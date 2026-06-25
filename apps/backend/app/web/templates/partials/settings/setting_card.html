@@ -1,0 +1,156 @@
+{% from 'macros/buttons.html' import icon_reset, btn_save %}
+<!-- Setting Card - Improved compact card design for defaults -->
+<div id="setting-{{ setting.key|replace('.', '-') }}" class="card p-4 hover:shadow-lg transition-all duration-200">
+    <!-- Header with icon and title -->
+    <div class="flex items-start justify-between gap-3 mb-3">
+        <div class="flex items-start gap-3 flex-1 min-w-0">
+            <!-- Icon based on category -->
+            <div class="flex-shrink-0">
+                {% if setting.category == 'check' %}
+                <!-- Check/Monitor Icon -->
+                <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500/20 to-blue-600/20 border border-blue-500/30 flex items-center justify-center">
+                    <span class="w-5 h-5 text-blue-400 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/check-circle.svg" %}</span>
+                </div>
+                {% elif setting.category == 'alert' %}
+                <!-- Alert/Bell Icon -->
+                <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-orange-500/20 to-orange-600/20 border border-orange-500/30 flex items-center justify-center">
+                    <span class="w-5 h-5 text-orange-400 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/bell.svg" %}</span>
+                </div>
+                {% elif setting.category == 'job' %}
+                <!-- Job/Task Icon -->
+                <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-500/20 to-purple-600/20 border border-purple-500/30 flex items-center justify-center">
+                    <span class="w-5 h-5 text-purple-400 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/briefcase.svg" %}</span>
+                </div>
+                {% else %}
+                <!-- System/Settings Icon -->
+                <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-gray-500/20 to-gray-600/20 border border-gray-500/30 flex items-center justify-center">
+                    <span class="w-5 h-5 text-gray-400 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/cog-6-tooth.svg" %}</span>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Title and Description -->
+            <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2 mb-1">
+                    <h3 class="font-semibold text-dark-text-primary text-sm">{{ setting.display_name }}</h3>
+
+                    <!-- Modified Badge -->
+                    {% set current_value = setting.value.value %}
+                    {% set default_value = setting.default_value.value %}
+                    {% if current_value != default_value %}
+                    <span class="px-1.5 py-0.5 text-xs font-medium rounded bg-brand-500/20 text-brand-400 border border-brand-500/30">
+                        Modified
+                    </span>
+                    {% endif %}
+                </div>
+
+                {% if setting.description %}
+                <p class="text-xs text-dark-text-muted leading-relaxed">{{ setting.description }}</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Reset Button (if modified) -->
+        {% if current_value != default_value %}
+        {{ icon_reset(title='Reset to default',
+                      hx_post='/settings/' ~ setting.key ~ '/reset',
+                      hx_target='#setting-' ~ setting.key|replace('.', '-'),
+                      extra_classes='flex-shrink-0') }}
+        {% endif %}
+    </div>
+
+    <!-- Value Section -->
+    <div class="space-y-2">
+        <!-- Inline Edit Form -->
+        <form
+            hx-post="/settings/{{ setting.key }}/update"
+            hx-target="#setting-{{ setting.key|replace('.', '-') }}"
+            hx-swap="outerHTML"
+            class="flex items-center gap-2"
+        >
+            {% set value_type = setting.value.type %}
+
+            {% if value_type == 'bool' %}
+                <!-- Boolean Toggle -->
+                <label class="flex items-center gap-2 cursor-pointer flex-1">
+                    <span class="text-xs text-dark-text-muted uppercase tracking-wide">Value:</span>
+                    <input
+                        type="checkbox"
+                        name="value"
+                        value="true"
+                        {% if current_value %}checked{% endif %}
+                        onchange="this.form.requestSubmit()"
+                        class="sr-only peer"
+                    >
+                    <div class="relative w-11 h-6 bg-dark-bg-tertiary peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-brand-500 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-500"></div>
+                    <span class="text-sm text-dark-text-primary">{% if current_value %}Enabled{% else %}Disabled{% endif %}</span>
+                </label>
+            {% elif value_type == 'int' or value_type == 'float' %}
+                <!-- Number Input with Unit -->
+                <div class="flex items-center gap-2 flex-1">
+                    <span class="text-xs text-dark-text-muted uppercase tracking-wide">Value:</span>
+                    <div class="relative">
+                        <input
+                            type="number"
+                            name="value"
+                            aria-label="{{ setting.display_name }} value"
+                            value="{{ current_value }}"
+                            {% if value_type == 'float' %}step="0.01"{% else %}step="1"{% endif %}
+                            {% if setting.validation and setting.validation.min is defined %}min="{{ setting.validation.min }}"{% endif %}
+                            {% if setting.validation and setting.validation.max is defined %}max="{{ setting.validation.max }}"{% endif %}
+                            class="px-3 py-1.5 pr-12 text-sm bg-dark-bg-tertiary border border-dark-border rounded-md focus:outline-none focus:ring-2 focus:ring-brand-500"
+                        >
+                        <!-- Unit Label -->
+                        <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-dark-text-muted">
+                            {% if 'seconds' in setting.key %}s{% elif 'minutes' in setting.key %}min{% elif 'days' in setting.key %}days{% elif 'milliseconds' in setting.key or '_ms' in setting.key %}ms{% endif %}
+                        </span>
+                    </div>
+                </div>
+                {{ btn_save(label='Save', size='sm', extra_classes='flex-shrink-0') }}
+            {% else %}
+                <!-- String Input -->
+                <div class="flex items-center gap-2 flex-1">
+                    <span class="text-xs text-dark-text-muted uppercase tracking-wide">Value:</span>
+                    {% if setting.validation and setting.validation.enum %}
+                        <!-- Dropdown for enum values - auto-saves on change -->
+                        <select
+                            name="value"
+                            aria-label="{{ setting.display_name }} value"
+                            onchange="this.form.requestSubmit()"
+                            class="pl-3 pr-8 py-1.5 text-sm bg-dark-bg-tertiary border border-dark-border rounded-md focus:outline-none focus:ring-2 focus:ring-brand-500"
+                        >
+                            {% for option in setting.validation.enum %}
+                            <option value="{{ option }}" {% if current_value == option %}selected{% endif %}>{{ option }}</option>
+                            {% endfor %}
+                        </select>
+                    {% else %}
+                        <!-- Text input for free-form strings -->
+                        <input
+                            type="text"
+                            name="value"
+                            aria-label="{{ setting.display_name }} value"
+                            value="{{ current_value }}"
+                            class="flex-1 px-3 py-1.5 text-sm bg-dark-bg-tertiary border border-dark-border rounded-md focus:outline-none focus:ring-2 focus:ring-brand-500"
+                        >
+                    {% endif %}
+                </div>
+                {% if not (setting.validation and setting.validation.enum) %}
+                {{ btn_save(label='Save', size='sm', extra_classes='flex-shrink-0') }}
+                {% endif %}
+            {% endif %}
+        </form>
+
+        <!-- Default Value and Range Info -->
+        <div class="flex items-center justify-between text-xs">
+            <div class="text-dark-text-muted">
+                <span class="uppercase tracking-wide">Default:</span>
+                <code class="ml-1 px-1.5 py-0.5 bg-dark-bg-tertiary rounded font-mono">{{ default_value }}</code>
+                {% if setting.validation and setting.validation.min is defined and setting.validation.max is defined %}
+                <span class="ml-2 text-dark-text-muted">
+                    (range: {{ setting.validation.min }} - {{ setting.validation.max }})
+                </span>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>

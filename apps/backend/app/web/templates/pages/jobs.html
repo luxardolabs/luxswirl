@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+{% from 'macros/page.html' import page_header %}
+{% from 'macros/buttons.html' import btn_create %}
+{% from 'macros/tables.html' import pagination_controls %}
+{% from 'macros/filters.html' import filter_card, filter_select, filter_per_page %}
+
+{% block content %}
+{% set actions_html %}
+{{ btn_create(label='New Job', hx_get='/jobs/create-form' ~ ('?agent_id=' ~ filters.agent_id if filters.agent_id and filters.agent_id != '' else ''), hx_target='#panel-container', hx_swap='innerHTML') }}
+{% endset %}
+
+{{ page_header(
+    title='Jobs',
+    description='Status and history of all background jobs and scheduled tasks',
+    actions=actions_html
+) }}
+
+<!-- Summary Stats -->
+<div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 mb-6">
+    <!-- Total -->
+    <div class="card p-4">
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-xs text-dark-text-muted uppercase tracking-wider mb-1">Total</p>
+                <p class="text-2xl font-bold text-dark-text-primary">{{ summary.total }}</p>
+            </div>
+            <div class="w-10 h-10 rounded-lg bg-brand-500/10 flex items-center justify-center">
+                <span class="w-6 h-6 text-brand-500 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/bars-4.svg" %}</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Active -->
+    <div class="card p-4">
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-xs text-dark-text-muted uppercase tracking-wider mb-1">Active</p>
+                <p class="text-2xl font-bold text-yellow-400">{{ summary.active }}</p>
+            </div>
+            <div class="w-10 h-10 rounded-lg bg-yellow-500/10 flex items-center justify-center">
+                <span class="w-6 h-6 text-yellow-500 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/bolt.svg" %}</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pending -->
+    <div class="card p-4">
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-xs text-dark-text-muted uppercase tracking-wider mb-1">Pending</p>
+                <p class="text-2xl font-bold text-gray-400">{{ summary.pending }}</p>
+            </div>
+            <div class="w-10 h-10 rounded-lg bg-gray-500/10 flex items-center justify-center">
+                <span class="w-6 h-6 text-gray-500 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/clock.svg" %}</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Running -->
+    <div class="card p-4">
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-xs text-dark-text-muted uppercase tracking-wider mb-1">Running</p>
+                <p class="text-2xl font-bold text-yellow-400">{{ summary.running }}</p>
+            </div>
+            <div class="w-10 h-10 rounded-lg bg-yellow-500/10 flex items-center justify-center">
+                <span class="w-6 h-6 text-yellow-500 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/play-circle.svg" %}</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Completed -->
+    <div class="card p-4">
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-xs text-dark-text-muted uppercase tracking-wider mb-1">Completed</p>
+                <p class="text-2xl font-bold text-green-400">{{ summary.completed }}</p>
+            </div>
+            <div class="w-10 h-10 rounded-lg bg-green-500/10 flex items-center justify-center">
+                <span class="w-6 h-6 text-green-500 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/check-circle.svg" %}</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Failed -->
+    <div class="card p-4">
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-xs text-dark-text-muted uppercase tracking-wider mb-1">Failed</p>
+                <p class="text-2xl font-bold text-red-400">{{ summary.failed }}</p>
+            </div>
+            <div class="w-10 h-10 rounded-lg bg-red-500/10 flex items-center justify-center">
+                <span class="w-6 h-6 text-red-500 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/x-circle.svg" %}</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cancelled -->
+    <div class="card p-4">
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-xs text-dark-text-muted uppercase tracking-wider mb-1">Cancelled</p>
+                <p class="text-2xl font-bold text-gray-400">{{ summary.cancelled }}</p>
+            </div>
+            <div class="w-10 h-10 rounded-lg bg-gray-500/10 flex items-center justify-center">
+                <span class="w-6 h-6 text-gray-500 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/no-symbol.svg" %}</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="jobs-content">
+<!-- Filters (matching table column order) -->
+{% call filter_card('/jobs', layout='grid', grid_classes='grid-cols-2 md:grid-cols-3 lg:grid-cols-6') %}
+    {% call filter_select('job_type', 'Type') %}
+        <option value="">All Types</option>
+        {% for jt in all_job_types %}
+        <option value="{{ jt }}" {% if filters.job_type == jt %}selected{% endif %}>{{ jt }}</option>
+        {% endfor %}
+    {% endcall %}
+
+    {% call filter_select('agent_id', 'Agent') %}
+        <option value="">All Agents</option>
+        {% if has_server_jobs %}
+        <option value="server" {% if filters.agent_id == "server" %}selected{% endif %}>server</option>
+        {% endif %}
+        {% for agent in all_agents %}
+        <option value="{{ agent.id }}" {% if filters.agent_id == agent.id|string %}selected{% endif %}>
+            {{ agent.agent_name or agent.id }}
+        </option>
+        {% endfor %}
+    {% endcall %}
+
+    {% call filter_select('status', 'Status') %}
+        <option value="" {% if not filters.status %}selected{% endif %}>All</option>
+        {% for opt in status_options %}
+        <option value="{{ opt.value }}" {% if filters.status == opt.value %}selected{% endif %}>{{ opt.label }}</option>
+        {% endfor %}
+    {% endcall %}
+
+    {% call filter_select('priority', 'Priority') %}
+        <option value="">All</option>
+        <option value="high" {% if filters.priority == 'high' %}selected{% endif %}>High (75+)</option>
+        <option value="normal" {% if filters.priority == 'normal' %}selected{% endif %}>Normal (25-74)</option>
+        <option value="low" {% if filters.priority == 'low' %}selected{% endif %}>Low (0-24)</option>
+    {% endcall %}
+
+    {% call filter_select('created', 'Created') %}
+        <option value="">All Time</option>
+        <option value="1h" {% if filters.created == '1h' %}selected{% endif %}>Last Hour</option>
+        <option value="24h" {% if filters.created == '24h' %}selected{% endif %}>Last 24h</option>
+        <option value="7d" {% if filters.created == '7d' %}selected{% endif %}>Last 7 Days</option>
+        <option value="30d" {% if filters.created == '30d' %}selected{% endif %}>Last 30 Days</option>
+    {% endcall %}
+
+    {{ filter_per_page(pagination.per_page) }}
+{% endcall %}
+
+{{ pagination_controls(pagination, '/jobs') }}
+
+<!-- Jobs Table (auto-updates every 10s) -->
+<div id="jobs-table"
+     hx-get="{{ paginated_url('/jobs/partials/table', pagination) }}"
+     hx-trigger="every 10s"
+     hx-swap="outerHTML">
+    {% include 'partials/jobs_table.html' %}
+</div>
+
+<!-- Pagination -->
+{{ pagination_controls(pagination, '/jobs') }}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/tags-picker.js?v={{ static_version }}"></script>
+<!-- Jobs functionality initialized in base.html -->
+{% endblock %}

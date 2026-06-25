@@ -1,0 +1,98 @@
+{# Settings Macros - Reusable components for settings pages #}
+
+{% macro settings_nav(active_section, current_user) %}
+{#
+    Settings horizontal tab navigation
+
+    Args:
+        active_section: str - Current active section (notifications, alerts, registration_keys, defaults, users)
+        current_user: User - Current user object for permission checks
+#}
+<div class="border-b border-dark-border mb-6">
+    <nav class="flex space-x-6" aria-label="Settings tabs">
+        <a href="/settings/notifications"
+           class="{% if active_section == 'notifications' %}border-brand-500 text-brand-500{% else %}border-transparent text-dark-text-muted hover:text-dark-text-primary hover:border-dark-border{% endif %} border-b-2 py-3 px-1 font-medium text-sm transition-colors">
+            Notifications
+        </a>
+        <a href="/settings/alerts"
+           class="{% if active_section == 'alerts' %}border-brand-500 text-brand-500{% else %}border-transparent text-dark-text-muted hover:text-dark-text-primary hover:border-dark-border{% endif %} border-b-2 py-3 px-1 font-medium text-sm transition-colors">
+            Alerts
+        </a>
+        <a href="/settings/registration-keys"
+           class="{% if active_section == 'registration_keys' %}border-brand-500 text-brand-500{% else %}border-transparent text-dark-text-muted hover:text-dark-text-primary hover:border-dark-border{% endif %} border-b-2 py-3 px-1 font-medium text-sm transition-colors">
+            API Keys
+        </a>
+        <a href="/settings/defaults"
+           class="{% if active_section == 'defaults' %}border-brand-500 text-brand-500{% else %}border-transparent text-dark-text-muted hover:text-dark-text-primary hover:border-dark-border{% endif %} border-b-2 py-3 px-1 font-medium text-sm transition-colors">
+            Defaults
+        </a>
+        {% if current_user.role == 'admin' %}
+        <a href="/settings/users"
+           class="{% if active_section == 'users' %}border-brand-500 text-brand-500{% else %}border-transparent text-dark-text-muted hover:text-dark-text-primary hover:border-dark-border{% endif %} border-b-2 py-3 px-1 font-medium text-sm transition-colors">
+            Users
+        </a>
+        <a href="/settings/components"
+           class="{% if active_section == 'components' %}border-brand-500 text-brand-500{% else %}border-transparent text-dark-text-muted hover:text-dark-text-primary hover:border-dark-border{% endif %} border-b-2 py-3 px-1 font-medium text-sm transition-colors">
+            Components
+        </a>
+        <a href="/settings/logo-demo"
+           class="{% if active_section == 'logo-demo' %}border-brand-500 text-brand-500{% else %}border-transparent text-dark-text-muted hover:text-dark-text-primary hover:border-dark-border{% endif %} border-b-2 py-3 px-1 font-medium text-sm transition-colors">
+            Logo Demo
+        </a>
+        {% endif %}
+    </nav>
+</div>
+{% endmacro %}
+
+{% macro section_header(title, description, icon_svg='') %}
+{#
+    Section header with optional icon
+
+    Args:
+        title: str - Section title
+        description: str - Section description
+        icon_svg: str (optional) - SVG icon HTML
+#}
+<div class="mb-6">
+    <div class="flex items-center gap-3 mb-2">
+        {% if icon_svg %}
+        <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-brand-500/20 to-brand-600/20 border border-brand-500/30 flex items-center justify-center">
+            {{ icon_svg|safe }}
+        </div>
+        {% endif %}
+        <h2 class="text-xl font-semibold text-dark-text-primary">{{ title }}</h2>
+    </div>
+    {% if description %}
+    <p class="text-sm text-dark-text-muted">{{ description }}</p>
+    {% endif %}
+</div>
+{% endmacro %}
+
+{% macro settings_category_card(title, description, icon, href) %}
+{#
+    Card for settings landing page navigation
+
+    Args:
+        title: str - Card title
+        description: str - Card description
+        icon: str - SVG icon HTML
+        href: str - Link URL
+#}
+<a href="{{ href }}" class="card p-6 hover:border-brand-500/30 hover:shadow-lg transition-all group">
+    <div class="flex items-start gap-4">
+        <div class="flex-shrink-0">
+            <div class="w-12 h-12 rounded-lg bg-gradient-to-br from-brand-500/20 to-brand-600/20 border border-brand-500/30 flex items-center justify-center group-hover:scale-110 transition-transform">
+                {{ icon|safe }}
+            </div>
+        </div>
+        <div class="flex-1 min-w-0">
+            <h2 class="font-semibold text-dark-text-primary mb-1 group-hover:text-brand-500 transition-colors">{{ title }}</h2>
+            <p class="text-sm text-dark-text-muted">{{ description }}</p>
+        </div>
+        <div class="flex-shrink-0">
+            <span class="w-5 h-5 text-dark-text-muted group-hover:text-brand-500 group-hover:translate-x-1 transition-all inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/chevron-right.svg" %}</span>
+        </div>
+    </div>
+</a>
+{% endmacro %}
+

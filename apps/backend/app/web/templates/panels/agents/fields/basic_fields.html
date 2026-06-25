@@ -1,0 +1,59 @@
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="label text-sm" for="agent_name">Agent Name{% if agent.approval_status == 'pending' %} <span class="text-red-400">*</span>{% endif %}</label>
+                    <input
+                        type="text"
+                        id="agent_name"
+                        name="agent_name"
+                        value="{{ agent.agent_name or '' }}"
+                        class="input font-mono"
+                        placeholder="my-agent"
+                        {% if agent.approval_status == 'pending' %}required{% endif %}
+                    >
+                </div>
+                <div>
+                    <label class="label text-sm" for="hostname">Hostname</label>
+                    <input
+                        type="text"
+                        id="hostname"
+                        name="hostname"
+                        value="{{ agent.hostname or '' }}"
+                        class="input"
+                        placeholder="agent-hostname"
+                    >
+                </div>
+            </div>
+
+            <!-- Intervals - Two columns -->
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="label text-sm" for="heartbeat_interval">
+                        Heartbeat
+                        <span class="text-xs text-dark-text-muted font-normal">(default: {{ default_heartbeat }}s)</span>
+                    </label>
+                    <input
+                        type="number"
+                        id="heartbeat_interval"
+                        name="heartbeat_interval"
+                        value="{{ agent.heartbeat_interval if agent.heartbeat_interval is not none else default_heartbeat }}"
+                        class="input font-mono"
+                        min="1"
+                        max="600"
+                    >
+                </div>
+                <div>
+                    <label class="label text-sm" for="check_sync_interval">
+                        Check Sync
+                        <span class="text-xs text-dark-text-muted font-normal">(default: {{ default_check_sync }}s)</span>
+                    </label>
+                    <input
+                        type="number"
+                        id="check_sync_interval"
+                        name="check_sync_interval"
+                        value="{{ agent.check_sync_interval if agent.check_sync_interval is not none else default_check_sync }}"
+                        class="input font-mono"
+                        min="1"
+                        max="600"
+                    >
+                </div>
+            </div>

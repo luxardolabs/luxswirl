@@ -1,0 +1,13 @@
+{% extends "layouts/public_status.html" %}
+
+{% block title %}{{ page_title | default('Error') }}{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto flex items-center justify-center min-h-[60vh]">
+    <div class="text-center">
+        <span class="w-20 h-20 mx-auto text-red-400 mb-8 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/exclamation-triangle.svg" %}</span>
+        <h1 class="text-3xl font-bold text-dark-text-primary mb-4">{{ error_title | default('Something went wrong') }}</h1>
+        <p class="text-lg text-dark-text-secondary">{{ error }}</p>
+    </div>
+</div>
+{% endblock %}

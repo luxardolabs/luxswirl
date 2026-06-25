@@ -1,0 +1,56 @@
+<!-- Generated Token Display -->
+{% if generated %}
+<div class="p-4 rounded-lg bg-green-500/10 border border-green-500/30 animate-pulse-once">
+    <div class="flex items-start gap-3 mb-3">
+        <span class="w-5 h-5 text-green-400 flex-shrink-0 mt-0.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/check-circle.svg" %}</span>
+        <div class="flex-1">
+            <p class="text-sm font-semibold text-green-400 mb-2">Token Generated Successfully!</p>
+            <p class="text-xs text-dark-text-muted mb-3">
+                ⚠️ This token is shown only once. Copy it now and store it securely.
+            </p>
+
+            <!-- Token with copy and download buttons -->
+            <div>
+                <div class="flex items-center gap-2">
+                    <input
+                        type="text"
+                        value="{{ token }}"
+                        readonly
+                        id="metrics-token-value"
+                        class="flex-1 px-3 py-2 bg-dark-bg-tertiary border border-dark-border rounded-lg text-sm font-mono text-dark-text-primary focus:outline-none focus:border-brand-500"
+                    />
+                    {% from 'macros/buttons.html' import btn_copy, btn_download %}
+                    {{ btn_copy(label='', extra_classes='px-3 py-2', extra_attrs='data-copy-token="' ~ token ~ '" id="copy-token-btn" title="Copy to clipboard"') }}
+                    {{ btn_download(label='', extra_classes='px-3 py-2', style='secondary', extra_attrs='data-download-token="' ~ token ~ '" title="Download as file" type="button"') }}
+                </div>
+                <p id="copy-confirmation" class="text-xs text-green-400 mt-1 opacity-0 transition-opacity">
+                    ✓ Copied to clipboard!
+                </p>
+            </div>
+
+            <!-- Usage Example -->
+            <div class="mt-3 p-3 rounded-lg bg-dark-bg-tertiary">
+                <p class="text-xs text-dark-text-muted mb-2">Save to file for Prometheus:</p>
+                <pre class="text-xs text-dark-text-primary overflow-x-auto"><code># /etc/prometheus/luxswirl-token.txt
+{{ token }}</code></pre>
+            </div>
+
+            <div class="mt-3 p-3 rounded-lg bg-dark-bg-tertiary">
+                <p class="text-xs text-dark-text-muted mb-2">Prometheus scrape config:</p>
+                <pre class="text-xs text-dark-text-primary overflow-x-auto"><code>scrape_configs:
+  - job_name: 'luxswirl'
+    static_configs:
+      - targets: ['localhost:9000']
+    bearer_token_file: /etc/prometheus/luxswirl-token.txt</code></pre>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% else %}
+<div class="p-3 rounded-lg bg-dark-bg-tertiary">
+    <p class="text-xs text-dark-text-muted text-center">
+        No token generated yet. Click "Generate Token" to create a new bearer token.
+    </p>
+</div>
+{% endif %}

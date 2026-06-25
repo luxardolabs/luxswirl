@@ -1,0 +1,130 @@
+{% from 'macros/badges.html' import role_badge %}
+{% from 'macros/buttons.html' import btn_save, btn_password, btn_cancel_text %}
+{% from 'macros/panels.html' import panel_wrapper, panel_header, panel_content %}
+
+{% call panel_wrapper() %}
+    {{ panel_header('My Account', subtitle='Manage your profile and account settings') }}
+    {% call panel_content() %}
+    <div class="space-y-6">
+        <!-- User Info Card -->
+        <div class="p-3 bg-dark-bg-tertiary rounded-lg border border-dark-border">
+            <div class="space-y-1 text-xs">
+                <div class="flex justify-between">
+                    <span class="text-dark-text-muted">User ID:</span>
+                    <span class="font-mono text-dark-text-secondary">{{ current_user.id }}</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-dark-text-muted">Username:</span>
+                    <span class="font-mono text-dark-text-secondary">{{ current_user.username }}</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-dark-text-muted">Role:</span>
+                    {{ role_badge(current_user.role) }}
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-dark-text-muted">Created:</span>
+                    <span class="text-dark-text-secondary">{{ current_user.created_at|format_datetime("%b %d, %Y %I:%M%p") }}</span>
+                </div>
+                {% if current_user.last_login_at %}
+                <div class="flex justify-between">
+                    <span class="text-dark-text-muted">Last Login:</span>
+                    <span class="text-dark-text-secondary">{{ current_user.last_login_at|format_datetime("%b %d, %Y %I:%M%p") }}</span>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Update Profile Form -->
+        <form
+            hx-post="/profile/update"
+            hx-target="#profile-update-result"
+            hx-swap="innerHTML"
+            class="space-y-4">
+
+            <!-- Result Message -->
+            <div id="profile-update-result"></div>
+
+            <!-- Full Name -->
+            <div>
+                <label class="label text-sm" for="full_name">Full Name</label>
+                <input
+                    type="text"
+                    id="full_name"
+                    name="full_name"
+                    value="{{ current_user.full_name or '' }}"
+                    class="input w-full"
+                    placeholder="John Doe"
+                >
+            </div>
+
+            <!-- Submit Button -->
+            <div class="flex items-center gap-2 pt-2 border-t border-dark-border">
+                {{ btn_save(extra_classes='flex-1') }}
+                {{ btn_cancel_text(extra_classes='flex-1', extra_attrs='type="button" data-close-panel') }}
+            </div>
+        </form>
+
+        <!-- Change Password Section -->
+        <div class="pt-4 border-t border-dark-border">
+            <h3 class="text-sm font-medium text-dark-text-secondary mb-3">Change Password</h3>
+
+            <form
+                hx-post="/profile/change-password"
+                hx-target="#password-change-result"
+                hx-swap="innerHTML"
+                hx-on::after-request="if(event.detail.successful) this.reset()"
+                class="space-y-4">
+
+                <!-- Result Message -->
+                <div id="password-change-result"></div>
+
+                <!-- Current Password -->
+                <div>
+                    <label class="label text-sm" for="current_password">Current Password <span class="text-red-400">*</span></label>
+                    <input
+                        type="password"
+                        id="current_password"
+                        name="current_password"
+                        required
+                        class="input font-mono"
+                        placeholder="••••••••"
+                    >
+                </div>
+
+                <!-- New Password & Confirm - Two columns -->
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="label text-sm" for="new_password">New Password <span class="text-red-400">*</span></label>
+                        <input
+                            type="password"
+                            id="new_password"
+                            name="new_password"
+                            required
+                            minlength="8"
+                            class="input font-mono"
+                            placeholder="••••••••"
+                        >
+                    </div>
+                    <div>
+                        <label class="label text-sm" for="confirm_password">Confirm <span class="text-red-400">*</span></label>
+                        <input
+                            type="password"
+                            id="confirm_password"
+                            name="confirm_password"
+                            required
+                            minlength="8"
+                            class="input font-mono"
+                            placeholder="••••••••"
+                        >
+                    </div>
+                </div>
+                <p class="text-xs text-dark-text-muted -mt-2">Min 8 characters, must include uppercase, lowercase, and digit</p>
+
+
+                <!-- Submit Button -->
+                {{ btn_password(extra_classes='w-full') }}
+            </form>
+        </div>
+    </div>
+    {% endcall %}
+{% endcall %}

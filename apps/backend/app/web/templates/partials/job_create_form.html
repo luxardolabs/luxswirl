@@ -1,0 +1,242 @@
+{% from 'macros/form_fields.html' import render_field_from_schema %}
+{% from 'macros/buttons.html' import btn_create, btn_cancel_text %}
+{% from 'macros/panels.html' import panel_wrapper, panel_header, panel_content %}
+
+{% call panel_wrapper() %}
+    {{ panel_header('Create Job', title_size='lg') }}
+    {% call panel_content() %}
+        <form
+            id="job-create-form"
+            hx-post="/jobs/create"
+            hx-target="#form-feedback"
+            hx-swap="innerHTML"
+        >
+            <div class="space-y-5">
+                <!-- Job Type and Agent on same line -->
+                <div class="grid grid-cols-2 gap-3">
+                    <!-- Job Type -->
+                    <div>
+                        <label for="job_type" class="block text-sm font-medium text-dark-text-primary mb-2">
+                            Job Type <span class="text-red-400">*</span>
+                        </label>
+                        <select
+                            id="job_type"
+                            name="job_type"
+                            class="input w-full"
+                            required
+                            hx-get="/jobs/create-form"
+                            hx-trigger="change"
+                            hx-target="#panel-container"
+                            hx-swap="innerHTML"
+                            hx-include="[name='agent_id'],[name='priority']"
+                        >
+                            <option value="">Select job type...</option>
+                            <option value="network_discover" {% if prefill_job_type == 'network_discover' %}selected{% endif %}>Network Discover</option>
+                            <option value="network_scan" {% if prefill_job_type == 'network_scan' %}selected{% endif %}>Network Scan</option>
+                        </select>
+                        <p class="text-xs text-dark-text-muted mt-1">Type of job to execute</p>
+                    </div>
+
+                    <!-- Agent -->
+                    <div>
+                        <label for="agent_id" class="block text-sm font-medium text-dark-text-primary mb-2">
+                            Agent <span class="text-red-400">*</span>
+                        </label>
+                        <select
+                            id="agent_id"
+                            name="agent_id"
+                            class="input w-full"
+                            required
+                        >
+                            {% if not prefill_job_type or not job_types[prefill_job_type].requires_agent %}
+                            <option value="server" {% if not prefill_agent_id or prefill_agent_id == 'server' %}selected{% endif %}>Server (Run locally)</option>
+                            {% endif %}
+                            {% for agent in agents %}
+                            <option value="{{ agent.id }}" {% if prefill_agent_id == agent.id|string %}selected{% endif %}>
+                                {{ agent.agent_name or agent.id }}{% if agent.hostname %} ({{ agent.hostname }}){% endif %}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <p class="text-xs text-dark-text-muted mt-1">
+                            {% if prefill_job_type and job_types[prefill_job_type].requires_agent %}
+                            Agent required (cannot run on server)
+                            {% else %}
+                            Which agent should execute
+                            {% endif %}
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Priority -->
+                <div>
+                    <label for="priority" class="block text-sm font-medium text-dark-text-primary mb-2">
+                        Priority
+                    </label>
+                    <div class="flex items-center gap-4">
+                        <input
+                            type="range"
+                            id="priority"
+                            name="priority"
+                            min="0"
+                            max="100"
+                            value="{{ prefill_priority or 0 }}"
+                            class="flex-1"
+                            data-priority-slider
+                        >
+                        <span id="priority-value" class="text-sm font-mono text-dark-text-primary w-12 text-right">{{ prefill_priority or 0 }}</span>
+                    </div>
+                    <div class="flex justify-between text-xs text-dark-text-muted mt-1">
+                        <span>Low (0)</span>
+                        <span>Normal (50)</span>
+                        <span>High (100)</span>
+                    </div>
+                </div>
+
+                <!-- Job Type Specific Fields (Dynamically Generated from Schema) -->
+                {% if prefill_job_type and prefill_job_type in job_types %}
+                {% set selected_job = job_types[prefill_job_type] %}
+                <div class="space-y-5">
+                    <!-- Job description card -->
+                    <div class="bg-gradient-to-r from-blue-500/10 to-blue-600/10 border border-blue-500/30 rounded-lg p-4">
+                        <div class="space-y-3">
+                            <!-- Job Type Header -->
+                            <div>
+                                <h4 class="text-sm font-semibold text-blue-400">{{ selected_job.display_name }}</h4>
+                                {% if selected_job.display_description %}
+                                <p class="text-xs text-dark-text-secondary mt-1">{{ selected_job.display_description }}</p>
+                                {% endif %}
+                            </div>
+
+                            <!-- Job Settings Info -->
+                            <div class="grid grid-cols-2 gap-3 pt-3 border-t border-blue-500/20">
+                                <!-- Job Timeout -->
+                                <div class="bg-dark-bg-primary/50 rounded-md px-3 py-2">
+                                    <div class="flex items-center gap-2">
+                                        <span class="w-4 h-4 text-blue-400 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/clock.svg" %}</span>
+                                        <div class="flex-1">
+                                            <div class="text-xs font-medium text-dark-text-primary">Job Timeout</div>
+                                            <div class="text-xs text-dark-text-muted">{{ selected_job.timeout_seconds }}s max runtime</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Parameters Count -->
+                                <div class="bg-dark-bg-primary/50 rounded-md px-3 py-2">
+                                    <div class="flex items-center gap-2">
+                                        <span class="w-4 h-4 text-blue-400 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/adjustments-vertical.svg" %}</span>
+                                        <div class="flex-1">
+                                            <div class="text-xs font-medium text-dark-text-primary">Parameters</div>
+                                            <div class="text-xs text-dark-text-muted">
+                                                {% if selected_job.properties %}
+                                                    {{ selected_job.properties|length }} field{{ 's' if selected_job.properties|length != 1 else '' }}
+                                                {% else %}
+                                                    Auto-configured
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Timeout Warning -->
+                            <div class="text-xs text-amber-400/70 bg-amber-500/10 border border-amber-500/20 rounded-md px-3 py-2">
+                                <strong class="text-amber-400">Note:</strong> Job timeout kills the entire job if exceeded. Individual operation timeouts are configured below.
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Dynamic form fields from schema -->
+                    {% if selected_job.properties %}
+                        {% if prefill_job_type == 'network_scan' %}
+                            <!-- Custom layout for network scan -->
+                            <!-- Subnet and Ports on same line -->
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label for="subnet" class="block text-sm font-medium text-dark-text-primary mb-2">
+                                        Subnet <span class="text-red-400">*</span>
+                                    </label>
+                                    <input
+                                        type="text"
+                                        id="subnet"
+                                        name="subnet"
+                                        class="input w-full font-mono"
+                                        required
+                                        value="{{ prefill_params.get('subnet') }}"
+                                        placeholder="192.168.1.0/24"
+                                    >
+                                    <p class="text-xs text-dark-text-muted mt-1">Network in CIDR notation</p>
+                                </div>
+                                <div>
+                                    <label for="ports" class="block text-sm font-medium text-dark-text-primary mb-2">
+                                        Ports
+                                    </label>
+                                    <input
+                                        type="text"
+                                        id="ports"
+                                        name="ports"
+                                        class="input w-full font-mono"
+                                        data-type="array"
+                                        value="{{ prefill_params.get('ports', [22, 80, 443, 3306, 5432, 8080, 8443])|join(',') }}"
+                                        placeholder="22,80,443"
+                                    >
+                                    <p class="text-xs text-dark-text-muted mt-1">TCP ports to scan</p>
+                                </div>
+                            </div>
+
+                            <!-- Timeout and Max Concurrent on same line -->
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label for="timeout" class="block text-sm font-medium text-dark-text-primary mb-2">
+                                        Timeout <span class="text-red-400">*</span>
+                                    </label>
+                                    <input
+                                        type="number"
+                                        id="timeout"
+                                        name="timeout"
+                                        class="input w-full"
+                                        required
+                                        value="{{ prefill_params.get('timeout') }}"
+                                        min="1"
+                                        max="30"
+                                    >
+                                    <p class="text-xs text-dark-text-muted mt-1">Seconds per host (total)</p>
+                                </div>
+                                <div>
+                                    <label for="max_concurrent" class="block text-sm font-medium text-dark-text-primary mb-2">
+                                        Max Concurrent
+                                    </label>
+                                    <input
+                                        type="number"
+                                        id="max_concurrent"
+                                        name="max_concurrent"
+                                        class="input w-full"
+                                        value="{{ prefill_params.get('max_concurrent') }}"
+                                        min="10"
+                                        max="500"
+                                    >
+                                    <p class="text-xs text-dark-text-muted mt-1">Parallel host scans</p>
+                                </div>
+                            </div>
+                        {% else %}
+                            <!-- Default rendering for other job types -->
+                            {% for field_name, field_schema in selected_job.properties.items() %}
+                                {{ render_field_from_schema(field_name, field_schema, field_name in selected_job.required, prefill_params.get(field_name)) }}
+                            {% endfor %}
+                        {% endif %}
+                    {% endif %}
+                </div>
+                {% endif %}
+
+                <!-- Form Feedback -->
+                <div id="form-feedback"></div>
+
+
+                <!-- Submit Button -->
+                <div class="flex gap-3 pt-4 border-t border-dark-border">
+                    {{ btn_cancel_text(extra_classes='flex-1', extra_attrs='type="button" data-close-panel') }}
+                    {{ btn_create(label='Create Job', extra_classes='flex-1') }}
+                </div>
+            </div>
+        </form>
+    {% endcall %}
+{% endcall %}

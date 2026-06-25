@@ -1,0 +1,213 @@
+{# ═══════════════════════════════════════════════════════════════════════
+   BRAND COLORS
+   ═══════════════════════════════════════════════════════════════════════ #}
+<section>
+    <h2 class="text-lg font-semibold text-dark-text-primary mb-1">Brand Colors</h2>
+    <p class="text-sm text-dark-text-muted mb-4">LuxSwirl brand palette based on sky blue (#0ea5e9). Defined in <code class="text-brand-400">tailwind.config.js</code> as <code class="text-brand-400">brand-50</code> through <code class="text-brand-400">brand-950</code>.</p>
+
+    <div class="card p-6">
+        <h3 class="text-sm font-medium text-dark-text-secondary mb-3">Key Shades (commonly used in templates)</h3>
+        <div class="flex gap-3">
+            <div class="flex-1 text-center">
+                <div class="h-12 rounded-lg bg-brand-400 mb-1"></div>
+                <span class="text-xs text-dark-text-muted">400</span>
+                <p class="text-xs text-dark-text-muted mt-0.5">Text accent</p>
+            </div>
+            <div class="flex-1 text-center">
+                <div class="h-12 rounded-lg bg-brand-500 mb-1 ring-2 ring-brand-400 ring-offset-2 ring-offset-dark-bg-primary"></div>
+                <span class="text-xs font-bold text-brand-400">500</span>
+                <p class="text-xs text-dark-text-muted mt-0.5">Primary</p>
+            </div>
+            <div class="flex-1 text-center">
+                <div class="h-12 rounded-lg bg-brand-600 mb-1"></div>
+                <span class="text-xs text-dark-text-muted">600</span>
+                <p class="text-xs text-dark-text-muted mt-0.5">Borders, bg/20</p>
+            </div>
+        </div>
+        <p class="text-xs text-dark-text-muted mt-3">Full scale (50-950) defined in tailwind.config.js. Most UI uses 400 (text), 500 (primary), 600 (borders/backgrounds at /20 opacity).</p>
+    </div>
+</section>
+
+{# ═══════════════════════════════════════════════════════════════════════
+   SEMANTIC COLORS
+   ═══════════════════════════════════════════════════════════════════════ #}
+<section>
+    <h2 class="text-lg font-semibold text-dark-text-primary mb-1">Semantic Colors</h2>
+    <p class="text-sm text-dark-text-muted mb-4">5-color system: brand, success, warning, danger, neutral. Extended palette for specialized use.</p>
+
+    <div class="card p-6 space-y-4">
+        <h3 class="text-sm font-medium text-dark-text-secondary mb-3">Core Semantic (use these first)</h3>
+        <div class="grid grid-cols-5 gap-4">
+            <div>
+                <div class="h-10 rounded-lg bg-brand-500 mb-2"></div>
+                <p class="text-xs font-medium text-dark-text-primary">Brand</p>
+                <p class="text-xs text-dark-text-muted">Primary actions, UI highlights</p>
+            </div>
+            <div>
+                <div class="h-10 rounded-lg bg-green-500 mb-2"></div>
+                <p class="text-xs font-medium text-dark-text-primary">Success</p>
+                <p class="text-xs text-dark-text-muted">Active, enabled, complete</p>
+            </div>
+            <div>
+                <div class="h-10 rounded-lg bg-yellow-500 mb-2"></div>
+                <p class="text-xs font-medium text-dark-text-primary">Warning</p>
+                <p class="text-xs text-dark-text-muted">Pending, attention needed</p>
+            </div>
+            <div>
+                <div class="h-10 rounded-lg bg-red-500 mb-2"></div>
+                <p class="text-xs font-medium text-dark-text-primary">Danger</p>
+                <p class="text-xs text-dark-text-muted">Errors, destructive actions</p>
+            </div>
+            <div>
+                <div class="h-10 rounded-lg bg-gray-500 mb-2"></div>
+                <p class="text-xs font-medium text-dark-text-primary">Neutral</p>
+                <p class="text-xs text-dark-text-muted">Default, inactive, secondary</p>
+            </div>
+        </div>
+
+        <h3 class="text-sm font-medium text-dark-text-secondary mt-6 mb-3">Extended Palette</h3>
+        <div class="grid grid-cols-5 gap-4">
+            <div>
+                <div class="h-10 rounded-lg bg-blue-500 mb-2"></div>
+                <p class="text-xs font-medium text-dark-text-primary">Blue / Info</p>
+                <p class="text-xs text-dark-text-muted">Information, history</p>
+            </div>
+            <div>
+                <div class="h-10 rounded-lg bg-purple-500 mb-2"></div>
+                <p class="text-xs font-medium text-dark-text-primary">Purple</p>
+                <p class="text-xs text-dark-text-muted">Admin, special categories</p>
+            </div>
+            <div>
+                <div class="h-10 rounded-lg bg-cyan-500 mb-2"></div>
+                <p class="text-xs font-medium text-dark-text-primary">Cyan</p>
+                <p class="text-xs text-dark-text-muted">Monitoring, network</p>
+            </div>
+            <div>
+                <div class="h-10 rounded-lg bg-orange-500 mb-2"></div>
+                <p class="text-xs font-medium text-dark-text-primary">Orange</p>
+                <p class="text-xs text-dark-text-muted">Suspend, disable, cancel</p>
+            </div>
+            <div></div>
+        </div>
+    </div>
+</section>
+
+{# ═══════════════════════════════════════════════════════════════════════
+   SURFACE COLORS
+   ═══════════════════════════════════════════════════════════════════════ #}
+<section>
+    <h2 class="text-lg font-semibold text-dark-text-primary mb-1">Surface Colors</h2>
+    <p class="text-sm text-dark-text-muted mb-4">Dark theme background, text, and border tokens. Each surface has a specific role in the layout hierarchy.</p>
+
+    <div class="space-y-4">
+        {# Background hierarchy with usage examples #}
+        <div class="card p-6">
+            <h3 class="text-sm font-medium text-dark-text-secondary mb-4">Background Hierarchy</h3>
+            <div class="space-y-4">
+                {# bg-primary #}
+                <div class="flex items-start gap-4">
+                    <div class="w-16 h-16 rounded-lg bg-dark-bg-primary border border-dark-border flex-shrink-0"></div>
+                    <div class="flex-1">
+                        <p class="text-sm font-medium text-dark-text-primary">bg-dark-bg-primary <span class="font-mono text-dark-text-muted font-normal">#0f172a</span></p>
+                        <p class="text-xs text-dark-text-muted mt-0.5">Page background, main content area. The darkest surface — everything sits on top of this.</p>
+                        <p class="text-xs text-brand-400 mt-1">Used by: body, main content area, chart/sparkline inner backgrounds</p>
+                    </div>
+                </div>
+                {# bg-secondary #}
+                <div class="flex items-start gap-4">
+                    <div class="w-16 h-16 rounded-lg bg-dark-bg-secondary border border-dark-border flex-shrink-0"></div>
+                    <div class="flex-1">
+                        <p class="text-sm font-medium text-dark-text-primary">bg-dark-bg-secondary <span class="font-mono text-dark-text-muted font-normal">#1e293b</span></p>
+                        <p class="text-xs text-dark-text-muted mt-0.5">Cards, sidebar, side panels, modals. The primary container surface — one step above the page.</p>
+                        <p class="text-xs text-brand-400 mt-1">Used by: .card, sidebar, side-panel, table row hover</p>
+                    </div>
+                </div>
+                {# bg-tertiary #}
+                <div class="flex items-start gap-4">
+                    <div class="w-16 h-16 rounded-lg bg-dark-bg-tertiary border border-dark-border flex-shrink-0"></div>
+                    <div class="flex-1">
+                        <p class="text-sm font-medium text-dark-text-primary">bg-dark-bg-tertiary <span class="font-mono text-dark-text-muted font-normal">#334155</span></p>
+                        <p class="text-xs text-dark-text-muted mt-0.5">Nested content inside cards — info boxes, key-value grids, code blocks. The lightest surface.</p>
+                        <p class="text-xs text-brand-400 mt-1">Used by: info cards inside panels, input backgrounds, stat card icons, table headers</p>
+                    </div>
+                </div>
+            </div>
+
+            {# Visual nesting demo #}
+            <h3 class="text-sm font-medium text-dark-text-secondary mt-6 mb-3">Nesting Example</h3>
+            <div class="rounded-lg bg-dark-bg-primary p-4 border border-dark-border">
+                <p class="text-xs text-dark-text-muted mb-2">bg-primary (page)</p>
+                <div class="rounded-lg bg-dark-bg-secondary p-4 border border-dark-border">
+                    <p class="text-xs text-dark-text-muted mb-2">bg-secondary (card)</p>
+                    <div class="rounded-lg bg-dark-bg-tertiary p-3 border border-dark-border">
+                        <p class="text-xs text-dark-text-muted">bg-tertiary (info box inside card)</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {# Text and borders #}
+        <div class="card p-6">
+            <div class="grid grid-cols-2 gap-6">
+                <div>
+                    <h3 class="text-sm font-medium text-dark-text-secondary mb-3">Text Hierarchy</h3>
+                    <div class="space-y-3">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-lg bg-dark-bg-tertiary border border-dark-border flex items-center justify-center">
+                                <span class="text-dark-text-primary font-bold">Aa</span>
+                            </div>
+                            <div>
+                                <p class="text-xs font-medium text-dark-text-primary">text-dark-text-primary <span class="font-mono text-dark-text-muted font-normal">#f1f5f9</span></p>
+                                <p class="text-xs text-dark-text-muted">Headings, names, emphasis</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-lg bg-dark-bg-tertiary border border-dark-border flex items-center justify-center">
+                                <span class="text-dark-text-secondary font-bold">Aa</span>
+                            </div>
+                            <div>
+                                <p class="text-xs font-medium text-dark-text-primary">text-dark-text-secondary <span class="font-mono text-dark-text-muted font-normal">#cbd5e1</span></p>
+                                <p class="text-xs text-dark-text-muted">Body text, values, descriptions</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-lg bg-dark-bg-tertiary border border-dark-border flex items-center justify-center">
+                                <span class="text-dark-text-muted font-bold">Aa</span>
+                            </div>
+                            <div>
+                                <p class="text-xs font-medium text-dark-text-primary">text-dark-text-muted <span class="font-mono text-dark-text-muted font-normal">#a1afc2</span></p>
+                                <p class="text-xs text-dark-text-muted">Labels, timestamps, hints, placeholders</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div>
+                    <h3 class="text-sm font-medium text-dark-text-secondary mb-3">Borders</h3>
+                    <div class="space-y-3">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-lg bg-dark-bg-primary border-2 border-dark-border"></div>
+                            <div>
+                                <p class="text-xs font-medium text-dark-text-primary">border-dark-border</p>
+                                <p class="text-xs text-dark-text-muted">Cards, panels, dividers, inputs</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-lg bg-dark-bg-primary border-2 border-brand-500/30"></div>
+                            <div>
+                                <p class="text-xs font-medium text-dark-text-primary">border-brand-500/30</p>
+                                <p class="text-xs text-dark-text-muted">Hover accent, focus rings</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-lg bg-dark-bg-primary border-2 border-{color}-600/30"></div>
+                            <div>
+                                <p class="text-xs font-medium text-dark-text-primary">border-{color}-600/30</p>
+                                <p class="text-xs text-dark-text-muted">Semantic badges and icon buttons</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>

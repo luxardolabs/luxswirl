@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% from 'macros/page.html' import page_header %}
+{% from 'macros/settings.html' import settings_nav %}
+
+{% block content %}
+{{ page_header(
+    title='Component Library',
+    description='Canonical reference for all LuxSwirl UI macros and design tokens. Every component on this page is rendered using macros only.'
+) }}
+
+{{ settings_nav('components', current_user) }}
+
+<div class="space-y-10">
+
+    {# Colors: brand palette, semantic colors, surface tokens #}
+    {% include 'partials/settings/components/colors.html' %}
+
+    {# Badges: badge(), tag(), status_dot(), role_badge(), category_badge(), check_type_badge(), domain status badges #}
+    {% include 'partials/settings/components/badges.html' %}
+
+    {# Buttons: icon action buttons, text buttons (btn-primary/secondary/danger) #}
+    {% include 'partials/settings/components/buttons.html' %}
+
+    {# Layout: stat cards, base cards, form elements, tables, page header #}
+    {% include 'partials/settings/components/layout.html' %}
+
+    {# Macro Index: reference table of all macro files and exports #}
+    {% include 'partials/settings/components/macro_index.html' %}
+
+</div>
+{% endblock %}

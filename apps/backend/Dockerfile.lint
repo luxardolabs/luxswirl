@@ -1,0 +1,17 @@
+# Backend lint image — ruff + mypy + import-linter, built fresh from CURRENT
+# source. The runtime image installs --only main (no linters), so linting must
+# use this throwaway image, not the running container. Build context = repo root.
+FROM python:3.14-slim
+
+WORKDIR /app
+RUN pip install --no-cache-dir poetry==1.8.2 && poetry config virtualenvs.create false
+
+# Deps (incl. dev group: ruff, mypy, import-linter) — cached on lock changes.
+COPY apps/backend/pyproject.toml apps/backend/poetry.lock* /app/
+RUN poetry install --no-root --with dev
+
+# Source. shared/ is vendored alongside app/ so `import shared.*` resolves.
+COPY apps/backend/app /app/app
+COPY apps/shared /app/shared
+COPY apps/backend/tests /app/tests
+ENV PYTHONPATH=/app

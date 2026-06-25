@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% from 'macros/page.html' import page_header %}
+{% from 'macros/buttons.html' import btn_refresh %}
+
+{% block content %}
+{% set actions_html %}
+{{ btn_refresh(hx_get='/database-health/refresh', hx_target='#health-metrics', hx_swap='innerHTML') }}
+{% endset %}
+
+{{ page_header(
+    title='Database Health & Metrics',
+    description='TimescaleDB performance, compression, and retention metrics',
+    actions=actions_html
+) }}
+
+<!-- Health Metrics -->
+<div id="health-metrics">
+    {% include 'partials/database_health.html' %}
+</div>
+{% endblock %}

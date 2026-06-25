@@ -1,0 +1,55 @@
+{#
+    Maintenance job status partial — embedded by whichever UI triggered the
+    enqueue (agent delete button, bulk-action submit, etc.).
+
+    Polls every 1s while queued/running. When the server returns a partial
+    without `hx-trigger` (terminal state), HTMX stops polling automatically.
+
+    On `done` we emit an `hx-on::load` that fires the `maintenanceJobDone`
+    custom event with the job kind + target_id so the originating page can
+    do its own DOM cleanup (remove the deleted row, close the side panel,
+    refresh the page, etc.).
+#}
+{%- set is_terminal = job.status in ['done', 'failed'] -%}
+<div id="maintenance-{{ job.id }}"
+     class="rounded-lg border p-3 text-sm
+            {% if job.status == 'done' %}border-green-600/30 bg-green-500/10 text-green-300
+            {% elif job.status == 'failed' %}border-red-700 bg-red-900/20 text-red-300
+            {% else %}border-dark-border bg-dark-bg-tertiary text-dark-text-muted{% endif %}"
+     {% if not is_terminal %}
+     hx-get="/maintenance/{{ job.id }}/status"
+     hx-trigger="every 1s"
+     hx-swap="outerHTML"
+     {% endif %}
+     {% if job.status == 'done' %}
+     hx-on::load="window.dispatchEvent(new CustomEvent('maintenanceJobDone', { detail: { id: '{{ job.id }}', kind: '{{ job.kind }}', target_id: '{{ job.target_id or '' }}' } }))"
+     {% endif %}>
+
+    <div class="flex items-center gap-3">
+        {% if job.status == 'queued' %}
+        <span class="w-4 h-4 animate-pulse inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/clock.svg" %}</span>
+        <span>Queued…</span>
+
+        {% elif job.status == 'running' %}
+        <span class="w-4 h-4 animate-spin inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/arrow-path.svg" %}</span>
+        <span>
+            {% if job.progress and job.progress.message %}
+                {{ job.progress.message }}
+            {% else %}
+                Running…
+            {% endif %}
+            {% if job.progress and job.progress.processed is not none and job.progress.total %}
+                ({{ job.progress.processed }} / {{ job.progress.total }})
+            {% endif %}
+        </span>
+
+        {% elif job.status == 'done' %}
+        <span class="w-4 h-4 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/check-circle.svg" %}</span>
+        <span>Done.</span>
+
+        {% elif job.status == 'failed' %}
+        <span class="w-4 h-4 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/exclamation-circle.svg" %}</span>
+        <span class="font-mono">{{ job.error or 'Failed.' }}</span>
+        {% endif %}
+    </div>
+</div>

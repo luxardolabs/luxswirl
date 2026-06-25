@@ -1,0 +1,120 @@
+{% from 'macros/badges.html' import role_badge %}
+{% macro nav_link(href, label, icon_slug, exact=false) %}
+<a href="{{ href }}" aria-label="{{ label }}" class="{% if (exact and request.url.path == href) or (not exact and request.url.path.startswith(href)) %}nav-item-active{% else %}nav-item{% endif %}">
+    <span class="w-5 h-5 flex-shrink-0 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/" ~ icon_slug ~ ".svg" %}</span>
+    <span class="sidebar-text">{{ label }}</span>
+</a>
+{% endmacro %}
+
+{# nav_item_btn — sidebar nav-rail button for non-link actions (htmx, form submit, JS toggle).
+   Sibling of nav_link; sidebar-internal. extra_classes lets the Logout button keep its red tint. #}
+{% macro nav_item_btn(label, icon_slug, type='button', hx_get='', hx_post='', hx_target='',
+                      hx_swap='', extra_classes='', extra_attrs='') %}
+<button type="{{ type }}"
+        {% if hx_get %}hx-get="{{ hx_get }}"{% endif %}
+        {% if hx_post %}hx-post="{{ hx_post }}"{% endif %}
+        {% if hx_target %}hx-target="{{ hx_target }}"{% endif %}
+        {% if hx_swap %}hx-swap="{{ hx_swap }}"{% endif %}
+        class="nav-item w-full {{ extra_classes }}"
+        aria-label="{{ label }}"
+        {{ extra_attrs | safe }}>
+    <span class="w-5 h-5 flex-shrink-0 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/" ~ icon_slug ~ ".svg" %}</span>
+    <span class="sidebar-text">{{ label }}</span>
+</button>
+{% endmacro %}
+
+<nav class="flex flex-col h-full p-4 overflow-y-auto" aria-label="Main">
+    <!-- Logo -->
+    <div class="flex items-center gap-3 mb-8 px-2">
+        <div class="globe-3d-container">
+            <div class="globe-3d">
+                <!-- Outer ring -->
+                <div class="ring ring-outer"></div>
+
+                <!-- Latitude rings (horizontal) -->
+                <div class="ring ring-lat-1"></div>
+                <div class="ring ring-lat-2"></div>
+
+                <!-- Longitude rings (vertical) -->
+                <div class="ring ring-long-1"></div>
+                <div class="ring ring-long-2"></div>
+
+                <!-- Center core -->
+                <div class="core"></div>
+            </div>
+        </div>
+        <span class="text-xl font-bold text-dark-text-primary sidebar-text">LuxSwirl</span>
+    </div>
+
+    <!-- Main navigation -->
+    <div class="flex-1 space-y-1">
+        <!-- Primary monitoring view -->
+        {{ nav_link('/dashboard', 'Dashboard', 'squares-2x2') }}
+
+        <div class="my-4 border-t border-dark-border"></div>
+
+        <!-- Operations/scans -->
+        {{ nav_link('/jobs', 'Jobs', 'briefcase') }}
+
+        {{ nav_link('/status-pages', 'Public Pages', 'globe-alt') }}
+
+        {{ nav_link('/notification-logs', 'Notification Logs', 'document-text') }}
+
+        <div class="my-4 border-t border-dark-border"></div>
+
+        <!-- Infrastructure -->
+        {{ nav_link('/agents', 'Agents', 'server-stack') }}
+
+        <div class="my-4 border-t border-dark-border"></div>
+
+        <!-- System -->
+        <a href="/settings" class="nav-item">
+            <span class="w-5 h-5 flex-shrink-0 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/cog-6-tooth.svg" %}</span>
+            <span class="sidebar-text">Settings</span>
+        </a>
+
+        {{ nav_item_btn('My Account', 'user-circle',
+                        hx_get='/profile', hx_target='#panel-container', hx_swap='innerHTML') }}
+
+        {{ nav_link('/scheduler', 'Scheduler', 'clock') }}
+
+        {{ nav_link('/database-health', 'Database Health', 'circle-stack') }}
+    </div>
+
+    <!-- User info and actions -->
+    <div class="mt-auto pt-4 border-t border-dark-border space-y-1">
+        <!-- User info display. current_user is None when the global error handler
+             renders this layout (render_error_response passes None), so guard it —
+             otherwise every full-page web error crashes here. -->
+        {% if current_user %}
+        <div class="flex items-center gap-3 px-2 py-2">
+            <div class="w-8 h-8 rounded-full bg-brand-500/20 border border-brand-500/50 flex items-center justify-center flex-shrink-0">
+                <span class="text-sm font-semibold text-brand-500">{{ current_user.username[0]|upper }}</span>
+            </div>
+            <div class="min-w-0 sidebar-text">
+                <p class="text-sm font-medium text-dark-text-primary truncate">{{ current_user.username }}</p>
+                {% if current_user.role %}
+                {{ role_badge(current_user.role) }}
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Logout button -->
+        <form method="POST" action="/logout">
+            {{ nav_item_btn('Logout', 'arrow-right-on-rectangle',
+                            type='submit',
+                            extra_classes='text-red-400 hover:text-red-300 hover:bg-red-600/10') }}
+        </form>
+
+        <!-- Sidebar toggle -->
+        {{ nav_item_btn('Collapse', 'chevron-double-left',
+                        extra_attrs='data-toggle-sidebar') }}
+    </div>
+</nav>
+
+<style>
+    .sidebar-collapsed .sidebar-text {
+        display: none;
+    }
+</style>

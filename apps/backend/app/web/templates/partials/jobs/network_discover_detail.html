@@ -1,0 +1,167 @@
+<!-- Network Discovery Results -->
+{% from 'macros/buttons.html' import text_btn %}
+{% from 'macros/tables.html' import data_table %}
+{% set result = job.result %}
+
+<!-- Discovery Summary -->
+<div class="card p-5">
+    <h3 class="text-sm font-semibold uppercase tracking-wide text-dark-text-secondary mb-4">Network Topology Discovery</h3>
+    <div class="space-y-3 text-sm">
+        {% if result.agent_info %}
+        <div class="grid grid-cols-2 gap-3">
+            <div>
+                <span class="text-dark-text-muted">Hostname:</span>
+                <span class="text-dark-text-primary ml-2 font-mono">{{ result.agent_info.hostname or '-' }}</span>
+            </div>
+            {% if result.agent_info.container_mode is not none %}
+            <div>
+                <span class="text-dark-text-muted">Container Mode:</span>
+                <span class="ml-2">
+                    {% if result.agent_info.container_mode %}
+                    <span class="text-yellow-400">✓ Yes</span>
+                    {% else %}
+                    <span class="text-green-400">✗ No (Host mode)</span>
+                    {% endif %}
+                </span>
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        {% if result.docker_gateway %}
+        <div>
+            <span class="text-dark-text-muted">Docker Gateway:</span>
+            <span class="text-dark-text-primary ml-2 font-mono">{{ result.docker_gateway }}</span>
+        </div>
+        {% endif %}
+
+        {% if result.default_gateway %}
+        <div>
+            <span class="text-dark-text-muted">Default Gateway:</span>
+            <span class="text-green-400 ml-2 font-mono font-semibold">{{ result.default_gateway }}</span>
+        </div>
+        {% endif %}
+
+        {% if result.real_gateway %}
+        <div>
+            <span class="text-dark-text-muted">Real Gateway:</span>
+            <span class="text-green-400 ml-2 font-mono font-semibold">{{ result.real_gateway }}</span>
+            <span class="text-xs text-dark-text-muted ml-2">(via TTL trace)</span>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Suggested Scan Target -->
+{% if result.inferred_network %}
+<div class="card bg-gradient-to-br from-green-500/10 to-emerald-500/5 border-green-500/30 p-5">
+    <div class="flex items-start justify-between mb-4">
+        <div class="flex items-center gap-3">
+            <span class="w-6 h-6 text-green-400 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/check-circle.svg" %}</span>
+            <h3 class="text-lg font-semibold text-green-400">Suggested Scan Target</h3>
+        </div>
+    </div>
+    <div class="space-y-3">
+        <div class="grid grid-cols-2 gap-4 text-sm">
+            <div>
+                <span class="text-dark-text-muted">Inferred Network:</span>
+                <span class="text-green-300 ml-2 font-mono font-bold text-lg">{{ result.inferred_network }}</span>
+            </div>
+            {% if result.network_size %}
+            <div>
+                <span class="text-dark-text-muted">Network Size:</span>
+                <span class="text-dark-text-primary ml-2">{{ result.network_size }} hosts</span>
+            </div>
+            {% endif %}
+        </div>
+
+        {% set scan_svg %}<span class="w-4 h-4 mr-2 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/cpu-chip.svg" %}</span>{% endset %}
+        {{ text_btn(scan_svg, 'Scan This Network →', style='primary', type='button', hx_get='/jobs/create-form?job_type=network_scan&agent_id=' ~ job.runner_token ~ '&prefill_params=' ~ ({'subnet': result.inferred_network}|tojson|urlencode), hx_target='#panel-container', hx_swap='innerHTML', extra_classes='w-full mt-4') }}
+    </div>
+</div>
+{% endif %}
+
+<!-- Interfaces Table -->
+{% if result.interfaces %}
+<div class="card p-5">
+    <h3 class="text-sm font-semibold uppercase tracking-wide text-dark-text-secondary mb-4">Network Interfaces</h3>
+    <div class="overflow-x-auto">
+        {% call data_table([
+            {'label': 'Interface'},
+            {'label': 'IP Address'},
+            {'label': 'CIDR'},
+            {'label': 'Gateway'},
+            {'label': 'Suggested Scan'},
+            {'label': 'Actions', 'align': 'right'},
+        ]) %}
+                {% for iface in result.interfaces %}
+                <tr>
+                    <td class="font-mono text-sm text-dark-text-primary">{{ iface.name }}</td>
+                    <td class="font-mono text-sm text-dark-text-secondary">{{ iface.ip }}</td>
+                    <td class="font-mono text-sm text-dark-text-secondary">{{ iface.cidr or '-' }}</td>
+                    <td class="font-mono text-sm text-dark-text-secondary">{{ iface.gateway or '-' }}</td>
+                    <td>
+                        {% if iface.get('suggested_scan') %}
+                        <code class="text-xs bg-dark-bg-primary px-2 py-1 rounded text-green-300">{{ iface.suggested_scan }}</code>
+                        {% else %}
+                        <span class="text-dark-text-muted">-</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if iface.get('suggested_scan') %}
+                        {% set scan_sm_svg %}<span class="w-3 h-3 mr-1 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/cpu-chip.svg" %}</span>{% endset %}
+                        {{ text_btn(scan_sm_svg, 'Scan', style='primary', type='button', hx_get='/jobs/create-form?job_type=network_scan&agent_id=' ~ job.runner_token ~ '&prefill_params=' ~ ({'subnet': iface.suggested_scan}|tojson|urlencode), hx_target='#panel-container', hx_swap='innerHTML', extra_attrs='title="Scan ' ~ iface.suggested_scan ~ '"', extra_classes='text-xs px-2 py-1') }}
+                        {% else %}
+                        <span class="text-dark-text-muted">-</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+        {% endcall %}
+    </div>
+</div>
+{% endif %}
+
+<!-- ARP Neighbors -->
+{% if result.arp_neighbors and result.arp_neighbors|length > 0 %}
+<div class="card p-5">
+    <h3 class="text-sm font-semibold uppercase tracking-wide text-dark-text-secondary mb-4">ARP Neighbors ({{ result.arp_neighbors|length }})</h3>
+    <div class="flex flex-wrap gap-2">
+        {% for ip in result.arp_neighbors %}
+        <code class="text-xs bg-dark-bg-primary px-2 py-1 rounded text-dark-text-secondary font-mono">{{ ip }}</code>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<!-- Warnings/Recommendations -->
+{% if result.warning %}
+<div class="card bg-yellow-500/5 border-yellow-500/30 p-5">
+    <div class="flex items-start gap-3">
+        <span class="w-5 h-5 text-yellow-400 flex-shrink-0 mt-0.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/exclamation-triangle.svg" %}</span>
+        <div class="flex-1">
+            <h4 class="text-sm font-semibold text-yellow-400 mb-2">Warning</h4>
+            <p class="text-sm text-yellow-300">{{ result.warning }}</p>
+            {% if result.agent_info and result.agent_info.container_mode %}
+            <p class="text-xs text-yellow-300/70 mt-2">
+                💡 For better network visibility, consider running the agent in host networking mode.
+            </p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% if result.recommendations and result.recommendations|length > 0 %}
+<div class="card bg-blue-500/5 border-blue-500/30 p-5">
+    <h3 class="text-sm font-semibold uppercase tracking-wide text-blue-400 mb-3">Recommendations</h3>
+    <ul class="space-y-2 text-sm text-blue-300">
+        {% for rec in result.recommendations %}
+        <li class="flex items-start gap-2">
+            <span class="w-4 h-4 flex-shrink-0 mt-0.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/arrow-right.svg" %}</span>
+            <span>{{ rec }}</span>
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}

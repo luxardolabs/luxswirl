@@ -1,0 +1,70 @@
+{% from 'macros/jobs.html' import job_status_badge, job_type_icon, priority_indicator %}
+{% from 'macros/buttons.html' import icon_view, delete_icon_button, cancel_icon_button %}
+{% from 'macros/tables.html' import data_table %}
+
+<div class="card overflow-hidden">
+    {% call data_table([
+        {'label': 'Type', 'width': 'w-16'},
+        {'label': 'Job ID'},
+        {'label': 'Agent'},
+        {'label': 'Status', 'width': 'w-32'},
+        {'label': 'Priority', 'align': 'center', 'width': 'w-24'},
+        {'label': 'Created', 'width': 'w-40'},
+        {'label': 'Duration', 'align': 'right', 'width': 'w-32'},
+        {'label': 'Actions', 'width': 'w-32'},
+    ]) %}
+            {% if job_rows %}
+                {% for row in job_rows %}
+                <tr id="job-row-{{ row.job_id }}"
+                    hx-get="/jobs/{{ row.job_id }}/detail"
+                    hx-target="#panel-container"
+                    hx-swap="innerHTML"
+                    hx-trigger="click"
+                >
+                    <td>
+                        <div class="flex items-center gap-1 text-dark-text-muted">
+                            {{ job_type_icon(row.job_type) }}
+                        </div>
+                    </td>
+                    <td class="font-mono text-xs text-dark-text-secondary">
+                        {{ (row.job_id | string)[:8] }}...
+                    </td>
+                    <td class="text-sm text-dark-text-primary">
+                        {{ row.agent_name }}
+                    </td>
+                    <td>
+                        {{ job_status_badge(row.status) }}
+                    </td>
+                    <td class="text-center">
+                        {{ priority_indicator(row.priority) }}
+                    </td>
+                    <td class="text-sm text-dark-text-muted">
+                        <span class="timeago" data-timestamp="{{ row.created_at }}">
+                            {{ row.created_at }}
+                        </span>
+                    </td>
+                    <td class="text-right font-mono text-sm text-dark-text-secondary">
+                        {{ row.duration_display }}
+                    </td>
+                    <td data-stop-propagation>
+                        <div class="flex items-center gap-2">
+                            {{ icon_view(hx_get='/jobs/' ~ row.job_id ~ '/detail', hx_target='#panel-container') }}
+                            {% if row.status in ['pending', 'assigned', 'running'] %}
+                            {{ cancel_icon_button(hx_post='/jobs/' ~ row.job_id ~ '/cancel', hx_confirm_text='Cancel job ' ~ row.job_type ~ '?') }}
+                            {% endif %}
+                            {{ delete_icon_button(delete_url='/jobs/' ~ row.job_id, target_id='job-row-' ~ row.job_id) }}
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            {% else %}
+                <tr>
+                    <td colspan="8" class="text-center py-12 text-dark-text-muted">
+                        <span class="w-12 h-12 mx-auto mb-4 opacity-50 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/briefcase.svg" %}</span>
+                        <p class="text-lg font-medium">No jobs found</p>
+                        <p class="text-sm mt-2">Create a job to get started</p>
+                    </td>
+                </tr>
+            {% endif %}
+    {% endcall %}
+</div>

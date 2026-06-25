@@ -1,0 +1,16 @@
+{% from 'macros/buttons.html' import icon_btn %}
+<div class="card p-6 bg-red-900/20 border-red-700 relative">
+    <!-- Dismiss button (cancel/close = orange per /settings/components) -->
+    {% set dismiss_svg %}<span class="w-3.5 h-3.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/x-mark.svg" %}</span>{% endset %}
+    {{ icon_btn(dismiss_svg, color='orange', title='Dismiss error',
+                extra_classes='absolute top-4 right-4',
+                extra_attrs='data-dismiss-error aria-label="Dismiss error"') }}
+
+    <div class="flex items-start gap-3 pr-6">
+        <span class="w-6 h-6 text-red-500 flex-shrink-0 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/exclamation-circle.svg" %}</span>
+        <div class="flex-1 min-w-0">
+            <p class="text-sm font-medium text-red-400">Error</p>
+            <p class="text-xs text-red-500 mt-1 whitespace-pre-wrap font-mono break-words overflow-wrap-anywhere">{{ error }}</p>
+        </div>
+    </div>
+</div>

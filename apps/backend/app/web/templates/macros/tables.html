@@ -1,0 +1,113 @@
+{#
+═══════════════════════════════════════════════════════════════════════════════
+LuxSwirl table-level macros — pagination and (eventually) sortable headers.
+═══════════════════════════════════════════════════════════════════════════════
+
+This file holds the canonical pagination control. Every paginated page in the
+admin/web UI MUST render its pagination via `pagination_controls`, not by
+hand-rolling prev/numbered/next blocks. Centralization is enforced by an
+architecture test (`test_no_hand_rolled_pagination`).
+
+Why centralize:
+- Single source of truth for prev/next/numbered UI; mobile + accessibility
+  improvements happen in one place
+- Single source of truth for URL construction (via the `paginated_url` Jinja
+  global); no template ever concatenates query strings — that's how
+  double-`?` and missing-filter bugs slip in
+- Pagination DTO produced by `build_pagination` in
+  `schemas/pagination_schema.py` is the single shape every view service
+  passes; renaming a field updates one place
+
+Usage:
+    {% from 'macros/tables.html' import pagination_controls %}
+
+    {{ pagination_controls(pagination, '/notification-logs') }}
+
+    where `pagination` is a Pagination model from schemas.pagination_schema,
+    constructed by the view service via `build_pagination(page=..., per_page=...,
+    total=..., filters={...})`.
+#}
+
+
+{# ─── pagination_controls — THE one pagination UI ────────────────────── #}
+{#
+    Renders prev / numbered with elision / next, plus "Showing X–Y of N · Page A of B".
+    Hidden when total_pages <= 1 (no controls needed for a single-page result).
+
+    Args:
+        pagination : Pagination DTO (schemas.pagination_schema.Pagination)
+        base_url   : page route without query string, e.g. '/notification-logs'
+#}
+{% from 'macros/buttons.html' import btn_prev, btn_next %}
+{% macro pagination_controls(pagination, base_url) %}
+{%- if pagination.total_pages > 1 -%}
+<div class="flex items-center justify-between gap-4 px-2 py-3 mt-4 border-t border-dark-border-subtle">
+    <div class="text-xs tabular-nums text-dark-text-muted">
+        Showing
+        <span class="text-dark-text-primary font-medium">{{ pagination.range_start }}</span>–<span class="text-dark-text-primary font-medium">{{ pagination.range_end }}</span>
+        of <span class="text-dark-text-primary font-medium">{{ pagination.total }}</span>
+        <span class="text-dark-text-muted">· Page {{ pagination.page }} of {{ pagination.total_pages }}</span>
+    </div>
+
+    <div class="flex items-center gap-2">
+        {{ btn_prev(href=paginated_url(base_url, pagination, pagination.prev_page) if pagination.has_prev else '', disabled=not pagination.has_prev) }}
+
+        {# Numbered pages with elision: 1 ... (current-2..current+2) ... last #}
+        <div class="flex items-center gap-1">
+            {%- for p in range(1, pagination.total_pages + 1) -%}
+                {%- if p == pagination.page -%}
+                <span class="px-3 py-1.5 text-sm font-medium bg-brand-700 text-white rounded-md" aria-current="page">{{ p }}</span>
+                {%- elif p == 1 or p == pagination.total_pages or (p >= pagination.page - 2 and p <= pagination.page + 2) -%}
+                <a href="{{ paginated_url(base_url, pagination, p) }}"
+                   class="px-3 py-1.5 text-sm font-medium text-dark-text-secondary hover:bg-dark-bg-tertiary rounded-md transition-colors"
+                   aria-label="Go to page {{ p }}">{{ p }}</a>
+                {%- elif (p == pagination.page - 3 and pagination.page > 4) or (p == pagination.page + 3 and pagination.page < pagination.total_pages - 3) -%}
+                <span class="px-2 text-dark-text-muted" aria-hidden="true">…</span>
+                {%- endif -%}
+            {%- endfor -%}
+        </div>
+
+        {{ btn_next(href=paginated_url(base_url, pagination, pagination.next_page) if pagination.has_next else '', disabled=not pagination.has_next) }}
+    </div>
+</div>
+{%- endif -%}
+{% endmacro %}
+
+
+{# ─── data_table — THE one data-grid table ───────────────────────────── #}
+{#
+    The canonical data grid. Renders <table class="table"> + a <thead> with one
+    scope="col" <th> per column; the `.table` CSS layer (input.css) does all the
+    styling — tertiary thead, secondary uppercase header text, padded cells, row
+    hover. The ONLY things this adds over raw `.table` markup are the scope="col"
+    that screen readers need and a single column API, so every table is identical
+    and accessible. Never hand-roll a <thead>/<table>; enforced by
+    `test_no_hand_rolled_table`. Canonical usage is on /settings/components.
+
+    Args:
+        columns: list of column dicts —
+            {'label': 'User'}                       → left (default)
+            {'label': 'Actions', 'align': 'right'}  → align: left|center|right
+            {'label': 'Type', 'width': 'w-16'}      → optional fixed width class
+    Body: the {% raw %}{% call %}{% endraw %} block provides the <tbody> rows.
+#}
+{% macro data_table(columns) %}
+{# overflow-x-auto so wide tables scroll horizontally on narrow screens instead
+   of blowing out the viewport — applies to every data_table caller at once. #}
+<div class="overflow-x-auto">
+<table class="table">
+    <thead>
+        <tr>
+            {%- for col in columns %}
+            {%- set align_cls = 'text-' ~ col.align if col.align in ('right', 'center') else '' -%}
+            {%- set th_cls = (align_cls ~ ' ' ~ (col.width or '')) | trim -%}
+            <th scope="col"{% if th_cls %} class="{{ th_cls }}"{% endif %}>{{ col.label }}</th>
+            {%- endfor %}
+        </tr>
+    </thead>
+    <tbody>
+        {{ caller() }}
+    </tbody>
+</table>
+</div>
+{% endmacro %}

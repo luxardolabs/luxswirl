@@ -1,0 +1,91 @@
+{# Single job row - used in scheduler table and returned by HTMX actions #}
+{% from 'macros/buttons.html' import icon_run, icon_reset, icon_toggle_on, icon_toggle_off, icon_history %}
+{% from 'macros/badges.html' import badge, category_badge %}
+{% set job = row.job if row is defined else job %}
+{% set schedule_display = row.schedule_display if row is defined else schedule_display %}
+{% set category_color = row.category_color if row is defined else category_color %}
+{% set status_color = row.status_color if row is defined else status_color %}
+{% set is_running = row.is_running if row is defined else is_running %}
+{% set avg_duration = row.avg_duration if row is defined else avg_duration %}
+{% set now = row.now if row is defined else now %}
+
+<tr id="job-row-{{ job.job_key }}" class="hover:bg-dark-bg-secondary/50 transition-colors duration-150">
+    <!-- Job Name -->
+    <td class="px-4 py-3">
+        <div>
+            <p class="text-sm font-medium text-dark-text-primary">{{ job.display_name }}</p>
+            <p class="text-xs text-dark-text-muted font-mono">{{ job.function_name }}</p>
+        </div>
+    </td>
+
+    <!-- Category -->
+    <td class="px-4 py-3">
+        {{ category_badge(job.category) }}
+    </td>
+
+    <!-- Schedule -->
+    <td class="px-4 py-3">
+        <span class="text-sm text-dark-text-secondary font-mono">{{ schedule_display }}</span>
+    </td>
+
+    <!-- Last Run -->
+    <td class="px-4 py-3">
+        {% if job.last_run_at %}
+        <span class="text-sm text-dark-text-secondary" title="{{ job.last_run_at | format_datetime(include_date=True) }}">
+            {{ job.last_run_at | timeago }}
+        </span>
+        {% else %}
+        <span class="text-sm text-dark-text-muted">Never</span>
+        {% endif %}
+    </td>
+
+    <!-- Next Run -->
+    <td class="px-4 py-3">
+        {% if is_running %}
+        {{ badge("Running", "info") }}
+        {% elif job.next_run_at and job.enabled %}
+        <span class="text-sm text-dark-text-secondary" title="{{ job.next_run_at | format_datetime(include_date=True) }}">
+            {{ job.next_run_at | timeago }}
+        </span>
+        {% elif not job.enabled %}
+        <span class="text-sm text-dark-text-muted">Disabled</span>
+        {% else %}
+        <span class="text-sm text-dark-text-muted">-</span>
+        {% endif %}
+    </td>
+
+    <!-- Status -->
+    <td class="px-4 py-3">
+        {% if job.last_status %}
+        {% set status_variant_map = {'green': 'success', 'red': 'danger', 'yellow': 'warning', 'blue': 'info'} %}
+        {{ badge(job.last_status, status_variant_map.get(status_color, 'neutral')) }}
+        {% else %}
+        <span class="text-sm text-dark-text-muted">-</span>
+        {% endif %}
+    </td>
+
+    <!-- Stats -->
+    <td class="px-4 py-3">
+        <div class="text-xs text-dark-text-secondary space-y-0.5">
+            <div>{{ job.total_runs }} runs{% if job.failed_runs > 0 %}, <span class="text-red-400">{{ job.failed_runs }} failed</span>{% endif %}</div>
+            {% if job.retry_count > 0 %}
+            <div class="text-yellow-400">{{ job.retry_count }}/{{ job.retry_limit or '∞' }} retries</div>
+            {% endif %}
+            <div class="text-dark-text-muted">avg {{ avg_duration }}</div>
+        </div>
+    </td>
+
+    <!-- Actions -->
+    <td class="px-4 py-3 text-right">
+        <div class="flex items-center justify-end gap-1">
+            {{ icon_history(hx_get='/scheduler/jobs/' ~ job.job_key ~ '/history') }}
+            {{ icon_run(hx_post='/scheduler/jobs/' ~ job.job_key ~ '/run', hx_target='#job-row-' ~ job.job_key) }}
+            {{ icon_reset(title='Reset retries and re-enable', hx_post='/scheduler/jobs/' ~ job.job_key ~ '/reset', hx_target='#job-row-' ~ job.job_key) }}
+            {% if job.enabled %}
+            {{ icon_toggle_off(hx_post='/scheduler/jobs/' ~ job.job_key ~ '/toggle', hx_target='#job-row-' ~ job.job_key) }}
+            {% else %}
+            {{ icon_toggle_on(hx_post='/scheduler/jobs/' ~ job.job_key ~ '/toggle', hx_target='#job-row-' ~ job.job_key) }}
+            {% endif %}
+        </div>
+    </td>
+</tr>

@@ -1,0 +1,62 @@
+{% from 'macros/buttons.html' import confirm_action_btn %}
+
+{# Action button icons — inline so the page doesn't pull from a sprite #}
+{%- set ICO_CHECK %}<span class="w-3.5 h-3.5 mr-1.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/check.svg" %}</span>{% endset %}
+{%- set ICO_X %}<span class="w-3.5 h-3.5 mr-1.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/x-mark.svg" %}</span>{% endset %}
+{%- set ICO_PAUSE %}<span class="w-3.5 h-3.5 mr-1.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/pause.svg" %}</span>{% endset %}
+{%- set ICO_PLAY %}<span class="w-3.5 h-3.5 mr-1.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/play-circle.svg" %}</span>{% endset %}
+{%- set ICO_BAN %}<span class="w-3.5 h-3.5 mr-1.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/no-symbol.svg" %}</span>{% endset %}
+{%- set ICO_TRASH %}<span class="w-3.5 h-3.5 mr-1.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/trash.svg" %}</span>{% endset %}
+        <!-- Actions Section -->
+        <div class="mb-6 space-y-3">
+            <!-- Status Actions -->
+            {% if agent.approval_status == 'pending' %}
+            <div class="flex items-center gap-2">
+                {{ confirm_action_btn(icon_svg=ICO_CHECK, label='Approve', color='green', hx_post='/agents/' ~ agent.id ~ '/approve-web', after='reload', title='Approve agent') }}
+                {{ confirm_action_btn(icon_svg=ICO_X, label='Reject', color='red', hx_post='/agents/' ~ agent.id ~ '/reject-web', after='reload', title='Reject agent') }}
+            </div>
+            {% elif agent.approval_status == 'active' %}
+            <div class="flex items-center gap-2">
+                {{ confirm_action_btn(icon_svg=ICO_PAUSE, label='Pause', color='orange', hx_post='/agents/' ~ agent.id ~ '/pause-web', after='reload', title='Pause agent') }}
+                {{ confirm_action_btn(icon_svg=ICO_BAN, label='Disable', color='gray', hx_post='/agents/' ~ agent.id ~ '/disable-web', after='reload', title='Disable agent') }}
+            </div>
+            {% elif agent.approval_status == 'paused' %}
+            <div>
+                {{ confirm_action_btn(icon_svg=ICO_PLAY, label='Resume', color='green', hx_post='/agents/' ~ agent.id ~ '/resume-web', after='reload', title='Resume agent') }}
+                {% if agent.status_reason %}
+                <p class="text-xs text-dark-text-muted mt-2">Reason: {{ agent.status_reason }}</p>
+                {% endif %}
+            </div>
+            {% elif agent.approval_status == 'disabled' %}
+            <div>
+                {{ confirm_action_btn(icon_svg=ICO_CHECK, label='Enable', color='green', hx_post='/agents/' ~ agent.id ~ '/enable-web', after='reload', title='Enable agent') }}
+                {% if agent.status_reason %}
+                <p class="text-xs text-dark-text-muted mt-2">Reason: {{ agent.status_reason }}</p>
+                {% endif %}
+            </div>
+            {% endif %}
+
+            {# Delete action — hx-target is the action card so the polling
+               partial REPLACES the button while the job is in flight; the
+               page reloads on `maintenanceJobDone`. #}
+            <div id="agent-delete-action-{{ agent.id }}"
+                 class="card bg-red-500/5 border-red-500/20 p-3">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        <span class="w-4 h-4 text-red-400 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/exclamation-triangle.svg" %}</span>
+                        <span class="text-sm text-dark-text-muted">
+                            {% if check_count > 0 %}
+                            Delete agent + {{ check_count }} check{{ 's' if check_count != 1 }} + history
+                            {% else %}
+                            Delete agent and all data
+                            {% endif %}
+                        </span>
+                    </div>
+                    {{ confirm_action_btn(icon_svg=ICO_TRASH, label='Delete', color='red',
+                        hx_delete='/agents/' ~ agent.id,
+                        hx_target='#agent-delete-action-' ~ agent.id|string,
+                        hx_swap='innerHTML',
+                        title='Delete agent and all data') }}
+                </div>
+            </div>
+        </div>

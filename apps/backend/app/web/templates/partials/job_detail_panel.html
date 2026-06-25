@@ -1,0 +1,158 @@
+{% from 'macros/jobs.html' import job_status_badge, job_type_icon, priority_indicator %}
+{% from 'macros/buttons.html' import confirm_action_btn %}
+{%- set ICO_X %}<span class="w-3.5 h-3.5 mr-1.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/x-circle.svg" %}</span>{% endset %}
+{%- set ICO_TRASH %}<span class="w-3.5 h-3.5 mr-1.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/trash.svg" %}</span>{% endset %}
+{% from 'macros/panels.html' import panel_wrapper, panel_header, panel_content %}
+
+{%- set h_pre -%}<div class="flex items-center gap-2 text-dark-text-muted">{{ job_type_icon(job.job_type) }}</div>{%- endset -%}
+{%- set h_extra = job_status_badge(job.status) -%}
+
+{% call panel_wrapper(max_width='max-w-3xl') %}
+    {{ panel_header(job.job_type|replace('_', ' ')|title, extra_pre=h_pre, extra_left=h_extra) }}
+    {% call panel_content() %}
+    <div class="space-y-6">
+        <!-- Job Metadata -->
+        <div class="card p-5 space-y-3">
+            <h3 class="text-sm font-semibold uppercase tracking-wide text-dark-text-secondary">Job Details</h3>
+            <div class="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                    <span class="text-dark-text-muted">Job ID:</span>
+                    <span class="text-dark-text-primary ml-2 font-mono">{{ job.id }}</span>
+                </div>
+                <div>
+                    <span class="text-dark-text-muted">Agent:</span>
+                    <span class="text-dark-text-primary ml-2">{{ agent.agent_name or agent.id if agent else 'server' }}</span>
+                </div>
+                <div>
+                    <span class="text-dark-text-muted">Priority:</span>
+                    <span class="ml-2">{{ priority_indicator(job.priority) }}</span>
+                </div>
+                <div>
+                    <span class="text-dark-text-muted">Created:</span>
+                    <span class="text-dark-text-primary ml-2">{{ job.created_at | format_datetime('%Y-%m-%d %I:%M:%S%p') if job.created_at else '-' }}</span>
+                </div>
+                {% if job.assigned_at %}
+                <div>
+                    <span class="text-dark-text-muted">Assigned:</span>
+                    <span class="text-dark-text-primary ml-2">{{ job.assigned_at | format_datetime('%Y-%m-%d %I:%M:%S%p') }}</span>
+                </div>
+                {% endif %}
+                {% if job.started_at %}
+                <div>
+                    <span class="text-dark-text-muted">Started:</span>
+                    <span class="text-dark-text-primary ml-2">{{ job.started_at | format_datetime('%Y-%m-%d %I:%M:%S%p') }}</span>
+                </div>
+                {% endif %}
+                {% if job.completed_at %}
+                <div>
+                    <span class="text-dark-text-muted">Completed:</span>
+                    <span class="text-dark-text-primary ml-2">{{ job.completed_at | format_datetime('%Y-%m-%d %I:%M:%S%p') }}</span>
+                </div>
+                {% endif %}
+                {% if job.duration_seconds %}
+                <div>
+                    <span class="text-dark-text-muted">Duration:</span>
+                    <span class="text-dark-text-primary ml-2 font-mono">{{ "%.2f"|format(job.duration_seconds) }}s</span>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Parameters -->
+        {% if job.params %}
+        <div class="card p-5">
+            <h3 class="text-sm font-semibold uppercase tracking-wide text-dark-text-secondary mb-3">Parameters</h3>
+            {% if job.job_type == 'network_scan' %}
+                <!-- Network Scan Parameters -->
+                <div class="text-sm">
+                    <span class="font-mono text-dark-text-primary">{{ job.params.subnet }}</span>
+                    <span class="text-dark-text-muted mx-2">•</span>
+                    <span class="text-dark-text-muted">{{ job.params.timeout }}s/host</span>
+                    <span class="text-dark-text-muted mx-2">•</span>
+                    <span class="text-dark-text-muted">{{ job.params.max_concurrent }} concurrent</span>
+                    <span class="text-dark-text-muted mx-2">•</span>
+                    <span class="text-dark-text-muted">Ports: {{ job.params.ports|join(', ') if job.params.ports else 'None' }}</span>
+                </div>
+            {% elif job.job_type == 'network_discover' %}
+                <!-- Network Discover Parameters -->
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <span class="text-xs text-dark-text-muted">Timeout:</span>
+                        <span class="text-sm font-mono text-dark-text-primary ml-2">{{ job.params.timeout }}s</span>
+                    </div>
+                    <div>
+                        <span class="text-xs text-dark-text-muted">Max Retries:</span>
+                        <span class="text-sm font-mono text-dark-text-primary ml-2">{{ job.params.retries }}</span>
+                    </div>
+                </div>
+            {% else %}
+                <!-- Default JSON display for unknown job types -->
+                <pre class="text-xs font-mono bg-dark-bg-primary p-3 rounded overflow-x-auto text-dark-text-secondary">{{ job.params|tojson(indent=2) }}</pre>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <!-- Error Display -->
+        {% if job.error %}
+        <div class="card bg-red-500/5 border-red-500/30 p-5">
+            <div class="flex items-start gap-3">
+                <span class="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/exclamation-circle.svg" %}</span>
+                <div class="flex-1">
+                    <h3 class="text-sm font-semibold text-red-400 mb-2">Error</h3>
+                    <p class="text-sm text-red-300 font-mono">{{ job.error }}</p>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Job-Type-Specific Results -->
+        {% if job.result %}
+            {% if job.job_type == 'network_discover' %}
+                {% include 'partials/jobs/network_discover_detail.html' %}
+            {% elif job.job_type == 'network_scan' %}
+                {% include 'partials/jobs/network_scan_detail.html' %}
+            {% else %}
+                <!-- Generic result display for unknown job types -->
+                <div class="card p-5">
+                    <h3 class="text-sm font-semibold uppercase tracking-wide text-dark-text-secondary mb-3">Result</h3>
+                    <pre class="text-xs font-mono bg-dark-bg-primary p-3 rounded overflow-x-auto text-dark-text-secondary">{{ job.result|tojson(indent=2) }}</pre>
+                </div>
+            {% endif %}
+        {% elif job.status in ['completed', 'failed'] %}
+            <div class="card p-12 text-center">
+                <span class="w-12 h-12 mx-auto mb-4 text-dark-text-muted opacity-50 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/document-text.svg" %}</span>
+                <p class="text-lg font-medium text-dark-text-primary mb-2">No result data</p>
+                <p class="text-sm text-dark-text-muted">Job completed but no result was stored</p>
+            </div>
+        {% elif job.status == 'running' %}
+            <div class="card p-12 text-center">
+                <span class="w-12 h-12 mx-auto mb-4 text-yellow-400 animate-spin inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/arrow-path.svg" %}</span>
+                <p class="text-lg font-medium text-yellow-400 mb-2">Job Running...</p>
+                <p class="text-sm text-dark-text-muted">Results will appear when complete</p>
+            </div>
+        {% else %}
+            <div class="card p-12 text-center">
+                <span class="w-12 h-12 mx-auto mb-4 text-dark-text-muted opacity-50 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/clock.svg" %}</span>
+                <p class="text-lg font-medium text-dark-text-primary mb-2">Waiting to Start</p>
+                <p class="text-sm text-dark-text-muted">Job will execute when assigned to agent</p>
+            </div>
+        {% endif %}
+
+        <!-- Actions -->
+        <div class="flex gap-3">
+            {% if job.status in ['pending', 'assigned', 'running'] %}
+            <div class="flex-1">
+                {{ confirm_action_btn(icon_svg=ICO_X, label='Cancel Job', color='orange',
+                    hx_post='/jobs/' ~ job.id ~ '/cancel', after='reload',
+                    extra_classes='w-full', title='Cancel this job') }}
+            </div>
+            {% endif %}
+            <div class="{% if job.status in ['pending', 'assigned', 'running'] %}flex-1{% else %}w-full{% endif %}">
+                {{ confirm_action_btn(icon_svg=ICO_TRASH, label='Delete Job', color='red',
+                    hx_delete='/jobs/' ~ job.id, after='reload',
+                    extra_classes='w-full', title='Delete this job') }}
+            </div>
+        </div>
+    </div>
+    {% endcall %}
+{% endcall %}

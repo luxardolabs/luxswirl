@@ -1,0 +1,110 @@
+{% from 'macros/buttons.html' import text_btn, tag_pill_button %}
+<!-- Assignment selector for replicate/distribute modes -->
+<div class="space-y-4" data-selector-init='{"existingSelector": {% if check and check.agent_selector %}{{ check.agent_selector|tojson }}{% else %}null{% endif %}, "availableTags": {{ available_tags|tojson }}}'>
+    <div class="card bg-blue-500/5 border-blue-500/20 p-4">
+        <div class="flex items-start gap-3">
+            <span class="w-5 h-5 text-blue-400 mt-0.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/information-circle.svg" %}</span>
+            <div class="flex-1 text-sm">
+                <p class="text-blue-400 font-medium mb-1">{{ mode_title }}</p>
+                <p class="text-dark-text-muted text-xs">{{ mode_description }}</p>
+            </div>
+        </div>
+    </div>
+
+    <div>
+        <div class="flex items-center justify-between mb-2">
+            <label class="label mb-0">Required Tags</label>
+
+            <!-- Match mode toggle slider -->
+            <div class="relative inline-flex items-center bg-dark-bg-tertiary rounded-lg p-1 border border-dark-border">
+                <!-- Sliding background -->
+                <div id="match-mode-slider" class="absolute left-1 top-1 bottom-1 w-[calc(50%-0.25rem)] bg-brand-600/20 border border-brand-600/50 rounded transition-all duration-200 ease-in-out"></div>
+
+                <!-- Toggle buttons -->
+                <button
+                    type="button"
+                    id="match-mode-all"
+                    data-set-match-mode="all"
+                    class="relative z-10 px-3 py-1.5 text-xs font-medium transition-colors duration-200 text-brand-400"
+                >
+                    ALL (AND)
+                </button>
+                <button
+                    type="button"
+                    id="match-mode-any"
+                    data-set-match-mode="any"
+                    class="relative z-10 px-3 py-1.5 text-xs font-medium transition-colors duration-200 text-dark-text-muted"
+                >
+                    ANY (OR)
+                </button>
+                <input type="hidden" id="tag-match-mode" value="all">
+            </div>
+        </div>
+
+        <!-- Tag pills container -->
+        <div id="selector-tags-container" class="flex flex-wrap gap-2 p-3 border border-dark-border rounded-lg bg-dark-bg-primary min-h-[44px] mb-2">
+            <!-- Tags will be inserted here -->
+        </div>
+
+        <!-- Tag input with suggestions -->
+        <div class="flex gap-2 mb-2">
+            <div class="relative flex-1">
+                <input
+                    type="text"
+                    id="selector-tag-input"
+                    class="input font-mono"
+                    placeholder="Type tag name or browse existing tags..."
+                    autocomplete="off"
+                >
+
+                <!-- Tag suggestions dropdown -->
+                <div id="tag-suggestions" class="hidden absolute z-10 w-full mt-1 bg-dark-bg-secondary border border-dark-border rounded-lg shadow-lg max-h-64 overflow-y-auto">
+                    <!-- Suggestions will be populated here -->
+                </div>
+            </div>
+            {% set tag_svg %}<span class="w-4 h-4 mr-1.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/tag.svg" %}</span>{% endset %}
+            {{ text_btn(tag_svg, 'Browse', style='secondary', type='button', extra_attrs='data-toggle-tag-browser title="Browse existing tags"', extra_classes='px-4 whitespace-nowrap') }}
+        </div>
+
+        <!-- Available tags browser (initially hidden) -->
+        {% if available_tags %}
+        <div id="tag-browser" class="hidden mb-2 p-3 bg-blue-500/5 border border-blue-500/30 rounded-lg">
+            <p class="text-xs text-blue-400 mb-2 font-medium flex items-center gap-2">
+                <span class="w-4 h-4 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/server.svg" %}</span>
+                Agent tags (click to add):
+            </p>
+            <div class="flex flex-wrap gap-2">
+                {% for tag in available_tags %}
+                {{ tag_pill_button(tag, color='blue', extra_attrs='data-add-selector-tag-from-suggestion="' ~ tag ~ '"') }}
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <p class="text-xs text-dark-text-muted mt-1" id="match-mode-help">
+            <strong>ALL tags:</strong> Agent must have ALL selected tags.
+            <br>
+            Simple tags: <code class="bg-dark-bg-tertiary px-1 py-0.5 rounded">production</code> or
+            key:value pairs: <code class="bg-dark-bg-tertiary px-1 py-0.5 rounded">role:monitor</code>
+        </p>
+
+        <!-- Available tags browser at bottom (always visible) -->
+        {% if available_tags %}
+        <div class="mt-3 p-3 bg-blue-500/5 border border-blue-500/30 rounded-lg">
+            <p class="text-xs text-blue-400 mb-2 font-medium flex items-center gap-2">
+                <span class="w-4 h-4 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/server.svg" %}</span>
+                Agent tags (click to add):
+            </p>
+            <div class="flex flex-wrap gap-2" id="tag-browser-bottom">
+                {% for tag in available_tags %}
+                {{ tag_pill_button(tag, color='blue', extra_classes='tag-browser-btn',
+                                   extra_attrs='data-add-selector-tag-from-suggestion="' ~ tag ~ '" data-tag="' ~ tag ~ '"') }}
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Hidden field for backward compatibility with existing JS -->
+    <input type="hidden" name="agent_selector" id="agent-selector-hidden" value="">
+</div>

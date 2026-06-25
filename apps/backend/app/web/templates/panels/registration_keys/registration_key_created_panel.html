@@ -1,0 +1,126 @@
+{% from 'macros/buttons.html' import btn_copy, btn_save %}
+{% from 'macros/panels.html' import panel_wrapper, panel_header, panel_content, panel_footer %}
+
+{%- set h_pre -%}
+<div class="w-10 h-10 rounded-lg bg-green-500/20 border border-green-500 flex items-center justify-center">
+    <span class="w-6 h-6 text-green-400 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/check-circle.svg" %}</span>
+</div>
+{%- endset -%}
+
+{% call panel_wrapper(max_width='max-w-3xl') %}
+    {{ panel_header('Key Created Successfully!', subtitle=key.name, extra_pre=h_pre) }}
+    {% call panel_content() %}
+    <div class="space-y-6">
+        <!-- Critical Warning -->
+        <div class="p-4 bg-orange-500/10 border-2 border-orange-500 rounded-lg">
+            <div class="flex items-start gap-3">
+                <span class="w-6 h-6 text-orange-400 flex-shrink-0 mt-0.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/exclamation-triangle.svg" %}</span>
+                <div class="flex-1">
+                    <p class="font-semibold text-orange-400 mb-2">IMPORTANT - Save This Key Now!</p>
+                    <p class="text-sm text-dark-text-muted leading-relaxed">
+                        This is the <strong>only time</strong> you will see this key.
+                        It cannot be retrieved later. Copy it now and store it securely.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Registration Key Display -->
+        <div class="card p-5">
+            <label class="label mb-3">Registration Key</label>
+            <div class="relative">
+                <div class="input font-mono text-sm bg-dark-bg-tertiary border-2 border-brand-500 pr-24">
+                    <span id="registration-key-value" class="select-all">{{ plaintext_key }}</span>
+                </div>
+                {{ btn_copy(extra_classes='absolute right-2 top-1/2 -translate-y-1/2 px-3 py-1 text-sm', extra_attrs='id="copy-key-button" data-copy-source="registration-key-value"') }}
+            </div>
+            <p class="mt-2 text-xs text-dark-text-muted">
+                Click to select, or use the Copy button
+            </p>
+        </div>
+
+        <!-- Usage Instructions -->
+        <div class="card p-5">
+            <h3 class="text-sm font-semibold uppercase tracking-wide text-dark-text-secondary mb-4">How to Use This Key</h3>
+
+            <div class="space-y-3">
+                <!-- Step 1 -->
+                <div class="flex items-start gap-3 p-3 bg-dark-bg-tertiary rounded-lg">
+                    <div class="w-6 h-6 rounded-full bg-brand-500 text-white flex items-center justify-center flex-shrink-0 text-sm font-bold">
+                        1
+                    </div>
+                    <div class="flex-1">
+                        <p class="font-semibold text-sm mb-1">Set Environment Variable</p>
+                        <code class="text-xs bg-dark-bg-primary px-2 py-1 rounded block overflow-x-auto">
+                            LUXSWIRL_AUTH_KEY={{ plaintext_key }}
+                        </code>
+                    </div>
+                </div>
+
+                <!-- Step 2 -->
+                <div class="flex items-start gap-3 p-3 bg-dark-bg-tertiary rounded-lg">
+                    <div class="w-6 h-6 rounded-full bg-brand-500 text-white flex items-center justify-center flex-shrink-0 text-sm font-bold">
+                        2
+                    </div>
+                    <div class="flex-1">
+                        <p class="font-semibold text-sm mb-1">Agent Registration</p>
+                        <p class="text-xs text-dark-text-muted">
+                            Agent uses this key to register and will receive a unique agent-specific key
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Step 3 -->
+                <div class="flex items-start gap-3 p-3 bg-dark-bg-tertiary rounded-lg">
+                    <div class="w-6 h-6 rounded-full bg-brand-500 text-white flex items-center justify-center flex-shrink-0 text-sm font-bold">
+                        3
+                    </div>
+                    <div class="flex-1">
+                        <p class="font-semibold text-sm mb-1">Key Recovery</p>
+                        <p class="text-xs text-dark-text-muted">
+                            If agent loses its key (container restart), it can recover using this registration key
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Security Reminders -->
+        <div class="card p-5">
+            <h4 class="text-sm font-semibold uppercase tracking-wide text-dark-text-secondary mb-3 flex items-center gap-2">
+                <span class="w-4 h-4 text-brand-500 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/shield-check.svg" %}</span>
+                Security Best Practices
+            </h4>
+            <ul class="text-xs text-dark-text-muted space-y-2">
+                <li class="flex items-start gap-2">
+                    <span class="w-3 h-3 text-brand-500 flex-shrink-0 mt-0.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/check.svg" %}</span>
+                    <span>Store in a secure password manager or secrets vault</span>
+                </li>
+                <li class="flex items-start gap-2">
+                    <span class="w-3 h-3 text-brand-500 flex-shrink-0 mt-0.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/check.svg" %}</span>
+                    <span>Never commit to version control</span>
+                </li>
+                <li class="flex items-start gap-2">
+                    <span class="w-3 h-3 text-brand-500 flex-shrink-0 mt-0.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/check.svg" %}</span>
+                    <span>Use separate keys for different environments</span>
+                </li>
+                <li class="flex items-start gap-2">
+                    <span class="w-3 h-3 text-brand-500 flex-shrink-0 mt-0.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/check.svg" %}</span>
+                    <span>Revoke immediately if compromised</span>
+                </li>
+                <li class="flex items-start gap-2">
+                    <span class="w-3 h-3 text-brand-500 flex-shrink-0 mt-0.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/check.svg" %}</span>
+                    <span>Monitor usage count and last used timestamp</span>
+                </li>
+            </ul>
+        </div>
+    </div>
+    {% endcall %}
+
+    {% call panel_footer() %}
+        {# Close panel + refresh page via the existing app.js event listeners.
+           No JS module needed — `closeSidePanel` and `refreshPage` are already
+           wired up in app.js and consumed by the rest of the codebase. #}
+        {{ btn_save(label="I've Saved The Key - Close", extra_classes='flex-1', extra_attrs='type="button" hx-on::click="document.body.dispatchEvent(new CustomEvent(\'closeSidePanel\'));setTimeout(()=>document.body.dispatchEvent(new CustomEvent(\'refreshPage\')),300)"') }}
+    {% endcall %}
+{% endcall %}

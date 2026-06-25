@@ -1,0 +1,245 @@
+{% extends "base.html" %}
+{% from 'macros/page.html' import page_header %}
+{% from 'macros/status.html' import status_row_compressed %}
+{% from 'macros/buttons.html' import btn_create, icon_btn, icon_edit, icon_delete, btn_save, btn_cancel_text %}
+{% from 'macros/tables.html' import pagination_controls %}
+{% from 'macros/filters.html' import filter_card, filter_select, filter_search, filter_per_page %}
+
+{% block content %}
+{% set actions_html %}
+{{ btn_create(label='New Check', hx_get='/checks/create-form', hx_target='#panel-container', hx_swap='innerHTML') }}
+{% endset %}
+
+{{ page_header(
+    title='Status',
+    description='Split-screen monitoring dashboard with inline status bars',
+    actions=actions_html
+) }}
+
+<!-- Summary Stats (auto-updates based on settings) -->
+<div id="status-summary" hx-get="/internal/summary" hx-trigger="every {{ refresh_interval }}s" hx-swap="outerHTML">
+    {% include 'partials/status_summary.html' %}
+</div>
+
+<div id="status-content">
+<!-- Filters -->
+{% call filter_card('/dashboard') %}
+    {{ filter_search('search', 'Search', 'Search checks by name or target...', filters.search or '') }}
+
+    {% call filter_select('status', 'Status') %}
+        <option value="" {% if not filters.status %}selected{% endif %}>All</option>
+        <option value="up" {% if filters.status == 'up' %}selected{% endif %}>Up</option>
+        <option value="down" {% if filters.status == 'down' %}selected{% endif %}>Down</option>
+        <option value="unknown" {% if filters.status == 'unknown' %}selected{% endif %}>Unknown</option>
+    {% endcall %}
+
+    {% call filter_select('agent_id', 'Agent') %}
+        <option value="">All Agents</option>
+        {% for agent in all_agents %}
+        <option value="{{ agent.id }}" {% if filters.agent_id == agent.id|string %}selected{% endif %}>
+            {{ agent.agent_name or agent.id }}
+        </option>
+        {% endfor %}
+    {% endcall %}
+
+    {% call filter_select('check_type', 'Type') %}
+        <option value="">All Types</option>
+        {% for check_type in all_types %}
+        <option value="{{ check_type }}" {% if filters.check_type == check_type %}selected{% endif %}>{{ check_type }}</option>
+        {% endfor %}
+    {% endcall %}
+
+    {% call filter_select('tags', 'Tag') %}
+        <option value="">All Tags</option>
+        {% for tag in all_tags %}
+        <option value="{{ tag }}" {% if filters.tags == tag %}selected{% endif %}>{{ tag }}</option>
+        {% endfor %}
+    {% endcall %}
+
+    {{ filter_per_page(pagination.per_page) }}
+{% endcall %}
+
+<!-- Split-screen layout: 40% list, 60% detail (sticky) -->
+<div class="grid grid-cols-12 gap-6 items-start">
+    <!-- Left: Check List (40% - 5 columns) -->
+    <div class="col-span-5">
+        {{ pagination_controls(pagination, '/dashboard') }}
+        <div class="card">
+            <div class="border-b border-dark-bg-tertiary">
+                <div class="p-4 flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <h2 class="text-lg font-semibold text-dark-text-primary">Checks ({{ pagination.total }})</h2>
+                        <!-- Toggle Selection Mode -->
+                        {% set toggle_mode_svg %}<span class="w-3.5 h-3.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/clipboard-document-check.svg" %}</span>{% endset %}
+                        {{ icon_btn(toggle_mode_svg, color='brand', title='Toggle selection mode', extra_attrs='id="toggle-selection-mode"') }}
+                    </div>
+                </div>
+
+                <!-- Maintenance job status slot — bulk-delete polls here, OOB-swapped from /checks/bulk-action -->
+                <div id="maintenance-status-slot" class="px-4 pb-2 empty:hidden"></div>
+
+                <!-- Bulk Actions (hidden by default) -->
+                <div id="bulk-actions" class="hidden px-4 pb-4">
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="flex items-center gap-4">
+                            <!-- Select All -->
+                            <label class="flex items-center gap-2 text-sm text-dark-text-muted cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    id="select-all-page"
+                                    class="rounded border-dark-border focus:ring-brand-500 focus:ring-offset-0 text-brand-600 cursor-pointer"
+                                >
+                                <span>All</span>
+                            </label>
+                            <span id="selection-count" class="text-sm font-medium text-dark-text-primary"></span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                        <!-- Enable -->
+                        {%- set enable_svg -%}<span class="w-3.5 h-3.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/check-circle.svg" %}</span>{%- endset -%}
+                        {{ icon_btn(enable_svg, color='green', title='Enable selected checks', extra_attrs='data-bulk-action="enable"') }}
+                        <!-- Disable -->
+                        {%- set disable_svg -%}<span class="w-3.5 h-3.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/no-symbol.svg" %}</span>{%- endset -%}
+                        {{ icon_btn(disable_svg, color='yellow', title='Disable selected checks', extra_attrs='data-bulk-action="disable"') }}
+                        <!-- Modify -->
+                        {{ icon_edit(title='Modify selected checks', extra_attrs='data-toggle-modify') }}
+                        <!-- Delete -->
+                        {{ icon_delete(title='Delete selected checks', extra_attrs='id="bulk-delete-btn" data-bulk-action="delete"') }}
+                        <!-- Clear Selection (cancel/close = orange per /settings/components) -->
+                        {% set clear_x_svg %}<span class="w-3.5 h-3.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/x-mark.svg" %}</span>{% endset %}
+                        {{ icon_btn(clear_x_svg, color='orange', title='Clear selection', extra_attrs='data-clear-selection') }}
+                        </div>
+                    </div>
+                    <!-- Select all notice (second row) -->
+                    <div id="select-all-notice" class="hidden text-sm text-dark-text-muted">
+                        <span id="select-all-link" class="text-brand-400 hover:text-brand-300 cursor-pointer underline"></span>
+                    </div>
+                </div>
+
+                <!-- Modify Panel (hidden by default) -->
+                <!-- Hidden form for bulk actions. JS populates `action`,
+                     `select_all`, and `check_ids` then triggers htmx submit. -->
+                {# bulk-action: visible Delete icon button is data-bulk-action="delete";
+                   its first click arms (2s window in status-bulk.js), second click
+                   submits this hidden form. No browser confirm. #}
+                <form id="bulk-action-form" style="display: none;"
+                    hx-post="/checks/bulk-action"
+                    hx-swap="none"
+                >
+                    <input type="hidden" name="action" id="bulk-action-type">
+                    <input type="hidden" name="select_all" id="bulk-select-all">
+                    <input type="hidden" name="agent" value="{{ filters.agent_id or '' }}">
+                    <input type="hidden" name="enabled" value="all">
+                    <input type="hidden" name="tag" value="{{ filters.tags or '' }}">
+                    <div id="bulk-check-ids-container"></div>
+                </form>
+
+                <div id="modify-panel" class="hidden px-4 pb-4 pt-4 border-t border-brand-600/20">
+                    <form id="bulk-modify-form"
+                        hx-post="/checks/bulk-modify"
+                        hx-swap="none"
+                    >
+                        <input type="hidden" name="select_all" id="modify-select-all">
+                        <input type="hidden" name="agent" value="{{ filters.agent_id or '' }}">
+                        <input type="hidden" name="enabled" value="all">
+                        <input type="hidden" name="tag" value="{{ filters.tags or '' }}">
+                        <div id="modify-check-ids-container"></div>
+
+                        <div class="flex gap-4 mb-4">
+                        <div>
+                            <label class="text-xs text-dark-text-muted block mb-1">Interval (s)</label>
+                            <input type="number" name="interval" class="input text-xs py-1 px-2 w-24" min="10" max="86400">
+                        </div>
+                        <div>
+                            <label class="text-xs text-dark-text-muted block mb-1">Timeout (s)</label>
+                            <input type="number" name="timeout" class="input text-xs py-1 px-2 w-24" min="1" max="300">
+                        </div>
+                        <div>
+                            <label class="text-xs text-dark-text-muted block mb-1">Retries</label>
+                            <input type="number" name="retries" class="input text-xs py-1 px-2 w-20" min="0" max="10">
+                        </div>
+                        <div class="flex-1">
+                            <label for="bulk-agent-id" class="text-xs text-dark-text-muted block mb-1">Agent</label>
+                            <select id="bulk-agent-id" name="agent_id" class="input text-xs py-1 px-2 w-full">
+                                <option value="">No change</option>
+                                {% for agent in all_agents %}
+                                <option value="{{ agent.id }}">{{ agent.agent_name or agent.id }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        </div>
+                    </form>
+                    <div class="flex items-center gap-2">
+                        {{ btn_save(label='Apply Changes', size='sm', extra_attrs='type="button" data-apply-modifications') }}
+                        {{ btn_cancel_text(label='Cancel', size='sm', extra_attrs='type="button" data-cancel-modifications') }}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Check rows -->
+            <div id="check-rows" class="divide-y divide-dark-bg-tertiary">
+                {% if status_rows %}
+                    {% for row in status_rows %}
+                        {{ status_row_compressed(row) }}
+                    {% endfor %}
+                {% else %}
+                    <div class="p-8 text-center text-dark-text-muted">
+                        <span class="w-12 h-12 mx-auto mb-4 text-dark-text-muted opacity-50 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/clipboard.svg" %}</span>
+                        <p class="text-sm">No checks found</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Pagination -->
+        {{ pagination_controls(pagination, '/dashboard') }}
+    </div>
+
+    <!-- Right: Detail Panel (60% - 7 columns, sticky) -->
+    <div class="col-span-7 sticky top-6" style="max-height: calc(100vh - 8rem);">
+        <div id="check-detail-panel" class="card overflow-y-auto scrollbar-thin" style="max-height: calc(100vh - 8rem);">
+            {% include 'partials/checks/check_detail_empty.html' %}
+        </div>
+    </div>
+</div>
+
+</div>
+
+<script>
+// Simple relative time display with timezone conversion
+document.querySelectorAll('.timeago').forEach(el => {
+    const timestamp = new Date(el.dataset.timestamp);
+    const now = new Date();
+    const seconds = Math.floor((now - timestamp) / 1000);
+
+    let text;
+    if (seconds < 60) {
+        text = seconds + 's ago';
+    } else if (seconds < 3600) {
+        text = Math.floor(seconds / 60) + 'm ago';
+    } else if (seconds < 86400) {
+        text = Math.floor(seconds / 3600) + 'h ago';
+    } else {
+        // For older timestamps, show local time instead of days
+        const timeStr = timestamp.toLocaleTimeString('en-US', {
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: true
+        }).toLowerCase();
+        text = timeStr;
+    }
+
+    el.textContent = text;
+    el.title = timestamp.toLocaleString(); // Full timestamp on hover
+});
+</script>
+
+<script type="module">
+import { init } from '/static/js/status-bulk.js';
+
+// Initialize bulk selection module
+init({
+    total: {{ pagination.total }},
+    perPage: {{ pagination.per_page }}
+});
+</script>
+{% endblock %}

@@ -1,0 +1,138 @@
+{#
+    Badge Macros - Status indicators and labels for LuxSwirl templates.
+
+    5-Color Semantic System:
+      - brand   (primary actions, UI highlights) — sky blue
+      - success (active, enabled, complete) — green
+      - warning (pending, attention needed) — amber/yellow
+      - danger  (errors, disabled, destructive) — red
+      - neutral (default, inactive, secondary) — gray
+
+    Usage:
+        {% from "macros/badges.html" import badge, status_badge, category_badge, status_dot %}
+#}
+
+
+{# Generic badge - 5 semantic colors only #}
+{% macro badge(text, variant="neutral", extra_classes='') %}
+{% set variants = {
+    'neutral': 'bg-gray-600/20 text-gray-300 border-gray-600/50',
+    'brand': 'bg-brand-600/20 text-brand-300 border-brand-600/50',
+    'success': 'bg-green-600/20 text-green-300 border-green-600/50',
+    'warning': 'bg-yellow-600/20 text-yellow-300 border-yellow-600/50',
+    'danger': 'bg-red-600/20 text-red-300 border-red-600/50',
+    'info': 'bg-blue-600/20 text-blue-300 border-blue-600/50',
+    'purple': 'bg-purple-600/20 text-purple-300 border-purple-600/50',
+    'cyan': 'bg-cyan-600/20 text-cyan-300 border-cyan-600/50',
+    'orange': 'bg-orange-600/20 text-orange-300 border-orange-600/50'
+} %}
+<span class="px-2 py-0.5 text-xs font-medium rounded-full border {{ variants.get(variant, variants.neutral) }} {{ extra_classes }}">
+    {{ text }}
+</span>
+{% endmacro %}
+
+
+{# Category badge - maps category names to colors #}
+{% macro category_badge(category) %}
+{% set category_map = {
+    'cleanup': 'purple',
+    'monitoring': 'cyan',
+    'system': 'neutral',
+    'network': 'blue',
+    'security': 'danger'
+} %}
+{{ badge(category, category_map.get(category, 'neutral')) }}
+{% endmacro %}
+
+
+{# Status dot - semantic colors for system status #}
+{% macro status_dot(status, show_label=false) %}
+{% set status_config = {
+    'online': {'color': 'bg-green-500', 'label': 'Online'},
+    'active': {'color': 'bg-green-500', 'label': 'Active'},
+    'healthy': {'color': 'bg-green-500', 'label': 'Healthy'},
+    'enabled': {'color': 'bg-green-500', 'label': 'Enabled'},
+    'success': {'color': 'bg-green-500', 'label': 'Success'},
+    'pending': {'color': 'bg-yellow-500', 'label': 'Pending'},
+    'warning': {'color': 'bg-yellow-500', 'label': 'Warning'},
+    'running': {'color': 'bg-blue-500 animate-pulse', 'label': 'Running'},
+    'offline': {'color': 'bg-red-500', 'label': 'Offline'},
+    'error': {'color': 'bg-red-500', 'label': 'Error'},
+    'failed': {'color': 'bg-red-500', 'label': 'Failed'},
+    'stale': {'color': 'bg-red-500', 'label': 'Stale'},
+    'disabled': {'color': 'bg-gray-500', 'label': 'Disabled'},
+    'inactive': {'color': 'bg-gray-500', 'label': 'Inactive'},
+    'unknown': {'color': 'bg-gray-600', 'label': 'Unknown'}
+} %}
+{% set config = status_config.get(status, {'color': 'bg-gray-600', 'label': status|title if status else 'Unknown'}) %}
+<span class="inline-flex items-center" title="{{ config.label }}"{% if not show_label %} role="img" aria-label="Status: {{ config.label }}"{% endif %}>
+    <span class="h-2.5 w-2.5 rounded-full {{ config.color }}"{% if show_label %} aria-hidden="true"{% endif %}></span>
+    {% if show_label %}<span class="ml-1.5 text-xs text-dark-text-muted">{{ config.label }}</span>{% endif %}
+</span>
+{% endmacro %}
+
+
+{# Active/Inactive status badge #}
+{% macro status_badge(is_active) %}
+{% if is_active %}
+{{ badge("Active", "success") }}
+{% else %}
+{{ badge("Inactive", "neutral") }}
+{% endif %}
+{% endmacro %}
+
+
+{# Role badge - maps user roles to brand tints #}
+{% macro role_badge(role) %}
+{% set role_map = {
+    'admin': 'purple',
+    'editor': 'info',
+    'viewer': 'neutral'
+} %}
+{{ badge(role|title, role_map.get(role, 'neutral')) }}
+{% endmacro %}
+
+
+{# Metadata tag - monospace identifier labels (agent names, tags, etc.)
+   Uses lighter /10 opacity backgrounds to differentiate from status badges.
+   Variants: info (blue, default), success (green), brand, neutral, purple #}
+{% macro tag(text, variant="info") %}
+{% set variants = {
+    'neutral': 'bg-gray-600/10 text-gray-300 border-gray-600/30',
+    'brand': 'bg-brand-600/10 text-brand-300 border-brand-600/30',
+    'success': 'bg-green-600/10 text-green-300 border-green-600/30',
+    'info': 'bg-blue-600/10 text-blue-300 border-blue-600/30',
+    'purple': 'bg-purple-600/10 text-purple-300 border-purple-600/30'
+} %}
+<span class="px-2 py-0.5 text-xs font-mono rounded border {{ variants.get(variant, variants.info) }} flex-shrink-0">
+    {{ text }}
+</span>
+{% endmacro %}
+
+
+{# Status pip - tiny w-2 h-2 inline status dot for check status indicators in compact layouts.
+   Maps 'up'/'down'/unknown to green/red/gray. Smaller than status_dot (w-2.5 h-2.5). #}
+{% macro status_pip(status) %}
+{% set pip_config = {
+    'up': {'color': 'bg-green-500', 'label': 'Up'},
+    'down': {'color': 'bg-red-500', 'label': 'Down'}
+} %}
+{% set config = pip_config.get(status, {'color': 'bg-gray-500', 'label': 'Unknown'}) %}
+<span class="w-2 h-2 rounded-full {{ config.color }} inline-block" role="img" aria-label="Status: {{ config.label }}" title="{{ config.label }}"></span>
+{% endmacro %}
+
+
+{# Check type badge #}
+{% macro check_type_badge(check_type) %}
+{% set type_map = {
+    'http': 'info',
+    'ping': 'success',
+    'tcp': 'purple',
+    'json': 'warning',
+    'dns': 'cyan',
+    'mysql': 'orange',
+    'postgres': 'brand',
+    'synthetic': 'danger'
+} %}
+{{ badge(check_type, type_map.get(check_type, 'neutral')) }}
+{% endmacro %}

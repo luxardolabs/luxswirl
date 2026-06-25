@@ -1,0 +1,56 @@
+# Test infrastructure — isolated from dev/prod
+# Usage:
+#   docker compose -f compose.test.yaml up -d --wait    # bring up test DB
+#   docker compose -f compose.test.yaml run --rm tests  # run pytest
+#   docker compose -f compose.test.yaml down -v          # tear down
+#
+# Pattern mirrors luxwx: TimescaleDB on tmpfs (RAM-backed) for fast schema
+# setup (~200ms per session). Non-conflicting ports so tests can run
+# alongside the dev stack. Data is destroyed on `down -v`.
+
+name: luxswirl-test
+
+services:
+  timescaledb-test:
+    image: timescale/timescaledb:latest-pg16
+    container_name: luxswirl_timescaledb_test
+    tmpfs:
+      - /var/lib/postgresql/data
+    # PostgreSQL needs more than Docker's 64MB default /dev/shm for sort
+    # buffers and parallel queries. Same rationale as compose.yaml.
+    shm_size: '1gb'
+    environment:
+      POSTGRES_DB: luxswirl_test
+      POSTGRES_USER: luxswirl_test
+      POSTGRES_PASSWORD: luxswirl_test
+    # 15432 is taken by luxwx's test DB on shared dev boxes; pick a port that
+    # doesn't collide. Internal port (used by the `tests` service via the
+    # compose network) is always 5432.
+    ports:
+      - "25432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U luxswirl_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+    restart: "no"
+
+  tests:
+    # Compose never builds: the Makefile bakes `luxswirl:test` fresh from
+    # on-disk source on every `make test` (the `test-build` target → Dockerfile.test,
+    # which is self-contained — no :dev base, no registry dependency).
+    image: luxswirl:test
+    container_name: luxswirl_tests
+    depends_on:
+      timescaledb-test:
+        condition: service_healthy
+    environment:
+      # Override the default DB URL so integration tests hit the test DB.
+      # `timescaledb-test` resolves via the compose-managed default network.
+      DATABASE__URL: postgresql+asyncpg://luxswirl_test:luxswirl_test@timescaledb-test:5432/luxswirl_test
+      LUXSWIRL_INTEGRATION: "1"
+    # No source bind-mounts — app/shared/tests are baked into the test image by
+    # `make test-build`. `run --rm tests` overrides this command; the default
+    # keeps the container alive so it doesn't exit when brought up via `up`.
+    command: ["tail", "-f", "/dev/null"]
+    restart: "no"

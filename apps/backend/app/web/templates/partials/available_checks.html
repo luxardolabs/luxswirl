@@ -1,0 +1,62 @@
+{% from 'macros/status.html' import check_type_icon %}
+{% from 'macros/badges.html' import tag as meta_tag, status_pip %}
+{% from 'macros/buttons.html' import icon_btn %}
+{% if filtered_checks %}
+<div class="text-xs text-dark-text-muted mb-3">Showing {{ filtered_checks|length }} checks</div>
+<div class="space-y-1.5">
+    {% for check in filtered_checks %}
+    {% set is_added = check.id in dashboard_check_ids if dashboard_check_ids else false %}
+    <div
+        class="flex items-center gap-2 p-2 rounded transition-colors cursor-pointer group available-check {{ 'bg-dark-bg-secondary opacity-60' if is_added else 'bg-dark-bg-tertiary hover:bg-dark-bg-secondary' }}"
+        data-check-id="{{ check.id }}"
+        data-check-name="{{ check.display_name }}"
+        data-check-type="{{ check.check_type }}"
+        data-agent-id="{{ check.agent.id }}"
+        data-target="{{ check.target }}"
+    >
+        {% if is_added %}
+            {% set added_svg %}<span class="w-3.5 h-3.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/check.svg" %}</span>{% endset %}
+            {{ icon_btn(added_svg, color='green', title='Already on dashboard', extra_classes='flex-shrink-0 add-check-btn') }}
+        {% else %}
+            {% set add_svg %}<span class="w-3.5 h-3.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/plus.svg" %}</span>{% endset %}
+            {{ icon_btn(add_svg, color='brand', title='Add to dashboard', extra_classes='flex-shrink-0 add-check-btn') }}
+        {% endif %}
+        <div class="flex-1 min-w-0 text-xs">
+            <div class="flex items-center gap-2">
+                <span class="font-medium text-dark-text-primary truncate">{{ check.display_name }}</span>
+                <span class="px-2 py-0.5 text-xs font-medium rounded bg-dark-bg-tertiary text-dark-text-muted flex items-center gap-1 flex-shrink-0">
+                    {{ check_type_icon(check.check_type) }}
+                    {{ check.check_type }}
+                </span>
+            </div>
+            <div class="flex items-center gap-1 mt-0.5 flex-wrap">
+                {{ meta_tag(check.agent.agent_name or check.agent.id, 'info') }}
+                {% if check.agent.tags %}
+                    {% for t in check.agent.tags %}
+                        {% set tag_clean = t.strip() %}
+                        {% if tag_clean %}
+                        {{ meta_tag(tag_clean, 'info') }}
+                        {% endif %}
+                    {% endfor %}
+                {% endif %}
+                {% if check.tags %}
+                    {% for t in check.tags %}
+                    {{ meta_tag(t, 'success') }}
+                    {% endfor %}
+                {% endif %}
+                <span class="text-xs font-mono text-dark-text-secondary truncate">{{ check.target }}</span>
+            </div>
+        </div>
+        <div class="flex-shrink-0">
+            {{ status_pip(check.latest_status) }}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="text-center py-12 text-dark-text-muted">
+    <span class="w-12 h-12 mx-auto mb-3 opacity-50 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/magnifying-glass.svg" %}</span>
+    <p class="text-sm">No checks found</p>
+    <p class="text-xs mt-1">Try adjusting your filters</p>
+</div>
+{% endif %}

@@ -1,0 +1,11 @@
+# Production overrides for docker-compose
+# Usage: docker-compose -f compose.yaml -f compose.prod.yaml up -d
+
+services:
+  luxswirl_server:
+    # Production CORS - MUST match the exact URL users access in their browser
+    environment:
+      - SERVER__CORS_ORIGINS=["https://luxswirl.example.com:9000"]
+      - LOG__LEVEL=INFO  # Less verbose for production
+      # Unique cookie name (critical if multiple apps on same subdomain)
+      - SECURITY__SESSION_COOKIE_NAME=luxswirl_session

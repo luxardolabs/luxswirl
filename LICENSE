@@ -1,0 +1,61 @@
+GNU AFFERO GENERAL PUBLIC LICENSE
+Version 3, 19 November 2007
+
+Copyright (C) 2024-2025 Luxardo Labs
+Contact: licensing@luxardolabs.com
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+---
+
+ADDITIONAL TERMS AND NOTICES
+
+1. Commercial Licensing
+
+   This software is dual-licensed. While the software is available under AGPLv3
+   for open-source use, commercial licenses are available for organizations that
+   wish to use this software in proprietary applications or host it as a service
+   without open-sourcing their modifications.
+
+   For commercial licensing inquiries, contact: sales@luxardolabs.com
+
+2. Network Use Requirement (AGPLv3 Section 13)
+
+   If you modify this program and make it available to users over a network
+   (including hosting it as a SaaS product), you must make the complete
+   corresponding source code available to those users.
+
+3. Attribution Requirement
+
+   When distributing or hosting this software, you must retain the copyright
+   notices and attribution to Luxardo Labs. This includes the "Powered by LuxSwirl"
+   notices in the web interface and API responses.
+
+4. No Warranty
+
+   THIS SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+   AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+   LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+   OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+   SOFTWARE.
+
+---
+
+For the complete AGPLv3 license text, visit:
+https://www.gnu.org/licenses/agpl-3.0.html
+
+For licensing questions and commercial licensing, see:
+docs/LICENSING_STRATEGY.md

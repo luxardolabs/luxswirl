@@ -1,0 +1,23 @@
+{
+  "name": "luxswirl-web-ui",
+  "version": "1.0.0",
+  "description": "LuxSwirl Monitoring - Web UI Assets",
+  "private": true,
+  "scripts": {
+    "dev": "tailwindcss -i ./app/web/static/css/input.css -o ./app/web/static/css/output.css --watch",
+    "build": "tailwindcss -i ./app/web/static/css/input.css -o ./app/web/static/css/output.css --minify",
+    "build:prod": "NODE_ENV=production npm run build"
+  },
+  "keywords": ["monitoring", "observability", "htmx", "tailwind"],
+  "author": "Luxardo Labs",
+  "license": "MIT",
+  "devDependencies": {
+    "@tailwindcss/forms": "^0.5.7",
+    "@tailwindcss/typography": "^0.5.10",
+    "tailwindcss": "^3.4.1"
+  },
+  "dependencies": {
+    "chart.js": "^4.4.1",
+    "htmx.org": "^1.9.10"
+  }
+}

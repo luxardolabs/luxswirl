@@ -1,0 +1,332 @@
+{% from 'macros/status.html' import status_badge, check_type_icon %}
+{% from 'macros/buttons.html' import icon_btn, icon_edit, delete_icon_button, collapse_toggle, toggle_switch %}
+{% from 'macros/tables.html' import data_table %}
+
+<!-- V2 Check detail for split-screen layout - no overlay UI, fully responsive -->
+<div class="w-full" id="check-detail-v2-content">
+    <!-- Content -->
+    <div class="p-6 space-y-6">
+        <!-- Check Meta -->
+        <div>
+            <div class="flex items-start justify-between gap-4 mb-2">
+                <div class="flex-1 min-w-0">
+                    <h3 class="text-2xl font-bold text-dark-text-primary mb-1 truncate" title="{{ check.display_name }}">{{ check.display_name }}</h3>
+                    <div class="flex items-center gap-1.5 text-sm font-mono text-dark-text-muted min-w-0" title="{{ check.target }}">
+                        <span class="truncate">{{ check.target }}</span>
+                        {% if check.target.startswith('http://') or check.target.startswith('https://') %}
+                        <a href="{{ check.target }}" target="_blank" rel="noopener noreferrer"
+                           class="inline-flex items-center text-brand-400 hover:text-brand-300 transition-colors flex-shrink-0"
+                           title="Open {{ check.target }} in a new tab">
+                            <span class="w-3.5 h-3.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/arrow-top-right-on-square.svg" %}</span>
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="flex items-center gap-2 flex-shrink-0">
+                    <!-- Pause/Enable Toggle -->
+                    {{ toggle_switch(check.enabled, size='sm',
+                                     hx_post='/checks/' ~ check.id ~ '/toggle',
+                                     hx_trigger='click',
+                                     hx_swap='none',
+                                     title=('Disable check' if check.enabled else 'Enable check'),
+                                     extra_attrs='hx-on::after-request="htmx.ajax(\'GET\', \'/check/' ~ check.id ~ '?hours=' ~ hours|string ~ '\', {target: \'#check-detail-panel\', swap: \'innerHTML\'})"') }}
+
+                    <!-- Clone -->
+                    {%- set clone_svg -%}<span class="w-3.5 h-3.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/document-duplicate.svg" %}</span>{%- endset -%}
+                    {{ icon_btn(clone_svg, color='purple', title='Clone Check', hx_get='/checks/' ~ check.id ~ '/clone-form', hx_target='#panel-container', hx_swap='innerHTML') }}
+
+                    <!-- Manage dependents (hidden when this check has a parent — can't be both child and parent under single-level) -->
+                    {% if not parent_check %}
+                    {%- set dep_svg -%}<span class="w-3.5 h-3.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/arrow-long-down.svg" %}</span>{%- endset -%}
+                    {{ icon_btn(dep_svg, color='brand', title=('Manage dependents (' ~ dependent_count ~ ')') if dependent_count else 'Add dependents', hx_get='/checks/' ~ check.id ~ '/dependents', hx_target='#panel-container', hx_swap='innerHTML') }}
+                    {% endif %}
+
+                    <!-- Edit -->
+                    {{ icon_edit(hx_get='/checks/' ~ check.id ~ '/edit-form', hx_target='#panel-container') }}
+
+                    <!-- Delete -->
+                    {{ delete_icon_button(delete_url='/checks/' ~ check.id, target_id='check-' ~ check.id) }}
+                </div>
+            </div>
+            <!-- Type and interval chips on second row -->
+            <div class="flex items-center justify-between gap-2">
+                <div class="flex items-center gap-2 flex-wrap">
+                    <span class="flex items-center gap-1 text-xs text-dark-text-muted">
+                        {{ check_type_icon(check.check_type) }}
+                        <span class="uppercase">{{ check.check_type }}</span>
+                    </span>
+                    <span class="text-dark-text-muted">•</span>
+                    <span class="px-2 py-0.5 text-xs font-medium rounded bg-dark-bg-tertiary text-dark-text-muted">
+                        {{ check.interval_seconds or 60 }}s
+                    </span>
+                    {% if parent_check %}
+                    <span class="text-dark-text-muted">•</span>
+                    <a hx-get="/check/{{ parent_check.id }}?hours={{ hours }}"
+                       hx-target="#check-detail-panel"
+                       hx-swap="innerHTML"
+                       class="inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-medium rounded bg-dark-bg-tertiary text-dark-text-muted hover:text-dark-text-primary cursor-pointer transition-colors"
+                       title="Alerts for this check are suppressed while the parent is down.">
+                        <span class="text-dark-text-muted">↑</span>
+                        Depends on: {{ parent_check.display_name }}
+                        {% if parent_latest_result is none %}
+                        <span class="w-2 h-2 rounded-full bg-slate-500" title="Parent has not reported yet"></span>
+                        {% elif parent_latest_result.success %}
+                        <span class="w-2 h-2 rounded-full bg-green-500" title="Parent is up"></span>
+                        {% else %}
+                        <span class="w-2 h-2 rounded-full bg-red-500" title="Parent is down — alerts suppressed"></span>
+                        {% endif %}
+                    </a>
+                    {% endif %}
+                    {% if dependent_count and dependent_count > 0 %}
+                    <span class="text-dark-text-muted">•</span>
+                    <a hx-get="/checks/{{ check.id }}/dependents"
+                       hx-target="#panel-container"
+                       hx-swap="innerHTML"
+                       class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded bg-brand-500/15 text-brand-300 hover:bg-brand-500/25 cursor-pointer"
+                       title="Click to manage the {{ dependent_count }} check(s) that depend on this one">
+                        <span>↓</span>
+                        {{ dependent_count }} dependent{{ 's' if dependent_count != 1 else '' }}
+                    </a>
+                    {% endif %}
+                    {% if not parent_check and (not dependent_count or dependent_count == 0) %}
+                    <span class="text-dark-text-muted">•</span>
+                    <a hx-get="/checks/{{ check.id }}/dependents"
+                       hx-target="#panel-container"
+                       hx-swap="innerHTML"
+                       class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded border border-dashed border-dark-border text-dark-text-muted hover:text-dark-text-primary hover:border-brand-500/40 cursor-pointer"
+                       title="Add dependent checks — others whose alerts should be suppressed when this one fails">
+                        <span>↓</span>
+                        Add dependents
+                    </a>
+                    {% endif %}
+                </div>
+
+                <!-- Time range selector -->
+                <div class="flex items-center gap-2">
+                    <label class="text-xs text-dark-text-muted" for="hours">Range:</label>
+                    <select
+                        name="hours"
+                        id="hours"
+                        class="input text-xs py-1 px-2"
+                        hx-get="/check/{{ check_id }}"
+                        hx-target="#check-detail-panel"
+                        hx-swap="innerHTML"
+                        hx-trigger="change"
+                    >
+                        <option value="4" {% if hours == 4 %}selected{% endif %}>4h</option>
+                        <option value="8" {% if hours == 8 %}selected{% endif %}>8h</option>
+                        <option value="24" {% if hours == 24 %}selected{% endif %}>24h</option>
+                        <option value="72" {% if hours == 72 %}selected{% endif %}>3d</option>
+                        <option value="168" {% if hours == 168 %}selected{% endif %}>7d</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Status Bar - Visual up/down timeline -->
+        <div class="card p-5">
+            <!-- Status bar visualization - 30 bars for last 30 minutes -->
+            <div class="relative">
+                <div class="flex gap-1.5 h-16 rounded-xl p-2 bg-gradient-to-b from-dark-bg-primary to-dark-bg-tertiary shadow-inner">
+                    {% for bar in minute_bars|reverse %}
+                    <div
+                        class="flex-1 rounded-md transform transition-all duration-200 hover:scale-105 hover:shadow-lg cursor-pointer
+                        {% if bar['success'] is none %}
+                            bg-gradient-to-t from-dark-bg-tertiary to-slate-700
+                        {% elif bar['success'] %}
+                            bg-gradient-to-t from-green-600 to-emerald-400 shadow-sm shadow-green-500/50
+                        {% else %}
+                            bg-gradient-to-t from-red-600 to-rose-400 shadow-sm shadow-red-500/50
+                        {% endif %}"
+                        title="{% if bar['success'] is not none %}{{ bar['minutes_ago'] }}m ago - {% if bar['success'] %}✓ Up{% else %}✗ Down{% endif %} ({{ bar['count'] }} checks, {{ bar['avg_latency'] }}ms avg){% else %}{{ bar['minutes_ago'] }}m ago - No data{% endif %}"
+                    ></div>
+                    {% endfor %}
+                </div>
+                <!-- Time labels -->
+                <div class="flex justify-between text-xs text-dark-text-muted mt-3 px-1">
+                    <span class="font-medium">← 30m ago</span>
+                    <span class="font-medium">now →</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Stats Row -->
+        <div class="grid grid-cols-3 sm:grid-cols-6 gap-3">
+            <div class="card p-3">
+                <p class="text-xs text-dark-text-muted mb-1">Current</p>
+                <p class="text-lg font-bold text-dark-text-primary">
+                    {% if history and history|length > 0 and history[-1].latency_ms %}
+                        {{ history[-1].latency_ms|int }}<span class="text-xs font-normal ml-0.5">ms</span>
+                    {% else %}
+                        -
+                    {% endif %}
+                </p>
+            </div>
+            <div class="card p-3">
+                <p class="text-xs text-dark-text-muted mb-1">Avg ({{ hours }}h)</p>
+                <p class="text-lg font-bold text-dark-text-primary">
+                    {% if stats.avg_latency_ms %}
+                        {{ stats.avg_latency_ms|int }}<span class="text-xs font-normal ml-0.5">ms</span>
+                    {% else %}
+                        -
+                    {% endif %}
+                </p>
+            </div>
+            <div class="card p-3">
+                <p class="text-xs text-dark-text-muted mb-1">Min ({{ hours }}h)</p>
+                <p class="text-lg font-bold text-green-400">
+                    {% if stats.min_latency_ms %}
+                        {{ stats.min_latency_ms|int }}<span class="text-xs font-normal ml-0.5">ms</span>
+                    {% else %}
+                        -
+                    {% endif %}
+                </p>
+            </div>
+            <div class="card p-3">
+                <p class="text-xs text-dark-text-muted mb-1">Max ({{ hours }}h)</p>
+                <p class="text-lg font-bold text-red-400">
+                    {% if stats.max_latency_ms %}
+                        {{ stats.max_latency_ms|int }}<span class="text-xs font-normal ml-0.5">ms</span>
+                    {% else %}
+                        -
+                    {% endif %}
+                </p>
+            </div>
+            <div class="card p-3">
+                <p class="text-xs text-dark-text-muted mb-1">Uptime</p>
+                <p class="text-lg font-bold {% if stats.uptime_pct >= 99 %}text-green-400{% elif stats.uptime_pct >= 95 %}text-amber-400{% else %}text-red-400{% endif %}">
+                    {{ stats.uptime_pct }}<span class="text-xs font-normal ml-0.5">%</span>
+                </p>
+            </div>
+            <div class="card p-3">
+                <p class="text-xs text-dark-text-muted mb-1">Checks</p>
+                <p class="text-lg font-bold text-dark-text-primary">
+                    {{ stats.total_checks }}
+                </p>
+            </div>
+        </div>
+
+        <!-- Chart -->
+        <div class="card p-6">
+            {% from 'macros/charts.html' import latency_chart %}
+            {{ latency_chart(chart_data) }}
+        </div>
+
+        <!-- SSL Certificate Info (for HTTPS checks) -->
+        {% if history and history|length > 0 and history[0].additional_data and history[0].additional_data.get('response') and history[0].additional_data.response.get('ssl_certificate') %}
+        {% set ssl_cert = history[0].additional_data.response.ssl_certificate %}
+        <div class="card p-4 {% if ssl_cert.expired %}bg-red-500/10 border-red-500/30{% elif ssl_cert.get('expires_critical') %}bg-orange-500/10 border-orange-500/30{% elif ssl_cert.get('expires_soon') %}bg-yellow-500/10 border-yellow-500/30{% else %}bg-green-500/5 border-green-500/20{% endif %}">
+            <div class="flex items-center justify-between mb-3">
+                <h3 class="text-sm font-medium uppercase tracking-wide {% if ssl_cert.expired %}text-red-400{% elif ssl_cert.get('expires_critical') %}text-orange-400{% elif ssl_cert.get('expires_soon') %}text-yellow-400{% else %}text-green-400{% endif %}">
+                    <span class="w-4 h-4 inline mr-1 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/lock-open.svg" %}</span>
+                    SSL Certificate
+                </h3>
+                <span class="px-2 py-1 text-xs font-medium rounded {% if ssl_cert.expired %}bg-red-600/20 text-red-300{% elif ssl_cert.get('expires_critical') %}bg-orange-600/20 text-orange-300{% elif ssl_cert.get('expires_soon') %}bg-yellow-600/20 text-yellow-300{% else %}bg-green-600/20 text-green-300{% endif %}">
+                    {% if ssl_cert.expired %}
+                        Expired
+                    {% elif ssl_cert.get('expires_critical') %}
+                        Critical
+                    {% elif ssl_cert.get('expires_soon') %}
+                        Expiring Soon
+                    {% else %}
+                        Valid
+                    {% endif %}
+                </span>
+            </div>
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+                <div>
+                    <p class="text-dark-text-muted text-xs mb-1">Days Until Expiration</p>
+                    <p class="font-bold {% if ssl_cert.expired %}text-red-400{% elif ssl_cert.get('expires_critical') %}text-orange-400{% elif ssl_cert.get('expires_soon') %}text-yellow-400{% else %}text-green-400{% endif %}">
+                        {% if ssl_cert.get('days_until_expiration') != None %}
+                            {% if ssl_cert.days_until_expiration < 0 %}
+                                Expired {{ ssl_cert.days_until_expiration|abs }} days ago
+                            {% else %}
+                                {{ ssl_cert.days_until_expiration }} days
+                            {% endif %}
+                        {% else %}
+                            Unknown
+                        {% endif %}
+                    </p>
+                </div>
+                <div>
+                    <p class="text-dark-text-muted text-xs mb-1">Expiration Date</p>
+                    <p class="font-mono text-dark-text-primary text-xs">{{ ssl_cert.expiration_date[:20] if ssl_cert.expiration_date else 'Unknown' }}</p>
+                </div>
+                <div>
+                    <p class="text-dark-text-muted text-xs mb-1">Subject</p>
+                    <p class="font-mono text-dark-text-primary text-xs truncate">{{ ssl_cert.subject or 'Unknown' }}</p>
+                </div>
+                <div>
+                    <p class="text-dark-text-muted text-xs mb-1">Issuer</p>
+                    <p class="font-mono text-dark-text-primary text-xs truncate">{{ ssl_cert.issuer or 'Unknown' }}</p>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Check-type-specific metrics -->
+        {% include 'panels/checks/metrics/dns_metrics.html' %}
+        {% include 'panels/checks/metrics/mysql_metrics.html' %}
+        {% include 'panels/checks/metrics/postgres_metrics.html' %}
+        {% include 'panels/checks/metrics/synthetic_metrics.html' %}
+
+        <!-- Recent Events (Accordion) -->
+        <div class="card overflow-hidden">
+            {{ collapse_toggle('Recent Events',
+                               chevron_id='recent-results-icon',
+                               toggle_attr='data-toggle-recent-results',
+                               extra_classes='w-full px-4 py-3 flex items-center justify-between hover:bg-dark-bg-tertiary/30 transition-colors',
+                               label_classes='text-sm font-medium text-dark-text-secondary uppercase tracking-wider') }}
+            <div id="recent-results-content" class="hidden max-h-96 overflow-y-auto scrollbar-thin border-t border-dark-border">
+                {% call data_table([
+                    {'label': 'Status'},
+                    {'label': 'Latency'},
+                    {'label': 'Time'},
+                    {'label': 'Error'},
+                ]) %}
+                    {% for result in recent_results %}
+                    <tr>
+                        <td>
+                            {% if result.success %}
+                            <span class="px-2 py-1 text-xs font-medium rounded-md bg-green-600/20 text-green-400 border border-green-600/30">
+                                ✓ Up
+                            </span>
+                            {% else %}
+                            <span class="px-2 py-1 text-xs font-medium rounded-md bg-red-600/20 text-red-400 border border-red-600/30">
+                                ✗ Down
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td class="font-mono text-sm">{{ result.latency_ms|int if result.latency_ms else '-' }} ms</td>
+                        <td class="text-sm text-dark-text-muted">{{ result.timestamp | format_datetime('%I:%M%p') }}</td>
+                        <td class="text-sm text-dark-text-muted max-w-xs truncate">{{ result.error or '-' }}</td>
+                    </tr>
+                    {% endfor %}
+                {% endcall %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+/* Latency chart smooth transitions */
+.latency-chart-dot {
+    transition: r 0.2s ease;
+}
+
+/* Chart animations */
+@keyframes drawLine {
+    to {
+        stroke-dashoffset: 0;
+    }
+}
+
+@keyframes expandUp {
+    from {
+        clip-path: inset(100% 0 0 0);
+    }
+    to {
+        clip-path: inset(0 0 0 0);
+    }
+}
+</style>

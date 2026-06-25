@@ -1,0 +1,290 @@
+{% from 'macros/status.html' import check_type_icon %}
+{% from 'macros/buttons.html' import icon_edit, delete_icon_button %}
+{% from 'macros/badges.html' import tag as meta_tag, status_pip %}
+{% if status_page.items %}
+    {% for item in status_page.items %}
+        {% if item.type == 'group' %}
+            <!-- Group -->
+            <div id="dashboard-item-{{ loop.index0 }}" class="border border-dark-border rounded-lg bg-dark-bg-secondary dashboard-item" data-item-index="{{ loop.index0 }}" data-item-type="group">
+                <div class="p-3 bg-dark-bg-tertiary {% if 'checks' not in item %}border-b border-dark-border{% endif %} rounded-t-lg group hover:bg-dark-bg-secondary transition-colors">
+                    <!-- Title row -->
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="flex items-center gap-2">
+                            <span class="w-4 h-4 text-dark-text-muted cursor-move drag-handle inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/bars-2.svg" %}</span>
+                            {% if 'checks' in item %}
+                            <!-- Container group icon -->
+                            <span class="w-4 h-4 text-brand-400 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/lock-closed.svg" %}</span>
+                            {% else %}
+                            <!-- Dynamic filter group icon -->
+                            <span class="w-4 h-4 text-purple-400 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/funnel.svg" %}</span>
+                            {% endif %}
+                            <span class="font-medium text-dark-text-primary group-name">{{ item.name }}</span>
+                            {% if 'checks' in item %}
+                            <span class="text-xs text-dark-text-muted">({{ item.checks|length }} checks)</span>
+                            {% endif %}
+                        </div>
+                        <div class="flex items-center gap-2">
+                            {{ icon_edit(extra_classes='opacity-0 group-hover:opacity-100 rename-group-btn', extra_attrs='data-item-index="' ~ loop.index0 ~ '"') }}
+                            {{ delete_icon_button(delete_url='/status-pages/' ~ status_page.id ~ '/remove-item/' ~ loop.index0, target_id='dashboard-item-' ~ loop.index0, hx_target='#dashboard-items', hx_swap='innerHTML', extra_classes='opacity-0 group-hover:opacity-100') }}
+                        </div>
+                    </div>
+
+                    {% if 'filter' in item %}
+                    <!-- Filter and Sort controls row (dynamic groups) -->
+                    <div class="flex items-center gap-3 mb-2">
+                        <!-- Filter controls -->
+                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 flex-1">
+                            <select class="input text-xs filter-agent-select" aria-label="Filter by agent" data-item-index="{{ loop.index0 }}">
+                                <option value="">All Agents</option>
+                                {% for agent in all_agents %}
+                                <option value="{{ agent.id }}" {% if item.filter.get('agent_id') == agent.id|string %}selected{% endif %}>
+                                    {{ agent.agent_name or agent.id }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                            <select class="input text-xs filter-type-select" aria-label="Filter by type" data-item-index="{{ loop.index0 }}">
+                                <option value="">All Types</option>
+                                {% for check_type in all_types %}
+                                <option value="{{ check_type }}" {% if item.filter.get('check_type') == check_type %}selected{% endif %}>{{ check_type }}</option>
+                                {% endfor %}
+                            </select>
+                            <input
+                                type="text"
+                                class="input text-xs filter-tags-input"
+                                data-item-index="{{ loop.index0 }}"
+                                placeholder="Tags"
+                                value="{% if item.filter.get('tags') %}{{ item.filter.tags|join(', ') }}{% endif %}"
+                            />
+                            <input
+                                type="text"
+                                class="input text-xs filter-search-input"
+                                data-item-index="{{ loop.index0 }}"
+                                placeholder="Search..."
+                                value="{{ item.filter.get('search', '') }}"
+                            />
+                        </div>
+                        <!-- Sort controls inline -->
+                        <div class="flex items-center gap-1 flex-shrink-0">
+                    {% else %}
+                    <!-- Sort Controls only (container groups) -->
+                    <div class="flex items-center gap-1 mb-2">
+                    {% endif %}
+                        <span class="text-xs font-medium text-dark-text-secondary uppercase tracking-wider">Sort:</span>
+                        {% set current_sort = item.get('sort_by', 'manual') %}
+                        {% set current_direction = item.get('sort_direction', 'asc') %}
+
+                        <!-- Manual -->
+                        <button
+                            class="p-1.5 {% if current_sort == 'manual' %}bg-brand-600/30{% else %}bg-brand-600/20{% endif %} hover:bg-brand-600/30 text-brand-300 rounded border border-brand-600/30 transition-colors"
+                            data-group-sort
+                            data-group-index="{{ loop.index0 }}"
+                            data-sort-by="manual"
+                            data-sort-direction="asc"
+                            title="Manual Order">
+                            <span class="w-3.5 h-3.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/bars-3.svg" %}</span>
+                        </button>
+
+                        <!-- Name -->
+                        <button
+                            class="p-1.5 w-7 h-7 flex items-center justify-center {% if current_sort == 'name' %}bg-purple-600/30{% else %}bg-purple-600/20{% endif %} hover:bg-purple-600/30 text-purple-300 rounded border border-purple-600/30 transition-colors font-bold text-xs"
+                            data-group-sort
+                            data-group-index="{{ loop.index0 }}"
+                            data-sort-by="name"
+                            data-sort-direction="{% if current_sort == 'name' and current_direction == 'asc' %}desc{% else %}asc{% endif %}"
+                            title="Sort by Name ({% if current_sort == 'name' and current_direction == 'asc' %}A-Z{% elif current_sort == 'name' %}Z-A{% else %}A-Z{% endif %})">
+                            A{% if current_sort == 'name' %}{% if current_direction == 'asc' %}↓{% else %}↑{% endif %}{% endif %}
+                        </button>
+
+                        <!-- Status -->
+                        <button
+                            class="p-1.5 w-7 h-7 flex items-center justify-center {% if current_sort == 'status' %}bg-green-600/30{% else %}bg-green-600/20{% endif %} hover:bg-green-600/30 text-green-300 rounded border border-green-600/30 transition-colors text-xs"
+                            data-group-sort
+                            data-group-index="{{ loop.index0 }}"
+                            data-sort-by="status"
+                            data-sort-direction="{% if current_sort == 'status' and current_direction == 'asc' %}desc{% else %}asc{% endif %}"
+                            title="Sort by Status ({% if current_sort == 'status' and current_direction == 'asc' %}Up First{% elif current_sort == 'status' %}Down First{% else %}Up First{% endif %})">
+                            {% if current_sort == 'status' and current_direction == 'desc' %}✗{% else %}✓{% endif %}{% if current_sort == 'status' %}{% if current_direction == 'asc' %}↓{% else %}↑{% endif %}{% endif %}
+                        </button>
+
+                        <!-- Latency -->
+                        <button
+                            class="p-1.5 {% if current_sort == 'latency' %}bg-yellow-600/30{% else %}bg-yellow-600/20{% endif %} hover:bg-yellow-600/30 text-yellow-300 rounded border border-yellow-600/30 transition-colors"
+                            data-group-sort
+                            data-group-index="{{ loop.index0 }}"
+                            data-sort-by="latency"
+                            data-sort-direction="{% if current_sort == 'latency' and current_direction == 'asc' %}desc{% else %}asc{% endif %}"
+                            title="Sort by Latency ({% if current_sort == 'latency' and current_direction == 'asc' %}Fast First{% elif current_sort == 'latency' %}Slow First{% else %}Fast First{% endif %})">
+                            <span class="w-3.5 h-3.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/bolt.svg" %}</span>
+                        </button>
+
+                        <!-- Uptime -->
+                        <button
+                            class="p-1.5 w-7 h-7 flex items-center justify-center {% if current_sort == 'uptime' %}bg-pink-600/30{% else %}bg-pink-600/20{% endif %} hover:bg-pink-600/30 text-pink-300 rounded border border-pink-600/30 transition-colors font-bold text-xs"
+                            data-group-sort
+                            data-group-index="{{ loop.index0 }}"
+                            data-sort-by="uptime"
+                            data-sort-direction="{% if current_sort == 'uptime' and current_direction == 'desc' %}asc{% else %}desc{% endif %}"
+                            title="Sort by Uptime ({% if current_sort == 'uptime' and current_direction == 'desc' %}High First{% elif current_sort == 'uptime' %}Low First{% else %}High First{% endif %})">
+                            %{% if current_sort == 'uptime' %}{% if current_direction == 'desc' %}↓{% else %}↑{% endif %}{% endif %}
+                        </button>
+                    </div>
+                    {% if 'filter' in item %}
+                    </div>
+                    {% endif %}
+                </div>
+                <!-- Group content area -->
+                <div class="{% if 'filter' in item %}p-2{% else %}p-2 space-y-1 min-h-[60px] group-checks-container{% endif %}" data-group-index="{{ loop.index0 }}">
+                    {% if 'filter' in item %}
+                        <!-- Filter-based group - show matching checks -->
+                        {% set matching_checks = filter_group_matches.get(loop.index0, []) %}
+                        {% if matching_checks %}
+                        <div class="space-y-1">
+                            <div class="text-xs text-purple-400 font-medium px-2 mb-1">Matching: {{ matching_checks|length }} checks</div>
+                            {% for check in matching_checks %}
+                            <div class="flex items-center gap-2 p-2 bg-dark-bg-tertiary rounded border border-purple-600/20">
+                                <div class="flex-1 min-w-0 text-xs">
+                                    <div class="flex items-center gap-2">
+                                        <span class="font-medium text-dark-text-primary truncate">{{ check.display_name }}</span>
+                                        <span class="px-2 py-0.5 text-xs font-medium rounded bg-dark-bg-tertiary text-dark-text-muted flex items-center gap-1 flex-shrink-0">
+                                            {{ check_type_icon(check.check_type) }}
+                                            {{ check.check_type }}
+                                        </span>
+                                    </div>
+                                    <div class="flex items-center gap-1 mt-0.5 flex-wrap">
+                                        {{ meta_tag(check.agent.agent_name or check.agent.id, 'info') }}
+                                        {% if check.agent.tags %}
+                                            {% for tag in check.agent.tags %}
+                                                {% set tag_clean = tag.strip() %}
+                                                {% if tag_clean %}
+                                                {{ meta_tag(tag_clean, 'info') }}
+                                                {% endif %}
+                                            {% endfor %}
+                                        {% endif %}
+                                        {% if check.tags %}
+                                            {% for tag in check.tags %}
+                                            {{ meta_tag(tag, 'success') }}
+                                            {% endfor %}
+                                        {% endif %}
+                                        <span class="text-xs font-mono text-dark-text-secondary truncate">{{ check.target }}</span>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-2 flex-shrink-0">
+                                    {% if check.latency_ms %}
+                                    <span class="text-xs text-dark-text-muted">{{ check.latency_ms|int }}ms</span>
+                                    {% endif %}
+                                    {{ status_pip(check.latest_status) }}
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% else %}
+                        <div class="text-xs text-dark-text-muted text-center py-4 border-2 border-dashed border-purple-600/30 rounded">
+                            No checks match current filters
+                        </div>
+                        {% endif %}
+                    {% elif 'checks' in item and item.checks %}
+                        <!-- Container group with checks -->
+                        {% set check_ids_to_display = container_group_sorted_checks.get(loop.index0, item.checks) %}
+                        {% for check_id in check_ids_to_display %}
+                            {% set check = check_details_map.get(check_id) %}
+                            {% if check %}
+                            <div class="flex items-center gap-2 p-2 bg-dark-bg-tertiary rounded hover:bg-dark-bg-primary transition-colors group-check dashboard-item" data-item-type="check" data-check-id="{{ check_id }}">
+                                <span class="w-3 h-3 text-dark-text-muted cursor-move drag-handle flex-shrink-0 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/bars-2.svg" %}</span>
+                                <div class="flex-1 min-w-0 text-xs">
+                                    <div class="flex items-center gap-2">
+                                        <span class="font-medium text-dark-text-primary truncate">{{ check.display_name }}</span>
+                                        <span class="px-2 py-0.5 text-xs font-medium rounded bg-dark-bg-tertiary text-dark-text-muted flex items-center gap-1 flex-shrink-0">
+                                            {{ check_type_icon(check.check_type) }}
+                                            {{ check.check_type }}
+                                        </span>
+                                    </div>
+                                    <div class="flex items-center gap-1 mt-0.5 flex-wrap">
+                                        {{ meta_tag(check.agent.agent_name or check.agent.id, 'info') }}
+                                        {% if check.agent.tags %}
+                                            {% for tag in check.agent.tags %}
+                                                {% set tag_clean = tag.strip() %}
+                                                {% if tag_clean %}
+                                                {{ meta_tag(tag_clean, 'info') }}
+                                                {% endif %}
+                                            {% endfor %}
+                                        {% endif %}
+                                        {% if check.tags %}
+                                            {% for tag in check.tags %}
+                                            {{ meta_tag(tag, 'success') }}
+                                            {% endfor %}
+                                        {% endif %}
+                                        <span class="text-xs font-mono text-dark-text-secondary truncate">{{ check.target }}</span>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-2 flex-shrink-0">
+                                    {% if check.latency_ms %}
+                                    <span class="text-xs text-dark-text-muted">{{ check.latency_ms|int }}ms</span>
+                                    {% endif %}
+                                    {{ status_pip(check.latest_status) }}
+                                </div>
+                            </div>
+                            {% endif %}
+                        {% endfor %}
+                    {% else %}
+                        <!-- Empty container group -->
+                        <div class="text-xs text-dark-text-muted text-center py-4 border-2 border-dashed border-dark-border rounded">
+                            Drop checks here
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        {% elif item.type == 'check' %}
+            <!-- Check -->
+            {% set check = check_details_map.get(item.check_id) %}
+            <div id="dashboard-item-{{ loop.index0 }}" class="flex items-center gap-2 p-2.5 bg-dark-bg-tertiary rounded-lg hover:bg-dark-bg-secondary transition-colors group dashboard-item" data-item-index="{{ loop.index0 }}" data-item-type="check" data-check-id="{{ item.check_id }}">
+                <span class="w-4 h-4 text-dark-text-muted cursor-move drag-handle flex-shrink-0 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/bars-2.svg" %}</span>
+                <div class="flex-1 min-w-0 text-xs">
+                    {% if check %}
+                        <div class="flex items-center gap-2">
+                            <span class="font-medium text-dark-text-primary truncate">{{ check.display_name }}</span>
+                            <span class="px-2 py-0.5 text-xs font-medium rounded bg-dark-bg-tertiary text-dark-text-muted flex items-center gap-1 flex-shrink-0">
+                                {{ check_type_icon(check.check_type) }}
+                                {{ check.check_type }}
+                            </span>
+                        </div>
+                        <div class="flex items-center gap-1 mt-0.5 flex-wrap">
+                            {{ meta_tag(check.agent.agent_name or check.agent.id, 'info') }}
+                            {% if check.agent.tags %}
+                                {% for t in check.agent.tags %}
+                                    {% set tag_clean = t.strip() %}
+                                    {% if tag_clean %}
+                                    {{ meta_tag(tag_clean, 'info') }}
+                                    {% endif %}
+                                {% endfor %}
+                            {% endif %}
+                            {% if check.tags %}
+                                {% for t in check.tags %}
+                                {{ meta_tag(t, 'success') }}
+                                {% endfor %}
+                            {% endif %}
+                            <span class="text-xs font-mono text-dark-text-secondary truncate">{{ check.target }}</span>
+                        </div>
+                    {% else %}
+                        <span class="font-medium text-dark-text-primary">Check #{{ item.check_id }}</span>
+                    {% endif %}
+                </div>
+                {% if check %}
+                <div class="flex items-center gap-2 flex-shrink-0">
+                    {% if check.latency_ms %}
+                    <span class="text-xs text-dark-text-muted">{{ check.latency_ms|int }}ms</span>
+                    {% endif %}
+                    {{ status_pip(check.latest_status) }}
+                </div>
+                {% endif %}
+                {{ delete_icon_button(delete_url='/status-pages/' ~ status_page.id ~ '/remove-item/' ~ loop.index0, target_id='dashboard-item-' ~ loop.index0, hx_target='#dashboard-items', hx_swap='innerHTML', extra_classes='opacity-0 group-hover:opacity-100 flex-shrink-0') }}
+            </div>
+        {% endif %}
+    {% endfor %}
+{% else %}
+    <!-- Empty state -->
+    <div class="text-center py-16 text-dark-text-muted" id="empty-state">
+        <span class="w-16 h-16 mx-auto mb-4 opacity-50 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/document-plus.svg" %}</span>
+        <p class="text-sm font-medium">No checks added yet</p>
+        <p class="text-xs mt-1">Click checks on the right to add them →</p>
+    </div>
+{% endif %}

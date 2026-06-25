@@ -1,0 +1,481 @@
+{#
+    Button Macros - LuxSwirl Dark Mode
+
+    ═══════════════════════════════════════════════════════════════════════════════
+    ACTION → COLOR MAPPING (Canonical Reference)
+    ═══════════════════════════════════════════════════════════════════════════════
+
+    | Action            | Icon Square Color | Text Button     |
+    |-------------------|-------------------|-----------------|
+    | View / Details    | brand (sky blue)  | btn-secondary   |
+    | Edit / Modify     | brand (sky blue)  | btn-primary     |
+    | Add / Create      | brand (sky blue)  | btn-primary     |
+    | Run / Execute     | green             | btn-primary     |
+    | Approve / Enable  | green             | btn-primary     |
+    | Reset / Regenerate| yellow            | btn-secondary   |
+    | Suspend / Pause   | orange            | btn-secondary   |
+    | Disable           | orange            | btn-secondary   |
+    | Revoke / Delete   | red               | btn-danger      |
+    | Cancel / Close    | —                 | btn-secondary   |
+    | DISABLED          | gray              | disabled btn    |
+
+    CRITICAL: Gray = DISABLED only. All clickable elements get COLOR.
+
+    Usage:
+        {% from "macros/buttons.html" import icon_btn, icon_view, icon_edit, icon_run, icon_delete, icon_history, icon_toggle_on, icon_toggle_off, icon_reset, icon_cancel, delete_icon_button, cancel_icon_button %}
+        {% from "macros/buttons.html" import text_btn, btn_save, btn_create, btn_delete_text, btn_cancel_text, btn_approve, btn_reject, btn_pause, btn_resume, btn_disable, btn_enable, btn_copy, btn_download, btn_upload, btn_clone, btn_external, btn_password, btn_regenerate, btn_revoke %}
+        {% from "macros/buttons.html" import btn_prev, btn_next %}
+#}
+
+
+{# ═══════════════════════════════════════════════════════════════════════════
+   ICON SQUARE BUTTON - Base macro for tiny action buttons
+   ═══════════════════════════════════════════════════════════════════════════ #}
+{% macro icon_btn(icon_svg, color='brand', title='', disabled=false, href='', hx_get='', hx_post='', hx_delete='', hx_target='', hx_swap='', hx_confirm='', hx_vals='', hx_include='', extra_attrs='', extra_classes='') %}
+{% set colors = {
+    'brand': 'bg-brand-600/20 hover:bg-brand-600/30 text-brand-300 border-brand-600/30',
+    'green': 'bg-green-600/20 hover:bg-green-600/30 text-green-300 border-green-600/30',
+    'yellow': 'bg-yellow-600/20 hover:bg-yellow-600/30 text-yellow-300 border-yellow-600/30',
+    'orange': 'bg-orange-600/20 hover:bg-orange-600/30 text-orange-300 border-orange-600/30',
+    'red': 'bg-red-600/20 hover:bg-red-600/30 text-red-300 border-red-600/30',
+    'blue': 'bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border-blue-600/30',
+    'purple': 'bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border-purple-600/30',
+    'muted': 'bg-gray-600/20 text-gray-500 border-gray-600/30 cursor-not-allowed opacity-50'
+} %}
+{% set c = 'muted' if disabled else color %}
+{% set css = "p-1.5 w-7 h-7 flex items-center justify-center rounded border transition-colors " ~ colors.get(c, colors.brand) ~ " " ~ extra_classes %}
+{% if href and not disabled %}
+<a href="{{ href }}" class="{{ css }}" title="{{ title }}"{% if title %} aria-label="{{ title }}"{% endif %} {{ extra_attrs | safe }}>
+    {{ icon_svg }}
+</a>
+{% else %}
+<button
+    type="button"
+    class="{{ css }}"
+    title="{{ title }}"
+    {% if title %}aria-label="{{ title }}"{% endif %}
+    {% if disabled %}disabled{% endif %}
+    {% if hx_get %}hx-get="{{ hx_get }}"{% endif %}
+    {% if hx_post %}hx-post="{{ hx_post }}"{% endif %}
+    {% if hx_delete %}hx-delete="{{ hx_delete }}"{% endif %}
+    {% if (hx_get or hx_post or hx_delete) and hx_target %}hx-target="{{ hx_target }}"{% endif %}
+    {% if (hx_get or hx_post or hx_delete) and hx_swap %}hx-swap="{{ hx_swap }}"{% endif %}
+    {% if (hx_get or hx_post or hx_delete) and hx_confirm %}hx-confirm="{{ hx_confirm }}"{% endif %}
+    {% if (hx_get or hx_post or hx_delete) and hx_vals %}hx-vals='{{ hx_vals | safe }}'{% endif %}
+    {% if (hx_get or hx_post or hx_delete) and hx_include %}hx-include="{{ hx_include }}"{% endif %}
+    {{ extra_attrs | safe }}
+>
+    {{ icon_svg }}
+</button>
+{% endif %}
+{% endmacro %}
+
+
+{# ═══════════════════════════════════════════════════════════════════════════
+   PRE-CONFIGURED ICON BUTTONS - Use these!
+   ═══════════════════════════════════════════════════════════════════════════ #}
+
+{# View (eye) - brand/sky blue #}
+{% macro icon_view(title='View details', hx_get='', hx_target='', hx_swap='innerHTML', disabled=false, extra_attrs='', extra_classes='') %}
+{% set svg %}<span class="w-3.5 h-3.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/eye.svg" %}</span>{% endset %}
+{{ icon_btn(svg, color='brand', title=title, hx_get=hx_get, hx_target=hx_target, hx_swap=hx_swap, disabled=disabled, extra_attrs=extra_attrs, extra_classes=extra_classes) }}
+{% endmacro %}
+
+{# Edit (pencil) - brand/sky blue #}
+{% macro icon_edit(title='Edit', href='', hx_get='', hx_target='', hx_swap='innerHTML', disabled=false, extra_attrs='', extra_classes='') %}
+{% set svg %}<span class="w-3.5 h-3.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/pencil-square.svg" %}</span>{% endset %}
+{{ icon_btn(svg, color='brand', title=title, href=href, hx_get=hx_get, hx_target=hx_target, hx_swap=hx_swap, disabled=disabled, extra_attrs=extra_attrs, extra_classes=extra_classes) }}
+{% endmacro %}
+
+{# Run / Play (play circle) - green #}
+{% macro icon_run(title='Run now', hx_post='', hx_target='', hx_swap='outerHTML', disabled=false, extra_attrs='', extra_classes='') %}
+{% set svg %}<span class="w-3.5 h-3.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/play-circle.svg" %}</span>{% endset %}
+{{ icon_btn(svg, color='green', title=title, hx_post=hx_post, hx_target=hx_target, hx_swap=hx_swap, disabled=disabled, extra_attrs=extra_attrs, extra_classes=extra_classes) }}
+{% endmacro %}
+
+{# History / Clock - blue #}
+{% macro icon_history(title='View history', hx_get='', hx_target='#panel-container', hx_swap='innerHTML', disabled=false, extra_attrs='', extra_classes='') %}
+{% set svg %}<span class="w-3.5 h-3.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/clock.svg" %}</span>{% endset %}
+{{ icon_btn(svg, color='blue', title=title, hx_get=hx_get, hx_target=hx_target, hx_swap=hx_swap, disabled=disabled, extra_attrs=extra_attrs, extra_classes=extra_classes) }}
+{% endmacro %}
+
+{# Reset (arrow-path) - yellow #}
+{% macro icon_reset(title='Reset', hx_post='', hx_target='', hx_swap='outerHTML', disabled=false, extra_attrs='', extra_classes='') %}
+{% set svg %}<span class="w-3.5 h-3.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/arrow-path.svg" %}</span>{% endset %}
+{{ icon_btn(svg, color='yellow', title=title, hx_post=hx_post, hx_target=hx_target, hx_swap=hx_swap, disabled=disabled, extra_attrs=extra_attrs, extra_classes=extra_classes) }}
+{% endmacro %}
+
+{# Toggle ON / Disable (pause circle) - orange #}
+{% macro icon_toggle_off(title='Disable', hx_post='', hx_target='', hx_swap='outerHTML', disabled=false, extra_attrs='', extra_classes='') %}
+{% set svg %}<span class="w-3.5 h-3.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/pause-circle.svg" %}</span>{% endset %}
+{{ icon_btn(svg, color='orange', title=title, hx_post=hx_post, hx_target=hx_target, hx_swap=hx_swap, disabled=disabled, extra_attrs=extra_attrs, extra_classes=extra_classes) }}
+{% endmacro %}
+
+{# Toggle OFF / Enable (play circle) - green #}
+{% macro icon_toggle_on(title='Enable', hx_post='', hx_target='', hx_swap='outerHTML', disabled=false, extra_attrs='', extra_classes='') %}
+{% set svg %}<span class="w-3.5 h-3.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/play-circle.svg" %}</span>{% endset %}
+{{ icon_btn(svg, color='green', title=title, hx_post=hx_post, hx_target=hx_target, hx_swap=hx_swap, disabled=disabled, extra_attrs=extra_attrs, extra_classes=extra_classes) }}
+{% endmacro %}
+
+{# Delete (trash) - red, simple HTMX #}
+{% macro icon_delete(title='Delete', hx_delete='', hx_post='', hx_target='', hx_swap='', hx_confirm='', disabled=false, extra_attrs='', extra_classes='') %}
+{% set svg %}<span class="w-3.5 h-3.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/trash.svg" %}</span>{% endset %}
+{{ icon_btn(svg, color='red', title=title, hx_delete=hx_delete, hx_post=hx_post, hx_target=hx_target, hx_swap=hx_swap, hx_confirm=hx_confirm, disabled=disabled, extra_attrs=extra_attrs, extra_classes=extra_classes) }}
+{% endmacro %}
+
+{# Cancel (x-circle) - orange, simple HTMX #}
+{% macro icon_cancel(title='Cancel', hx_post='', hx_target='', hx_swap='', hx_confirm='', disabled=false, extra_attrs='', extra_classes='') %}
+{% set svg %}<span class="w-3.5 h-3.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/x-circle.svg" %}</span>{% endset %}
+{{ icon_btn(svg, color='orange', title=title, hx_post=hx_post, hx_target=hx_target, hx_swap=hx_swap, hx_confirm=hx_confirm, disabled=disabled, extra_attrs=extra_attrs, extra_classes=extra_classes) }}
+{% endmacro %}
+
+
+{# ═══════════════════════════════════════════════════════════════════════════
+   TEXT BUTTONS WITH ICONS - Labeled buttons for page-level actions
+   ═══════════════════════════════════════════════════════════════════════════ #}
+
+{# Pagination Previous - renders <a> or disabled <button> #}
+{% macro btn_prev(href='', disabled=false) %}
+{% set svg %}<span class="w-4 h-4 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/chevron-left.svg" %}</span>{% endset %}
+{% if disabled %}
+<button disabled class="btn-secondary btn-sm opacity-50 cursor-not-allowed">{{ svg }} Previous</button>
+{% else %}
+<a href="{{ href }}" class="btn-secondary btn-sm">{{ svg }} Previous</a>
+{% endif %}
+{% endmacro %}
+
+{# Pagination Next - renders <a> or disabled <button> #}
+{% macro btn_next(href='', disabled=false) %}
+{% set svg %}<span class="w-4 h-4 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/chevron-right.svg" %}</span>{% endset %}
+{% if disabled %}
+<button disabled class="btn-secondary btn-sm opacity-50 cursor-not-allowed">Next {{ svg }}</button>
+{% else %}
+<a href="{{ href }}" class="btn-secondary btn-sm">Next {{ svg }}</a>
+{% endif %}
+{% endmacro %}
+
+
+{# ═══════════════════════════════════════════════════════════════════════════
+   TEXT BUTTON - Base macro for labeled buttons with icons
+   ═══════════════════════════════════════════════════════════════════════════ #}
+{% macro text_btn(icon_svg, label, style='primary', size='', type='submit', href='', disabled=false, hx_get='', hx_post='', hx_delete='', hx_target='', hx_swap='', hx_confirm='', extra_attrs='', extra_classes='') %}
+{% set btn_class = 'btn-' ~ style %}
+{% set size_class = ' btn-' ~ size if size else '' %}
+{% set css = btn_class ~ size_class ~ (' ' ~ extra_classes if extra_classes else '') %}
+{% if href and not disabled %}
+<a href="{{ href }}" class="{{ css }}" {{ extra_attrs | safe }}>
+    {{ icon_svg }}
+    {{ label }}
+</a>
+{% else %}
+<button
+    type="{{ type }}"
+    class="{{ css }}"
+    {% if disabled %}disabled{% endif %}
+    {% if hx_get %}hx-get="{{ hx_get }}"{% endif %}
+    {% if hx_post %}hx-post="{{ hx_post }}"{% endif %}
+    {% if hx_delete %}hx-delete="{{ hx_delete }}"{% endif %}
+    {% if hx_target %}hx-target="{{ hx_target }}"{% endif %}
+    {% if hx_swap %}hx-swap="{{ hx_swap }}"{% endif %}
+    {% if hx_confirm %}hx-confirm="{{ hx_confirm }}"{% endif %}
+    {{ extra_attrs | safe }}
+>
+    {{ icon_svg }}
+    {{ label }}
+</button>
+{% endif %}
+{% endmacro %}
+
+
+{# ═══════════════════════════════════════════════════════════════════════════
+   PRE-CONFIGURED TEXT BUTTONS - Common action patterns
+   ═══════════════════════════════════════════════════════════════════════════ #}
+
+{# Save / Update — checkmark icon, primary #}
+{% macro btn_save(label='Save Changes', size='', extra_classes='', extra_attrs='', disabled=false) %}
+{% set svg %}<span class="w-4 h-4 mr-1.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/check.svg" %}</span>{% endset %}
+{{ text_btn(svg, label, style='primary', size=size, extra_classes=extra_classes, extra_attrs=extra_attrs, disabled=disabled) }}
+{% endmacro %}
+
+{# Create / Add — plus icon, primary #}
+{% macro btn_create(label='Create', size='', hx_get='', hx_target='', hx_swap='', extra_classes='', extra_attrs='', disabled=false) %}
+{% set svg %}<span class="w-4 h-4 mr-1.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/plus.svg" %}</span>{% endset %}
+{{ text_btn(svg, label, style='primary', size=size, hx_get=hx_get, hx_target=hx_target, hx_swap=hx_swap, extra_classes=extra_classes, extra_attrs=extra_attrs, disabled=disabled) }}
+{% endmacro %}
+
+{# Delete (text) — trash icon, danger #}
+{% macro btn_delete_text(label='Delete', size='', disabled=false, extra_classes='', extra_attrs='') %}
+{% set svg %}<span class="w-4 h-4 mr-1.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/trash.svg" %}</span>{% endset %}
+{{ text_btn(svg, label, style='danger', size=size, disabled=disabled, extra_classes=extra_classes, extra_attrs=extra_attrs) }}
+{% endmacro %}
+
+{# Cancel (text) — x-circle icon, secondary #}
+{% macro btn_cancel_text(label='Cancel', size='', extra_classes='', extra_attrs='') %}
+{% set svg %}<span class="w-4 h-4 mr-1.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/x-circle.svg" %}</span>{% endset %}
+{{ text_btn(svg, label, style='secondary', size=size, extra_classes=extra_classes, extra_attrs=extra_attrs) }}
+{% endmacro %}
+
+{# Approve — checkmark icon, primary btn-sm #}
+{% macro btn_approve(label='Approve', size='sm', extra_classes='', extra_attrs='') %}
+{% set svg %}<span class="w-4 h-4 mr-1.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/check.svg" %}</span>{% endset %}
+{{ text_btn(svg, label, style='primary', size=size, extra_classes=extra_classes, extra_attrs=extra_attrs) }}
+{% endmacro %}
+
+{# Reject — x-mark icon, danger btn-sm #}
+{% macro btn_reject(label='Reject', size='sm', extra_classes='', extra_attrs='') %}
+{% set svg %}<span class="w-4 h-4 mr-1.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/x-mark.svg" %}</span>{% endset %}
+{{ text_btn(svg, label, style='danger', size=size, extra_classes=extra_classes, extra_attrs=extra_attrs) }}
+{% endmacro %}
+
+{# Pause — pause bars icon, secondary btn-sm #}
+{% macro btn_pause(label='Pause', size='sm', extra_classes='', extra_attrs='') %}
+{% set svg %}<span class="w-4 h-4 mr-1.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/pause.svg" %}</span>{% endset %}
+{{ text_btn(svg, label, style='secondary', size=size, extra_classes=extra_classes, extra_attrs=extra_attrs) }}
+{% endmacro %}
+
+{# Resume — play circle icon, primary btn-sm #}
+{% macro btn_resume(label='Resume', size='sm', extra_classes='', extra_attrs='') %}
+{% set svg %}<span class="w-4 h-4 mr-1.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/play-circle.svg" %}</span>{% endset %}
+{{ text_btn(svg, label, style='primary', size=size, extra_classes=extra_classes, extra_attrs=extra_attrs) }}
+{% endmacro %}
+
+{# Disable — ban circle icon, secondary btn-sm #}
+{% macro btn_disable(label='Disable', size='sm', extra_classes='', extra_attrs='') %}
+{% set svg %}<span class="w-4 h-4 mr-1.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/no-symbol.svg" %}</span>{% endset %}
+{{ text_btn(svg, label, style='secondary', size=size, extra_classes=extra_classes, extra_attrs=extra_attrs) }}
+{% endmacro %}
+
+{# Enable — checkmark icon, primary btn-sm #}
+{% macro btn_enable(label='Enable', size='sm', extra_classes='', extra_attrs='') %}
+{% set svg %}<span class="w-4 h-4 mr-1.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/check.svg" %}</span>{% endset %}
+{{ text_btn(svg, label, style='primary', size=size, extra_classes=extra_classes, extra_attrs=extra_attrs) }}
+{% endmacro %}
+
+{# Copy — clipboard icon, primary #}
+{% macro btn_copy(label='Copy', size='', extra_classes='', extra_attrs='') %}
+{% set svg %}<span class="w-4 h-4 mr-1.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/document-duplicate.svg" %}</span>{% endset %}
+{{ text_btn(svg, label, style='primary', size=size, extra_classes=extra_classes, extra_attrs=extra_attrs) }}
+{% endmacro %}
+
+{# Download — download arrow icon #}
+{% macro btn_download(label='Download', href='', size='', style='primary', extra_classes='', extra_attrs='') %}
+{% set svg %}<span class="w-4 h-4 mr-1.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/arrow-down-tray.svg" %}</span>{% endset %}
+{{ text_btn(svg, label, style=style, href=href, size=size, extra_classes=extra_classes, extra_attrs=extra_attrs) }}
+{% endmacro %}
+
+{# Upload / Import — upload arrow icon, primary #}
+{% macro btn_upload(label='Import', size='', extra_classes='', extra_attrs='') %}
+{% set svg %}<span class="w-4 h-4 mr-1.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/arrow-up-tray.svg" %}</span>{% endset %}
+{{ text_btn(svg, label, style='primary', size=size, extra_classes=extra_classes, extra_attrs=extra_attrs) }}
+{% endmacro %}
+
+{# Clone — duplicate icon, primary #}
+{% macro btn_clone(label='Clone', size='', extra_classes='', extra_attrs='') %}
+{% set svg %}<span class="w-4 h-4 mr-1.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/document-duplicate.svg" %}</span>{% endset %}
+{{ text_btn(svg, label, style='primary', size=size, extra_classes=extra_classes, extra_attrs=extra_attrs) }}
+{% endmacro %}
+
+{# External link — arrow pointing out, primary #}
+{% macro btn_external(label, href='', size='', extra_classes='', extra_attrs='') %}
+{% set svg %}<span class="w-4 h-4 mr-1.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/arrow-top-right-on-square.svg" %}</span>{% endset %}
+{{ text_btn(svg, label, style='primary', href=href, size=size, extra_classes=extra_classes, extra_attrs=extra_attrs) }}
+{% endmacro %}
+
+{# Password change — key icon, primary #}
+{% macro btn_password(label='Change Password', size='', extra_classes='', extra_attrs='') %}
+{% set svg %}<span class="w-4 h-4 mr-1.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/key.svg" %}</span>{% endset %}
+{{ text_btn(svg, label, style='primary', size=size, extra_classes=extra_classes, extra_attrs=extra_attrs) }}
+{% endmacro %}
+
+{# Regenerate — refresh icon, primary #}
+{% macro btn_regenerate(label='Regenerate', size='sm', extra_classes='', extra_attrs='') %}
+{% set svg %}<span class="w-4 h-4 mr-1.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/arrow-path.svg" %}</span>{% endset %}
+{{ text_btn(svg, label, style='primary', size=size, extra_classes=extra_classes, extra_attrs=extra_attrs) }}
+{% endmacro %}
+
+{# Revoke — ban circle icon, danger #}
+{% macro btn_revoke(label='Revoke', size='sm', extra_classes='', extra_attrs='') %}
+{% set svg %}<span class="w-4 h-4 mr-1.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/no-symbol.svg" %}</span>{% endset %}
+{{ text_btn(svg, label, style='danger', size=size, extra_classes=extra_classes, extra_attrs=extra_attrs) }}
+{% endmacro %}
+
+{# Back — left arrow icon, secondary #}
+{% macro btn_back(label='Back', href='', size='', extra_classes='', extra_attrs='') %}
+{% set svg %}<span class="w-4 h-4 mr-1.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/arrow-left.svg" %}</span>{% endset %}
+{{ text_btn(svg, label, style='secondary', href=href, size=size, extra_classes=extra_classes, extra_attrs=extra_attrs) }}
+{% endmacro %}
+
+{# Refresh / Reload — refresh icon, secondary #}
+{% macro btn_refresh(label='Refresh', size='', hx_get='', hx_post='', hx_target='', hx_swap='', extra_classes='', extra_attrs='') %}
+{% set svg %}<span class="w-4 h-4 mr-1.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/arrow-path.svg" %}</span>{% endset %}
+{{ text_btn(svg, label, style='secondary', size=size, hx_get=hx_get, hx_post=hx_post, hx_target=hx_target, hx_swap=hx_swap, extra_classes=extra_classes, extra_attrs=extra_attrs) }}
+{% endmacro %}
+
+{# Filter / Search — search icon, primary #}
+{% macro btn_filter(label='Filter', size='', extra_classes='', extra_attrs='') %}
+{% set svg %}<span class="w-4 h-4 mr-1.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/magnifying-glass.svg" %}</span>{% endset %}
+{{ text_btn(svg, label, style='primary', size=size, extra_classes=extra_classes, extra_attrs=extra_attrs) }}
+{% endmacro %}
+
+{# Sign In — arrow-right icon, primary #}
+{% macro btn_signin(label='Sign In', size='', extra_classes='', extra_attrs='') %}
+{% set svg %}<span class="w-4 h-4 mr-1.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/arrow-left-on-rectangle.svg" %}</span>{% endset %}
+{{ text_btn(svg, label, style='primary', size=size, extra_classes=extra_classes, extra_attrs=extra_attrs) }}
+{% endmacro %}
+
+{# View — eye/external icon, secondary #}
+{% macro btn_view_text(label='View', href='', size='', extra_classes='', extra_attrs='') %}
+{% set svg %}<span class="w-4 h-4 mr-1.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/eye.svg" %}</span>{% endset %}
+{{ text_btn(svg, label, style='secondary', href=href, size=size, extra_classes=extra_classes, extra_attrs=extra_attrs) }}
+{% endmacro %}
+
+{# Edit (text) — pencil icon, secondary btn-sm #}
+{% macro btn_edit_text(label='Edit', size='sm', href='', hx_get='', hx_target='', hx_swap='', extra_classes='', extra_attrs='') %}
+{% set svg %}<span class="w-4 h-4 mr-1.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/pencil-square.svg" %}</span>{% endset %}
+{{ text_btn(svg, label, style='secondary', size=size, href=href, hx_get=hx_get, hx_target=hx_target, hx_swap=hx_swap, extra_classes=extra_classes, extra_attrs=extra_attrs) }}
+{% endmacro %}
+
+
+{# Destructive / state-change action buttons — luxwx-style double-click.
+   Standalone buttons (no <form> wrapper), inline Alpine x-data, htmx.ajax()
+   on the second click. NO browser confirm modals, NO helper attrs. #}
+
+{% macro confirm_action_btn(icon_svg='', label='', color='red',
+                            hx_post='', hx_delete='', hx_get='',
+                            hx_target='body', hx_swap='none', after='',
+                            timeout=3000, title='Confirm', extra_classes='') %}
+{%- set method = 'DELETE' if hx_delete else ('GET' if hx_get else 'POST') -%}
+{%- set url = hx_delete or hx_get or hx_post -%}
+{%- set palette = {
+    'red':    {'normal': 'bg-red-600/20 hover:bg-red-600/30 text-red-300 border-red-600/30',
+               'armed':  'bg-red-500 text-white border-red-500 shadow-lg shadow-red-500/50 animate-pulse'},
+    'orange': {'normal': 'bg-orange-600/20 hover:bg-orange-600/30 text-orange-300 border-orange-600/30',
+               'armed':  'bg-orange-500 text-white border-orange-500 shadow-lg shadow-orange-500/50 animate-pulse'},
+    'green':  {'normal': 'bg-green-600/20 hover:bg-green-600/30 text-green-300 border-green-600/30',
+               'armed':  'bg-green-500 text-white border-green-500 shadow-lg shadow-green-500/50 animate-pulse'},
+    'amber':  {'normal': 'bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border-amber-600/30',
+               'armed':  'bg-amber-500 text-white border-amber-500 shadow-lg shadow-amber-500/50 animate-pulse'},
+    'gray':   {'normal': 'bg-gray-600/20 hover:bg-gray-600/30 text-gray-300 border-gray-600/30',
+               'armed':  'bg-gray-500 text-white border-gray-500 shadow-lg shadow-gray-500/50 animate-pulse'},
+    'brand':  {'normal': 'bg-brand-600/20 hover:bg-brand-600/30 text-brand-300 border-brand-600/30',
+               'armed':  'bg-brand-500 text-white border-brand-500 shadow-lg shadow-brand-500/50 animate-pulse'},
+} -%}
+{%- set p = palette.get(color, palette.red) -%}
+{%- set size_class = 'px-3 py-1.5 text-sm gap-1.5' if label else 'p-1.5 w-7 h-7' -%}
+{%- set _after = '.then(() => window.location.reload())' if after == 'reload' else '' -%}
+<button type="button"
+    x-data="{ confirm: false }"
+    @click="if (confirm) { let t = '{{ hx_target }}'; htmx.ajax('{{ method }}', '{{ url }}', {target: t.startsWith('closest ') ? $el.closest(t.substring(8)) : t, swap: '{{ hx_swap }}'}){{ _after }}; confirm = false; } else { confirm = true; setTimeout(() => confirm = false, {{ timeout }}); }"
+    :class="confirm ? '{{ p.armed }}' : '{{ p.normal }}'"
+    :title="confirm ? 'Click again to confirm' : '{{ title }}'"
+    {% if not label %}aria-label="{{ title }}"{% endif %}
+    class="{{ size_class }} flex items-center justify-center rounded border transition-all duration-150 {{ extra_classes }}">
+    {{ icon_svg | safe }}{% if label %}<span>{{ label }}</span>{% endif %}
+</button>
+{% endmacro %}
+
+
+{# Thin wrappers — forward to confirm_action_btn with preset icon + color. #}
+{% macro delete_icon_button(delete_url, target_id, title='Delete', extra_classes='',
+                            hx_target='', hx_swap='outerHTML', timeout=3000) %}
+{%- set _target = hx_target if hx_target else '#' ~ target_id -%}
+{%- set svg %}<span class="w-3.5 h-3.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/trash.svg" %}</span>{% endset -%}
+{{ confirm_action_btn(icon_svg=svg, color='red', hx_delete=delete_url, hx_target=_target, hx_swap=hx_swap, title=title, timeout=timeout, extra_classes=extra_classes) }}
+{% endmacro %}
+
+{% macro cancel_icon_button(hx_post, hx_target='body', hx_swap='outerHTML', hx_confirm_text='',
+                            timeout=3000, title='Cancel') %}
+{%- set svg %}<span class="w-3.5 h-3.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/x-circle.svg" %}</span>{% endset -%}
+{{ confirm_action_btn(icon_svg=svg, color='orange', hx_post=hx_post, hx_target=hx_target, hx_swap=hx_swap, title=title, timeout=timeout) }}
+{% endmacro %}
+
+
+{# ═══════════════════════════════════════════════════════════════════════════
+   COMPOSITE PATTERNS — Repeated UI primitives beyond simple buttons
+   Each new macro here MUST be documented at /settings/components.
+   ═══════════════════════════════════════════════════════════════════════════ #}
+
+{# Tag pill button — clickable tag in a tag-browser/picker.
+   Used in tag-browser dropdowns and click-to-add UIs.
+   Color follows the same palette as icon_btn but at /10 bg opacity (subtler). #}
+{% macro tag_pill_button(label, color='brand', extra_classes='', extra_attrs='') %}
+{%- set palettes = {
+    'brand': 'bg-brand-600/10 hover:bg-brand-600/20 text-brand-300 hover:text-brand-200 border-brand-600/40 hover:border-brand-500/60',
+    'green': 'bg-green-600/10 hover:bg-green-600/20 text-green-300 hover:text-green-200 border-green-600/40 hover:border-green-500/60',
+    'blue':  'bg-blue-600/10 hover:bg-blue-600/20 text-blue-300 hover:text-blue-200 border-blue-600/40 hover:border-blue-500/60',
+    'yellow':'bg-yellow-600/10 hover:bg-yellow-600/20 text-yellow-300 hover:text-yellow-200 border-yellow-600/40 hover:border-yellow-500/60',
+    'orange':'bg-orange-600/10 hover:bg-orange-600/20 text-orange-300 hover:text-orange-200 border-orange-600/40 hover:border-orange-500/60',
+    'red':   'bg-red-600/10 hover:bg-red-600/20 text-red-300 hover:text-red-200 border-red-600/40 hover:border-red-500/60',
+    'purple':'bg-purple-600/10 hover:bg-purple-600/20 text-purple-300 hover:text-purple-200 border-purple-600/40 hover:border-purple-500/60'
+} -%}
+<button type="button"
+        class="px-2 py-1 text-xs font-mono border rounded transition-colors {{ palettes.get(color, palettes.brand) }} {{ extra_classes }}"
+        {{ extra_attrs | safe }}>{{ label }}</button>
+{% endmacro %}
+
+
+{# Collapse toggle — section/accordion header that toggles its sibling content.
+   The chevron rotates via CSS based on a JS-managed class (caller wires the JS hook
+   via toggle_attr, e.g. data-accordion-toggle, data-toggle-recent-results).
+   Defaults render a card-style header; pass extra_classes/label_classes for variations. #}
+{% macro collapse_toggle(label, chevron_id='', label_id='', toggle_attr='data-toggle-collapse',
+                         extra_classes='w-full flex items-center justify-between p-3 bg-dark-bg-tertiary hover:bg-dark-bg-primary transition-colors text-left',
+                         label_classes='text-sm font-medium text-dark-text-secondary',
+                         extra_attrs='') %}
+<button type="button" {{ toggle_attr | safe }} class="{{ extra_classes }}" {{ extra_attrs | safe }}>
+    <span {% if label_id %}id="{{ label_id }}"{% endif %} class="{{ label_classes }}">{{ label }}</span>
+    <span class="w-4 h-4 text-dark-text-muted transition-transform inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/chevron-down.svg" %}</span>
+</button>
+{% endmacro %}
+
+
+{# Toggle switch — pill-style on/off switch.
+   Per /settings/components: enabled/active = green. size sm for inline/table use,
+   size md for prominent settings cards. #}
+{% macro toggle_switch(enabled, size='md', on_color='green', hx_post='', hx_target='',
+                       hx_swap='outerHTML', hx_trigger='', title='', extra_attrs='') %}
+{%- set sizes = {
+    'sm': {'track': 'h-5 w-9',  'thumb': 'h-4 w-4', 'on': 'translate-x-4', 'off': 'translate-x-0.5'},
+    'md': {'track': 'h-6 w-11', 'thumb': 'h-4 w-4', 'on': 'translate-x-6', 'off': 'translate-x-1'}
+} -%}
+{%- set s = sizes.get(size, sizes.md) -%}
+{%- set on_classes = {'green': 'bg-green-600', 'brand': 'bg-brand-500'}.get(on_color, 'bg-green-600') -%}
+<button type="button"
+        role="switch"
+        aria-checked="{{ 'true' if enabled else 'false' }}"
+        {% if title %}aria-label="{{ title }}"{% endif %}
+        {% if hx_post %}hx-post="{{ hx_post }}"{% endif %}
+        {% if hx_target %}hx-target="{{ hx_target }}"{% endif %}
+        {% if hx_swap %}hx-swap="{{ hx_swap }}"{% endif %}
+        {% if hx_trigger %}hx-trigger="{{ hx_trigger }}"{% endif %}
+        class="relative inline-flex {{ s.track }} items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 cursor-pointer {% if enabled %}{{ on_classes }}{% else %}bg-gray-600{% endif %}"
+        title="{{ title }}"
+        {{ extra_attrs | safe }}>
+    <span class="{% if enabled %}{{ s.on }}{% else %}{{ s.off }}{% endif %} inline-block {{ s.thumb }} transform rounded-full bg-white shadow-sm transition-transform"></span>
+</button>
+{% endmacro %}
+
+
+{# Link button — text-only button styled as an inline link.
+   For "Manage", "Show details", "Generate" inline actions where a full button would be
+   too heavy. Color follows the action mapping from /settings/components. #}
+{% macro link_btn(label, color='brand', hx_get='', hx_post='', hx_target='', hx_swap='',
+                  hx_confirm='', extra_classes='', extra_attrs='') %}
+{%- set color_class = {
+    'brand':  'text-brand-400 hover:text-brand-300',
+    'green':  'text-green-400 hover:text-green-300',
+    'blue':   'text-blue-400 hover:text-blue-300',
+    'yellow': 'text-yellow-400 hover:text-yellow-300',
+    'orange': 'text-orange-400 hover:text-orange-300',
+    'red':    'text-red-400 hover:text-red-300',
+    'purple': 'text-purple-400 hover:text-purple-300'
+}.get(color, 'text-brand-400 hover:text-brand-300') -%}
+<button type="button"
+        {% if hx_get %}hx-get="{{ hx_get }}"{% endif %}
+        {% if hx_post %}hx-post="{{ hx_post }}"{% endif %}
+        {% if hx_target %}hx-target="{{ hx_target }}"{% endif %}
+        {% if hx_swap %}hx-swap="{{ hx_swap }}"{% endif %}
+        {% if hx_confirm %}hx-confirm="{{ hx_confirm }}"{% endif %}
+        class="text-xs {{ color_class }} hover:underline text-left {{ extra_classes }}"
+        {{ extra_attrs | safe }}>{{ label }}</button>
+{% endmacro %}

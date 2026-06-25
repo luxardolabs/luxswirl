@@ -1,0 +1,103 @@
+# =============================================================================
+# Generated secrets and runtime data — NEVER commit
+# =============================================================================
+# These get created by docker-compose at runtime via ./data/<service> bind-mounts.
+# Includes auto-generated SECRET_KEY, api_token, encrypted agent credentials.
+data/
+*_credentials.json
+secret_key
+api_token
+
+# Operator-specific environment overrides — ignore every .env* (incl. .env.dev,
+# which carries a real field-encryption key) EXCEPT the committed template.
+.env
+.env.*
+!.env.example
+
+# =============================================================================
+# Python
+# =============================================================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+build/
+dist/
+.eggs/
+pip-wheel-metadata/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Test / lint / type cache
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+
+# =============================================================================
+# Editors / IDEs
+# =============================================================================
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# =============================================================================
+# Docker / build artifacts
+# =============================================================================
+backups/
+*.log
+*.sqlite
+*.sqlite3
+*.db
+
+# =============================================================================
+# Node / frontend tooling (Tailwind build deps — not committed)
+# =============================================================================
+node_modules/
+
+# Lint cache not covered above
+.import_linter_cache/
+
+# NFS sillyrename turds (appear when an open file is deleted on NFS)
+.nfs*
+
+# =============================================================================
+# Local-only docs and notes
+# =============================================================================
+# Publish shared Claude Code config + architecture-enforcement hooks
+# (.claude/settings.json, .claude/hooks/) but keep personal/machine-local
+# settings out of the repo.
+.claude/settings.local.json
+NOTES.md
+TODO.md
+
+# Internal (non-OSS) marketing value-prop docs
+marketing/
+
+# =============================================================================
+# Internal-only deployment overlays (operator/vendor-specific — not part of OSS)
+# =============================================================================
+# Throwaway sandbox stack + Chronosphere observability collector + its config.
+compose.sandbox.yaml
+compose.chronosphere.yaml
+deploy/chronocollector/
+
+# Operator runtime configs — real values (TLS cert paths, domains) live here and
+# are NOT committed. The committed *.example files are the OSS templates; copy them:
+#   cp compose.dev.yaml.example compose.dev.yaml
+#   cp nginx/conf.d/luxswirl.conf.example nginx/conf.d/luxswirl.conf
+compose.dev.yaml
+nginx/conf.d/luxswirl.conf

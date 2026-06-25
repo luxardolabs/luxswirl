@@ -1,0 +1,100 @@
+{% from 'macros/panels.html' import panel_wrapper, panel_header, panel_content, panel_footer %}
+{% from 'macros/buttons.html' import btn_save, btn_cancel_text, text_btn %}
+{% from 'macros/status.html' import check_type_icon %}
+
+{% set check_svg %}<span class="w-3.5 h-3.5 mr-1 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/check.svg" %}</span>{% endset %}
+{% set clear_svg %}<span class="w-3.5 h-3.5 mr-1 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/x-mark.svg" %}</span>{% endset %}
+
+{% call panel_wrapper() %}
+    {{ panel_header(
+        'Dependents of ' ~ parent.display_name,
+        subtitle='Select the checks that should be suppressed when this one is failing.',
+        title_size='xl',
+    ) }}
+
+    <form id="dependents-panel"
+          hx-post="/checks/{{ parent.id }}/dependents"
+          hx-swap="none"
+          class="flex-1 flex flex-col min-h-0">
+
+        {% call panel_content() %}
+        <div class="space-y-5">
+
+            <div hx-get="/checks/{{ parent.id }}/dependents"
+                 hx-target="closest [role=dialog]"
+                 hx-swap="outerHTML"
+                 hx-trigger="change from:.dep-filter, keyup changed delay:300ms from:input[name=search]"
+                 hx-include="this"
+                 class="grid grid-cols-2 gap-2">
+                <input type="text" name="search" value="{{ search }}"
+                       placeholder="Search name or target…"
+                       class="input col-span-2 dep-filter">
+                <select name="check_type" class="input dep-filter" aria-label="Filter by type">
+                    <option value="">All types</option>
+                    {% for t in all_types %}
+                    <option value="{{ t }}" {% if check_type == t %}selected{% endif %}>{{ t }}</option>
+                    {% endfor %}
+                </select>
+                <select name="agent_name" class="input dep-filter" aria-label="Filter by agent">
+                    <option value="">All agents</option>
+                    {% for a in all_agents %}
+                    <option value="{{ a }}" {% if agent_name == a %}selected{% endif %}>{{ a }}</option>
+                    {% endfor %}
+                </select>
+                <input type="text" name="tags" value="{{ tags }}"
+                       placeholder="Tag equals…"
+                       class="input dep-filter col-span-2">
+            </div>
+
+            <div class="flex items-center justify-between text-xs text-dark-text-muted">
+                <span id="dependents-selected-count">
+                    {{ current_dependent_ids|length }} of {{ candidates|length }} selected
+                </span>
+                <div class="flex gap-2">
+                    {{ text_btn(check_svg, 'Select all matching', style='secondary', size='sm', type='button', extra_attrs='data-dep-select-all') }}
+                    {{ text_btn(clear_svg, 'Clear all', style='secondary', size='sm', type='button', extra_attrs='data-dep-clear') }}
+                </div>
+            </div>
+
+            <div id="dependents-list"
+                 class="card max-h-[28rem] overflow-y-auto divide-y divide-dark-border">
+                {% if candidates %}
+                    {% for c in candidates %}
+                    <label class="flex items-center gap-3 p-3 hover:bg-dark-bg-tertiary/40 cursor-pointer">
+                        <input type="checkbox"
+                               name="dependent_ids"
+                               value="{{ c.id }}"
+                               {% if c.id in current_dependent_ids %}checked{% endif %}
+                               class="w-4 h-4 rounded text-brand-600 bg-dark-bg-primary border-dark-border focus:ring-brand-500">
+                        <div class="flex items-center gap-1 text-dark-text-muted text-xs uppercase w-12">
+                            {{ check_type_icon(c.check_type) }}
+                            {{ c.check_type }}
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <div class="font-medium text-dark-text-primary truncate" title="{{ c.display_name }}">
+                                {{ c.display_name }}
+                            </div>
+                            <div class="text-xs font-mono text-dark-text-muted truncate" title="{{ c.target }}">
+                                {{ c.target }}
+                            </div>
+                        </div>
+                        <div class="text-xs text-dark-text-muted whitespace-nowrap">
+                            {{ (c.agent.agent_name if c.agent else 'unknown') }}
+                        </div>
+                    </label>
+                    {% endfor %}
+                {% else %}
+                    <div class="p-8 text-center text-sm text-dark-text-muted">
+                        No checks match the current filters.
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endcall %}
+
+        {% call panel_footer() %}
+            {{ btn_cancel_text(extra_classes='flex-1', extra_attrs='type="button" data-close-panel') }}
+            {{ btn_save(label='Save dependents', extra_classes='flex-1') }}
+        {% endcall %}
+    </form>
+{% endcall %}

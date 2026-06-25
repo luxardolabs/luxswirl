@@ -1,0 +1,374 @@
+{% from 'macros/buttons.html' import btn_save, btn_create, btn_cancel_text %}
+{% from 'macros/panels.html' import panel_wrapper, panel_header, panel_content, panel_footer %}
+
+{% call panel_wrapper(max_width='max-w-3xl') %}
+    {{ panel_header('Edit Alert Rule' if alert else 'Create New Alert Rule', subtitle='Configure when and how notifications should be sent') }}
+    <form
+        {% if alert %}
+            hx-post="/alerts/{{ alert.id }}/update"
+        {% else %}
+            hx-post="/alerts/create"
+        {% endif %}
+        hx-target="#panel-container"
+        hx-swap="innerHTML"
+        class="contents"
+        id="alert-form"
+    >
+    {% call panel_content(padding='tight') %}
+    <div class="space-y-4">
+        <!-- Basic Information -->
+        <div class="space-y-3">
+            <h3 class="text-xs font-semibold text-dark-text-secondary uppercase tracking-wider">Basic Information</h3>
+
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="label">Alert Name <span class="text-red-400">*</span></label>
+                    <input
+                        type="text"
+                        name="name"
+                        class="input"
+                        value="{{ alert.name if alert else '' }}"
+                        required
+                        placeholder="e.g., Critical Services Down"
+                    >
+                </div>
+
+                <div>
+                    <label class="label">Description</label>
+                    <input
+                        type="text"
+                        name="description"
+                        class="input"
+                        value="{{ alert.description if alert and alert.description else '' }}"
+                        placeholder="Optional description"
+                    >
+                </div>
+            </div>
+        </div>
+
+        <!-- Trigger Configuration -->
+        <div class="space-y-2">
+            <h3 class="text-xs font-semibold text-dark-text-secondary uppercase tracking-wider">Trigger Configuration</h3>
+
+            {% if not alert %}
+            <div>
+                <label class="label" for="trigger-type-select">Trigger Type <span class="text-red-400">*</span></label>
+                <select
+                    name="trigger_type"
+                    id="trigger-type-select"
+                    class="input"
+                    required
+                >
+                    <option value="">Select trigger type...</option>
+                    <option value="status_change">Status Change (Check Down)</option>
+                    <option value="threshold">Latency Threshold</option>
+                    <option value="ssl_cert_expiry">SSL Certificate Expiry</option>
+                </select>
+            </div>
+            {% else %}
+            <input type="hidden" name="trigger_type" value="{{ alert.trigger_type }}">
+            <div class="card p-3 bg-dark-bg-primary">
+                <p class="text-sm">Trigger: <span class="font-semibold">{{ alert.trigger_type.replace('_', ' ').title() }}</span></p>
+            </div>
+            {% endif %}
+
+            <!-- Trigger-specific fields (dynamic) -->
+            <div id="trigger-config-fields">
+                {% if alert %}
+                    {% if alert.trigger_type == 'status_change' %}
+                    <div class="space-y-4">
+                        <div>
+                            <label class="label">Consecutive Failures <span class="text-red-400">*</span></label>
+                            <input
+                                type="number"
+                                name="trigger_consecutive_failures"
+                                class="input"
+                                value="{{ alert.trigger_config.consecutive_failures if alert and alert.trigger_config.consecutive_failures else alert_defaults.consecutive_failures }}"
+                                min="1"
+                                max="100"
+                                required
+                            >
+                            <p class="text-xs text-dark-text-muted mt-1">Number of consecutive failures before triggering alert</p>
+                        </div>
+                    </div>
+                    {% elif alert.trigger_type == 'threshold' %}
+                    <div>
+                        <input type="hidden" name="trigger_threshold_metric" value="latency_ms">
+                        <label class="label mb-3">Alert when response time is: <span class="text-red-400">*</span></label>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="text-xs text-dark-text-muted block mb-1" for="trigger_threshold_operator">Operator</label>
+                                <select id="trigger_threshold_operator" name="trigger_threshold_operator" class="input" required>
+                                    {% set current_operator = alert.trigger_config.operator if alert.trigger_config.operator else '>' %}
+                                    <option value=">" {% if current_operator == '>' %}selected{% endif %}>Greater than (&gt;)</option>
+                                    <option value=">=" {% if current_operator == '>=' %}selected{% endif %}>Greater than or equal (&gt;=)</option>
+                                    <option value="<" {% if current_operator == '<' %}selected{% endif %}>Less than (&lt;)</option>
+                                    <option value="<=" {% if current_operator == '<=' %}selected{% endif %}>Less than or equal (&lt;=)</option>
+                                    <option value="==" {% if current_operator == '==' %}selected{% endif %}>Equal to (==)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="text-xs text-dark-text-muted block mb-1">Threshold (milliseconds)</label>
+                                <input
+                                    type="number"
+                                    name="trigger_threshold_value"
+                                    class="input"
+                                    value="{{ alert.trigger_config.value if alert.trigger_config.value else 1000 }}"
+                                    min="1"
+                                    required
+                                    placeholder="e.g., 1000"
+                                >
+                            </div>
+                        </div>
+                        <p class="text-xs text-dark-text-muted mt-2">Example: "&gt; 1000" alerts when response time exceeds 1 second</p>
+                    </div>
+                    {% elif alert.trigger_type == 'ssl_cert_expiry' %}
+                    <div>
+                        <label class="label">Alert When Certificate Expires In <span class="text-red-400">*</span></label>
+                        <p class="text-xs text-dark-text-muted mb-2">Select thresholds (use "Resend Interval" below to control frequency)</p>
+                        {% set selected_thresholds = alert.trigger_config.days_thresholds if alert and alert.trigger_config.days_thresholds else [30] %}
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                            <label class="flex items-center gap-2 p-2 hover:bg-dark-bg-tertiary rounded cursor-pointer">
+                                <input type="checkbox" name="trigger_days_threshold_7" value="7"
+                                       {% if 7 in selected_thresholds %}checked{% endif %}
+                                       class="w-4 h-4 text-brand-500 bg-dark-bg-primary border-dark-border rounded">
+                                <span class="text-sm">7 days</span>
+                            </label>
+                            <label class="flex items-center gap-2 p-2 hover:bg-dark-bg-tertiary rounded cursor-pointer">
+                                <input type="checkbox" name="trigger_days_threshold_14" value="14"
+                                       {% if 14 in selected_thresholds %}checked{% endif %}
+                                       class="w-4 h-4 text-brand-500 bg-dark-bg-primary border-dark-border rounded">
+                                <span class="text-sm">14 days</span>
+                            </label>
+                            <label class="flex items-center gap-2 p-2 hover:bg-dark-bg-tertiary rounded cursor-pointer">
+                                <input type="checkbox" name="trigger_days_threshold_21" value="21"
+                                       {% if 21 in selected_thresholds %}checked{% endif %}
+                                       class="w-4 h-4 text-brand-500 bg-dark-bg-primary border-dark-border rounded">
+                                <span class="text-sm">21 days</span>
+                            </label>
+                            <label class="flex items-center gap-2 p-2 hover:bg-dark-bg-tertiary rounded cursor-pointer">
+                                <input type="checkbox" name="trigger_days_threshold_30" value="30"
+                                       {% if 30 in selected_thresholds %}checked{% endif %}
+                                       class="w-4 h-4 text-brand-500 bg-dark-bg-primary border-dark-border rounded">
+                                <span class="text-sm">30 days</span>
+                            </label>
+                            <label class="flex items-center gap-2 p-2 hover:bg-dark-bg-tertiary rounded cursor-pointer">
+                                <input type="checkbox" name="trigger_days_threshold_60" value="60"
+                                       {% if 60 in selected_thresholds %}checked{% endif %}
+                                       class="w-4 h-4 text-brand-500 bg-dark-bg-primary border-dark-border rounded">
+                                <span class="text-sm">60 days</span>
+                            </label>
+                            <label class="flex items-center gap-2 p-2 hover:bg-dark-bg-tertiary rounded cursor-pointer">
+                                <input type="checkbox" name="trigger_days_threshold_90" value="90"
+                                       {% if 90 in selected_thresholds %}checked{% endif %}
+                                       class="w-4 h-4 text-brand-500 bg-dark-bg-primary border-dark-border rounded">
+                                <span class="text-sm">90 days</span>
+                            </label>
+                        </div>
+                    </div>
+                    {% endif %}
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Scope -->
+        <div class="space-y-2">
+            <h3 class="text-xs font-semibold text-dark-text-secondary uppercase tracking-wider">Alert Scope</h3>
+
+            {% if not alert %}
+            <div class="grid grid-cols-2 gap-2">
+                <label class="flex items-start gap-2 cursor-pointer p-2 border border-dark-border rounded-lg hover:border-brand-500/30 transition-colors">
+                    <input
+                        type="radio"
+                        name="is_global"
+                        value="true"
+                        class="mt-1 w-4 h-4 text-brand-500 bg-dark-bg-tertiary border-dark-border"
+                        checked
+                    >
+                    <div class="flex-1">
+                        <div class="flex items-center gap-2 mb-1">
+                            <span class="w-4 h-4 text-brand-500 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/globe-americas.svg" %}</span>
+                            <span class="text-sm font-medium text-dark-text-primary">Global</span>
+                        </div>
+                        <p class="text-xs text-dark-text-muted">All checks</p>
+                    </div>
+                </label>
+
+                <label class="flex items-start gap-2 cursor-pointer p-2 border border-dark-border rounded-lg hover:border-brand-500/30 transition-colors">
+                    <input
+                        type="radio"
+                        name="is_global"
+                        value="false"
+                        class="mt-1 w-4 h-4 text-brand-500 bg-dark-bg-tertiary border-dark-border"
+                    >
+                    <div class="flex-1">
+                        <div class="flex items-center gap-2 mb-1">
+                            <span class="w-4 h-4 text-brand-500 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/clipboard.svg" %}</span>
+                            <span class="text-sm font-medium text-dark-text-primary">Specific</span>
+                        </div>
+                        <p class="text-xs text-dark-text-muted">Select checks</p>
+                    </div>
+                </label>
+            </div>
+
+            <!-- Check selector (shown when specific checks selected) -->
+            <div id="check-selector" style="display: none;">
+                <label class="label">Select Checks <span class="text-red-400">*</span></label>
+                <div class="card p-3 max-h-64 overflow-y-auto space-y-2">
+                    {% for check in checks %}
+                    <label class="flex items-center gap-2 p-2 hover:bg-dark-bg-tertiary rounded cursor-pointer">
+                        <input
+                            type="checkbox"
+                            name="check_{{ check.id }}"
+                            value="{{ check.id }}"
+                            class="w-4 h-4 text-brand-500 bg-dark-bg-primary border-dark-border rounded"
+                        >
+                        <span class="text-sm">{{ check.agent.id if check.agent else 'unknown' }}:{{ check.display_name }}</span>
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+            {% else %}
+            <div class="card p-4 bg-dark-bg-primary">
+                {% if alert.is_global %}
+                <p class="text-sm">
+                    <span class="font-semibold text-dark-text-primary">Global Alert</span> - Applies to all checks
+                </p>
+                {% else %}
+                <p class="text-sm">
+                    <span class="font-semibold text-dark-text-primary">Specific Checks</span> - Applies to {{ alert.check_count }} check(s)
+                </p>
+                {% endif %}
+                <p class="text-xs text-dark-text-muted mt-1">Scope cannot be changed after creation</p>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Notification Providers -->
+        {% if not alert %}
+        <div class="space-y-2">
+            <h3 class="text-xs font-semibold text-dark-text-secondary uppercase tracking-wider">Notification Providers</h3>
+
+            {% if providers %}
+            <div class="space-y-1">
+                {% for provider in providers %}
+                <label class="flex items-center gap-2 p-2 border border-dark-border rounded hover:border-brand-500/30 transition-colors cursor-pointer">
+                    <input
+                        type="checkbox"
+                        name="provider_{{ provider.id }}"
+                        value="{{ provider.id }}"
+                        {% if provider.is_default_enabled %}checked{% endif %}
+                        class="w-4 h-4 text-brand-500 bg-dark-bg-primary border-dark-border rounded"
+                    >
+                    <div class="flex-1">
+                        <div class="text-sm font-medium">{{ provider.friendly_name }}</div>
+                        <div class="text-xs text-dark-text-muted">{{ provider.provider_type.replace('_', ' ') }}</div>
+                    </div>
+                </label>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="card p-3 text-center">
+                <p class="text-xs text-dark-text-muted">No providers configured. <a href="/settings?tab=notifications" class="text-brand-500 hover:text-brand-400">Create one</a></p>
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <!-- Notification Settings -->
+        <div class="space-y-2">
+            <h3 class="text-xs font-semibold text-dark-text-secondary uppercase tracking-wider">Notification Settings</h3>
+
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                    <label class="label">Resend Interval (min)</label>
+                    <input
+                        type="number"
+                        name="resend_interval_minutes"
+                        class="input"
+                        value="{{ alert.resend_interval_minutes if alert else '' }}"
+                        min="1"
+                        placeholder="Optional"
+                    >
+                </div>
+
+                <div>
+                    <label class="label">Max Resends</label>
+                    <input
+                        type="number"
+                        name="max_resends"
+                        class="input"
+                        value="{{ alert.max_resends if alert and alert.max_resends else '' }}"
+                        min="0"
+                        placeholder="0 = unlimited"
+                    >
+                </div>
+
+                <div class="flex items-end">
+                    <label class="flex items-center gap-2 cursor-pointer p-2 border border-dark-border rounded">
+                        <input
+                            type="checkbox"
+                            name="notify_on_recovery"
+                            value="true"
+                            {% if (alert and alert.notify_on_recovery) or (not alert and alert_defaults.notify_on_recovery) %}checked{% endif %}
+                            class="w-4 h-4 text-brand-500 bg-dark-bg-tertiary border-dark-border rounded"
+                        >
+                        <span class="text-sm">Notify on Recovery</span>
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <!-- Custom Message Templates -->
+        <div class="space-y-2">
+            <h3 class="text-xs font-semibold text-dark-text-secondary uppercase tracking-wider">Custom Templates (Optional)</h3>
+
+            <div>
+                <label class="label">Custom Subject</label>
+                <input
+                    type="text"
+                    name="custom_subject"
+                    class="input font-mono text-sm"
+                    value="{{ alert.custom_subject if alert and alert.custom_subject else '' }}"
+                    placeholder="Variables: {{NAME}}, {{STATUS}}, {{HOSTNAME_OR_URL}}, {{LATENCY}}"
+                >
+            </div>
+
+            <div>
+                <label class="label">Custom Message</label>
+                <textarea
+                    name="custom_message"
+                    class="input font-mono text-sm"
+                    rows="3"
+                    placeholder="Leave blank for default"
+                >{{ alert.custom_message if alert and alert.custom_message else '' }}</textarea>
+            </div>
+        </div>
+
+        <!-- Status Checkbox -->
+        <div class="pt-3 border-t border-dark-border">
+            <label class="flex items-center gap-2 cursor-pointer">
+                <input
+                    type="checkbox"
+                    name="is_enabled"
+                    value="true"
+                    {% if not alert or alert.is_enabled %}checked{% endif %}
+                    class="w-4 h-4 text-brand-500 bg-dark-bg-tertiary border-dark-border rounded"
+                >
+                <span class="text-sm font-medium">Enable this alert</span>
+            </label>
+        </div>
+
+    </div>
+    {% endcall %}
+
+    {% call panel_footer() %}
+        {{ btn_cancel_text(extra_classes='flex-1', extra_attrs='type="button" data-close-panel') }}
+        {% if alert %}
+            {{ btn_save(label='Update Alert', extra_classes='flex-1') }}
+        {% else %}
+            {{ btn_create(label='Create Alert', extra_classes='flex-1') }}
+        {% endif %}
+    {% endcall %}
+    </form>
+{% endcall %}

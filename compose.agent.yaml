@@ -1,0 +1,31 @@
+services:
+  luxswirl_agent:
+    image: ghcr.io/luxardolabs/luxswirl-agent:latest
+    container_name: luxswirl_agent
+    command: ["python", "-m", "app.agent_main"]
+    environment:
+      # Registration key (for initial registration - agent will receive unique key after approval)
+      # Generate via Settings → Registration Keys in the server UI after first admin login.
+      - LUXSWIRL_AUTH_KEY=${LUXSWIRL_AUTH_KEY:?must be set — generate via server UI}
+
+      # Server URL
+      - LUXSWIRL_SERVER_URL=https://luxswirl.example.com:9000/api/v1/reports
+
+      # Agent configuration
+      - AGENT__MAX_CONCURRENT_CHECKS=200
+      - AGENT__REPORT_BATCH_SIZE=5000
+      - AGENT__REPORT_INTERVAL=10
+
+      # Logging
+      - LOG__LEVEL=INFO
+
+    # Persistent storage for credentials and data
+    volumes:
+      - ./data:/app/data:rw
+    #   - ./agent-config.yaml:/app/config.yaml:ro  # Optional: check definitions
+
+    restart: always
+
+    # Network mode host allows agent to ping and reach local services
+    # Comment out if you don't need host networking
+    network_mode: host

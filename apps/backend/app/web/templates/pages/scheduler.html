@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% from 'macros/page.html' import page_header %}
+{% from 'macros/cards.html' import stat_card %}
+{% from 'macros/tables.html' import data_table %}
+
+{% block content %}
+{{ page_header(
+    title='Scheduler',
+    description='Manage scheduled background jobs for data lifecycle and monitoring'
+) }}
+
+<!-- Summary Stats -->
+<div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+    {% set total_icon %}
+    <span class="w-6 h-6 text-brand-500 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/clock.svg" %}</span>
+    {% endset %}
+    {{ stat_card('Total Jobs', total_jobs, icon=total_icon, color='brand') }}
+
+    {% set enabled_icon %}
+    <span class="w-6 h-6 text-green-500 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/check-circle.svg" %}</span>
+    {% endset %}
+    {{ stat_card('Enabled', enabled_count, icon=enabled_icon, color='green') }}
+
+    {% set disabled_icon %}
+    <span class="w-6 h-6 text-gray-500 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/no-symbol.svg" %}</span>
+    {% endset %}
+    {{ stat_card('Disabled', disabled_count, icon=disabled_icon, color='gray') }}
+</div>
+
+<!-- Jobs Table -->
+<div class="card overflow-hidden">
+    <div class="overflow-x-auto">
+        {% call data_table([
+            {'label': 'Job'},
+            {'label': 'Category'},
+            {'label': 'Schedule'},
+            {'label': 'Last Run'},
+            {'label': 'Next Run'},
+            {'label': 'Status'},
+            {'label': 'Stats'},
+            {'label': 'Actions', 'align': 'right'},
+        ]) %}
+            {% for row in job_rows %}
+            {% include 'partials/scheduler_job_row.html' %}
+            {% endfor %}
+        {% endcall %}
+    </div>
+
+    {% if not job_rows %}
+    <div class="p-12 text-center text-dark-text-muted">
+        <span class="w-12 h-12 mx-auto mb-4 opacity-50 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/clock.svg" %}</span>
+        <p class="text-lg font-medium">No scheduled jobs configured</p>
+        <p class="text-sm mt-1">Jobs will appear here after scheduler initialization.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

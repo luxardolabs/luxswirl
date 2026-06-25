@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+{% from 'macros/settings.html' import settings_nav, section_header %}
+{% from 'macros/page.html' import page_header %}
+{% from 'macros/buttons.html' import icon_edit, icon_delete, icon_btn, btn_create %}
+{% from 'macros/badges.html' import badge, role_badge %}
+{% from 'macros/filters.html' import filter_card, filter_select, filter_search %}
+{% from 'macros/tables.html' import pagination_controls, data_table %}
+
+{% block content %}
+{{ page_header(
+    title='Settings',
+    description='Manage user accounts, roles, and permissions'
+) }}
+
+{{ settings_nav('users', current_user) }}
+
+<!-- Users Content -->
+<div class="mb-6 flex items-center justify-between">
+    <div>
+        <h2 class="text-lg font-semibold">User Management</h2>
+        <p class="text-sm text-dark-text-muted mt-1">{{ pagination.total }} total users</p>
+    </div>
+    {{ btn_create(label='Create User', hx_get='/settings/users/create-form', hx_target='#panel-container', hx_swap='innerHTML') }}
+</div>
+
+<!-- Stats Cards -->
+<div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+    <div class="card p-4">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center">
+                <span class="w-6 h-6 text-blue-400 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/users.svg" %}</span>
+            </div>
+            <div>
+                <p class="text-2xl font-bold text-dark-text-primary">{{ stats.total_users }}</p>
+                <p class="text-xs text-dark-text-muted">Total Users</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="card p-4">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-lg bg-green-500/10 flex items-center justify-center">
+                <span class="w-6 h-6 text-green-400 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/check-circle.svg" %}</span>
+            </div>
+            <div>
+                <p class="text-2xl font-bold text-dark-text-primary">{{ stats.active_users }}</p>
+                <p class="text-xs text-dark-text-muted">Active</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="card p-4">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-lg bg-purple-500/10 flex items-center justify-center">
+                <span class="w-6 h-6 text-purple-400 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/document-text.svg" %}</span>
+            </div>
+            <div>
+                <p class="text-lg font-bold text-dark-text-primary">
+                    {{ stats.admin_count }}/{{ stats.editor_count }}/{{ stats.viewer_count }}
+                </p>
+                <p class="text-xs text-dark-text-muted">Admin/Editor/Viewer</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="card p-4">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-lg bg-red-500/10 flex items-center justify-center">
+                <span class="w-6 h-6 text-red-400 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/lock-open.svg" %}</span>
+            </div>
+            <div>
+                <p class="text-2xl font-bold text-dark-text-primary">{{ stats.locked_accounts }}</p>
+                <p class="text-xs text-dark-text-muted">Locked</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Filters -->
+{% call filter_card('/settings/users') %}
+    {{ filter_search('search', 'Search', 'Username or name...', filters.search or '', extra_classes='flex-1 min-w-[200px]') }}
+
+    {% call filter_select('role', 'Role', extra_classes='w-40') %}
+        <option value="">All Roles</option>
+        {% for opt in role_options %}
+        <option value="{{ opt.value }}" {% if filters.role == opt.value %}selected{% endif %}>{{ opt.label }}</option>
+        {% endfor %}
+    {% endcall %}
+
+    {% call filter_select('is_active', 'Status', extra_classes='w-40') %}
+        <option value="">All</option>
+        <option value="true" {% if filters.is_active == true %}selected{% endif %}>Active</option>
+        <option value="false" {% if filters.is_active == false %}selected{% endif %}>Inactive</option>
+    {% endcall %}
+{% endcall %}
+
+{{ pagination_controls(pagination, '/settings/users') }}
+
+<!-- Users Table -->
+<div class="card overflow-hidden">
+    {% call data_table([
+        {'label': 'User'},
+        {'label': 'Role'},
+        {'label': 'Status'},
+        {'label': 'Last Login'},
+        {'label': 'Actions', 'align': 'right'},
+    ]) %}
+            {% for user in users %}
+            <tr>
+                <td>
+                    <div class="max-w-xs">
+                        <div class="flex items-center gap-2">
+                            <p class="font-medium text-dark-text-primary truncate" title="{{ user.username }}">{{ user.username }}</p>
+                            {% if user.id == current_user.id %}
+                            {{ badge('You', 'info') }}
+                            {% endif %}
+                        </div>
+                        {% if user.full_name %}
+                        <p class="text-xs text-dark-text-muted truncate" title="{{ user.full_name }}">{{ user.full_name }}</p>
+                        {% endif %}
+                    </div>
+                </td>
+                <td>
+                    {{ role_badge(user.role) }}
+                </td>
+                <td>
+                    <div class="flex flex-col gap-1">
+                        {% if user.locked_until %}
+                        {{ badge('Locked', 'danger') }}
+                        {% elif not user.is_active %}
+                        {{ badge('Inactive', 'neutral') }}
+                        {% else %}
+                        {{ badge('Active', 'success') }}
+                        {% endif %}
+                        {% if user.must_change_password %}
+                        {{ badge('Must change password', 'warning') }}
+                        {% endif %}
+                    </div>
+                </td>
+                <td>
+                    {% if user.last_login_at %}
+                    <span class="font-mono text-dark-text-muted">{{ user.last_login_at|format_datetime('%m/%d %I:%M%p') }}</span>
+                    {% else %}
+                    <span class="text-dark-text-muted/50">Never</span>
+                    {% endif %}
+                </td>
+                <td class="text-right">
+                    <div class="flex items-center justify-end gap-2">
+                        {{ icon_edit(hx_get='/settings/users/' ~ user.id ~ '/edit-form', hx_target='#panel-container') }}
+
+                        <!-- Unlock (if locked) — Approve/Enable = green per /settings/components -->
+                        {% if user.locked_until %}
+                        {% set unlock_svg %}<span class="w-3.5 h-3.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/lock-closed.svg" %}</span>{% endset %}
+                        <form method="POST" action="/settings/users/{{ user.id }}/unlock" class="inline">
+                            {{ icon_btn(unlock_svg, color='green', title='Unlock Account', extra_attrs='type="submit"') }}
+                        </form>
+                        {% endif %}
+
+                        {% if user.id != current_user.id %}
+                        <form method="POST" action="/settings/users/{{ user.id }}/delete" onsubmit="return confirm('Are you sure you want to delete this user? This action cannot be undone.');" class="inline">
+                            {{ icon_delete() }}
+                        </form>
+                        {% endif %}
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+    {% endcall %}
+
+    {% if users|length == 0 %}
+    <div class="p-12 text-center">
+        <span class="w-16 h-16 mx-auto text-dark-text-muted/30 mb-4 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/users.svg" %}</span>
+        <p class="text-dark-text-muted">No users found</p>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Pagination -->
+{{ pagination_controls(pagination, '/settings/users') }}
+{% endblock %}

@@ -1,0 +1,26 @@
+{% from 'macros/badges.html' import badge as _badge %}
+{% macro job_status_badge(status) %}
+{% set status_map = {'pending': 'neutral', 'assigned': 'info', 'running': 'warning', 'completed': 'success', 'failed': 'danger', 'cancelled': 'neutral'} %}
+{% set extra = 'animate-pulse' if status == 'running' else ('line-through' if status == 'cancelled' else '') %}
+{{ _badge(status|title, status_map.get(status, 'neutral'), extra_classes=extra) }}
+{% endmacro %}
+
+{% macro job_type_icon(job_type) %}
+{% if job_type == 'network_discover' %}
+    <span class="w-4 h-4 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/magnifying-glass.svg" %}</span>
+{% elif job_type == 'network_scan' %}
+    <span class="w-4 h-4 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/cpu-chip.svg" %}</span>
+{% else %}
+    <span class="w-4 h-4 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/briefcase.svg" %}</span>
+{% endif %}
+{% endmacro %}
+
+{% macro priority_indicator(priority) %}
+{% if priority >= 75 %}
+    {{ _badge('High', 'danger') }}
+{% elif priority >= 25 %}
+    {{ _badge('Normal', 'warning') }}
+{% else %}
+    {{ _badge('Low', 'info') }}
+{% endif %}
+{% endmacro %}

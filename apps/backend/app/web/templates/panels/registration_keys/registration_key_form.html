@@ -1,0 +1,85 @@
+{% from 'macros/buttons.html' import btn_create, btn_cancel_text %}
+{% from 'macros/panels.html' import panel_wrapper, panel_header, panel_content, panel_footer %}
+
+{% call panel_wrapper(max_width='max-w-3xl') %}
+    {{ panel_header('New Registration Key') }}
+    <form hx-post="/registration-keys/create" hx-target="#panel-container" hx-swap="innerHTML" class="contents">
+    {% call panel_content() %}
+    <div class="space-y-6">
+        <!-- Info Alert -->
+        <div class="p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+            <div class="flex items-start gap-3">
+                <span class="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/information-circle.svg" %}</span>
+                <div class="text-sm">
+                    <p class="font-semibold text-blue-400 mb-1">Security Notice</p>
+                    <p class="text-dark-text-muted">
+                        The registration key will only be shown <strong>once</strong> after creation.
+                        Make sure to copy and store it securely.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Name -->
+        <div>
+            <label class="label required">
+                Name
+                <span class="text-red-500">*</span>
+            </label>
+            <input
+                type="text"
+                name="name"
+                required
+                placeholder="e.g., Production Agents"
+                class="input"
+            />
+            <p class="mt-1 text-xs text-dark-text-muted">
+                A descriptive name for this key (e.g., environment or location)
+            </p>
+        </div>
+
+        <!-- Description -->
+        <div>
+            <label class="label">Description (Optional)</label>
+            <textarea
+                name="description"
+                rows="3"
+                placeholder="Optional notes about this key's purpose..."
+                class="input"
+            ></textarea>
+            <p class="mt-1 text-xs text-dark-text-muted">
+                Additional context about when and where this key should be used
+            </p>
+        </div>
+
+        <!-- Usage Guidelines -->
+        <div class="card p-5">
+            <h4 class="text-sm font-semibold uppercase tracking-wide text-dark-text-secondary mb-3">Usage Guidelines</h4>
+            <ul class="text-xs text-dark-text-muted space-y-2">
+                <li class="flex items-start gap-2">
+                    <span class="w-4 h-4 text-brand-500 flex-shrink-0 mt-0.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/check-circle.svg" %}</span>
+                    <span>Create separate keys for different environments (prod, staging, dev)</span>
+                </li>
+                <li class="flex items-start gap-2">
+                    <span class="w-4 h-4 text-brand-500 flex-shrink-0 mt-0.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/check-circle.svg" %}</span>
+                    <span>Agents use this key to register and recover their agent-specific keys</span>
+                </li>
+                <li class="flex items-start gap-2">
+                    <span class="w-4 h-4 text-brand-500 flex-shrink-0 mt-0.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/check-circle.svg" %}</span>
+                    <span>Set as environment variable: LUXSWIRL_AUTH_KEY</span>
+                </li>
+                <li class="flex items-start gap-2">
+                    <span class="w-4 h-4 text-brand-500 flex-shrink-0 mt-0.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/check-circle.svg" %}</span>
+                    <span>Revoke immediately if compromised</span>
+                </li>
+            </ul>
+        </div>
+    </div>
+    {% endcall %}
+
+    {% call panel_footer() %}
+        {{ btn_cancel_text(extra_classes='flex-1', extra_attrs='type="button" data-close-panel') }}
+        {{ btn_create(label='Create Key', extra_classes='flex-1') }}
+    {% endcall %}
+    </form>
+{% endcall %}
