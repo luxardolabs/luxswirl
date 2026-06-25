@@ -1,0 +1,103 @@
+services:
+  timescaledb:
+    image: timescale/timescaledb:latest-pg16
+    container_name: luxswirl_timescaledb
+    environment:
+      - POSTGRES_DB=luxswirl
+      - POSTGRES_USER=luxswirl
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    # PostgreSQL uses /dev/shm for parallel query workers, large sorts, and hash
+    # joins. The Docker default of 64MB is enough for trivial workloads but any
+    # multi-status notification_logs scan or TimescaleDB chunk aggregation will
+    # hit `could not resize shared memory segment: No space left on device` and
+    # poison the surrounding transaction. 1GB is a conservative production floor.
+    shm_size: '1gb'
+    # Internal port only - exposed in compose.dev.yaml for development
+    expose:
+      - "5432"
+    volumes:
+      - luxswirl_db_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    networks:
+      - luxswirl-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U luxswirl"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  luxswirl_server:
+    image: ghcr.io/luxardolabs/luxswirl-backend:latest
+    container_name: luxswirl_server
+    command: ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 9000"]
+    # Internal port only - exposed via nginx
+    expose:
+      - "9000"
+    volumes:
+      - ./data/server:/app/data  # Persists generated SECRET_KEY + api_token
+      # - ./config/server.yaml:/app/config.yaml  # Optional: custom config
+    environment:
+      - LOG__LEVEL=INFO
+      - DATABASE_URL=postgresql+asyncpg://luxswirl:${POSTGRES_PASSWORD}@timescaledb:5432/luxswirl
+      - DATABASE_ECHO=false
+      - SERVER_ENVIRONMENT=production
+      # SECURITY__FIELD_ENCRYPTION_KEY - Set in .env file or compose.dev.yaml/compose.prod.yaml
+      # CORS: Override this in compose.prod.yaml or compose.dev.yaml for your deployment
+    restart: unless-stopped
+    networks:
+      - luxswirl-network
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:9000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  luxswirl_agent:
+    image: ghcr.io/luxardolabs/luxswirl-agent:latest
+    container_name: luxswirl_agent
+    hostname: luxswirl_agent  # IMPORTANT: Keep hostname consistent for encryption key derivation
+    command: ["python", "-m", "app.agent_main"]
+    volumes:
+      - ./data/agent:/app/data  # Local directory for easy dev access
+    #   - ./config/agent.yaml:/app/config.yaml  # Optional: custom config
+    environment:
+      - LUXSWIRL_AGENT_ID=docker-agent
+      # Required: generate via Settings → Registration Keys in the server UI
+      # after first login, then set this value (e.g., in a .env file).
+      - LUXSWIRL_AUTH_KEY=${LUXSWIRL_AUTH_KEY:?must be set — generate via server UI after first admin login}
+      - LUXSWIRL_SERVER_URL=http://luxswirl_server:9000/api/v1/reports
+    restart: unless-stopped
+    networks:
+      - luxswirl-network
+    depends_on:
+      luxswirl_server:
+        condition: service_healthy
+
+  nginx:
+    image: nginx:alpine
+    container_name: luxswirl_nginx
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      # SSL certificates from host
+      - /etc/ssl/certs/your-domain:/etc/nginx/ssl:ro
+    ports:
+      - "9000:9000"
+    networks:
+      - luxswirl-network
+    depends_on:
+      luxswirl_server:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  luxswirl_db_data:
+    name: luxswirl_db_data
+
+networks:
+  luxswirl-network:
+    driver: bridge

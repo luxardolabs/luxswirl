@@ -1,0 +1,111 @@
+{% from 'macros/status.html' import check_type_icon %}
+{% from 'macros/badges.html' import badge %}
+{% from 'macros/buttons.html' import icon_btn, confirm_action_btn %}
+
+<tr id="notification-log-row-{{ log.id }}">
+    <!-- Timestamp -->
+    <td class="text-dark-text-secondary text-sm whitespace-nowrap">
+        {{ log.sent_at | format_datetime('%Y-%m-%d %I:%M:%S%p') }}
+    </td>
+
+    <!-- Alert -->
+    <td>
+        <span class="font-medium text-dark-text-primary max-w-xs truncate block" title="{{ log.alert_name }}">{{ log.alert_name }}</span>
+    </td>
+
+    <!-- Provider -->
+    <td class="text-dark-text-secondary max-w-xs truncate" title="{{ log.provider_name }}">
+        {{ log.provider_name }}
+    </td>
+
+    <!-- Check Type Icon -->
+    <td class="text-dark-text-muted">
+        {{ check_type_icon(log.check_type) }}
+    </td>
+
+    <!-- Check -->
+    <td>
+        <span class="font-mono text-sm text-dark-text-primary max-w-xs truncate block" title="{{ log.check_name }}">{{ log.check_name }}</span>
+    </td>
+
+    <!-- Target -->
+    <td class="text-dark-text-secondary text-sm max-w-xs truncate" title="{{ log.check_target }}">
+        {{ log.check_target }}
+    </td>
+
+    <!-- Check Result (Up/Down) -->
+    <td>
+        {% if log.check_success %}
+        <span class="px-2 py-1 text-xs font-medium rounded-md bg-green-600/20 text-green-400 border border-green-600/30">
+            Up
+        </span>
+        {% else %}
+        <span class="px-2 py-1 text-xs font-medium rounded-md bg-red-600/20 text-red-400 border border-red-600/30">
+            Down
+        </span>
+        {% endif %}
+    </td>
+
+    <!-- Latency -->
+    <td class="text-dark-text-secondary text-sm whitespace-nowrap">
+        {% if log.check_latency_ms is not none %}
+        {{ "%.0f"|format(log.check_latency_ms) }}ms
+        {% else %}
+        <span class="text-dark-text-muted">—</span>
+        {% endif %}
+    </td>
+
+    <!-- Notification Status -->
+    <td>
+        {% set notif_status_map = {'sent': 'success', 'failed': 'danger', 'retrying': 'warning', 'rate_limited': 'warning', 'deduplicated': 'info', 'suppressed': 'neutral'} %}
+        {{ badge(log.status|replace('_', ' ')|title, notif_status_map.get(log.status, 'neutral')) }}
+    </td>
+
+    <!-- Error -->
+    <td class="text-sm">
+        {% if log.error_message %}
+        <span class="text-red-400 truncate max-w-xs block" title="{{ log.error_message }}">
+            {{ log.error_message }}
+        </span>
+        {% else %}
+        <span class="text-dark-text-muted">—</span>
+        {% endif %}
+    </td>
+
+    <!-- Actions -->
+    <td class="text-right whitespace-nowrap">
+        <div class="flex items-center justify-end gap-1">
+            <!-- View Check Icon Button (only when the check still exists) -->
+            {% if log.check_detail_url %}
+            {% set view_chart_svg %}<span class="w-3.5 h-3.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/chart-bar.svg" %}</span>{% endset %}
+            {{ icon_btn(view_chart_svg, color='brand', title='View check details',
+                        hx_get=log.check_detail_url, hx_target='#panel-container', hx_swap='innerHTML') }}
+            {% endif %}
+
+            {# Snooze controls — explicit add/clear buttons, no JS overload. Need a check. #}
+            {% if log.snooze_url %}
+            {% set snooze_svg %}<span class="w-3.5 h-3.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/moon.svg" %}</span>{% endset %}
+            {% if log.snooze_duration %}
+                {# Active snooze: bright orange '+15m' to extend, plus a 'Clear' X #}
+                {{ icon_btn(snooze_svg, color='orange',
+                            title='Snoozed ' ~ log.snooze_duration ~ ' — click to add 15 more minutes',
+                            hx_post=log.snooze_url,
+                            hx_target=log.row_target,
+                            hx_swap='outerHTML') }}
+                {% set clear_svg %}<span class="w-3.5 h-3.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/x-mark.svg" %}</span>{% endset %}
+                {{ confirm_action_btn(icon_svg=clear_svg, color='red',
+                    hx_delete=log.snooze_url,
+                    hx_target=log.row_target, hx_swap='outerHTML',
+                    title='Clear snooze — resume notifications now') }}
+            {% else %}
+                {# Inactive: dimmed snooze button to start a 15m snooze #}
+                {{ icon_btn(snooze_svg, color='orange', title='Snooze for 15 minutes',
+                            hx_post=log.snooze_url,
+                            hx_target=log.row_target,
+                            hx_swap='outerHTML',
+                            extra_classes='opacity-50') }}
+            {% endif %}
+            {% endif %}
+        </div>
+    </td>
+</tr>

@@ -1,0 +1,116 @@
+{% from 'macros/buttons.html' import btn_save, btn_enable, btn_delete_text, btn_cancel_text, confirm_action_btn %}
+{%- set ICO_TRASH %}<span class="w-3.5 h-3.5 mr-1.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/trash.svg" %}</span>{% endset %}
+{% from 'macros/panels.html' import panel_wrapper, panel_header, panel_content %}
+
+{% call panel_wrapper() %}
+    {{ panel_header('Edit User', subtitle='Update account details and permissions') }}
+    {% call panel_content() %}
+        <!-- User Info Card -->
+        <div class="mb-4 p-3 bg-dark-bg-tertiary rounded-lg border border-dark-border">
+            <div class="space-y-1 text-xs">
+                <div class="flex justify-between">
+                    <span class="text-dark-text-muted">User ID:</span>
+                    <span class="font-mono text-dark-text-secondary">{{ user.id }}</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-dark-text-muted">Created:</span>
+                    <span class="text-dark-text-secondary">{{ user.created_at|format_datetime("%b %d, %Y %I:%M%p") }}</span>
+                </div>
+                {% if user.last_login_at %}
+                <div class="flex justify-between">
+                    <span class="text-dark-text-muted">Last Login:</span>
+                    <span class="text-dark-text-secondary">{{ user.last_login_at|format_datetime("%b %d, %Y %I:%M%p") }}</span>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <form
+            hx-post="/settings/users/{{ user.id }}/update"
+            hx-target="#user-edit-result"
+            hx-swap="innerHTML"
+            class="space-y-4">
+
+            <!-- Result Message -->
+            <div id="user-edit-result"></div>
+
+            <!-- Full Name -->
+            <div>
+                <label class="label text-sm" for="full_name">Full Name</label>
+                <input
+                    type="text"
+                    id="full_name"
+                    name="full_name"
+                    value="{{ user.full_name or '' }}"
+                    class="input w-full"
+                    placeholder="John Doe"
+                >
+            </div>
+
+            <!-- Role -->
+            <div>
+                <label class="label text-sm" for="role">Role <span class="text-red-400">*</span></label>
+                <select id="role" name="role" class="input" required>
+                    {% for opt in role_options %}
+                    <option value="{{ opt.value }}" {% if user.role == opt.value %}selected{% endif %}>{{ opt.label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- Checkboxes -->
+            <div class="space-y-2">
+                <label class="flex items-center gap-2 cursor-pointer text-sm text-dark-text-secondary">
+                    <input type="checkbox" name="is_active" value="true" {% if user.is_active %}checked{% endif %}>
+                    Account is active
+                </label>
+
+                <label class="flex items-center gap-2 cursor-pointer text-sm text-dark-text-secondary">
+                    <input type="checkbox" name="must_change_password" value="true" {% if user.must_change_password %}checked{% endif %}>
+                    Require password change on next login
+                </label>
+            </div>
+
+
+            <!-- Action Buttons -->
+            <div class="flex items-center gap-2 pt-2 border-t border-dark-border">
+                {{ btn_save(extra_classes='flex-1') }}
+                {{ btn_cancel_text(extra_classes='flex-1', extra_attrs='type="button" data-close-panel') }}
+            </div>
+        </form>
+
+        <!-- Danger Zone -->
+        <div class="mt-6 pt-4 border-t border-dark-border space-y-3">
+            <h3 class="text-sm font-medium text-dark-text-secondary mb-2">Danger Zone</h3>
+
+            <!-- Unlock Account -->
+            {% if user.locked_until %}
+            <div class="p-3 bg-yellow-500/5 border border-yellow-500/30 rounded-lg">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-medium text-yellow-300">Account Locked</p>
+                        <p class="text-xs text-dark-text-muted">Failed attempts: {{ user.failed_login_attempts }}</p>
+                    </div>
+                    <form hx-post="/settings/users/{{ user.id }}/unlock" hx-swap="none" hx-on::after-request="window.location.reload()" class="inline">
+                        {{ btn_enable(label='Unlock') }}
+                    </form>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Delete User -->
+            {% if user.id != current_user.id %}
+            <div class="p-3 bg-red-500/5 border border-red-500/30 rounded-lg">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-medium text-red-300">Delete User</p>
+                        <p class="text-xs text-dark-text-muted">Permanently remove user account</p>
+                    </div>
+                    {{ confirm_action_btn(icon_svg=ICO_TRASH, label='Delete', color='red',
+                        hx_post='/settings/users/' ~ user.id ~ '/delete',
+                        after='reload', title='Delete user') }}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    {% endcall %}
+{% endcall %}

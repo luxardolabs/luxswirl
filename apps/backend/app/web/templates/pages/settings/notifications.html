@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% from 'macros/settings.html' import settings_nav, section_header %}
+{% from 'macros/page.html' import page_header %}
+{% from 'macros/buttons.html' import delete_icon_button, btn_create, btn_disable, btn_enable, btn_edit_text, text_btn %}
+{% from 'macros/badges.html' import badge %}
+
+{% block content %}
+{{ page_header(
+    title='Settings',
+    description='Configure notification providers and how LuxSwirl sends alerts'
+) }}
+
+{{ settings_nav('notifications', current_user) }}
+
+<!-- Notifications Content -->
+<div class="space-y-6">
+    <!-- Header with action button -->
+    <div class="flex items-center justify-between">
+        <div>
+            {{ section_header('Notification Providers', 'Configure how LuxSwirl sends alerts • ' ~ total_providers ~ ' total providers') }}
+        </div>
+        {{ btn_create(label='Add Notification', hx_get='/notification-providers/create-form', hx_target='#panel-container', hx_swap='innerHTML') }}
+    </div>
+
+    <!-- Provider List -->
+    {% if providers %}
+    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        {% for provider in providers %}
+        <div id="provider-{{ provider.id }}" class="card p-4 hover:border-brand-500/30 transition-all">
+            <div class="flex items-start justify-between mb-3">
+                <div class="flex items-start gap-3 flex-1">
+                    <!-- Provider Icon -->
+                    <div class="w-10 h-10 rounded-lg bg-brand-500/10 flex items-center justify-center flex-shrink-0">
+                        {% if provider.provider_type == 'email' %}
+                        <span class="w-6 h-6 text-brand-500 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/envelope.svg" %}</span>
+                        {% elif provider.provider_type == 'webhook' %}
+                        <span class="w-6 h-6 text-brand-500 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/bolt.svg" %}</span>
+                        {% elif provider.provider_type == 'homeassistant' %}
+                        <span class="w-6 h-6 text-brand-500 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/home.svg" %}</span>
+                        {% else %}
+                        <span class="w-6 h-6 text-brand-500 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/bell.svg" %}</span>
+                        {% endif %}
+                    </div>
+
+                    <div class="flex-1 min-w-0">
+                        <h3 class="font-semibold text-dark-text-primary truncate">{{ provider.friendly_name }}</h3>
+                        <p class="text-xs text-dark-text-muted capitalize">{{ provider.provider_type.replace('_', ' ') }}</p>
+                    </div>
+                </div>
+
+                <!-- Status Badge -->
+                {{ badge('Enabled', 'success') if provider.is_enabled else badge('Disabled', 'neutral') }}
+            </div>
+
+            <!-- Provider Details -->
+            <div class="space-y-2 mb-4 text-sm">
+                {% if provider.provider_type == 'email' %}
+                    <p class="text-dark-text-muted truncate">To: {{ provider.config.to_email }}</p>
+                {% elif provider.provider_type == 'webhook' %}
+                    <p class="text-dark-text-muted truncate">{{ provider.config.post_url }}</p>
+                {% elif provider.provider_type == 'homeassistant' %}
+                    <p class="text-dark-text-muted truncate">{{ provider.config.post_url }}</p>
+                {% endif %}
+
+                {% if provider.rate_limit_count %}
+                <p class="text-xs text-dark-text-muted">
+                    Rate limit: {{ provider.rate_limit_count }} per {{ provider.rate_limit_window_minutes }}min
+                </p>
+                {% endif %}
+            </div>
+
+            <!-- Actions -->
+            <div class="flex items-center gap-2 pt-3 border-t border-dark-border">
+                {% if provider.is_enabled %}
+                    {{ btn_disable(extra_classes='flex-1', extra_attrs='hx-post="/notification-providers/' ~ provider.id ~ '/toggle" hx-swap="none" title="Disable"') }}
+                {% else %}
+                    {{ btn_enable(extra_classes='flex-1', extra_attrs='hx-post="/notification-providers/' ~ provider.id ~ '/toggle" hx-swap="none" title="Enable"') }}
+                {% endif %}
+                {% set test_spinner %}<span class="htmx-indicator absolute inset-0 flex items-center justify-center bg-dark-bg-tertiary/80 rounded" id="test-spinner-{{ provider.id }}"><span class="animate-spin h-4 w-4 text-brand-500 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/arrow-path.svg" %}</span></span>{% endset %}
+                {{ text_btn(test_spinner, 'Test', style='secondary', size='sm', type='button',
+                            extra_classes='flex-1 relative',
+                            extra_attrs='hx-post="/notification-providers/' ~ provider.id ~ '/test" hx-swap="none" hx-indicator="#test-spinner-' ~ provider.id ~ '" title="Send test notification"') }}
+                {{ btn_edit_text(extra_classes='flex-1', hx_get='/notification-providers/' ~ provider.id ~ '/edit-form', hx_target='#panel-container', hx_swap='innerHTML') }}
+                {{ delete_icon_button(delete_url='/notification-providers/' ~ provider.id, target_id='provider-' ~ provider.id) }}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <!-- Empty State -->
+    <div class="card p-12 text-center">
+        <span class="w-16 h-16 mx-auto mb-4 text-dark-text-muted opacity-50 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/bell.svg" %}</span>
+        <h3 class="text-lg font-semibold mb-2">No notification providers yet</h3>
+        <p class="text-dark-text-muted mb-4">Get started by adding your first notification provider</p>
+        {% set bell_svg %}<span class="w-4 h-4 mr-1.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/bell.svg" %}</span>{% endset %}
+        {{ text_btn(bell_svg, 'Add Your First Provider', style='primary', hx_get='/notification-providers/create-form', hx_target='#panel-container', hx_swap='innerHTML') }}
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

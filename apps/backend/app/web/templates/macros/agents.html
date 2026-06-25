@@ -1,0 +1,492 @@
+{% from 'macros/badges.html' import badge %}
+{% from 'macros/buttons.html' import btn_refresh, btn_edit_text, text_btn, link_btn, confirm_action_btn %}
+{% macro agent_row(item, now_timestamp, agent_stale_threshold=300) %}
+{% set seconds_since_last_seen = (now_timestamp - item.agent.last_seen.timestamp()) if item.agent.last_seen else 999999 %}
+{% set is_stale = seconds_since_last_seen > agent_stale_threshold %}
+<div class="card p-6 {% if is_stale %}border-yellow-500/30 bg-yellow-500/5{% endif %}">
+    <!-- Header -->
+    <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between mb-6">
+        <div class="flex items-center gap-3">
+            <span class="w-3 h-3 rounded-full {% if item.agent.is_online %}bg-status-success animate-pulse{% else %}bg-status-error{% endif %} shadow-lg {% if item.agent.is_online %}shadow-green-500/50{% else %}shadow-red-500/50{% endif %}"></span>
+            <div>
+                <div class="flex items-center gap-2 flex-wrap">
+                    <h2 class="text-xl font-bold text-dark-text-primary">
+                        {{ item.agent.agent_name or item.agent.id }}
+                    </h2>
+                    {% set approval_variant_map = {'pending': 'warning', 'active': 'success', 'paused': 'info', 'disabled': 'neutral', 'rejected': 'danger'} %}
+                    {% if item.agent.approval_status %}
+                    {{ badge(item.agent.approval_status|title, approval_variant_map.get(item.agent.approval_status, 'neutral')) }}
+                    {% endif %}
+                    {% if item.agent.tags %}
+                        {% for tag in item.agent.tags %}
+                        <span class="px-2 py-0.5 bg-brand-500/10 text-brand-400 rounded text-xs font-medium">{{ tag.strip() }}</span>
+                        {% endfor %}
+                    {% endif %}
+                </div>
+                <div class="flex items-center gap-3 text-xs text-dark-text-muted mt-0.5">
+                    {% if item.agent.hostname %}
+                    <span class="font-mono">{{ item.agent.hostname }}</span>
+                    {% endif %}
+                    <span class="flex items-center gap-1">
+                        <span class="w-3 h-3 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/heart.svg" %}</span>
+                        <span class="font-mono">{{ item.agent.heartbeat_interval or item.default_heartbeat }}s</span>
+                    </span>
+                    <span class="flex items-center gap-1">
+                        <span class="w-3 h-3 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/arrow-path.svg" %}</span>
+                        Sync: <span class="font-mono">{{ item.agent.check_sync_interval or item.default_check_sync }}s</span>
+                    </span>
+                </div>
+            </div>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+            {{ btn_refresh(label='Reload', size='sm', hx_post='/agents/' ~ item.agent.id ~ '/force-reload', extra_attrs='hx-swap="none" hx-on::after-request="if(event.detail.successful) { htmx.trigger(\'#main-content\', \'refresh\'); showToast(\'Config reload triggered\', \'success\'); }" title="Force agent to reload checks"') }}
+            {{ btn_edit_text(hx_get='/agents/' ~ item.agent.id ~ '/edit-form', hx_target='#panel-container', hx_swap='innerHTML') }}
+            {% set import_export_svg %}<span class="w-4 h-4 mr-1.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/arrow-up-tray.svg" %}</span>{% endset %}
+            {{ text_btn(import_export_svg, 'Import / Export', style='secondary', size='sm', hx_get='/agents/' ~ item.agent.id ~ '/import-export-form', hx_target='#panel-container', hx_swap='innerHTML') }}
+            {% set view_checks_svg %}<span class="w-4 h-4 mr-1.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/clipboard.svg" %}</span>{% endset %}
+            {{ text_btn(view_checks_svg, 'View Checks', style='primary', size='sm', href='/dashboard?agent_id=' ~ item.agent.id) }}
+        </div>
+    </div>
+
+    <!-- Stats Grid - 6 cards, API Key double width -->
+    <div class="grid gap-3 mb-6" style="grid-template-columns: 1fr 1fr 1fr 1fr 1fr 2fr;">
+        <!-- Success Rate -->
+        <div class="bg-dark-bg-tertiary/50 rounded-lg p-2 border border-dark-border flex flex-col justify-center">
+            <div class="flex items-center gap-1.5 mb-1">
+                <span class="w-3.5 h-3.5 text-dark-text-muted inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/check-circle.svg" %}</span>
+                <span class="text-xs text-dark-text-muted uppercase tracking-wide">Success</span>
+            </div>
+            {% if item.agent.checks_executed_total %}
+                <p class="text-xl font-bold {% if item.agent.success_rate >= 99 %}text-green-400{% elif item.agent.success_rate >= 95 %}text-amber-400{% else %}text-red-400{% endif %}">
+                    {{ "%.1f"|format(item.agent.success_rate) }}%
+                </p>
+            {% else %}
+                <p class="text-xl font-bold text-dark-text-muted">-</p>
+            {% endif %}
+        </div>
+
+        <!-- Checks -->
+        <div class="bg-dark-bg-tertiary/50 rounded-lg p-2 border border-dark-border flex flex-col justify-center">
+            <div class="flex items-center gap-1.5 mb-1">
+                <span class="w-3.5 h-3.5 text-dark-text-muted inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/clipboard-document-check.svg" %}</span>
+                <span class="text-xs text-dark-text-muted uppercase tracking-wide">Checks</span>
+            </div>
+            <p class="text-xl font-bold text-dark-text-primary">{{ item.enabled_checks }}<span class="text-sm text-dark-text-muted">/{{ item.total_checks }}</span></p>
+        </div>
+
+        <!-- Uptime -->
+        <div class="bg-dark-bg-tertiary/50 rounded-lg p-2 border border-dark-border flex flex-col justify-center">
+            <div class="flex items-center gap-1.5 mb-1">
+                <span class="w-3.5 h-3.5 text-dark-text-muted inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/clock.svg" %}</span>
+                <span class="text-xs text-dark-text-muted uppercase tracking-wide">Uptime</span>
+            </div>
+            <p class="text-xl font-bold text-dark-text-primary">{{ item.agent.uptime_seconds|humanize_seconds }}</p>
+        </div>
+
+        <!-- Queue -->
+        <div class="bg-dark-bg-tertiary/50 rounded-lg p-2 border border-dark-border flex flex-col justify-center">
+            <div class="flex items-center gap-1.5 mb-1">
+                <span class="w-3.5 h-3.5 text-dark-text-muted inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/bars-3.svg" %}</span>
+                <span class="text-xs text-dark-text-muted uppercase tracking-wide">Queue</span>
+            </div>
+            <p class="text-xl font-bold text-dark-text-primary">{{ item.agent.queue_depth or 0 }}</p>
+        </div>
+
+        <!-- Reporter Backlog -->
+        <div class="bg-dark-bg-tertiary/50 rounded-lg p-2 border {% if item.agent.stored_reports_count and item.agent.stored_reports_count > 0 %}border-yellow-500/50 bg-yellow-500/5{% else %}border-dark-border{% endif %} flex flex-col justify-center">
+            <div class="flex items-center gap-1.5 mb-1">
+                <span class="w-4 h-4 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/archive-box.svg" %}</span>
+                <span class="text-xs {% if item.agent.stored_reports_count and item.agent.stored_reports_count > 0 %}text-yellow-300{% else %}text-dark-text-muted{% endif %} uppercase tracking-wide">Backlog</span>
+            </div>
+            {% if item.agent.stored_reports_count and item.agent.stored_reports_count > 0 %}
+                <p class="text-xl font-bold text-yellow-300">{{ item.agent.stored_reports_count }}</p>
+                {% if item.agent.stored_reports_oldest_timestamp %}
+                <p class="text-xs text-yellow-400 mt-0.5">{{ ((now_timestamp - item.agent.stored_reports_oldest_timestamp) / 60)|int }}m ago</p>
+                {% endif %}
+            {% else %}
+                <p class="text-xl font-bold text-green-400">0</p>
+            {% endif %}
+        </div>
+
+        <!-- API Key - Double Width, Two Columns -->
+        <div class="bg-dark-bg-tertiary/50 rounded-lg p-2 border border-dark-border flex flex-col justify-center">
+            {% if item.agent.api_key_hash %}
+                <div class="grid grid-cols-2 gap-x-4 gap-y-1">
+                    <div class="flex items-center gap-1.5">
+                        <span class="w-3.5 h-3.5 text-brand-400 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/key.svg" %}</span>
+                        <span class="text-xs text-dark-text-muted uppercase tracking-wide">API Key</span>
+                    </div>
+                    <div class="flex items-center gap-1.5">
+                        <span class="w-2 h-2 rounded-full bg-status-success"></span>
+                        <span class="text-xs font-bold text-green-400">Active</span>
+                    </div>
+                    {% if item.agent.api_key_created_at %}
+                    <div class="text-xs text-dark-text-muted">Created: <span class="font-mono">{{ item.agent.api_key_created_at | format_datetime('%m/%d %I:%M%p') }}</span></div>
+                    {% endif %}
+                    {% if item.agent.api_key_last_used %}
+                    <div class="text-xs text-dark-text-muted">Used: <span class="font-mono">{{ item.agent.api_key_last_used | format_datetime('%m/%d %I:%M%p') }}</span></div>
+                    {% else %}
+                    <div class="text-xs text-orange-400">Never Used</div>
+                    {% endif %}
+                    {{ link_btn('Manage', color='brand',
+                                hx_get='/agents/' ~ item.agent.id ~ '/key-management-panel',
+                                hx_target='#panel-container', hx_swap='innerHTML') }}
+                </div>
+            {% else %}
+                <div class="grid grid-cols-2 gap-x-4 gap-y-1">
+                    <div class="flex items-center gap-1.5">
+                        <span class="w-3.5 h-3.5 text-brand-400 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/key.svg" %}</span>
+                        <span class="text-xs text-dark-text-muted uppercase tracking-wide">API Key</span>
+                    </div>
+                    <div class="flex items-center gap-1.5">
+                        <span class="w-2 h-2 rounded-full bg-dark-text-muted"></span>
+                        <span class="text-xs font-bold text-dark-text-muted">None</span>
+                    </div>
+                    {%- set ICO_KEY %}<span class="w-3.5 h-3.5 mr-1.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/key.svg" %}</span>{% endset %}
+                    {{ confirm_action_btn(icon_svg=ICO_KEY, label='Generate Agent Key', color='brand',
+                                          hx_post='/agents/' ~ item.agent.id ~ '/generate-key-web',
+                                          hx_target='#panel-container', hx_swap='innerHTML',
+                                          extra_classes='col-span-2',
+                                          title='Generate agent-specific API key') }}
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Metrics with Sparklines - 3x2 Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <!-- CPU Usage -->
+        <div>
+            <div class="flex items-center justify-between mb-2">
+                <div class="flex items-center gap-2">
+                    <span class="w-4 h-4 text-brand-400 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/cpu-chip.svg" %}</span>
+                    <span class="text-xs font-medium text-dark-text-secondary uppercase tracking-wider">CPU Usage</span>
+                </div>
+                <div class="text-right">
+                    {% set valid_vals = [] %}
+                    {% for v in item.cpu_sparkline %}{% if v is not none %}{% set _ = valid_vals.append(v) %}{% endif %}{% endfor %}
+                    {% if valid_vals|length > 0 %}
+                        {% set last_val = valid_vals[-1] %}
+                        <div class="text-sm font-bold font-mono {% if last_val > 80 %}text-red-400{% elif last_val > 60 %}text-amber-400{% else %}text-brand-400{% endif %}">
+                            {{ "%.1f"|format(last_val) }}%
+                        </div>
+                    {% else %}
+                        <div class="text-sm text-dark-text-muted">-</div>
+                    {% endif %}
+                    <div class="text-xs text-dark-text-muted font-mono">
+                        {% if valid_vals|length > 0 %}
+                            min {{ "%.1f"|format(valid_vals|min) }} max {{ "%.1f"|format(valid_vals|max) }} avg {{ "%.1f"|format(valid_vals|sum / valid_vals|length) }}
+                        {% else %}
+                            min - max - avg -
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {{ sparkline(item.cpu_sparkline, 'cpu', 'brand') }}
+        </div>
+
+        <!-- Memory Usage -->
+        <div>
+            <div class="flex items-center justify-between mb-2">
+                <div class="flex items-center gap-2">
+                    <span class="w-4 h-4 text-purple-400 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/lock-closed.svg" %}</span>
+                    <span class="text-xs font-medium text-dark-text-secondary uppercase tracking-wider">Memory</span>
+                </div>
+                <div class="text-right">
+                    {% set valid_vals = [] %}
+                    {% for v in item.memory_sparkline %}{% if v is not none %}{% set _ = valid_vals.append(v) %}{% endif %}{% endfor %}
+                    {% if valid_vals|length > 0 %}
+                        <div class="text-sm font-bold font-mono text-purple-400">{{ valid_vals[-1]|int }} MB</div>
+                    {% else %}
+                        <div class="text-sm text-dark-text-muted">-</div>
+                    {% endif %}
+                    <div class="text-xs text-dark-text-muted font-mono">
+                        {% if valid_vals|length > 0 %}
+                            min {{ valid_vals|min|int }} max {{ valid_vals|max|int }} avg {{ ((valid_vals|sum / valid_vals|length)|int) }}
+                        {% else %}
+                            min - max - avg -
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {{ sparkline(item.memory_sparkline, 'memory', 'purple') }}
+        </div>
+
+        <!-- Queue Depth -->
+        <div>
+            <div class="flex items-center justify-between mb-2">
+                <div class="flex items-center gap-2">
+                    <span class="w-4 h-4 text-yellow-400 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/bars-3.svg" %}</span>
+                    <span class="text-xs font-medium text-dark-text-secondary uppercase tracking-wider">Queue Depth</span>
+                </div>
+                <div class="text-right">
+                    {% set valid_vals = [] %}
+                    {% for v in item.queue_sparkline %}{% if v is not none %}{% set _ = valid_vals.append(v) %}{% endif %}{% endfor %}
+                    {% if valid_vals|length > 0 %}
+                        {% set last_val = valid_vals[-1]|int %}
+                        <div class="text-sm font-bold font-mono {% if last_val > 100 %}text-red-400{% elif last_val > 50 %}text-amber-400{% else %}text-yellow-400{% endif %}">
+                            {{ last_val }}
+                        </div>
+                    {% else %}
+                        <div class="text-sm text-dark-text-muted">-</div>
+                    {% endif %}
+                    <div class="text-xs text-dark-text-muted font-mono">
+                        {% if valid_vals|length > 0 %}
+                            min {{ valid_vals|min|int }} max {{ valid_vals|max|int }} avg {{ ((valid_vals|sum / valid_vals|length)|int) }}
+                        {% else %}
+                            min - max - avg -
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {{ sparkline(item.queue_sparkline, 'queue', 'yellow') }}
+        </div>
+
+        <!-- Checks Executed -->
+        <div>
+            <div class="flex items-center justify-between mb-2">
+                <div class="flex items-center gap-2">
+                    <span class="w-4 h-4 text-green-400 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/clipboard-document-check.svg" %}</span>
+                    <span class="text-xs font-medium text-dark-text-secondary uppercase tracking-wider">Checks Executed</span>
+                </div>
+                <div class="text-right">
+                    {% set valid_vals = [] %}
+                    {% for v in item.checks_executed_sparkline %}{% if v is not none %}{% set _ = valid_vals.append(v) %}{% endif %}{% endfor %}
+                    {% if valid_vals|length > 0 %}
+                        <div class="text-sm font-bold font-mono text-green-400">{{ valid_vals[-1]|humanize_number }}</div>
+                    {% else %}
+                        <div class="text-sm text-dark-text-muted">-</div>
+                    {% endif %}
+                    <div class="text-xs text-dark-text-muted font-mono">
+                        {% if valid_vals|length > 0 %}
+                            min {{ valid_vals|min|humanize_number }} max {{ valid_vals|max|humanize_number }} avg {{ ((valid_vals|sum / valid_vals|length)|humanize_number) }}
+                        {% else %}
+                            min - max - avg -
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {{ sparkline(item.checks_executed_sparkline, 'checks', 'green') }}
+        </div>
+
+        <!-- File Descriptors -->
+        <div>
+            <div class="flex items-center justify-between mb-2">
+                <div class="flex items-center gap-2">
+                    <span class="w-4 h-4 text-orange-400 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/document.svg" %}</span>
+                    <span class="text-xs font-medium text-dark-text-secondary uppercase tracking-wider">File Descriptors</span>
+                </div>
+                <div class="text-right">
+                    {% set valid_vals = [] %}
+                    {% for v in item.fd_sparkline %}{% if v is not none %}{% set _ = valid_vals.append(v) %}{% endif %}{% endfor %}
+                    {% if valid_vals|length > 0 %}
+                        {% set last_val = valid_vals[-1]|int %}
+                        {% set max_val = valid_vals|max|int %}
+                        {% set fd_pct = (last_val / max_val * 100) if max_val > 0 else 0 %}
+                        <div class="text-sm font-bold font-mono {% if fd_pct > 80 %}text-red-400{% elif fd_pct > 60 %}text-amber-400{% else %}text-orange-400{% endif %}">
+                            {{ last_val }}
+                        </div>
+                    {% else %}
+                        <div class="text-sm text-dark-text-muted">-</div>
+                    {% endif %}
+                    <div class="text-xs text-dark-text-muted font-mono">
+                        {% if valid_vals|length > 0 %}
+                            min {{ valid_vals|min|int }} max {{ valid_vals|max|int }} avg {{ ((valid_vals|sum / valid_vals|length)|int) }}
+                        {% else %}
+                            min - max - avg -
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {{ sparkline(item.fd_sparkline, 'fd', 'orange') }}
+        </div>
+
+        <!-- Subprocesses -->
+        <div>
+            <div class="flex items-center justify-between mb-2">
+                <div class="flex items-center gap-2">
+                    <span class="w-4 h-4 text-cyan-400 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/document-duplicate.svg" %}</span>
+                    <span class="text-xs font-medium text-dark-text-secondary uppercase tracking-wider">Subprocesses</span>
+                </div>
+                <div class="text-right">
+                    {% set valid_vals = [] %}
+                    {% for v in item.subprocess_sparkline %}{% if v is not none %}{% set _ = valid_vals.append(v) %}{% endif %}{% endfor %}
+                    {% if valid_vals|length > 0 %}
+                        {% set last_val = valid_vals[-1]|int %}
+                        <div class="text-sm font-bold font-mono {% if last_val > 50 %}text-amber-400{% else %}text-cyan-400{% endif %}">
+                            {{ last_val }}
+                        </div>
+                    {% else %}
+                        <div class="text-sm text-dark-text-muted">-</div>
+                    {% endif %}
+                    <div class="text-xs text-dark-text-muted font-mono">
+                        {% if valid_vals|length > 0 %}
+                            min {{ valid_vals|min|int }} max {{ valid_vals|max|int }} avg {{ ((valid_vals|sum / valid_vals|length)|int) }}
+                        {% else %}
+                            min - max - avg -
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {{ sparkline(item.subprocess_sparkline, 'subprocess', 'cyan') }}
+        </div>
+    </div>
+
+    <!-- Footer Info -->
+    <div class="mt-4 pt-4 border-t border-dark-border flex items-center justify-between text-xs text-dark-text-muted">
+        <div class="flex items-center gap-4">
+            <span>Executed: <span class="font-mono text-dark-text-primary">{{ item.agent.checks_executed_total or 0 }}</span></span>
+            {% if item.agent.version %}
+            <span>v{{ item.agent.version }}</span>
+            {% endif %}
+        </div>
+        <div class="flex items-center gap-2">
+            {% if is_stale %}
+            <span class="w-4 h-4 text-yellow-400 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/exclamation-triangle.svg" %}</span>
+            <span class="font-mono {% if is_stale %}text-yellow-400{% endif %}">{{ item.agent.last_seen | format_datetime('%Y-%m-%d %I:%M%p') }}</span>
+            {% else %}
+            <span class="font-mono">{{ item.agent.last_seen | format_datetime('%Y-%m-%d %I:%M%p') }}</span>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endmacro %}
+
+{% macro sparkline(values, type='cpu', color='brand') %}
+{% if values and values|length > 0 %}
+    <!-- Set colors based on color theme -->
+    {% if color == 'brand' %}
+        {% set gradient_start = 'rgb(59, 130, 246)' %}
+        {% set gradient_end = 'rgb(59, 130, 246)' %}
+        {% set stroke_color = 'rgb(59, 130, 246)' %}
+        {% set dot_color = 'rgb(96, 165, 250)' %}
+    {% elif color == 'purple' %}
+        {% set gradient_start = 'rgb(168, 85, 247)' %}
+        {% set gradient_end = 'rgb(168, 85, 247)' %}
+        {% set stroke_color = 'rgb(168, 85, 247)' %}
+        {% set dot_color = 'rgb(192, 132, 252)' %}
+    {% elif color == 'yellow' %}
+        {% set gradient_start = 'rgb(251, 191, 36)' %}
+        {% set gradient_end = 'rgb(251, 191, 36)' %}
+        {% set stroke_color = 'rgb(251, 191, 36)' %}
+        {% set dot_color = 'rgb(252, 211, 77)' %}
+    {% elif color == 'green' %}
+        {% set gradient_start = 'rgb(74, 222, 128)' %}
+        {% set gradient_end = 'rgb(74, 222, 128)' %}
+        {% set stroke_color = 'rgb(74, 222, 128)' %}
+        {% set dot_color = 'rgb(134, 239, 172)' %}
+    {% elif color == 'orange' %}
+        {% set gradient_start = 'rgb(251, 146, 60)' %}
+        {% set gradient_end = 'rgb(251, 146, 60)' %}
+        {% set stroke_color = 'rgb(251, 146, 60)' %}
+        {% set dot_color = 'rgb(253, 186, 116)' %}
+    {% elif color == 'cyan' %}
+        {% set gradient_start = 'rgb(34, 211, 238)' %}
+        {% set gradient_end = 'rgb(34, 211, 238)' %}
+        {% set stroke_color = 'rgb(34, 211, 238)' %}
+        {% set dot_color = 'rgb(103, 232, 249)' %}
+    {% else %}
+        {% set gradient_start = 'rgb(59, 130, 246)' %}
+        {% set gradient_end = 'rgb(59, 130, 246)' %}
+        {% set stroke_color = 'rgb(59, 130, 246)' %}
+        {% set dot_color = 'rgb(96, 165, 250)' %}
+    {% endif %}
+
+    <div class="relative rounded-lg p-3 bg-gradient-to-b from-dark-bg-primary to-dark-bg-tertiary shadow-inner">
+        <svg class="w-full h-16" viewBox="0 0 300 60" preserveAspectRatio="none">
+            {% set numeric_vals = values|reject('none')|list %}
+            {% set max_val = numeric_vals|max if numeric_vals else 1 %}
+            {% set min_val = 0 %}
+            {% set range_val = max_val if max_val > 0 else 1 %}
+            {% set points = [] %}
+            {% for val in values %}
+                {% if val is not none %}
+                    {% set x = loop.index0 * (300 / (values|length - 1)) if values|length > 1 else 150 %}
+                    {% set y = 60 - (val / range_val * 50) if range_val > 0 else 60 %}
+                    {% set _ = points.append("%s,%s"|format(x, y)) %}
+                {% endif %}
+            {% endfor %}
+
+            <!-- Filled area under line -->
+            <defs>
+                <linearGradient id="gradient-{{ type }}-{{ color }}" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" style="stop-color:{{ gradient_start }};stop-opacity:0.3" />
+                    <stop offset="100%" style="stop-color:{{ gradient_end }};stop-opacity:0.05" />
+                </linearGradient>
+            </defs>
+
+            <!-- Smooth curved fill area -->
+            {% set curve_points = [] %}
+            {% for point in points %}
+                {% if loop.first %}
+                    {% set _ = curve_points.append("M " + point) %}
+                {% else %}
+                    {% set prev_point = points[loop.index0 - 1] %}
+                    {% set prev_x = prev_point.split(',')[0]|float %}
+                    {% set prev_y = prev_point.split(',')[1]|float %}
+                    {% set curr_x = point.split(',')[0]|float %}
+                    {% set curr_y = point.split(',')[1]|float %}
+                    {% set cp1_x = prev_x + (curr_x - prev_x) * 0.5 %}
+                    {% set cp1_y = prev_y %}
+                    {% set cp2_x = prev_x + (curr_x - prev_x) * 0.5 %}
+                    {% set cp2_y = curr_y %}
+                    {% set _ = curve_points.append("C %s,%s %s,%s %s,%s"|format(cp1_x, cp1_y, cp2_x, cp2_y, curr_x, curr_y)) %}
+                {% endif %}
+            {% endfor %}
+            <path
+                d="{{ curve_points|join(' ') }} L 300,60 L 0,60 Z"
+                fill="url(#gradient-{{ type }}-{{ color }})"
+            />
+
+            <!-- Smooth curved line -->
+            <path
+                d="{{ curve_points|join(' ') }}"
+                fill="none"
+                stroke="{{ stroke_color }}"
+                stroke-width="2.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                vector-effect="non-scaling-stroke"
+            />
+
+            <!-- Invisible hover targets at data points -->
+            {% for point in points %}
+                {% set point_index = loop.index0 %}
+                {% set point_value = values[point_index] if point_index < values|length else none %}
+                <!-- Larger invisible circle for better hover detection -->
+                <circle
+                    cx="{{ point.split(',')[0] }}"
+                    cy="{{ point.split(',')[1] }}"
+                    r="8"
+                    fill="transparent"
+                    class="sparkline-hover-zone"
+                    style="cursor: pointer;"
+                >
+                    {% if point_value is not none %}
+                    <title>Value: {{ "%.1f"|format(point_value) if point_value is number else point_value }}</title>
+                    {% endif %}
+                </circle>
+                <!-- Small visible dot on hover -->
+                <circle
+                    cx="{{ point.split(',')[0] }}"
+                    cy="{{ point.split(',')[1] }}"
+                    r="0"
+                    fill="{{ dot_color }}"
+                    stroke="white"
+                    stroke-width="2"
+                    class="sparkline-dot"
+                    data-dot="true"
+                >
+                    {% if point_value is not none %}
+                    <title>Value: {{ "%.1f"|format(point_value) if point_value is number else point_value }}</title>
+                    {% endif %}
+                </circle>
+            {% endfor %}
+        </svg>
+    </div>
+{% else %}
+    <div class="relative rounded-lg p-3 bg-gradient-to-b from-dark-bg-primary to-dark-bg-tertiary shadow-inner h-16 flex items-center justify-center">
+        <span class="text-xs text-dark-text-muted">No data available</span>
+    </div>
+{% endif %}
+{% endmacro %}

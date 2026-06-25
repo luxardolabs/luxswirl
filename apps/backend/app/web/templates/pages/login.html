@@ -1,0 +1,135 @@
+{% from 'macros/buttons.html' import btn_signin %}
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - LuxSwirl Monitoring</title>
+
+    <!-- Tailwind CSS -->
+    <link rel="stylesheet" href="/static/css/output.css?v={{ static_version }}">
+
+    <!-- Fonts -->
+    <link rel="stylesheet" href="/static/fonts/inter.css?v={{ static_version }}">
+
+    <style>
+        /* Hide controls but keep in DOM for future Easter egg */
+        #logo-controls {
+            display: none;
+        }
+
+        /* Full viewport background logo */
+        #logo-background {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            overflow: hidden;
+        }
+
+        #canvas-container {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, calc(-50% - 200px));
+        }
+
+        /* Login content overlay */
+        #login-content {
+            position: relative;
+            z-index: 10;
+            margin-top: 250px;
+        }
+    </style>
+</head>
+<body class="font-sans antialiased bg-dark-bg-primary">
+    <!-- Full-screen animated logo background -->
+    <div id="logo-background">
+        <div id="canvas-container"></div>
+    </div>
+
+    <!-- Login form overlay -->
+    <div id="login-content" class="min-h-screen flex flex-col items-center justify-center px-4">
+        <!-- Branding -->
+        <div class="mb-4 text-center">
+            <h1 class="text-2xl font-bold text-dark-text-primary">LuxSwirl Monitoring</h1>
+        </div>
+
+        <!-- Login Card -->
+        <div class="w-full max-w-md">
+            <div style="background: rgba(20, 23, 35, 0.4); backdrop-filter: blur(10px); box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 0.5rem; padding: 2rem;">
+                <!-- Error Message -->
+                {% if error %}
+                <div class="mb-6 p-4 rounded-lg bg-red-500/10 border border-red-500/30">
+                    <div class="flex items-start gap-3">
+                        <span class="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/exclamation-circle.svg" %}</span>
+                        <p class="text-sm text-red-400">{{ error }}</p>
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Login Form -->
+                <form method="POST" action="/login" class="space-y-6">
+                    <!-- Username -->
+                    <div>
+                        <label for="username" class="block text-sm font-medium text-dark-text-primary mb-2">
+                            Username
+                        </label>
+                        <input
+                            type="text"
+                            id="username"
+                            name="username"
+                            required
+                            autofocus
+                            autocomplete="username"
+                            value="{{ username or '' }}"
+                            class="w-full px-4 py-2 rounded-lg border text-dark-text-primary"
+                            style="background: rgba(30, 35, 50, 0.6); border-color: rgba(255, 255, 255, 0.2);"
+                            placeholder="Enter your username"
+                        >
+                    </div>
+
+                    <!-- Password -->
+                    <div>
+                        <label for="password" class="block text-sm font-medium text-dark-text-primary mb-2">
+                            Password
+                        </label>
+                        <input
+                            type="password"
+                            id="password"
+                            name="password"
+                            required
+                            autocomplete="current-password"
+                            class="w-full px-4 py-2 rounded-lg border text-dark-text-primary"
+                            style="background: rgba(30, 35, 50, 0.6); border-color: rgba(255, 255, 255, 0.2);"
+                            placeholder="Enter your password"
+                        >
+                    </div>
+
+                    <!-- Hidden redirect field -->
+                    <input type="hidden" name="redirect" value="{{ redirect }}">
+
+                    <!-- Submit Button -->
+                    {{ btn_signin(extra_classes='w-full') }}
+                </form>
+            </div>
+
+            <!-- Footer -->
+            <div class="mt-6 text-center text-xs text-dark-text-muted">
+                <p>LuxSwirl Monitoring &copy; 2026 Luxardo Labs</p>
+                <p class="mt-1">High-performance monitoring platform</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hidden controls for future Easter egg -->
+    <div id="logo-controls" style="display: none;">
+        <!-- Controls will go here if we add Easter egg later -->
+    </div>
+
+    <!-- Animated logo initialization -->
+    <script type="module" src="/static/js/login-init.js?v={{ static_version }}"></script>
+</body>
+</html>

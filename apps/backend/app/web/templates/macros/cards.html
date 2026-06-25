@@ -1,0 +1,18 @@
+{% macro stat_card(label, value, change=None, icon=None, color='brand') %}
+<div class="stat-card">
+    <div class="flex items-center justify-between">
+        <div class="flex-1">
+            <p class="stat-label">{{ label }}</p>
+            <p class="stat-value">{{ value }}</p>
+            {% if change %}
+            <p class="stat-change">{{ change }}</p>
+            {% endif %}
+        </div>
+        {% if icon %}
+        <div class="p-3 bg-{{ color }}-500/10 rounded-lg">
+            {{ icon|safe }}
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endmacro %}

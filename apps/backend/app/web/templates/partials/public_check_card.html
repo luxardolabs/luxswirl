@@ -1,0 +1,203 @@
+{% set check = item.check %}
+
+<!-- Super Compact Card with sparkle ✨ -->
+<div class="status-card animate-fade-in w-64 flex-shrink-0 rounded-lg border transition-all duration-300 p-3 group
+    {% if check.latest_success %}
+        bg-gradient-to-br from-dark-bg-secondary to-green-950/20 border-green-600/30 hover:border-green-500/60 hover:shadow-lg hover:shadow-green-500/20 hover:scale-110 hover:z-50
+    {% else %}
+        bg-gradient-to-br from-dark-bg-secondary to-red-950/20 border-red-600/30 hover:border-red-500/60 hover:shadow-lg hover:shadow-red-500/20 hover:scale-110 hover:z-50
+    {% endif %}
+    opacity-100">
+
+    <!-- Uptime % at top with glow -->
+    <div class="flex items-center justify-between mb-2">
+        <div class="flex items-center gap-1.5">
+            <div class="text-lg font-bold transition-all duration-200
+                {% if check.uptime_24h >= 99.9 %}text-green-400 group-hover:text-green-300 drop-shadow-[0_0_8px_rgba(34,197,94,0.5)]{% elif check.uptime_24h >= 95 %}text-yellow-400 group-hover:text-yellow-300 drop-shadow-[0_0_8px_rgba(234,179,8,0.5)]{% else %}text-red-400 group-hover:text-red-300 drop-shadow-[0_0_8px_rgba(239,68,68,0.5)]{% endif %}"
+                title="24-hour uptime">
+                {{ check.uptime_24h }}%
+            </div>
+            {% if check.uptime_24h < 100 and check.last_failure_at %}
+            <span class="text-xs text-dark-text-muted">•</span>
+            <span class="text-xs text-dark-text-muted" title="Last failure at {{ check.last_failure_at | format_datetime }}">
+                {{ check.last_failure_at | format_datetime }}
+            </span>
+            {% endif %}
+        </div>
+        <div class="flex items-center gap-2">
+            <!-- Check type icon -->
+            {% if check.check_type|lower == 'http' %}
+            <span class="p-1.5 bg-blue-600/20 text-blue-300 rounded border border-blue-600/30 flex items-center gap-1.5" title="HTTP">
+                <span class="w-3.5 h-3.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/globe-alt.svg" %}</span>
+                <span class="text-xs font-medium">{{ check.latency_ms|int }}ms</span>
+            </span>
+            {% elif check.check_type|lower == 'tcp' %}
+            <span class="p-1.5 bg-purple-600/20 text-purple-300 rounded border border-purple-600/30 flex items-center gap-1.5" title="TCP">
+                <span class="w-3.5 h-3.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/command-line.svg" %}</span>
+                <span class="text-xs font-medium">{{ check.latency_ms|int }}ms</span>
+            </span>
+            {% elif check.check_type|lower == 'ping' %}
+            <span class="p-1.5 bg-green-600/20 text-green-300 rounded border border-green-600/30 flex items-center gap-1.5" title="Ping">
+                <span class="w-3.5 h-3.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/chart-bar.svg" %}</span>
+                <span class="text-xs font-medium">{{ check.latency_ms|int }}ms</span>
+            </span>
+            {% elif check.check_type|lower == 'json' %}
+            <span class="p-1.5 bg-yellow-600/20 text-yellow-300 rounded border border-yellow-600/30 flex items-center gap-1.5" title="JSON">
+                <span class="w-3.5 h-3.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/circle-stack.svg" %}</span>
+                <span class="text-xs font-medium">{{ check.latency_ms|int }}ms</span>
+            </span>
+            {% else %}
+            <span class="p-1.5 bg-slate-600/20 text-slate-300 rounded border border-slate-600/30 flex items-center gap-1.5" title="{{ check.check_type }}">
+                <span class="w-3.5 h-3.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/plus.svg" %}</span>
+                <span class="text-xs font-medium">{{ check.latency_ms|int }}ms</span>
+            </span>
+            {% endif %}
+            <!-- Status dot with pulse -->
+            <div class="flex-shrink-0 relative">
+                {% if check.latest_success %}
+                <div class="w-2 h-2 bg-green-500 rounded-full"></div>
+                <div class="absolute inset-0 w-2 h-2 bg-green-500 rounded-full animate-ping opacity-75"></div>
+                {% else %}
+                <div class="w-2 h-2 bg-red-500 rounded-full"></div>
+                <div class="absolute inset-0 w-2 h-2 bg-red-500 rounded-full animate-ping opacity-75"></div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Name -->
+    <div class="text-sm font-medium text-dark-text-primary truncate mb-3 group-hover:text-white transition-colors duration-200">
+        {{ check.display_name }}
+    </div>
+
+    <!-- 30-Minute Bar with 3D effect -->
+    {% if check.minute_bars %}
+    <div class="mb-1">
+        <div class="flex gap-px h-7 rounded-lg overflow-hidden shadow-inner bg-dark-bg-primary/50 p-1" style="min-width:100%">
+            {% for bar in check.minute_bars|reverse %}
+            <div
+                class="flex-1 rounded-sm transition-all duration-200 transform hover:scale-y-125 hover:scale-x-110 hover:z-10 cursor-pointer
+                {% if bar.success == None %}
+                    bg-gradient-to-t from-slate-800 to-slate-700 shadow-sm
+                {% elif bar.success %}
+                    bg-gradient-to-t from-green-600 to-emerald-400 shadow-md shadow-green-500/50 hover:shadow-lg hover:shadow-green-400/60
+                {% else %}
+                    bg-gradient-to-t from-red-600 to-rose-400 shadow-md shadow-red-500/50 hover:shadow-lg hover:shadow-red-400/60
+                {% endif %}"
+                style="min-width:2px"
+                title="{% if bar.success != None %}{{ bar.minutes_ago }}m ago - {% if bar.success %}✓ Up{% else %}✗ Down{% endif %}{% if bar.http_status_code %} [{{ bar.http_status_code }}]{% endif %} ({{ bar.avg_latency }}ms){% else %}{{ bar.minutes_ago }}m ago - No data{% endif %}"
+            ></div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Latency Sparkline -->
+    <div class="mb-2">
+        <svg class="w-full h-7" preserveAspectRatio="none" viewBox="0 0 {{ num_bars | default(30) }} 20" style="display:block">
+            <!-- Define gradient for the line (vertical: light at bottom, dark at top) -->
+            <defs>
+                <linearGradient id="sparkline-gradient-{{ check.id }}" x1="0%" y1="100%" x2="0%" y2="0%">
+                    {% if check.latest_success %}
+                    <stop offset="0%" style="stop-color:rgb(134,239,172);stop-opacity:0.6" />
+                    <stop offset="100%" style="stop-color:rgb(34,197,94);stop-opacity:1" />
+                    {% else %}
+                    <stop offset="0%" style="stop-color:rgb(252,165,165);stop-opacity:0.6" />
+                    <stop offset="100%" style="stop-color:rgb(239,68,68);stop-opacity:1" />
+                    {% endif %}
+                </linearGradient>
+                <!-- Animated gradient for the sizzle effect -->
+                <linearGradient id="sparkline-sizzle-{{ check.id }}" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" style="stop-color:rgb(255,255,255);stop-opacity:0">
+                        <animate attributeName="offset" values="0;1" dur="2s" repeatCount="indefinite" />
+                    </stop>
+                    <stop offset="5%" style="stop-color:rgb(255,255,255);stop-opacity:1">
+                        <animate attributeName="offset" values="0.05;1.05" dur="2s" repeatCount="indefinite" />
+                    </stop>
+                    <stop offset="10%" style="stop-color:rgb(255,255,255);stop-opacity:0">
+                        <animate attributeName="offset" values="0.1;1.1" dur="2s" repeatCount="indefinite" />
+                    </stop>
+                </linearGradient>
+            </defs>
+
+            <!-- Build the path data (two-pass: find range, then build path) -->
+            {% set ns = namespace(path='', max_latency=0, min_latency=999999, has_data=false) %}
+
+            {# First pass: find max/min latency from bars that have data #}
+            {% for bar in check.minute_bars|reverse %}
+                {% if bar.success != None and bar.avg_latency > 0 %}
+                    {% set ns.has_data = true %}
+                    {% if bar.avg_latency > ns.max_latency %}
+                        {% set ns.max_latency = bar.avg_latency %}
+                    {% endif %}
+                    {% if bar.avg_latency < ns.min_latency %}
+                        {% set ns.min_latency = bar.avg_latency %}
+                    {% endif %}
+                {% endif %}
+            {% endfor %}
+
+            {# Set default max if we only have failures with zero latency #}
+            {% if not ns.has_data %}
+                {% for bar in check.minute_bars|reverse %}
+                    {% if bar.success == False %}
+                        {% set ns.has_data = true %}
+                        {% set ns.max_latency = 100 %}
+                        {% set ns.min_latency = 100 %}
+                    {% endif %}
+                {% endfor %}
+            {% endif %}
+
+            {% if ns.has_data %}
+                {% set range = ns.max_latency - ns.min_latency %}
+                {% set range = range if range > 0 else 1 %}
+
+                {# Second pass: build path including failures with zero latency #}
+                {% for bar in check.minute_bars|reverse %}
+                    {% set x = loop.index0 %}
+                    {% if bar.success != None %}
+                        {# Use max_latency for failed checks with zero latency (timeouts, etc) #}
+                        {% set latency = bar.avg_latency if bar.avg_latency > 0 else ns.max_latency %}
+                        {% set y = 20 - (((latency - ns.min_latency) / range) * 18) %}
+                        {% if loop.first %}
+                            {% set ns.path = 'M ' ~ x ~ ' ' ~ y %}
+                        {% else %}
+                            {% set ns.path = ns.path ~ ' L ' ~ x ~ ' ' ~ y %}
+                        {% endif %}
+                    {% endif %}
+                {% endfor %}
+
+                <!-- Base sparkline -->
+                <path d="{{ ns.path }}"
+                      fill="none"
+                      stroke="url(#sparkline-gradient-{{ check.id }})"
+                      stroke-width="0.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      opacity="0.6"
+                      class="sparkline-path">
+                </path>
+
+                <!-- Sizzle effect line -->
+                <path d="{{ ns.path }}"
+                      fill="none"
+                      stroke="url(#sparkline-sizzle-{{ check.id }})"
+                      stroke-width="1.5"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="sparkline-sizzle">
+                </path>
+            {% else %}
+                <!-- No data placeholder - simple dashes -->
+                <line x1="2" y1="10" x2="8" y2="10" stroke="currentColor" stroke-width="0.5" opacity="0.2" stroke-dasharray="1,1"/>
+                <line x1="11" y1="10" x2="17" y2="10" stroke="currentColor" stroke-width="0.5" opacity="0.2" stroke-dasharray="1,1"/>
+                <line x1="20" y1="10" x2="26" y2="10" stroke="currentColor" stroke-width="0.5" opacity="0.2" stroke-dasharray="1,1"/>
+            {% endif %}
+        </svg>
+    </div>
+    {% endif %}
+
+    <!-- Time labels -->
+    <div class="flex justify-between text-xs text-dark-text-muted">
+        <span class="transition-colors group-hover:text-dark-text-secondary">{{ time_range_label | default('30m') }} ago</span>
+        <span class="transition-colors group-hover:text-dark-text-secondary">now</span>
+    </div>
+</div>

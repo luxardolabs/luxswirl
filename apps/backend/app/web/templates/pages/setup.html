@@ -1,0 +1,172 @@
+{% from 'macros/buttons.html' import btn_create %}
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Set Up - LuxSwirl Monitoring</title>
+
+    <!-- Tailwind CSS -->
+    <link rel="stylesheet" href="/static/css/output.css?v={{ static_version }}">
+
+    <!-- Fonts -->
+    <link rel="stylesheet" href="/static/fonts/inter.css?v={{ static_version }}">
+
+    <style>
+        /* Hide controls but keep in DOM for future Easter egg */
+        #logo-controls {
+            display: none;
+        }
+
+        /* Full viewport background logo */
+        #logo-background {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            overflow: hidden;
+        }
+
+        #canvas-container {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, calc(-50% - 200px));
+        }
+
+        /* Setup content overlay */
+        #login-content {
+            position: relative;
+            z-index: 10;
+            margin-top: 250px;
+        }
+    </style>
+</head>
+<body class="font-sans antialiased bg-dark-bg-primary">
+    <!-- Full-screen animated logo background -->
+    <div id="logo-background">
+        <div id="canvas-container"></div>
+    </div>
+
+    <!-- Setup form overlay -->
+    <div id="login-content" class="min-h-screen flex flex-col items-center justify-center px-4">
+        <!-- Setup Card -->
+        <div class="w-full max-w-md">
+            <div style="background: rgba(20, 23, 35, 0.4); backdrop-filter: blur(10px); box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 0.5rem; padding: 2rem;">
+                <!-- Branding (inside the card so it stays legible over the animated globe) -->
+                <div class="mb-6 text-center">
+                    <h1 class="text-2xl font-bold text-dark-text-primary">Welcome to LuxSwirl</h1>
+                    <p class="mt-1 text-sm text-dark-text-muted">Create your administrator account to get started</p>
+                </div>
+
+                <!-- Error Message -->
+                {% if error %}
+                <div class="mb-6 p-4 rounded-lg bg-red-500/10 border border-red-500/30">
+                    <div class="flex items-start gap-3">
+                        <span class="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/exclamation-circle.svg" %}</span>
+                        <p class="text-sm text-red-400">{{ error }}</p>
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Password Requirements -->
+                <div class="mb-6 p-4 rounded-lg bg-blue-500/10 border border-blue-500/30">
+                    <h3 class="text-sm font-semibold text-blue-400 mb-2">Password Requirements</h3>
+                    <ul class="text-xs text-blue-300 space-y-1">
+                        <li class="flex items-center gap-2">
+                            <span class="w-4 h-4 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/check.svg" %}</span>
+                            Minimum 8 characters
+                        </li>
+                        <li class="flex items-center gap-2">
+                            <span class="w-4 h-4 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/check.svg" %}</span>
+                            At least one uppercase and one lowercase letter
+                        </li>
+                        <li class="flex items-center gap-2">
+                            <span class="w-4 h-4 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/check.svg" %}</span>
+                            At least one digit
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- Setup Form -->
+                <form method="POST" action="/setup" class="space-y-6">
+                    <!-- Username -->
+                    <div>
+                        <label for="username" class="block text-sm font-medium text-dark-text-primary mb-2">
+                            Username
+                        </label>
+                        <input
+                            type="text"
+                            id="username"
+                            name="username"
+                            required
+                            autofocus
+                            autocomplete="username"
+                            minlength="3"
+                            value="{{ username or '' }}"
+                            class="w-full px-4 py-2 rounded-lg border text-dark-text-primary"
+                            style="background: rgba(30, 35, 50, 0.6); border-color: rgba(255, 255, 255, 0.2);"
+                            placeholder="admin"
+                        >
+                    </div>
+
+                    <!-- Password -->
+                    <div>
+                        <label for="password" class="block text-sm font-medium text-dark-text-primary mb-2">
+                            Password
+                        </label>
+                        <input
+                            type="password"
+                            id="password"
+                            name="password"
+                            required
+                            autocomplete="new-password"
+                            minlength="8"
+                            class="w-full px-4 py-2 rounded-lg border text-dark-text-primary"
+                            style="background: rgba(30, 35, 50, 0.6); border-color: rgba(255, 255, 255, 0.2);"
+                            placeholder="Choose a strong password"
+                        >
+                    </div>
+
+                    <!-- Confirm Password -->
+                    <div>
+                        <label for="confirm_password" class="block text-sm font-medium text-dark-text-primary mb-2">
+                            Confirm Password
+                        </label>
+                        <input
+                            type="password"
+                            id="confirm_password"
+                            name="confirm_password"
+                            required
+                            autocomplete="new-password"
+                            minlength="8"
+                            class="w-full px-4 py-2 rounded-lg border text-dark-text-primary"
+                            style="background: rgba(30, 35, 50, 0.6); border-color: rgba(255, 255, 255, 0.2);"
+                            placeholder="Re-enter your password"
+                        >
+                    </div>
+
+                    <!-- Submit Button -->
+                    {{ btn_create(label='Create Admin Account', extra_classes='w-full justify-center') }}
+                </form>
+            </div>
+
+            <!-- Footer -->
+            <div class="mt-6 text-center text-xs text-dark-text-muted">
+                <p>LuxSwirl Monitoring &copy; 2026 Luxardo Labs</p>
+                <p class="mt-1">High-performance monitoring platform</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hidden controls for future Easter egg -->
+    <div id="logo-controls" style="display: none;">
+        <!-- Controls will go here if we add Easter egg later -->
+    </div>
+
+    <!-- Animated logo initialization -->
+    <script type="module" src="/static/js/login-init.js?v={{ static_version }}"></script>
+</body>
+</html>

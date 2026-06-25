@@ -1,0 +1,160 @@
+{% macro latency_chart(chart_data) %}
+{% if chart_data.has_data %}
+<div class="relative rounded-lg p-4 bg-gradient-to-b from-dark-bg-primary to-dark-bg-tertiary shadow-inner" style="height: 256px;">
+    <svg class="w-full h-full" viewBox="0 0 {{ chart_data.width }} {{ chart_data.height }}" preserveAspectRatio="none">
+        {# Gradient definition #}
+        <defs>
+            <linearGradient id="latency-gradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" style="stop-color:rgb(14, 165, 233);stop-opacity:0.3" />
+                <stop offset="100%" style="stop-color:rgb(14, 165, 233);stop-opacity:0.05" />
+            </linearGradient>
+        </defs>
+
+        {# Wrap all animated elements in a group #}
+        <g style="animation: expandUp 0.6s ease-out forwards;">
+            {# Filled area under curve #}
+            <path
+                d="{{ chart_data.curve_path }} L {{ chart_data.width }},{{ chart_data.height }} L 0,{{ chart_data.height }} Z"
+                fill="url(#latency-gradient)"
+            />
+
+            {# Smooth curved line - draws in from left to right #}
+            <path
+                class="latency-line-path"
+                d="{{ chart_data.curve_path }}"
+                fill="none"
+                stroke="rgba(14, 165, 233, 1)"
+                stroke-width="2.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                vector-effect="non-scaling-stroke"
+                style="
+                    stroke-dasharray: {{ chart_data.path_length }};
+                    stroke-dashoffset: {{ chart_data.path_length }};
+                    animation: drawLine 1.2s ease-out forwards;
+                "
+            />
+
+            {# Data points with hover #}
+            {% for point in chart_data.points %}
+                {% set prev_x = chart_data.points[loop.index0 - 1].x if loop.index0 > 0 else 0 %}
+                {% set next_x = chart_data.points[loop.index0 + 1].x if loop.index0 < chart_data.points|length - 1 else chart_data.width %}
+                {% set rect_x = (prev_x + point.x) / 2 %}
+                {% set rect_width = (next_x + point.x) / 2 - rect_x %}
+
+                {# Vertical rectangle hover zone - spans full height, no overlap #}
+                <rect
+                    x="{{ rect_x }}"
+                    y="0"
+                    width="{{ rect_width }}"
+                    height="{{ chart_data.height }}"
+                    fill="transparent"
+                    class="latency-chart-hover-zone"
+                    data-latency="{{ point.latency }}"
+                    data-timestamp="{{ point.timestamp }}"
+                    data-success="{{ 'true' if point.success else 'false' }}"
+                    data-point-x="{{ point.x }}"
+                    data-point-y="{{ point.y }}"
+                />
+                {# Visible dot (hidden by default, shown on hover) #}
+                <circle
+                    cx="{{ point.x }}"
+                    cy="{{ point.y }}"
+                    r="0"
+                    fill="{% if point.success %}rgba(16, 185, 129, 0.8){% else %}rgba(239, 68, 68, 0.8){% endif %}"
+                    stroke="white"
+                    stroke-width="2"
+                    class="latency-chart-dot"
+                    data-chart-dot="true"
+                />
+            {% endfor %}
+
+            {# Minimal grid lines - very subtle #}
+            {% for i in range(1, 5) %}
+                {% set y = i * 40 %}
+                <line
+                    x1="0"
+                    y1="{{ y }}"
+                    x2="{{ chart_data.width }}"
+                    y2="{{ y }}"
+                    stroke="rgba(255, 255, 255, 0.03)"
+                    stroke-width="1"
+                />
+            {% endfor %}
+        </g>
+
+        {# Beautiful Y-axis labels - right side, only show max and middle #}
+        <text x="790" y="{{ chart_data.labels.y_axis.max.y }}" text-anchor="end" fill="rgba(148, 163, 184, 0.6)" font-size="12" font-family="system-ui">{{ chart_data.labels.y_axis.max.text }}</text>
+        <text x="790" y="{{ chart_data.labels.y_axis.middle.y }}" text-anchor="end" fill="rgba(148, 163, 184, 0.6)" font-size="12" font-family="system-ui">{{ chart_data.labels.y_axis.middle.text }}</text>
+
+        {# Beautiful X-axis time labels - bottom, show first, middle, last #}
+        <text x="{{ chart_data.labels.x_axis.start.x }}" y="195" fill="rgba(148, 163, 184, 0.6)" font-size="11" font-family="system-ui">{{ chart_data.labels.x_axis.start.time | format_datetime('%I:%M%p') }}</text>
+        <text x="{{ chart_data.labels.x_axis.middle.x }}" y="195" text-anchor="middle" fill="rgba(148, 163, 184, 0.6)" font-size="11" font-family="system-ui">{{ chart_data.labels.x_axis.middle.time | format_datetime('%I:%M%p') }}</text>
+        <text x="{{ chart_data.labels.x_axis.end.x }}" y="195" text-anchor="end" fill="rgba(148, 163, 184, 0.6)" font-size="11" font-family="system-ui">{{ chart_data.labels.x_axis.end.time | format_datetime('%I:%M%p') }}</text>
+
+        {# Beautiful floating tooltip (hidden by default, positioned by JS) #}
+        <g id="latency-tooltip" style="display: none; pointer-events: none; filter: drop-shadow(0 10px 20px rgba(0, 0, 0, 0.5));">
+            {# Background with gradient and glow #}
+            <defs>
+                <linearGradient id="tooltip-bg" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" style="stop-color:#1e293b;stop-opacity:0.98" />
+                    <stop offset="100%" style="stop-color:#0f172a;stop-opacity:0.98" />
+                </linearGradient>
+            </defs>
+            <rect
+                x="0"
+                y="0"
+                width="160"
+                height="80"
+                fill="url(#tooltip-bg)"
+                stroke="rgba(14, 165, 233, 0.3)"
+                stroke-width="1.5"
+                rx="8"
+            />
+            {# Accent line on left edge #}
+            <rect
+                x="0"
+                y="0"
+                width="3"
+                height="80"
+                fill="rgb(14, 165, 233)"
+                rx="8"
+            />
+            {# Time label #}
+            <text
+                id="latency-tooltip-time"
+                x="15"
+                y="24"
+                fill="rgba(148, 163, 184, 0.9)"
+                font-size="11"
+                font-family="system-ui, -apple-system, sans-serif"
+            ></text>
+            {# Latency value - large and prominent #}
+            <text
+                id="latency-tooltip-latency"
+                x="15"
+                y="50"
+                fill="rgb(14, 165, 233)"
+                font-size="20"
+                font-family="system-ui, -apple-system, sans-serif"
+                font-weight="700"
+            ></text>
+            {# Status badge #}
+            <text
+                id="latency-tooltip-status"
+                x="15"
+                y="68"
+                fill="#10b981"
+                font-size="12"
+                font-family="system-ui, -apple-system, sans-serif"
+                font-weight="600"
+            ></text>
+        </g>
+    </svg>
+</div>
+{% else %}
+<div class="relative rounded-lg p-4 bg-gradient-to-b from-dark-bg-primary to-dark-bg-tertiary shadow-inner h-64 flex items-center justify-center">
+    <span class="text-sm text-dark-text-muted">No history data available</span>
+</div>
+{% endif %}
+{% endmacro %}

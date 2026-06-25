@@ -1,0 +1,52 @@
+<!-- Synthetic-specific fields -->
+<div id="synthetic-fields" class="space-y-4 {% if not check or check.check_type != 'synthetic' %}hidden{% endif %}">
+    <!-- Security Warning Banner -->
+    <div class="rounded-lg border-2 border-yellow-600 bg-gradient-to-br from-yellow-900/30 to-orange-900/20 p-4 shadow-lg">
+        <div class="flex items-start gap-3">
+            <div class="flex-shrink-0">
+                <span class="w-6 h-6 text-yellow-500 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/exclamation-triangle.svg" %}</span>
+            </div>
+            <div class="flex-1">
+                <h4 class="text-lg font-semibold text-yellow-400 mb-2">Security Warning: Arbitrary Code Execution</h4>
+                <ul class="text-sm text-dark-text-secondary space-y-1 mb-3">
+                    <li class="flex items-start gap-2">
+                        <span class="text-yellow-500 flex-shrink-0">•</span>
+                        <span><strong class="text-dark-text-primary">Administrator access required:</strong> Synthetic checks execute arbitrary Python code on agent hosts</span>
+                    </li>
+                    <li class="flex items-start gap-2">
+                        <span class="text-yellow-500 flex-shrink-0">•</span>
+                        <span><strong class="text-dark-text-primary">Trusted environments only:</strong> Designed for self-hosted, single-organization deployments</span>
+                    </li>
+                    <li class="flex items-start gap-2">
+                        <span class="text-yellow-500 flex-shrink-0">•</span>
+                        <span><strong class="text-dark-text-primary">Code runs with agent privileges:</strong> Has access to agent environment variables and file system</span>
+                    </li>
+                    <li class="flex items-start gap-2">
+                        <span class="text-yellow-500 flex-shrink-0">•</span>
+                        <span><strong class="text-dark-text-primary">Review carefully:</strong> Only use scripts from trusted sources. Malicious code could compromise your infrastructure</span>
+                    </li>
+                </ul>
+                <div class="text-xs text-dark-text-muted">
+                    <strong>Security Model:</strong> Scripts are validated using AST analysis to block obvious attacks (eval, exec, os, subprocess, etc.),
+                    but this is not a complete sandbox. Docker containerization provides additional isolation.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div>
+        <label class="label">Playwright Script Code</label>
+        <textarea
+            name="script_code"
+            id="script-code-textarea"
+            rows="15"
+            class="input font-mono text-sm"
+            placeholder="async def run_check(page):&#10;    steps = []&#10;    try:&#10;        # Navigate to your target URL&#10;        await page.goto('{{ check.target if check else 'https://example.com' }}')&#10;        steps.append('✅ Page loaded')&#10;        &#10;        # Your test logic here...&#10;        &#10;        return {&#10;            'status': 'success',&#10;            'steps': steps&#10;        }&#10;    except Exception as e:&#10;        return {&#10;            'status': 'failure',&#10;            'steps': steps,&#10;            'errors': [str(e)]&#10;        }"
+        >{{ check.script_code if check and check.script_code else '' }}</textarea>
+        <p class="text-xs text-dark-text-muted mt-1">
+            Python async function using Playwright • Must define <code class="px-1 py-0.5 bg-dark-bg-tertiary rounded text-brand-400">run_check(page)</code> •
+            Returns dict with <code class="px-1 py-0.5 bg-dark-bg-tertiary rounded text-brand-400">status</code> and <code class="px-1 py-0.5 bg-dark-bg-tertiary rounded text-brand-400">steps</code> •
+            Full Playwright API available
+        </p>
+    </div>
+</div>

@@ -1,0 +1,139 @@
+{% from 'macros/cards.html' import stat_card %}
+{% from 'macros/badges.html' import check_type_badge, role_badge %}
+{% from 'macros/buttons.html' import icon_view, icon_edit, icon_delete %}
+{% from 'macros/status.html' import status_badge as check_status_badge %}
+{% from 'macros/page.html' import page_header %}
+{% from 'macros/tables.html' import data_table %}
+
+{# ═══════════════════════════════════════════════════════════════════════
+   CARDS — macros/cards.html + CSS classes
+   ═══════════════════════════════════════════════════════════════════════ #}
+<section>
+    <h2 class="text-lg font-semibold text-dark-text-primary mb-1">Cards</h2>
+    <p class="text-sm text-dark-text-muted mb-4">From <code class="text-brand-400">macros/cards.html</code> and <code class="text-brand-400">input.css</code></p>
+
+    <div class="space-y-4">
+        <div>
+            <h3 class="text-sm font-medium text-dark-text-secondary mb-3">stat_card(label, value, change, icon, color)</h3>
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                {% set icon_checks %}<span class="w-6 h-6 text-brand-400 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/check-circle.svg" %}</span>{% endset %}
+                {% set icon_up %}<span class="w-6 h-6 text-green-400 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/arrow-long-up.svg" %}</span>{% endset %}
+                {% set icon_alert %}<span class="w-6 h-6 text-yellow-400 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/exclamation-triangle.svg" %}</span>{% endset %}
+                {% set icon_down %}<span class="w-6 h-6 text-red-400 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/arrow-long-down.svg" %}</span>{% endset %}
+                {{ stat_card("Total Checks", "142", icon=icon_checks, color="brand") }}
+                {{ stat_card("Online", "138", change="+2 today", icon=icon_up, color="green") }}
+                {{ stat_card("Warning", "3", icon=icon_alert, color="yellow") }}
+                {{ stat_card("Down", "1", icon=icon_down, color="red") }}
+            </div>
+        </div>
+
+        <div>
+            <h3 class="text-sm font-medium text-dark-text-secondary mb-3">Base Card (CSS class: card)</h3>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div class="card p-4">
+                    <p class="text-sm text-dark-text-primary">Standard card</p>
+                    <p class="text-xs text-dark-text-muted mt-1">Uses .card class from input.css</p>
+                </div>
+                <div class="card-hover p-4">
+                    <p class="text-sm text-dark-text-primary">Hover card</p>
+                    <p class="text-xs text-dark-text-muted mt-1">Uses .card-hover — hover to see effect</p>
+                </div>
+                <div class="p-3 bg-dark-bg-tertiary rounded-lg border border-dark-border">
+                    <p class="text-sm text-dark-text-primary">Info card (inline)</p>
+                    <p class="text-xs text-dark-text-muted mt-1">Used inside cards for key-value grids</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+{# ═══════════════════════════════════════════════════════════════════════
+   FORMS — CSS classes from input.css
+   ═══════════════════════════════════════════════════════════════════════ #}
+<section>
+    <h2 class="text-lg font-semibold text-dark-text-primary mb-1">Form Elements</h2>
+    <p class="text-sm text-dark-text-muted mb-4">CSS component classes from <code class="text-brand-400">input.css</code></p>
+
+    <div class="card p-6">
+        <div class="grid grid-cols-2 gap-6">
+            <div>
+                <label class="label" for="demo-text-input">Text Input (label + input)</label>
+                <input type="text" id="demo-text-input" class="input w-full" placeholder="Placeholder text..." value="Example value">
+            </div>
+            <div>
+                <label class="label" for="demo-select">Select</label>
+                <select id="demo-select" class="select w-full">
+                    <option>Option 1</option>
+                    <option>Option 2</option>
+                    <option>Option 3</option>
+                </select>
+            </div>
+            <div>
+                <label class="label">Monospace Input</label>
+                <input type="text" class="input w-full font-mono" placeholder="api_key_here..." value="swrl_abc123def456">
+            </div>
+            <div>
+                <label class="label">Textarea</label>
+                <textarea class="textarea w-full" rows="3" placeholder="Multi-line content...">SELECT COUNT(*) FROM checks</textarea>
+            </div>
+        </div>
+    </div>
+</section>
+
+{# ═══════════════════════════════════════════════════════════════════════
+   DATA TABLE — macros/tables.html
+   ═══════════════════════════════════════════════════════════════════════ #}
+<section>
+    <h2 class="text-lg font-semibold text-dark-text-primary mb-1">Data Table</h2>
+    <p class="text-sm text-dark-text-muted mb-4">From <code class="text-brand-400">macros/tables.html</code> — <code class="text-brand-400">data_table(columns)</code> + a call-block body. Bakes in <code class="text-brand-400">.table</code> styling and the <code class="text-brand-400">scope="col"</code> headers screen readers need; rows are plain <code>&lt;tr&gt;&lt;td&gt;</code> (no per-cell classes — <code class="text-brand-400">.table</code> handles them).</p>
+
+    <div class="card overflow-hidden">
+        {% call data_table([
+            {'label': 'Name'},
+            {'label': 'Type'},
+            {'label': 'Status'},
+            {'label': 'Role'},
+            {'label': 'Actions', 'align': 'right'},
+        ]) %}
+            <tr>
+                <td>Production API</td>
+                <td>{{ check_type_badge("http") }}</td>
+                <td>{{ check_status_badge("success") }}</td>
+                <td>{{ role_badge("admin") }}</td>
+                <td><div class="flex items-center justify-end gap-1">{{ icon_view() }}{{ icon_edit() }}{{ icon_delete() }}</div></td>
+            </tr>
+            <tr>
+                <td>Database Health</td>
+                <td>{{ check_type_badge("postgres") }}</td>
+                <td>{{ check_status_badge("error") }}</td>
+                <td>{{ role_badge("editor") }}</td>
+                <td><div class="flex items-center justify-end gap-1">{{ icon_view() }}{{ icon_edit() }}{{ icon_delete() }}</div></td>
+            </tr>
+            <tr>
+                <td>DNS Resolver</td>
+                <td>{{ check_type_badge("dns") }}</td>
+                <td>{{ check_status_badge("unknown") }}</td>
+                <td>{{ role_badge("viewer") }}</td>
+                <td><div class="flex items-center justify-end gap-1">{{ icon_view() }}{{ icon_edit(disabled=true) }}{{ icon_delete(disabled=true) }}</div></td>
+            </tr>
+        {% endcall %}
+    </div>
+</section>
+
+{# ═══════════════════════════════════════════════════════════════════════
+   PAGE HEADER — macros/page.html
+   ═══════════════════════════════════════════════════════════════════════ #}
+<section>
+    <h2 class="text-lg font-semibold text-dark-text-primary mb-1">Page Header</h2>
+    <p class="text-sm text-dark-text-muted mb-4">From <code class="text-brand-400">macros/page.html</code> — <code class="text-brand-400">page_header(title, description, actions)</code></p>
+
+    <div class="card p-6">
+        <div class="bg-dark-bg-primary rounded-lg p-4 border border-dark-border">
+            {{ page_header(
+                title="Example Page Title",
+                description="This is how page headers render with a description and action buttons.",
+                actions='<button class="btn-primary btn-sm">Add New</button>'
+            ) }}
+        </div>
+    </div>
+</section>

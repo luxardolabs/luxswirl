@@ -1,0 +1,77 @@
+{% from 'macros/buttons.html' import collapse_toggle %}
+            <!-- Performance Configuration - Collapsible -->
+            <div class="border border-dark-border rounded-lg overflow-hidden">
+                {{ collapse_toggle('Performance Tuning', toggle_attr='data-accordion-toggle') }}
+                <div class="hidden p-3 space-y-3 bg-dark-bg-primary">
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="label text-xs" for="max_concurrent_checks">
+                                Max Concurrent Checks
+                                <span class="text-xs text-dark-text-muted font-normal">(default: 200)</span>
+                            </label>
+                            <input
+                                type="number"
+                                id="max_concurrent_checks"
+                                name="max_concurrent_checks"
+                                value="{{ agent.max_concurrent_checks if agent.max_concurrent_checks is not none else '' }}"
+                                class="input input-sm font-mono text-sm"
+                                placeholder="200"
+                                min="1"
+                                max="1000"
+                            >
+                        </div>
+                        <div>
+                            <label class="label text-xs" for="log_level">
+                                Log Level
+                                <span class="text-xs text-dark-text-muted font-normal">(default: INFO)</span>
+                            </label>
+                            <select
+                                id="log_level"
+                                name="log_level"
+                                class="input input-sm font-mono text-sm"
+                            >
+                                <option value="">-- Use Default --</option>
+                                <option value="DEBUG" {% if agent.log_level == 'DEBUG' %}selected{% endif %}>DEBUG</option>
+                                <option value="INFO" {% if agent.log_level == 'INFO' %}selected{% endif %}>INFO</option>
+                                <option value="WARNING" {% if agent.log_level == 'WARNING' %}selected{% endif %}>WARNING</option>
+                                <option value="ERROR" {% if agent.log_level == 'ERROR' %}selected{% endif %}>ERROR</option>
+                                <option value="CRITICAL" {% if agent.log_level == 'CRITICAL' %}selected{% endif %}>CRITICAL</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="label text-xs" for="watchdog_interval">
+                                Watchdog Interval (s)
+                                <span class="text-xs text-dark-text-muted font-normal">(default: 30s)</span>
+                            </label>
+                            <input
+                                type="number"
+                                id="watchdog_interval"
+                                name="watchdog_interval"
+                                value="{{ agent.watchdog_interval if agent.watchdog_interval is not none else '' }}"
+                                class="input input-sm font-mono text-sm"
+                                placeholder="30"
+                                min="5"
+                                max="300"
+                            >
+                        </div>
+                        <div>
+                            <label class="label text-xs" for="watchdog_stall_threshold">
+                                Watchdog Stall Threshold
+                                <span class="text-xs text-dark-text-muted font-normal">(default: 3)</span>
+                            </label>
+                            <input
+                                type="number"
+                                id="watchdog_stall_threshold"
+                                name="watchdog_stall_threshold"
+                                value="{{ agent.watchdog_stall_threshold if agent.watchdog_stall_threshold is not none else '' }}"
+                                class="input input-sm font-mono text-sm"
+                                placeholder="3"
+                                min="1"
+                                max="10"
+                            >
+                        </div>
+                    </div>
+                </div>
+            </div>

@@ -1,0 +1,87 @@
+{% from 'macros/buttons.html' import btn_create, btn_cancel_text %}
+{% from 'macros/panels.html' import panel_wrapper, panel_header, panel_content, panel_footer %}
+
+{% call panel_wrapper() %}
+    {{ panel_header('Create New User', subtitle='Configure user account and permissions') }}
+    <form
+        hx-post="/settings/users/create"
+        hx-target="#user-create-result"
+        hx-swap="innerHTML"
+        class="contents">
+    {% call panel_content() %}
+    <div class="space-y-4">
+            <!-- Result Message -->
+            <div id="user-create-result"></div>
+
+            <!-- Username -->
+            <div>
+                <label class="label text-sm" for="username">Username <span class="text-red-400">*</span></label>
+                <input
+                    type="text"
+                    id="username"
+                    name="username"
+                    required
+                    pattern="[a-zA-Z0-9_-]+"
+                    class="input font-mono w-full"
+                    placeholder="john_doe"
+                >
+            </div>
+
+            <!-- Password -->
+            <div>
+                <label class="label text-sm" for="password">Password <span class="text-red-400">*</span></label>
+                <input
+                    type="password"
+                    id="password"
+                    name="password"
+                    required
+                    minlength="8"
+                    class="input font-mono"
+                    placeholder="••••••••"
+                >
+                <p class="text-xs text-dark-text-muted mt-1">Min 8 characters, must include uppercase, lowercase, and digit</p>
+            </div>
+
+            <!-- Full Name -->
+            <div>
+                <label class="label text-sm" for="full_name">Full Name</label>
+                <input
+                    type="text"
+                    id="full_name"
+                    name="full_name"
+                    class="input"
+                    placeholder="John Doe"
+                >
+            </div>
+
+            <!-- Role -->
+            <div>
+                <label class="label text-sm" for="role">Role <span class="text-red-400">*</span></label>
+                <select id="role" name="role" class="input" required>
+                    {% for opt in role_options %}
+                    <option value="{{ opt.value }}">{{ opt.label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- Checkboxes -->
+            <div class="space-y-2">
+                <label class="flex items-center gap-2 cursor-pointer text-sm text-dark-text-secondary">
+                    <input type="checkbox" name="is_active" value="true" checked>
+                    Account is active
+                </label>
+
+                <label class="flex items-center gap-2 cursor-pointer text-sm text-dark-text-secondary">
+                    <input type="checkbox" name="must_change_password" value="true" checked>
+                    Require password change on first login
+                </label>
+            </div>
+    </div>
+    {% endcall %}
+
+    {% call panel_footer() %}
+        {{ btn_create(label='Create User', extra_classes='flex-1') }}
+        {{ btn_cancel_text(extra_classes='flex-1', extra_attrs='type="button" data-close-panel') }}
+    {% endcall %}
+    </form>
+{% endcall %}

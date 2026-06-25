@@ -1,0 +1,545 @@
+<!-- Network Scan Results -->
+{% from 'macros/buttons.html' import text_btn, btn_create, icon_btn, tag_pill_button %}
+{% from 'macros/tables.html' import data_table %}
+{% set result = job.result %}
+
+<!-- Scan Summary Stats -->
+<div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+    <div class="card p-4">
+        <p class="text-xs text-dark-text-muted mb-1 uppercase tracking-wider">IPs Scanned</p>
+        <p class="text-2xl font-bold text-dark-text-primary">{{ result.hosts_scanned or 0 }}</p>
+    </div>
+    <div class="card p-4">
+        <p class="text-xs text-dark-text-muted mb-1 uppercase tracking-wider">Responding</p>
+        <p class="text-2xl font-bold text-green-400">{{ result.hosts_responding or 0 }}</p>
+        {% if result.hosts_scanned and result.hosts_scanned > 0 %}
+        <p class="text-xs text-dark-text-muted mt-1">{{ "%.1f"|format((result.hosts_responding / result.hosts_scanned) * 100) }}%</p>
+        {% endif %}
+    </div>
+    <div class="card p-4">
+        <p class="text-xs text-dark-text-muted mb-1 uppercase tracking-wider">Duration</p>
+        <p class="text-2xl font-bold text-dark-text-primary">
+            {% if result.scan_duration_seconds %}
+            {{ "%.1f"|format(result.scan_duration_seconds) }}s
+            {% elif job.duration_seconds %}
+            {{ "%.1f"|format(job.duration_seconds) }}s
+            {% else %}
+            -
+            {% endif %}
+        </p>
+    </div>
+    <div class="card p-4">
+        <p class="text-xs text-dark-text-muted mb-1 uppercase tracking-wider">Chunks</p>
+        <p class="text-2xl font-bold text-dark-text-primary">{{ result.chunks_scanned or 1 }}</p>
+    </div>
+</div>
+
+<!-- Discovery Summary -->
+{% if result.summary %}
+<div class="card bg-blue-500/5 border-blue-500/30 p-4">
+    <h3 class="text-sm font-semibold uppercase tracking-wide text-blue-400 mb-3">Discovery Summary</h3>
+    <p class="text-sm text-blue-300">{{ result.summary }}</p>
+</div>
+{% endif %}
+
+<!-- Quick Actions -->
+{% if result.discovered_hosts and result.discovered_hosts|length > 0 %}
+<div class="card bg-green-500/5 border-green-500/30 p-4">
+    <h3 class="text-sm font-semibold uppercase tracking-wide text-green-400 mb-3">Quick Actions</h3>
+
+    <!-- Defaults Configuration (2 rows of 3 fields) -->
+    <div class="space-y-3 mb-4 p-3 bg-dark-bg-tertiary rounded border border-green-600/20">
+        <!-- First row: Interval, Timeout, Retries -->
+        <div class="grid grid-cols-3 gap-3">
+            <div>
+                <label class="text-xs text-green-300/70 block mb-1">Interval (s)</label>
+                <input type="number" name="interval" id="default_interval" value="{{ check_defaults.interval_seconds }}"
+                       class="input input-sm w-full text-xs bg-dark-bg-primary border-2 border-dark-border focus:border-brand-500" min="10" max="86400">
+            </div>
+            <div>
+                <label class="text-xs text-green-300/70 block mb-1">Timeout (s)</label>
+                <input type="number" name="timeout" id="default_timeout" value="{{ check_defaults.timeout_seconds }}"
+                       class="input input-sm w-full text-xs bg-dark-bg-primary border-2 border-dark-border focus:border-brand-500" min="1" max="300">
+            </div>
+            <div>
+                <label class="text-xs text-green-300/70 block mb-1">Retry Attempts</label>
+                <input type="number" name="retry_attempts" id="default_retry_attempts" value="{{ check_defaults.retry_attempts }}"
+                       class="input input-sm w-full text-xs bg-dark-bg-primary border-2 border-dark-border focus:border-brand-500" min="0" max="10">
+            </div>
+        </div>
+        <!-- Second row: Expected Status, Verify SSL, Agent -->
+        <div class="grid grid-cols-3 gap-3">
+            <div>
+                <label class="text-xs text-green-300/70 block mb-1">Expected Status</label>
+                <input type="number" name="expected_status" id="default_expected_status" value="{{ check_defaults.expected_status }}"
+                       class="input input-sm w-full text-xs bg-dark-bg-primary border-2 border-dark-border focus:border-brand-500" min="100" max="599">
+            </div>
+            <div>
+                <label for="default_verify_ssl" class="text-xs text-green-300/70 block mb-1">Verify SSL</label>
+                <select name="verify_ssl" id="default_verify_ssl" class="input input-sm w-full text-xs bg-dark-bg-primary border-2 border-dark-border focus:border-brand-500">
+                    <option value="false" {% if not check_defaults.verify_ssl %}selected{% endif %}>No (self-signed)</option>
+                    <option value="true" {% if check_defaults.verify_ssl %}selected{% endif %}>Yes (valid certs)</option>
+                </select>
+            </div>
+            <div>
+                <label for="default_agent" class="text-xs text-green-300/70 block mb-1">Agent <span class="text-red-400">*</span></label>
+                <select name="agent_id" id="default_agent" class="input input-sm w-full text-xs bg-dark-bg-primary border-2 border-dark-border focus:border-brand-500" required>
+                    <option value="">Select agent...</option>
+                    {% for a in agents %}
+                    <option value="{{ a.id }}" {% if job.agent_id|string == a.id|string %}selected{% endif %}>
+                        {{ a.agent_name or a.id }}{% if a.hostname %} ({{ a.hostname }}){% endif %}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+        <!-- Third row: Tags -->
+        <div>
+            <label class="text-xs text-green-300/70 block mb-1">Tags</label>
+            <div id="bulk-tags-container" class="flex flex-wrap gap-1.5 p-2 border-2 border-dark-border rounded bg-dark-bg-primary min-h-[36px]">
+                <!-- Tags will be inserted here -->
+            </div>
+            <div class="flex gap-2 mt-2">
+                <input
+                    type="text"
+                    id="bulk-tag-input"
+                    class="input input-sm flex-1 text-xs bg-dark-bg-primary border-2 border-dark-border focus:border-brand-500"
+                    placeholder="e.g., production, monitoring"
+                    autocomplete="off"
+                >
+                {% set plus_svg %}<span class="w-3.5 h-3.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/plus.svg" %}</span>{% endset %}
+                {{ text_btn(plus_svg, 'Add', style='secondary', size='sm', type='button', extra_attrs='id="bulk-tag-add-btn" title="Add tag"', extra_classes='px-3 text-xs whitespace-nowrap') }}
+                {% if available_check_tags and available_check_tags|length > 0 %}
+                {{ text_btn('', 'Browse', style='secondary', size='sm', type='button', extra_attrs='id="bulk-tag-browser-btn" title="Browse existing tags"', extra_classes='px-4 text-xs whitespace-nowrap') }}
+                {% endif %}
+            </div>
+            <!-- Available tags browser (initially hidden) -->
+            {% if available_check_tags and available_check_tags|length > 0 %}
+            <div id="bulk-tag-browser" class="hidden mt-2 p-3 bg-green-500/5 border border-green-500/30 rounded-lg">
+                <p class="text-xs text-green-400 mb-2">Click to add:</p>
+                <div class="flex flex-wrap gap-2">
+                    {% for tag in available_check_tags %}
+                    {{ tag_pill_button(tag, color='green', extra_classes='bulk-tag-browser-option',
+                                       extra_attrs='data-tag="' ~ tag ~ '"') }}
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+            <!-- Hidden input to store tags as comma-separated values -->
+            <input type="hidden" name="tags" id="bulk-tags-hidden" value="">
+        </div>
+    </div>
+
+    <!-- Bulk Action Buttons -->
+    <div class="flex flex-wrap gap-2">
+        {% set ping_svg %}<span class="w-4 h-4 mr-1 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/chart-bar.svg" %}</span>{% endset %}
+        {% set ping_label %}<span>Ping All {{ result.discovered_hosts|length }} Hosts</span><div id="ping-spinner" class="htmx-indicator liquid-luxswirl ml-2"><div></div><div></div><div></div><div></div></div>{% endset %}
+        {{ text_btn(ping_svg, ping_label, style='primary', size='sm', type='button', hx_post='/jobs/' ~ job.id ~ '/create-checks/bulk-ping', hx_target='#quick-actions-feedback', hx_swap='innerHTML', extra_attrs='hx-include="[name=\'interval\'],[name=\'timeout\'],[name=\'retry_attempts\'],[name=\'agent_id\'],[name=\'tags\']" hx-disabled-elt="this" hx-indicator="#ping-spinner"', extra_classes='flex items-center') }}
+        {% if result.categorized_hosts.web and result.categorized_hosts.web|length > 0 %}
+        {% set web_svg %}<span class="w-4 h-4 mr-1 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/globe-alt.svg" %}</span>{% endset %}
+        {% set web_label %}<span>Monitor All Web ({{ result.categorized_hosts.web|length }})</span><div id="web-spinner" class="htmx-indicator liquid-luxswirl ml-2"><div></div><div></div><div></div><div></div></div>{% endset %}
+        {{ text_btn(web_svg, web_label, style='secondary', size='sm', type='button', hx_post='/jobs/' ~ job.id ~ '/create-checks/bulk-web', hx_target='#quick-actions-feedback', hx_swap='innerHTML', extra_attrs='hx-include="[name=\'interval\'],[name=\'timeout\'],[name=\'retry_attempts\'],[name=\'agent_id\'],[name=\'expected_status\'],[name=\'verify_ssl\'],[name=\'tags\']" hx-disabled-elt="this" hx-indicator="#web-spinner"', extra_classes='flex items-center') }}
+        {% endif %}
+        {% if result.categorized_hosts.ssh and result.categorized_hosts.ssh|length > 0 %}
+        {% set ssh_svg %}<span class="w-4 h-4 mr-1 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/command-line.svg" %}</span>{% endset %}
+        {% set ssh_label %}<span>Monitor All SSH ({{ result.categorized_hosts.ssh|length }})</span><div id="ssh-spinner" class="htmx-indicator liquid-luxswirl ml-2"><div></div><div></div><div></div><div></div></div>{% endset %}
+        {{ text_btn(ssh_svg, ssh_label, style='secondary', size='sm', type='button', hx_post='/jobs/' ~ job.id ~ '/create-checks/bulk-ssh', hx_target='#quick-actions-feedback', hx_swap='innerHTML', extra_attrs='hx-include="[name=\'interval\'],[name=\'timeout\'],[name=\'retry_attempts\'],[name=\'agent_id\'],[name=\'tags\']" hx-disabled-elt="this" hx-indicator="#ssh-spinner"', extra_classes='flex items-center') }}
+        {% endif %}
+        {% if result.categorized_hosts.database and result.categorized_hosts.database|length > 0 %}
+        {% set db_svg %}<span class="w-4 h-4 mr-1 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/circle-stack.svg" %}</span>{% endset %}
+        {% set db_label %}<span>Monitor All Database ({{ result.categorized_hosts.database|length }})</span><div id="db-spinner" class="htmx-indicator liquid-luxswirl ml-2"><div></div><div></div><div></div><div></div></div>{% endset %}
+        {{ text_btn(db_svg, db_label, style='secondary', size='sm', type='button', hx_post='/jobs/' ~ job.id ~ '/create-checks/bulk-database', hx_target='#quick-actions-feedback', hx_swap='innerHTML', extra_attrs='hx-include="[name=\'interval\'],[name=\'timeout\'],[name=\'retry_attempts\'],[name=\'agent_id\'],[name=\'tags\']" hx-disabled-elt="this" hx-indicator="#db-spinner"', extra_classes='flex items-center') }}
+        {% endif %}
+    </div>
+
+    <!-- Feedback area -->
+    <div id="quick-actions-feedback" class="mt-3"></div>
+</div>
+{% endif %}
+
+<!-- Discovered Hosts (Compact View) -->
+{% if result.discovered_hosts and result.discovered_hosts|length > 0 %}
+<div class="card p-4" id="discovered-hosts-card">
+    {# Pre-compute host monitoring status #}
+    {% set sorted_hosts = result.discovered_hosts | sort(attribute='ip') %}
+    {% set ns = namespace(new_count=0, monitored_count=0) %}
+    {% for host in sorted_hosts %}
+        {% set h = namespace(all_exist=true) %}
+        {# Check ping #}
+        {% set check_name = ("ping_" ~ (host.hostname or host.ip)).replace(".", "_") %}
+        {% if check_name not in existing_checks %}{% set h.all_exist = false %}{% endif %}
+        {# Check service ports #}
+        {% if host.open_ports %}
+            {% for port in host.open_ports %}
+                {% if port in [80, 443, 8080, 8443, 8000, 3000, 5000] %}
+                    {% set check_name = ("http_" ~ (host.hostname or host.ip) ~ "_" ~ port|string).replace(".", "_") %}
+                    {% if check_name not in existing_checks %}{% set h.all_exist = false %}{% endif %}
+                {% endif %}
+                {% if port in [22, 2222] %}
+                    {% set check_name = ("ssh_" ~ (host.hostname or host.ip) ~ "_" ~ port|string).replace(".", "_") %}
+                    {% if check_name not in existing_checks %}{% set h.all_exist = false %}{% endif %}
+                {% endif %}
+                {% if port in [3306, 5432, 5433, 27017, 6379, 1433, 1521] %}
+                    {% set check_name = ("db_" ~ (host.hostname or host.ip) ~ "_" ~ port|string).replace(".", "_") %}
+                    {% if check_name not in existing_checks %}{% set h.all_exist = false %}{% endif %}
+                {% endif %}
+            {% endfor %}
+        {% endif %}
+        {% if h.all_exist %}
+            {% set ns.monitored_count = ns.monitored_count + 1 %}
+        {% else %}
+            {% set ns.new_count = ns.new_count + 1 %}
+        {% endif %}
+    {% endfor %}
+
+    {# Header with sort + filter controls #}
+    <div class="flex items-center justify-between mb-3">
+        <div class="flex items-center gap-3">
+            <h3 class="text-sm font-semibold uppercase tracking-wide text-dark-text-secondary">
+                Discovered Hosts ({{ result.discovered_hosts|length }})
+            </h3>
+            <div class="flex items-center gap-1" id="host-sort-btns">
+                {% set ip_svg %}<span class="w-3.5 h-3.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/arrows-right-left.svg" %}</span>{% endset %}
+                {% set ip_label %}IP<span class="w-2.5 h-2.5 ml-0.5 sort-arrow inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/chevron-down.svg" %}</span>{% endset %}
+                {{ text_btn(ip_svg, ip_label, style='secondary', size='sm', type='button', extra_attrs='data-host-sort="ip" title="Sort by IP address"', extra_classes='host-sort-btn p-1 text-[10px] !bg-brand-600/20 !text-brand-300 !border-brand-600/40') }}
+                {% set name_svg %}<span class="w-3.5 h-3.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/server.svg" %}</span>{% endset %}
+                {% set name_label %}Name<span class="w-2.5 h-2.5 ml-0.5 sort-arrow hidden inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/chevron-down.svg" %}</span>{% endset %}
+                {{ text_btn(name_svg, name_label, style='secondary', size='sm', type='button', extra_attrs='data-host-sort="hostname" title="Sort by hostname"', extra_classes='host-sort-btn p-1 text-[10px]') }}
+            </div>
+        </div>
+        <div class="flex items-center gap-1" id="host-filter-pills">
+            <button type="button" data-host-filter="all"
+                class="host-filter-pill px-2.5 py-1 text-xs rounded-full border transition-colors bg-dark-bg-tertiary text-dark-text-muted border-dark-border hover:border-dark-border-hover">
+                All <span class="ml-1 opacity-70">{{ result.discovered_hosts|length }}</span>
+            </button>
+            <button type="button" data-host-filter="new"
+                class="host-filter-pill px-2.5 py-1 text-xs rounded-full border transition-colors bg-green-600/20 text-green-300 border-green-600/40">
+                New <span class="ml-1 opacity-70">{{ ns.new_count }}</span>
+            </button>
+            <button type="button" data-host-filter="monitored"
+                class="host-filter-pill px-2.5 py-1 text-xs rounded-full border transition-colors bg-dark-bg-tertiary text-dark-text-muted border-dark-border hover:border-dark-border-hover">
+                Monitored <span class="ml-1 opacity-70">{{ ns.monitored_count }}</span>
+            </button>
+        </div>
+    </div>
+
+    {# Empty state when filter hides everything #}
+    <div id="host-filter-empty" class="hidden p-6 text-center text-sm text-dark-text-muted">
+        No hosts match this filter.
+    </div>
+
+    <div class="space-y-2" id="discovered-hosts-list">
+        {% for host in sorted_hosts %}
+        {# Recompute all_exist for this host to set data attribute #}
+        {% set h = namespace(all_exist=true) %}
+        {% set check_name = ("ping_" ~ (host.hostname or host.ip)).replace(".", "_") %}
+        {% if check_name not in existing_checks %}{% set h.all_exist = false %}{% endif %}
+        {% if host.open_ports %}
+            {% for port in host.open_ports %}
+                {% if port in [80, 443, 8080, 8443, 8000, 3000, 5000] %}
+                    {% set check_name = ("http_" ~ (host.hostname or host.ip) ~ "_" ~ port|string).replace(".", "_") %}
+                    {% if check_name not in existing_checks %}{% set h.all_exist = false %}{% endif %}
+                {% endif %}
+                {% if port in [22, 2222] %}
+                    {% set check_name = ("ssh_" ~ (host.hostname or host.ip) ~ "_" ~ port|string).replace(".", "_") %}
+                    {% if check_name not in existing_checks %}{% set h.all_exist = false %}{% endif %}
+                {% endif %}
+                {% if port in [3306, 5432, 5433, 27017, 6379, 1433, 1521] %}
+                    {% set check_name = ("db_" ~ (host.hostname or host.ip) ~ "_" ~ port|string).replace(".", "_") %}
+                    {% if check_name not in existing_checks %}{% set h.all_exist = false %}{% endif %}
+                {% endif %}
+            {% endfor %}
+        {% endif %}
+        <div class="flex items-center justify-between p-2 bg-dark-bg-tertiary rounded border border-dark-border hover:border-dark-border-hover transition-colors host-row"
+             data-host-status="{{ 'monitored' if h.all_exist else 'new' }}"
+             data-ip="{{ host.ip }}"
+             data-hostname="{{ host.hostname or '' }}"
+        >
+            <!-- Host Info -->
+            <div class="flex items-center gap-3 flex-1 min-w-0">
+                <span class="text-xs font-mono text-dark-text-primary truncate">
+                    {% if host.hostname %}
+                        {{ host.hostname }} <span class="text-dark-text-muted">({{ host.ip }})</span>
+                    {% else %}
+                        {{ host.ip }}
+                    {% endif %}
+                </span>
+            </div>
+
+            <!-- Service Action Buttons -->
+            <div class="flex items-center gap-1 flex-shrink-0">
+                {# After successful create, dim/disable the clicked button so the user
+                   gets immediate visual feedback. The page's `existing_checks` lookup
+                   will render it as disabled on next reload, making this purely a
+                   client-side nicety. #}
+                {% set on_success_disable = 'hx-on::after-request="if(event.detail.successful){this.classList.add(\'opacity-30\',\'cursor-not-allowed\',\'pointer-events-none\');this.title=\'Check created\'}"' %}
+                {% set quick_create_url = '/jobs/' ~ job.id ~ '/quick-create-check' %}
+                {% set quick_include = "[name='interval'],[name='timeout'],[name='retry_attempts'],[name='agent_id'],[name='tags'],[name='expected_status'],[name='verify_ssl']" %}
+
+                {% if host.open_ports and host.open_ports|length > 0 %}
+                    {# Web ports (80, 443, 8080, 8443, 8000, 3000, 5000) #}
+                    {% for port in host.open_ports %}
+                        {% if port in [80, 443, 8080, 8443, 8000, 3000, 5000] %}
+                        {% set check_name = ("http_" ~ (host.hostname or host.ip) ~ "_" ~ port).replace(".", "_") %}
+                        {% set exists = check_name in existing_checks %}
+                        {% set http_svg %}<span class="w-3.5 h-3.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/globe-alt.svg" %}</span><span class="sr-only">HTTP:{{ port }}</span>{% endset %}
+                        {{ icon_btn(http_svg, color='brand', disabled=exists,
+                                    title=('Check already exists' if exists else 'Create HTTP check for port ' ~ port|string),
+                                    hx_post=quick_create_url, hx_swap='none',
+                                    hx_include=quick_include,
+                                    hx_vals='{"check_type":"http","target":"http://' ~ (host.hostname or host.ip) ~ ':' ~ port|string ~ '","display_name":"' ~ check_name ~ '","port":"' ~ port|string ~ '"}',
+                                    extra_attrs=on_success_disable) }}
+                        {% endif %}
+
+                        {# SSH ports (22, 2222) #}
+                        {% if port in [22, 2222] %}
+                        {% set check_name = ("ssh_" ~ (host.hostname or host.ip) ~ "_" ~ port).replace(".", "_") %}
+                        {% set exists = check_name in existing_checks %}
+                        {% set ssh_svg %}<span class="w-3.5 h-3.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/command-line.svg" %}</span><span class="sr-only">SSH:{{ port }}</span>{% endset %}
+                        {{ icon_btn(ssh_svg, color='purple', disabled=exists,
+                                    title=('Check already exists' if exists else 'Create TCP check for SSH port ' ~ port|string),
+                                    hx_post=quick_create_url, hx_swap='none',
+                                    hx_include=quick_include,
+                                    hx_vals='{"check_type":"tcp","target":"' ~ (host.hostname or host.ip) ~ ':' ~ port|string ~ '","display_name":"' ~ check_name ~ '","port":"' ~ port|string ~ '"}',
+                                    extra_attrs=on_success_disable) }}
+                        {% endif %}
+
+                        {# Database ports (3306, 5432, 27017, 6379, 1433, 1521) #}
+                        {% if port in [3306, 5432, 5433, 27017, 6379, 1433, 1521] %}
+                        {% set check_name = ("db_" ~ (host.hostname or host.ip) ~ "_" ~ port).replace(".", "_") %}
+                        {% set exists = check_name in existing_checks %}
+                        {% set db_svg %}<span class="w-3.5 h-3.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/circle-stack.svg" %}</span><span class="sr-only">DB:{{ port }}</span>{% endset %}
+                        {{ icon_btn(db_svg, color='yellow', disabled=exists,
+                                    title=('Check already exists' if exists else 'Create TCP check for database port ' ~ port|string),
+                                    hx_post=quick_create_url, hx_swap='none',
+                                    hx_include=quick_include,
+                                    hx_vals='{"check_type":"tcp","target":"' ~ (host.hostname or host.ip) ~ ':' ~ port|string ~ '","display_name":"' ~ check_name ~ '","port":"' ~ port|string ~ '"}',
+                                    extra_attrs=on_success_disable) }}
+                        {% endif %}
+                    {% endfor %}
+                {% endif %}
+
+                {# Always show ping option #}
+                {% set check_name = ("ping_" ~ (host.hostname or host.ip)).replace(".", "_") %}
+                {% set exists = check_name in existing_checks %}
+                {% set ping_svg %}<span class="w-3.5 h-3.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/chart-bar.svg" %}</span><span class="sr-only">Ping</span>{% endset %}
+                {{ icon_btn(ping_svg, color='green', disabled=exists,
+                            title=('Check already exists' if exists else 'Create ping check'),
+                            hx_post=quick_create_url, hx_swap='none',
+                            hx_include=quick_include,
+                            hx_vals='{"check_type":"ping","target":"' ~ (host.hostname or host.ip) ~ '","display_name":"' ~ check_name ~ '"}',
+                            extra_attrs=on_success_disable) }}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- Host filter JS -->
+<script>
+(function() {
+    const card = document.getElementById('discovered-hosts-card');
+    if (!card) return;
+    const pills = card.querySelectorAll('.host-filter-pill');
+    const rows = card.querySelectorAll('.host-row');
+    const empty = document.getElementById('host-filter-empty');
+    const activeClasses = { all: 'bg-brand-600/20 text-brand-300 border-brand-600/40', new: 'bg-green-600/20 text-green-300 border-green-600/40', monitored: 'bg-blue-600/20 text-blue-300 border-blue-600/40' };
+    const inactiveClass = 'bg-dark-bg-tertiary text-dark-text-muted border-dark-border hover:border-dark-border-hover';
+
+    function applyFilter(filter) {
+        let visible = 0;
+        rows.forEach(function(row) {
+            const status = row.getAttribute('data-host-status');
+            const show = filter === 'all' || status === filter;
+            row.style.display = show ? '' : 'none';
+            if (show) visible++;
+        });
+        if (empty) empty.classList.toggle('hidden', visible > 0);
+        pills.forEach(function(pill) {
+            const f = pill.getAttribute('data-host-filter');
+            pill.className = 'host-filter-pill px-2.5 py-1 text-xs rounded-full border transition-colors ' + (f === filter ? activeClasses[f] : inactiveClass);
+        });
+    }
+
+    pills.forEach(function(pill) {
+        pill.addEventListener('click', function() {
+            applyFilter(this.getAttribute('data-host-filter'));
+        });
+    });
+
+    // Default to "new" filter if there are new hosts, otherwise "all"
+    applyFilter(card.querySelectorAll('.host-row[data-host-status="new"]').length > 0 ? 'new' : 'all');
+
+    // --- Sort logic ---
+    var sortBtns = card.querySelectorAll('.host-sort-btn');
+    var list = document.getElementById('discovered-hosts-list');
+    var currentSort = 'ip';
+    var currentDir = 'asc';
+    var activeSort = 'host-sort-btn p-1 text-[10px] btn-secondary btn-sm !bg-brand-600/20 !text-brand-300 !border-brand-600/40';
+    var inactiveSort = 'host-sort-btn p-1 text-[10px] btn-secondary btn-sm';
+
+    function compareIP(a, b) {
+        var pa = a.getAttribute('data-ip').split('.').map(Number);
+        var pb = b.getAttribute('data-ip').split('.').map(Number);
+        for (var i = 0; i < 4; i++) {
+            if (pa[i] !== pb[i]) return pa[i] - pb[i];
+        }
+        return 0;
+    }
+
+    function compareHostname(a, b) {
+        var ha = (a.getAttribute('data-hostname') || a.getAttribute('data-ip')).toLowerCase();
+        var hb = (b.getAttribute('data-hostname') || b.getAttribute('data-ip')).toLowerCase();
+        return ha.localeCompare(hb);
+    }
+
+    function applySort(field, dir) {
+        var rowArr = Array.from(rows);
+        var cmp = field === 'ip' ? compareIP : compareHostname;
+        rowArr.sort(function(a, b) { return dir === 'asc' ? cmp(a, b) : cmp(b, a); });
+        rowArr.forEach(function(r) { list.appendChild(r); });
+
+        // Update button styling & arrows
+        sortBtns.forEach(function(btn) {
+            var f = btn.getAttribute('data-host-sort');
+            btn.className = (f === field) ? activeSort : inactiveSort;
+            var arrow = btn.querySelector('.sort-arrow');
+            if (f === field) {
+                arrow.classList.remove('hidden');
+                arrow.style.transform = dir === 'asc' ? 'rotate(180deg)' : '';
+            } else {
+                arrow.classList.add('hidden');
+                arrow.style.transform = '';
+            }
+        });
+    }
+
+    sortBtns.forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var field = this.getAttribute('data-host-sort');
+            if (field === currentSort) {
+                currentDir = currentDir === 'asc' ? 'desc' : 'asc';
+            } else {
+                currentSort = field;
+                currentDir = 'asc';
+            }
+            applySort(currentSort, currentDir);
+        });
+    });
+
+    // Default sort: IP ascending (already sorted server-side, just set arrow state)
+    applySort('ip', 'asc');
+})();
+</script>
+{% endif %}
+
+<!-- Chunk Performance (if multi-chunk scan) -->
+{% if result.chunk_metrics and result.chunk_metrics|length > 1 %}
+<div class="card p-5">
+    <h3 class="text-sm font-semibold uppercase tracking-wide text-dark-text-secondary mb-4">Chunk Performance</h3>
+
+    <!-- Split chunks into with/without findings -->
+    {% set chunks_with_findings = result.chunk_metrics | selectattr('hosts_found', 'gt', 0) | list %}
+    {% set chunks_without_findings = result.chunk_metrics | selectattr('hosts_found', 'equalto', 0) | list %}
+
+    <!-- Chunks with findings (always visible) -->
+    {% if chunks_with_findings %}
+    <div class="mb-4">
+        <p class="text-xs text-green-400 mb-2">✓ Subnets with hosts found ({{ chunks_with_findings|length }})</p>
+        <div class="overflow-x-auto">
+            {% call data_table([
+                {'label': 'Subnet'},
+                {'label': 'Duration', 'align': 'right'},
+                {'label': 'Scanned', 'align': 'right'},
+                {'label': 'Found', 'align': 'right'},
+                {'label': '% Responding', 'align': 'right'},
+            ]) %}
+                    {% for chunk in chunks_with_findings %}
+                    <tr>
+                        <td class="font-mono">{{ chunk.subnet }}</td>
+                        <td class="text-right font-mono">{{ "%.2f"|format(chunk.duration_seconds) }}s</td>
+                        <td class="text-right">{{ chunk.hosts_scanned }}</td>
+                        <td class="text-right text-green-400 font-medium">{{ chunk.hosts_found }}</td>
+                        <td class="text-right">
+                            {{ "%.1f"|format((chunk.hosts_found / chunk.hosts_scanned) * 100) }}%
+                        </td>
+                    </tr>
+                    {% endfor %}
+            {% endcall %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Chunks without findings (collapsed) -->
+    {% if chunks_without_findings %}
+    <details class="opacity-50">
+        <summary class="cursor-pointer text-xs text-dark-text-muted mb-2">
+            ⊘ Subnets with no hosts found ({{ chunks_without_findings|length }}) - click to expand
+        </summary>
+        <div class="overflow-x-auto mt-2">
+            {% call data_table([
+                {'label': 'Subnet'},
+                {'label': 'Duration', 'align': 'right'},
+                {'label': 'Scanned', 'align': 'right'},
+                {'label': 'Found', 'align': 'right'},
+                {'label': '% Responding', 'align': 'right'},
+            ]) %}
+                    {% for chunk in chunks_without_findings %}
+                    <tr>
+                        <td class="font-mono">{{ chunk.subnet }}</td>
+                        <td class="text-right font-mono">{{ "%.2f"|format(chunk.duration_seconds) }}s</td>
+                        <td class="text-right">{{ chunk.hosts_scanned }}</td>
+                        <td class="text-right text-dark-text-muted">0</td>
+                        <td class="text-right">0.0%</td>
+                    </tr>
+                    {% endfor %}
+            {% endcall %}
+        </div>
+    </details>
+    {% endif %}
+</div>
+{% endif %}
+
+<!-- All Discovered Hosts (Raw Data) -->
+{% if result.discovered_hosts and result.discovered_hosts|length > 0 %}
+<div class="card p-5">
+    <details>
+        <summary class="cursor-pointer text-sm font-semibold uppercase tracking-wide text-dark-text-secondary mb-4">
+            All Discovered Hosts ({{ result.discovered_hosts|length }})
+        </summary>
+        <div class="overflow-x-auto mt-4">
+            {% call data_table([
+                {'label': 'IP Address'},
+                {'label': 'Hostname'},
+                {'label': 'Status'},
+                {'label': 'Open Ports'},
+            ]) %}
+                    {% for host in result.discovered_hosts %}
+                    <tr>
+                        <td class="font-mono">{{ host.ip }}</td>
+                        <td class="font-mono text-xs text-dark-text-muted">{{ host.hostname or '-' }}</td>
+                        <td>
+                            {% if host.responds %}
+                            <span class="text-green-400">✓ Up</span>
+                            {% else %}
+                            <span class="text-dark-text-muted">✗ Down</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if host.open_ports and host.open_ports|length > 0 %}
+                            <div class="flex flex-wrap gap-1">
+                                {% for port in host.open_ports %}
+                                <code class="text-xs bg-dark-bg-primary px-1.5 py-0.5 rounded">{{ port }}</code>
+                                {% endfor %}
+                            </div>
+                            {% else %}
+                            <span class="text-dark-text-muted">-</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+            {% endcall %}
+        </div>
+    </details>
+</div>
+{% endif %}

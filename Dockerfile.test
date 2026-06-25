@@ -1,0 +1,40 @@
+# Backend test image — built fresh from CURRENT on-disk source, fully
+# independent of the :dev image and the registry. `make test` rebuilds it every
+# run (the `test-build` prerequisite), so the DB-integration suite is a
+# self-contained CI gate — the same principle `make arch` applies via the lint
+# image (LUXSWIRL-175). The architecture / static guards still run via `make
+# arch`; this image only runs the DB-integration suite.
+#
+# Build context = repo root: `docker build -f Dockerfile.test .`
+FROM python:3.14-slim
+
+WORKDIR /app
+RUN pip install --no-cache-dir poetry==1.8.2 && poetry config virtualenvs.create false
+
+# Runtime deps first (incl. asyncpg + the app's full runtime stack) — the same
+# `--only main` set the runtime image installs, cached on lock changes.
+COPY apps/backend/pyproject.toml apps/backend/poetry.lock* /app/
+RUN poetry install --only main --no-root
+
+# Test toolchain (pinned; not part of the runtime dependency set).
+RUN pip install --no-cache-dir \
+        pytest==9.0.3 \
+        pytest-asyncio==1.3.0 \
+        pytest-cov==7.1.0 \
+        faker==40.0.0 \
+        hypothesis==6.122.3 \
+        mutmut==3.2.3 \
+        import-linter==2.11
+
+# Source + tests last so only these layers rebuild on a code change. shared/ is
+# vendored alongside app/ so `import shared.*` resolves; pyproject carries the
+# pytest config + importlinter contracts.
+COPY apps/backend/pyproject.toml /app/pyproject.toml
+COPY apps/backend/app /app/app
+COPY apps/shared /app/shared
+COPY apps/backend/tests /app/tests
+# Alembic migrations + config so `make migration-check` can run
+# `alembic upgrade head && alembic check` against the test DB (LUXSWIRL-178).
+COPY apps/backend/alembic /app/alembic
+COPY apps/backend/alembic.ini /app/alembic.ini
+ENV PYTHONPATH=/app

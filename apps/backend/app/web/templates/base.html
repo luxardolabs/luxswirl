@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="LuxSwirl - High-performance monitoring and observability platform">
+    <title>{% block title %}{{ page_title|default('LuxSwirl Monitoring') }}{% endblock %}</title>
+
+    <!-- Tailwind CSS -->
+    <link rel="stylesheet" href="/static/css/output.css?v={{ static_version }}">
+    <link rel="stylesheet" href="/static/css/spinner.css?v={{ static_version }}">
+
+    <!-- Fonts - Self-hosted -->
+    <link rel="stylesheet" href="/static/fonts/inter.css?v={{ static_version }}">
+
+    <!-- HTMX - Self-hosted -->
+    <script src="/static/js/vendor/htmx.min.js?v={{ static_version }}"></script>
+
+    <!-- Alpine.js - Self-hosted (powers panel transitions) -->
+    <script defer src="/static/js/vendor/alpine.min.js?v={{ static_version }}"></script>
+
+    <!-- Chart.js - Self-hosted -->
+    <script src="/static/js/vendor/chart.umd.js?v={{ static_version }}"></script>
+
+    <!-- Custom JS - ES6 Modules -->
+    <script type="module">
+        import { init as initApp } from '/static/js/app.js';
+        import { init as initCheckDetail } from '/static/js/check-detail.js';
+        import { init as initAlertsForm } from '/static/js/alerts-form.js';
+        import { init as initCheckForm } from '/static/js/check-form.js';
+        import { init as initCheckAssignmentSelector } from '/static/js/check-assignment-selector.js';
+        import { init as initAgentDetail } from '/static/js/agent-detail.js';
+        import { init as initDatabaseHealth } from '/static/js/database-health.js';
+        import { init as initSettings } from '/static/js/settings.js';
+        import { init as initRegistrationKeys } from '/static/js/registration-keys.js';
+        import { init as initAgents } from '/static/js/agents.js';
+        import { init as initNotifications } from '/static/js/notifications.js';
+        import { init as initImportExport } from '/static/js/import-export.js';
+        import { init as initJobs } from '/static/js/jobs.js';
+        import { init as initStatusPages } from '/static/js/status-pages.js';
+        import { init as initDependentsManager } from '/static/js/dependents-manager.js';
+
+        // Initialize modules when DOM is ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => {
+                initApp();
+                initCheckDetail();
+                initAlertsForm();
+                initCheckForm();
+                initCheckAssignmentSelector();
+                initAgentDetail();
+                initDatabaseHealth();
+                initSettings();
+                initRegistrationKeys();
+                initAgents();
+                initNotifications();
+                initImportExport();
+                initJobs();
+                initStatusPages();
+                initDependentsManager();
+            });
+        } else {
+            initApp();
+            initCheckDetail();
+            initAlertsForm();
+            initCheckForm();
+            initCheckAssignmentSelector();
+            initAgentDetail();
+            initDatabaseHealth();
+            initSettings();
+            initRegistrationKeys();
+            initAgents();
+            initNotifications();
+            initImportExport();
+            initJobs();
+            initStatusPages();
+            initDependentsManager();
+        }
+    </script>
+
+    {% block head %}{% endblock %}
+</head>
+<body class="font-sans antialiased">
+    <div class="flex h-screen overflow-hidden bg-dark-bg-primary">
+        <!-- Sidebar -->
+        <aside id="sidebar" class="sidebar sidebar-expanded transition-all duration-300">
+            {% include 'partials/sidebar.html' %}
+        </aside>
+
+        <!-- Main content wrapper - will adjust based on sidebar width -->
+        <div id="main-content" class="flex flex-col overflow-hidden transition-all duration-300" style="margin-left: 16rem; width: calc(100% - 16rem);">
+            <!-- Page content -->
+            <main class="flex-1 overflow-y-auto scrollbar-thin">
+                <div class="px-6 py-8">
+                    {% block content %}{% endblock %}
+                </div>
+            </main>
+        </div>
+
+        <!-- Panel container — slide-over panels render their own self-contained
+             overlay (backdrop + slide pane) into this div. Matches the pattern in
+             luxwx / luxcapital / luxhelix. -->
+        <div id="panel-container"></div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toast-container" class="fixed top-4 right-4 z-50 space-y-2"></div>
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>

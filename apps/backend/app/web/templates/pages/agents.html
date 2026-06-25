@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+{% from 'macros/agents.html' import agent_row %}
+{% from 'macros/page.html' import page_header %}
+{% from 'macros/buttons.html' import btn_approve, btn_reject, confirm_action_btn %}
+{%- set ICO_X %}<span class="w-3.5 h-3.5 mr-1.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/x-mark.svg" %}</span>{% endset %}
+{% from 'macros/tables.html' import pagination_controls %}
+
+{% block content %}
+<div id="agents-content">
+
+{% set actions_html %}
+<input
+    type="text"
+    name="search"
+    placeholder="Search agents..."
+    class="input text-sm py-1 px-2 w-48"
+    value="{{ search or '' }}"
+    hx-get="/agents"
+    hx-target="#agents-content"
+    hx-select="#agents-content"
+    hx-trigger="keyup changed delay:500ms"
+    hx-include="[name='hours'], [name='active_only']"
+>
+<label for="agents-hours" class="text-xs text-dark-text-secondary uppercase tracking-wider">Time Range:</label>
+<select
+    name="hours"
+    id="agents-hours"
+    class="text-sm py-1 px-2 bg-dark-bg-secondary border border-dark-border rounded text-dark-text-primary focus:outline-none focus:ring-2 focus:ring-brand-500"
+    hx-get="/agents"
+    hx-target="#agents-content"
+    hx-select="#agents-content"
+    hx-trigger="change"
+    hx-include="[name='active_only'], [name='search']"
+>
+    <option value="1" {% if hours == 1 %}selected{% endif %}>1 Hour</option>
+    <option value="4" {% if hours == 4 %}selected{% endif %}>4 Hours</option>
+    <option value="8" {% if hours == 8 %}selected{% endif %}>8 Hours</option>
+    <option value="24" {% if hours == 24 %}selected{% endif %}>24 Hours</option>
+    <option value="168" {% if hours == 168 %}selected{% endif %}>7 Days</option>
+</select>
+<label class="flex items-center gap-2 text-sm text-dark-text-secondary">
+    <input
+        type="checkbox"
+        name="active_only"
+        class="rounded"
+        {% if active_only %}checked{% endif %}
+        hx-get="/agents"
+        hx-target="#agents-content"
+        hx-select="#agents-content"
+        hx-trigger="change"
+        hx-include="[name='hours'], [name='search']"
+    >
+    Active only
+</label>
+{% endset %}
+
+{{ page_header(
+    title='Monitoring Agents',
+    description=total|string + ' total agents',
+    actions=actions_html
+) }}
+
+<!-- Pending Agents Section -->
+{% if pending_agents %}
+<div id="pending-section" class="mb-6">
+    <div class="flex items-center justify-between mb-4">
+        <h2 class="text-lg font-semibold text-yellow-400 flex items-center gap-2">
+            <span class="w-5 h-5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/exclamation-triangle.svg" %}</span>
+            Pending Approval (<span id="pending-count">{{ pending_agents|length }}</span>)
+        </h2>
+    </div>
+    <div class="space-y-3">
+        {% for agent in pending_agents %}
+        <div id="pending-agent-{{ agent.id }}" class="card bg-yellow-500/5 border-yellow-500/30 p-4">
+            <div class="flex items-center justify-between">
+                <div class="flex-1">
+                    <div class="flex items-center gap-3 mb-2">
+                        <h3 class="text-base font-semibold text-dark-text-primary font-mono">
+                            {{ agent.agent_name }}
+                        </h3>
+                        <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-yellow-600/20 text-yellow-300 border border-yellow-600/50">
+                            Pending
+                        </span>
+                    </div>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                        <div>
+                            <span class="text-dark-text-muted">First Seen:</span>
+                            <span class="text-dark-text-primary ml-1">{{ agent.first_seen | format_datetime('%Y-%m-%d %I:%M%p') }}</span>
+                        </div>
+                        {% if agent.hostname %}
+                        <div>
+                            <span class="text-dark-text-muted">Hostname:</span>
+                            <span class="text-dark-text-primary ml-1 font-mono">{{ agent.hostname }}</span>
+                        </div>
+                        {% endif %}
+                        {% if agent.ip_address %}
+                        <div>
+                            <span class="text-dark-text-muted">IP:</span>
+                            <span class="text-dark-text-primary ml-1 font-mono">{{ agent.ip_address }}</span>
+                        </div>
+                        {% endif %}
+                        {% if agent.version %}
+                        <div>
+                            <span class="text-dark-text-muted">Version:</span>
+                            <span class="text-dark-text-primary ml-1">{{ agent.version }}</span>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="flex items-center gap-2 ml-4">
+                    <!-- Approve -->
+                    <form
+                        hx-post="/agents/{{ agent.id }}/approve-web"
+                        hx-target="#pending-agent-{{ agent.id }}"
+                        hx-swap="outerHTML swap:0.5s"
+                        class="inline"
+                    >
+                        {{ btn_approve(extra_attrs='title="Approve agent"') }}
+                    </form>
+                    {{ confirm_action_btn(icon_svg=ICO_X, label='Reject', color='red',
+                        hx_post='/agents/' ~ agent.id ~ '/reject-web',
+                        hx_target='#pending-agent-' ~ agent.id|string,
+                        hx_swap='outerHTML swap:0.5s',
+                        title='Reject agent') }}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+{{ pagination_controls(pagination, '/agents') }}
+
+<!-- Active Agents Section -->
+{% if agent_data %}
+<div class="space-y-4">
+    {% for item in agent_data %}
+        {{ agent_row(item, now_timestamp, agent_stale_threshold) }}
+    {% endfor %}
+</div>
+{% else %}
+<div class="card p-12 text-center">
+    <span class="w-16 h-16 mx-auto mb-4 text-dark-text-muted opacity-50 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/server.svg" %}</span>
+    <p class="text-lg font-medium text-dark-text-primary mb-2">No agents found</p>
+    <p class="text-sm text-dark-text-muted">Start an agent to begin monitoring</p>
+</div>
+{% endif %}
+
+<!-- Pagination -->
+{{ pagination_controls(pagination, '/agents') }}
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<!-- Agent functionality initialized in base.html -->
+<script type="module">
+import { init } from '/static/js/agent-sparklines.js';
+init();
+</script>
+
+<style>
+/* Sparkline smooth transitions */
+.sparkline-dot {
+    transition: r 0.2s ease;
+}
+</style>
+{% endblock %}

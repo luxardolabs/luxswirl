@@ -1,0 +1,102 @@
+{% from 'macros/buttons.html' import btn_download, btn_upload %}
+{% from 'macros/panels.html' import panel_wrapper, panel_header, panel_content %}
+
+{% call panel_wrapper() %}
+    {{ panel_header('Import / Export Checks', subtitle='Agent: ' ~ agent_id ~ ' • ' ~ check_count ~ ' checks') }}
+    {% call panel_content() %}
+    <div class="space-y-8">
+        <!-- Export Section -->
+        <div class="card p-6">
+            <div class="flex items-start gap-4">
+                <div class="p-3 bg-blue-500/10 rounded-lg">
+                    <span class="w-6 h-6 text-blue-400 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/arrow-down-tray.svg" %}</span>
+                </div>
+                <div class="flex-1">
+                    <h3 class="text-lg font-semibold text-dark-text-primary mb-2">Export Checks</h3>
+                    <p class="text-sm text-dark-text-muted mb-4">
+                        Download all {{ check_count }} checks for this agent as a JSON file.
+                    </p>
+                    {{ btn_download(label='Download JSON', href='/agents/' ~ agent_id ~ '/export', extra_classes='inline-flex items-center', extra_attrs='download="' ~ agent_id ~ '-checks.json"') }}
+                </div>
+            </div>
+        </div>
+
+        <!-- Import Section -->
+        <div class="card p-6">
+            <div class="flex items-start gap-4 mb-6">
+                <div class="p-3 bg-green-500/10 rounded-lg">
+                    <span class="w-6 h-6 text-green-400 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/arrow-up-tray.svg" %}</span>
+                </div>
+                <div class="flex-1">
+                    <h3 class="text-lg font-semibold text-dark-text-primary mb-2">Import Checks</h3>
+                    <p class="text-sm text-dark-text-muted">
+                        Upload a JSON file to bulk import checks for this agent.
+                    </p>
+                </div>
+            </div>
+
+            <form
+                id="import-form"
+                hx-post="/agents/{{ agent_id }}/import"
+                hx-encoding="multipart/form-data"
+                hx-target="#import-result"
+                hx-swap="innerHTML"
+                class="space-y-4"
+            >
+                <!-- Import Mode -->
+                <div>
+                    <label class="label mb-3">Import Mode</label>
+                    <div class="space-y-2">
+                        <label class="flex items-center p-3 border border-dark-border rounded-lg hover:bg-dark-bg-tertiary cursor-pointer transition-colors">
+                            <input type="radio" name="mode" value="merge" checked class="w-4 h-4 text-brand-600 focus:ring-brand-500 focus:ring-2">
+                            <div class="ml-3">
+                                <div class="text-sm font-medium text-dark-text-primary">Merge</div>
+                                <div class="text-xs text-dark-text-muted">Add new checks, skip existing ones</div>
+                            </div>
+                        </label>
+                        <label class="flex items-center p-3 border border-dark-border rounded-lg hover:bg-dark-bg-tertiary cursor-pointer transition-colors">
+                            <input type="radio" name="mode" value="replace" class="w-4 h-4 text-brand-600 focus:ring-brand-500 focus:ring-2">
+                            <div class="ml-3">
+                                <div class="text-sm font-medium text-dark-text-primary">Replace</div>
+                                <div class="text-xs text-dark-text-muted">Update existing checks with new values</div>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- File Upload -->
+                <div>
+                    <label class="label mb-2">Upload JSON File</label>
+                    <div
+                        id="drop-zone"
+                        class="border-2 border-dashed border-dark-border rounded-lg p-8 text-center hover:border-brand-500 hover:bg-dark-bg-tertiary/50 transition-colors cursor-pointer"
+                    >
+                        <span class="w-12 h-12 mx-auto mb-4 text-dark-text-muted inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/cloud-arrow-up.svg" %}</span>
+                        <p class="text-sm text-dark-text-primary font-medium mb-1">
+                            Drag and drop your JSON file here
+                        </p>
+                        <p class="text-xs text-dark-text-muted">
+                            or click to browse
+                        </p>
+                        <p id="file-name" class="text-sm text-brand-400 mt-3 font-medium hidden"></p>
+                    </div>
+                    <input
+                        type="file"
+                        id="file-input"
+                        name="file"
+                        accept=".json"
+                        class="hidden"
+                    >
+                </div>
+
+
+                <!-- Import Button -->
+                {{ btn_upload(label='Import Checks', extra_classes='w-full') }}
+            </form>
+
+            <!-- Import Result -->
+            <div id="import-result" class="mt-6"></div>
+        </div>
+    </div>
+    {% endcall %}
+{% endcall %}

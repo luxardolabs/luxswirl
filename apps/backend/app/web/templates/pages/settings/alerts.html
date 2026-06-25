@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% from 'macros/settings.html' import settings_nav, section_header %}
+{% from 'macros/page.html' import page_header %}
+{% from 'macros/buttons.html' import delete_icon_button, btn_create, btn_disable, btn_enable, btn_edit_text, text_btn %}
+{% from 'macros/tables.html' import pagination_controls %}
+{% from 'macros/badges.html' import badge %}
+{% from 'macros/filters.html' import filter_card, filter_select, filter_per_page %}
+
+{% block content %}
+{{ page_header(
+    title='Settings',
+    description='Configure when and how notifications are triggered'
+) }}
+
+{{ settings_nav('alerts', current_user) }}
+
+<!-- Alerts Content -->
+<div class="space-y-6">
+    <!-- Header with action button -->
+    <div class="flex items-center justify-between">
+        <div>
+            {{ section_header('Alert Rules', 'Configure when and how notifications are triggered • ' ~ total ~ ' total alerts') }}
+        </div>
+        {{ btn_create(label='New Alert', hx_get='/alerts/create-form', hx_target='#panel-container', hx_swap='innerHTML') }}
+    </div>
+
+    <!-- Filters -->
+    {% call filter_card('/settings/alerts', layout='grid', grid_classes='grid-cols-1 md:grid-cols-3') %}
+        {% call filter_select('is_enabled', 'Status') %}
+            <option value="" {% if filters.is_enabled is none %}selected{% endif %}>All</option>
+            <option value="true" {% if filters.is_enabled == true %}selected{% endif %}>Enabled</option>
+            <option value="false" {% if filters.is_enabled == false %}selected{% endif %}>Disabled</option>
+        {% endcall %}
+
+        {% call filter_select('is_global', 'Scope') %}
+            <option value="" {% if filters.is_global is none %}selected{% endif %}>All</option>
+            <option value="true" {% if filters.is_global == true %}selected{% endif %}>Global</option>
+            <option value="false" {% if filters.is_global == false %}selected{% endif %}>Specific Checks</option>
+        {% endcall %}
+
+        {{ filter_per_page(per_page, options=[10, 25, 50, 100]) }}
+    {% endcall %}
+
+    {{ pagination_controls(pagination, '/settings/alerts') }}
+
+    <!-- Alert List -->
+    {% if alerts %}
+    <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-3">
+        {% for alert in alerts %}
+        <div id="alert-{{ alert.id }}" class="card p-4 hover:border-brand-500/30 transition-all">
+            <div class="flex items-start justify-between mb-3">
+                <div class="flex items-start gap-3 flex-1">
+                    <!-- Alert Icon -->
+                    <div class="w-10 h-10 rounded-lg bg-orange-500/10 flex items-center justify-center flex-shrink-0">
+                        <span class="w-6 h-6 text-orange-500 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/bell.svg" %}</span>
+                    </div>
+
+                    <div class="flex-1 min-w-0">
+                        <h3 class="font-semibold text-dark-text-primary truncate">{{ alert.name }}</h3>
+                        {% if alert.description %}
+                        <p class="text-xs text-dark-text-muted mt-1 line-clamp-2">{{ alert.description }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Status Badge -->
+                {{ badge('Enabled', 'success') if alert.is_enabled else badge('Disabled', 'neutral') }}
+            </div>
+
+            <!-- Alert Details -->
+            <div class="space-y-2 mb-4 text-sm">
+                <!-- Trigger Type -->
+                <div class="flex items-center justify-between">
+                    <span class="text-dark-text-muted">Trigger:</span>
+                    {{ badge(alert.trigger_type.replace('_', ' ').title(), 'info') }}
+                </div>
+
+                <!-- Scope -->
+                <div class="flex items-center justify-between">
+                    <span class="text-dark-text-muted">Scope:</span>
+                    {% if alert.is_global %}
+                    <div class="flex items-center gap-1.5">
+                        <span class="w-4 h-4 text-brand-500 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/globe-americas.svg" %}</span>
+                        <span class="text-sm text-brand-500 font-medium">Global</span>
+                    </div>
+                    {% else %}
+                    <div class="flex items-center gap-1.5">
+                        <span class="w-4 h-4 text-dark-text-muted inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/clipboard.svg" %}</span>
+                        <span class="text-sm text-dark-text-muted">Specific</span>
+                    </div>
+                    {% endif %}
+                </div>
+
+                <!-- Notifications -->
+                <div class="flex items-center justify-between">
+                    <span class="text-dark-text-muted">Providers:</span>
+                    <span class="text-sm text-dark-text-primary">{{ alert.notification_provider_count }}</span>
+                </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="flex items-center gap-2 pt-3 border-t border-dark-border">
+                {% if alert.is_enabled %}
+                    {{ btn_disable(extra_classes='flex-1', extra_attrs='hx-post="/alerts/' ~ alert.id ~ '/toggle" hx-swap="none" title="Disable"') }}
+                {% else %}
+                    {{ btn_enable(extra_classes='flex-1', extra_attrs='hx-post="/alerts/' ~ alert.id ~ '/toggle" hx-swap="none" title="Enable"') }}
+                {% endif %}
+                {{ btn_edit_text(extra_classes='flex-1', hx_get='/alerts/' ~ alert.id ~ '/edit-form', hx_target='#panel-container', hx_swap='innerHTML') }}
+                {{ delete_icon_button(delete_url='/alerts/' ~ alert.id, target_id='alert-' ~ alert.id) }}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Pagination -->
+    {{ pagination_controls(pagination, '/settings/alerts') }}
+
+    {% else %}
+    <!-- Empty State -->
+    <div class="card p-12 text-center">
+        <span class="w-16 h-16 mx-auto mb-4 text-dark-text-muted opacity-50 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/bell.svg" %}</span>
+        <h3 class="text-lg font-semibold mb-2">No alerts configured yet</h3>
+        <p class="text-dark-text-muted mb-4">
+            Create your first alert rule to receive notifications when checks fail
+        </p>
+        {% set bell_svg %}<span class="w-4 h-4 mr-1.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/bell.svg" %}</span>{% endset %}
+        {{ text_btn(bell_svg, 'Create Your First Alert', style='primary', hx_get='/alerts/create-form', hx_target='#panel-container', hx_swap='innerHTML') }}
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

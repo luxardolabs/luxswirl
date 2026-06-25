@@ -1,0 +1,8 @@
+{# Toggle button for enabling/disabling a check.
+   Vars: check_id (UUID), enabled (bool). #}
+{% from 'macros/buttons.html' import toggle_switch %}
+{{ toggle_switch(enabled, size='sm',
+                 hx_post='/checks/' ~ check_id ~ '/toggle',
+                 hx_trigger='click',
+                 hx_swap='outerHTML',
+                 title=('Disable check' if enabled else 'Enable check')) }}

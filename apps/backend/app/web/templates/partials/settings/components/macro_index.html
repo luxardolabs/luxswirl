@@ -1,0 +1,72 @@
+{% from 'macros/tables.html' import data_table %}
+{# ═══════════════════════════════════════════════════════════════════════
+   MACRO INDEX
+   ═══════════════════════════════════════════════════════════════════════ #}
+<section>
+    <h2 class="text-lg font-semibold text-dark-text-primary mb-1">Macro Index</h2>
+    <p class="text-sm text-dark-text-muted mb-4">All available macro files and their exports.</p>
+
+    <div class="card overflow-hidden">
+        {% call data_table([
+            {'label': 'File'},
+            {'label': 'Macros'},
+            {'label': 'Purpose'},
+        ]) %}
+                <tr>
+                    <td class="font-mono text-xs text-brand-400">macros/badges.html</td>
+                    <td class="text-xs text-dark-text-secondary">badge, tag, status_badge, category_badge, status_dot, status_pip, role_badge, check_type_badge</td>
+                    <td class="text-xs text-dark-text-muted">Semantic badges, metadata tags, and status indicators. badge() and tag() support extra_classes param. status_pip() for tiny inline check status dots.</td>
+                </tr>
+                <tr>
+                    <td class="font-mono text-xs text-brand-400">macros/buttons.html</td>
+                    <td class="text-xs text-dark-text-secondary">icon_btn, icon_view, icon_edit, icon_run, icon_history, icon_reset, icon_toggle_on, icon_toggle_off, icon_delete, icon_cancel, text_btn, btn_save, btn_create, btn_delete_text, btn_cancel_text, btn_approve, btn_reject, btn_pause, btn_resume, btn_disable, btn_enable, btn_copy, btn_download, btn_upload, btn_clone, btn_external, btn_password, btn_regenerate, btn_revoke, btn_back, btn_refresh, btn_filter, btn_signin, btn_view_text, btn_edit_text, btn_prev, btn_next, delete_icon_button, cancel_icon_button</td>
+                    <td class="text-xs text-dark-text-muted">Icon square buttons (icon_*), text buttons with icons (btn_*), pagination (btn_prev/btn_next), double-click confirmation (delete/cancel_icon_button). icon_btn/icon_edit support href. text_btn is the base for all labeled buttons.</td>
+                </tr>
+                <tr>
+                    <td class="font-mono text-xs text-brand-400">macros/cards.html</td>
+                    <td class="text-xs text-dark-text-secondary">stat_card</td>
+                    <td class="text-xs text-dark-text-muted">Dashboard statistics cards</td>
+                </tr>
+                <tr>
+                    <td class="font-mono text-xs text-brand-400">macros/page.html</td>
+                    <td class="text-xs text-dark-text-secondary">page_header</td>
+                    <td class="text-xs text-dark-text-muted">Consistent page title structure</td>
+                </tr>
+                <tr>
+                    <td class="font-mono text-xs text-brand-400">macros/status.html</td>
+                    <td class="text-xs text-dark-text-secondary">status_badge, check_type_icon, status_row_compressed</td>
+                    <td class="text-xs text-dark-text-muted">Check status and dashboard rows</td>
+                </tr>
+                <tr>
+                    <td class="font-mono text-xs text-brand-400">macros/jobs.html</td>
+                    <td class="text-xs text-dark-text-secondary">job_status_badge, job_type_icon, priority_indicator</td>
+                    <td class="text-xs text-dark-text-muted">Job queue badges and icons</td>
+                </tr>
+                <tr>
+                    <td class="font-mono text-xs text-brand-400">macros/charts.html</td>
+                    <td class="text-xs text-dark-text-secondary">latency_chart</td>
+                    <td class="text-xs text-dark-text-muted">SVG latency chart with tooltips</td>
+                </tr>
+                <tr>
+                    <td class="font-mono text-xs text-brand-400">macros/agents.html</td>
+                    <td class="text-xs text-dark-text-secondary">agent_row, sparkline</td>
+                    <td class="text-xs text-dark-text-muted">Agent cards with sparkline charts</td>
+                </tr>
+                <tr>
+                    <td class="font-mono text-xs text-brand-400">macros/settings.html</td>
+                    <td class="text-xs text-dark-text-secondary">settings_nav, section_header, settings_category_card</td>
+                    <td class="text-xs text-dark-text-muted">Settings page navigation and layout</td>
+                </tr>
+                <tr>
+                    <td class="font-mono text-xs text-brand-400">macros/filters.html</td>
+                    <td class="text-xs text-dark-text-secondary">filter_card, filter_select, filter_search, filter_per_page</td>
+                    <td class="text-xs text-dark-text-muted">Standardized filter layouts with HTMX auto-navigation. filter_card wraps filters (flex or grid) with hx-get/hx-trigger/hx-push-url for zero-JS filtering. filter_select/filter_search render labeled inputs, filter_per_page is pre-configured.</td>
+                </tr>
+                <tr>
+                    <td class="font-mono text-xs text-brand-400">macros/form_fields.html</td>
+                    <td class="text-xs text-dark-text-secondary">render_field_from_schema</td>
+                    <td class="text-xs text-dark-text-muted">Dynamic form field rendering</td>
+                </tr>
+        {% endcall %}
+    </div>
+</section>

@@ -1,0 +1,47 @@
+{% from 'macros/badges.html' import badge %}
+{% from 'macros/buttons.html' import btn_save, btn_cancel_text %}
+{% from 'macros/panels.html' import panel_wrapper, panel_header, panel_content %}
+
+{%- set approval_variant_map = {'pending': 'warning', 'active': 'success', 'paused': 'info', 'disabled': 'neutral', 'rejected': 'danger'} -%}
+{%- set extra_left -%}
+    {% if agent.approval_status %}{{ badge(agent.approval_status|title, approval_variant_map.get(agent.approval_status, 'neutral')) }}{% endif %}
+{%- endset -%}
+
+{% call panel_wrapper() %}
+    {{ panel_header(agent.agent_name or agent.id, title_size='lg', extra_left=extra_left) }}
+    {% call panel_content() %}
+        <!-- Actions Section (extracted to partial for maintainability) -->
+        {% include 'panels/agents/fields/actions.html' %}
+
+        <!-- Agent Edit Form - agent name, hostname, tags, intervals -->
+        <form
+            id="agent-edit-form"
+            hx-patch="/agents/{{ agent.id }}"
+            hx-target="#agent-edit-result"
+            hx-swap="innerHTML"
+            class="space-y-4"
+        >
+            <!-- Result Message (at top for visibility) -->
+            <div id="agent-edit-result"></div>
+
+            <!-- Basic fields (extracted to partial for maintainability) -->
+            {% include 'panels/agents/fields/basic_fields.html' %}
+
+            <!-- Reporter Configuration (extracted to partial for maintainability) -->
+            {% include 'panels/agents/fields/reporter_config.html' %}
+
+            <!-- Performance Configuration (extracted to partial for maintainability) -->
+            {% include 'panels/agents/fields/performance_config.html' %}
+
+            <!-- Tags Section (extracted to partial for maintainability) -->
+            {% include 'panels/agents/fields/tags.html' %}
+
+
+            <!-- Action Buttons -->
+            <div class="flex items-center gap-2 pt-2 border-t border-dark-border">
+                {{ btn_save(extra_classes='flex-1') }}
+                {{ btn_cancel_text(label='Cancel', extra_classes='flex-1', extra_attrs='type="button" data-close-panel') }}
+            </div>
+        </form>
+    {% endcall %}
+{% endcall %}

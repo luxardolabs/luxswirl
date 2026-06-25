@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trace Viewer - {{ filename }}</title>
+    <link rel="stylesheet" href="/static/css/output.css?v={{ static_version }}">
+    {% from 'macros/buttons.html' import btn_external, btn_download, btn_copy %}
+    <style>
+        body { margin: 0; padding: 0; }
+        #trace-frame { width: 100%; height: 100vh; border: none; }
+    </style>
+</head>
+<body class="bg-dark-bg-primary">
+    <div id="container" class="flex items-center justify-center min-h-screen p-8">
+        <div class="max-w-2xl w-full">
+            <div class="card p-8 text-center">
+                <!-- Header -->
+                <div class="mb-6">
+                    <span class="w-20 h-20 mx-auto text-blue-400 mb-4 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/chart-bar.svg" %}</span>
+                    <h1 class="text-2xl font-bold text-dark-text-primary mb-2">Playwright Trace Viewer</h1>
+                    <p class="text-dark-text-muted font-mono text-sm">{{ filename }} ({{ size_kb }} KB)</p>
+                </div>
+
+                <!-- Instructions -->
+                <div class="bg-blue-500/10 border border-blue-500/30 rounded-lg p-6 mb-6 text-left">
+                    <h2 class="text-lg font-semibold text-blue-400 mb-3">📊 Interactive Trace Analysis</h2>
+                    <p class="text-sm text-dark-text-muted mb-4">
+                        View complete execution timeline, network waterfall, console logs, DOM snapshots, and screenshots.
+                    </p>
+                    <div class="space-y-2 text-sm text-dark-text-muted">
+                        <div class="flex items-start gap-2">
+                            <span class="text-green-400">✓</span>
+                            <span>Timeline of all actions with exact timing</span>
+                        </div>
+                        <div class="flex items-start gap-2">
+                            <span class="text-green-400">✓</span>
+                            <span>Network requests/responses with headers and payloads</span>
+                        </div>
+                        <div class="flex items-start gap-2">
+                            <span class="text-green-400">✓</span>
+                            <span>Console output (logs, warnings, errors)</span>
+                        </div>
+                        <div class="flex items-start gap-2">
+                            <span class="text-green-400">✓</span>
+                            <span>DOM snapshots at each step (inspect any moment)</span>
+                        </div>
+                        <div class="flex items-start gap-2">
+                            <span class="text-green-400">✓</span>
+                            <span>Screenshots showing visual state</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action Button -->
+                {{ btn_external(label='Open in Playwright Trace Viewer', extra_classes='w-full py-4 text-lg mb-4', extra_attrs='id="open-viewer-btn" onclick="openTraceViewer()"', size='') }}
+
+                <!-- Alternative: Download -->
+                <p class="text-xs text-dark-text-muted mb-2">Or download and view locally:</p>
+                <div class="flex gap-2">
+                    {% set download_attrs %}download="{{ filename }}"{% endset %}
+                    {{ btn_download(label='Download Trace', href='/artifacts/' ~ artifact_id ~ '/view', style='secondary', extra_classes='flex-1 py-2 text-sm', extra_attrs=download_attrs) }}
+                    {{ btn_copy(label='Copy CLI Command', extra_classes='flex-1 py-2 text-sm', extra_attrs='onclick="copyCommand()" title="Copy CLI command"') }}
+                </div>
+
+                <div id="copied-message" class="hidden mt-2 text-xs text-green-400">
+                    ✓ Copied: playwright show-trace {{ filename }}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <iframe id="trace-frame" style="display: none;"></iframe>
+
+    <script>
+        const traceUrl = '/artifacts/{{ artifact_id }}/view';
+        const filename = '{{ filename }}';
+
+        async function openTraceViewer() {
+            const btn = document.getElementById('open-viewer-btn');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="inline-block animate-spin mr-2">⏳</span> Loading trace...';
+
+            try {
+                // Fetch the trace file
+                const response = await fetch(traceUrl);
+                if (!response.ok) {
+                    throw new Error(`Failed to load trace: ${response.status}`);
+                }
+
+                const blob = await response.blob();
+
+                // Open Playwright's trace viewer in the iframe
+                const iframe = document.getElementById('trace-frame');
+
+                // Create a File object from blob to simulate upload
+                const file = new File([blob], filename, { type: 'application/zip' });
+
+                // Use Playwright's trace viewer
+                // Since we can't directly pass the file, we'll open trace.playwright.dev
+                // and show instructions to upload
+                window.open('https://trace.playwright.dev', '_blank');
+
+                // Show success message
+                btn.innerHTML = '✓ Opened in new tab';
+                btn.classList.remove('btn-primary');
+                btn.classList.add('bg-green-600');
+
+                setTimeout(() => {
+                    document.getElementById('container').innerHTML = `
+                        <div class="max-w-2xl w-full mx-auto card p-8 text-center">
+                            <span class="w-16 h-16 mx-auto text-green-400 mb-4 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/check-circle.svg" %}</span>
+                            <h2 class="text-xl font-bold text-dark-text-primary mb-3">Trace Viewer Opened</h2>
+                            <p class="text-dark-text-muted mb-6">
+                                Drag and drop <code class="px-2 py-1 bg-dark-bg-tertiary rounded text-brand-400">${filename}</code> into the trace viewer window.
+                            </p>
+                            <a href="/artifacts/{{ artifact_id }}/view" download="${filename}" class="btn-primary">
+                                Download Trace File
+                            </a>
+                        </div>
+                    `;
+                }, 1000);
+
+            } catch (error) {
+                btn.disabled = false;
+                btn.innerHTML = '❌ Error - Try Download Instead';
+                console.error(error);
+            }
+        }
+
+        function copyCommand() {
+            const command = `playwright show-trace ${filename}`;
+            navigator.clipboard.writeText(command).then(() => {
+                const msg = document.getElementById('copied-message');
+                msg.classList.remove('hidden');
+                setTimeout(() => msg.classList.add('hidden'), 3000);
+            });
+        }
+    </script>
+</body>
+</html>
