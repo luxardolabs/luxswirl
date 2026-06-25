@@ -1,0 +1,207 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom base styles */
+@layer base {
+  html {
+    @apply antialiased;
+  }
+
+  body {
+    background-color: theme('colors.dark.bg.primary');
+    color: theme('colors.dark.text.primary');
+  }
+}
+
+/* Custom components */
+@layer components {
+  /* Status badge */
+  .status-badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+
+  .status-badge-success {
+    @apply bg-status-success text-white;
+  }
+
+  .status-badge-warning {
+    @apply bg-status-warning text-white;
+  }
+
+  .status-badge-error {
+    @apply bg-status-error text-white;
+  }
+
+  .status-badge-unknown {
+    @apply bg-status-unknown text-white;
+  }
+
+  /* Cards */
+  .card {
+    @apply bg-dark-bg-secondary border border-dark-border rounded-lg shadow-sm;
+  }
+
+  .card-hover {
+    @apply card transition-all duration-200 hover:shadow-md hover:border-brand-500/50;
+  }
+
+  /* Buttons */
+  .btn {
+    @apply inline-flex items-center justify-center px-4 py-2 rounded-md font-medium transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-dark-bg-primary;
+  }
+
+  .btn-primary {
+    /* brand-700 (not -600): white text needs ≥4.5:1 — brand-600 is 4.09:1, brand-700 is 5.94:1 (WCAG AA). */
+    @apply btn bg-brand-700 text-white hover:bg-brand-800 focus:ring-brand-500;
+  }
+
+  .btn-secondary {
+    @apply btn bg-dark-bg-tertiary text-dark-text-primary hover:bg-slate-600 focus:ring-slate-500;
+  }
+
+  .btn-danger {
+    @apply btn bg-status-error text-white hover:bg-red-700 focus:ring-red-500;
+  }
+
+  .btn-sm {
+    @apply px-3 py-1.5 text-sm;
+  }
+
+  .btn-xs {
+    @apply px-2 py-1 text-xs;
+  }
+
+  /* Form inputs */
+  .label {
+    @apply block text-sm font-medium text-dark-text-primary mb-1.5;
+  }
+
+  .input {
+    @apply w-full px-3 py-2 bg-dark-bg-tertiary border border-dark-border text-dark-text-primary placeholder-dark-text-muted rounded-md text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-colors;
+  }
+
+  /* Extra padding for select dropdowns - adds breathing room */
+  select.input {
+    @apply px-4 pr-12;
+  }
+
+  textarea.input {
+    @apply resize-y min-h-[80px];
+  }
+
+  /* Table styles */
+  .table {
+    @apply w-full border-collapse;
+  }
+
+  .table thead {
+    @apply bg-dark-bg-tertiary;
+  }
+
+  .table th {
+    @apply px-6 py-3 text-left text-xs font-medium text-dark-text-secondary uppercase tracking-wider;
+  }
+
+  .table td {
+    @apply px-6 py-4 text-sm text-dark-text-primary border-t border-dark-border;
+  }
+
+  .table tbody tr {
+    @apply transition-colors duration-150 hover:bg-dark-bg-tertiary/50 cursor-pointer;
+  }
+
+  /* Sidebar */
+  .sidebar {
+    @apply fixed left-0 top-0 h-screen bg-dark-bg-secondary border-r border-dark-border z-30 transition-all duration-300;
+  }
+
+  .sidebar-expanded {
+    @apply w-64;
+  }
+
+  .sidebar-collapsed {
+    @apply w-16;
+  }
+
+  /* Panels render via macros/panels.html — each panel is a self-contained
+     fixed overlay (Alpine.js driven). The container in base.html is just an
+     empty div; no styling needed here. */
+
+  #main-content {
+    @apply transition-all duration-300;
+  }
+
+  /* Navigation */
+  .nav-item {
+    @apply flex items-center gap-3 px-4 py-2.5 text-dark-text-secondary hover:text-dark-text-primary hover:bg-dark-bg-tertiary/50 transition-colors duration-150 rounded-md;
+  }
+
+  .nav-item-active {
+    @apply nav-item text-brand-400 bg-dark-bg-tertiary;
+  }
+
+  /* Stat card */
+  .stat-card {
+    @apply card p-5;
+  }
+
+  .stat-label {
+    @apply text-xs font-medium text-dark-text-secondary uppercase tracking-wider;
+  }
+
+  .stat-value {
+    @apply text-3xl font-bold text-dark-text-primary mt-2;
+  }
+
+  .stat-change {
+    @apply text-xs text-dark-text-muted mt-1;
+  }
+
+  /* Loading states */
+  .loading-pulse {
+    @apply animate-pulse bg-dark-bg-tertiary rounded;
+  }
+
+  /* HTMX indicators */
+  .htmx-indicator {
+    @apply opacity-0 transition-opacity duration-200;
+  }
+
+  .htmx-request .htmx-indicator {
+    @apply opacity-100;
+  }
+
+  .htmx-request.htmx-indicator {
+    @apply opacity-100;
+  }
+}
+
+/* Custom utilities */
+@layer utilities {
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-brand-400 to-blue-600;
+  }
+
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: theme('colors.dark.bg.tertiary') theme('colors.dark.bg.secondary');
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    @apply bg-dark-bg-secondary;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    @apply bg-dark-bg-tertiary rounded-full;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    @apply bg-slate-600;
+  }
+}

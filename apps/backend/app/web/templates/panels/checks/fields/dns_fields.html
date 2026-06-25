@@ -1,0 +1,58 @@
+<!-- DNS-specific fields -->
+<div id="dns-fields" class="space-y-4 {% if not check or check.check_type != 'dns' %}hidden{% endif %}">
+    <div class="grid grid-cols-2 gap-4">
+        <div>
+            <label class="label" for="record_type">Record Type</label>
+            <select name="record_type" id="record_type" class="input">
+                <option value="A" {% if check and check.record_type == 'A' %}selected{% endif %}>A (IPv4 Address)</option>
+                <option value="AAAA" {% if check and check.record_type == 'AAAA' %}selected{% endif %}>AAAA (IPv6 Address)</option>
+                <option value="CNAME" {% if check and check.record_type == 'CNAME' %}selected{% endif %}>CNAME (Canonical Name)</option>
+                <option value="MX" {% if check and check.record_type == 'MX' %}selected{% endif %}>MX (Mail Exchange)</option>
+                <option value="TXT" {% if check and check.record_type == 'TXT' %}selected{% endif %}>TXT (Text Record)</option>
+                <option value="NS" {% if check and check.record_type == 'NS' %}selected{% endif %}>NS (Name Server)</option>
+                <option value="PTR" {% if check and check.record_type == 'PTR' %}selected{% endif %}>PTR (Pointer)</option>
+                <option value="SOA" {% if check and check.record_type == 'SOA' %}selected{% endif %}>SOA (Start of Authority)</option>
+                <option value="SRV" {% if check and check.record_type == 'SRV' %}selected{% endif %}>SRV (Service)</option>
+                <option value="CAA" {% if check and check.record_type == 'CAA' %}selected{% endif %}>CAA (Certificate Authority)</option>
+            </select>
+            <p class="text-xs text-dark-text-muted mt-1">DNS record type to query</p>
+        </div>
+        <div>
+            <label class="label">DNS Server</label>
+            <input
+                type="text"
+                name="nameserver"
+                value="{{ check.nameserver if check and check.nameserver is not none else '1.1.1.1' }}"
+                class="input"
+                placeholder="1.1.1.1"
+            >
+            <p class="text-xs text-dark-text-muted mt-1">Nameserver to query (default: Cloudflare)</p>
+        </div>
+    </div>
+    <div class="grid grid-cols-2 gap-4">
+        <div>
+            <label class="label">DNS Port</label>
+            <input
+                type="number"
+                name="port"
+                value="{{ check.port if check and check.port is not none else 53 }}"
+                min="1"
+                max="65535"
+                class="input"
+                placeholder="53"
+            >
+            <p class="text-xs text-dark-text-muted mt-1">DNS server port (default: 53)</p>
+        </div>
+        <div>
+            <label class="label">Expected Value (optional)</label>
+            <input
+                type="text"
+                name="expect_value"
+                value="{{ check.expect_value if check and check.expect_value is not none else '' }}"
+                class="input"
+                placeholder="192.168.1.1"
+            >
+            <p class="text-xs text-dark-text-muted mt-1">Expected record value (leave empty to skip)</p>
+        </div>
+    </div>
+</div>

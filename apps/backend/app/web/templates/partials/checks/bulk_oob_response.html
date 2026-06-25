@@ -1,0 +1,17 @@
+{# OOB swap response for bulk action / bulk modify.
+   Vars: summary (status summary dict), status_rows (list).
+   Renders both #status-summary and #check-rows out-of-band so the page
+   refreshes after a bulk operation. #}
+{% from "macros/status.html" import status_row_compressed %}
+<div id="status-summary" hx-swap-oob="true">
+    {% include "partials/status_summary.html" %}
+</div>
+<div id="check-rows" hx-swap-oob="true">
+    {% if status_rows %}
+        {% for row in status_rows %}{{ status_row_compressed(row) }}{% endfor %}
+    {% else %}
+        <div class="p-8 text-center text-dark-text-muted">
+            <p class="text-lg">No checks found</p>
+        </div>
+    {% endif %}
+</div>

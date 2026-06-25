@@ -1,0 +1,17 @@
+{# Reusable inline status card for agent edit-form responses.
+   Vars: kind ("success" or "error"), message (str). #}
+{% if kind == "success" %}
+<div class="card bg-green-500/10 border-green-500/20 p-4">
+    <div class="flex items-center gap-3">
+        <span class="w-5 h-5 text-green-400 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/check-circle.svg" %}</span>
+        <span class="text-sm text-green-400 font-medium">{{ message }}</span>
+    </div>
+</div>
+{% else %}
+<div class="card bg-red-500/10 border-red-500/20 p-4">
+    <div class="flex items-center gap-3">
+        <span class="w-5 h-5 text-red-400 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/exclamation-circle.svg" %}</span>
+        <span class="text-sm text-red-400 font-medium">{{ message }}</span>
+    </div>
+</div>
+{% endif %}

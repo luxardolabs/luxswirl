@@ -1,0 +1,122 @@
+"""
+Common passwords list for validation.
+
+Based on analysis of password breaches and common password lists.
+Prevents users from choosing easily guessable passwords.
+"""
+
+# Top 100 most common passwords (case-insensitive check)
+COMMON_PASSWORDS = {
+    "password",
+    "123456",
+    "123456789",
+    "12345678",
+    "12345",
+    "1234567",
+    "password1",
+    "12345679",
+    "qwerty",
+    "abc123",
+    "111111",
+    "123123",
+    "1234567890",
+    "000000",
+    "password123",
+    "1234",
+    "iloveyou",
+    "1q2w3e4r",
+    "qwertyuiop",
+    "123",
+    "monkey",
+    "dragon",
+    "princess",
+    "letmein",
+    "starwars",
+    "master",
+    "sunshine",
+    "ashley",
+    "bailey",
+    "passw0rd",
+    "shadow",
+    "123321",
+    "654321",
+    "superman",
+    "qazwsx",
+    "michael",
+    "football",
+    "baseball",
+    "welcome",
+    "hello",
+    "freedom",
+    "whatever",
+    "nicole",
+    "jordan",
+    "cameron",
+    "secret",
+    "summer",
+    "1qaz2wsx",
+    "zxcvbnm",
+    "trustno1",
+    "ranger",
+    "thomas",
+    "robert",
+    "222222",
+    "987654321",
+    "liverpool",
+    "killer",
+    "harley",
+    "jordan23",
+    "chelsea",
+    "hunter",
+    "batman",
+    "andrew",
+    "charlie",
+    "joshua",
+    "maggie",
+    "matrix",
+    "qwerty123",
+    "flower",
+    "computer",
+    "987654",
+    "daniel",
+    "samsung",
+    "jessica",
+    "mustang",
+    "password12",
+    "qwe123",
+    "admin",
+    "administrator",
+    "root",
+    "toor",
+    "pass",
+    "pass123",
+    "1111",
+    "11111",
+    "1111111",
+    "333333",
+    "444444",
+    "555555",
+    "666666",
+    "777777",
+    "888888",
+    "999999",
+    "121212",
+    "123454321",
+    "abc",
+    "abcd",
+    "abcd1234",
+    "qwerty1",
+}
+
+
+def is_common_password(password: str) -> bool:
+    """
+    Check if password is in common passwords list.
+
+    Args:
+        password: Password to check (case-insensitive)
+
+    Returns:
+        True if password is common/weak
+    """
+    return password.lower() in COMMON_PASSWORDS

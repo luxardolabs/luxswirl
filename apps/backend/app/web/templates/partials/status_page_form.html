@@ -1,0 +1,122 @@
+{% from 'macros/buttons.html' import btn_save, btn_create, btn_cancel_text %}
+{% from 'macros/panels.html' import panel_wrapper, panel_header, panel_content %}
+
+{%- set h_title = 'Edit Status Page' if status_page else 'Create New Status Page' -%}
+{%- set h_subtitle = 'Update status page configuration' if status_page else 'Create a custom public status dashboard' -%}
+
+{% call panel_wrapper() %}
+    {{ panel_header(h_title, subtitle=h_subtitle) }}
+    {% call panel_content() %}
+    <form
+        {% if status_page %}
+        hx-post="/status-pages/{{ status_page.id }}/update"
+        {% else %}
+        hx-post="/status-pages/create"
+        {% endif %}
+        hx-target="#panel-container"
+        hx-swap="innerHTML"
+        class="space-y-6"
+    >
+        <!-- Name -->
+        <div>
+            <label for="name" class="label">Name</label>
+            <input
+                type="text"
+                id="name"
+                name="name"
+                class="input"
+                placeholder="Production Status"
+                value="{% if status_page %}{{ status_page.name }}{% endif %}"
+                required
+            >
+            <p class="text-xs text-dark-text-muted mt-1">Display name for the status page</p>
+        </div>
+
+        <!-- Slug -->
+        <div>
+            <label for="slug" class="label">Slug</label>
+            <div class="flex items-center gap-2">
+                <span class="text-sm text-dark-text-muted">/status/</span>
+                <input
+                    type="text"
+                    id="slug"
+                    name="slug"
+                    class="input flex-1"
+                    placeholder="production"
+                    pattern="[a-z0-9\-_]+"
+                    value="{% if status_page %}{{ status_page.slug }}{% endif %}"
+                    required
+                >
+            </div>
+            <p class="text-xs text-dark-text-muted mt-1">URL-friendly identifier (lowercase, alphanumeric, hyphens, underscores)</p>
+        </div>
+
+        <!-- Description -->
+        <div>
+            <label for="description" class="label">Description (Optional)</label>
+            <textarea
+                id="description"
+                name="description"
+                class="input"
+                rows="3"
+                placeholder="Status page for all production services"
+            >{% if status_page %}{{ status_page.description }}{% endif %}</textarea>
+            <p class="text-xs text-dark-text-muted mt-1">Brief description of what this status page shows</p>
+        </div>
+
+        <!-- Visibility -->
+        <div>
+            <label class="flex items-center gap-2 cursor-pointer">
+                <input
+                    type="checkbox"
+                    name="is_public"
+                    class="rounded"
+                    {% if not status_page or status_page.is_public %}checked{% endif %}
+                >
+                <span class="text-sm text-dark-text-secondary">Make this status page publicly accessible</span>
+            </label>
+            <p class="text-xs text-dark-text-muted mt-1 ml-6">
+                Public pages can be viewed at <code class="text-xs bg-dark-bg-tertiary text-brand-400 px-1 py-0.5 rounded">/status/&lt;slug&gt;</code> without authentication
+            </p>
+        </div>
+
+        <!-- Status Bar Time Range -->
+        <div>
+            <label for="status_bar_minutes" class="label">Status Bar Time Range</label>
+            <select
+                id="status_bar_minutes"
+                name="status_bar_minutes"
+                class="input"
+            >
+                {% set current_minutes = (status_page.config.status_bar_minutes if status_page and status_page.config and status_page.config.status_bar_minutes else 30) %}
+                <option value="30" {% if current_minutes == 30 %}selected{% endif %}>30 minutes</option>
+                <option value="60" {% if current_minutes == 60 %}selected{% endif %}>1 hour</option>
+                <option value="120" {% if current_minutes == 120 %}selected{% endif %}>2 hours</option>
+                <option value="240" {% if current_minutes == 240 %}selected{% endif %}>4 hours</option>
+                <option value="480" {% if current_minutes == 480 %}selected{% endif %}>8 hours</option>
+                <option value="1440" {% if current_minutes == 1440 %}selected{% endif %}>24 hours</option>
+            </select>
+            <p class="text-xs text-dark-text-muted mt-1">Default time range for the status bar visualization. Viewers can override this on the public page.</p>
+        </div>
+
+
+        <!-- Form Actions -->
+        <div class="flex items-center gap-3 pt-4 border-t border-dark-border">
+            {% if status_page %}
+                {{ btn_save(label='Update Status Page', extra_classes='flex-1') }}
+            {% else %}
+                {{ btn_create(label='Create Status Page', extra_classes='flex-1') }}
+            {% endif %}
+            {{ btn_cancel_text(extra_attrs='type="button" data-close-panel') }}
+        </div>
+
+        {% if status_page %}
+        <div class="pt-4 border-t border-dark-border">
+            <p class="text-xs text-dark-text-muted mb-2">
+                After saving, click "Manage" to add checks and groups to this status page.
+            </p>
+        </div>
+        {% endif %}
+    </form>
+    {% endcall %}
+{% endcall %}

@@ -1,0 +1,457 @@
+{% from 'macros/badges.html' import badge %}
+{% from 'macros/buttons.html' import text_btn, btn_create, btn_save, btn_clone, btn_cancel_text, btn_refresh, tag_pill_button, collapse_toggle %}
+{% from 'macros/panels.html' import panel_wrapper, panel_header, panel_content, panel_footer %}
+
+{%- set h_title = mode_title if mode == 'clone' else ('Edit Check' if check else 'Create New Check') -%}
+{%- set h_subtitle = mode_description if mode == 'clone' else ('Update check configuration and check' if check else 'Configure a health check and assign it to an agent') -%}
+
+{% call panel_wrapper() %}
+    {{ panel_header(h_title, subtitle=h_subtitle) }}
+    <form
+        {% if mode == 'clone' %}
+            hx-post="/checks/{{ check.id }}/clone"
+        {% elif check %}
+            hx-post="/checks/{{ check.id }}/update"
+        {% else %}
+            hx-post="/checks/create"
+        {% endif %}
+        hx-target="#panel-container"
+        hx-swap="innerHTML"
+        class="contents"
+        data-existing-tags='{% if check and check.tags %}{{ check.tags|tojson }}{% else %}[]{% endif %}'
+    >
+    {% call panel_content() %}
+    <div class="space-y-6">
+        <!-- Agent and Check Name -->
+        <div class="space-y-4">
+            <!-- Agent and Display Name on same line -->
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="label" for="agent_id">Agent</label>
+                    <select name="agent_id" id="agent_id" required class="input">
+                        <option value="">Select an agent...</option>
+                        {% for agent in agents %}
+                        <option value="{{ agent.id }}" {% if check and check.agent_id == agent.id %}selected{% endif %}>
+                            {{ agent.agent_name or agent.id }}{% if agent.hostname %} ({{ agent.hostname }}){% endif %}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    <p class="text-xs text-dark-text-muted mt-1">Agent to run this check</p>
+                </div>
+
+                <div id="display-name-field">
+                    <label class="label">Display Name</label>
+                    <div class="flex gap-2">
+                        <input
+                            type="text"
+                            name="display_name"
+                            id="check-name-input"
+                            value="{% if mode == 'clone' %}{{ suggested_name }}{% elif check %}{{ check.display_name }}{% endif %}"
+                            required
+                            class="input flex-1"
+                            placeholder="ping_gateway"
+                        >
+                        {% if not check or mode == 'clone' %}
+                        {{ btn_refresh(label='', extra_classes='px-3', extra_attrs='type="button" data-generate-check-name title="Auto-generate display name from type and target"') }}
+                        {% endif %}
+                    </div>
+                    <p class="text-xs text-dark-text-muted mt-1">
+                        {% if mode == 'clone' %}
+                            Auto-suggested from source (editable)
+                        {% else %}
+                            Unique name for this check{% if not check %} (auto-generate){% endif %}
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Assignment Mode (Phase 2) -->
+        <div class="space-y-4">
+            <div class="flex items-center justify-between border-b border-dark-border pb-2">
+                <h3 class="text-lg font-semibold text-dark-text-primary">Assignment Strategy</h3>
+            </div>
+
+            <div>
+                <label class="label" for="assignment-mode-select">Assignment Mode</label>
+                <select
+                    name="assignment_mode"
+                    id="assignment-mode-select"
+                    class="input"
+                    hx-get="/checks/assignment-mode-selector"
+                    hx-trigger="change"
+                    hx-target="#assignment-selector-container"
+                    hx-swap="innerHTML"
+                    hx-include="this"
+                >
+                    <option value="manual" {% if check and check.assignment_mode == 'manual' or not check %}selected{% endif %}>
+                        Manual - Assign to specific agent
+                    </option>
+                    <option value="replicate" {% if check and check.assignment_mode == 'replicate' %}selected{% endif %}>
+                        Replicate - Run on ALL matching agents
+                    </option>
+                    <option value="distribute" {% if check and check.assignment_mode == 'distribute' %}selected{% endif %}>
+                        Distribute - Split among matching agents
+                    </option>
+                </select>
+                <p class="text-xs text-dark-text-muted mt-1">
+                    {% if check and check.assignment_mode == 'replicate' %}
+                        Replicate: Check runs on ALL agents matching selector (multi-region monitoring)
+                    {% elif check and check.assignment_mode == 'distribute' %}
+                        Distribute: Checks split among matching agents via hash (load sharing + HA)
+                    {% else %}
+                        Manual: Explicitly assign check to one agent (default)
+                    {% endif %}
+                </p>
+            </div>
+
+            <!-- HTMX will swap assignment selector UI here based on mode -->
+            <div id="assignment-selector-container">
+                {% if check and check.assignment_mode != 'manual' %}
+                    {% include 'partials/check_assignment_selector.html' %}
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Check Type and Interval -->
+        <div class="grid grid-cols-2 gap-4">
+            <div>
+                <label class="label" for="check-type-select">Check Type</label>
+                <select name="check_type" required class="input" id="check-type-select">
+                    {% for opt in check_type_options %}
+                    <option value="{{ opt.value }}" {% if check and check.check_type == opt.value %}selected{% endif %}>{{ opt.label }}</option>
+                    {% endfor %}
+                    {# UI-only pseudo-type: switches the form to bulk-import mode, not a real check_type #}
+                    <option value="http-bulk" {% if check and check.check_type == 'http-bulk' %}selected{% endif %}>HTTP Bulk Import</option>
+                </select>
+                <p class="text-xs text-dark-text-muted mt-1">Type of health check to perform</p>
+            </div>
+
+            <div>
+                <label class="label">Interval (seconds)</label>
+                <input
+                    type="number"
+                    name="interval"
+                    value="{{ check.interval_seconds if check else check_defaults.interval_seconds }}"
+                    min="1"
+                    max="86400"
+                    required
+                    class="input"
+                >
+                <p class="text-xs text-dark-text-muted mt-1">How often to run this check (1-86400 seconds)</p>
+            </div>
+        </div>
+
+        <!-- Target (hidden for bulk) -->
+        <div id="target-field">
+            <label class="label">Target</label>
+            <input
+                type="text"
+                name="target"
+                value="{{ check.target if check else '' }}"
+                required
+                class="input"
+                id="target-input"
+                placeholder="{% if check %}{% if check.check_type == 'ping' %}192.168.1.1 or hostname.example.com{% elif check.check_type == 'http' %}https://example.com/api/health{% elif check.check_type == 'tcp' %}hostname.example.com:3306{% elif check.check_type == 'dns' %}example.com{% elif check.check_type == 'json' %}https://api.example.com/status{% elif check.check_type == 'mysql' %}mysql://username:password@host:3306/database{% elif check.check_type == 'postgres' %}postgres://username:password@host:5432/database{% else %}192.168.1.1 or https://example.com{% endif %}{% else %}192.168.1.1 or https://example.com{% endif %}"
+            >
+            <p class="text-xs text-dark-text-muted mt-1" id="target-hint">
+                {% if check %}
+                    {% if check.check_type == 'ping' %}IP address or hostname to ping
+                    {% elif check.check_type == 'http' %}Full URL including protocol (http:// or https://)
+                    {% elif check.check_type == 'tcp' %}Hostname or IP with port (e.g., db.example.com:5432)
+                    {% elif check.check_type == 'dns' %}Domain name to query
+                    {% elif check.check_type == 'json' %}API endpoint that returns JSON
+                    {% elif check.check_type == 'mysql' %}MySQL connection string (or use Connection String field below)
+                    {% elif check.check_type == 'postgres' %}PostgreSQL connection string (or use Connection String field below)
+                    {% else %}IP address, hostname, or URL to check (format depends on check type)
+                    {% endif %}
+                {% else %}
+                    IP address, hostname, or URL to check (format depends on check type)
+                {% endif %}
+            </p>
+        </div>
+
+        <!-- Check-type-specific fields (extracted to partials for maintainability) -->
+        {% include 'panels/checks/fields/http_fields.html' %}
+        {% include 'panels/checks/fields/json_fields.html' %}
+        {% include 'panels/checks/fields/dns_fields.html' %}
+        {% include 'panels/checks/fields/mysql_fields.html' %}
+        {% include 'panels/checks/fields/postgres_fields.html' %}
+        {% include 'panels/checks/fields/synthetic_fields.html' %}
+        {% include 'panels/checks/fields/bulk_fields.html' %}
+
+        <!-- Advanced Settings -->
+        <div class="space-y-4">
+            <div class="flex items-center justify-between border-b border-dark-border pb-2">
+                <h3 class="text-lg font-semibold text-dark-text-primary">Advanced Settings</h3>
+                {{ collapse_toggle('Show',
+                                   chevron_id='advanced-settings-toggle-icon',
+                                   label_id='advanced-settings-toggle-text',
+                                   toggle_attr='data-toggle-advanced-settings',
+                                   extra_classes='text-sm text-brand-500 hover:text-brand-400 flex items-center gap-1',
+                                   label_classes='',
+                                   extra_attrs='id="advanced-settings-toggle"') }}
+            </div>
+
+            <div id="advanced-settings-content" class="hidden space-y-4">
+                <!-- Description -->
+                <div>
+                    <label class="label">Description</label>
+                    <textarea
+                        name="description"
+                        class="input"
+                        rows="3"
+                        placeholder="Human-readable description of what this check monitors..."
+                    >{{ check.description if check else '' }}</textarea>
+                    <p class="text-xs text-dark-text-muted mt-1">Optional description for documentation purposes</p>
+                </div>
+
+                <!-- Timeout and SSL Verification -->
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="label">Timeout (seconds)</label>
+                        <input
+                            type="number"
+                            name="timeout_seconds"
+                            value="{{ check.timeout_seconds if check and check.timeout_seconds else check_defaults.timeout_seconds }}"
+                            min="1"
+                            max="300"
+                            class="input"
+                        >
+                        <p class="text-xs text-dark-text-muted mt-1">Maximum time to wait for check response</p>
+                    </div>
+
+                    <div id="verify-ssl-field" class="{% if not check or check.check_type not in ['http', 'json'] %}hidden{% endif %}">
+                        <label class="label">SSL Verification</label>
+                        <div class="card p-4 mt-2">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <label class="text-sm font-medium text-dark-text-primary">Verify SSL Certificates</label>
+                                    <p class="text-xs text-dark-text-muted mt-1">Disable for self-signed certs</p>
+                                </div>
+                                <input
+                                    type="checkbox"
+                                    name="verify_ssl"
+                                    {% if check %}
+                                        {% if check and check.verify_ssl or not check and check_defaults.verify_ssl %}checked{% endif %}
+                                    {% else %}
+                                        checked
+                                    {% endif %}
+                                    class="w-5 h-5 rounded border-dark-border bg-dark-bg-tertiary text-brand-600 focus:ring-brand-500 focus:ring-2"
+                                >
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Retry Configuration -->
+                <div class="space-y-4">
+                    <p class="text-sm font-medium text-dark-text-primary">Retry Configuration</p>
+                    <p class="text-xs text-dark-text-muted">Configure how the check retries on failure before marking as down</p>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="label">Max Retries</label>
+                            <input
+                                type="number"
+                                name="max_retries"
+                                value="{{ check.max_retries if check and check.max_retries else check_defaults.max_retries }}"
+                                min="0"
+                                max="10"
+                                class="input"
+                            >
+                            <p class="text-xs text-dark-text-muted mt-1">Retries before marking as down</p>
+                        </div>
+
+                        <div>
+                            <label class="label">Retry Interval (seconds)</label>
+                            <input
+                                type="number"
+                                name="retry_interval_seconds"
+                                value="{{ check.retry_interval_seconds if check and check.retry_interval_seconds else check_defaults.retry_interval_seconds }}"
+                                min="1"
+                                max="300"
+                                class="input"
+                            >
+                            <p class="text-xs text-dark-text-muted mt-1">Wait time between retries</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Notification Resend Configuration -->
+                <div>
+                    <label class="label">Resend Notification After</label>
+                    <input
+                        type="number"
+                        name="resend_notification_after"
+                        value="{{ check.resend_notification_after if check and check.resend_notification_after else '' }}"
+                        min="1"
+                        max="100"
+                        placeholder="Leave empty to disable"
+                        class="input"
+                    >
+                    <p class="text-xs text-dark-text-muted mt-1">Resend notification if down X times consecutively (leave empty to disable)</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tags -->
+        <div>
+            <label class="label">Tags</label>
+            <div id="tags-container" class="flex flex-wrap gap-2 p-3 border border-dark-border rounded-lg bg-dark-bg-primary min-h-[44px]">
+                <!-- Tags will be inserted here -->
+            </div>
+            <div class="flex gap-2 mt-2">
+                <input
+                    type="text"
+                    id="tag-input"
+                    class="input flex-1"
+                    placeholder="Type a tag or browse existing tags..."
+                >
+                {% set plus_svg %}<span class="w-4 h-4 mr-1.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/plus.svg" %}</span>{% endset %}
+                {{ text_btn(plus_svg, 'Add', style='secondary', type='button', extra_attrs='data-add-tag', extra_classes='px-4') }}
+                {% if available_check_tags and available_check_tags|length > 0 %}
+                {% set tag_svg %}<span class="w-4 h-4 mr-1.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/tag.svg" %}</span>{% endset %}
+                {{ text_btn(tag_svg, 'Browse', style='secondary', type='button', extra_attrs='data-toggle-tag-browser title="Browse existing tags"', extra_classes='px-4 whitespace-nowrap') }}
+                {% endif %}
+            </div>
+            <p class="text-xs text-dark-text-muted mt-1">Add tags to organize and filter checks</p>
+
+            <!-- Available tags browser -->
+            {% if available_check_tags and available_check_tags|length > 0 %}
+            <div id="check-tag-browser" class="hidden mt-3 p-3 bg-green-500/5 border border-green-500/30 rounded-lg">
+                <p class="text-xs text-green-400 mb-2 font-medium flex items-center gap-2">
+                    <span class="w-4 h-4 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/tag.svg" %}</span>
+                    Check tags (click to add):
+                </p>
+                <div class="flex flex-wrap gap-2">
+                    {% for tag in available_check_tags %}
+                    {{ tag_pill_button(tag, color='green', extra_attrs='data-add-tag-from-browser="' ~ tag ~ '"') }}
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Hidden input to store tags as comma-separated values -->
+            <input type="hidden" name="tags" id="tags-hidden" value="">
+        </div>
+
+        <!-- Alerts Assignment -->
+        <div class="space-y-4">
+            <div class="flex items-center justify-between border-b border-dark-border pb-2">
+                <h3 class="text-lg font-semibold text-dark-text-primary">Alerts</h3>
+                {% if not alerts or alerts|length == 0 %}
+                <a href="/alerts" class="text-xs text-brand-500 hover:text-brand-400">
+                    Create an alert first
+                </a>
+                {% endif %}
+            </div>
+
+            {% if alerts and alerts|length > 0 %}
+            <p class="text-sm text-dark-text-muted">
+                Select which alerts should monitor this check
+            </p>
+
+            <div class="card p-4 max-h-64 overflow-y-auto space-y-2">
+                {% for alert in alerts %}
+                <label class="flex items-start gap-3 p-3 border border-dark-border rounded-lg hover:border-brand-500/30 transition-colors cursor-pointer">
+                    <input
+                        type="checkbox"
+                        name="alert_ids"
+                        value="{{ alert.id }}"
+                        {% if assigned_alert_ids and alert.id in assigned_alert_ids %}checked{% endif %}
+                        class="mt-1 w-4 h-4 text-brand-500 bg-dark-bg-primary border-dark-border rounded"
+                    >
+                    <div class="flex-1">
+                        <div class="flex items-center gap-2 mb-1">
+                            <span class="font-medium text-dark-text-primary">{{ alert.name }}</span>
+                            {% if alert.is_global %}
+                            <span class="px-1.5 py-0.5 text-xs font-medium rounded bg-purple-600/20 text-purple-400" title="This alert applies to all checks globally">
+                                Global
+                            </span>
+                            {% endif %}
+                            {% if not alert.is_enabled %}
+                            <span class="px-1.5 py-0.5 text-xs font-medium rounded bg-gray-600/20 text-gray-400">
+                                Disabled
+                            </span>
+                            {% endif %}
+                        </div>
+                        {% if alert.description %}
+                        <p class="text-xs text-dark-text-muted">{{ alert.description }}</p>
+                        {% endif %}
+                        <div class="flex items-center gap-2 mt-1">
+                            {{ badge(alert.trigger_type.replace('_', ' ').title(), 'info') }}
+                            {% if alert.notify_on_recovery %}
+                            <span class="text-xs text-dark-text-muted">
+                                <span class="w-3 h-3 inline mr-0.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/check-circle.svg" %}</span>
+                                Recovery notifications
+                            </span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </label>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="card p-6 text-center">
+                <span class="w-12 h-12 mx-auto mb-3 text-dark-text-muted opacity-50 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/bell.svg" %}</span>
+                <p class="text-sm text-dark-text-muted mb-2">No alerts configured yet</p>
+                <a href="/alerts" class="text-brand-500 hover:text-brand-400 text-sm">
+                    Create your first alert
+                </a>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Depends On (cascade suppression) -->
+        <div>
+            <label class="label" for="depends_on_check_id">Depends On</label>
+            <select name="depends_on_check_id" id="depends_on_check_id" class="input">
+                <option value="">None (no dependency)</option>
+                {% for agent_name, parent_checks in (eligible_parent_checks or {}).items() %}
+                <optgroup label="Agent: {{ agent_name }}">
+                    {% for p in parent_checks %}
+                    <option value="{{ p.id }}" {% if check and check.depends_on_check_id == p.id %}selected{% endif %}>{{ p.display_name }}</option>
+                    {% endfor %}
+                </optgroup>
+                {% endfor %}
+            </select>
+            <p class="text-xs text-dark-text-muted mt-1">Suppress alerts for this check when its parent is failing — one alert for the root cause instead of one per downstream check. The parent must be monitored well enough to detect its own failure.</p>
+        </div>
+
+        <!-- Enabled Toggle -->
+        <div class="card p-4">
+            <div class="flex items-center justify-between">
+                <div>
+                    <label class="text-sm font-medium text-dark-text-primary">Enable Check</label>
+                    <p class="text-xs text-dark-text-muted mt-1">When disabled, this check will not run</p>
+                </div>
+                <input
+                    type="checkbox"
+                    name="enabled"
+                    {% if check %}
+                        {% if check.enabled %}checked{% endif %}
+                    {% else %}
+                        checked
+                    {% endif %}
+                    class="w-5 h-5 rounded border-dark-border bg-dark-bg-tertiary text-brand-600 focus:ring-brand-500 focus:ring-2"
+                >
+            </div>
+        </div>
+
+
+    </div>
+    {% endcall %}
+
+    {% call panel_footer() %}
+        {{ btn_cancel_text(extra_classes='flex-1', extra_attrs='type="button" data-close-panel') }}
+        {% if mode == 'clone' %}
+            {{ btn_clone(label='Clone Check', extra_classes='flex-1') }}
+        {% elif check %}
+            {{ btn_save(label='Update Check', extra_classes='flex-1') }}
+        {% else %}
+            {{ btn_create(label='Create Check', extra_classes='flex-1') }}
+        {% endif %}
+    {% endcall %}
+    </form>
+{% endcall %}

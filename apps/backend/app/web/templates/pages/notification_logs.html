@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% from 'macros/status.html' import check_type_icon %}
+{% from 'macros/page.html' import page_header %}
+{% from 'macros/badges.html' import badge %}
+{% from 'macros/buttons.html' import icon_view, icon_btn %}
+{% from 'macros/tables.html' import pagination_controls, data_table %}
+{% from 'macros/filters.html' import filter_card, filter_select, filter_search, filter_per_page %}
+
+{% block content %}
+{{ page_header(
+    title='Notification Logs',
+    description='History of all notifications sent by LuxSwirl'
+) }}
+
+<!-- Summary Stats -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+    <!-- Total Notifications -->
+    <div class="card p-4">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-xs font-medium text-dark-text-secondary uppercase tracking-wider">Total Notifications</p>
+                    <p class="text-2xl font-bold text-dark-text-primary mt-1">{{ status_counts.total }}</p>
+                </div>
+                <div class="w-10 h-10 rounded-lg bg-brand-500/10 flex items-center justify-center">
+                    <span class="w-6 h-6 text-brand-500 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/bell.svg" %}</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sent Successfully -->
+        <div class="card p-4">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-xs font-medium text-dark-text-secondary uppercase tracking-wider">Sent Successfully</p>
+                    <p class="text-2xl font-bold text-green-400 mt-1">{{ status_counts.sent }}</p>
+                </div>
+                <div class="w-10 h-10 rounded-lg bg-green-500/10 flex items-center justify-center">
+                    <span class="w-6 h-6 text-green-500 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/check-circle.svg" %}</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Failed -->
+        <div class="card p-4">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-xs font-medium text-dark-text-secondary uppercase tracking-wider">Failed</p>
+                    <p class="text-2xl font-bold text-red-400 mt-1">{{ status_counts.failed }}</p>
+                </div>
+                <div class="w-10 h-10 rounded-lg bg-red-500/10 flex items-center justify-center">
+                    <span class="w-6 h-6 text-red-500 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/exclamation-circle.svg" %}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+<!-- Filters -->
+{% call filter_card('/notification-logs') %}
+    {{ filter_search('search', 'Search', 'Search logs...', filters.search or '') }}
+
+    {% call filter_select('status', 'Status') %}
+        <option value="" {% if not filters.status %}selected{% endif %}>All</option>
+        {% for opt in status_options %}
+        <option value="{{ opt.value }}" {% if filters.status == opt.value %}selected{% endif %}>{{ opt.label }}</option>
+        {% endfor %}
+    {% endcall %}
+
+    {% call filter_select('alert_id', 'Alert') %}
+        <option value="">All Alerts</option>
+        {% for alert_id, alert_name in all_alerts %}
+        <option value="{{ alert_id }}" {% if filters.alert_id == alert_id %}selected{% endif %}>{{ alert_name }}</option>
+        {% endfor %}
+    {% endcall %}
+
+    {% call filter_select('notification_provider_id', 'Provider') %}
+        <option value="">All Providers</option>
+        {% for provider_id, provider_name in all_providers %}
+        <option value="{{ provider_id }}" {% if filters.notification_provider_id == provider_id %}selected{% endif %}>{{ provider_name }}</option>
+        {% endfor %}
+    {% endcall %}
+
+    {{ filter_per_page(pagination.per_page) }}
+{% endcall %}
+
+{{ pagination_controls(pagination, '/notification-logs') }}
+
+<!-- Logs Table -->
+<div class="card overflow-hidden">
+    {% call data_table([
+        {'label': 'Timestamp'},
+        {'label': 'Alert'},
+        {'label': 'Provider'},
+        {'label': 'Type'},
+        {'label': 'Check'},
+        {'label': 'Target'},
+        {'label': 'Check Result'},
+        {'label': 'Latency'},
+        {'label': 'Notification Status'},
+        {'label': 'Error'},
+        {'label': 'Actions', 'align': 'right'},
+    ]) %}
+        {% if log_rows %}
+            {% for log in log_rows %}
+                {% include 'partials/notification_logs/log_row.html' %}
+            {% endfor %}
+        {% else %}
+            <tr>
+                <td colspan="11" class="text-center py-8 text-dark-text-muted">
+                    No notification logs found
+                </td>
+            </tr>
+        {% endif %}
+    {% endcall %}
+</div>
+
+<!-- Pagination -->
+{{ pagination_controls(pagination, '/notification-logs') }}
+{% endblock %}

@@ -1,0 +1,208 @@
+{% from 'macros/buttons.html' import btn_save, btn_create, btn_cancel_text %}
+{% from 'macros/panels.html' import panel_wrapper, panel_header, panel_content, panel_footer %}
+
+{% call panel_wrapper() %}
+    {{ panel_header('Edit Notification' if provider else 'Setup Notification', subtitle='Configure notification provider settings') }}
+    <form
+        {% if provider %}
+            hx-post="/notification-providers/{{ provider.id }}/update"
+        {% else %}
+            hx-post="/notification-providers/create"
+        {% endif %}
+        hx-target="#panel-container"
+        hx-swap="innerHTML"
+        class="contents"
+        id="provider-form"
+    >
+    {% call panel_content() %}
+    <div class="space-y-6">
+        <!-- Provider Type Selector (only for new providers) -->
+        {% if not provider %}
+        <div>
+            <label class="label" for="provider-type-select">Notification Type</label>
+            <select
+                name="provider_type"
+                id="provider-type-select"
+                class="input"
+                required
+                hx-get="/notification-providers/create-form"
+                hx-target="#panel-container"
+                hx-swap="innerHTML"
+                hx-include="[name='friendly_name']"
+            >
+                <option value="">Select a provider type...</option>
+                {% for ptype in available_types %}
+                <option value="{{ ptype.type }}" {% if selected_type == ptype.type %}selected{% endif %}>
+                    {{ ptype.name }}
+                </option>
+                {% endfor %}
+            </select>
+            <p class="text-xs text-dark-text-muted mt-1">Choose how notifications should be sent</p>
+        </div>
+        {% else %}
+        <input type="hidden" name="provider_type" value="{{ provider.provider_type }}">
+        {% endif %}
+
+        <!-- Friendly Name (always visible) -->
+        <div>
+            <label class="label">Friendly Name</label>
+            <input
+                type="text"
+                name="friendly_name"
+                class="input"
+                value="{{ provider.friendly_name if provider else '' }}"
+                required
+                placeholder="e.g., Google SMTP, Primary Webhook"
+            >
+            <p class="text-xs text-dark-text-muted mt-1">A descriptive name for this notification provider</p>
+        </div>
+
+        <!-- Provider-Specific Fields (dynamic based on type) -->
+        {% if selected_type %}
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6" id="provider-config">
+            {% set provider_info = available_types | selectattr('type', 'equalto', selected_type) | first %}
+            {% if provider_info %}
+                {% for field_name, field_schema in provider_info.schema.items() %}
+                <div {% if field_schema.type == 'json' %}class="md:col-span-2"{% endif %}>
+                    <label class="label" for="config_{{ field_name }}">
+                        {{ field_schema.label }}
+                        {% if field_schema.required %}
+                        <span class="text-red-400">*</span>
+                        {% endif %}
+                    </label>
+
+                    {% if field_schema.type == 'string' %}
+                        <input
+                            type="text"
+                            name="config_{{ field_name }}"
+                            class="input"
+                            value="{{ provider.config[field_name] if provider and field_name in provider.config else field_schema.default | default('') }}"
+                            {% if field_schema.required %}required{% endif %}
+                            {% if field_schema.placeholder %}placeholder="{{ field_schema.placeholder }}"{% endif %}
+                        >
+
+                    {% elif field_schema.type == 'integer' %}
+                        <input
+                            type="number"
+                            name="config_{{ field_name }}"
+                            class="input"
+                            value="{{ provider.config[field_name] if provider and field_name in provider.config else field_schema.default | default('') }}"
+                            {% if field_schema.required %}required{% endif %}
+                        >
+
+                    {% elif field_schema.type == 'boolean' %}
+                        <label class="flex items-center gap-2 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                name="config_{{ field_name }}"
+                                value="true"
+                                {% if (provider and field_name in provider.config and provider.config[field_name]) or (not provider and field_schema.default) %}checked{% endif %}
+                                class="w-4 h-4 text-brand-500 bg-dark-bg-tertiary border-dark-border rounded focus:ring-brand-500 focus:ring-2"
+                            >
+                            <span class="text-sm text-dark-text-muted">Enable</span>
+                        </label>
+
+                    {% elif field_schema.type == 'select' %}
+                        <select
+                            id="config_{{ field_name }}"
+                            name="config_{{ field_name }}"
+                            class="input"
+                            {% if field_schema.required %}required{% endif %}
+                        >
+                            {% for option in field_schema.options %}
+                            <option value="{{ option.value }}" {% if (provider and provider.config.get(field_name) == option.value) or (not provider and field_schema.default == option.value) %}selected{% endif %}>
+                                {{ option.label }}
+                            </option>
+                            {% endfor %}
+                        </select>
+
+                    {% elif field_schema.type == 'json' %}
+                        <textarea
+                            name="config_{{ field_name }}"
+                            class="input font-mono text-sm"
+                            rows="4"
+                            {% if field_schema.required %}required{% endif %}
+                            {% if field_schema.placeholder %}placeholder="{{ field_schema.placeholder }}"{% endif %}
+                        >{{ provider.config[field_name] | tojson if provider and field_name in provider.config else '' }}</textarea>
+
+                    {% elif field_schema.type == 'password' %}
+                        <input
+                            type="password"
+                            name="config_{{ field_name }}"
+                            class="input"
+                            value="{{ provider.config[field_name] if provider and field_name in provider.config else '' }}"
+                            {% if field_schema.required %}required{% endif %}
+                            {% if field_schema.placeholder %}placeholder="{{ field_schema.placeholder }}"{% endif %}
+                        >
+
+                    {% else %}
+                        <!-- Fallback for unknown types -->
+                        <input
+                            type="text"
+                            name="config_{{ field_name }}"
+                            class="input"
+                            value="{{ provider.config[field_name] if provider and field_name in provider.config else field_schema.default | default('') }}"
+                        >
+                    {% endif %}
+
+                    {% if field_schema.help_text %}
+                    <p class="text-xs text-dark-text-muted mt-1">{{ field_schema.help_text }}</p>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <!-- Provider Status Options -->
+        {% if selected_type %}
+        <div class="pt-4 border-t border-dark-border space-y-4">
+            <!-- Enable Provider -->
+            <label class="flex items-center gap-2 cursor-pointer">
+                <input
+                    type="checkbox"
+                    name="is_enabled"
+                    value="true"
+                    {% if not provider or provider.is_enabled %}checked{% endif %}
+                    class="w-4 h-4 text-brand-500 bg-dark-bg-tertiary border-dark-border rounded"
+                >
+                <span class="text-sm font-medium">Enable this notification provider</span>
+            </label>
+
+            <!-- Default Enabled Option -->
+            <label class="flex items-start gap-3 cursor-pointer">
+                <input
+                    type="checkbox"
+                    name="is_default_enabled"
+                    value="true"
+                    {% if provider and provider.is_default_enabled %}checked{% endif %}
+                    class="mt-1 w-4 h-4 text-brand-500 bg-dark-bg-tertiary border-dark-border rounded focus:ring-brand-500 focus:ring-2"
+                >
+                <div class="flex-1">
+                    <span class="text-sm font-medium text-dark-text-primary">Default enabled</span>
+                    <p class="text-xs text-dark-text-muted mt-1">
+                        This notification will be enabled by default for new monitors. You can still disable the notification separately for each monitor.
+                    </p>
+                </div>
+            </label>
+        </div>
+        {% endif %}
+
+        {% if selected_type %}
+        {% endif %}
+
+    </div>
+    {% endcall %}
+
+    {% if selected_type %}
+    {% call panel_footer() %}
+        {{ btn_cancel_text(extra_classes='flex-1', extra_attrs='type="button" data-close-panel') }}
+        {% if provider %}
+            {{ btn_save(label='Update Provider', extra_classes='flex-1') }}
+        {% else %}
+            {{ btn_create(label='Add Provider', extra_classes='flex-1') }}
+        {% endif %}
+    {% endcall %}
+    {% endif %}
+    </form>
+{% endcall %}

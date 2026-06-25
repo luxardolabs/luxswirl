@@ -1,0 +1,58 @@
+<!-- Summary stats cards -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+    <!-- Total Checks -->
+    <div class="card p-4">
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-xs text-dark-text-muted uppercase tracking-wider mb-1">Total Checks</p>
+                <p class="text-2xl font-bold text-dark-text-primary">{{ summary.enabled_checks }}</p>
+                <p class="text-xs text-dark-text-muted mt-1">{{ summary.total_checks }} total</p>
+            </div>
+            <div class="w-10 h-10 rounded-lg bg-brand-500/10 flex items-center justify-center">
+                <span class="w-6 h-6 text-brand-500 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/clipboard-document-check.svg" %}</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Up -->
+    <div class="card p-4">
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-xs text-dark-text-muted uppercase tracking-wider mb-1">Up</p>
+                <p class="text-2xl font-bold text-green-400">{{ summary.up_count }}</p>
+                <p class="text-xs text-green-400 mt-1">{{ "%.1f"|format((summary.up_count / summary.enabled_checks * 100) if summary.enabled_checks > 0 else 0) }}%</p>
+            </div>
+            <div class="w-10 h-10 rounded-lg bg-green-500/10 flex items-center justify-center">
+                <span class="w-6 h-6 text-green-500 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/check-circle.svg" %}</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Down -->
+    <div class="card p-4">
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-xs text-dark-text-muted uppercase tracking-wider mb-1">Down</p>
+                <p class="text-2xl font-bold text-red-400">{{ summary.down_count }}</p>
+                <p class="text-xs text-red-400 mt-1">{{ "%.1f"|format((summary.down_count / summary.enabled_checks * 100) if summary.enabled_checks > 0 else 0) }}%</p>
+            </div>
+            <div class="w-10 h-10 rounded-lg bg-red-500/10 flex items-center justify-center">
+                <span class="w-6 h-6 text-red-500 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/exclamation-circle.svg" %}</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Success Rate -->
+    <div class="card p-4">
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-xs text-dark-text-muted uppercase tracking-wider mb-1">24h Success Rate</p>
+                <p class="text-2xl font-bold text-brand-500">{{ "%.1f"|format(summary.overall_success_rate) }}%</p>
+                <p class="text-xs text-dark-text-muted mt-1">{{ summary.active_agents }} agent{{ 's' if summary.active_agents != 1 else '' }}</p>
+            </div>
+            <div class="w-10 h-10 rounded-lg bg-brand-500/10 flex items-center justify-center">
+                <span class="w-6 h-6 text-brand-500 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/arrow-trending-up.svg" %}</span>
+            </div>
+        </div>
+    </div>
+</div>

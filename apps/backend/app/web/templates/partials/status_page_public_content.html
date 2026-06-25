@@ -1,0 +1,34 @@
+<!-- Public Status Page Content (refreshable) -->
+{% if rendered_items %}
+    <!-- Flexbox layout - cards wrap based on fixed width -->
+    <div class="space-y-6">
+        {% for item in rendered_items %}
+            {% if item.type == 'check' %}
+                <!-- Collect checks for flex container -->
+                {% if loop.first or rendered_items[loop.index0 - 1].type != 'check' %}
+                    <!-- Start new flex section with has-hover for blur effect -->
+                    <div class="flex flex-wrap gap-4 card-grid">
+                {% endif %}
+
+                {% include 'partials/public_check_card.html' with context %}
+
+                {% if loop.last or rendered_items[loop.index0 + 1].type != 'check' %}
+                    <!-- Close flex section -->
+                    </div>
+                {% endif %}
+            {% elif item.type == 'group' %}
+                <!-- Group Container (full width) -->
+                {% include 'partials/public_group.html' with context %}
+            {% endif %}
+        {% endfor %}
+    </div>
+{% else %}
+    <!-- Empty State -->
+    <div class="card p-12 text-center">
+        <div class="text-dark-text-muted">
+            <span class="w-16 h-16 mx-auto mb-4 opacity-50 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/document-text.svg" %}</span>
+            <p class="text-lg font-medium">No checks configured</p>
+            <p class="text-sm mt-2">This status page doesn't have any checks yet.</p>
+        </div>
+    </div>
+{% endif %}

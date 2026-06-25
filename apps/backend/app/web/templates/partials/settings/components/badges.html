@@ -1,0 +1,231 @@
+{% from 'macros/badges.html' import badge, status_badge, category_badge, status_dot, status_pip, role_badge, check_type_badge, tag %}
+{% from 'macros/status.html' import status_badge as check_status_badge %}
+{% from 'macros/jobs.html' import job_status_badge, priority_indicator %}
+
+{# ═══════════════════════════════════════════════════════════════════════
+   BADGES — macros/badges.html
+   ═══════════════════════════════════════════════════════════════════════ #}
+<section>
+    <h2 class="text-lg font-semibold text-dark-text-primary mb-1">Badges</h2>
+    <p class="text-sm text-dark-text-muted mb-4">From <code class="text-brand-400">macros/badges.html</code> — <code class="text-brand-400">badge(text, variant, extra_classes='')</code></p>
+
+    <div class="card p-6 space-y-6">
+        {# Generic badge #}
+        <div>
+            <h3 class="text-sm font-medium text-dark-text-secondary mb-3">badge(text, variant)</h3>
+            <div class="flex flex-wrap items-center gap-2">
+                {{ badge("Neutral", "neutral") }}
+                {{ badge("Brand", "brand") }}
+                {{ badge("Success", "success") }}
+                {{ badge("Warning", "warning") }}
+                {{ badge("Danger", "danger") }}
+                {{ badge("Info", "info") }}
+                {{ badge("Purple", "purple") }}
+                {{ badge("Cyan", "cyan") }}
+                {{ badge("Orange", "orange") }}
+            </div>
+        </div>
+
+        {# Status badge #}
+        <div>
+            <h3 class="text-sm font-medium text-dark-text-secondary mb-3">status_badge(is_active)</h3>
+            <div class="flex items-center gap-4">
+                {{ status_badge(true) }}
+                {{ status_badge(false) }}
+            </div>
+        </div>
+
+        {# Role badge #}
+        <div>
+            <h3 class="text-sm font-medium text-dark-text-secondary mb-3">role_badge(role)</h3>
+            <div class="flex items-center gap-2">
+                {{ role_badge("admin") }}
+                {{ role_badge("editor") }}
+                {{ role_badge("viewer") }}
+            </div>
+        </div>
+
+        {# Category badge #}
+        <div>
+            <h3 class="text-sm font-medium text-dark-text-secondary mb-3">category_badge(category)</h3>
+            <div class="flex items-center gap-2">
+                {{ category_badge("cleanup") }}
+                {{ category_badge("monitoring") }}
+                {{ category_badge("system") }}
+                {{ category_badge("network") }}
+                {{ category_badge("security") }}
+            </div>
+        </div>
+
+        {# Check type badge #}
+        <div>
+            <h3 class="text-sm font-medium text-dark-text-secondary mb-3">check_type_badge(check_type)</h3>
+            <div class="flex items-center gap-2">
+                {{ check_type_badge("http") }}
+                {{ check_type_badge("ping") }}
+                {{ check_type_badge("tcp") }}
+                {{ check_type_badge("json") }}
+                {{ check_type_badge("dns") }}
+                {{ check_type_badge("mysql") }}
+                {{ check_type_badge("postgres") }}
+                {{ check_type_badge("synthetic") }}
+            </div>
+        </div>
+    </div>
+</section>
+
+{# ═══════════════════════════════════════════════════════════════════════
+   METADATA TAGS — macros/badges.html
+   ═══════════════════════════════════════════════════════════════════════ #}
+<section>
+    <h2 class="text-lg font-semibold text-dark-text-primary mb-1">Metadata Tags</h2>
+    <p class="text-sm text-dark-text-muted mb-4">From <code class="text-brand-400">macros/badges.html</code> — <code class="text-brand-400">tag(text, variant)</code> — Monospace identifier labels with lighter /10 opacity backgrounds (vs /20 for badges)</p>
+
+    <div class="card p-6 space-y-6">
+        <div>
+            <h3 class="text-sm font-medium text-dark-text-secondary mb-3">tag(text, variant)</h3>
+            <div class="flex flex-wrap items-center gap-2">
+                {{ tag("agent-prod-01", "info") }}
+                {{ tag("us-east-1", "success") }}
+                {{ tag("luxswirl-server", "brand") }}
+                {{ tag("deprecated", "neutral") }}
+                {{ tag("admin-only", "purple") }}
+            </div>
+        </div>
+
+        <div>
+            <h3 class="text-sm font-medium text-dark-text-secondary mb-3">Usage: Agent &amp; Check Metadata</h3>
+            <p class="text-xs text-dark-text-muted mb-3">Tags are used for agent names, agent tags, and check tags throughout the status table, dashboard items, and available checks panels.</p>
+            <div class="flex flex-wrap items-center gap-2">
+                {{ tag("web-monitor", "info") }}
+                {{ tag("production", "info") }}
+                {{ tag("us-west-2", "info") }}
+                {{ tag("http-health", "success") }}
+                {{ tag("critical", "success") }}
+            </div>
+        </div>
+    </div>
+</section>
+
+{# ═══════════════════════════════════════════════════════════════════════
+   STATUS DOTS — macros/badges.html
+   ═══════════════════════════════════════════════════════════════════════ #}
+<section>
+    <h2 class="text-lg font-semibold text-dark-text-primary mb-1">Status Dots</h2>
+    <p class="text-sm text-dark-text-muted mb-4">From <code class="text-brand-400">macros/badges.html</code> — <code class="text-brand-400">status_dot(status, show_label=false)</code></p>
+
+    <div class="card p-6">
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div class="flex items-center gap-3">
+                {{ status_dot("online", show_label=true) }}
+            </div>
+            <div class="flex items-center gap-3">
+                {{ status_dot("active", show_label=true) }}
+            </div>
+            <div class="flex items-center gap-3">
+                {{ status_dot("healthy", show_label=true) }}
+            </div>
+            <div class="flex items-center gap-3">
+                {{ status_dot("enabled", show_label=true) }}
+            </div>
+            <div class="flex items-center gap-3">
+                {{ status_dot("success", show_label=true) }}
+            </div>
+            <div class="flex items-center gap-3">
+                {{ status_dot("pending", show_label=true) }}
+            </div>
+            <div class="flex items-center gap-3">
+                {{ status_dot("warning", show_label=true) }}
+            </div>
+            <div class="flex items-center gap-3">
+                {{ status_dot("running", show_label=true) }}
+            </div>
+            <div class="flex items-center gap-3">
+                {{ status_dot("offline", show_label=true) }}
+            </div>
+            <div class="flex items-center gap-3">
+                {{ status_dot("error", show_label=true) }}
+            </div>
+            <div class="flex items-center gap-3">
+                {{ status_dot("failed", show_label=true) }}
+            </div>
+            <div class="flex items-center gap-3">
+                {{ status_dot("stale", show_label=true) }}
+            </div>
+            <div class="flex items-center gap-3">
+                {{ status_dot("disabled", show_label=true) }}
+            </div>
+            <div class="flex items-center gap-3">
+                {{ status_dot("inactive", show_label=true) }}
+            </div>
+            <div class="flex items-center gap-3">
+                {{ status_dot("unknown", show_label=true) }}
+            </div>
+        </div>
+    </div>
+</section>
+
+{# ═══════════════════════════════════════════════════════════════════════
+   STATUS PIPS — macros/badges.html
+   ═══════════════════════════════════════════════════════════════════════ #}
+<section>
+    <h2 class="text-lg font-semibold text-dark-text-primary mb-1">Status Pips</h2>
+    <p class="text-sm text-dark-text-muted mb-4">From <code class="text-brand-400">macros/badges.html</code> — <code class="text-brand-400">status_pip(status)</code> — Tiny w-2 h-2 inline dots for compact check status in dashboard items and check lists</p>
+
+    <div class="card p-6">
+        <div class="flex items-center gap-6">
+            <div class="flex items-center gap-2">
+                {{ status_pip("up") }}
+                <span class="text-xs text-dark-text-muted">up</span>
+            </div>
+            <div class="flex items-center gap-2">
+                {{ status_pip("down") }}
+                <span class="text-xs text-dark-text-muted">down</span>
+            </div>
+            <div class="flex items-center gap-2">
+                {{ status_pip("unknown") }}
+                <span class="text-xs text-dark-text-muted">unknown / other</span>
+            </div>
+        </div>
+    </div>
+</section>
+
+{# ═══════════════════════════════════════════════════════════════════════
+   STATUS BADGES — macros/status.html + macros/jobs.html
+   ═══════════════════════════════════════════════════════════════════════ #}
+<section>
+    <h2 class="text-lg font-semibold text-dark-text-primary mb-1">Status Badges (Domain)</h2>
+    <p class="text-sm text-dark-text-muted mb-4">From <code class="text-brand-400">macros/status.html</code> and <code class="text-brand-400">macros/jobs.html</code></p>
+
+    <div class="card p-6 space-y-6">
+        <div>
+            <h3 class="text-sm font-medium text-dark-text-secondary mb-3">check status_badge(status) <span class="text-dark-text-muted font-normal">— macros/status.html</span></h3>
+            <div class="flex items-center gap-2">
+                {{ check_status_badge("success") }}
+                {{ check_status_badge("error") }}
+                {{ check_status_badge("unknown") }}
+            </div>
+        </div>
+
+        <div>
+            <h3 class="text-sm font-medium text-dark-text-secondary mb-3">job_status_badge(status) <span class="text-dark-text-muted font-normal">— macros/jobs.html</span></h3>
+            <div class="flex items-center gap-2">
+                {{ job_status_badge("pending") }}
+                {{ job_status_badge("assigned") }}
+                {{ job_status_badge("running") }}
+                {{ job_status_badge("completed") }}
+                {{ job_status_badge("failed") }}
+                {{ job_status_badge("cancelled") }}
+            </div>
+        </div>
+
+        <div>
+            <h3 class="text-sm font-medium text-dark-text-secondary mb-3">priority_indicator(priority) <span class="text-dark-text-muted font-normal">— macros/jobs.html</span></h3>
+            <div class="flex items-center gap-2">
+                {{ priority_indicator(10) }}
+                {{ priority_indicator(50) }}
+                {{ priority_indicator(90) }}
+            </div>
+        </div>
+    </div>
+</section>

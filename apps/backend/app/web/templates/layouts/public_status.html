@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="{% block description %}Real-time system status and uptime monitoring{% endblock %}">
+    <title>{% block title %}{{ page_title|default('Status Dashboard') }}{% endblock %}</title>
+
+    <!-- Tailwind CSS -->
+    <link rel="stylesheet" href="/static/css/output.css?v={{ static_version }}">
+
+    <!-- Public Status Page Custom Styles -->
+    <link rel="stylesheet" href="/static/css/status-public.css?v={{ static_version }}">
+
+    <!-- Fonts -->
+
+
+    <link rel="stylesheet" href="/static/fonts/inter.css?v={{ static_version }}">
+
+    <!-- HTMX -->
+    <script src="/static/js/vendor/htmx.min.js?v={{ static_version }}"></script>
+
+    <!-- Idiomorph (for smooth HTMX morphing) -->
+    <script src="/static/js/vendor/idiomorph-ext.min.js?v={{ static_version }}"></script>
+
+    <!-- Chart.js -->
+    <script src="/static/js/vendor/chart.umd.js?v={{ static_version }}"></script>
+
+    {% block head %}{% endblock %}
+
+    <!-- Custom styles for public page -->
+    <style>
+        {% if status_page and status_page.config and status_page.config.get('custom_css') %}
+        /* Custom CSS from status page config */
+        {{ status_page.config.custom_css | safe }}
+        {% endif %}
+    </style>
+</head>
+<body class="font-sans antialiased bg-dark-bg-primary text-dark-text-primary min-h-screen">
+    <!-- Main content -->
+    <main class="px-4 sm:px-6 lg:px-8 py-8">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Footer -->
+    <footer class="px-4 sm:px-6 lg:px-8 py-8 mt-12 border-t border-dark-border">
+        <div class="flex items-center justify-between text-sm text-dark-text-muted">
+            <div>
+                {% if status_page and status_page.config and status_page.config.get('branding', {}).get('show_powered_by', True) %}
+                <p>Powered by <span class="font-semibold text-dark-text-secondary">LuxSwirl</span></p>
+                {% endif %}
+            </div>
+            <div id="last-updated" class="text-xs">
+                Last updated: <span class="font-mono">just now</span>
+            </div>
+        </div>
+    </footer>
+
+    {% block scripts %}{% endblock %}
+
+    <!-- Auto-update timestamp -->
+    <script>
+        function updateTimestamp() {
+            const el = document.querySelector('#last-updated span');
+            if (el) {
+                el.textContent = 'just now';
+            }
+        }
+
+        // Update timestamp on HTMX refresh
+        document.body.addEventListener('htmx:afterSwap', updateTimestamp);
+    </script>
+</body>
+</html>

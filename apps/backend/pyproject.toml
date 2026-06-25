@@ -1,0 +1,194 @@
+[tool.poetry]
+name = "luxswirl-backend"
+version = "1.0.21"
+description = "LuxSwirl observability platform — FastAPI server + HTMX portal"
+authors = ["Luxardo Labs"]
+readme = "README.md"
+package-mode = false
+
+[tool.poetry.dependencies]
+python = "^3.14"
+# FastAPI & Server
+fastapi = "^0.136.0"
+uvicorn = {extras = ["standard"], version = "^0.46.0"}
+jinja2 = "^3.1.0"
+python-multipart = "^0.0.27"
+
+# Logging (shared/logger.py)
+python-json-logger = "^2.0.7"
+
+# Database
+sqlalchemy = {extras = ["asyncio"], version = "^2.0.25"}
+asyncpg = "^0.31.0"
+alembic = "^1.13.1"
+
+# Pydantic
+pydantic = {extras = ["email"], version = "^2.5.3"}
+pydantic-settings = "^2.1.0"
+
+# HTTP Client
+httpx = "^0.28.1"
+requests = "^2.31.0"  # healthcheck
+
+# Async I/O
+aiofiles = "^25.1.0"
+aiosmtplib = "^5.0.0"
+
+# YAML & JSON (shared/config.py + import/export)
+pyyaml = "^6.0"
+jsonschema = "^4.17.3"
+
+# Metrics
+prometheus-client = "^0.25.0"
+
+# System metrics
+psutil = "^7.1.2"
+
+# UUID v7 (time-ordered UUIDs)
+uuid7 = "^0.1.0"
+
+# Security
+python-jose = {extras = ["cryptography"], version = "^3.3.0"}
+bcrypt = "^5.0.0"
+cryptography = "^48.0.0"
+
+# Rate Limiting
+slowapi = "^0.1.9"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^9.0.0"
+pytest-asyncio = "^1.3.0"
+pytest-cov = "^7.0.0"
+faker = "^40.0.0"
+hypothesis = "^6.122"
+mutmut = "^3.2"
+mypy = "^2.0.0"
+ruff = "^0.15.0"
+import-linter = "^2.11"
+ipython = "^9.0.0"
+types-pyyaml = "^6.0.12.20240917"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_functions = "test_*"
+# "." = apps/backend (resolves `import app.*`); ".." = apps/ (resolves
+# `import shared.*` from apps/shared); "tests" (resolves `from fixtures.db`).
+pythonpath = [".", "..", "tests"]
+addopts = "-v --cov=app --cov-report=term-missing --cov-report=html"
+
+[tool.mypy]
+python_version = "3.14"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false  # Gradually enable
+plugins = ["pydantic.mypy"]
+explicit_package_bases = true
+mypy_path = ".:.."
+exclude = ["alembic"]
+
+# Without this the plugin types every model __init__ field as Any, so
+# CheckCreate(target=<str|None>) and friends are never type-checked at the
+# construction site — the exact hole that let the job_to_check None-target
+# crash through. init_typed makes constructors honor the field annotations.
+[tool.pydantic-mypy]
+init_typed = true
+
+[[tool.mypy.overrides]]
+module = ["asyncpg.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["uuid_extensions"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["jsonata", "playwright.*"]
+ignore_missing_imports = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py314"
+exclude = [".git", ".mypy_cache", ".ruff_cache", ".venv", "__pycache__", "alembic"]
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "B", "C4", "UP"]
+ignore = ["E501", "B008"]
+
+[tool.ruff.lint.isort]
+# `shared` is a vendored top-level package (apps/shared, COPYd into each image),
+# not a first-party app module — classify it explicitly so `make format` (which
+# mounts app+tests) and `make lint` (fully baked) agree on its import group.
+known-third-party = ["shared"]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]
+"alembic/*" = ["E402"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+
+[tool.importlinter]
+root_packages = ["app"]
+include_external_packages = true
+
+# 1. Layered architecture: lower layers cannot import from higher ones.
+[[tool.importlinter.contracts]]
+name = "Layered architecture: routers → services → crud → models"
+type = "layers"
+layers = [
+    "app.api.v1.routers : app.web.routers",
+    "app.services.views",
+    "app.services.core",
+    "app.crud",
+    "app.models",
+]
+
+# 2. Web routers must go through view services — not core or crud directly.
+[[tool.importlinter.contracts]]
+name = "Web routers do not import core services or crud directly"
+type = "forbidden"
+source_modules = ["app.web.routers"]
+forbidden_modules = ["app.services.core", "app.crud"]
+allow_indirect_imports = true
+
+# 3. JSON API routers must go through core services — not view services or crud.
+[[tool.importlinter.contracts]]
+name = "API routers do not import view services or crud directly"
+type = "forbidden"
+source_modules = ["app.api.v1.routers"]
+forbidden_modules = ["app.services.views", "app.crud"]
+allow_indirect_imports = true
+
+# 4. View services do not compose other view services.
+[[tool.importlinter.contracts]]
+name = "View services do not import other view services"
+type = "independence"
+modules = ["app.services.views"]
+ignore_imports = [
+    "app.services.views.status_pages_view_service -> app.services.views._dashboard_render",
+]
+
+# 5. Core services must not depend on view services or routers.
+[[tool.importlinter.contracts]]
+name = "Core services do not import view services or routers"
+type = "forbidden"
+source_modules = ["app.services.core"]
+forbidden_modules = ["app.services.views", "app.api", "app.web"]
+allow_indirect_imports = true
+
+# 6. CRUD must not depend on services or routers.
+[[tool.importlinter.contracts]]
+name = "CRUD does not import services or routers"
+type = "forbidden"
+source_modules = ["app.crud"]
+forbidden_modules = ["app.services", "app.api", "app.web"]
+allow_indirect_imports = true

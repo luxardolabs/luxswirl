@@ -1,0 +1,27 @@
+<!-- HTTP-specific fields -->
+<div id="http-fields" class="space-y-4 {% if not check or (check.check_type not in ['http', 'json']) %}hidden{% endif %}">
+    <div class="grid grid-cols-2 gap-4">
+        <div>
+            <label class="label" for="http_method">HTTP Method</label>
+            <select name="http_method" id="http_method" class="input">
+                <option value="GET" {% if (check and check.http_method == 'GET') or (not check and check_defaults.http_method == 'GET') or (check and not check.http_method) %}selected{% endif %}>GET</option>
+                <option value="POST" {% if (check and check.http_method == 'POST') or (not check and check_defaults.http_method == 'POST') %}selected{% endif %}>POST</option>
+                <option value="PUT" {% if (check and check.http_method == 'PUT') or (not check and check_defaults.http_method == 'PUT') %}selected{% endif %}>PUT</option>
+                <option value="HEAD" {% if (check and check.http_method == 'HEAD') or (not check and check_defaults.http_method == 'HEAD') %}selected{% endif %}>HEAD</option>
+            </select>
+            <p class="text-xs text-dark-text-muted mt-1">HTTP request method</p>
+        </div>
+        <div>
+            <label class="label">Expected Status</label>
+            <input
+                type="number"
+                name="expected_status"
+                value="{{ check.expected_status if check and check.expected_status else check_defaults.expected_status }}"
+                min="100"
+                max="599"
+                class="input"
+            >
+            <p class="text-xs text-dark-text-muted mt-1">Expected HTTP status code</p>
+        </div>
+    </div>
+</div>

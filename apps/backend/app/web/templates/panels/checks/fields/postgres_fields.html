@@ -1,0 +1,25 @@
+<!-- PostgreSQL-specific fields -->
+<div id="postgres-fields" class="space-y-4 {% if not check or check.check_type != 'postgres' %}hidden{% endif %}">
+    <div>
+        <label class="label">Connection String</label>
+        <input
+            type="text"
+            name="connection_string"
+            value="{{ check.connection_string if check and check.connection_string is not none else '' }}"
+            class="input"
+            placeholder="postgres://username:password@host:5432/database"
+        >
+        <p class="text-xs text-dark-text-muted mt-1">PostgreSQL connection string (format: postgres://user:pass@host:port/db)</p>
+    </div>
+    <div>
+        <label class="label">Query (optional)</label>
+        <input
+            type="text"
+            name="query"
+            value="{{ check.query if check and check.query is not none else '' }}"
+            class="input"
+            placeholder="SELECT 1"
+        >
+        <p class="text-xs text-dark-text-muted mt-1">SQL query to execute (default: SELECT 1)</p>
+    </div>
+</div>

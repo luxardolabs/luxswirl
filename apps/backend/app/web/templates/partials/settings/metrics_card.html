@@ -1,0 +1,116 @@
+{% from 'macros/badges.html' import badge %}
+{% from 'macros/buttons.html' import text_btn, btn_save, toggle_switch %}
+<!-- Prometheus Metrics Card -->
+<div id="metrics-card" class="card p-4 hover:border-brand-500/30 transition-all">
+    <div class="flex items-start justify-between mb-3">
+        <div class="flex items-center gap-3">
+            <!-- Metrics Icon -->
+            <div class="w-10 h-10 rounded-lg bg-purple-500/10 flex items-center justify-center">
+                <span class="w-6 h-6 text-purple-500 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/chart-bar.svg" %}</span>
+            </div>
+
+            <div class="flex-1">
+                <h3 class="font-semibold text-dark-text-primary">Prometheus Metrics</h3>
+                <p class="text-xs text-dark-text-muted">Endpoint at /metrics</p>
+            </div>
+        </div>
+
+        <!-- Status Badge -->
+        {% if not metrics_settings.enabled %}
+        {{ badge('Disabled', 'danger') }}
+        {% elif metrics_settings.auth_required %}
+        {{ badge('Protected', 'success') }}
+        {% else %}
+        {{ badge('Public', 'warning') }}
+        {% endif %}
+    </div>
+
+    <!-- Controls Row -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-4">
+        <!-- Endpoint Enabled Toggle -->
+        <div class="flex flex-col">
+            <label class="text-sm font-medium text-dark-text-primary mb-2">Enable Endpoint</label>
+            {{ toggle_switch(metrics_settings.enabled, size='md',
+                             hx_post='/settings/metrics/toggle-enabled',
+                             hx_target='#metrics-card', hx_swap='outerHTML',
+                             title='Enable or disable /metrics endpoint') }}
+            <p class="text-xs text-dark-text-muted mt-1">Enable or disable /metrics</p>
+        </div>
+
+        {% if metrics_settings.enabled %}
+        <!-- Authentication Required Toggle -->
+        <div class="flex flex-col">
+            <label class="text-sm font-medium text-dark-text-primary mb-2">Require Authentication</label>
+            {{ toggle_switch(metrics_settings.auth_required, size='md',
+                             hx_post='/settings/metrics/toggle-auth',
+                             hx_target='#metrics-card', hx_swap='outerHTML',
+                             title='Toggle bearer token requirement on /metrics') }}
+            <p class="text-xs text-dark-text-muted mt-1">Public or bearer token required</p>
+        </div>
+
+        <!-- Agent Timeout Configuration -->
+        <div class="flex flex-col">
+            <label for="agent-timeout-input" class="text-sm font-medium text-dark-text-primary mb-2">Agent Timeout Threshold</label>
+            <div class="flex gap-2">
+                <input
+                    type="number"
+                    id="agent-timeout-input"
+                    name="timeout"
+                    min="30"
+                    max="3600"
+                    step="30"
+                    value="{{ metrics_settings.agent_timeout_seconds }}"
+                    class="flex-1 px-3 py-2 bg-dark-bg-tertiary border border-dark-border rounded-lg text-dark-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                />
+                {{ btn_save(label='Save', size='sm',
+                            extra_attrs='hx-post="/settings/metrics/update-timeout" hx-target="#metrics-card" hx-swap="outerHTML" hx-include="#agent-timeout-input"') }}
+            </div>
+            <p class="text-xs text-dark-text-muted mt-1">Seconds without heartbeat before agent marked as down</p>
+        </div>
+        {% endif %}
+    </div>
+
+    {% if metrics_settings.enabled %}
+
+    <!-- Token Display Area -->
+    <div id="token-display" class="mb-4">
+        {% if metrics_settings.bearer_token and not metrics_settings.auth_required %}
+        <div class="p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/30">
+            <div class="flex items-start gap-2">
+                <span class="w-4 h-4 text-yellow-400 flex-shrink-0 mt-0.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/exclamation-triangle.svg" %}</span>
+                <p class="text-xs text-dark-text-muted">
+                    Token configured but authentication is disabled.
+                </p>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Generate Token Button -->
+    <div class="pt-3 border-t border-dark-border">
+        {% set key_svg %}<span class="w-4 h-4 mr-1.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/key.svg" %}</span>{% endset %}
+        {{ text_btn(key_svg, 'Generate Bearer Token', hx_post='/settings/metrics/generate-token', hx_target='#token-display', hx_swap='innerHTML', extra_classes='w-full text-sm py-2') }}
+    </div>
+
+    <!-- Prometheus Config Example -->
+    <details class="mt-4">
+        <summary class="text-xs text-dark-text-muted cursor-pointer hover:text-dark-text-primary">
+            Show Prometheus config example
+        </summary>
+        <div class="mt-2 p-3 rounded-lg bg-dark-bg-tertiary">
+            {% if metrics_settings.auth_required and metrics_settings.bearer_token %}
+            <pre class="text-xs text-dark-text-muted overflow-x-auto"><code>scrape_configs:
+  - job_name: 'luxswirl'
+    static_configs:
+      - targets: ['localhost:9000']
+    bearer_token_file: /etc/prometheus/luxswirl-token.txt</code></pre>
+            {% else %}
+            <pre class="text-xs text-dark-text-muted overflow-x-auto"><code>scrape_configs:
+  - job_name: 'luxswirl'
+    static_configs:
+      - targets: ['localhost:9000']</code></pre>
+            {% endif %}
+        </div>
+    </details>
+    {% endif %}
+</div>

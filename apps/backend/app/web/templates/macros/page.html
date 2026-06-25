@@ -1,0 +1,29 @@
+{#
+    Page-level macros for consistent page structure
+
+    Usage:
+        {% from 'macros/page.html' import page_header %}
+        {{ page_header(
+            title='Page Title',
+            description='Brief description of what this page does',
+            actions='<button>Action</button>'  // Optional
+        ) }}
+#}
+
+{% macro page_header(title, description='', actions='') %}
+<div class="mb-8">
+    <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+            <h1 class="text-2xl font-bold text-dark-text-primary mb-2">{{ title }}</h1>
+            {% if description %}
+            <p class="text-dark-text-muted">{{ description }}</p>
+            {% endif %}
+        </div>
+        {% if actions %}
+        <div class="flex flex-wrap items-center gap-2">
+            {{ actions|safe }}
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endmacro %}

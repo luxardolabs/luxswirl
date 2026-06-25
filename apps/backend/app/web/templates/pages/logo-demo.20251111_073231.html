@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LuxSwirl Logo Animation v0.2 - Broadway Light Patterns</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Courier New', monospace;
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow-x: hidden;
+            color: #ffffff;
+            padding: 2rem;
+        }
+
+        .container {
+            display: flex;
+            gap: 2rem;
+            max-width: 1400px;
+            width: 100%;
+        }
+
+        .canvas-section {
+            flex-shrink: 0;
+        }
+
+        h1 {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+            color: #ff3300;
+            text-shadow: 0 0 20px rgba(255, 51, 0, 0.5);
+            letter-spacing: 0.1em;
+            text-align: center;
+        }
+
+        #canvas-container {
+            width: 600px;
+            height: 600px;
+            margin-bottom: 1rem;
+            transition: filter 0.3s ease;
+        }
+
+        .controls-section {
+            flex: 1;
+            overflow-y: auto;
+            max-height: 90vh;
+        }
+
+        .controls {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 1.5rem;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 51, 0, 0.3);
+            backdrop-filter: blur(10px);
+        }
+
+        .control-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .control-group h3 {
+            color: #ff6633;
+            font-size: 0.9rem;
+            margin-bottom: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            border-bottom: 1px solid rgba(255, 51, 0, 0.2);
+            padding-bottom: 0.5rem;
+        }
+
+        .control-item {
+            margin-bottom: 1rem;
+        }
+
+        .control-item label {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.25rem;
+            font-size: 0.85rem;
+            color: #aaaaaa;
+        }
+
+        .control-item .value {
+            color: #ff6633;
+            font-weight: bold;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+            outline: none;
+            -webkit-appearance: none;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            background: #ff3300;
+            cursor: pointer;
+            border-radius: 50%;
+            box-shadow: 0 0 10px rgba(255, 51, 0, 0.5);
+        }
+
+        input[type="range"]::-moz-range-thumb {
+            width: 16px;
+            height: 16px;
+            background: #ff3300;
+            cursor: pointer;
+            border-radius: 50%;
+            box-shadow: 0 0 10px rgba(255, 51, 0, 0.5);
+            border: none;
+        }
+
+        input[type="color"] {
+            width: 100%;
+            height: 40px;
+            background: transparent;
+            border: 1px solid rgba(255, 51, 0, 0.3);
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+            accent-color: #ff3300;
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .back-link {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            padding: 10px 20px;
+            background: rgba(255, 51, 0, 0.2);
+            border: 1px solid rgba(255, 51, 0, 0.5);
+            border-radius: 5px;
+            color: #ff6633;
+            text-decoration: none;
+            font-size: 0.9rem;
+            transition: all 0.3s ease;
+            z-index: 1000;
+        }
+
+        .back-link:hover {
+            background: rgba(255, 51, 0, 0.3);
+            color: #ff9966;
+        }
+
+        .info {
+            margin-top: 1rem;
+            padding: 1rem;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 5px;
+            font-size: 0.8rem;
+            color: #888;
+        }
+
+        .info code {
+            color: #ff6633;
+        }
+    </style>
+</head>
+<body>
+    <a href="/" class="back-link">← Back to Dashboard</a>
+
+    <div class="container">
+        <div class="canvas-section">
+            <h1>SWIRL LOGO</h1>
+            <div id="canvas-container"></div>
+        </div>
+
+        <div class="controls-section">
+            <div class="controls">
+                <h2 style="color: #ff3300; margin-bottom: 1rem; font-size: 1.2rem;">Animation Controls</h2>
+
+                <!-- Sphere Controls -->
+                <div class="control-group">
+                    <h3>Sphere</h3>
+
+                    <div class="control-item">
+                        <label>
+                            <span>Vertices (Wireframe Detail)</span>
+                            <span class="value" id="vertices-value">28</span>
+                        </label>
+                        <input type="range" id="vertices" min="8" max="64" step="4" value="28">
+                    </div>
+
+                    <div class="control-item">
+                        <label>
+                            <span>Size</span>
+                            <span class="value" id="sphereSize-value">1.7</span>
+                        </label>
+                        <input type="range" id="sphereSize" min="0.5" max="3.0" step="0.1" value="1.7">
+                    </div>
+
+                    <div class="control-item">
+                        <label>
+                            <span>Rotation Speed</span>
+                            <span class="value" id="rotationSpeed-value">0.001</span>
+                        </label>
+                        <input type="range" id="rotationSpeed" min="0" max="0.02" step="0.001" value="0.001">
+                    </div>
+
+                    <div class="control-item">
+                        <label>
+                            <span>Pulse Amount (Growth)</span>
+                            <span class="value" id="pulseAmount-value">0.03</span>
+                        </label>
+                        <input type="range" id="pulseAmount" min="0" max="0.3" step="0.01" value="0.03">
+                    </div>
+
+                    <div class="control-item">
+                        <label>
+                            <span>Pulse Speed</span>
+                            <span class="value" id="pulseSpeed-value">2.7</span>
+                        </label>
+                        <input type="range" id="pulseSpeed" min="0.5" max="5.0" step="0.1" value="2.7">
+                    </div>
+                </div>
+
+                <!-- Opacity Controls -->
+                <div class="control-group">
+                    <h3>Opacity & Visibility</h3>
+
+                    <div class="control-item">
+                        <label>
+                            <span>Wireframe Opacity</span>
+                            <span class="value" id="wireframeOpacity-value">0.90</span>
+                        </label>
+                        <input type="range" id="wireframeOpacity" min="0" max="1" step="0.05" value="0.9">
+                    </div>
+
+                    <div class="control-item">
+                        <label>
+                            <span>Transparency (0=Solid, 1=See Through)</span>
+                            <span class="value" id="backsideOpacity-value">0.40</span>
+                        </label>
+                        <input type="range" id="backsideOpacity" min="0" max="1" step="0.05" value="0.4">
+                    </div>
+
+                    <div class="control-item">
+                        <label>
+                            <span>Glow Intensity</span>
+                            <span class="value" id="glowIntensity-value">0.25</span>
+                        </label>
+                        <input type="range" id="glowIntensity" min="0" max="1" step="0.05" value="0.25">
+                    </div>
+
+                    <div class="control-item">
+                        <label>
+                            <span>Outer Glow (CSS Shadow) Color</span>
+                        </label>
+                        <input type="color" id="cssGlowColor" value="#ff3300">
+                    </div>
+
+                    <div class="control-item">
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="lockCssGlowToSphere" checked>
+                            <label for="lockCssGlowToSphere">Lock Outer Glow to Sphere Color</label>
+                        </div>
+                    </div>
+
+                    <div class="control-item">
+                        <label>
+                            <span>Outer Glow Intensity</span>
+                            <span class="value" id="cssGlowIntensity-value">40</span>
+                        </label>
+                        <input type="range" id="cssGlowIntensity" min="0" max="100" step="5" value="40">
+                    </div>
+                </div>
+
+                <!-- Color Controls -->
+                <div class="control-group">
+                    <h3>Colors</h3>
+
+                    <div class="control-item">
+                        <label>
+                            <span>Primary Color (Sphere)</span>
+                        </label>
+                        <input type="color" id="primaryColor" value="#ff3300">
+                    </div>
+
+                    <div class="control-item">
+                        <label>
+                            <span>Glow Color (Inner Sphere)</span>
+                        </label>
+                        <input type="color" id="glowColor" value="#ff3300">
+                    </div>
+
+                    <div class="control-item">
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="useGradient">
+                            <label for="useGradient">Gradient Wave (Pulse Colors)</label>
+                        </div>
+                    </div>
+
+                    <div class="control-item">
+                        <label>
+                            <span>Gradient Wave Color</span>
+                        </label>
+                        <input type="color" id="primaryGradientColor" value="#ff6633">
+                    </div>
+
+                    <div class="control-item">
+                        <label>
+                            <span>Gradient Wave Speed</span>
+                            <span class="value" id="gradientWaveSpeed-value">0.5</span>
+                        </label>
+                        <input type="range" id="gradientWaveSpeed" min="0" max="3.0" step="0.1" value="0.5">
+                    </div>
+
+                    <div class="control-item">
+                        <label>
+                            <span>Secondary Color (Ring Particles)</span>
+                        </label>
+                        <input type="color" id="secondaryColor" value="#ff6633">
+                    </div>
+                </div>
+
+                <!-- Ring Controls -->
+                <div class="control-group">
+                    <h3>Particle Rings</h3>
+
+                    <div class="control-item">
+                        <label>
+                            <span>Number of Rings</span>
+                            <span class="value" id="ringCount-value">3</span>
+                        </label>
+                        <input type="range" id="ringCount" min="0" max="8" step="1" value="3">
+                    </div>
+
+                    <div class="control-item">
+                        <label>
+                            <span>Particles Per Ring</span>
+                            <span class="value" id="ringParticleCount-value">120</span>
+                        </label>
+                        <input type="range" id="ringParticleCount" min="20" max="300" step="10" value="120">
+                    </div>
+
+                    <div class="control-item">
+                        <label>
+                            <span>Particle Size</span>
+                            <span class="value" id="ringParticleSize-value">0.02</span>
+                        </label>
+                        <input type="range" id="ringParticleSize" min="0.01" max="0.1" step="0.01" value="0.02">
+                    </div>
+
+                    <div class="control-item">
+                        <label>
+                            <span>Ring Radius</span>
+                            <span class="value" id="ringRadius-value">2.5</span>
+                        </label>
+                        <input type="range" id="ringRadius" min="1.5" max="4.0" step="0.1" value="2.5">
+                    </div>
+
+                    <div class="control-item">
+                        <label>
+                            <span>Ring Rotation Speed</span>
+                            <span class="value" id="ringRotationSpeed-value">0.3</span>
+                        </label>
+                        <input type="range" id="ringRotationSpeed" min="0" max="2.0" step="0.1" value="0.3">
+                    </div>
+
+                    <div class="control-item">
+                        <label>
+                            <span>Ring Pulse Amount (Growth)</span>
+                            <span class="value" id="ringPulseAmount-value">0.15</span>
+                        </label>
+                        <input type="range" id="ringPulseAmount" min="0" max="0.5" step="0.01" value="0.15">
+                    </div>
+
+                    <div class="control-item">
+                        <label>
+                            <span>Ring Pulse Speed</span>
+                            <span class="value" id="ringPulseSpeed-value">2.0</span>
+                        </label>
+                        <input type="range" id="ringPulseSpeed" min="0" max="5.0" step="0.1" value="2.0">
+                    </div>
+
+                    <div class="control-item">
+                        <label>
+                            <span>Ring Radius Pulse (Expand/Contract)</span>
+                            <span class="value" id="ringRadiusPulse-value">0.1</span>
+                        </label>
+                        <input type="range" id="ringRadiusPulse" min="0" max="0.5" step="0.01" value="0.1">
+                    </div>
+
+                    <div class="control-item">
+                        <label>
+                            <span>Ring Radius Pulse Speed</span>
+                            <span class="value" id="ringRadiusPulseSpeed-value">1.5</span>
+                        </label>
+                        <input type="range" id="ringRadiusPulseSpeed" min="0" max="5.0" step="0.1" value="1.5">
+                    </div>
+                </div>
+
+                <!-- Light Pattern Controls -->
+                <div class="control-group">
+                    <h3>Light Patterns (Broadway Style)</h3>
+
+                    <div class="control-item">
+                        <label>
+                            <span>Pattern Type</span>
+                        </label>
+                        <select id="lightPattern" class="input text-sm py-2 px-3" style="width: 100%; background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,51,0,0.3); border-radius: 5px;">
+                            <option value="wave">Wave</option>
+                            <option value="chase">Chase (Broadway)</option>
+                            <option value="sparkle">Sparkle</option>
+                            <option value="pulse">Pulse</option>
+                            <option value="trail">Trail</option>
+                        </select>
+                    </div>
+
+                    <div class="control-item">
+                        <label>
+                            <span>Light Speed</span>
+                            <span class="value" id="lightSpeed-value">0.5</span>
+                        </label>
+                        <input type="range" id="lightSpeed" min="0" max="3.0" step="0.1" value="0.5">
+                    </div>
+
+                    <div class="control-item">
+                        <label>
+                            <span>Trail Length (% of ring)</span>
+                            <span class="value" id="trailLength-value">50</span>
+                        </label>
+                        <input type="range" id="trailLength" min="0" max="100" step="5" value="50">
+                    </div>
+
+                    <div class="control-item">
+                        <label>
+                            <span>Fade Curve</span>
+                        </label>
+                        <select id="fadeCurve" class="input text-sm py-2 px-3" style="width: 100%; background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,51,0,0.3); border-radius: 5px;">
+                            <option value="linear" selected>Linear (Default)</option>
+                            <option value="sqrt">Square Root (Slow start)</option>
+                            <option value="squared">Squared (Fast start)</option>
+                            <option value="exponential">Exponential</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Camera Controls -->
+                <div class="control-group">
+                    <h3>Camera</h3>
+
+                    <div class="control-item">
+                        <label>
+                            <span>Camera Distance (Zoom)</span>
+                            <span class="value" id="cameraDistance-value">5.0</span>
+                        </label>
+                        <input type="range" id="cameraDistance" min="2" max="10" step="0.5" value="5.0">
+                    </div>
+
+                    <div class="control-item">
+                        <label>
+                            <span>Camera Orbit Speed</span>
+                            <span class="value" id="cameraOrbitSpeed-value">0.3</span>
+                        </label>
+                        <input type="range" id="cameraOrbitSpeed" min="0" max="1.0" step="0.05" value="0.3">
+                    </div>
+                </div>
+
+                <div class="info">
+                    <p><strong>Version 0.2:</strong> Broadway lights + Gradient wave!</p>
+                    <p><strong>New Features:</strong></p>
+                    <p>• <strong>Gradient Wave</strong> - Sphere pulses between two colors smoothly</p>
+                    <p>• <strong>Glow Colors</strong> - Separate controls for inner glow (3D) and outer glow (CSS shadow)</p>
+                    <p>• <strong>Lock Outer Glow</strong> - Checkbox to sync outer CSS glow with sphere color as it changes</p>
+                    <p>• <strong>Ring Radius Pulse</strong> - Rings expand/contract (breathing hoops)</p>
+                    <p><strong>Light Patterns:</strong> Wave, Chase, Sparkle, Pulse, Trail</p>
+                    <p><strong>Trail Length</strong> = fade gradient (0% = no trail, 100% = full ring lit)</p>
+                    <p>Backups: <code>logo-animation.v0.1.js</code> & <code>logo-demo.v0.1.html</code></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initLogo } from '/static/js/logo-animation.js';
+
+        // CSS Glow variables
+        let cssGlowColor = '#ff3300';
+        let cssGlowIntensity = 40;
+        let cssGlowLocked = true;
+
+        function updateCSSGlow() {
+            const container = document.getElementById('canvas-container');
+            if (cssGlowIntensity === 0) {
+                container.style.filter = 'none';
+            } else {
+                // Convert hex color to rgba
+                const r = parseInt(cssGlowColor.substr(1, 2), 16);
+                const g = parseInt(cssGlowColor.substr(3, 2), 16);
+                const b = parseInt(cssGlowColor.substr(5, 2), 16);
+                container.style.filter = `drop-shadow(0 0 ${cssGlowIntensity}px rgba(${r}, ${g}, ${b}, 0.6))`;
+            }
+        }
+
+        // Initialize logo with color update callback
+        const logoController = initLogo('canvas-container', {}, {
+            onColorUpdate: (currentColor) => {
+                // Update CSS glow if locked
+                if (cssGlowLocked) {
+                    cssGlowColor = currentColor;
+                    updateCSSGlow();
+                }
+            }
+        });
+
+        // Initialize CSS glow
+        updateCSSGlow();
+
+        // CSS Glow lock to sphere color logic
+        const primaryColorPicker = document.getElementById('primaryColor');
+        const cssGlowColorPicker = document.getElementById('cssGlowColor');
+        const lockCssGlowCheckbox = document.getElementById('lockCssGlowToSphere');
+
+        function updateCssGlowLock() {
+            if (cssGlowLocked) {
+                cssGlowColorPicker.disabled = true;
+                cssGlowColorPicker.style.opacity = '0.5';
+                cssGlowColorPicker.style.cursor = 'not-allowed';
+            } else {
+                cssGlowColorPicker.disabled = false;
+                cssGlowColorPicker.style.opacity = '1';
+                cssGlowColorPicker.style.cursor = 'pointer';
+            }
+        }
+
+        // Initialize CSS glow lock state
+        updateCssGlowLock();
+
+        lockCssGlowCheckbox.addEventListener('change', (e) => {
+            cssGlowLocked = e.target.checked;
+            updateCssGlowLock();
+            if (cssGlowLocked) {
+                // Sync CSS glow color to primary color immediately
+                const currentPrimaryColor = primaryColorPicker.value;
+                cssGlowColorPicker.value = currentPrimaryColor;
+                cssGlowColor = currentPrimaryColor;
+                updateCSSGlow();
+            }
+        });
+
+        // Setup all controls
+        const controls = [
+            'vertices', 'sphereSize', 'rotationSpeed', 'pulseAmount', 'pulseSpeed',
+            'wireframeOpacity', 'backsideOpacity', 'glowIntensity',
+            'primaryColor', 'glowColor', 'primaryGradientColor', 'useGradient', 'gradientWaveSpeed', 'secondaryColor',
+            'ringCount', 'ringParticleCount', 'ringParticleSize', 'ringRadius', 'ringRotationSpeed',
+            'ringPulseAmount', 'ringPulseSpeed', 'ringRadiusPulse', 'ringRadiusPulseSpeed',
+            'lightSpeed', 'trailLength',
+            'cameraDistance', 'cameraOrbitSpeed'
+        ];
+
+        controls.forEach(controlId => {
+            const input = document.getElementById(controlId);
+            const valueDisplay = document.getElementById(`${controlId}-value`);
+
+            if (input && input.type !== 'checkbox' && input.type !== 'color') {
+                // Range sliders
+                input.addEventListener('input', (e) => {
+                    const value = parseFloat(e.target.value);
+                    if (valueDisplay) {
+                        valueDisplay.textContent = value;
+                    }
+                    logoController.updateConfig({ [controlId]: value });
+                });
+            } else if (input && input.type === 'color') {
+                // Color pickers
+                input.addEventListener('input', (e) => {
+                    logoController.updateConfig({ [controlId]: e.target.value });
+
+                    // If primary color changes and CSS glow is locked, update CSS glow too
+                    if (controlId === 'primaryColor' && cssGlowLocked) {
+                        cssGlowColorPicker.value = e.target.value;
+                        cssGlowColor = e.target.value;
+                        updateCSSGlow();
+                    }
+                });
+            } else if (input && input.type === 'checkbox') {
+                // Checkboxes
+                input.addEventListener('change', (e) => {
+                    logoController.updateConfig({ [controlId]: e.target.checked });
+                });
+            }
+        });
+
+        // Handle select dropdowns
+        const lightPatternSelect = document.getElementById('lightPattern');
+        if (lightPatternSelect) {
+            lightPatternSelect.addEventListener('change', (e) => {
+                logoController.updateConfig({ lightPattern: e.target.value });
+            });
+        }
+
+        const fadeCurveSelect = document.getElementById('fadeCurve');
+        if (fadeCurveSelect) {
+            fadeCurveSelect.addEventListener('change', (e) => {
+                logoController.updateConfig({ fadeCurve: e.target.value });
+            });
+        }
+
+        // CSS Glow color picker (manual control when unlocked)
+        if (cssGlowColorPicker) {
+            cssGlowColorPicker.addEventListener('input', (e) => {
+                if (!cssGlowLocked) {
+                    cssGlowColor = e.target.value;
+                    updateCSSGlow();
+                }
+            });
+        }
+
+        // CSS Glow intensity slider
+        const cssGlowIntensitySlider = document.getElementById('cssGlowIntensity');
+        const cssGlowIntensityValue = document.getElementById('cssGlowIntensity-value');
+        if (cssGlowIntensitySlider) {
+            cssGlowIntensitySlider.addEventListener('input', (e) => {
+                cssGlowIntensity = parseInt(e.target.value);
+                if (cssGlowIntensityValue) {
+                    cssGlowIntensityValue.textContent = cssGlowIntensity;
+                }
+                updateCSSGlow();
+            });
+        }
+    </script>
+</body>
+</html>

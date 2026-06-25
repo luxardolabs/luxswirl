@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+{% from 'macros/settings.html' import settings_nav, section_header %}
+{% from 'macros/page.html' import page_header %}
+{% from 'macros/buttons.html' import btn_create, text_btn, delete_icon_button, confirm_action_btn %}
+{%- set ICO_BAN %}<span class="w-3.5 h-3.5 mr-1.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/no-symbol.svg" %}</span>{% endset %}
+{%- set ICO_TRASH %}<span class="w-3.5 h-3.5 mr-1.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/trash.svg" %}</span>{% endset %}
+{% from 'macros/badges.html' import badge %}
+
+{% block content %}
+{{ page_header(
+    title='Settings',
+    description='Manage registration keys and Prometheus metrics authentication'
+) }}
+
+{{ settings_nav('registration_keys', current_user) }}
+
+<!-- API Keys Content -->
+<div class="space-y-6">
+    <!-- Prometheus Metrics Section -->
+    <div>
+        {{ section_header('Prometheus Metrics Authentication', 'Optional bearer token authentication for the /metrics endpoint') }}
+
+        <div class="max-w-3xl mb-8">
+            {% include "partials/settings/metrics_card.html" %}
+        </div>
+    </div>
+
+    <!-- Registration Keys Section -->
+    <div class="flex items-center justify-between">
+        <div>
+            {{ section_header('Registration Keys', 'Shared tokens for agent registration and recovery • ' ~ total_keys ~ ' total keys') }}
+        </div>
+        {{ btn_create(label='New Registration Key', hx_get='/registration-keys/create-form', hx_target='#panel-container', hx_swap='innerHTML') }}
+    </div>
+
+    <!-- Info box -->
+    <div class="card p-4 bg-blue-500/10 border-blue-500/30">
+        <div class="flex items-start gap-3">
+            <span class="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/information-circle.svg" %}</span>
+            <div class="flex-1 text-sm">
+                <p class="font-semibold text-blue-400 mb-1">About Registration Keys</p>
+                <p class="text-dark-text-muted">
+                    Registration keys are shared tokens that agents use to register and recover their agent-specific keys.
+                    Create one key per environment (production, staging, etc.) or per deployment location.
+                    Keys are only shown once at creation.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Key List -->
+    {% if registration_keys %}
+    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        {% for key in registration_keys %}
+        <div id="key-{{ key.id }}" class="card p-4 hover:border-brand-500/30 transition-all">
+            <div class="flex items-start justify-between mb-3">
+                <div class="flex items-start gap-3 flex-1">
+                    <!-- Key Icon -->
+                    <div class="w-10 h-10 rounded-lg bg-brand-500/10 flex items-center justify-center flex-shrink-0">
+                        <span class="w-6 h-6 text-brand-500 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/key.svg" %}</span>
+                    </div>
+
+                    <div class="flex-1 min-w-0">
+                        <h3 class="font-semibold text-dark-text-primary truncate">{{ key.name }}</h3>
+                        {% if key.description %}
+                        <p class="text-xs text-dark-text-muted mt-1 line-clamp-2">{{ key.description }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Status Badge -->
+                {{ badge('Revoked', 'danger') if key.revoked_at else badge('Active', 'success') }}
+            </div>
+
+            <!-- Key Details -->
+            <div class="space-y-2 mb-4 text-sm">
+                <!-- Created -->
+                <div class="flex items-center justify-between">
+                    <span class="text-dark-text-muted">Created:</span>
+                    <span class="text-sm text-dark-text-primary">{{ key.created_at.strftime('%Y-%m-%d') if key.created_at else 'N/A' }}</span>
+                </div>
+
+                <!-- Last Used -->
+                <div class="flex items-center justify-between">
+                    <span class="text-dark-text-muted">Last Used:</span>
+                    <span class="text-sm text-dark-text-primary">
+                        {% if key.last_used_at %}
+                            {{ key.last_used_at.strftime('%Y-%m-%d %H:%M') }}
+                        {% else %}
+                            Never
+                        {% endif %}
+                    </span>
+                </div>
+
+                <!-- Usage Count -->
+                <div class="flex items-center justify-between">
+                    <span class="text-dark-text-muted">Usage:</span>
+                    <span class="text-sm text-dark-text-primary">{{ key.usage_count }} times</span>
+                </div>
+
+                {% if key.revoked_at %}
+                <!-- Revocation Info -->
+                <div class="pt-2 border-t border-dark-border">
+                    <p class="text-xs text-red-400">
+                        Revoked: {{ key.revoked_at.strftime('%Y-%m-%d') }}
+                    </p>
+                    {% if key.revoked_reason %}
+                    <p class="text-xs text-dark-text-muted mt-1">{{ key.revoked_reason }}</p>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Actions -->
+            {% if not key.revoked_at %}
+            <div class="flex items-center gap-2 pt-3 border-t border-dark-border">
+                {{ confirm_action_btn(icon_svg=ICO_BAN, label='Revoke', color='red',
+                    hx_post='/registration-keys/' ~ key.id ~ '/revoke',
+                    after='reload', extra_classes='flex-1', title='Revoke key') }}
+                {{ delete_icon_button(delete_url='/registration-keys/' ~ key.id, target_id='key-' ~ key.id) }}
+            </div>
+            {% else %}
+            <div class="pt-3 border-t border-dark-border">
+                {{ confirm_action_btn(icon_svg=ICO_TRASH, label='Delete Permanently', color='red',
+                    hx_delete='/registration-keys/' ~ key.id,
+                    hx_target='#key-' ~ key.id, hx_swap='outerHTML',
+                    extra_classes='w-full', title='Permanently delete this revoked key') }}
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+
+    {% else %}
+    <!-- Empty State -->
+    <div class="card p-12 text-center">
+        <span class="w-16 h-16 mx-auto mb-4 text-dark-text-muted opacity-50 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/key.svg" %}</span>
+        <h3 class="text-lg font-semibold mb-2">No registration keys yet</h3>
+        <p class="text-dark-text-muted mb-4">
+            Create your first registration key to allow agents to register and authenticate
+        </p>
+        {% set key_svg %}<span class="w-4 h-4 mr-1.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/key.svg" %}</span>{% endset %}
+        {{ text_btn(key_svg, 'Create Your First Key', style='primary', hx_get='/registration-keys/create-form', hx_target='#panel-container', hx_swap='innerHTML') }}
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

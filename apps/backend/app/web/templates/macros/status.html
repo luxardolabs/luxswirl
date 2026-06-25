@@ -1,0 +1,138 @@
+{% from 'macros/badges.html' import badge as _badge %}
+{% macro status_badge(status) %}
+{% if status == 'success' %}
+<span class="px-2 py-1 text-xs font-medium rounded-md bg-green-600/20 text-green-400 border border-green-600/30">
+    Up
+</span>
+{% elif status == 'error' %}
+<span class="px-2 py-1 text-xs font-medium rounded-md bg-red-600/20 text-red-400 border border-red-600/30">
+    Down
+</span>
+{% else %}
+<span class="px-2 py-1 text-xs font-medium rounded-md bg-gray-600/20 text-gray-400 border border-gray-600/30">
+    Unknown
+</span>
+{% endif %}
+{% endmacro %}
+
+{% macro check_type_icon(type) %}
+{% if type == 'ping' %}
+    <span class="w-4 h-4 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/bolt.svg" %}</span>
+{% elif type == 'http' or type == 'https' %}
+    <span class="w-4 h-4 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/globe-alt.svg" %}</span>
+{% elif type == 'tcp' %}
+    <span class="w-4 h-4 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/command-line.svg" %}</span>
+{% elif type == 'json' %}
+    <span class="w-4 h-4 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/code-bracket.svg" %}</span>
+{% else %}
+    <span class="w-4 h-4 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/check-circle.svg" %}</span>
+{% endif %}
+{% endmacro %}
+
+{% macro status_row_compressed(row) %}
+<div
+    id="check-{{ row.check_id }}"
+    class="p-4 hover:bg-dark-bg-secondary cursor-pointer transition-colors duration-200 check-row border-l-4"
+    style="border-left-color: transparent;"
+    hx-get="/check/{{ row.check_id }}?hours=4"
+    hx-target="#check-detail-panel"
+    hx-swap="innerHTML"
+    data-check-id="{{ row.check_id }}"
+>
+    <!-- Row 1: Checkbox (hidden by default) + Check name + 15-minute bars -->
+    <div class="flex items-center justify-between mb-2 gap-3">
+        <!-- Checkbox (hidden by default, shown in selection mode) -->
+        <input
+            type="checkbox"
+            class="check-select hidden rounded border-dark-border focus:ring-brand-500 focus:ring-offset-0 bg-dark-bg-secondary text-brand-600 flex-shrink-0"
+            data-check-id="{{ row.check_id }}"
+            onclick="event.stopPropagation()"
+        >
+        <!-- Check name -->
+        <h3 class="font-medium text-dark-text-primary truncate flex-1" title="{{ row.check_name }}">
+            {{ row.check_name }}
+        </h3>
+
+        <!-- 15-minute status bar -->
+        <div class="min-w-0" style="width: 200px;">
+            <div class="flex gap-1.5 h-8 rounded-xl p-2 bg-gradient-to-b from-dark-bg-primary to-dark-bg-tertiary shadow-inner">
+                {% if row.minute_bars %}
+                    {% for bar in row.minute_bars %}
+                    <div
+                        class="flex-1 rounded-md transform transition-all duration-200 hover:scale-105 hover:shadow-lg cursor-pointer
+                        {% if bar['success'] is none %}
+                            bg-gradient-to-t from-dark-bg-tertiary to-slate-700
+                        {% elif bar['success'] %}
+                            bg-gradient-to-t from-green-600 to-emerald-400 shadow-sm shadow-green-500/50
+                        {% else %}
+                            bg-gradient-to-t from-red-600 to-rose-400 shadow-sm shadow-red-500/50
+                        {% endif %}"
+                        title="{% if bar['success'] is not none %}{{ bar['minutes_ago'] }}m ago - {% if bar['success'] %}✓ Up{% else %}✗ Down{% endif %} ({{ bar['count'] }} checks, {{ bar['avg_latency'] }}ms avg){% else %}{{ bar['minutes_ago'] }}m ago - No data{% endif %}"
+                    ></div>
+                    {% endfor %}
+                {% else %}
+                    <!-- Placeholder bars if data not available -->
+                    {% for i in range(15) %}
+                    <div class="flex-1 rounded-md bg-gradient-to-t from-dark-bg-tertiary to-slate-700"></div>
+                    {% endfor %}
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Row 2: Target + Type badge + Tags (left) | Latency | Availability | Status (right) -->
+    <div class="flex items-center justify-between gap-3">
+        <!-- Left side: Target, Type, Tags -->
+        <div class="flex items-center gap-2 min-w-0 flex-1">
+            <span class="text-xs font-mono text-dark-text-secondary truncate" title="{{ row.target }}">
+                {{ row.target }}
+            </span>
+            <span class="px-2 py-0.5 text-xs font-medium rounded bg-dark-bg-tertiary text-dark-text-muted flex items-center gap-1 flex-shrink-0">
+                {{ check_type_icon(row.check_type) }}
+                {{ row.check_type }}
+            </span>
+            {% if not row.enabled %}
+            <span class="px-2 py-0.5 text-xs font-medium rounded bg-gray-600/20 text-gray-400 border border-gray-600/30 flex-shrink-0">
+                Disabled
+            </span>
+            {% endif %}
+            {% if row.check_tags %}
+                {% for tag in row.check_tags[:2] %}
+                {{ _badge(tag, 'info') }}
+                {% endfor %}
+                {% if row.check_tags|length > 2 %}
+                <span class="text-xs text-dark-text-muted flex-shrink-0">+{{ row.check_tags|length - 2 }}</span>
+                {% endif %}
+            {% endif %}
+        </div>
+
+        <!-- Right side: Latency, Availability, Status chips -->
+        <div class="flex items-center gap-2 flex-shrink-0">
+            <!-- Latency chip -->
+            <span class="px-2 py-0.5 text-xs font-medium rounded bg-dark-bg-tertiary text-dark-text-muted">
+                {{ row.latency_display }}
+            </span>
+
+            <!-- Availability chip -->
+            <span class="px-2 py-0.5 text-xs font-medium rounded bg-dark-bg-tertiary text-dark-text-muted">
+                {{ row.uptime_display }}
+            </span>
+
+            <!-- Status badge -->
+            {% if row.status_class == 'success' %}
+            <span class="px-2 py-1 text-xs font-medium rounded-md bg-green-600/20 text-green-400 border border-green-600/30">
+                Up
+            </span>
+            {% elif row.status_class == 'error' %}
+            <span class="px-2 py-1 text-xs font-medium rounded-md bg-red-600/20 text-red-400 border border-red-600/30">
+                Down
+            </span>
+            {% else %}
+            <span class="px-2 py-1 text-xs font-medium rounded-md bg-gray-600/20 text-gray-400 border border-gray-600/30">
+                Unknown
+            </span>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endmacro %}

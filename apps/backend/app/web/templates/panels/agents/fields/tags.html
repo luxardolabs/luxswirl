@@ -1,0 +1,41 @@
+{% from 'macros/buttons.html' import tag_pill_button %}
+            <!-- Tags Section -->
+            <div>
+                <label class="label text-sm">Tags</label>
+
+                <!-- Tag pills container -->
+                <div id="agent-tags-container" class="flex flex-wrap gap-1.5 p-2 border border-dark-border rounded-lg bg-dark-bg-primary min-h-[40px] mb-2">
+                    <!-- Tags will be inserted here -->
+                </div>
+
+                <!-- Tag input with browse button -->
+                <div class="flex gap-2">
+                    <input
+                        type="text"
+                        id="agent-tag-input"
+                        class="input font-mono text-sm flex-1"
+                        placeholder="Type and press Enter..."
+                        autocomplete="off"
+                    >
+                    {% if available_agent_tags and available_agent_tags|length > 0 %}
+                    {% from 'macros/buttons.html' import text_btn %}
+                    {% set tag_svg %}<span class="w-4 h-4 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/tag.svg" %}</span>{% endset %}
+                    {{ text_btn(tag_svg, '', style='secondary', size='sm', type='button', extra_attrs='data-toggle-agent-tags title="Browse existing tags"', extra_classes='px-3 whitespace-nowrap') }}
+                    {% endif %}
+                </div>
+
+                <!-- Available tags browser (initially hidden) -->
+                {% if available_agent_tags and available_agent_tags|length > 0 %}
+                <div id="agent-tag-browser" class="hidden mt-2 p-2 bg-blue-500/5 border border-blue-500/30 rounded-lg">
+                    <p class="text-xs text-blue-400 mb-1.5">Click to add:</p>
+                    <div class="flex flex-wrap gap-1.5">
+                        {% for tag in available_agent_tags %}
+                        {{ tag_pill_button(tag, color='blue', extra_attrs='data-add-agent-tag="' ~ tag ~ '"') }}
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Hidden field for form submission -->
+                <input type="hidden" id="agent-tags-hidden" name="tags" value="{{ agent.tags|join(',') if agent.tags else '' }}">
+            </div>

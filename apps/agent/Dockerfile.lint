@@ -1,0 +1,14 @@
+# Agent lint image — ruff + mypy, built fresh from CURRENT source.
+# Build context = repo root.
+FROM python:3.14-slim
+
+WORKDIR /app
+RUN pip install --no-cache-dir poetry==1.8.2 && poetry config virtualenvs.create false
+
+COPY apps/agent/pyproject.toml apps/agent/poetry.lock* /app/
+RUN poetry install --no-root --with dev
+
+COPY apps/agent/app /app/app
+COPY apps/shared /app/shared
+COPY apps/agent/tests /app/tests
+ENV PYTHONPATH=/app

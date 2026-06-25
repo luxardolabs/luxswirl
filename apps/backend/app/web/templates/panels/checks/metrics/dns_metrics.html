@@ -1,0 +1,86 @@
+<!-- DNS Check Details -->
+{% if check.check_type == 'dns' and history and history|length > 0 and history[0].additional_data and history[0].additional_data.get('dns') %}
+{% set dns = history[0].additional_data.dns %}
+<div class="card p-5 bg-gradient-to-br from-blue-500/10 to-cyan-500/5 border-blue-500/30">
+    <div class="flex items-center justify-between mb-4">
+        <h3 class="text-sm font-medium uppercase tracking-wide text-blue-400 flex items-center gap-2">
+            <span class="w-5 h-5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/globe-alt.svg" %}</span>
+            DNS Query Details
+        </h3>
+        <span class="px-2 py-1 text-xs font-medium rounded {% if dns.authoritative %}bg-green-600/20 text-green-300 border border-green-600/30{% else %}bg-yellow-600/20 text-yellow-300 border border-yellow-600/30{% endif %}">
+            {% if dns.authoritative %}AUTHORITATIVE{% else %}NON-AUTHORITATIVE{% endif %}
+        </span>
+    </div>
+
+    <!-- DNS Query Info -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
+        <div>
+            <p class="text-dark-text-muted text-xs mb-1">Record Type</p>
+            <p class="font-mono text-dark-text-primary text-sm font-medium">{{ dns.record_type }}</p>
+        </div>
+        <div>
+            <p class="text-dark-text-muted text-xs mb-1">Nameserver</p>
+            <p class="font-mono text-dark-text-primary text-sm">{{ dns.nameserver }}:{{ dns.port }}</p>
+        </div>
+        <div>
+            <p class="text-dark-text-muted text-xs mb-1">TTL (Time to Live)</p>
+            <p class="font-mono text-dark-text-primary text-sm">{{ dns.ttl if dns.ttl is not none else 'N/A' }}s</p>
+        </div>
+        <div>
+            <p class="text-dark-text-muted text-xs mb-1">Record Count</p>
+            <p class="font-mono text-dark-text-primary text-sm">{{ dns.record_count }}</p>
+        </div>
+    </div>
+
+    <!-- DNS Records -->
+    {% if dns.records and dns.records|length > 0 %}
+    <div class="mb-4">
+        <p class="text-dark-text-muted text-xs mb-2 uppercase tracking-wide">DNS Records</p>
+        <div class="space-y-1 max-h-40 overflow-y-auto scrollbar-thin bg-dark-bg-primary/50 p-3 rounded-lg border border-blue-500/20">
+            {% for record in dns.records %}
+            <div class="flex items-start gap-2">
+                <span class="text-blue-400 flex-shrink-0 mt-0.5">→</span>
+                <span class="font-mono text-dark-text-primary text-sm break-all">{{ record }}</span>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Canonical Name (CNAME chain) -->
+    {% if dns.canonical_name %}
+    <div class="mb-4">
+        <p class="text-dark-text-muted text-xs mb-1">Canonical Name (CNAME)</p>
+        <p class="font-mono text-dark-text-primary text-sm">{{ dns.canonical_name }}</p>
+    </div>
+    {% endif %}
+
+    <!-- DNS Flags -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div class="flex items-center gap-2 text-xs">
+            <span class="{% if dns.recursion_desired %}text-green-400{% else %}text-dark-text-muted{% endif %}">
+                {% if dns.recursion_desired %}✓{% else %}✗{% endif %}
+            </span>
+            <span class="text-dark-text-muted">Recursion Desired</span>
+        </div>
+        <div class="flex items-center gap-2 text-xs">
+            <span class="{% if dns.recursion_available %}text-green-400{% else %}text-dark-text-muted{% endif %}">
+                {% if dns.recursion_available %}✓{% else %}✗{% endif %}
+            </span>
+            <span class="text-dark-text-muted">Recursion Available</span>
+        </div>
+        <div class="flex items-center gap-2 text-xs">
+            <span class="{% if dns.truncated %}text-yellow-400{% else %}text-green-400{% endif %}">
+                {% if dns.truncated %}⚠{% else %}✓{% endif %}
+            </span>
+            <span class="text-dark-text-muted">{% if dns.truncated %}Truncated{% else %}Not Truncated{% endif %}</span>
+        </div>
+        <div class="flex items-center gap-2 text-xs">
+            <span class="{% if dns.authoritative %}text-green-400{% else %}text-dark-text-muted{% endif %}">
+                {% if dns.authoritative %}✓{% else %}✗{% endif %}
+            </span>
+            <span class="text-dark-text-muted">Authoritative Answer</span>
+        </div>
+    </div>
+</div>
+{% endif %}

@@ -1,0 +1,51 @@
+<!-- Import result message -->
+{% if success %}
+<div class="card p-4 bg-green-500/10 border-green-500/20">
+    <div class="flex items-start gap-3">
+        <span class="w-6 h-6 text-green-400 flex-shrink-0 mt-0.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/check-circle.svg" %}</span>
+        <div class="flex-1">
+            <h4 class="text-sm font-semibold text-green-400 mb-2">Import Successful!</h4>
+            <div class="text-sm text-dark-text-primary space-y-1">
+                <p><span class="font-medium">Total:</span> {{ total }} checks</p>
+                <p><span class="font-medium text-green-400">Created:</span> {{ created }} new checks</p>
+                {% if updated > 0 %}
+                <p><span class="font-medium text-blue-400">Updated:</span> {{ updated }} existing checks</p>
+                {% endif %}
+                {% if skipped > 0 %}
+                <p><span class="font-medium text-yellow-400">Skipped:</span> {{ skipped }} existing checks</p>
+                {% endif %}
+                {% if errors|length > 0 %}
+                <p><span class="font-medium text-red-400">Errors:</span> {{ errors|length }} failed</p>
+                {% endif %}
+            </div>
+
+            {% if errors|length > 0 %}
+            <div class="mt-4 p-3 bg-dark-bg-tertiary rounded border border-dark-border">
+                <p class="text-xs font-semibold text-dark-text-primary mb-2">Errors:</p>
+                <div class="space-y-1 max-h-32 overflow-y-auto scrollbar-thin">
+                    {% for error in errors %}
+                    <p class="text-xs text-red-400">
+                        <span class="font-medium">{{ error.check }}:</span> {{ error.error }}
+                    </p>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            <p class="text-xs text-dark-text-muted mt-4">
+                The page will refresh automatically to show new checks.
+            </p>
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="card p-4 bg-red-500/10 border-red-500/20">
+    <div class="flex items-start gap-3">
+        <span class="w-6 h-6 text-red-400 flex-shrink-0 mt-0.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/exclamation-circle.svg" %}</span>
+        <div class="flex-1">
+            <h4 class="text-sm font-semibold text-red-400 mb-2">Import Failed</h4>
+            <p class="text-sm text-dark-text-primary">{{ error }}</p>
+        </div>
+    </div>
+</div>
+{% endif %}

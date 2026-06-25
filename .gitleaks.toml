@@ -1,0 +1,25 @@
+# gitleaks configuration for LuxSwirl.
+# Run: make gitleaks   (uses `ghcr.io/gitleaks/gitleaks` with this config)
+
+title = "LuxSwirl gitleaks config"
+
+[extend]
+# Start from gitleaks' built-in ruleset, then add the allowlist below.
+useDefault = true
+
+[allowlist]
+description = "Known-safe matches: OpenAPI doc examples and placeholder env values"
+
+regexes = [
+  # OpenAPI schema examples in registration_key_schema.py — illustrative, fake,
+  # the literal 'abcdef1234567890' pattern makes that obvious.
+  '''luxswirl_(rk|ak)_abcdef1234567890abcdef1234567890''',
+  # Placeholder / required-but-empty env values used in compose + docs.
+  '''(changeme|your-[a-z-]+|must be set|REPLACE_ME|<[a-z-]+>)''',
+]
+
+paths = [
+  # Operator-local env files (gitignored, never committed) and example templates.
+  '''\.env(\..*)?$''',
+  '''\.env\.example$''',
+]

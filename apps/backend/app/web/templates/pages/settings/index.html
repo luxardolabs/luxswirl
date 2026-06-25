@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% from 'macros/settings.html' import settings_category_card %}
+{% from 'macros/page.html' import page_header %}
+
+{% block content %}
+{{ page_header(
+    title='Settings',
+    description="Configure LuxSwirl's behavior, notifications, security, and system defaults"
+) }}
+
+{# Pre-render each icon as captured output so the includes resolve before
+   being passed as a macro arg (Jinja doesn't re-evaluate template tags inside
+   string-literal arguments). #}
+{%- set ICO_BELL %}<span class="w-6 h-6 text-brand-500 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/bell.svg" %}</span>{% endset -%}
+{%- set ICO_WARN %}<span class="w-6 h-6 text-brand-500 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/exclamation-triangle.svg" %}</span>{% endset -%}
+{%- set ICO_KEY %}<span class="w-6 h-6 text-brand-500 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/key.svg" %}</span>{% endset -%}
+{%- set ICO_PAINT %}<span class="w-6 h-6 text-brand-500 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/paint-brush.svg" %}</span>{% endset -%}
+{%- set ICO_COG %}<span class="w-6 h-6 text-brand-500 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/cog-6-tooth.svg" %}</span>{% endset -%}
+{%- set ICO_USERS %}<span class="w-6 h-6 text-brand-500 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/user-group.svg" %}</span>{% endset -%}
+
+<!-- Settings Categories Grid -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+    <!-- Notifications -->
+    {{ settings_category_card(
+        title='Notifications',
+        description='Configure notification providers and how LuxSwirl sends alerts',
+        icon=ICO_BELL,
+        href='/settings/notifications'
+    ) }}
+
+    <!-- Alerts -->
+    {{ settings_category_card(
+        title='Alerts',
+        description='Configure when and how notifications are triggered',
+        icon=ICO_WARN,
+        href='/settings/alerts'
+    ) }}
+
+    <!-- API Keys -->
+    {{ settings_category_card(
+        title='API Keys & Metrics',
+        description='Manage registration keys and Prometheus metrics authentication',
+        icon=ICO_KEY,
+        href='/settings/registration-keys'
+    ) }}
+
+    <!-- Defaults -->
+    {{ settings_category_card(
+        title='System Defaults',
+        description='Configure default values for checks, alerts, and system behavior',
+        icon=ICO_COG,
+        href='/settings/defaults'
+    ) }}
+
+    <!-- Users (Admin only) -->
+    {% if current_user.role == 'admin' %}
+    {{ settings_category_card(
+        title='User Management',
+        description='Manage user accounts, roles, and permissions',
+        icon=ICO_USERS,
+        href='/settings/users'
+    ) }}
+
+    {{ settings_category_card(
+        title='Component Library',
+        description='Brand colors, macros, badges, buttons, and design token reference',
+        icon=ICO_PAINT,
+        href='/settings/components'
+    ) }}
+    {% endif %}
+</div>
+
+<!-- Quick Stats (Optional - can be added later) -->
+{% if stats %}
+<div class="mt-12">
+    <h2 class="text-xl font-bold text-dark-text-primary mb-4">Overview</h2>
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div class="card p-4">
+            <div class="flex items-start justify-between mb-2">
+                <span class="text-sm text-dark-text-muted">Notification Providers</span>
+                <span class="w-5 h-5 text-brand-500 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/bell.svg" %}</span>
+            </div>
+            <div class="text-2xl font-bold text-brand-500">{{ stats.providers if stats else 0 }}</div>
+        </div>
+
+        <div class="card p-4">
+            <div class="flex items-start justify-between mb-2">
+                <span class="text-sm text-dark-text-muted">Alert Rules</span>
+                <span class="w-5 h-5 text-orange-500 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/exclamation-triangle.svg" %}</span>
+            </div>
+            <div class="text-2xl font-bold text-orange-500">{{ stats.alerts if stats else 0 }}</div>
+        </div>
+
+        <div class="card p-4">
+            <div class="flex items-start justify-between mb-2">
+                <span class="text-sm text-dark-text-muted">Registration Keys</span>
+                <span class="w-5 h-5 text-purple-500 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/key.svg" %}</span>
+            </div>
+            <div class="text-2xl font-bold text-purple-500">{{ stats['keys'] if stats else 0 }}</div>
+        </div>
+
+        <div class="card p-4">
+            <div class="flex items-start justify-between mb-2">
+                <span class="text-sm text-dark-text-muted">Active Users</span>
+                <span class="w-5 h-5 text-green-500 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/user-group.svg" %}</span>
+            </div>
+            <div class="text-2xl font-bold text-green-500">{{ stats.users if stats else 0 }}</div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

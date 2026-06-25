@@ -1,0 +1,141 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+.hypothesis/
+*.cover
+*.log
+venv/
+ENV/
+env/
+.venv
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Documentation (not needed in container)
+*.md
+!README.md
+docs/
+TODO*.md
+CHANGELOG*.md
+
+# Test files
+test_*.sh
+test_*.py
+tests/
+*_test.py
+*.test.js
+
+# Build artifacts
+*.pyc
+*.pyo
+*.pyd
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Environment files (should use docker env vars)
+.env
+.env.*
+*.env
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.travis.yml
+Jenkinsfile
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+compose*.yaml
+.dockerignore
+
+# Scripts and utilities (not needed in runtime)
+Makefile
+build.sh
+deploy.sh
+*.sh
+!docker-entrypoint.sh
+
+# Config examples
+*.example
+*.sample
+config/examples/
+
+# Logs and databases (if any local copies)
+*.log
+*.sqlite
+*.db
+
+# Runtime data (agent-specific, should not be in image)
+src/app/reports/
+src/app/data/
+reports/
+data/
+*.json.bak
+*_credentials.json
+
+# Backups — local DB/volume snapshots, never belong in the image context
+backups/
+
+# Build artifacts and editor caches
+.claude/
+.ruff_cache/
+.mypy_cache/
+.cache/
+
+# Lock files (already installed via requirements.txt)
+poetry.lock
+package-lock.json
+yarn.lock
+
+# Misc
+input.txt
+name.py
+ping_generator*.py
+tailwind.config.js
+
+# Keep only essentials for runtime
