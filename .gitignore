@@ -87,14 +87,6 @@ TODO.md
 # Internal (non-OSS) marketing value-prop docs
 marketing/
 
-# =============================================================================
-# Internal-only deployment overlays (operator/vendor-specific — not part of OSS)
-# =============================================================================
-# Throwaway sandbox stack + Chronosphere observability collector + its config.
-compose.sandbox.yaml
-compose.chronosphere.yaml
-deploy/chronocollector/
-
 # Operator runtime configs — real values (TLS cert paths, domains) live here and
 # are NOT committed. The committed *.example files are the OSS templates; copy them:
 #   cp compose.dev.yaml.example compose.dev.yaml

@@ -42,9 +42,6 @@ NON_REQUEST_FILES: frozenset[str] = frozenset(
         "app/background/job_purge.py",  # background task
         "app/background/database_maintenance.py",  # AUTOCOMMIT VACUUM connection
         "app/scripts/migrate_encrypt_checks.py",  # one-shot migration
-        "app/scripts/test_create_status_page.py",  # dev seed script
-        "app/scripts/create_test_status_page.py",  # dev seed script
-        "app/scripts/cleanup_duplicate_internal_checks.py",  # one-shot cleanup
     }
 )
 

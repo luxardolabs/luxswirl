@@ -7,11 +7,6 @@ A test platform for the LuxSwirl monitoring system. Tests are organized by
 area. Pure logic tests, integration tests, and API tests live side-by-side
 within each domain.
 
-The structure here is a deliberate copy of the luxwx test architecture
-(`/mnt/luxardolabs/luxwx/.../apps/backend/tests/`). The doctrine, fixtures,
-and Makefile targets all mirror that pattern so contributors who work in
-both repos see the same shape.
-
 ---
 
 ## Tooling
