@@ -21,6 +21,11 @@ AGENT_NAME      := luxardolabs/luxswirl-agent
 BACKEND_IMAGE   := $(REGISTRY)/$(BACKEND_NAME)
 AGENT_IMAGE     := $(REGISTRY)/$(AGENT_NAME)
 
+# Multi-arch registry pushes (amd64 + arm64). Local build / build-dev stay single-
+# arch — you can't --load a multi-platform image. Override with e.g. PLATFORMS=linux/amd64.
+PLATFORMS       ?= linux/amd64,linux/arm64
+BUILDX_BUILDER  := luxswirl-builder
+
 # Build args baked into both images (exposed as ENV + LABEL at runtime).
 BUILD_ARGS := --build-arg BUILD_VERSION=$(VERSION) \
               --build-arg BUILD_TIMESTAMP=$(TIMESTAMP) \
@@ -108,15 +113,18 @@ agent-image: ## Build agent image as :$(VERSION) (no push)
 
 build: backend-image agent-image ## Build both images as :$(VERSION) (no push)
 
-build-backend: backend-image ## Build + push backend :$(VERSION) AND :latest
-	docker tag $(BACKEND_IMAGE):$(VERSION) $(BACKEND_IMAGE):latest
-	docker push $(BACKEND_IMAGE):$(VERSION)
-	docker push $(BACKEND_IMAGE):latest
+buildx-setup: ## Create/use the multi-arch buildx builder (docker-container driver + QEMU)
+	@docker buildx inspect $(BUILDX_BUILDER) >/dev/null 2>&1 || \
+		docker buildx create --name $(BUILDX_BUILDER) --driver docker-container --bootstrap --use
+	@docker buildx use $(BUILDX_BUILDER)
 
-build-agent: agent-image ## Build + push agent :$(VERSION) AND :latest
-	docker tag $(AGENT_IMAGE):$(VERSION) $(AGENT_IMAGE):latest
-	docker push $(AGENT_IMAGE):$(VERSION)
-	docker push $(AGENT_IMAGE):latest
+build-backend: buildx-setup ## Build + push backend :$(VERSION) AND :latest (multi-arch: $(PLATFORMS))
+	docker buildx build $(NO_CACHE_FLAG) --platform $(PLATFORMS) -f apps/backend/Dockerfile $(BUILD_ARGS) \
+		-t $(BACKEND_IMAGE):$(VERSION) -t $(BACKEND_IMAGE):latest --push .
+
+build-agent: buildx-setup ## Build + push agent :$(VERSION) AND :latest (multi-arch: $(PLATFORMS))
+	docker buildx build $(NO_CACHE_FLAG) --platform $(PLATFORMS) -f apps/agent/Dockerfile $(BUILD_ARGS) \
+		-t $(AGENT_IMAGE):$(VERSION) -t $(AGENT_IMAGE):latest --push .
 
 build-dev: ## Build both images locally tagged :dev (for the dev stack)
 	docker build $(NO_CACHE_FLAG) -f apps/backend/Dockerfile $(BUILD_ARGS) -t $(BACKEND_IMAGE):dev .
