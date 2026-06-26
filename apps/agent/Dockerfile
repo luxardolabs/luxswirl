@@ -58,6 +58,14 @@ ENV APP_VERSION=${BUILD_VERSION} \
     BUILD_TIMESTAMP=${BUILD_TIMESTAMP} \
     BUILD_COMMIT=${BUILD_COMMIT}
 LABEL version="${BUILD_VERSION}" build_timestamp="${BUILD_TIMESTAMP}" commit="${BUILD_COMMIT}"
+LABEL org.opencontainers.image.source="https://github.com/luxardolabs/luxswirl" \
+      org.opencontainers.image.url="https://github.com/luxardolabs/luxswirl" \
+      org.opencontainers.image.title="LuxSwirl Agent" \
+      org.opencontainers.image.description="LuxSwirl monitoring agent — runs health checks (ping, HTTP, TCP, JSON, DNS, MySQL, PostgreSQL, synthetic) and reports results to the server." \
+      org.opencontainers.image.licenses="AGPL-3.0-or-later" \
+      org.opencontainers.image.version="${BUILD_VERSION}" \
+      org.opencontainers.image.revision="${BUILD_COMMIT}" \
+      org.opencontainers.image.created="${BUILD_TIMESTAMP}"
 
 # app package -> /app/app ; shared -> /app/shared.
 # PYTHONPATH=/app resolves both `import app.*` and `import shared.*`.
