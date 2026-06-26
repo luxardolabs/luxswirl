@@ -41,6 +41,14 @@ ENV APP_VERSION=${BUILD_VERSION} \
     BUILD_TIMESTAMP=${BUILD_TIMESTAMP} \
     BUILD_COMMIT=${BUILD_COMMIT}
 LABEL version="${BUILD_VERSION}" build_timestamp="${BUILD_TIMESTAMP}" commit="${BUILD_COMMIT}"
+LABEL org.opencontainers.image.source="https://github.com/luxardolabs/luxswirl" \
+      org.opencontainers.image.url="https://github.com/luxardolabs/luxswirl" \
+      org.opencontainers.image.title="LuxSwirl Backend" \
+      org.opencontainers.image.description="LuxSwirl monitoring server — REST API, web dashboard, and Prometheus metrics (FastAPI + TimescaleDB)." \
+      org.opencontainers.image.licenses="AGPL-3.0-or-later" \
+      org.opencontainers.image.version="${BUILD_VERSION}" \
+      org.opencontainers.image.revision="${BUILD_COMMIT}" \
+      org.opencontainers.image.created="${BUILD_TIMESTAMP}"
 
 # app package -> /app/app ; shared -> /app/shared ; alembic at component root.
 # PYTHONPATH=/app resolves both `import app.*` and `import shared.*`.
