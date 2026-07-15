@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Keep internal-only context out of PUBLIC commit messages.
+#
+#   - LUXSWIRL-<n> : internal LuxPM tracker ids. Track work in LuxPM by commit
+#                    SHA instead; in the message reference a public GitHub issue
+#                    (#123) or nothing.
+#   - internal-host    : internal infrastructure hostnames — never in the public repo.
+#
+# Enforced here (not by convention) so it holds for any committer. Bypass with
+# `git commit --no-verify` if you deliberately mean it.
+set -euo pipefail
+
+msg_file="$1"
+patterns='LUXSWIRL-[0-9]+|internal-host'
+
+if grep -nEi "$patterns" "$msg_file" >/dev/null 2>&1; then
+  echo "✗ commit blocked: internal reference in the commit message" >&2
+  grep -nEi "$patterns" "$msg_file" | sed 's/^/      /' >&2
+  echo "  → Reference a public GitHub issue (#123) or nothing; link the SHA in LuxPM." >&2
+  echo "    (bypass: git commit --no-verify)" >&2
+  exit 1
+fi
