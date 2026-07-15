@@ -27,6 +27,13 @@ from app.core.security import (
 )
 from app.models.user_model import User
 
+# Plain type alias for the authenticated user, for layers that RECEIVE the user
+# as a positional argument rather than via `Depends()` — e.g. view services,
+# which routers hand `current_user` down to. They annotate `current_user:
+# AuthedUser` and import this instead of reaching into app.models.user_model
+# (the view layer consumes the auth boundary, not the ORM model directly).
+type AuthedUser = User
+
 CurrentUser = Annotated[User, Depends(get_current_user)]
 AdminUser = Annotated[User, Depends(require_admin)]
 CurrentUserWeb = Annotated[User, Depends(get_current_user_web)]

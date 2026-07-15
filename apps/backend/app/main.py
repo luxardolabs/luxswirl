@@ -48,7 +48,7 @@ from app.services.core.metrics_collector_core_service import MetricsCollectorCor
 from app.services.core.scheduler_core_service import scheduler_service
 from app.services.core.settings_core_service import SettingsCoreService
 from app.services.core.user_core_service import UserCoreService
-from app.web.routers._render import render_error_response
+from app.web.render import render_error_response
 from app.web.routers.agents_router import router as agents_router
 from app.web.routers.alerts_router import router as alerts_router
 from app.web.routers.artifacts_router import router as artifacts_router
@@ -262,7 +262,7 @@ async def value_error_handler(request: Request, exc: ValueError):
     Web routers used to catch these and render a 400 partial themselves; now
     they propagate here so the handling lives in exactly one place.
     """
-    get_logger("luxswirl.server").warning("Value error", extra={"message": str(exc)})
+    get_logger("luxswirl.server").warning("Value error", extra={"error_message": str(exc)})
     return render_error_response(
         request,
         status.HTTP_400_BAD_REQUEST,

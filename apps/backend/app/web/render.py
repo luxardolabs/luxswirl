@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.models.user_model import User
 from app.services.views.notification_logs_view_service import NotificationLogsViewService
-from app.web._hx_responses import hx_toast_trigger, hx_trigger
+from app.web.hx_responses import hx_toast_trigger, hx_trigger
 from app.web.templates_config import templates
 
 

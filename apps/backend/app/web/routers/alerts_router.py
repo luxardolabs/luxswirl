@@ -21,8 +21,8 @@ from app.db import get_db
 from app.services.views.alert_form_view_service import AlertFormViewService
 from app.services.views.alerts_view_service import AlertsViewService
 from app.services.views.checks_view_service import ChecksViewService
-from app.web._hx_responses import hx_empty_with_toast
-from app.web.routers._render import render_log_row
+from app.web.hx_responses import hx_empty_with_toast
+from app.web.render import render_log_row
 from app.web.templates_config import templates
 
 logger = get_logger("luxswirl.web.alerts")

@@ -12,8 +12,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.auth_deps import AdminUserWeb
 from app.db import get_db
 from app.services.views.settings_view_service import SettingsViewService
-from app.web._hx_responses import hx_empty_with_toast, hx_toast_trigger
-from app.web.routers._render import error_page
+from app.web.hx_responses import hx_empty_with_toast, hx_toast_trigger
+from app.web.render import error_page
 from app.web.templates_config import templates
 
 logger = get_logger("luxswirl.web.settings")

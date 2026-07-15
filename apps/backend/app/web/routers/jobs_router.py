@@ -18,8 +18,8 @@ from app.core.query_params import JobStatusFilter, JobTypeFilter
 from app.db import get_db
 from app.services.views.job_bulk_check_view_service import JobBulkCheckViewService
 from app.services.views.jobs_view_service import JobsViewService
-from app.web._hx_responses import hx_empty_with_toast
-from app.web.routers._render import bulk_check_response, error_partial
+from app.web.hx_responses import hx_empty_with_toast
+from app.web.render import bulk_check_response, error_partial
 from app.web.templates_config import templates
 
 logger = get_logger("luxswirl.web.routers.jobs")

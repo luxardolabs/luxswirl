@@ -12,7 +12,7 @@ from fastapi import Request
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.user_model import User
+from app.core.auth_deps import AuthedUser
 from app.services.core.artifact_core_service import ArtifactCoreService
 
 logger = get_logger("luxswirl.web.services.artifacts")
@@ -31,7 +31,7 @@ class ArtifactsViewService:
         db: AsyncSession,
         artifact_id: UUID,
         request: Request,
-        current_user: User,
+        current_user: AuthedUser,
     ) -> tuple[dict[str, Any] | None, str | None]:
         """
         Build template context for the Playwright trace viewer.

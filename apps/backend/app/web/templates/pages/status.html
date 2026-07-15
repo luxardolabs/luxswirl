@@ -121,7 +121,7 @@
                 {# bulk-action: visible Delete icon button is data-bulk-action="delete";
                    its first click arms (2s window in status-bulk.js), second click
                    submits this hidden form. No browser confirm. #}
-                <form id="bulk-action-form" style="display: none;"
+                <form id="bulk-action-form" class="hidden"
                     hx-post="/checks/bulk-action"
                     hx-swap="none"
                 >
@@ -195,8 +195,8 @@
     </div>
 
     <!-- Right: Detail Panel (60% - 7 columns, sticky) -->
-    <div class="col-span-7 sticky top-6" style="max-height: calc(100vh - 8rem);">
-        <div id="check-detail-panel" class="card overflow-y-auto scrollbar-thin" style="max-height: calc(100vh - 8rem);">
+    <div class="col-span-7 sticky top-6 max-h-[calc(100vh-8rem)]">
+        <div id="check-detail-panel" class="card overflow-y-auto scrollbar-thin max-h-[calc(100vh-8rem)]">
             {% include 'partials/checks/check_detail_empty.html' %}
         </div>
     </div>

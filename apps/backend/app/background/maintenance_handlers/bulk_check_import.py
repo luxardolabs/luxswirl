@@ -48,7 +48,7 @@ async def handle(db: AsyncSession, job: MaintenanceJob) -> None:
         "Bulk check import complete",
         extra={
             "agent_id": str(agent_id),
-            "created": result.created,
+            "created_count": result.created,
             "updated": result.updated,
             "skipped": result.skipped,
             "errors_count": len(result.errors) if result.errors else 0,

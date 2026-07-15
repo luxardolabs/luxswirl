@@ -9,7 +9,7 @@ from fastapi import Request
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.user_model import User
+from app.core.auth_deps import AuthedUser
 from app.services.core.timescale_core_service import TimescaleCoreService
 
 logger = get_logger("luxswirl.web.services.database_health")
@@ -20,7 +20,7 @@ class DatabaseHealthViewService:
 
     @staticmethod
     async def build_health_page_context(
-        db: AsyncSession, request: Request, current_user: User
+        db: AsyncSession, request: Request, current_user: AuthedUser
     ) -> dict[str, Any]:
         """Full-page context for /database-health."""
         health = await TimescaleCoreService.get_health_summary(db)
@@ -33,7 +33,7 @@ class DatabaseHealthViewService:
 
     @staticmethod
     async def build_health_refresh_context(
-        db: AsyncSession, request: Request, current_user: User
+        db: AsyncSession, request: Request, current_user: AuthedUser
     ) -> dict[str, Any]:
         """HTMX-partial context for /database-health/refresh."""
         health = await TimescaleCoreService.get_health_summary(db)

@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_db
 from app.services.views.web_users_view_service import WebUsersViewService
-from app.web.routers._render import render_setup
+from app.web.render import render_setup
 
 logger = get_logger("luxswirl.web.routers.setup")
 

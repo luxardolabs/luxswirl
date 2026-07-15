@@ -6,7 +6,7 @@ from uuid import UUID
 from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.user_model import User
+from app.core.auth_deps import AuthedUser
 from app.services.core.maintenance_job_core_service import MaintenanceJobCoreService
 
 
@@ -15,7 +15,7 @@ class MaintenanceJobViewService:
     async def build_status_partial_context(
         db: AsyncSession,
         request: Request,
-        current_user: User | None,
+        current_user: AuthedUser | None,
         job_id: UUID,
     ) -> dict[str, Any]:
         job = await MaintenanceJobCoreService.get_by_id(db, job_id)

@@ -4,7 +4,7 @@ CheckResult service - business logic for check result operations and analytics.
 
 import json
 from collections.abc import Sequence
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
@@ -51,10 +51,12 @@ class CheckResultCoreService:
                 return raw_cert_data
 
             # Parse expiration date (format: 'Jan 1 00:00:00 2025 GMT')
-            expiration_date = datetime.strptime(expiration_str, "%b %d %H:%M:%S %Y %Z")
+            expiration_date = datetime.strptime(expiration_str, "%b %d %H:%M:%S %Y %Z").replace(
+                tzinfo=UTC
+            )
 
             # Calculate days until expiration
-            now = datetime.utcnow()
+            now = datetime.now(UTC)
             days_until_expiration = (expiration_date - now).days
 
             # Fetch SSL thresholds from settings

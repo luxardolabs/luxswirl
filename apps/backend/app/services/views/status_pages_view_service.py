@@ -6,6 +6,7 @@ Wraps StatusPageCoreService (core) for status-page CRUD and orchestrates
 the dashboard rendering view-model assembly via DashboardRender.
 """
 
+import json
 from typing import Any
 from uuid import UUID
 
@@ -13,9 +14,9 @@ from fastapi import Request
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.auth_deps import AuthedUser
 from app.core.query_params import split_csv
 from app.models.enum_model import CheckHealthStatus, CheckType, MaintenanceJobKind
-from app.models.user_model import User
 from app.schemas.pagination_schema import build_pagination
 from app.schemas.status_page_schema import StatusPageCreate, StatusPageUpdate
 from app.services.core.check_core_service import CheckCoreService
@@ -56,7 +57,7 @@ class StatusPagesViewService:
     async def build_list_context(
         db: AsyncSession,
         request: Request,
-        current_user: User,
+        current_user: AuthedUser,
         is_public: str,
         page: int,
         per_page: int | None,
@@ -92,7 +93,7 @@ class StatusPagesViewService:
         }
 
     @staticmethod
-    def build_create_form_context(request: Request, current_user: User) -> dict[str, Any]:
+    def build_create_form_context(request: Request, current_user: AuthedUser) -> dict[str, Any]:
         """Empty status-page form."""
         return {
             "request": request,
@@ -102,7 +103,7 @@ class StatusPagesViewService:
 
     @staticmethod
     async def build_edit_form_context(
-        db: AsyncSession, request: Request, current_user: User, status_page_id: UUID
+        db: AsyncSession, request: Request, current_user: AuthedUser, status_page_id: UUID
     ) -> dict[str, Any]:
         """Populated status-page form (raises StatusPageNotFoundException if missing)."""
         status_page = await StatusPageCoreService.get_status_page_by_id(db, status_page_id)
@@ -114,7 +115,7 @@ class StatusPagesViewService:
 
     @staticmethod
     async def build_manage_context(
-        db: AsyncSession, request: Request, current_user: User, status_page_id: UUID
+        db: AsyncSession, request: Request, current_user: AuthedUser, status_page_id: UUID
     ) -> dict[str, Any]:
         """Full manage page — items, filters, available checks."""
         status_page = await StatusPageCoreService.get_status_page_by_id(db, status_page_id)
@@ -138,7 +139,7 @@ class StatusPagesViewService:
     async def build_available_checks_context(
         db: AsyncSession,
         request: Request,
-        current_user: User,
+        current_user: AuthedUser,
         status_page_id: UUID,
         agent_id: UUID | None,
         check_type: CheckType | None,
@@ -171,7 +172,7 @@ class StatusPagesViewService:
 
     @staticmethod
     async def build_dashboard_items_context(
-        db: AsyncSession, request: Request, current_user: User, status_page_id: UUID
+        db: AsyncSession, request: Request, current_user: AuthedUser, status_page_id: UUID
     ) -> dict[str, Any]:
         """Dashboard items partial (used after filter changes)."""
         status_page = await StatusPageCoreService.get_status_page_by_id(db, status_page_id)
@@ -268,7 +269,7 @@ class StatusPagesViewService:
     async def add_check_to_dashboard(
         db: AsyncSession,
         request: Request,
-        current_user: User,
+        current_user: AuthedUser,
         status_page_id: UUID,
         check_id: UUID,
     ) -> tuple[dict[str, Any] | None, str | None]:
@@ -304,7 +305,7 @@ class StatusPagesViewService:
     async def remove_item_from_dashboard(
         db: AsyncSession,
         request: Request,
-        current_user: User,
+        current_user: AuthedUser,
         status_page_id: UUID,
         item_index: int,
     ) -> dict[str, Any]:
@@ -328,11 +329,12 @@ class StatusPagesViewService:
     async def reorder_dashboard_items(
         db: AsyncSession,
         request: Request,
-        current_user: User,
+        current_user: AuthedUser,
         status_page_id: UUID,
-        items: list,
+        items_json: str,
     ) -> dict[str, Any]:
         """Reorder dashboard items, return refreshed dashboard_items context."""
+        items = json.loads(items_json)
         await StatusPageCoreService.reorder_all_items(db, status_page_id, items)
         logger.info(
             "Reordered items in status page",
@@ -351,13 +353,14 @@ class StatusPagesViewService:
     async def add_group_to_dashboard(
         db: AsyncSession,
         request: Request,
-        current_user: User,
+        current_user: AuthedUser,
         status_page_id: UUID,
-        body: dict,
+        name: str,
+        filter_json: str | None = None,
     ) -> tuple[dict[str, Any] | None, str | None]:
         """Add a group; returns (context, error)."""
-        name = body.get("name", "New Group")
-        filter = body.get("filter", None)
+        name = name or "New Group"
+        filter = json.loads(filter_json) if filter_json is not None else None
 
         status_page = await StatusPageCoreService.add_group_to_page(
             db, status_page_id, name, filter
@@ -386,7 +389,7 @@ class StatusPagesViewService:
     async def rename_group(
         db: AsyncSession,
         request: Request,
-        current_user: User,
+        current_user: AuthedUser,
         status_page_id: UUID,
         item_index: int,
         new_name: str,
@@ -415,12 +418,13 @@ class StatusPagesViewService:
     async def update_group_filters(
         db: AsyncSession,
         request: Request,
-        current_user: User,
+        current_user: AuthedUser,
         status_page_id: UUID,
         item_index: int,
-        filter: dict,
+        filter_json: str,
     ) -> dict[str, Any]:
         """Update filters for a dynamic filter group, return dashboard_items context."""
+        filter = json.loads(filter_json) if filter_json else {}
         await StatusPageCoreService.update_group_filters(db, status_page_id, item_index, filter)
         logger.info(
             "Updated filters for group in status page",
@@ -442,7 +446,7 @@ class StatusPagesViewService:
     async def update_group_sort(
         db: AsyncSession,
         request: Request,
-        current_user: User,
+        current_user: AuthedUser,
         status_page_id: UUID,
         item_index: int,
         sort_by: str,
@@ -477,7 +481,7 @@ class StatusPagesViewService:
     async def build_public_view(
         db: AsyncSession,
         request: Request,
-        current_user: User | None,
+        current_user: AuthedUser | None,
         slug: str,
         time_range: int | None,
     ) -> tuple[dict[str, Any] | None, str | None]:
@@ -526,7 +530,7 @@ class StatusPagesViewService:
     async def build_public_view_partial(
         db: AsyncSession,
         request: Request,
-        current_user: User | None,
+        current_user: AuthedUser | None,
         slug: str,
         time_range: int | None,
     ) -> tuple[dict[str, Any] | None, int | None]:
@@ -571,7 +575,7 @@ class StatusPagesViewService:
 
     @staticmethod
     def build_error_partial_context(
-        request: Request, current_user: User | None, error: str
+        request: Request, current_user: AuthedUser | None, error: str
     ) -> dict[str, Any]:
         """Common error-partial context."""
         return {
@@ -583,7 +587,7 @@ class StatusPagesViewService:
     @staticmethod
     def build_error_page_context(
         request: Request,
-        current_user: User | None,
+        current_user: AuthedUser | None,
         error: str,
         page_title: str = "Error",
     ) -> dict[str, Any]:
