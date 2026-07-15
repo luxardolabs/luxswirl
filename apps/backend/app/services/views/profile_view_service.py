@@ -12,7 +12,7 @@ from fastapi import Request
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.user_model import User
+from app.core.auth_deps import AuthedUser
 from app.schemas.user_schema import UserUpdate
 from app.services.core.auth_core_service import AuthCoreService
 from app.services.core.user_core_service import UserCoreService
@@ -24,7 +24,7 @@ class ProfileViewService:
     """View-layer wrapper for /profile endpoints."""
 
     @staticmethod
-    def build_panel_context(request: Request, current_user: User) -> dict[str, Any]:
+    def build_panel_context(request: Request, current_user: AuthedUser) -> dict[str, Any]:
         """Initial-load panel context."""
         return {
             "request": request,
@@ -34,7 +34,7 @@ class ProfileViewService:
     @staticmethod
     async def update_profile(
         db: AsyncSession,
-        user: User,
+        user: AuthedUser,
         full_name: str | None,
     ) -> tuple[str, str]:
         """
@@ -63,7 +63,7 @@ class ProfileViewService:
     @staticmethod
     async def change_password(
         db: AsyncSession,
-        user: User,
+        user: AuthedUser,
         current_password: str,
         new_password: str,
         confirm_password: str,

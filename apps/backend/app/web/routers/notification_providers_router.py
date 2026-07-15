@@ -18,8 +18,8 @@ from app.db import get_db
 from app.services.views.notification_providers_view_service import (
     NotificationProvidersViewService,
 )
-from app.web._hx_responses import hx_empty_with_toast
-from app.web.routers._render import error_partial
+from app.web.hx_responses import hx_empty_with_toast
+from app.web.render import error_partial
 from app.web.templates_config import templates
 
 logger = get_logger("luxswirl.web.notification_providers")

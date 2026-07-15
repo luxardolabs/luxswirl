@@ -17,7 +17,7 @@ from app.core.auth_deps import CurrentUserWeb
 from app.core.query_params import CheckTypeFilter, HealthStatusFilter
 from app.db import get_db
 from app.services.views.status_view_service import StatusViewService
-from app.web.routers._render import error_page, error_partial
+from app.web.render import error_page, error_partial
 from app.web.templates_config import templates
 
 logger = get_logger("luxswirl.web.routers.status")

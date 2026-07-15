@@ -31,7 +31,7 @@
 {# ═══════════════════════════════════════════════════════════════════════════
    ICON SQUARE BUTTON - Base macro for tiny action buttons
    ═══════════════════════════════════════════════════════════════════════════ #}
-{% macro icon_btn(icon_svg, color='brand', title='', disabled=false, href='', hx_get='', hx_post='', hx_delete='', hx_target='', hx_swap='', hx_confirm='', hx_vals='', hx_include='', extra_attrs='', extra_classes='') %}
+{% macro icon_btn(icon_svg, color='brand', title='', disabled=false, href='', hx_get='', hx_post='', hx_delete='', hx_target='', hx_swap='', hx_vals='', hx_include='', extra_attrs='', extra_classes='') %}
 {% set colors = {
     'brand': 'bg-brand-600/20 hover:bg-brand-600/30 text-brand-300 border-brand-600/30',
     'green': 'bg-green-600/20 hover:bg-green-600/30 text-green-300 border-green-600/30',
@@ -60,7 +60,6 @@
     {% if hx_delete %}hx-delete="{{ hx_delete }}"{% endif %}
     {% if (hx_get or hx_post or hx_delete) and hx_target %}hx-target="{{ hx_target }}"{% endif %}
     {% if (hx_get or hx_post or hx_delete) and hx_swap %}hx-swap="{{ hx_swap }}"{% endif %}
-    {% if (hx_get or hx_post or hx_delete) and hx_confirm %}hx-confirm="{{ hx_confirm }}"{% endif %}
     {% if (hx_get or hx_post or hx_delete) and hx_vals %}hx-vals='{{ hx_vals | safe }}'{% endif %}
     {% if (hx_get or hx_post or hx_delete) and hx_include %}hx-include="{{ hx_include }}"{% endif %}
     {{ extra_attrs | safe }}
@@ -118,15 +117,15 @@
 {% endmacro %}
 
 {# Delete (trash) - red, simple HTMX #}
-{% macro icon_delete(title='Delete', hx_delete='', hx_post='', hx_target='', hx_swap='', hx_confirm='', disabled=false, extra_attrs='', extra_classes='') %}
+{% macro icon_delete(title='Delete', hx_delete='', hx_post='', hx_target='', hx_swap='', disabled=false, extra_attrs='', extra_classes='') %}
 {% set svg %}<span class="w-3.5 h-3.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/trash.svg" %}</span>{% endset %}
-{{ icon_btn(svg, color='red', title=title, hx_delete=hx_delete, hx_post=hx_post, hx_target=hx_target, hx_swap=hx_swap, hx_confirm=hx_confirm, disabled=disabled, extra_attrs=extra_attrs, extra_classes=extra_classes) }}
+{{ icon_btn(svg, color='red', title=title, hx_delete=hx_delete, hx_post=hx_post, hx_target=hx_target, hx_swap=hx_swap, disabled=disabled, extra_attrs=extra_attrs, extra_classes=extra_classes) }}
 {% endmacro %}
 
 {# Cancel (x-circle) - orange, simple HTMX #}
-{% macro icon_cancel(title='Cancel', hx_post='', hx_target='', hx_swap='', hx_confirm='', disabled=false, extra_attrs='', extra_classes='') %}
+{% macro icon_cancel(title='Cancel', hx_post='', hx_target='', hx_swap='', disabled=false, extra_attrs='', extra_classes='') %}
 {% set svg %}<span class="w-3.5 h-3.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/x-circle.svg" %}</span>{% endset %}
-{{ icon_btn(svg, color='orange', title=title, hx_post=hx_post, hx_target=hx_target, hx_swap=hx_swap, hx_confirm=hx_confirm, disabled=disabled, extra_attrs=extra_attrs, extra_classes=extra_classes) }}
+{{ icon_btn(svg, color='orange', title=title, hx_post=hx_post, hx_target=hx_target, hx_swap=hx_swap, disabled=disabled, extra_attrs=extra_attrs, extra_classes=extra_classes) }}
 {% endmacro %}
 
 
@@ -158,7 +157,7 @@
 {# ═══════════════════════════════════════════════════════════════════════════
    TEXT BUTTON - Base macro for labeled buttons with icons
    ═══════════════════════════════════════════════════════════════════════════ #}
-{% macro text_btn(icon_svg, label, style='primary', size='', type='submit', href='', disabled=false, hx_get='', hx_post='', hx_delete='', hx_target='', hx_swap='', hx_confirm='', extra_attrs='', extra_classes='') %}
+{% macro text_btn(icon_svg, label, style='primary', size='', type='submit', href='', disabled=false, hx_get='', hx_post='', hx_delete='', hx_target='', hx_swap='', extra_attrs='', extra_classes='') %}
 {% set btn_class = 'btn-' ~ style %}
 {% set size_class = ' btn-' ~ size if size else '' %}
 {% set css = btn_class ~ size_class ~ (' ' ~ extra_classes if extra_classes else '') %}
@@ -177,7 +176,6 @@
     {% if hx_delete %}hx-delete="{{ hx_delete }}"{% endif %}
     {% if hx_target %}hx-target="{{ hx_target }}"{% endif %}
     {% if hx_swap %}hx-swap="{{ hx_swap }}"{% endif %}
-    {% if hx_confirm %}hx-confirm="{{ hx_confirm }}"{% endif %}
     {{ extra_attrs | safe }}
 >
     {{ icon_svg }}
@@ -460,7 +458,7 @@
    For "Manage", "Show details", "Generate" inline actions where a full button would be
    too heavy. Color follows the action mapping from /settings/components. #}
 {% macro link_btn(label, color='brand', hx_get='', hx_post='', hx_target='', hx_swap='',
-                  hx_confirm='', extra_classes='', extra_attrs='') %}
+                  extra_classes='', extra_attrs='') %}
 {%- set color_class = {
     'brand':  'text-brand-400 hover:text-brand-300',
     'green':  'text-green-400 hover:text-green-300',
@@ -475,7 +473,6 @@
         {% if hx_post %}hx-post="{{ hx_post }}"{% endif %}
         {% if hx_target %}hx-target="{{ hx_target }}"{% endif %}
         {% if hx_swap %}hx-swap="{{ hx_swap }}"{% endif %}
-        {% if hx_confirm %}hx-confirm="{{ hx_confirm }}"{% endif %}
         class="text-xs {{ color_class }} hover:underline text-left {{ extra_classes }}"
         {{ extra_attrs | safe }}>{{ label }}</button>
 {% endmacro %}

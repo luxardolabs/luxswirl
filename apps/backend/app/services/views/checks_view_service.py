@@ -31,7 +31,7 @@ from app.services.core.alert_core_service import AlertCoreService
 from app.services.core.check_core_service import CheckCoreService
 from app.services.core.maintenance_job_core_service import MaintenanceJobCoreService
 from app.services.core.settings_core_service import SettingsCoreService
-from app.web._hx_responses import hx_empty_with_toast
+from app.web.hx_responses import hx_empty_with_toast
 from app.web.templates_config import templates
 
 logger = get_logger("luxswirl.web.services.checks")

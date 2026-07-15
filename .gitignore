@@ -91,5 +91,7 @@ marketing/
 # are NOT committed. The committed *.example files are the OSS templates; copy them:
 #   cp compose.dev.yaml.example compose.dev.yaml
 #   cp nginx/conf.d/luxswirl.conf.example nginx/conf.d/luxswirl.conf
+#   cp Makefile.local.example Makefile.local   # sets LUXARCH_REGISTRY for `make arch`
 compose.dev.yaml
 nginx/conf.d/luxswirl.conf
+Makefile.local

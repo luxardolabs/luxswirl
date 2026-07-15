@@ -54,7 +54,7 @@
     <div id="login-content" class="min-h-screen flex flex-col items-center justify-center px-4">
         <!-- Setup Card -->
         <div class="w-full max-w-md">
-            <div style="background: rgba(20, 23, 35, 0.4); backdrop-filter: blur(10px); box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 0.5rem; padding: 2rem;">
+            <div class="glass-card">
                 <!-- Branding (inside the card so it stays legible over the animated globe) -->
                 <div class="mb-6 text-center">
                     <h1 class="text-2xl font-bold text-dark-text-primary">Welcome to LuxSwirl</h1>
@@ -106,8 +106,7 @@
                             autocomplete="username"
                             minlength="3"
                             value="{{ username or '' }}"
-                            class="w-full px-4 py-2 rounded-lg border text-dark-text-primary"
-                            style="background: rgba(30, 35, 50, 0.6); border-color: rgba(255, 255, 255, 0.2);"
+                            class="w-full px-4 py-2 rounded-lg border text-dark-text-primary glass-input"
                             placeholder="admin"
                         >
                     </div>
@@ -124,8 +123,7 @@
                             required
                             autocomplete="new-password"
                             minlength="8"
-                            class="w-full px-4 py-2 rounded-lg border text-dark-text-primary"
-                            style="background: rgba(30, 35, 50, 0.6); border-color: rgba(255, 255, 255, 0.2);"
+                            class="w-full px-4 py-2 rounded-lg border text-dark-text-primary glass-input"
                             placeholder="Choose a strong password"
                         >
                     </div>
@@ -142,8 +140,7 @@
                             required
                             autocomplete="new-password"
                             minlength="8"
-                            class="w-full px-4 py-2 rounded-lg border text-dark-text-primary"
-                            style="background: rgba(30, 35, 50, 0.6); border-color: rgba(255, 255, 255, 0.2);"
+                            class="w-full px-4 py-2 rounded-lg border text-dark-text-primary glass-input"
                             placeholder="Re-enter your password"
                         >
                     </div>
@@ -162,7 +159,7 @@
     </div>
 
     <!-- Hidden controls for future Easter egg -->
-    <div id="logo-controls" style="display: none;">
+    <div id="logo-controls">
         <!-- Controls will go here if we add Easter egg later -->
     </div>
 

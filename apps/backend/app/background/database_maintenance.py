@@ -10,7 +10,7 @@ Periodically performs database maintenance operations:
 """
 
 import asyncio
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from shared.logger import get_logger
@@ -135,7 +135,7 @@ async def _vacuum_table(db, table_name: str, full: bool = False) -> dict:
     # Security: Validate table name to prevent SQL injection
     _validate_table_name(table_name)
 
-    start_time = datetime.utcnow()
+    start_time = datetime.now(UTC)
     vacuum_type = "VACUUM FULL" if full else "VACUUM"
 
     # VACUUM cannot run inside a transaction block (PostgreSQL DDL restriction).
@@ -158,7 +158,7 @@ async def _vacuum_table(db, table_name: str, full: bool = False) -> dict:
             await conn.execute(vacuum_sql)
             size_after = (await conn.execute(size_sql, size_params)).scalar()
 
-        duration = (datetime.utcnow() - start_time).total_seconds()
+        duration = (datetime.now(UTC) - start_time).total_seconds()
         if size_before is None or size_after is None:
             raise RuntimeError(
                 f"VACUUM size query returned NULL for table {table_name} "
@@ -274,7 +274,7 @@ async def _run_maintenance_cycle(db):
     5. Log results
     """
     logger.info("Starting database maintenance cycle")
-    start_time = datetime.utcnow()
+    start_time = datetime.now(UTC)
 
     # Tables to maintain
     tables = [
@@ -447,14 +447,14 @@ async def _run_maintenance_cycle(db):
         logger.warning("Error refreshing continuous aggregates", exc_info=True)
 
     # Calculate total stats
-    total_duration = (datetime.utcnow() - start_time).total_seconds()
+    total_duration = (datetime.now(UTC) - start_time).total_seconds()
     total_reclaimed = sum(
         op.get("space_reclaimed_mb", 0)
         for op in maintenance_report["vacuum_operations"]
         if op.get("success")
     )
 
-    maintenance_report["cycle_end"] = datetime.utcnow().isoformat()
+    maintenance_report["cycle_end"] = datetime.now(UTC).isoformat()
     maintenance_report["total_duration_seconds"] = round(total_duration, 2)
     maintenance_report["total_space_reclaimed_mb"] = round(total_reclaimed, 2)
 

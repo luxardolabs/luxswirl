@@ -4,7 +4,7 @@ Check detail service - provides detailed check information for side panel.
 
 import json
 from collections import defaultdict
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
@@ -110,8 +110,8 @@ class CheckDetailViewService:
                         exp_date = datetime.strptime(
                             ssl_cert["expiration_date"], "%b %d %H:%M:%S %Y %Z"
                         )
-                        exp_date = exp_date.replace(tzinfo=None)  # Make naive for comparison
-                        now = datetime.utcnow()
+                        exp_date = exp_date.replace(tzinfo=UTC)  # aware for comparison
+                        now = datetime.now(UTC)
 
                         # Calculate days until expiration
                         days_remaining = (exp_date - now).days

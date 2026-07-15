@@ -11,7 +11,7 @@ from fastapi import Request
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.user_model import User
+from app.core.auth_deps import AuthedUser
 from app.schemas.pagination_schema import build_pagination
 from app.services.core.alert_core_service import AlertCoreService
 from app.services.core.notification_core_service import NotificationCoreService
@@ -250,7 +250,7 @@ class SettingsViewService:
 
     @staticmethod
     async def build_landing_context(
-        db: AsyncSession, request: Request, current_user: User
+        db: AsyncSession, request: Request, current_user: AuthedUser
     ) -> dict[str, Any]:
         """/settings landing page — totals across providers/alerts/keys/users."""
         _, providers_count = await NotificationCoreService.list_providers(db, limit=1)
@@ -271,7 +271,7 @@ class SettingsViewService:
 
     @staticmethod
     async def build_notifications_context(
-        db: AsyncSession, request: Request, current_user: User
+        db: AsyncSession, request: Request, current_user: AuthedUser
     ) -> dict[str, Any]:
         """/settings/notifications page context."""
         providers, total = await NotificationCoreService.list_providers(db, limit=1000)
@@ -288,7 +288,7 @@ class SettingsViewService:
     async def build_alerts_context(
         db: AsyncSession,
         request: Request,
-        current_user: User,
+        current_user: AuthedUser,
         is_enabled: bool | None,
         is_global: bool | None,
         page: int,
@@ -320,7 +320,7 @@ class SettingsViewService:
     async def build_registration_keys_context(
         db: AsyncSession,
         request: Request,
-        current_user: User,
+        current_user: AuthedUser,
         is_enabled: bool | None,
     ) -> dict[str, Any]:
         """/settings/registration-keys page context (also includes metrics settings)."""
@@ -340,7 +340,7 @@ class SettingsViewService:
         }
 
     @staticmethod
-    def build_components_context(request: Request, current_user: User) -> dict[str, Any]:
+    def build_components_context(request: Request, current_user: AuthedUser) -> dict[str, Any]:
         """/settings/components — purely presentational, no DB."""
         return {
             "request": request,
@@ -350,7 +350,7 @@ class SettingsViewService:
 
     @staticmethod
     async def build_defaults_context(
-        db: AsyncSession, request: Request, current_user: User
+        db: AsyncSession, request: Request, current_user: AuthedUser
     ) -> dict[str, Any]:
         """/settings/defaults — all configurable defaults grouped by category."""
         return {
@@ -372,7 +372,7 @@ class SettingsViewService:
 
     @staticmethod
     def build_setting_card_context(
-        request: Request, current_user: User, setting: Any
+        request: Request, current_user: AuthedUser, setting: Any
     ) -> dict[str, Any]:
         """Setting-card partial context (used for update/reset responses)."""
         return {
@@ -383,7 +383,7 @@ class SettingsViewService:
 
     @staticmethod
     def build_metrics_card_context(
-        request: Request, current_user: User, metrics_settings: Any
+        request: Request, current_user: AuthedUser, metrics_settings: Any
     ) -> dict[str, Any]:
         """Metrics-card partial context."""
         return {
@@ -394,7 +394,7 @@ class SettingsViewService:
 
     @staticmethod
     def build_metrics_token_context(
-        request: Request, current_user: User, token: str
+        request: Request, current_user: AuthedUser, token: str
     ) -> dict[str, Any]:
         """Metrics-token-display partial context."""
         return {

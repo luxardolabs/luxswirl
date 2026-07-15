@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.auth_deps import AdminUserWeb
 from app.db import get_db
 from app.services.views.registration_keys_view_service import RegistrationKeysViewService
-from app.web._hx_responses import hx_empty_with_toast
+from app.web.hx_responses import hx_empty_with_toast
 from app.web.templates_config import templates
 
 logger = get_logger("luxswirl.web.registration_keys")

@@ -15,7 +15,7 @@ from shared.logger import get_logger
 
 from app.core.auth_deps import AdminUserWeb
 from app.services.views.scheduler_view_service import SchedulerViewService
-from app.web._hx_responses import hx_empty_with_toast, hx_toast_trigger
+from app.web.hx_responses import hx_empty_with_toast, hx_toast_trigger
 from app.web.templates_config import templates
 
 logger = get_logger("luxswirl.web.routers.scheduler")

@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.auth_deps import CurrentUserWeb
 from app.db import get_db
 from app.services.views.profile_view_service import ProfileViewService
-from app.web.routers._render import status_message
+from app.web.render import status_message
 from app.web.templates_config import templates
 
 logger = get_logger("luxswirl.web.routers.profile")

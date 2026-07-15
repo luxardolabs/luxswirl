@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import pytest
 
-from app.core.request_helpers import client_ip_from_request
+from app.core.request_helpers import client_ip_from_request, reset_trusted_networks_cache
 
 
 def _make_request(direct_ip: str | None, xff: str = "") -> SimpleNamespace:
@@ -20,16 +20,9 @@ def _make_request(direct_ip: str | None, xff: str = "") -> SimpleNamespace:
 @pytest.fixture(autouse=True)
 def _reset_helper_caches():
     """Clear lru_cache between tests so config changes take effect."""
-    from app.core.request_helpers import (
-        _parsed_trusted_networks,
-        _trusted_networks_cache_key,
-    )
-
-    _trusted_networks_cache_key.cache_clear()
-    _parsed_trusted_networks.cache_clear()
+    reset_trusted_networks_cache()
     yield
-    _trusted_networks_cache_key.cache_clear()
-    _parsed_trusted_networks.cache_clear()
+    reset_trusted_networks_cache()
 
 
 @pytest.fixture
@@ -124,13 +117,7 @@ def test_empty_trusted_proxy_list_disables_xff_honoring():
     """If operator clears the trusted list, XFF is never honored."""
     with patch("app.core.request_helpers.settings") as mock_settings:
         mock_settings.security.trusted_proxy_networks = []
-        from app.core.request_helpers import (
-            _parsed_trusted_networks,
-            _trusted_networks_cache_key,
-        )
-
-        _trusted_networks_cache_key.cache_clear()
-        _parsed_trusted_networks.cache_clear()
+        reset_trusted_networks_cache()
 
         req = _make_request(direct_ip="127.0.0.1", xff="93.184.216.34")
         # Even loopback isn't trusted now — direct peer wins.
@@ -144,13 +131,7 @@ def test_misconfigured_cidr_does_not_crash():
             "not-a-cidr",
             "127.0.0.0/8",
         ]
-        from app.core.request_helpers import (
-            _parsed_trusted_networks,
-            _trusted_networks_cache_key,
-        )
-
-        _trusted_networks_cache_key.cache_clear()
-        _parsed_trusted_networks.cache_clear()
+        reset_trusted_networks_cache()
 
         req = _make_request(direct_ip="127.0.0.1", xff="93.184.216.34")
         # Loopback still trusted via the valid CIDR, so XFF honored.

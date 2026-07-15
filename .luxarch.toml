@@ -1,0 +1,86 @@
+# Pilot key for luxswirl (fastapi-web). Reproduces luxswirl's local `make arch`:
+# all guards green except the deferred service-size ratchet (its @pytest.mark.xfail).
+
+[[target]]
+kind = "fastapi-web"
+app = "apps/backend/app"
+
+[shared]
+paths = ["apps/shared"]
+
+[enums]
+declared = [
+  "AgentApprovalStatus", "AgentStatus", "AlertTriggerType", "CheckArtifactType",
+  "CheckErrorType", "CheckType", "JobStatus", "JobType", "NotificationProviderType",
+  "NotificationStatus", "SchedulerExecutionStatus", "SchedulerJobCategory",
+  "SchedulerTriggerType", "SettingCategory", "UserRole",
+]
+labelled = ["UserRole", "CheckType"]
+
+[hypertables]
+names = ["check_results", "agent_metrics", "check_artifacts"]
+models = ["CheckResult", "AgentMetric", "CheckArtifact"]
+
+[uuid]
+extra_id_names = ["log_id", "job_id"]
+
+[allowlist]
+non_request_files = [
+  "app/db/database.py",
+  "app/main.py",
+  "app/background/job_purge.py",
+  "app/background/database_maintenance.py",
+  "app/scripts/migrate_encrypt_checks.py",
+]
+cascading_delete_calls = [
+  "\\bbulk_delete_by_ids\\b",
+  "\\bdelete_check_handler\\b",
+  "AgentCoreService\\.delete_agent\\b",
+  "StatusPageCoreService\\.delete_status_page\\b",
+  "\\bbulk_create_checks\\b",
+]
+uuid_typing = [
+  { path = "core/exceptions.py", name = "agent_id", evidence = "raised not-found message arg, not the column" },
+]
+enum_freetext_columns = [
+  { path = "app/models/check_artifact_model.py", column = "content_type", evidence = "MIME, open set" },
+]
+hypertable_unbounded = [
+  { file = "artifact_crud", func = "get_stats_for_check", evidence = "check_artifacts is retention-scoped + filtered by check_id (indexed); a time bound prunes nothing (LUXSWIRL-180)" },
+]
+js_network = [
+  { file = "app.js", pattern = "window.location.reload(", evidence = "canonical refreshPage HX-Trigger handler" },
+  { file = "database-health.js", pattern = "fetch(", evidence = "Chart.js data refresh — Section B carve-out" },
+]
+
+[templates]
+# Evidence-backed template carve-outs (substring match on path). In luxarch <=0.2.0
+# these lived hardcoded in the image; 0.2.1 moved them out to the repo's own config
+# (they were luxswirl data, not fleet standard). Every template rule honors this list.
+# NOTE: the old pages/alerts.html carve-out is intentionally absent — that orphan has
+# since been deleted, so exempting it would be a phantom (evidence-less) entry.
+exempt = [
+  { page = "macros/tables.html",  evidence = "canonical table/pagination macro source — it emits THE <table>, not a violation" },
+  { page = "macros/filters.html", evidence = "filter_select macro source (its docstring mentions <select>)" },
+  { page = "logo-demo",           evidence = "admin-only design playground, not a product page" },
+]
+
+[rules.deferred]
+# LOC reductions deferred — current oversize: checks_view_service.py 1560, check_core_service.py
+# 1442, alert_core_service.py 1266, agent_core_service.py 1041 (limit 1000). LOC splits remain
+# deferred; no dedicated open ticket (originally parked under the closed LUXSWIRL-170).
+"fw.service_size" = "Service LOC splits deferred — checks_view_service 1560, check_core_service 1442, alert_core_service 1266, agent_core_service 1041 (limit 1000)"
+# New coverage luxarch adds over the old in-repo suite (apps/shared was never scanned).
+# Recorded, not silent — drains when apps/shared/config.py moves its env-expansion imports up.
+"shared.no_inline_imports" = "apps/shared/config.py inline imports in _expand_env_vars/validate_config — pending lift to module top"
+
+# ── luxarch 0.2.1 adoption deferrals (parent LUXSWIRL-194) ──────────────────
+# Genuine larger refactors, recorded (XFAIL) not silenced. Each drains its child ticket.
+# ~140 db.add/flush/refresh/delete sites in alert/agent core services → move into crud.
+"fw.no_session_mutation_outside_crud" = "Session-mutation ops in alert/agent core services (~140 sites); crud-confinement is a multi-day refactor of two oversize services — LUXSWIRL-195"
+# 8 view services pass/return ORM objects (Check/Agent/Job/User/Session/StatusPage/NotificationProvider);
+# the 7 user-only files were already cleared via the AuthedUser alias. Remaining = ORM→schema boundary.
+"fw.views_dont_import_models" = "8 view services return/consume ORM models (ORM-through-view); the schema-boundary refactor is tracked — 7 user-only files already cleared via the AuthedUser alias — LUXSWIRL-196"
+# 33 enum-ish DTO fields; mostly the free-text/response-envelope ones LUXSWIRL-177 deliberately left
+# as str (typing them to the lookalike enum breaks serialization on existing data). Per-field triage.
+"fw.enum_dto_fields_enum_typed" = "33 enum-ish DTO fields need per-field triage (Enum/Literal/enum_dto_freetext); mostly carries forward LUXSWIRL-177/186 decisions — footguns must NOT be blind-typed — LUXSWIRL-197"

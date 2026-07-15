@@ -44,6 +44,17 @@ def _parsed_trusted_networks() -> list[IPv4Network | IPv6Network]:
     return nets
 
 
+def reset_trusted_networks_cache() -> None:
+    """Clear the trusted-network lru_caches so a config change takes effect.
+
+    Public entry point for cache invalidation — used by tests (which mutate
+    the configured CIDRs between cases) and available to runtime code that
+    reconfigures ``trusted_proxy_networks`` without a restart.
+    """
+    _trusted_networks_cache_key.cache_clear()
+    _parsed_trusted_networks.cache_clear()
+
+
 def _ip_in_trusted_networks(ip_str: str) -> bool:
     try:
         ip = ip_address(ip_str)

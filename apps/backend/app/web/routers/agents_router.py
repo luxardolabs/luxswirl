@@ -18,8 +18,8 @@ from app.core.auth_deps import (
 from app.core.exceptions import AgentNotFoundException
 from app.db import get_db
 from app.services.views.agents_view_service import AgentsViewService
-from app.web._hx_responses import hx_empty_with_toast
-from app.web.routers._render import status_message
+from app.web.hx_responses import hx_empty_with_toast
+from app.web.render import status_message
 from app.web.templates_config import templates
 
 logger = get_logger("luxswirl.web.routers.agents")

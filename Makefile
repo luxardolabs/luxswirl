@@ -21,6 +21,15 @@ AGENT_NAME      := luxardolabs/luxswirl-agent
 BACKEND_IMAGE   := $(REGISTRY)/$(BACKEND_NAME)
 AGENT_IMAGE     := $(REGISTRY)/$(AGENT_NAME)
 
+# Architecture guard (luxarch) — internal tooling on a private registry (not on ghcr,
+# not part of this repo's public surface). Supply the registry host out-of-tree via
+# Makefile.local (gitignored): copy Makefile.local.example -> Makefile.local and set it.
+# Contributors don't need it — lint/test and the import-linter contracts run without it.
+LUXARCH_REGISTRY ?=
+LUXARCH_VERSION  ?= 0.2.1
+LUXARCH_IMAGE    ?= $(LUXARCH_REGISTRY)/luxardolabs/luxarch:$(LUXARCH_VERSION)
+-include Makefile.local
+
 # Multi-arch registry pushes (amd64 + arm64). Local build / build-dev stay single-
 # arch — you can't --load a multi-platform image. Override with e.g. PLATFORMS=linux/amd64.
 PLATFORMS       ?= linux/amd64,linux/arm64
@@ -292,8 +301,13 @@ mypy: lint-build ## mypy type-check BOTH components
 	docker run --rm $(BACKEND_LINT) mypy app
 	docker run --rm $(AGENT_LINT) mypy app
 
-arch: lint-build ## Architecture + static lint guards (grep + import-linter) — ALWAYS baked fresh from on-disk source (CI gate; no :dev dependency)
-	docker run --rm $(BACKEND_LINT) sh -c 'cd /app && pytest tests/test_architecture.py tests/test_no_redundant_db_commit.py tests/test_no_raw_js_network.py -q --no-cov'
+arch: lint-build ## Architecture conformance via luxarch (private tooling) + import-linter contracts (in-repo)
+	@if [ -n "$(LUXARCH_REGISTRY)" ]; then \
+		docker run --rm -v $(PWD):/repo $(LUXARCH_IMAGE); \
+	else \
+		echo ">> luxarch skipped: LUXARCH_REGISTRY unset (internal tooling — see Makefile.local.example)"; \
+	fi
+	docker run --rm $(BACKEND_LINT) sh -c 'cd /app && python -c "import sys; from importlinter.cli import lint_imports_command; sys.exit(lint_imports_command())"'
 
 gitleaks: ## Scan the tree for committed secrets (run before the first git commit)
 	docker run --rm -v $(PWD):/repo -w /repo ghcr.io/gitleaks/gitleaks:latest \
@@ -317,7 +331,7 @@ test-build: ## Build the test image from current source (self-contained — no :
 
 test: test-build ## Run the backend DB-integration suite against an isolated test DB (TEST=path/to/test for one file). Image is ALWAYS baked fresh from on-disk source (no :dev dependency). Static/arch guards run via `make arch`.
 	$(DC_TEST) up -d --wait timescaledb-test
-	$(DC_TEST) run --rm tests pytest $(TEST) --ignore=tests/test_architecture.py --ignore=tests/test_no_redundant_db_commit.py --ignore=tests/test_no_raw_js_network.py ; status=$$? ; $(DC_TEST) down -v ; exit $$status
+	$(DC_TEST) run --rm tests pytest $(TEST) ; status=$$? ; $(DC_TEST) down -v ; exit $$status
 
 test-down: ## Tear down the test stack
 	$(DC_TEST) down -v

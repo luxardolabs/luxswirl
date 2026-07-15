@@ -10,7 +10,7 @@ from fastapi import Request
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.user_model import User
+from app.core.auth_deps import AuthedUser
 from app.schemas.registration_key_schema import RegistrationKeyCreate, RegistrationKeyRevoke
 from app.services.core.registration_key_core_service import RegistrationKeyCoreService
 
@@ -21,7 +21,7 @@ class RegistrationKeysViewService:
     """View-layer wrapper for registration-key admin endpoints."""
 
     @staticmethod
-    def build_create_form_context(request: Request, current_user: User) -> dict[str, Any]:
+    def build_create_form_context(request: Request, current_user: AuthedUser) -> dict[str, Any]:
         """Empty-form partial context for the 'new key' modal."""
         return {
             "request": request,
@@ -33,7 +33,7 @@ class RegistrationKeysViewService:
     async def create_key(
         db: AsyncSession,
         request: Request,
-        current_user: User,
+        current_user: AuthedUser,
         name: str,
         description: str | None,
     ) -> dict[str, Any]:
@@ -75,7 +75,9 @@ class RegistrationKeysViewService:
         )
 
     @staticmethod
-    def build_error_context(request: Request, current_user: User, error: str) -> dict[str, Any]:
+    def build_error_context(
+        request: Request, current_user: AuthedUser, error: str
+    ) -> dict[str, Any]:
         """Common error-partial context (used by all four endpoints)."""
         return {
             "request": request,

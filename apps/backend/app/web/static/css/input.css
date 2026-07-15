@@ -46,6 +46,21 @@
     @apply card transition-all duration-200 hover:shadow-md hover:border-brand-500/50;
   }
 
+  /* Frosted-glass panel used by the setup + login auth pages (over the logo bg). */
+  .glass-card {
+    @apply rounded-lg p-8;
+    background: rgba(20, 23, 35, 0.4);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  /* Text inputs inside a .glass-card (setup + login) — translucent over the bg. */
+  .glass-input {
+    background: rgba(30, 35, 50, 0.6);
+    border-color: rgba(255, 255, 255, 0.2);
+  }
+
   /* Buttons */
   .btn {
     @apply inline-flex items-center justify-center px-4 py-2 rounded-md font-medium transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-dark-bg-primary;

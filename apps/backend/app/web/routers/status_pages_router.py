@@ -2,7 +2,6 @@
 Status Pages router — web UI for managing custom status pages/dashboards.
 """
 
-import json
 from typing import Annotated
 from uuid import UUID
 
@@ -20,8 +19,8 @@ from app.core.exceptions import StatusPageNotFoundException
 from app.core.query_params import AgentIdFilter, CheckTypeFilter, HealthStatusFilter
 from app.db import get_db
 from app.services.views.status_pages_view_service import StatusPagesViewService
-from app.web._hx_responses import hx_empty_with_toast, hx_toast_trigger
-from app.web.routers._render import error_page, error_partial, public_error_page
+from app.web.hx_responses import hx_empty_with_toast, hx_toast_trigger
+from app.web.render import error_page, error_partial, public_error_page
 from app.web.templates_config import templates
 
 logger = get_logger("luxswirl.web.routers.status_pages")
@@ -301,9 +300,8 @@ async def reorder_dashboard_items(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     """Reorder items in the dashboard. Returns refreshed dashboard_items partial."""
-    items = json.loads(items_json)
     context = await StatusPagesViewService.reorder_dashboard_items(
-        db, request, current_user, status_page_id, items
+        db, request, current_user, status_page_id, items_json
     )
     return templates.TemplateResponse(request, "partials/dashboard_items.html", context)
 
@@ -322,11 +320,8 @@ async def add_group_to_dashboard(
     filter_json: Annotated[str | None, Form()] = None,
 ):
     """Add a group to the dashboard. Returns refreshed dashboard_items partial."""
-    body: dict = {"name": name}
-    if filter_json is not None:
-        body["filter"] = json.loads(filter_json)
     context, error = await StatusPagesViewService.add_group_to_dashboard(
-        db, request, current_user, status_page_id, body
+        db, request, current_user, status_page_id, name, filter_json
     )
     if error == "no_items":
         return HTMLResponse(content="", status_code=500)
@@ -374,9 +369,8 @@ async def update_group_filters_in_dashboard(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     """Update filters for a dynamic filter group. Returns dashboard_items partial."""
-    filter = json.loads(filter_json) if filter_json else {}
     context = await StatusPagesViewService.update_group_filters(
-        db, request, current_user, status_page_id, item_index, filter
+        db, request, current_user, status_page_id, item_index, filter_json
     )
     return templates.TemplateResponse(request, "partials/dashboard_items.html", context)
 
