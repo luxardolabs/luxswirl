@@ -13,9 +13,9 @@
 
 set -e  # Exit on error
 
-# Configuration
-COLLECTOR_URL="https://localhost:9000"
-AUTH_TOKEN="REDACTED_TOKEN"
+# Configuration (override via env; AUTH_TOKEN is required — don't hardcode it)
+COLLECTOR_URL="${COLLECTOR_URL:-https://localhost:9000}"
+AUTH_TOKEN="${AUTH_TOKEN:?Set AUTH_TOKEN to your dev API token before running, e.g. AUTH_TOKEN=... ./scripts/test_job_api.sh}"
 AGENT_ID="test-agent-$(date +%s)"
 CURL_OPTS="-k"  # Allow insecure HTTPS for testing
 
