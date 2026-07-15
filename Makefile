@@ -309,6 +309,10 @@ arch: lint-build ## Architecture conformance via luxarch (private tooling) + imp
 	fi
 	docker run --rm $(BACKEND_LINT) sh -c 'cd /app && python -c "import sys; from importlinter.cli import lint_imports_command; sys.exit(lint_imports_command())"'
 
+hooks: ## Activate the repo git hooks (.githooks/) for this clone — run once after cloning
+	git config core.hooksPath .githooks
+	@echo "git hooks active (.githooks/): commit-msg blocks internal refs, pre-commit blocks infra hosts."
+
 gitleaks: ## Scan the tree for committed secrets (run before the first git commit)
 	docker run --rm -v $(PWD):/repo -w /repo ghcr.io/gitleaks/gitleaks:latest \
 	  dir /repo/apps -c /repo/.gitleaks.toml --no-banner --redact -v

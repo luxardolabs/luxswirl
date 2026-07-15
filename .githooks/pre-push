@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# Secret-scan the commits being pushed, before they reach a remote (public repo).
+#
+# Scans only the NEW commits in each pushed range (remote..local), not all of
+# history — so it gates fresh work without re-litigating already-public commits.
+# Uses gitleaks `git` mode, which sees committed content only (gitignored files
+# never enter the scan). Bypass with `git push --no-verify`.
+set -euo pipefail
+
+image="ghcr.io/gitleaks/gitleaks:latest"
+zero="0000000000000000000000000000000000000000"
+status=0
+
+while read -r _local_ref local_sha _remote_ref remote_sha; do
+  [ "$local_sha" = "$zero" ] && continue          # branch deletion — nothing to scan
+  if [ "$remote_sha" = "$zero" ]; then
+    range="$local_sha"                            # new ref: scan up to its tip
+  else
+    range="${remote_sha}..${local_sha}"           # only the commits being added
+  fi
+  echo ">> gitleaks: scanning $range"
+  docker run --rm -v "$PWD:/repo" -w /repo "$image" \
+    git /repo -c /repo/.gitleaks.toml --log-opts="$range" --no-banner --redact || status=1
+done
+
+if [ "$status" -ne 0 ]; then
+  echo "✗ push blocked: gitleaks found a secret in the commits being pushed." >&2
+  echo "  Fix it (or, if a false positive, allowlist it in .gitleaks.toml)." >&2
+  echo "  (bypass: git push --no-verify)" >&2
+  exit 1
+fi
