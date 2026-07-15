@@ -83,7 +83,7 @@ Web UI:    web/routers/     →  services/views/ →  services/core/  →  crud/
 
 **Naming (also enforced):** `*_router.py`, `*_view_service.py`, `*_core_service.py`, `*_crud.py`, `*_model.py`, `*_schema.py`. Files prefixed with `_` are shared helpers exempt from the naming rule (use only for genuinely multi-consumer helpers).
 
-**Enforcement:** `tests/test_architecture.py` (grep-based checks for raw SQL, naming, LOC limits, business logic in routers) + `pyproject.toml [tool.importlinter]` (6 import-graph contracts). Both run in the same pytest suite.
+**Enforcement:** `make arch` runs the luxarch conformance guard (architecture rules + this repo's facts/levels in `.luxarch.toml`: raw SQL, naming, LOC limits, business logic in routers, …) plus `pyproject.toml [tool.importlinter]` (6 import-graph contracts, run as the in-repo tail). The former in-repo grep guards were migrated into luxarch; `make lint`/`make test` need no extra setup, and `make arch` skips luxarch gracefully if its registry isn't configured (see `Makefile.local.example`).
 
 ### Three-component runtime
 
@@ -228,8 +228,8 @@ Version is **coded in the `VERSION` file** (not derived from the directory path)
 ```bash
 make lint          # ruff check + format-check + mypy for BOTH components (fresh Dockerfile.lint images)
 make test          # backend suite against an isolated test DB (compose.test.yaml)
-make arch          # architecture guards (grep tests + import-linter contracts)
-make gitleaks      # secret scan (must pass before the first git commit)
+make arch          # architecture conformance (luxarch guard + import-linter contracts)
+make gitleaks      # secret scan (pre-push hook runs it on the pushed commits)
 make compileall    # fast syntax check (byte-compile) in docker
 make check         # lint + test (boutique-style pre-commit suite)
 make poetry-lock   # regenerate poetry.lock for BOTH components (docker; no host poetry)
@@ -482,7 +482,7 @@ export DATABASE__URL=postgresql+asyncpg://luxswirl:luxswirl@localhost:5432/luxsw
 
 - **Async/await**: All I/O operations are async throughout the codebase
 - **Type hints**: Used extensively with `typing` module and modern Python 3.10+ syntax (`str | None`)
-- **Naming conventions** (enforced by `test_architecture.py`):
+- **Naming conventions** (enforced by `make arch`):
   - Models: `app/models/{name}_model.py`
   - Schemas: `app/schemas/{name}_schema.py`
   - CRUD: `app/crud/{name}_crud.py`
@@ -519,7 +519,7 @@ export DATABASE__URL=postgresql+asyncpg://luxswirl:luxswirl@localhost:5432/luxsw
   - Core services own business logic and transactions; never touch raw SQL
   - CRUD modules are the only place that runs `db.execute(...)`, `select()`, `update()`, `delete()`, `text()`
   - View services do not import each other (helpers prefixed with `_` are exempt)
-  - Enforced by `tests/test_architecture.py` (grep) + `pyproject.toml [tool.importlinter]` (import-graph)
+  - Enforced by `make arch` (luxarch guard) + `pyproject.toml [tool.importlinter]` (import-graph contracts)
 
 ## Recent Improvements (2024-10-22)
 
