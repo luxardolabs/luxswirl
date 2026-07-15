@@ -8,6 +8,11 @@ app = "apps/backend/app"
 [shared]
 paths = ["apps/shared"]
 
+# luxswirl enforces layering with import-linter (the lint-imports tail on `make arch`),
+# so keep fw.import_linter_declared active — it went opt-in in luxarch 0.5.0.
+[importlinter]
+required = true
+
 [enums]
 declared = [
   "AgentApprovalStatus", "AgentStatus", "AlertTriggerType", "CheckArtifactType",
