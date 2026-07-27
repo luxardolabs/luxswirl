@@ -9,7 +9,7 @@ from uuid import UUID
 from pydantic import Field
 
 from app.models.enum_model import AlertTriggerType
-from app.schemas.base import BaseSchema, TimestampSchema
+from app.schemas.base_schema import BaseSchema, TimestampSchema
 
 
 class AlertBase(BaseSchema):

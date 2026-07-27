@@ -1,4 +1,5 @@
 {% from 'macros/buttons.html' import btn_create %}
+{% from 'macros/form_fields.html' import input %}
 <!DOCTYPE html>
 <html lang="en" class="dark">
 <head>
@@ -97,18 +98,7 @@
                         <label for="username" class="block text-sm font-medium text-dark-text-primary mb-2">
                             Username
                         </label>
-                        <input
-                            type="text"
-                            id="username"
-                            name="username"
-                            required
-                            autofocus
-                            autocomplete="username"
-                            minlength="3"
-                            value="{{ username or '' }}"
-                            class="w-full px-4 py-2 rounded-lg border text-dark-text-primary glass-input"
-                            placeholder="admin"
-                        >
+                        {{ input('username', type='text', value=(username or ''), placeholder='admin', required=true, autofocus=true, autocomplete='username', minlength=3, class='w-full px-4 py-2 rounded-lg border text-dark-text-primary glass-input') }}
                     </div>
 
                     <!-- Password -->
@@ -116,16 +106,7 @@
                         <label for="password" class="block text-sm font-medium text-dark-text-primary mb-2">
                             Password
                         </label>
-                        <input
-                            type="password"
-                            id="password"
-                            name="password"
-                            required
-                            autocomplete="new-password"
-                            minlength="8"
-                            class="w-full px-4 py-2 rounded-lg border text-dark-text-primary glass-input"
-                            placeholder="Choose a strong password"
-                        >
+                        {{ input('password', type='password', placeholder='Choose a strong password', required=true, autocomplete='new-password', minlength=8, class='w-full px-4 py-2 rounded-lg border text-dark-text-primary glass-input') }}
                     </div>
 
                     <!-- Confirm Password -->
@@ -133,16 +114,7 @@
                         <label for="confirm_password" class="block text-sm font-medium text-dark-text-primary mb-2">
                             Confirm Password
                         </label>
-                        <input
-                            type="password"
-                            id="confirm_password"
-                            name="confirm_password"
-                            required
-                            autocomplete="new-password"
-                            minlength="8"
-                            class="w-full px-4 py-2 rounded-lg border text-dark-text-primary glass-input"
-                            placeholder="Re-enter your password"
-                        >
+                        {{ input('confirm_password', type='password', placeholder='Re-enter your password', required=true, autocomplete='new-password', minlength=8, class='w-full px-4 py-2 rounded-lg border text-dark-text-primary glass-input') }}
                     </div>
 
                     <!-- Submit Button -->

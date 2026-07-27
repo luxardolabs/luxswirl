@@ -30,7 +30,7 @@ from app.schemas.auth_schema import (
 from app.schemas.auth_schema import (
     UserResponse as AuthUserResponse,
 )
-from app.schemas.base import (
+from app.schemas.base_schema import (
     BaseSchema,
     ErrorResponse,
     PaginatedResponse,

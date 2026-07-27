@@ -18,7 +18,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
-from app.models.base import Base, SerializerMixin, TableNameMixin, str_enum
+from app.models.base_model import Base, SerializerMixin, TableNameMixin, str_enum
 from app.models.enum_model import CheckArtifactType
 
 if TYPE_CHECKING:

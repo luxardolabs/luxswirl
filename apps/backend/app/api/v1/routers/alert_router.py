@@ -16,6 +16,7 @@ from app.core.exceptions import (
     NotFoundException,
     ValidationException,
 )
+from app.core.query_params import EnabledFilter, GlobalFilter
 from app.core.security import verify_api_token
 from app.db import get_db
 from app.schemas.alert_schema import (
@@ -38,8 +39,8 @@ router = APIRouter(prefix="/alerts", tags=["Alerts"])
 async def list_alerts(
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[str, Depends(verify_api_token)],
-    is_enabled: Annotated[bool | None, Query(description="Filter by enabled status")] = None,
-    is_global: Annotated[bool | None, Query(description="Filter by global status")] = None,
+    is_enabled: EnabledFilter = None,
+    is_global: GlobalFilter = None,
     page: Annotated[int, Query(ge=1, description="Page number")] = 1,
     page_size: Annotated[int, Query(ge=1, le=1000, description="Items per page")] = 50,
 ):

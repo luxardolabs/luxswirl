@@ -15,7 +15,7 @@ from sqlalchemy import JSON, DateTime, Index, Text, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.datetime_utils import utc_now
-from app.models.base import Base, str_enum
+from app.models.base_model import Base, str_enum
 from app.models.enum_model import MaintenanceJobKind, MaintenanceJobStatus
 
 

@@ -16,6 +16,7 @@ from app.core.auth_deps import (
     EditorUserWeb,
 )
 from app.core.exceptions import AgentNotFoundException
+from app.core.query_params import PerPageFilter
 from app.db import get_db
 from app.services.views.agents_view_service import AgentsViewService
 from app.web.hx_responses import hx_empty_with_toast
@@ -39,9 +40,7 @@ async def agents_list_page(
     search: Annotated[str, Query(description="Search agents by name, hostname, or IP")] = "",
     hours: Annotated[int, Query(ge=1, le=24, description="Hours of metrics history")] = 4,
     page: Annotated[int, Query(ge=1, description="Page number")] = 1,
-    per_page: Annotated[
-        int | None, Query(ge=10, le=200, description="Items per page (defaults to setting)")
-    ] = None,
+    per_page: PerPageFilter = None,
 ):
     """Agents list page — paginated."""
     try:

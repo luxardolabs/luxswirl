@@ -7,7 +7,7 @@ from typing import Any
 from sqlalchemy import JSON, Index, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.models.base import (
+from app.models.base_model import (
     Base,
     SerializerMixin,
     TableNameMixin,

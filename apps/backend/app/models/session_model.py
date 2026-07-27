@@ -9,7 +9,7 @@ from uuid import UUID
 from sqlalchemy import ForeignKey, Index, String, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.models.base import UUIDBaseModel
+from app.models.base_model import UUIDBaseModel
 
 if TYPE_CHECKING:
     from app.models.user_model import User

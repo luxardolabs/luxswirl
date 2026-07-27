@@ -9,7 +9,7 @@ from sqlalchemy import Boolean, Index, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, attributes, mapped_column
 
-from app.models.base import UUIDBaseModel
+from app.models.base_model import UUIDBaseModel
 
 if TYPE_CHECKING:
     pass

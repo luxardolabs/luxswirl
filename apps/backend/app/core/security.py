@@ -201,7 +201,7 @@ async def _unauthenticated_web_redirect(request: Request, db: AsyncSession) -> H
     requested path. Mirrors UserCoreService.needs_setup.
     """
     # Lazy import: app.core.__init__ eagerly imports this module while
-    # app.models.base is still initializing, so a top-level user_crud (-> models)
+    # app.models.base_model is still initializing, so a top-level user_crud (-> models)
     # import here would create a circular import.
     from app.crud.user_crud import (
         UserCRUD,  # noqa: inline-import (breaks core<->models import cycle)

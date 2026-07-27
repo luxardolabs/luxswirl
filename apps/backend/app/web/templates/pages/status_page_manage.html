@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% from 'macros/page.html' import page_header %}
-{% from 'macros/buttons.html' import btn_back, btn_view_text, btn_edit_text %}
+{% from 'macros/buttons.html' import btn_back, btn_view_text, btn_edit_text, dashed_add_btn %}
+{% from 'macros/form_fields.html' import input, select %}
 
 {% block head %}
 <script src="/static/js/vendor/sortable.min.js?v={{ static_version }}"></script>
@@ -76,21 +77,11 @@ if (document.readyState === 'loading') {
                     </div>
 
                     <!-- Add Group buttons -->
+                    {% set add_group_icon %}{% include "icons/hero/outline/lock-closed.svg" %}{% endset %}
+                    {% set add_filter_icon %}{% include "icons/hero/outline/funnel.svg" %}{% endset %}
                     <div class="mt-4 grid grid-cols-2 gap-3">
-                        <button
-                            id="add-group-btn"
-                            class="py-3 px-4 border-2 border-dashed border-dark-border rounded-lg text-sm text-dark-text-muted hover:border-brand-500 hover:text-brand-400 transition-colors flex items-center justify-center gap-2"
-                        >
-                            <span class="w-4 h-4 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/lock-closed.svg" %}</span>
-                            <span>Container Group</span>
-                        </button>
-                        <button
-                            id="add-filter-group-btn"
-                            class="py-3 px-4 border-2 border-dashed border-dark-border rounded-lg text-sm text-dark-text-muted hover:border-purple-500 hover:text-purple-400 transition-colors flex items-center justify-center gap-2"
-                        >
-                            <span class="w-4 h-4 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/funnel.svg" %}</span>
-                            <span>Dynamic Group</span>
-                        </button>
+                        {{ dashed_add_btn(add_group_icon, 'Container Group', id='add-group-btn', color='brand') }}
+                        {{ dashed_add_btn(add_filter_icon, 'Dynamic Group', id='add-filter-group-btn', color='purple') }}
                     </div>
                 </div>
             </div>
@@ -110,93 +101,54 @@ if (document.readyState === 'loading') {
                     <!-- Agent filter -->
                     <div>
                         <label for="filter-agent" class="block text-xs font-medium text-dark-text-secondary uppercase tracking-wider mb-1.5">Agent</label>
-                        <select
-                            name="agent_id"
-                            id="filter-agent"
-                            class="input text-sm w-full"
-                            hx-get="/status-pages/{{ status_page.id }}/available-checks"
-                            hx-target="#available-checks-list"
-                            hx-swap="innerHTML"
-                            hx-include="[name='agent_id'],[name='check_type'],[name='status'],[name='tags'],[name='search']"
-                        >
+                        {% call select('agent_id', id='filter-agent', class='input text-sm w-full', hx_get='/status-pages/' ~ status_page.id ~ '/available-checks', hx_target='#available-checks-list', hx_swap='innerHTML', hx_include="[name='agent_id'],[name='check_type'],[name='status'],[name='tags'],[name='search']") %}
                             <option value="">All Agents</option>
                             {% for agent in all_agents %}
                             <option value="{{ agent.id }}">{{ agent.agent_name or agent.id }}</option>
                             {% endfor %}
-                        </select>
+                        {% endcall %}
                     </div>
 
                     <!-- Type filter -->
                     <div>
                         <label for="filter-type" class="block text-xs font-medium text-dark-text-secondary uppercase tracking-wider mb-1.5">Type</label>
-                        <select
-                            name="check_type"
-                            id="filter-type"
-                            class="input text-sm w-full"
-                            hx-get="/status-pages/{{ status_page.id }}/available-checks"
-                            hx-target="#available-checks-list"
-                            hx-swap="innerHTML"
-                            hx-include="[name='agent_id'],[name='check_type'],[name='status'],[name='tags'],[name='search']"
-                        >
+                        {% call select('check_type', id='filter-type', class='input text-sm w-full', hx_get='/status-pages/' ~ status_page.id ~ '/available-checks', hx_target='#available-checks-list', hx_swap='innerHTML', hx_include="[name='agent_id'],[name='check_type'],[name='status'],[name='tags'],[name='search']") %}
                             <option value="">All Types</option>
                             {% for check_type in all_types %}
                             <option value="{{ check_type }}">{{ check_type }}</option>
                             {% endfor %}
-                        </select>
+                        {% endcall %}
                     </div>
                 </div>
 
                 <!-- Status filter -->
                 <div>
                     <label for="filter-status" class="block text-xs font-medium text-dark-text-secondary uppercase tracking-wider mb-1.5">Status</label>
-                    <select
-                        name="status"
-                        id="filter-status"
-                        class="input text-sm w-full"
-                        hx-get="/status-pages/{{ status_page.id }}/available-checks"
-                        hx-target="#available-checks-list"
-                        hx-swap="innerHTML"
-                        hx-include="[name='agent_id'],[name='check_type'],[name='status'],[name='tags'],[name='search']"
-                    >
+                    {% call select('status', id='filter-status', class='input text-sm w-full', hx_get='/status-pages/' ~ status_page.id ~ '/available-checks', hx_target='#available-checks-list', hx_swap='innerHTML', hx_include="[name='agent_id'],[name='check_type'],[name='status'],[name='tags'],[name='search']") %}
                         <option value="">All Status</option>
                         <option value="up">Up</option>
                         <option value="down">Down</option>
                         <option value="unknown">Unknown</option>
-                    </select>
+                    {% endcall %}
                 </div>
 
                 <!-- Tags filter -->
                 <div>
                     <label for="filter-tag" class="block text-xs font-medium text-dark-text-secondary uppercase tracking-wider mb-1.5">Tags</label>
                     <div class="flex flex-wrap gap-1.5 mb-2 min-h-[24px]" id="selected-tags"></div>
-                    <select
-                        name="tag_picker"
-                        id="filter-tag"
-                        class="input text-sm w-full"
-                    >
+                    {% call select('tag_picker', id='filter-tag', class='input text-sm w-full') %}
                         <option value="">Add tag filter...</option>
                         {% for tag in all_tags %}
                         <option value="{{ tag }}">{{ tag }}</option>
                         {% endfor %}
-                    </select>
+                    {% endcall %}
                     <input type="hidden" name="tags" id="filter-tags-hidden" value="">
                 </div>
 
                 <!-- Search -->
                 <div>
                     <label class="block text-xs font-medium text-dark-text-secondary uppercase tracking-wider mb-1.5">Search</label>
-                    <input
-                        type="text"
-                        name="search"
-                        id="filter-search"
-                        placeholder="Filter by name or target..."
-                        class="input text-sm w-full"
-                        hx-get="/status-pages/{{ status_page.id }}/available-checks"
-                        hx-target="#available-checks-list"
-                        hx-swap="innerHTML"
-                        hx-trigger="keyup changed delay:300ms"
-                        hx-include="[name='agent_id'],[name='check_type'],[name='status'],[name='tags'],[name='search']"
-                    />
+                    {{ input('search', type='text', id='filter-search', placeholder='Filter by name or target...', class='input text-sm w-full', hx_get='/status-pages/' ~ status_page.id ~ '/available-checks', hx_target='#available-checks-list', hx_swap='innerHTML', hx_trigger='keyup changed delay:300ms', hx_include="[name='agent_id'],[name='check_type'],[name='status'],[name='tags'],[name='search']") }}
                 </div>
             </div>
 

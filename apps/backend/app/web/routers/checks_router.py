@@ -16,7 +16,7 @@ from app.core.auth_deps import (
     EditorUserWeb,
 )
 from app.core.exceptions import CheckNotFoundException
-from app.core.query_params import AgentIdFilter, CheckTypeFilter, empty_to_none
+from app.core.query_params import AgentIdFilter, CheckTypeFilter, PerPageFilter, empty_to_none
 from app.db import get_db
 from app.services.views.checks_view_service import ChecksViewService
 from app.services.views.status_view_service import StatusViewService
@@ -497,9 +497,7 @@ async def checks_table_partial(
     agent: AgentIdFilter = None,
     enabled: Annotated[str, Query(description="Filter by enabled status")] = "all",
     page: Annotated[int, Query(ge=1, description="Page number")] = 1,
-    per_page: Annotated[
-        int | None, Query(ge=10, le=200, description="Items per page (defaults to setting)")
-    ] = None,
+    per_page: PerPageFilter = None,
 ):
     """Check assignments table partial for HTMX updates."""
     try:

@@ -4,6 +4,7 @@
 {% from 'macros/buttons.html' import btn_create, icon_btn, icon_edit, icon_delete, btn_save, btn_cancel_text %}
 {% from 'macros/tables.html' import pagination_controls %}
 {% from 'macros/filters.html' import filter_card, filter_select, filter_search, filter_per_page %}
+{% from 'macros/form_fields.html' import input, checkbox, select %}
 
 {% block content %}
 {% set actions_html %}
@@ -84,11 +85,7 @@
                         <div class="flex items-center gap-4">
                             <!-- Select All -->
                             <label class="flex items-center gap-2 text-sm text-dark-text-muted cursor-pointer">
-                                <input
-                                    type="checkbox"
-                                    id="select-all-page"
-                                    class="rounded border-dark-border focus:ring-brand-500 focus:ring-offset-0 text-brand-600 cursor-pointer"
-                                >
+                                {{ checkbox(id='select-all-page', class='rounded border-dark-border focus:ring-brand-500 focus:ring-offset-0 text-brand-600 cursor-pointer') }}
                                 <span>All</span>
                             </label>
                             <span id="selection-count" class="text-sm font-medium text-dark-text-primary"></span>
@@ -147,24 +144,24 @@
                         <div class="flex gap-4 mb-4">
                         <div>
                             <label class="text-xs text-dark-text-muted block mb-1">Interval (s)</label>
-                            <input type="number" name="interval" class="input text-xs py-1 px-2 w-24" min="10" max="86400">
+                            {{ input('interval', type='number', class='input text-xs py-1 px-2 w-24', min=10, max=86400) }}
                         </div>
                         <div>
                             <label class="text-xs text-dark-text-muted block mb-1">Timeout (s)</label>
-                            <input type="number" name="timeout" class="input text-xs py-1 px-2 w-24" min="1" max="300">
+                            {{ input('timeout', type='number', class='input text-xs py-1 px-2 w-24', min=1, max=300) }}
                         </div>
                         <div>
                             <label class="text-xs text-dark-text-muted block mb-1">Retries</label>
-                            <input type="number" name="retries" class="input text-xs py-1 px-2 w-20" min="0" max="10">
+                            {{ input('retries', type='number', class='input text-xs py-1 px-2 w-20', min=0, max=10) }}
                         </div>
                         <div class="flex-1">
                             <label for="bulk-agent-id" class="text-xs text-dark-text-muted block mb-1">Agent</label>
-                            <select id="bulk-agent-id" name="agent_id" class="input text-xs py-1 px-2 w-full">
+                            {% call select('agent_id', id='bulk-agent-id', class='input text-xs py-1 px-2 w-full') %}
                                 <option value="">No change</option>
                                 {% for agent in all_agents %}
                                 <option value="{{ agent.id }}">{{ agent.agent_name or agent.id }}</option>
                                 {% endfor %}
-                            </select>
+                            {% endcall %}
                         </div>
                         </div>
                     </form>

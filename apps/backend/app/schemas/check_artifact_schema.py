@@ -8,7 +8,7 @@ from uuid import UUID
 
 from pydantic import Field
 
-from app.schemas.base import BaseSchema
+from app.schemas.base_schema import BaseSchema
 
 
 class CheckArtifactCreate(BaseSchema):

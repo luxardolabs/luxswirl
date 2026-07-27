@@ -10,6 +10,7 @@ from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth_deps import AdminUser
+from app.core.query_params import ActiveFilter
 from app.db import get_db
 from app.schemas.user_schema import (
     UserCreate,
@@ -33,7 +34,7 @@ async def list_users(
     skip: Annotated[int, Query(ge=0, description="Number of records to skip")] = 0,
     limit: Annotated[int, Query(ge=1, le=200, description="Maximum records to return")] = 50,
     role: Annotated[str | None, Query(description="Filter by role")] = None,
-    is_active: Annotated[bool | None, Query(description="Filter by active status")] = None,
+    is_active: ActiveFilter = None,
     search: Annotated[str | None, Query(description="Search username or name")] = None,
 ):
     """

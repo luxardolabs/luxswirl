@@ -10,7 +10,7 @@ from sqlalchemy.dialects.postgresql import JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.encrypted_types import EncryptedJSON, EncryptedString
-from app.models.base import UUIDBaseModel, str_enum
+from app.models.base_model import UUIDBaseModel, str_enum
 from app.models.enum_model import AssignmentMode, CheckType
 
 if TYPE_CHECKING:

@@ -84,3 +84,31 @@ AlertIdFilter = Annotated[
 AgentIdFilter = Annotated[
     UUID | None, BeforeValidator(empty_to_none), Query(description="Filter by agent id")
 ]
+
+# ── Scalar filters: optional non-str params a dropdown/form can submit as '' ──
+# The same empty→None normalization the enum filters get — an optional int/bool
+# query param 422s on the "All" option's '' without it (fw.optional_query_empty_safe).
+PerPageFilter = Annotated[
+    int | None,
+    BeforeValidator(empty_to_none),
+    Query(ge=10, le=200, description="Items per page (defaults to setting)"),
+]
+HistoryHoursFilter = Annotated[
+    int | None,
+    BeforeValidator(empty_to_none),
+    Query(ge=1, le=168, description="Hours of history to show (defaults to setting)"),
+]
+TimeRangeFilter = Annotated[
+    int | None,
+    BeforeValidator(empty_to_none),
+    Query(description="Status bar time range in minutes"),
+]
+EnabledFilter = Annotated[
+    bool | None, BeforeValidator(empty_to_none), Query(description="Filter by enabled status")
+]
+GlobalFilter = Annotated[
+    bool | None, BeforeValidator(empty_to_none), Query(description="Filter by global status")
+]
+ActiveFilter = Annotated[
+    bool | None, BeforeValidator(empty_to_none), Query(description="Filter by active status")
+]

@@ -5,12 +5,13 @@ Check router - web UI for check details.
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Path, Query, Request
+from fastapi import APIRouter, Depends, Path, Request
 from fastapi.responses import HTMLResponse
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth_deps import CurrentUserWeb
+from app.core.query_params import HistoryHoursFilter
 from app.db import get_db
 from app.services.views.check_detail_view_service import CheckDetailViewService
 from app.web.templates_config import templates
@@ -26,10 +27,7 @@ async def check_detail_panel(
     check_id: Annotated[UUID, Path(description="Check UUID")],
     current_user: CurrentUserWeb,
     db: Annotated[AsyncSession, Depends(get_db)],
-    hours: Annotated[
-        int | None,
-        Query(ge=1, le=168, description="Hours of history to show (defaults to setting)"),
-    ] = None,
+    hours: HistoryHoursFilter = None,
 ):
     """
     Check detail panel for split-screen layout - opened when clicking a check row on dashboard.

@@ -14,7 +14,7 @@ from app.core.auth_deps import (
     CurrentUserWeb,
     EditorUserWeb,
 )
-from app.core.query_params import JobStatusFilter, JobTypeFilter
+from app.core.query_params import JobStatusFilter, JobTypeFilter, PerPageFilter
 from app.db import get_db
 from app.services.views.job_bulk_check_view_service import JobBulkCheckViewService
 from app.services.views.jobs_view_service import JobsViewService
@@ -47,9 +47,7 @@ async def jobs_page(
         str | None, Query(description="Filter by created time (1h/24h/7d/30d)")
     ] = None,
     page: Annotated[int, Query(ge=1, description="Page number")] = 1,
-    per_page: Annotated[
-        int | None, Query(ge=10, le=200, description="Items per page (defaults to setting)")
-    ] = None,
+    per_page: PerPageFilter = None,
 ):
     """Main jobs page — paginated list with filters."""
     try:

@@ -7,7 +7,7 @@ from datetime import datetime
 from sqlalchemy import Index, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.models.base import UUIDBaseModel
+from app.models.base_model import UUIDBaseModel
 
 
 class RegistrationKey(UUIDBaseModel):

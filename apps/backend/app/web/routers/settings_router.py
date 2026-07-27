@@ -10,6 +10,7 @@ from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth_deps import AdminUserWeb
+from app.core.query_params import EnabledFilter, GlobalFilter, PerPageFilter
 from app.db import get_db
 from app.services.views.settings_view_service import SettingsViewService
 from app.web.hx_responses import hx_empty_with_toast, hx_toast_trigger
@@ -59,10 +60,10 @@ async def settings_alerts(
     request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: AdminUserWeb,
-    is_enabled: Annotated[bool | None, Query(description="Filter by enabled status")] = None,
-    is_global: Annotated[bool | None, Query(description="Filter by global status")] = None,
+    is_enabled: EnabledFilter = None,
+    is_global: GlobalFilter = None,
     page: Annotated[int, Query(ge=1)] = 1,
-    per_page: Annotated[int | None, Query(ge=10, le=200, description="Items per page")] = None,
+    per_page: PerPageFilter = None,
 ):
     """Alert rules settings page."""
     try:
@@ -80,7 +81,7 @@ async def settings_registration_keys(
     request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: AdminUserWeb,
-    is_enabled: Annotated[bool | None, Query(description="Filter by enabled status")] = None,
+    is_enabled: EnabledFilter = None,
 ):
     """Registration keys + Prometheus metrics settings page."""
     try:

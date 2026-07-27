@@ -10,7 +10,7 @@ from sqlalchemy import JSON, DateTime, Index, Integer, String, Text, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.datetime_utils import utc_now
-from app.models.base import Base, TimestampMixin, str_enum
+from app.models.base_model import Base, TimestampMixin, str_enum
 from app.models.enum_model import JobStatus, JobType
 
 

@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import verify_api_token
 from app.db import get_db
-from app.schemas.base import ErrorResponse
+from app.schemas.base_schema import ErrorResponse
 from app.schemas.registration_key_schema import (
     RegistrationKeyCreate,
     RegistrationKeyCreateResponse,

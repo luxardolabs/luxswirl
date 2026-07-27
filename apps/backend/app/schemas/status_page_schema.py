@@ -7,7 +7,7 @@ from uuid import UUID
 
 from pydantic import Field, field_validator
 
-from app.schemas.base import BaseSchema, TimestampSchema
+from app.schemas.base_schema import BaseSchema, TimestampSchema
 
 
 class StatusPageCheckItem(BaseSchema):

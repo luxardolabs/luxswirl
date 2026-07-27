@@ -1,6 +1,7 @@
 {% from 'macros/cards.html' import stat_card %}
 {% from 'macros/badges.html' import check_type_badge, role_badge %}
-{% from 'macros/buttons.html' import icon_view, icon_edit, icon_delete %}
+{% from 'macros/buttons.html' import icon_view, icon_edit, icon_delete, dashed_add_btn %}
+{% from 'macros/form_fields.html' import input, checkbox, select %}
 {% from 'macros/status.html' import status_badge as check_status_badge %}
 {% from 'macros/page.html' import page_header %}
 {% from 'macros/tables.html' import data_table %}
@@ -52,30 +53,44 @@
    ═══════════════════════════════════════════════════════════════════════ #}
 <section>
     <h2 class="text-lg font-semibold text-dark-text-primary mb-1">Form Elements</h2>
-    <p class="text-sm text-dark-text-muted mb-4">CSS component classes from <code class="text-brand-400">input.css</code></p>
+    <p class="text-sm text-dark-text-muted mb-4">From <code class="text-brand-400">macros/form_fields.html</code> — <code class="text-brand-400">input()</code>, <code class="text-brand-400">select()</code>, <code class="text-brand-400">checkbox()</code>. The macro owns the element and bakes in the branded <code class="text-brand-400">.input</code> class (from <code class="text-brand-400">input.css</code>); the page keeps the <code>&lt;form&gt;</code> and <code>&lt;label&gt;</code>. select() takes its <code>&lt;option&gt;</code> loop as a call-block body.</p>
 
     <div class="card p-6">
         <div class="grid grid-cols-2 gap-6">
             <div>
-                <label class="label" for="demo-text-input">Text Input (label + input)</label>
-                <input type="text" id="demo-text-input" class="input w-full" placeholder="Placeholder text..." value="Example value">
+                <label class="label" for="demo-text-input">Text Input — input(name, value, placeholder)</label>
+                {{ input('demo-text-input', value='Example value', placeholder='Placeholder text...') }}
             </div>
             <div>
-                <label class="label" for="demo-select">Select</label>
-                <select id="demo-select" class="select w-full">
+                <label class="label" for="demo-select">Select — {% raw %}{% call select(name) %}…options…{% endcall %}{% endraw %}</label>
+                {% call select('demo-select') %}
                     <option>Option 1</option>
                     <option>Option 2</option>
                     <option>Option 3</option>
-                </select>
+                {% endcall %}
             </div>
             <div>
-                <label class="label">Monospace Input</label>
-                <input type="text" class="input w-full font-mono" placeholder="api_key_here..." value="swrl_abc123def456">
+                <label class="label" for="demo-mono">Monospace Input — input(class='input w-full font-mono')</label>
+                {{ input('demo-mono', value='swrl_abc123def456', placeholder='api_key_here...', class='input w-full font-mono') }}
             </div>
             <div>
-                <label class="label">Textarea</label>
-                <textarea class="textarea w-full" rows="3" placeholder="Multi-line content...">SELECT COUNT(*) FROM checks</textarea>
+                <label class="label flex items-center gap-2">
+                    {{ checkbox('demo-check', checked=true, class='rounded') }}
+                    Checkbox — checkbox(name, checked, class)
+                </label>
+                <label class="label mt-4">Textarea (CSS class: textarea)</label>
+                <textarea class="textarea w-full" rows="2" placeholder="Multi-line content...">SELECT COUNT(*) FROM checks</textarea>
             </div>
+        </div>
+    </div>
+
+    <div class="mt-6">
+        <h3 class="text-sm font-medium text-dark-text-secondary mb-3">dashed_add_btn(icon_svg, label, color) — from macros/buttons.html</h3>
+        <div class="grid grid-cols-2 gap-3">
+            {% set demo_lock %}{% include "icons/hero/outline/lock-closed.svg" %}{% endset %}
+            {% set demo_funnel %}{% include "icons/hero/outline/funnel.svg" %}{% endset %}
+            {{ dashed_add_btn(demo_lock, 'Container Group', color='brand') }}
+            {{ dashed_add_btn(demo_funnel, 'Dynamic Group', color='purple') }}
         </div>
     </div>
 </section>

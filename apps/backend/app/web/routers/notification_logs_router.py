@@ -12,7 +12,12 @@ from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth_deps import CurrentUserWeb
-from app.core.query_params import AlertIdFilter, NotifStatusFilter, ProviderIdFilter
+from app.core.query_params import (
+    AlertIdFilter,
+    NotifStatusFilter,
+    PerPageFilter,
+    ProviderIdFilter,
+)
 from app.db import get_db
 from app.services.views.notification_logs_view_service import NotificationLogsViewService
 from app.web.templates_config import templates
@@ -32,9 +37,7 @@ async def notification_logs_page(
     notification_provider_id: ProviderIdFilter = None,
     search: Annotated[str | None, Query(description="Search logs")] = None,
     page: Annotated[int, Query(ge=1, description="Page number")] = 1,
-    per_page: Annotated[
-        int | None, Query(ge=10, le=200, description="Items per page (defaults to setting)")
-    ] = None,
+    per_page: PerPageFilter = None,
 ):
     """Notification logs page - all notification attempts with pagination."""
     try:
