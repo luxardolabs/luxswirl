@@ -24,7 +24,7 @@ from app.core.datetime_utils import utc_now
 from app.core.exceptions import AgentNotFoundException, CheckNotFoundException
 from app.core.security import verify_agent_token, verify_api_token
 from app.db import get_db
-from app.schemas.base import ErrorResponse
+from app.schemas.base_schema import ErrorResponse
 from app.schemas.check_result_schema import (
     AgentReportRequest,
     AgentReportResponse,

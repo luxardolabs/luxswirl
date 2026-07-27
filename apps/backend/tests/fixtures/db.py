@@ -29,7 +29,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 # Base.metadata.create_all() would only see whatever happened to be imported
 # already, producing an empty schema.
 import app.models  # noqa: F401
-from app.models.base import Base
+from app.models.base_model import Base
 
 # ---------------------------------------------------------------------------
 # Test database URL — must match compose.test.yaml

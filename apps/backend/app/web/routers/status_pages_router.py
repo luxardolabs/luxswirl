@@ -16,7 +16,13 @@ from app.core.auth_deps import (
     OptionalUserWeb,
 )
 from app.core.exceptions import StatusPageNotFoundException
-from app.core.query_params import AgentIdFilter, CheckTypeFilter, HealthStatusFilter
+from app.core.query_params import (
+    AgentIdFilter,
+    CheckTypeFilter,
+    HealthStatusFilter,
+    PerPageFilter,
+    TimeRangeFilter,
+)
 from app.db import get_db
 from app.services.views.status_pages_view_service import StatusPagesViewService
 from app.web.hx_responses import hx_empty_with_toast, hx_toast_trigger
@@ -38,9 +44,7 @@ async def status_pages_list(
     current_user: CurrentUserWeb,
     is_public: Annotated[str, Query(description="Filter by public/private status")] = "all",
     page: Annotated[int, Query(ge=1, description="Page number")] = 1,
-    per_page: Annotated[
-        int | None, Query(ge=10, le=200, description="Items per page (defaults to setting)")
-    ] = None,
+    per_page: PerPageFilter = None,
 ):
     """Status pages list page — manage custom status dashboards."""
     try:
@@ -427,7 +431,7 @@ async def view_public_status_page(
     slug: Annotated[str, Path(description="Status page slug")],
     current_user: OptionalUserWeb,
     db: Annotated[AsyncSession, Depends(get_db)],
-    time_range: Annotated[int | None, Query(description="Status bar time range in minutes")] = None,
+    time_range: TimeRangeFilter = None,
 ):
     """Public view of a status page by slug at /status/{slug}."""
     try:
@@ -457,7 +461,7 @@ async def view_public_status_page_partial(
     slug: Annotated[str, Path(description="Status page slug")],
     current_user: OptionalUserWeb,
     db: Annotated[AsyncSession, Depends(get_db)],
-    time_range: Annotated[int | None, Query(description="Status bar time range in minutes")] = None,
+    time_range: TimeRangeFilter = None,
 ):
     """Partial refresh endpoint for public status page (HTMX polling)."""
     try:

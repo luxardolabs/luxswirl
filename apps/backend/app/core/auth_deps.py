@@ -2,7 +2,7 @@
 
 These live in their own leaf module — NOT in core/security.py — on purpose.
 `core/security.py` is pulled into the models-init chain
-(`app.models.base` → `app.core.__init__` → `app.core.security`), so a *runtime*
+(`app.models.base_model` → `app.core.__init__` → `app.core.security`), so a *runtime*
 `User` import there closes a circular import
 (`security → user_model → base`) that only surfaces on the alembic startup path
 (not on `import app.main`). This module is imported only by routers, after the

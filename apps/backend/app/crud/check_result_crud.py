@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import Integer, Row, and_, cast, desc, func, or_, select, text
+from sqlalchemy import Integer, Row, and_, cast, delete, desc, func, or_, select, text
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,7 +16,6 @@ from sqlalchemy.sql import ColumnElement
 
 from app.core.datetime_utils import utc_now
 from app.models.agent_model import Agent
-from app.models.agent_model import Agent as AgentModel
 from app.models.check_artifact_model import CheckArtifact
 from app.models.check_model import Check
 from app.models.check_result_model import CheckResult
@@ -184,10 +183,7 @@ class CheckResultCRUD:
     @staticmethod
     async def delete_older_than(db: AsyncSession, cutoff) -> int:
         """Bulk delete check results with timestamp < cutoff. Returns rowcount."""
-        result = await db.execute(
-            text("DELETE FROM check_results WHERE timestamp < :cutoff_time"),
-            {"cutoff_time": cutoff},
-        )
+        result = await db.execute(delete(CheckResult).where(CheckResult.timestamp < cutoff))
         return result.rowcount or 0  # type: ignore[attr-defined]
 
     @staticmethod
@@ -549,9 +545,7 @@ class CheckResultCRUD:
         # Active agents
 
         active_agents_result = await db.execute(
-            select(func.count(AgentModel.id)).where(
-                AgentModel.last_seen >= utc_now() - timedelta(minutes=10)
-            )
+            select(func.count(Agent.id)).where(Agent.last_seen >= utc_now() - timedelta(minutes=10))
         )
         active_agents = active_agents_result.scalar_one()
 

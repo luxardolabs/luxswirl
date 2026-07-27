@@ -6,7 +6,6 @@ StatusViewService.
 """
 
 from typing import Annotated
-from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -14,7 +13,12 @@ from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth_deps import CurrentUserWeb
-from app.core.query_params import CheckTypeFilter, HealthStatusFilter
+from app.core.query_params import (
+    AgentIdFilter,
+    CheckTypeFilter,
+    HealthStatusFilter,
+    PerPageFilter,
+)
 from app.db import get_db
 from app.services.views.status_view_service import StatusViewService
 from app.web.render import error_page, error_partial
@@ -58,15 +62,13 @@ async def status_page(
     request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: CurrentUserWeb,
-    agent_id: Annotated[UUID | None, Query(description="Filter by agent")] = None,
+    agent_id: AgentIdFilter = None,
     check_type: CheckTypeFilter = None,
     status: HealthStatusFilter = None,
     tags: Annotated[str | None, Query(description="Filter by tags")] = None,
     search: Annotated[str | None, Query(description="Search checks")] = None,
     page: Annotated[int, Query(ge=1, description="Page number")] = 1,
-    per_page: Annotated[
-        int | None, Query(ge=10, le=200, description="Items per page (defaults to setting)")
-    ] = None,
+    per_page: PerPageFilter = None,
 ):
     """Main status dashboard - split-screen layout with inline 15-minute bars."""
     try:

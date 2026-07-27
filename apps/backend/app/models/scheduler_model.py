@@ -10,7 +10,7 @@ from sqlalchemy import Boolean, DateTime, Float, Index, Integer, String, Text, U
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.models.base import Base, UUIDBaseModel, str_enum
+from app.models.base_model import Base, UUIDBaseModel, str_enum
 from app.models.enum_model import (
     SchedulerExecutionStatus,
     SchedulerJobCategory,

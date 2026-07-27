@@ -100,3 +100,75 @@
 </div>
 
 {% endmacro %}
+
+{# ═══════════════════════════════════════════════════════════════════════════
+   FORM FIELD PRIMITIVES — pages compose these, they don't hand-roll <input>/
+   <select> (fw.no_hand_rolled_components_in_pages). The <form> wrapper and
+   <label> stay in the page; the macro owns the component element. Styling comes
+   from the caller via `class` so a field renders however the page needs.
+   ═══════════════════════════════════════════════════════════════════════════ #}
+
+{# Text-like input (text/password/email/number). Label + wrapper stay in the page. #}
+{% macro input(name, type='text', value='', placeholder='', required=false, autofocus=false,
+               autocomplete=none, minlength=none, min=none, max=none, id=none,
+               class='input w-full', hx_get='', hx_post='', hx_target='', hx_select='',
+               hx_trigger='', hx_include='', hx_swap='', extra_attrs='') %}
+{%- set field_id = id if id else name -%}
+<input type="{{ type }}"
+       id="{{ field_id }}"
+       name="{{ name }}"
+       value="{{ value }}"
+       {%- if placeholder %} placeholder="{{ placeholder }}"{% endif %}
+       {%- if required %} required{% endif %}
+       {%- if autofocus %} autofocus{% endif %}
+       {%- if autocomplete %} autocomplete="{{ autocomplete }}"{% endif %}
+       {%- if minlength is not none %} minlength="{{ minlength }}"{% endif %}
+       {%- if min is not none %} min="{{ min }}"{% endif %}
+       {%- if max is not none %} max="{{ max }}"{% endif %}
+       {%- if hx_get %} hx-get="{{ hx_get }}"{% endif %}
+       {%- if hx_post %} hx-post="{{ hx_post }}"{% endif %}
+       {%- if hx_target %} hx-target="{{ hx_target }}"{% endif %}
+       {%- if hx_select %} hx-select="{{ hx_select }}"{% endif %}
+       {%- if hx_trigger %} hx-trigger="{{ hx_trigger }}"{% endif %}
+       {%- if hx_include %} hx-include="{{ hx_include }}"{% endif %}
+       {%- if hx_swap %} hx-swap="{{ hx_swap }}"{% endif %}
+       class="{{ class }}"
+       {{ extra_attrs | safe }}>
+{% endmacro %}
+
+{# Checkbox. `id` is rendered only when given (checkboxes often have neither name nor id). #}
+{% macro checkbox(name='', id=none, checked=false, class='', hx_get='', hx_post='',
+                  hx_target='', hx_select='', hx_trigger='', hx_include='', extra_attrs='') %}
+<input type="checkbox"
+       {%- if name %} name="{{ name }}"{% endif %}
+       {%- if id %} id="{{ id }}"{% endif %}
+       {%- if checked %} checked{% endif %}
+       {%- if hx_get %} hx-get="{{ hx_get }}"{% endif %}
+       {%- if hx_post %} hx-post="{{ hx_post }}"{% endif %}
+       {%- if hx_target %} hx-target="{{ hx_target }}"{% endif %}
+       {%- if hx_select %} hx-select="{{ hx_select }}"{% endif %}
+       {%- if hx_trigger %} hx-trigger="{{ hx_trigger }}"{% endif %}
+       {%- if hx_include %} hx-include="{{ hx_include }}"{% endif %}
+       class="{{ class }}"
+       {{ extra_attrs | safe }}>
+{% endmacro %}
+
+{# Select wrapper — the page supplies the <option> loop as the macro body:
+   {% call select('agent_id', class='input') %}<option ...>…</option>{% endcall %} #}
+{% macro select(name, id=none, class='input', required=false, hx_get='', hx_post='',
+                hx_target='', hx_select='', hx_trigger='', hx_include='', hx_swap='',
+                extra_attrs='') %}
+{%- set field_id = id if id else name -%}
+<select name="{{ name }}"
+        id="{{ field_id }}"
+        {%- if required %} required{% endif %}
+        {%- if hx_get %} hx-get="{{ hx_get }}"{% endif %}
+        {%- if hx_post %} hx-post="{{ hx_post }}"{% endif %}
+        {%- if hx_target %} hx-target="{{ hx_target }}"{% endif %}
+        {%- if hx_select %} hx-select="{{ hx_select }}"{% endif %}
+        {%- if hx_trigger %} hx-trigger="{{ hx_trigger }}"{% endif %}
+        {%- if hx_include %} hx-include="{{ hx_include }}"{% endif %}
+        {%- if hx_swap %} hx-swap="{{ hx_swap }}"{% endif %}
+        class="{{ class }}"
+        {{ extra_attrs | safe }}>{{ caller() }}</select>
+{% endmacro %}

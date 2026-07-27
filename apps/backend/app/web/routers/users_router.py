@@ -13,6 +13,7 @@ from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth_deps import AdminUser
+from app.core.query_params import ActiveFilter, PerPageFilter
 from app.db import get_db
 from app.services.views.web_users_view_service import WebUsersViewService
 from app.web.templates_config import templates
@@ -28,11 +29,9 @@ async def users_page(
     user: AdminUser,
     db: Annotated[AsyncSession, Depends(get_db)],
     page: Annotated[int, Query(ge=1)] = 1,
-    per_page: Annotated[
-        int | None, Query(ge=10, le=200, description="Items per page (defaults to setting)")
-    ] = None,
+    per_page: PerPageFilter = None,
     role: Annotated[str | None, Query()] = None,
-    is_active: Annotated[bool | None, Query()] = None,
+    is_active: ActiveFilter = None,
     search: Annotated[str | None, Query()] = None,
 ):
     """User management page (admin only)."""
@@ -55,11 +54,9 @@ async def users_table_partial(
     user: AdminUser,
     db: Annotated[AsyncSession, Depends(get_db)],
     page: Annotated[int, Query(ge=1)] = 1,
-    per_page: Annotated[
-        int | None, Query(ge=10, le=200, description="Items per page (defaults to setting)")
-    ] = None,
+    per_page: PerPageFilter = None,
     role: Annotated[str | None, Query()] = None,
-    is_active: Annotated[bool | None, Query()] = None,
+    is_active: ActiveFilter = None,
     search: Annotated[str | None, Query()] = None,
 ):
     """HTMX partial: users table with filtering and pagination."""

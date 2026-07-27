@@ -35,7 +35,7 @@ from app.schemas.agent_schema import (
     AgentStatsResponse,
     AgentUpdate,
 )
-from app.schemas.base import ErrorResponse
+from app.schemas.base_schema import ErrorResponse
 from app.schemas.registration_key_schema import (
     AgentKeyRecoveryResponse,
     AgentKeyRegenerateResponse,

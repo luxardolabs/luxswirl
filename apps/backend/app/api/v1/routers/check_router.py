@@ -19,7 +19,7 @@ from app.core.exceptions import (
 )
 from app.core.security import verify_agent_token, verify_api_token
 from app.db import get_db
-from app.schemas.base import ErrorResponse
+from app.schemas.base_schema import ErrorResponse
 from app.schemas.check_schema import (
     BulkCheckCreateRequest,
     BulkCheckCreateResponse,

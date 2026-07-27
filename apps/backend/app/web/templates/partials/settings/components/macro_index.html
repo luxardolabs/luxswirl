@@ -19,8 +19,8 @@
                 </tr>
                 <tr>
                     <td class="font-mono text-xs text-brand-400">macros/buttons.html</td>
-                    <td class="text-xs text-dark-text-secondary">icon_btn, icon_view, icon_edit, icon_run, icon_history, icon_reset, icon_toggle_on, icon_toggle_off, icon_delete, icon_cancel, text_btn, btn_save, btn_create, btn_delete_text, btn_cancel_text, btn_approve, btn_reject, btn_pause, btn_resume, btn_disable, btn_enable, btn_copy, btn_download, btn_upload, btn_clone, btn_external, btn_password, btn_regenerate, btn_revoke, btn_back, btn_refresh, btn_filter, btn_signin, btn_view_text, btn_edit_text, btn_prev, btn_next, delete_icon_button, cancel_icon_button</td>
-                    <td class="text-xs text-dark-text-muted">Icon square buttons (icon_*), text buttons with icons (btn_*), pagination (btn_prev/btn_next), double-click confirmation (delete/cancel_icon_button). icon_btn/icon_edit support href. text_btn is the base for all labeled buttons.</td>
+                    <td class="text-xs text-dark-text-secondary">icon_btn, icon_view, icon_edit, icon_run, icon_history, icon_reset, icon_toggle_on, icon_toggle_off, icon_delete, icon_cancel, text_btn, btn_save, btn_create, btn_delete_text, btn_cancel_text, btn_approve, btn_reject, btn_pause, btn_resume, btn_disable, btn_enable, btn_copy, btn_download, btn_upload, btn_clone, btn_external, btn_password, btn_regenerate, btn_revoke, btn_back, btn_refresh, btn_filter, btn_signin, btn_view_text, btn_edit_text, btn_prev, btn_next, delete_icon_button, cancel_icon_button, dashed_add_btn</td>
+                    <td class="text-xs text-dark-text-muted">Icon square buttons (icon_*), text buttons with icons (btn_*), pagination (btn_prev/btn_next), double-click confirmation (delete/cancel_icon_button), dashed_add_btn for full-width "add a group/section" tiles. icon_btn/icon_edit support href. text_btn is the base for all labeled buttons.</td>
                 </tr>
                 <tr>
                     <td class="font-mono text-xs text-brand-400">macros/cards.html</td>
@@ -64,8 +64,8 @@
                 </tr>
                 <tr>
                     <td class="font-mono text-xs text-brand-400">macros/form_fields.html</td>
-                    <td class="text-xs text-dark-text-secondary">render_field_from_schema</td>
-                    <td class="text-xs text-dark-text-muted">Dynamic form field rendering</td>
+                    <td class="text-xs text-dark-text-secondary">input, checkbox, select, render_field_from_schema</td>
+                    <td class="text-xs text-dark-text-muted">Form field primitives — input()/checkbox()/select() own the &lt;input&gt;/&lt;select&gt; element (default <code>.input</code> class); the page keeps the &lt;form&gt; wrapper and &lt;label&gt;. select() takes its &lt;option&gt; loop as a call-block body. render_field_from_schema for dynamic schema-driven fields.</td>
                 </tr>
         {% endcall %}
     </div>

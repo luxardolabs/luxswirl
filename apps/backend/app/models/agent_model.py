@@ -9,7 +9,7 @@ from sqlalchemy import ARRAY, Float, Index, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.datetime_utils import utc_now
-from app.models.base import UUIDBaseModel, str_enum
+from app.models.base_model import UUIDBaseModel, str_enum
 from app.models.enum_model import AgentApprovalStatus, AgentStatus
 
 if TYPE_CHECKING:

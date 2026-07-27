@@ -9,7 +9,7 @@ from uuid import UUID
 from sqlalchemy import Float, ForeignKey, Index, Integer, String, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.models.base import Base, str_enum
+from app.models.base_model import Base, str_enum
 from app.models.enum_model import AgentStatus
 
 if TYPE_CHECKING:

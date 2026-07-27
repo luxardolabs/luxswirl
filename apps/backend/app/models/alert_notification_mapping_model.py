@@ -8,7 +8,7 @@ from uuid import UUID
 from sqlalchemy import Boolean, ForeignKey, Index, UniqueConstraint, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.models.base import (
+from app.models.base_model import (
     Base,
     SerializerMixin,
     TableNameMixin,

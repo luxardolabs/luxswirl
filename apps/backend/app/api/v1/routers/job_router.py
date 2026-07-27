@@ -15,7 +15,7 @@ from app.core.exceptions import AgentNotFoundException
 from app.core.query_params import JobStatusFilter, JobTypeFilter
 from app.core.security import verify_agent_token, verify_api_token
 from app.db import get_db
-from app.schemas.base import ErrorResponse
+from app.schemas.base_schema import ErrorResponse
 from app.schemas.job_schema import (
     JobCreate,
     JobListResponse,
