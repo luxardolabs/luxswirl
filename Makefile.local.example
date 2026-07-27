@@ -1,11 +1,12 @@
 # Local, git-ignored make overrides — copy to `Makefile.local` and edit.
 #
-# `make arch` runs the luxarch architecture guard, which lives on a private
-# registry (internal tooling, not published). Set its host here so the value
-# stays out of the public repo — the same pattern as compose.dev.yaml and the
-# nginx confs (committed *.example templates; real files git-ignored).
+# `make arch` (luxarch) and `make audit` (luxaudit) run private fleet guards that
+# live on a private registry (internal tooling, not published). Set its host here
+# so the value stays out of the public repo — the same pattern as compose.dev.yaml
+# and the nginx confs (committed *.example templates; real files git-ignored). Both
+# guards read this one var (LUXARCH_REGISTRY).
 #
 # Contributors do NOT need this: `make lint`, `make test`, and the import-linter
-# contracts inside `make arch` all run without it (luxarch is simply skipped).
+# contracts inside `make arch` all run without it (luxarch/luxaudit are simply skipped).
 #
 # LUXARCH_REGISTRY := your.registry.example:5000

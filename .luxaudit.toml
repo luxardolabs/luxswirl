@@ -1,0 +1,5 @@
+# luxaudit — dependency CVE scan config.
+# This is a two-component monorepo: the backend and agent each own a poetry.lock
+# under apps/. luxaudit auto-detects only a repo-root lock, so point it at both.
+[source]
+paths = ["apps/backend/poetry.lock", "apps/agent/poetry.lock"]

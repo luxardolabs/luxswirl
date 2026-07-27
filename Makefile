@@ -26,8 +26,12 @@ AGENT_IMAGE     := $(REGISTRY)/$(AGENT_NAME)
 # Makefile.local (gitignored): copy Makefile.local.example -> Makefile.local and set it.
 # Contributors don't need it — lint/test and the import-linter contracts run without it.
 LUXARCH_REGISTRY ?=
-LUXARCH_VERSION  ?= 0.9.0
+LUXARCH_VERSION  ?= 0.14.2
 LUXARCH_IMAGE    ?= $(LUXARCH_REGISTRY)/luxardolabs/luxarch:$(LUXARCH_VERSION)
+# Dependency-CVE guard (luxaudit) — same private registry as luxarch, mount-only.
+# Scans the pinned poetry.locks against the live advisory feed (see .luxaudit.toml).
+LUXAUDIT_VERSION ?= 0.1.5
+LUXAUDIT_IMAGE   ?= $(LUXARCH_REGISTRY)/luxardolabs/luxaudit:$(LUXAUDIT_VERSION)
 -include Makefile.local
 
 # Multi-arch registry pushes (amd64 + arm64). Local build / build-dev stay single-
@@ -308,6 +312,13 @@ arch: lint-build ## Architecture conformance via luxarch (private tooling) + imp
 		echo ">> luxarch skipped: LUXARCH_REGISTRY unset (internal tooling — see Makefile.local.example)"; \
 	fi
 	docker run --rm $(BACKEND_LINT) sh -c 'cd /app && python -c "import sys; from importlinter.cli import lint_imports_command; sys.exit(lint_imports_command())"'
+
+audit: ## Dependency CVE scan (luxaudit, private tooling) — pinned locks vs the live advisory feed
+	@if [ -n "$(LUXARCH_REGISTRY)" ]; then \
+		docker run --rm -v $(PWD):/repo $(LUXAUDIT_IMAGE); \
+	else \
+		echo ">> luxaudit skipped: LUXARCH_REGISTRY unset (internal tooling — see Makefile.local.example)"; \
+	fi
 
 hooks: ## Activate the repo git hooks (.githooks/) for this clone — run once after cloning
 	git config core.hooksPath .githooks
