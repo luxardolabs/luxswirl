@@ -32,6 +32,12 @@ LUXARCH_IMAGE    ?= $(LUXARCH_REGISTRY)/luxardolabs/luxarch:$(LUXARCH_VERSION)
 # Scans the pinned poetry.locks against the live advisory feed (see .luxaudit.toml).
 LUXAUDIT_VERSION ?= 0.1.5
 LUXAUDIT_IMAGE   ?= $(LUXARCH_REGISTRY)/luxardolabs/luxaudit:$(LUXAUDIT_VERSION)
+# Lint/type/test-standard guard (luxlint) — same private registry. Owns the fleet
+# ruff/mypy config byte-identical (see .luxlint.toml); ruff runs mount-only, mypy
+# runs as an in-repo tail (needs a current mypy for PEP 758 excepts — the baked
+# lint image freezes an older one, so the tail installs a fresh mypy).
+LUXLINT_VERSION  ?= 0.8.4
+LUXLINT_IMAGE    ?= $(LUXARCH_REGISTRY)/luxardolabs/luxlint:$(LUXLINT_VERSION)
 -include Makefile.local
 
 # Multi-arch registry pushes (amd64 + arm64). Local build / build-dev stay single-
@@ -62,6 +68,16 @@ docker run --rm -u $(REPO_UID):$(REPO_GID) -e HOME=/tmp -v $(PWD)/$(1):/work -w 
   python:3.14-slim sh -c 'python -m venv /tmp/v && /tmp/v/bin/pip install -q $(POETRY_SPEC) && /tmp/v/bin/poetry $(2)'
 endef
 
+# $(call mypy_leg,<component>) — the luxlint mypy tail for ONE app leg. Runs a FRESH
+# mypy (+pydantic for the plugin) on a lean slim image, NOT the baked lint image: the
+# latter freezes mypy 2.1.0 which crashes on this repo's PEP 758 `except A, B:` — the
+# tail is versioned by luxlint, decoupled from the app's dep freeze. MYPYPATH carries
+# the leg's own root (apps/<c> → `app`) plus apps/ (→ vendored `shared`); the canonical
+# config (ignore_missing_imports) treats the rest as Any. Config emitted to .luxlint.mypy.ini.
+define mypy_leg
+docker run --rm -v $(PWD):/w -w /w python:3.14-slim sh -c 'pip install -q -U mypy pydantic && MYPYPATH=/w/apps/$(1):/w/apps mypy --config-file /w/.luxlint.mypy.ini apps/$(1)/app'
+endef
+
 # Compose invocations (base + environment overlay).
 DC      := docker compose -f compose.yaml
 DC_DEV  := docker compose -f compose.yaml -f compose.dev.yaml
@@ -88,7 +104,7 @@ BOLD := \033[1m
         status logs clean clean-all docker-clean \
         css css-watch \
         poetry-lock poetry-update poetry-install \
-        compileall lint-build lint format mypy arch gitleaks check \
+        compileall lint-build lint format mypy arch audit gitleaks onboard-check check \
         test test-down
 
 .DEFAULT_GOAL := help
@@ -289,21 +305,37 @@ lint-build: ## Build BOTH lint images (ruff + mypy) from current source
 	DOCKER_BUILDKIT=1 docker build $(NO_CACHE_FLAG) -f apps/backend/Dockerfile.lint -t $(BACKEND_LINT) .
 	DOCKER_BUILDKIT=1 docker build $(NO_CACHE_FLAG) -f apps/agent/Dockerfile.lint -t $(AGENT_LINT) .
 
-lint: lint-build ## ruff check + format-check + mypy for BOTH components (boutique-style)
-	docker run --rm $(BACKEND_LINT) ruff check app tests
-	docker run --rm $(BACKEND_LINT) ruff format --check app
-	docker run --rm $(BACKEND_LINT) mypy app
-	docker run --rm $(AGENT_LINT) ruff check app tests
-	docker run --rm $(AGENT_LINT) ruff format --check app
-	docker run --rm $(AGENT_LINT) mypy app
+lint: ## luxlint ruff (mount-only, canonical set) + the mypy tail per leg — ONE recipe
+	@if [ -z "$(LUXARCH_REGISTRY)" ]; then \
+		echo ">> luxlint skipped: LUXARCH_REGISTRY unset (internal tooling — see Makefile.local.example)"; exit 0; \
+	fi
+	@set +e; rc=0; \
+	docker run --rm -v $(PWD):/repo $(LUXLINT_IMAGE); ruff=$$?; [ $$ruff -ne 0 ] && rc=1; \
+	docker run --rm -v $(PWD):/repo $(LUXLINT_IMAGE) --emit-config mypy > $(PWD)/.luxlint.mypy.ini; \
+	$(call mypy_leg,backend); be=$$?; [ $$be -ne 0 ] && rc=1; \
+	$(call mypy_leg,agent); ae=$$?; [ $$ae -ne 0 ] && rc=1; \
+	rm -f $(PWD)/.luxlint.mypy.ini; \
+	if [ $$rc -ne 0 ]; then echo "lint FAILED (luxlint-ruff=$$ruff mypy-backend=$$be mypy-agent=$$ae)"; exit 1; fi
 
-format: lint-build ## ruff auto-fix + format for BOTH components (writes to host)
-	docker run --rm -e RUFF_CACHE_DIR=/tmp/ruff -u $(REPO_UID):$(REPO_GID) -v $(PWD)/apps/backend/app:/app/app -v $(PWD)/apps/backend/tests:/app/tests $(BACKEND_LINT) sh -c 'ruff check --fix app tests && ruff format app tests'
-	docker run --rm -e RUFF_CACHE_DIR=/tmp/ruff -u $(REPO_UID):$(REPO_GID) -v $(PWD)/apps/agent/app:/app/app -v $(PWD)/apps/agent/tests:/app/tests $(AGENT_LINT) sh -c 'ruff check --fix app tests && ruff format app tests'
+format: ## ruff auto-fix + format with the canonical luxlint config (writes to host)
+	@if [ -z "$(LUXARCH_REGISTRY)" ]; then \
+		echo ">> format skipped: LUXARCH_REGISTRY unset (needs the luxlint ruff config — see Makefile.local.example)"; exit 0; \
+	fi
+	docker run --rm -v $(PWD):/repo $(LUXLINT_IMAGE) --emit-config ruff > $(PWD)/.luxlint.ruff.toml
+	-docker run --rm -u $(REPO_UID):$(REPO_GID) -e RUFF_CACHE_DIR=/tmp/ruff -v $(PWD):/w -w /w python:3.14-slim \
+	  sh -c 'pip install -q -U ruff && ruff check --fix --config /w/.luxlint.ruff.toml apps/backend/app apps/agent/app apps/shared && ruff format --config /w/.luxlint.ruff.toml apps/backend/app apps/agent/app apps/shared'
+	rm -f $(PWD)/.luxlint.ruff.toml
 
-mypy: lint-build ## mypy type-check BOTH components
-	docker run --rm $(BACKEND_LINT) mypy app
-	docker run --rm $(AGENT_LINT) mypy app
+mypy: ## mypy type-check BOTH components (canonical luxlint config, fresh mypy)
+	@if [ -z "$(LUXARCH_REGISTRY)" ]; then \
+		echo ">> mypy skipped: LUXARCH_REGISTRY unset (needs the luxlint mypy config — see Makefile.local.example)"; exit 0; \
+	fi
+	@set +e; rc=0; \
+	docker run --rm -v $(PWD):/repo $(LUXLINT_IMAGE) --emit-config mypy > $(PWD)/.luxlint.mypy.ini; \
+	$(call mypy_leg,backend); be=$$?; [ $$be -ne 0 ] && rc=1; \
+	$(call mypy_leg,agent); ae=$$?; [ $$ae -ne 0 ] && rc=1; \
+	rm -f $(PWD)/.luxlint.mypy.ini; \
+	if [ $$rc -ne 0 ]; then echo "mypy FAILED (backend=$$be agent=$$ae)"; exit 1; fi
 
 arch: lint-build ## Architecture conformance via luxarch (private tooling) + import-linter contracts (in-repo)
 	@if [ -n "$(LUXARCH_REGISTRY)" ]; then \
@@ -319,6 +351,18 @@ audit: ## Dependency CVE scan (luxaudit, private tooling) — pinned locks vs th
 	else \
 		echo ">> luxaudit skipped: LUXARCH_REGISTRY unset (internal tooling — see Makefile.local.example)"; \
 	fi
+
+onboard-check: ## Prove all three guards are wired + HONEST (not green) — the fleet onboard gate
+	@if [ -z "$(LUXARCH_REGISTRY)" ]; then \
+		echo ">> onboard-check skipped: LUXARCH_REGISTRY unset (internal tooling — see Makefile.local.example)"; exit 0; \
+	fi
+	@set +e; fail=0; \
+	docker run --rm -v $(PWD):/repo $(LUXARCH_IMAGE)  --version   >/dev/null || { echo "luxarch not wired";  fail=1; }; \
+	docker run --rm -v $(PWD):/repo $(LUXLINT_IMAGE)  --version   >/dev/null || { echo "luxlint not wired";  fail=1; }; \
+	docker run --rm -v $(PWD):/repo $(LUXAUDIT_IMAGE) --version   >/dev/null || { echo "luxaudit not wired"; fail=1; }; \
+	docker run --rm -v $(PWD):/repo $(LUXLINT_IMAGE)  --preflight              || { echo "mypy tail NOT honest (luxlint --preflight)"; fail=1; }; \
+	docker run --rm -v $(PWD):/repo $(LUXAUDIT_IMAGE) 2>&1 | grep -q "scan could not run" && { echo "luxaudit can't scan — supply-chain blind"; fail=1; }; \
+	[ $$fail -eq 0 ] && echo "onboard-check: all three guards on + honest ✓" || { echo "onboard-check FAILED"; exit 1; }
 
 hooks: ## Activate the repo git hooks (.githooks/) for this clone — run once after cloning
 	git config core.hooksPath .githooks

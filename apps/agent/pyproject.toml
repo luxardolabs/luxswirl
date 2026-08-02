@@ -46,6 +46,13 @@ mypy = "^2.0.0"
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
+# ruff / mypy config is fleet-owned by luxlint (byte-identical, emitted from the
+# pinned image) — this repo intentionally carries none. See .luxlint.toml and
+# `make lint` (luxlint ruff mount-only + the mypy tail).
+#
+# pytest config is NOT yet migrated to the canonical luxlint tail (see the backend
+# pyproject note): test.no_local_pytest_config stays RED (tracked burn-down); the
+# local config below keeps `make test` working meanwhile.
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
@@ -53,34 +60,3 @@ python_files = "test_*.py"
 python_functions = "test_*"
 # "." = apps/agent (resolves `import app.*`); ".." = apps/ (resolves `import shared.*`).
 pythonpath = [".", ".."]
-
-[tool.mypy]
-python_version = "3.14"
-ignore_missing_imports = true
-explicit_package_bases = true
-mypy_path = ".:.."
-warn_return_any = false
-warn_unused_configs = true
-disallow_untyped_defs = false
-
-[tool.ruff]
-line-length = 100
-target-version = "py314"
-exclude = [".git", ".mypy_cache", ".ruff_cache", ".venv", "__pycache__"]
-
-[tool.ruff.lint]
-select = ["E", "W", "F", "I", "B", "C4", "UP"]
-ignore = ["E501", "B008"]
-
-[tool.ruff.lint.isort]
-# `shared` is a vendored top-level package (apps/shared, COPYd into each image),
-# not a first-party app module — classify it explicitly so `make format` (which
-# mounts app+tests) and `make lint` (fully baked) agree on its import group.
-known-third-party = ["shared"]
-
-[tool.ruff.lint.per-file-ignores]
-"__init__.py" = ["F401"]
-
-[tool.ruff.format]
-quote-style = "double"
-indent-style = "space"
