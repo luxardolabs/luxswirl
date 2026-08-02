@@ -72,6 +72,15 @@ types-pyyaml = "^6.0.12.20240917"
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
+# ruff / mypy config is fleet-owned by luxlint (byte-identical, emitted from the
+# pinned image) — this repo intentionally carries none. See .luxlint.toml and
+# `make lint` (luxlint ruff mount-only + the mypy tail).
+#
+# pytest config is NOT yet migrated to the canonical luxlint tail: the suite runs
+# through the compose.test.yaml harness and the canonical config is materially
+# stricter (filterwarnings=error, --strict-markers). luxlint's
+# test.no_local_pytest_config stays RED (tracked burn-down) until the pytest/conftest
+# tail migration; the local config below keeps `make test` working meanwhile.
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
@@ -81,60 +90,6 @@ python_functions = "test_*"
 # `import shared.*` from apps/shared); "tests" (resolves `from fixtures.db`).
 pythonpath = [".", "..", "tests"]
 addopts = "-v --cov=app --cov-report=term-missing --cov-report=html"
-
-[tool.mypy]
-python_version = "3.14"
-warn_return_any = true
-warn_unused_configs = true
-disallow_untyped_defs = false  # Gradually enable
-plugins = ["pydantic.mypy"]
-explicit_package_bases = true
-mypy_path = ".:.."
-exclude = ["alembic"]
-
-# Without this the plugin types every model __init__ field as Any, so
-# CheckCreate(target=<str|None>) and friends are never type-checked at the
-# construction site — the exact hole that let the job_to_check None-target
-# crash through. init_typed makes constructors honor the field annotations.
-[tool.pydantic-mypy]
-init_typed = true
-
-[[tool.mypy.overrides]]
-module = ["asyncpg.*"]
-ignore_missing_imports = true
-
-[[tool.mypy.overrides]]
-module = ["uuid_extensions"]
-ignore_missing_imports = true
-
-[[tool.mypy.overrides]]
-module = ["jsonata", "playwright.*"]
-ignore_missing_imports = true
-
-[tool.ruff]
-line-length = 100
-target-version = "py314"
-exclude = [".git", ".mypy_cache", ".ruff_cache", ".venv", "__pycache__", "alembic"]
-
-[tool.ruff.lint]
-select = ["E", "W", "F", "I", "B", "C4", "UP"]
-ignore = ["E501", "B008"]
-
-[tool.ruff.lint.isort]
-# `shared` is a vendored top-level package (apps/shared, COPYd into each image),
-# not a first-party app module — classify it explicitly so `make format` (which
-# mounts app+tests) and `make lint` (fully baked) agree on its import group.
-known-third-party = ["shared"]
-
-[tool.ruff.lint.per-file-ignores]
-"__init__.py" = ["F401"]
-"alembic/*" = ["E402"]
-
-[tool.ruff.format]
-quote-style = "double"
-indent-style = "space"
-skip-magic-trailing-comma = false
-line-ending = "auto"
 
 [tool.importlinter]
 root_packages = ["app"]

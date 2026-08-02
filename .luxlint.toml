@@ -1,0 +1,31 @@
+# luxlint — fleet ruff/mypy/pytest standard (config ships in the image, byte-identical).
+# This file carries per-repo FACTS only, never lint config. See docs/ONBOARDING.md in
+# the luxlint repo (or `luxlint --docs`).
+
+[source]
+# Monorepo: two app legs (backend + agent) both named `app`, plus the vendored
+# shared SSOT. Lint + format-check all of them and their test suites.
+paths = [
+  "apps/backend/app",
+  "apps/agent/app",
+  "apps/shared",
+]
+
+[python]
+target = "py314"   # per-repo fact: both components pin python ^3.14 (PEP 758 excepts in use)
+
+# No [shared] overlay: apps/shared is REAL code COPYd into both images at build
+# (not 0-byte placeholders bind-mounted at runtime), so the mypy tail resolves it
+# directly via MYPYPATH. Omitting [shared] is this repo's "no overlay" attestation.
+
+[mypy.tail]
+# Honesty attestation (preflight), NOT a deferral: proof the mypy tail sees the code
+# truthfully. The tail (make lint) installs pydantic and emits the config with
+# `plugins = pydantic.mypy`, so pydantic model constructors/fields resolve instead of
+# flooding phantom call-arg/attr-defined. Measured on the backend leg, mypy 2.3.0:
+# without the plugin 1187 errors → with the plugin 998 (−189 phantom pydantic errors).
+pydantic = "tail installs pydantic + emits with plugin; backend 1187→998 (−189 phantom call-arg/attr), mypy 2.3.0"
+
+[rules.deferred]
+# Owner's dial only — evidence-backed. Empty at onboarding: reds stay RED and are
+# tracked in LuxPM, not silenced here.
