@@ -26,7 +26,7 @@ AGENT_IMAGE     := $(REGISTRY)/$(AGENT_NAME)
 # Makefile.local (gitignored): copy Makefile.local.example -> Makefile.local and set it.
 # Contributors don't need it — lint/test and the import-linter contracts run without it.
 LUXARCH_REGISTRY ?=
-LUXARCH_VERSION := 0.126.0
+LUXARCH_VERSION := 0.128.0
 LUXARCH_IMAGE    ?= $(LUXARCH_REGISTRY)/luxardolabs/luxarch:$(LUXARCH_VERSION)
 # Dependency-CVE guard (luxaudit) — same private registry as luxarch, mount-only.
 # Scans the pinned poetry.locks against the live advisory feed (see .luxaudit.toml).
@@ -36,7 +36,7 @@ LUXAUDIT_IMAGE   ?= $(LUXARCH_REGISTRY)/luxardolabs/luxaudit:$(LUXAUDIT_VERSION)
 # ruff/mypy config byte-identical (see .luxlint.toml); ruff runs mount-only, mypy
 # runs as an in-repo tail (needs a current mypy for PEP 758 excepts — the baked
 # lint image freezes an older one, so the tail installs a fresh mypy).
-LUXLINT_VERSION := 0.41.0
+LUXLINT_VERSION := 0.42.0
 LUXLINT_IMAGE    ?= $(LUXARCH_REGISTRY)/luxardolabs/luxlint:$(LUXLINT_VERSION)
 -include Makefile.local
 
@@ -361,7 +361,7 @@ guard-upgrade: ## Bump every guard pin to the published latest (prints what newl
 	  var=$$(echo $$g | tr a-z A-Z)_VERSION; old=$$(sed -n "s/^$$var := //p" Makefile); \
 	  [ -n "$$latest" ] && sed -i "s/^$$var := .*/$$var := $$latest/" Makefile; \
 	  [ "$$g" = luxarch ] && [ -n "$$old" ] && docker run --rm -v $(PWD):/repo $(LUXARCH_REGISTRY)/luxardolabs/luxarch:$$latest --new-rules --since $$old || true; \
-	done; echo "pins bumped \342\200\224 re-run make check"
+	done; echo "pins bumped - re-run make check"
 
 honest: ## HONESTY gate — a green `make check` must mean nothing was silently unchecked
 	@if [ -z "$(LUXARCH_REGISTRY)" ]; then \
