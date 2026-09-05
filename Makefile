@@ -26,24 +26,27 @@ AGENT_IMAGE     := $(REGISTRY)/$(AGENT_NAME)
 # Makefile.local (gitignored): copy Makefile.local.example -> Makefile.local and set it.
 # Contributors don't need it — lint/test and the import-linter contracts run without it.
 LUXARCH_REGISTRY ?=
-LUXARCH_VERSION  ?= 0.14.2
+LUXARCH_VERSION := 0.126.0
 LUXARCH_IMAGE    ?= $(LUXARCH_REGISTRY)/luxardolabs/luxarch:$(LUXARCH_VERSION)
 # Dependency-CVE guard (luxaudit) — same private registry as luxarch, mount-only.
 # Scans the pinned poetry.locks against the live advisory feed (see .luxaudit.toml).
-LUXAUDIT_VERSION ?= 0.1.5
+LUXAUDIT_VERSION := 0.4.0
 LUXAUDIT_IMAGE   ?= $(LUXARCH_REGISTRY)/luxardolabs/luxaudit:$(LUXAUDIT_VERSION)
 # Lint/type/test-standard guard (luxlint) — same private registry. Owns the fleet
 # ruff/mypy config byte-identical (see .luxlint.toml); ruff runs mount-only, mypy
 # runs as an in-repo tail (needs a current mypy for PEP 758 excepts — the baked
 # lint image freezes an older one, so the tail installs a fresh mypy).
-LUXLINT_VERSION  ?= 0.8.4
+LUXLINT_VERSION := 0.41.0
 LUXLINT_IMAGE    ?= $(LUXARCH_REGISTRY)/luxardolabs/luxlint:$(LUXLINT_VERSION)
 -include Makefile.local
 
 # Multi-arch registry pushes (amd64 + arm64). Local build / build-dev stay single-
 # arch — you can't --load a multi-platform image. Override with e.g. PLATFORMS=linux/amd64.
 PLATFORMS       ?= linux/amd64,linux/arm64
-BUILDX_BUILDER  := luxswirl-builder
+# ONE shared fleet builder — never a per-project `<repo>-builder`. Ten per-project builders = ten
+# un-shared caches (no base-layer/pip/npm dedup) = tens of GB idle; the shared builder dedups and
+# cross-project cache-hits speed builds. Enforced by repo.shared_buildx_builder; see FLEET-BUILD-DEPLOY-STANDARD.
+BUILDX_BUILDER  ?= luxardo-builder
 
 # Build args baked into both images (exposed as ENV + LABEL at runtime).
 BUILD_ARGS := --build-arg BUILD_VERSION=$(VERSION) \
@@ -101,10 +104,11 @@ BOLD := \033[1m
         dev dev-up dev-down dev-logs dev-shell dev-agent-shell dev-restart dev-rebuild \
         prod prod-up prod-down prod-logs \
         db-shell db-backup \
-        status logs clean clean-all docker-clean \
+        ps logs clean clean-all docker-clean \
         css css-watch \
         poetry-lock poetry-update poetry-install \
         compileall lint-build lint format mypy arch audit gitleaks onboard-check check \
+        guard-version-check guard-upgrade honest status db-verify \
         test test-down
 
 .DEFAULT_GOAL := help
@@ -142,9 +146,10 @@ agent-image: ## Build agent image as :$(VERSION) (no push)
 
 build: backend-image agent-image ## Build both images as :$(VERSION) (no push)
 
-buildx-setup: ## Create/use the multi-arch buildx builder (docker-container driver + QEMU)
-	@docker buildx inspect $(BUILDX_BUILDER) >/dev/null 2>&1 || \
-		docker buildx create --name $(BUILDX_BUILDER) --driver docker-container --bootstrap --use
+buildx-setup: ## Ensure the ONE shared multi-arch buildx builder exists (GC-capped so its cache self-prunes)
+	@mkdir -p $(HOME)/.docker
+	@[ -f $(HOME)/.docker/buildkitd.toml ] || printf '[worker.oci]\n  gc = true\n  [[worker.oci.gcpolicy]]\n    keepBytes = "20GB"\n    all = true\n' > $(HOME)/.docker/buildkitd.toml
+	@docker buildx inspect $(BUILDX_BUILDER) >/dev/null 2>&1 || docker buildx create --name $(BUILDX_BUILDER) --driver docker-container --buildkitd-config $(HOME)/.docker/buildkitd.toml --bootstrap --use
 	@docker buildx use $(BUILDX_BUILDER)
 
 build-backend: buildx-setup ## Build + push backend :$(VERSION) AND :latest (multi-arch: $(PLATFORMS))
@@ -317,14 +322,11 @@ lint: ## luxlint ruff (mount-only, canonical set) + the mypy tail per leg — ON
 	rm -f $(PWD)/.luxlint.mypy.ini; \
 	if [ $$rc -ne 0 ]; then echo "lint FAILED (luxlint-ruff=$$ruff mypy-backend=$$be mypy-agent=$$ae)"; exit 1; fi
 
-format: ## ruff auto-fix + format with the canonical luxlint config (writes to host)
+format: ## THE canonical fixer — `luxlint --format` (ruff fix+format AND markdown), in place. PATH=<substr> to scope.
 	@if [ -z "$(LUXARCH_REGISTRY)" ]; then \
-		echo ">> format skipped: LUXARCH_REGISTRY unset (needs the luxlint ruff config — see Makefile.local.example)"; exit 0; \
+		echo ">> format skipped: LUXARCH_REGISTRY unset (see Makefile.local.example)"; exit 0; \
 	fi
-	docker run --rm -v $(PWD):/repo $(LUXLINT_IMAGE) --emit-config ruff > $(PWD)/.luxlint.ruff.toml
-	-docker run --rm -u $(REPO_UID):$(REPO_GID) -e RUFF_CACHE_DIR=/tmp/ruff -v $(PWD):/w -w /w python:3.14-slim \
-	  sh -c 'pip install -q -U ruff && ruff check --fix --config /w/.luxlint.ruff.toml apps/backend/app apps/agent/app apps/shared && ruff format --config /w/.luxlint.ruff.toml apps/backend/app apps/agent/app apps/shared'
-	rm -f $(PWD)/.luxlint.ruff.toml
+	docker run --rm -v $(PWD):/repo $(LUXLINT_IMAGE) --format $(if $(PATH_SCOPE),--path $(PATH_SCOPE),)
 
 mypy: ## mypy type-check BOTH components (canonical luxlint config, fresh mypy)
 	@if [ -z "$(LUXARCH_REGISTRY)" ]; then \
@@ -336,6 +338,39 @@ mypy: ## mypy type-check BOTH components (canonical luxlint config, fresh mypy)
 	$(call mypy_leg,agent); ae=$$?; [ $$ae -ne 0 ] && rc=1; \
 	rm -f $(PWD)/.luxlint.mypy.ini; \
 	if [ $$rc -ne 0 ]; then echo "mypy FAILED (backend=$$be agent=$$ae)"; exit 1; fi
+
+guard-version-check: ## FATAL: fail if any guard pin is behind the published latest
+	@if [ -z "$(LUXARCH_REGISTRY)" ]; then \
+		echo ">> guard-version-check skipped: LUXARCH_REGISTRY unset (see Makefile.local.example)"; exit 0; \
+	fi
+	@rc=0; for g in luxarch luxlint luxaudit; do \
+	  pin=$$(case $$g in luxarch) echo $(LUXARCH_VERSION);; luxlint) echo $(LUXLINT_VERSION);; luxaudit) echo $(LUXAUDIT_VERSION);; esac); \
+	  docker pull -q $(LUXARCH_REGISTRY)/luxardolabs/$$g:latest >/dev/null 2>&1 || true; \
+	  latest=$$(docker run --rm $(LUXARCH_REGISTRY)/luxardolabs/$$g:latest --version 2>/dev/null | awk '{print $$2}'); \
+	  if [ -n "$$latest" ] && [ "$$latest" != "$$pin" ]; then \
+	    printf "\342\234\227 %s pinned %s, latest %s \342\200\224 behind. Preview: --new-rules --since %s; then make guard-upgrade\n" "$$g" "$$pin" "$$latest" "$$pin"; rc=1; \
+	  fi; done; exit $$rc
+
+guard-upgrade: ## Bump every guard pin to the published latest (prints what newly bites)
+	@if [ -z "$(LUXARCH_REGISTRY)" ]; then \
+		echo ">> guard-upgrade skipped: LUXARCH_REGISTRY unset (see Makefile.local.example)"; exit 0; \
+	fi
+	@for g in luxarch luxlint luxaudit; do \
+	  docker pull -q $(LUXARCH_REGISTRY)/luxardolabs/$$g:latest >/dev/null 2>&1 || true; \
+	  latest=$$(docker run --rm $(LUXARCH_REGISTRY)/luxardolabs/$$g:latest --version 2>/dev/null | awk '{print $$2}'); \
+	  var=$$(echo $$g | tr a-z A-Z)_VERSION; old=$$(sed -n "s/^$$var := //p" Makefile); \
+	  [ -n "$$latest" ] && sed -i "s/^$$var := .*/$$var := $$latest/" Makefile; \
+	  [ "$$g" = luxarch ] && [ -n "$$old" ] && docker run --rm -v $(PWD):/repo $(LUXARCH_REGISTRY)/luxardolabs/luxarch:$$latest --new-rules --since $$old || true; \
+	done; echo "pins bumped \342\200\224 re-run make check"
+
+honest: ## HONESTY gate — a green `make check` must mean nothing was silently unchecked
+	@if [ -z "$(LUXARCH_REGISTRY)" ]; then \
+		echo ">> honest skipped: LUXARCH_REGISTRY unset (see Makefile.local.example)"; exit 0; \
+	fi
+	@set +e; rc=0; \
+	docker run --rm -v $(PWD):/repo $(LUXARCH_IMAGE) --assert-scans; a=$$?; [ $$a -ne 0 ] && rc=1; \
+	docker run --rm -v $(PWD):/repo $(LUXLINT_IMAGE) --preflight;     l=$$?; [ $$l -ne 0 ] && rc=1; \
+	if [ $$rc -ne 0 ]; then echo "honest FAILED (assert-scans=$$a preflight=$$l)"; exit 1; fi
 
 arch: lint-build ## Architecture conformance via luxarch (private tooling) + import-linter contracts (in-repo)
 	@if [ -n "$(LUXARCH_REGISTRY)" ]; then \
@@ -372,7 +407,7 @@ gitleaks: ## Scan the tree for committed secrets (run before the first git commi
 	docker run --rm -v $(PWD):/repo -w /repo ghcr.io/gitleaks/gitleaks:latest \
 	  dir /repo/apps -c /repo/.gitleaks.toml --no-banner --redact -v
 
-check: lint test ## Full pre-commit suite — lint + types + tests, all in docker (boutique-style)
+check: guard-version-check honest lint mypy test db-verify arch audit gitleaks ## THE fleet gate — run before every commit
 
 docker-clean: ## Remove locally built image tags (backend/agent :dev/:$(VERSION) + lint)
 	-docker rmi $(BACKEND_IMAGE):dev $(AGENT_IMAGE):dev \
@@ -388,12 +423,31 @@ docker-clean: ## Remove locally built image tags (backend/agent :dev/:$(VERSION)
 test-build: ## Build the test image from current source (self-contained — no :dev dependency)
 	DOCKER_BUILDKIT=1 docker build $(NO_CACHE_FLAG) -f Dockerfile.test -t $(TEST_IMAGE) .
 
-test: test-build ## Run the backend DB-integration suite against an isolated test DB (TEST=path/to/test for one file). Image is ALWAYS baked fresh from on-disk source (no :dev dependency). Static/arch guards run via `make arch`.
-	$(DC_TEST) up -d --wait timescaledb-test
-	$(DC_TEST) run --rm tests pytest $(TEST) ; status=$$? ; $(DC_TEST) down -v ; exit $$status
+test: test-build test-db-up ## Run the FULL backend suite (incl. durability) against the throwaway test DB (TEST=path/to/test for one file). Image is ALWAYS baked fresh from on-disk source (no :dev dependency).
+	$(DC_TEST) run --rm tests pytest $(TEST) ; status=$$? ; $(MAKE) test-db-down ; exit $$status
 
-test-down: ## Tear down the test stack
-	$(DC_TEST) down -v
+test-db-up: ## Start the disposable test Postgres (throwaway — never the dev DB)
+	$(DC_TEST) up -d --wait timescaledb-test
+
+test-db-down: ## Stop + WIPE the disposable test Postgres
+	@$(DC_TEST) down -v >/dev/null 2>&1 || true
+
+test-down: test-db-down ## Tear down the test stack (alias for test-db-down)
+
+db-verify: test-build test-db-up ## PROVE the migration chain builds the schema from EMPTY, no drift vs models
+	@set -e; \
+	$(DC_TEST) exec -T -e PGPASSWORD=luxswirl_test timescaledb-test \
+	  psql -h 127.0.0.1 -U luxswirl_test -d postgres -v ON_ERROR_STOP=1 \
+	  -c 'DROP DATABASE IF EXISTS luxswirl_migverify' \
+	  -c 'CREATE DATABASE luxswirl_migverify'; \
+	$(DC_TEST) run --rm \
+	  -e DATABASE__URL=postgresql+asyncpg://luxswirl_test:luxswirl_test@timescaledb-test:5432/luxswirl_migverify \
+	  tests sh -c 'alembic upgrade head && python scripts/verify_migration_chain.py'; \
+	status=$$?; \
+	$(DC_TEST) exec -T -e PGPASSWORD=luxswirl_test timescaledb-test \
+	  psql -h 127.0.0.1 -U luxswirl_test -d postgres -c 'DROP DATABASE IF EXISTS luxswirl_migverify' >/dev/null 2>&1 || true; \
+	$(MAKE) test-db-down; \
+	exit $$status
 
 migration-check: test-build ## Verify alembic migrations match the models — `alembic check` on a fresh DB must be clean (LUXSWIRL-178)
 	$(DC_TEST) up -d --wait timescaledb-test
@@ -405,7 +459,22 @@ migration-check: test-build ## Verify alembic migrations match the models — `a
 
 ##@ Utilities
 
-status: ## Show container status (dev stack)
+# Regenerate the committed guard-status files (the fleet READS these instead of re-running).
+# `|| true` on the run: --json exits non-zero when the repo is red — a red repo still has a
+# valid, committable status. `set -e` so a failed stamp aborts (never a false "wrote").
+STAMP = python3 -c 'import json,sys,os; d=json.load(open(sys.argv[1])); d["commit"]=os.environ["SHA"]; d["generated_at"]=os.environ["TS"]; json.dump(d,open(sys.argv[2],"w"),indent=2)'
+
+status: ## Regenerate committed guard-status files (.lux*-status.json) — commit them
+	@if [ -z "$(LUXARCH_REGISTRY)" ]; then \
+		echo ">> status skipped: LUXARCH_REGISTRY unset (see Makefile.local.example)"; exit 0; \
+	fi
+	@set -e; export SHA=$$(git rev-parse HEAD) TS=$$(date -u +%FT%TZ); \
+	docker run --rm -v $(PWD):/repo $(LUXLINT_IMAGE)  --json > /tmp/lux.json || true; $(STAMP) /tmp/lux.json .luxlint-status.json; \
+	docker run --rm -v $(PWD):/repo $(LUXARCH_IMAGE)  --json > /tmp/lux.json || true; $(STAMP) /tmp/lux.json .luxarch-status.json; \
+	docker run --rm -v $(PWD):/repo $(LUXAUDIT_IMAGE) --json > /tmp/lux.json || true; $(STAMP) /tmp/lux.json .luxaudit-status.json; \
+	echo "wrote .lux*-status.json at $$SHA — commit them"
+
+ps: ## Show container status (dev stack)
 	$(DC_DEV) ps
 
 logs: ## Follow all logs (dev stack)

@@ -28,8 +28,14 @@ services:
     # compose network) is always 5432.
     ports:
       - "25432:5432"
+    # Readiness = an AUTHENTICATED TCP query, never a bare `pg_isready`. With no -h,
+    # pg_isready connects over the unix SOCKET — which the postgres entrypoint's temporary
+    # initdb server also listens on, BEFORE the role/password exist. A socket probe therefore
+    # goes green mid-bootstrap and the suite fails with InvalidPasswordError. `-h 127.0.0.1`
+    # forces TCP (the initdb server is socket-only) and the auth'd `select 1` needs the role
+    # to exist. The window is ~5x wider on TimescaleDB (extension preload + tune + bounce).
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U luxswirl_test"]
+      test: ["CMD-SHELL", "PGPASSWORD=luxswirl_test psql -h 127.0.0.1 -U luxswirl_test -d luxswirl_test -tAc 'select 1' >/dev/null"]
       interval: 2s
       timeout: 3s
       retries: 15
