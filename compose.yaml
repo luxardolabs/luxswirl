@@ -1,3 +1,5 @@
+name: luxswirl
+
 services:
   timescaledb:
     image: timescale/timescaledb:latest-pg16
@@ -60,7 +62,7 @@ services:
     image: ghcr.io/luxardolabs/luxswirl-agent:latest
     container_name: luxswirl_agent
     hostname: luxswirl_agent  # IMPORTANT: Keep hostname consistent for encryption key derivation
-    command: ["python", "-m", "app.agent_main"]
+    command: ["python", "-m", "app.main"]
     volumes:
       - ./data/agent:/app/data  # Local directory for easy dev access
     #   - ./config/agent.yaml:/app/config.yaml  # Optional: custom config
