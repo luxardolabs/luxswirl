@@ -53,7 +53,8 @@ apps/                                # one self-contained component per dir (lux
 │   ├── app/
 │   │   ├── agent/core.py            # LuxSwirlAgent class
 │   │   ├── checks/                  # ping, http, tcp, json, dns, mysql, postgres, synthetic
-│   │   └── agent_main.py            # Agent entrypoint (python -m app.agent_main)
+│   │   ├── health/check.py          # Docker HEALTHCHECK (python -m app.health.check)
+│   │   └── main.py                 # Agent entrypoint (python -m app.main)
 │   ├── tests/
 │   ├── pyproject.toml + poetry.lock # Agent deps only (playwright, db drivers, …)
 │   └── Dockerfile + Dockerfile.lint
@@ -87,7 +88,7 @@ Web UI:    web/routers/     →  services/views/ →  services/core/  →  crud/
 
 ### Three-component runtime
 
-1. **luxswirl_agent** (`apps/agent/`) — Runs health checks. Entry: `apps/agent/app/agent_main.py` (`python -m app.agent_main`). Pushes results to server via HTTP. Built as its own image.
+1. **luxswirl_agent** (`apps/agent/`) — Runs health checks. Entry: `apps/agent/app/main.py` (`python -m app.main`). Pushes results to server via HTTP. Built as its own image.
 2. **luxswirl_server** (`apps/backend/`) — FastAPI app: REST API at `/api/v1`, web dashboard at `/dashboard`, Prometheus at `/metrics`. Entry: `apps/backend/app/main.py` (`uvicorn app.main:app`). Built as its own image.
 3. **TimescaleDB** — PostgreSQL extension. Automatic partitioning, configurable retention, continuous aggregates. Schema lives in `apps/backend/app/models/*_model.py`; DDL helpers live in `apps/backend/app/crud/timescale_crud.py`.
 
@@ -157,7 +158,7 @@ Available check types (in `apps/agent/app/checks/`):
 To add a new check type:
 1. Create a new file in `apps/agent/app/checks/` that inherits from `BaseCheck`
 2. Implement the `run()` method returning a result dictionary
-3. Register it in `apps/agent/app/agent_main.py` using `agent.register_check_type()`
+3. Register it in `apps/agent/app/main.py` using `agent.register_check_type()`
 
 ### Configuration System
 
@@ -319,7 +320,7 @@ All metrics include labels: `agent`, `check`, `type`, `target`
 **Testing override (UNSAFE - never use in production):**
 ```bash
 # ONLY for testing/development
-LUXSWIRL_ALLOW_INSECURE_HTTP=true LUXSWIRL_SERVER_URL=http://test.example.com:9000 python -m app.agent_main
+LUXSWIRL_ALLOW_INSECURE_HTTP=true LUXSWIRL_SERVER_URL=http://test.example.com:9000 python -m app.main
 ```
 
 **Implementation:**

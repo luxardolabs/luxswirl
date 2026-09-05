@@ -103,7 +103,7 @@ Two more properties are not backed by `check_config`:
 
 The schema validator (`CheckBase.validate_check_type`) accepts: `ping`, `http`, `https`, `tcp`, `udp`, `dns`, `json`, `mysql`, `postgres`, `grpc`, `websocket`, `synthetic`, `internal`, `unknown`.
 
-However, only **8 of these have functional agent executors** (registered in `apps/agent/app/agent_main.py`): `ping`, `http`, `tcp`, `dns`, `json`, `mysql`, `postgres`, `synthetic`. The remaining strings (`https`, `udp`, `grpc`, `websocket`, `internal`, `unknown`) pass validation but have no executor and will not run — they are reserved/placeholder values.
+However, only **8 of these have functional agent executors** (registered in `apps/agent/app/main.py`): `ping`, `http`, `tcp`, `dns`, `json`, `mysql`, `postgres`, `synthetic`. The remaining strings (`https`, `udp`, `grpc`, `websocket`, `internal`, `unknown`) pass validation but have no executor and will not run — they are reserved/placeholder values.
 
 ## Indexes and constraints
 

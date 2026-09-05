@@ -54,7 +54,7 @@ DATABASE__URL=postgresql+asyncpg://luxswirl:luxswirl@localhost:5432/luxswirl \
 # Agent (separate terminal, from apps/agent)
 cd apps/agent && poetry install
 LUXSWIRL_SERVER_URL=http://localhost:9000/api/v1/reports \
-  PYTHONPATH=.:.. poetry run python -m app.agent_main
+  PYTHONPATH=.:.. poetry run python -m app.main
 ```
 
 **Access:**

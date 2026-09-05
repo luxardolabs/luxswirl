@@ -22,7 +22,7 @@ services:
   luxswirl_agent:
     image: ghcr.io/luxardolabs/luxswirl-agent:latest
     container_name: luxswirl_agent
-    command: ["python", "-m", "app.agent_main"]
+    command: ["python", "-m", "app.main"]
     network_mode: host  # Recommended for stability
     restart: unless-stopped
 
