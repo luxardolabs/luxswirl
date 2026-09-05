@@ -250,7 +250,7 @@ python3 -c "import secrets; print(secrets.token_urlsafe(64))"
 The repo ships a base `compose.yaml` plus environment overlays (`compose.prod.yaml`, `compose.dev.yaml`). The base file already defines `timescaledb`, `luxswirl_server`, `luxswirl_agent`, and an `nginx` reverse proxy. The published images are:
 
 - `ghcr.io/luxardolabs/luxswirl-backend` — server (`uvicorn app.main:app`)
-- `ghcr.io/luxardolabs/luxswirl-agent` — agent (`python -m app.agent_main`)
+- `ghcr.io/luxardolabs/luxswirl-agent` — agent (`python -m app.main`)
 
 Both are tagged `:latest` and `:<version>`. If you prefer not to pull, build both locally with the Makefile: `make build`.
 
@@ -303,7 +303,7 @@ services:
     image: ghcr.io/luxardolabs/luxswirl-agent:latest
     container_name: luxswirl_agent
     hostname: luxswirl_agent  # Keep stable: used in credential encryption
-    command: ["python", "-m", "app.agent_main"]
+    command: ["python", "-m", "app.main"]
     restart: unless-stopped
     depends_on:
       luxswirl_server:
@@ -556,7 +556,7 @@ Environment="LUXSWIRL_SERVER_URL=http://localhost:9000/api/v1/reports"
 Environment="LUXSWIRL_AGENT_ID=default-agent"
 # LUXSWIRL_AUTH_KEY must be set (in .env) — generate it via Settings →
 # Registration Keys in the server UI after first login.
-ExecStart=/opt/luxswirl/venv/bin/python -m app.agent_main
+ExecStart=/opt/luxswirl/venv/bin/python -m app.main
 Restart=on-failure
 RestartSec=5s
 

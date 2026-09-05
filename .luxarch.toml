@@ -1,19 +1,16 @@
-# Pilot key for luxswirl (fastapi-web). Reproduces luxswirl's local `make arch`:
-# all guards green except the deferred service-size ratchet (its @pytest.mark.xfail).
+# luxarch key for luxswirl. Two deployable components, each its own image and its own
+# `app` package: the backend (FastAPI server + HTMX portal) and the health-check agent.
 
 [[target]]
 kind = "fastapi-web"
 app = "apps/backend/app"
 
-[shared]
-paths = ["apps/shared"]
-
 # luxswirl enforces layering with import-linter (the lint-imports tail on `make arch`),
 # so keep fw.import_linter_declared active — it went opt-in in luxarch 0.5.0.
-[importlinter]
+[target.importlinter]
 required = true
 
-[enums]
+[target.enums]
 declared = [
   "AgentApprovalStatus", "AgentStatus", "AlertTriggerType", "CheckArtifactType",
   "CheckErrorType", "CheckType", "JobStatus", "JobType", "NotificationProviderType",
@@ -22,14 +19,14 @@ declared = [
 ]
 labelled = ["UserRole", "CheckType"]
 
-[hypertables]
+[target.hypertables]
 names = ["check_results", "agent_metrics", "check_artifacts"]
 models = ["CheckResult", "AgentMetric", "CheckArtifact"]
 
-[uuid]
+[target.uuid]
 extra_id_names = ["log_id", "job_id"]
 
-[allowlist]
+[target.allowlist]
 non_request_files = [
   "app/db/database.py",
   "app/main.py",
@@ -58,7 +55,7 @@ js_network = [
   { file = "database-health.js", pattern = "fetch(", evidence = "Chart.js data refresh — Section B carve-out" },
 ]
 
-[templates]
+[target.templates]
 # Evidence-backed template carve-outs (substring match on path). In luxarch <=0.2.0
 # these lived hardcoded in the image; 0.2.1 moved them out to the repo's own config
 # (they were luxswirl data, not fleet standard). Every template rule honors this list.
@@ -69,6 +66,18 @@ exempt = [
   { page = "macros/filters.html", evidence = "filter_select macro source (its docstring mentions <select>)" },
   { page = "logo-demo",           evidence = "admin-only design playground, not a product page" },
 ]
+
+
+# The health-check agent: runs checks on an interval and pushes results to the server.
+# `source_client` names the long-lived client modules checked for connect()/close().
+[[target]]
+kind = "collector"
+app = "apps/agent/app"
+source_client = ["agent/reporter.py"]
+
+[shared]
+paths = ["apps/shared"]
+
 
 [rules.deferred]
 # LOC reductions deferred — current oversize: checks_view_service.py 1560, check_core_service.py

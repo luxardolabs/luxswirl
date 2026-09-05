@@ -151,7 +151,7 @@
 - **Local storage**: Failed reports stored locally, retried later
 - **Self-monitoring**: Agent reports own health metrics
 
-**Agent entry point**: `apps/agent/app/agent_main.py` **Core logic**: `apps/agent/app/agent/core.py` (LuxSwirlAgent class)
+**Agent entry point**: `apps/agent/app/main.py` **Core logic**: `apps/agent/app/agent/core.py` (LuxSwirlAgent class)
 
 ---
 

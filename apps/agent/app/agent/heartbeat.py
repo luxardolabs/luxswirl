@@ -13,6 +13,7 @@ import logging
 import os
 import time
 from datetime import datetime
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import httpx
@@ -22,6 +23,22 @@ if TYPE_CHECKING:
     from app.checks.base import BaseCheck
 
 logger = get_logger("luxswirl.agent.heartbeat")
+
+# Liveness stamp read by the Docker HEALTHCHECK (app/health/check.py). Written only on a
+# heartbeat the server ACCEPTED, so a wedged agent stops stamping and reads unhealthy even
+# though its process is still alive.
+HEALTH_FILE = Path(os.getenv("LUXSWIRL_HEALTH_FILE", "/app/data/agent_health"))
+
+
+def _stamp_liveness() -> None:
+    """Record a successful heartbeat for the container health check (best-effort)."""
+    try:
+        HEALTH_FILE.parent.mkdir(parents=True, exist_ok=True)
+        HEALTH_FILE.write_text(str(time.time()))
+    except (
+        OSError
+    ) as exc:  # a read-only/missing volume must never kill the heartbeat loop
+        logger.debug("Could not write liveness stamp", extra={"error": str(exc)})
 
 
 class HeartbeatSender:
@@ -144,7 +161,9 @@ class HeartbeatSender:
                             else {}
                         )
                     except Exception:
-                        self.logger.warning("Failed to get system metrics", exc_info=True)
+                        self.logger.warning(
+                            "Failed to get system metrics", exc_info=True
+                        )
                         cpu_percent = None
                         memory_mb = None
                         reporter_metrics = {}
@@ -162,16 +181,22 @@ class HeartbeatSender:
 
                             proc = psutil.Process()
                             fd_count = proc.num_fds()
-                            fd_soft_limit, _ = sys_resource.getrlimit(sys_resource.RLIMIT_NOFILE)
+                            fd_soft_limit, _ = sys_resource.getrlimit(
+                                sys_resource.RLIMIT_NOFILE
+                            )
                             children = proc.children(recursive=True)
                             resource_metrics = {
                                 "open_file_descriptors": fd_count,
                                 "fd_limit_soft": fd_soft_limit,
-                                "fd_usage_percent": round((fd_count / fd_soft_limit) * 100, 1),
+                                "fd_usage_percent": round(
+                                    (fd_count / fd_soft_limit) * 100, 1
+                                ),
                                 "subprocess_count": len(children),
                             }
                         except Exception:
-                            self.logger.debug("Could not get resource metrics", exc_info=True)
+                            self.logger.debug(
+                                "Could not get resource metrics", exc_info=True
+                            )
 
                     # Build heartbeat payload
                     heartbeat = {
@@ -194,7 +219,9 @@ class HeartbeatSender:
                         # Performance metrics
                         "cpu_percent": cpu_percent,
                         "memory_mb": memory_mb,
-                        "queue_depth": (self.result_queue.qsize() if self.result_queue else 0),
+                        "queue_depth": (
+                            self.result_queue.qsize() if self.result_queue else 0
+                        ),
                         "queue_max_size": self.metrics["result_queue_max_size"],
                         # Config state
                         "config_version": self.config_version,
@@ -203,31 +230,44 @@ class HeartbeatSender:
                         # Job queue stats
                         "jobs_pending": job_stats.get("jobs_pending", 0),
                         "jobs_running": job_stats.get("jobs_running", 0),
-                        "jobs_completed_since_last": job_stats.get("jobs_completed_since_last", 0),
-                        "jobs_failed_since_last": job_stats.get("jobs_failed_since_last", 0),
+                        "jobs_completed_since_last": job_stats.get(
+                            "jobs_completed_since_last", 0
+                        ),
+                        "jobs_failed_since_last": job_stats.get(
+                            "jobs_failed_since_last", 0
+                        ),
                         # Error tracking
                         "errors_since_last_heartbeat": 0,
                         "warnings_since_last_heartbeat": 0,
                         "last_error_message": None,
-                        "server_unreachable_count": reporter_metrics.get("failed_batches", 0),
+                        "server_unreachable_count": reporter_metrics.get(
+                            "failed_batches", 0
+                        ),
                         # Reporter backlog metrics
-                        "stored_reports_count": reporter_metrics.get("stored_reports_count", 0),
+                        "stored_reports_count": reporter_metrics.get(
+                            "stored_reports_count", 0
+                        ),
                         "stored_reports_oldest_timestamp": reporter_metrics.get(
                             "stored_reports_oldest_timestamp"
                         ),
                         # Resource monitoring (SWIRL-57)
-                        "open_file_descriptors": resource_metrics.get("open_file_descriptors"),
+                        "open_file_descriptors": resource_metrics.get(
+                            "open_file_descriptors"
+                        ),
                         "fd_limit_soft": resource_metrics.get("fd_limit_soft"),
                         "fd_usage_percent": resource_metrics.get("fd_usage_percent"),
                         "subprocess_count": resource_metrics.get("subprocess_count"),
                     }
 
                     # Send heartbeat
-                    response = await self.heartbeat_client.post(heartbeat_url, json=heartbeat)
+                    response = await self.heartbeat_client.post(
+                        heartbeat_url, json=heartbeat
+                    )
 
                     if response.status_code == 200:
                         self.metrics["heartbeats"] += 1
                         self.last_heartbeat_time = time.time()
+                        _stamp_liveness()
 
                         # Parse heartbeat response
                         try:
@@ -322,17 +362,26 @@ class HeartbeatSender:
         """Update reporter configuration from heartbeat response."""
         reporter_updates = {}
 
-        if "report_interval" in response_data and response_data["report_interval"] is not None:
+        if (
+            "report_interval" in response_data
+            and response_data["report_interval"] is not None
+        ):
             new_val = response_data["report_interval"]
             if new_val != self.reporter.report_interval:
                 self.logger.info(
                     "Updating report_interval",
-                    extra={"from_seconds": self.reporter.report_interval, "to_seconds": new_val},
+                    extra={
+                        "from_seconds": self.reporter.report_interval,
+                        "to_seconds": new_val,
+                    },
                 )
                 self.reporter.report_interval = new_val
                 reporter_updates["report_interval"] = new_val
 
-        if "report_batch_size" in response_data and response_data["report_batch_size"] is not None:
+        if (
+            "report_batch_size" in response_data
+            and response_data["report_batch_size"] is not None
+        ):
             new_val = response_data["report_batch_size"]
             if new_val != self.reporter.batch_size:
                 self.logger.info(
@@ -350,7 +399,10 @@ class HeartbeatSender:
             if new_val != self.reporter.max_files_per_batch:
                 self.logger.info(
                     "Updating report_max_files_per_batch",
-                    extra={"from_value": self.reporter.max_files_per_batch, "to_value": new_val},
+                    extra={
+                        "from_value": self.reporter.max_files_per_batch,
+                        "to_value": new_val,
+                    },
                 )
                 self.reporter.max_files_per_batch = new_val
                 reporter_updates["report_max_files_per_batch"] = new_val
@@ -363,7 +415,10 @@ class HeartbeatSender:
             if new_val != self.reporter.process_interval:
                 self.logger.info(
                     "Updating report_process_interval",
-                    extra={"from_seconds": self.reporter.process_interval, "to_seconds": new_val},
+                    extra={
+                        "from_seconds": self.reporter.process_interval,
+                        "to_seconds": new_val,
+                    },
                 )
                 self.reporter.process_interval = new_val
                 reporter_updates["report_process_interval"] = new_val
@@ -376,7 +431,10 @@ class HeartbeatSender:
             if new_val != self.reporter.max_queue_size:
                 self.logger.info(
                     "Updating report_max_queue_size",
-                    extra={"from_value": self.reporter.max_queue_size, "to_value": new_val},
+                    extra={
+                        "from_value": self.reporter.max_queue_size,
+                        "to_value": new_val,
+                    },
                 )
                 self.reporter.max_queue_size = new_val
                 reporter_updates["report_max_queue_size"] = new_val
@@ -407,19 +465,28 @@ class HeartbeatSender:
             if new_val != self.max_concurrent_checks:
                 self.logger.info(
                     "Updating max_concurrent_checks",
-                    extra={"from_value": self.max_concurrent_checks, "to_value": new_val},
+                    extra={
+                        "from_value": self.max_concurrent_checks,
+                        "to_value": new_val,
+                    },
                 )
                 # Update the semaphore by recreating it
                 if self.semaphore:
                     self.semaphore = asyncio.Semaphore(new_val)
                 self.max_concurrent_checks = new_val
 
-        if "watchdog_interval" in response_data and response_data["watchdog_interval"] is not None:
+        if (
+            "watchdog_interval" in response_data
+            and response_data["watchdog_interval"] is not None
+        ):
             new_val = response_data["watchdog_interval"]
             if new_val != self.watchdog_interval:
                 self.logger.info(
                     "Updating watchdog_interval",
-                    extra={"from_seconds": self.watchdog_interval, "to_seconds": new_val},
+                    extra={
+                        "from_seconds": self.watchdog_interval,
+                        "to_seconds": new_val,
+                    },
                 )
                 self.watchdog_interval = new_val
 
@@ -431,7 +498,10 @@ class HeartbeatSender:
             if new_val != self.watchdog_stall_threshold:
                 self.logger.info(
                     "Updating watchdog_stall_threshold",
-                    extra={"from_value": self.watchdog_stall_threshold, "to_value": new_val},
+                    extra={
+                        "from_value": self.watchdog_stall_threshold,
+                        "to_value": new_val,
+                    },
                 )
                 self.watchdog_stall_threshold = new_val
 
@@ -507,7 +577,9 @@ class HeartbeatSender:
                     if self.heartbeat_client:
                         await self.heartbeat_client.aclose()
                         self.heartbeat_client = httpx.AsyncClient(
-                            headers={"Authorization": f"Bearer {self.config['auth_key']}"},
+                            headers={
+                                "Authorization": f"Bearer {self.config['auth_key']}"
+                            },
                             timeout=10.0,
                         )
                 else:
@@ -532,12 +604,16 @@ class HeartbeatSender:
         """
         agent_id = self.config.get("agent_id")
         if not agent_id:
-            self.logger.warning("No agent_id configured, cannot send shutdown heartbeat")
+            self.logger.warning(
+                "No agent_id configured, cannot send shutdown heartbeat"
+            )
             return
 
         push_url = self.config.get("push_url", "http://localhost:9000")
         if not push_url:
-            self.logger.warning("No push_url configured, cannot send shutdown heartbeat")
+            self.logger.warning(
+                "No push_url configured, cannot send shutdown heartbeat"
+            )
             return
 
         # Extract base URL
