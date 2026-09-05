@@ -1,0 +1,24 @@
+{
+  "guard": "luxaudit",
+  "guard_version": "0.4.0",
+  "repo": "/repo",
+  "packages": 113,
+  "source": "poetry.lock, poetry.lock",
+  "summary": {
+    "PASS": 112,
+    "FAIL": 1,
+    "XFAIL": 0
+  },
+  "vulnerable": [
+    {
+      "package": "ecdsa",
+      "version": "0.19.2",
+      "vuln_id": "PYSEC-2026-1325",
+      "fix": "(no fix released)"
+    }
+  ],
+  "deferred": [],
+  "not_audited": [],
+  "commit": "140692413da923ae33b6c9d7b1cfdee3cc0daae2",
+  "generated_at": "2026-09-05T23:42:29Z"
+}
