@@ -136,7 +136,9 @@ class AgentCredentials:
             except json.JSONDecodeError, UnicodeDecodeError:
                 # Not JSON - must be encrypted format
                 if not self._encryption_enabled:
-                    logger.error("Encrypted credentials found but encryption is disabled")
+                    logger.error(
+                        "Encrypted credentials found but encryption is disabled"
+                    )
                     return False
 
                 # Decrypt the content

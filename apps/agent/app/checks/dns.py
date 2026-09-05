@@ -51,7 +51,9 @@ class DNSCheck(BaseCheck):
             )
 
         if "record_type" not in config:
-            raise ValueError(f"DNS check {config.get('name', 'unnamed')} must have a 'record_type'")
+            raise ValueError(
+                f"DNS check {config.get('name', 'unnamed')} must have a 'record_type'"
+            )
 
         record_type = config["record_type"].upper()
         if record_type not in self.VALID_RECORD_TYPES:
@@ -118,11 +120,17 @@ class DNSCheck(BaseCheck):
                 # Add DNS-specific performance and metadata
                 if answers.response:
                     resp = answers.response
-                    additional_data["ttl"] = int(answers.rrset.ttl) if answers.rrset else None
+                    additional_data["ttl"] = (
+                        int(answers.rrset.ttl) if answers.rrset else None
+                    )
                     additional_data["authoritative"] = bool(resp.flags & dns.flags.AA)
                     additional_data["truncated"] = bool(resp.flags & dns.flags.TC)
-                    additional_data["recursion_desired"] = bool(resp.flags & dns.flags.RD)
-                    additional_data["recursion_available"] = bool(resp.flags & dns.flags.RA)
+                    additional_data["recursion_desired"] = bool(
+                        resp.flags & dns.flags.RD
+                    )
+                    additional_data["recursion_available"] = bool(
+                        resp.flags & dns.flags.RA
+                    )
 
                 # Add canonical name if CNAME chain exists
                 if answers.canonical_name != answers.qname:
@@ -137,7 +145,9 @@ class DNSCheck(BaseCheck):
                 # Validate expected count if specified
                 if expect_count is not None:
                     if len(records) != expect_count:
-                        error = f"Expected {expect_count} records but got {len(records)}"
+                        error = (
+                            f"Expected {expect_count} records but got {len(records)}"
+                        )
                         continue
 
                 # If we get here, the check succeeded
@@ -190,9 +200,7 @@ class DNSCheck(BaseCheck):
         records = []
 
         for rdata in answers:
-            if record_type == "A":
-                records.append(str(rdata.address))
-            elif record_type == "AAAA":
+            if record_type == "A" or record_type == "AAAA":
                 records.append(str(rdata.address))
             elif record_type == "CNAME":
                 records.append(str(rdata.target))
@@ -202,16 +210,16 @@ class DNSCheck(BaseCheck):
                 # TXT records can have multiple strings
                 txt_value = " ".join([s.decode() for s in rdata.strings])
                 records.append(txt_value)
-            elif record_type == "NS":
-                records.append(str(rdata.target))
-            elif record_type == "PTR":
+            elif record_type == "NS" or record_type == "PTR":
                 records.append(str(rdata.target))
             elif record_type == "SOA":
                 records.append(
                     f"{rdata.mname} {rdata.rname} {rdata.serial} {rdata.refresh} {rdata.retry} {rdata.expire} {rdata.minimum}"
                 )
             elif record_type == "SRV":
-                records.append(f"{rdata.priority} {rdata.weight} {rdata.port} {rdata.target}")
+                records.append(
+                    f"{rdata.priority} {rdata.weight} {rdata.port} {rdata.target}"
+                )
             elif record_type == "CAA":
                 records.append(f'{rdata.flags} {rdata.tag} "{rdata.value}"')
             else:

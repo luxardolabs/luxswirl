@@ -86,12 +86,16 @@ class CheckExecutor:
                 # Update check stats
                 self.check_stats[check.name]["total_runs"] += 1
                 if result.get("latency_ms"):
-                    self.check_stats[check.name]["total_latency"] += result["latency_ms"]
+                    self.check_stats[check.name]["total_latency"] += result[
+                        "latency_ms"
+                    ]
 
                 # Add agent metadata to the result
                 agent_id = self.config.get("agent_id", "unknown")
                 result["result_id"] = str(result_id)  # UUID for artifact linking
-                result["agent_id"] = str(agent_id) if agent_id != "unknown" else "unknown"
+                result["agent_id"] = (
+                    str(agent_id) if agent_id != "unknown" else "unknown"
+                )
                 result["agent_run_id"] = self.run_id
                 result["timestamp"] = time.time()
 

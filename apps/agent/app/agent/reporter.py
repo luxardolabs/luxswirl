@@ -27,7 +27,9 @@ CREATE TABLE IF NOT EXISTS pending_batches (
     payload BLOB NOT NULL
 )
 """
-_CREATE_INDEX = "CREATE INDEX IF NOT EXISTS idx_created_at ON pending_batches(created_at)"
+_CREATE_INDEX = (
+    "CREATE INDEX IF NOT EXISTS idx_created_at ON pending_batches(created_at)"
+)
 
 
 class Reporter:
@@ -237,7 +239,9 @@ class Reporter:
         # Start the background task for processing stored reports
         if self.enable_local_storage:
             self.logger.info("Starting stored reports processor")
-            self.stored_reports_task = asyncio.create_task(self.process_stored_reports())
+            self.stored_reports_task = asyncio.create_task(
+                self.process_stored_reports()
+            )
 
     async def stop(self) -> None:
         """Stop the reporter and clean up."""
@@ -315,7 +319,9 @@ class Reporter:
                             "Batch processor triggering flush",
                             extra={
                                 "batch_size": batch_size,
-                                "time_since_last_send_seconds": round(time_since_last_send, 1),
+                                "time_since_last_send_seconds": round(
+                                    time_since_last_send, 1
+                                ),
                             },
                         )
 
@@ -350,7 +356,9 @@ class Reporter:
             current_batch_size = len(self.current_batch)
 
             # If we're getting overwhelmed, start dropping older results
-            max_batch_before_drop = int(self.max_queue_size * self.backpressure_threshold)
+            max_batch_before_drop = int(
+                self.max_queue_size * self.backpressure_threshold
+            )
             if current_batch_size > max_batch_before_drop:
                 self.logger.warning(
                     "Reporter nearing capacity",
@@ -492,7 +500,9 @@ class Reporter:
                     await asyncio.sleep(self.retry_delay)
 
             except httpx.RequestError:
-                self.logger.warning("Connection error while sending results", exc_info=True)
+                self.logger.warning(
+                    "Connection error while sending results", exc_info=True
+                )
                 retry_count += 1
                 self.metrics["send_failures"] += 1
 
@@ -502,7 +512,9 @@ class Reporter:
                 await asyncio.sleep(self.retry_delay)
 
             except Exception:
-                self.logger.error("Unexpected error while sending results", exc_info=True)
+                self.logger.error(
+                    "Unexpected error while sending results", exc_info=True
+                )
                 retry_count += 1
                 self.metrics["send_failures"] += 1
 
@@ -653,7 +665,9 @@ class Reporter:
                         if combined and len(combined) + len(checks) > self.batch_size:
                             if await self.send_batch(combined):
                                 for cid in consumed_ids:
-                                    await asyncio.to_thread(self._delete_stored_batch_sync, cid)
+                                    await asyncio.to_thread(
+                                        self._delete_stored_batch_sync, cid
+                                    )
                                 self.logger.info(
                                     "Drained stored batches in one POST",
                                     extra={
@@ -681,7 +695,9 @@ class Reporter:
                     if combined and self.running and not aborted:
                         if await self.send_batch(combined):
                             for cid in consumed_ids:
-                                await asyncio.to_thread(self._delete_stored_batch_sync, cid)
+                                await asyncio.to_thread(
+                                    self._delete_stored_batch_sync, cid
+                                )
                             self.logger.info(
                                 "Drained stored batches in one POST",
                                 extra={
@@ -728,7 +744,9 @@ class Reporter:
         """
         conn = self._get_db()
         try:
-            row = conn.execute("SELECT COUNT(*), MIN(created_at) FROM pending_batches").fetchone()
+            row = conn.execute(
+                "SELECT COUNT(*), MIN(created_at) FROM pending_batches"
+            ).fetchone()
             return (row[0], row[1])
         finally:
             conn.close()
@@ -753,7 +771,9 @@ class Reporter:
                 metrics["stored_reports_count"] = count
                 metrics["stored_reports_oldest_timestamp"] = oldest or 0.0
             except Exception:
-                self.logger.warning("Failed to get stored reports metrics", exc_info=True)
+                self.logger.warning(
+                    "Failed to get stored reports metrics", exc_info=True
+                )
                 metrics["stored_reports_count"] = 0
                 metrics["stored_reports_oldest_timestamp"] = 0.0
         else:

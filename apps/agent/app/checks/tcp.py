@@ -26,7 +26,9 @@ class TCPCheck(BaseCheck):
         super().validate_config(config)
 
         if "port" not in config:
-            raise ValueError(f"TCP check {config.get('name', 'unnamed')} must have a 'port'")
+            raise ValueError(
+                f"TCP check {config.get('name', 'unnamed')} must have a 'port'"
+            )
 
         port = config["port"]
         if not isinstance(port, int) or port < 1 or port > 65535:
@@ -184,7 +186,9 @@ class TCPCheck(BaseCheck):
 
             # Read response if expect_string is set
             if expect_string:
-                response_data = await asyncio.wait_for(reader.read(1024), timeout=timeout)
+                response_data = await asyncio.wait_for(
+                    reader.read(1024), timeout=timeout
+                )
                 response = response_data.decode("utf-8", errors="replace")
                 latency = self.stop_timer(start_time)
 

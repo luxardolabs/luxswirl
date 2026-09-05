@@ -35,7 +35,9 @@ class HTTPCheck(BaseCheck):
         # Check that target is a valid URL
         target = config.get("target", "")
         if not target.startswith(("http://", "https://")):
-            raise ValueError(f"HTTP check target must start with http:// or https://: {target}")
+            raise ValueError(
+                f"HTTP check target must start with http:// or https://: {target}"
+            )
 
     async def run(self) -> dict[str, Any]:
         """Execute the HTTP health check.
@@ -104,7 +106,9 @@ class HTTPCheck(BaseCheck):
                 if last_error
                 else "Unknown error"
             )
-            return self.create_result(success=False, latency_ms=None, error=error_message)
+            return self.create_result(
+                success=False, latency_ms=None, error=error_message
+            )
 
         # Collect response data
         response_data = {
@@ -115,7 +119,9 @@ class HTTPCheck(BaseCheck):
         }
 
         # Validate response
-        validation_result = self._validate_response(http_response, validate_options, latency)
+        validation_result = self._validate_response(
+            http_response, validate_options, latency
+        )
 
         # Get SSL certificate info for HTTPS targets
         ssl_info = self._get_ssl_certificate_info(target, timeout=timeout)
@@ -157,7 +163,9 @@ class HTTPCheck(BaseCheck):
                 )
         else:
             if response.status_code != expected_status:
-                errors.append(f"Status code {response.status_code} != expected {expected_status}")
+                errors.append(
+                    f"Status code {response.status_code} != expected {expected_status}"
+                )
 
         # Check response time if max is specified
         max_time = options.get("max_response_time")
@@ -179,7 +187,9 @@ class HTTPCheck(BaseCheck):
             else:
                 actual_value = response.headers.get(header)
                 if actual_value != expected_value:
-                    errors.append(f"Header {header}: {actual_value} != expected {expected_value}")
+                    errors.append(
+                        f"Header {header}: {actual_value} != expected {expected_value}"
+                    )
 
         # If we have any errors, the check fails
         if errors:
@@ -188,7 +198,9 @@ class HTTPCheck(BaseCheck):
 
         return result
 
-    def _get_ssl_certificate_info(self, target: str, timeout: float = 5) -> dict[str, Any] | None:
+    def _get_ssl_certificate_info(
+        self, target: str, timeout: float = 5
+    ) -> dict[str, Any] | None:
         """
         Extract SSL certificate information from HTTPS target.
 
@@ -229,8 +241,12 @@ class HTTPCheck(BaseCheck):
                     # Parse the DER certificate using cryptography library
                     # Suppress warning about NULL parameters in signature (common with IPMI/BMC certs)
                     with warnings.catch_warnings():
-                        warnings.filterwarnings("ignore", category=CryptographyDeprecationWarning)
-                        cert = x509.load_der_x509_certificate(der_cert, default_backend())
+                        warnings.filterwarnings(
+                            "ignore", category=CryptographyDeprecationWarning
+                        )
+                        cert = x509.load_der_x509_certificate(
+                            der_cert, default_backend()
+                        )
 
                     # Extract expiration dates (use UTC versions)
                     not_after = cert.not_valid_after_utc
@@ -243,9 +259,9 @@ class HTTPCheck(BaseCheck):
                     # Extract subject Common Name
                     subject_cn = hostname
                     try:
-                        cn_value = cert.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)[
-                            0
-                        ].value
+                        cn_value = cert.subject.get_attributes_for_oid(
+                            x509.NameOID.COMMON_NAME
+                        )[0].value
                         subject_cn = str(cn_value) if cn_value is not None else hostname
                     except IndexError, AttributeError:
                         pass
@@ -257,14 +273,18 @@ class HTTPCheck(BaseCheck):
                         org_value = cert.issuer.get_attributes_for_oid(
                             x509.NameOID.ORGANIZATION_NAME
                         )[0].value
-                        issuer_name = str(org_value) if org_value is not None else "Unknown"
+                        issuer_name = (
+                            str(org_value) if org_value is not None else "Unknown"
+                        )
                     except IndexError, AttributeError:
                         try:
                             # Fall back to Common Name
-                            cn_value = cert.issuer.get_attributes_for_oid(x509.NameOID.COMMON_NAME)[
-                                0
-                            ].value
-                            issuer_name = str(cn_value) if cn_value is not None else "Unknown"
+                            cn_value = cert.issuer.get_attributes_for_oid(
+                                x509.NameOID.COMMON_NAME
+                            )[0].value
+                            issuer_name = (
+                                str(cn_value) if cn_value is not None else "Unknown"
+                            )
                         except IndexError, AttributeError:
                             pass
 

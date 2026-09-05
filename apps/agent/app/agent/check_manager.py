@@ -94,7 +94,9 @@ class CheckManager:
 
         # Derive key using PBKDF2
         key_material = f"{hostname}:{machine_id}".encode()
-        key_bytes = hashlib.pbkdf2_hmac("sha256", key_material, self.ENCRYPTION_SALT, 100000)
+        key_bytes = hashlib.pbkdf2_hmac(
+            "sha256", key_material, self.ENCRYPTION_SALT, 100000
+        )
 
         return base64.urlsafe_b64encode(key_bytes)
 
@@ -112,7 +114,9 @@ class CheckManager:
             extra={"check_type": name},
         )
 
-    def save_checks_cache(self, checks: list[dict[str, Any]], version: str | None = None) -> None:
+    def save_checks_cache(
+        self, checks: list[dict[str, Any]], version: str | None = None
+    ) -> None:
         """
         Save checks to encrypted cache file for offline capability.
 
@@ -186,7 +190,9 @@ class CheckManager:
                 if checks:
                     self.logger.info("Migrating checks cache to encrypted format...")
                     self.save_checks_cache(checks, version)
-                    self.logger.info("✅ Migration complete - checks cache now encrypted")
+                    self.logger.info(
+                        "✅ Migration complete - checks cache now encrypted"
+                    )
 
             except json.JSONDecodeError, UnicodeDecodeError:
                 # Not JSON - must be encrypted format
@@ -268,7 +274,9 @@ class CheckManager:
                     "Agent not found in server (orphaned - likely database reset)",
                     extra={"agent_id": str(agent_id)},
                 )
-                self.logger.info("Clearing invalid credentials and attempting re-registration")
+                self.logger.info(
+                    "Clearing invalid credentials and attempting re-registration"
+                )
 
                 # Clear invalid credentials
                 if not self.credentials.clear():
@@ -334,7 +342,9 @@ class CheckManager:
                 )
             else:
                 # No fallback to local config - server is source of truth
-                self.logger.warning("No cache available and server unreachable - no checks to load")
+                self.logger.warning(
+                    "No cache available and server unreachable - no checks to load"
+                )
                 check_configs = []
 
         # Process check configurations
@@ -362,7 +372,9 @@ class CheckManager:
 
             try:
                 # Transform server format to agent format
-                agent_check_cfg = self._transform_check_config(check_cfg, check_type, check_name)
+                agent_check_cfg = self._transform_check_config(
+                    check_cfg, check_type, check_name
+                )
 
                 # Skip disabled checks
                 if not agent_check_cfg["enabled"]:

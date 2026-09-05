@@ -63,9 +63,13 @@ class HealthMonitor:
         self.last_heartbeat_time = time.time()
 
         # Resource monitoring (SWIRL-57)
-        self.resource_monitoring_enabled = config.get("resource_monitoring_enabled", True)
+        self.resource_monitoring_enabled = config.get(
+            "resource_monitoring_enabled", True
+        )
         self.resource_fd_warning_percent = config.get("resource_fd_warning_percent", 80)
-        self.resource_subprocess_warning_count = config.get("resource_subprocess_warning_count", 50)
+        self.resource_subprocess_warning_count = config.get(
+            "resource_subprocess_warning_count", 50
+        )
         self.process = psutil.Process()
 
     async def monitor_result_processing(self) -> None:
@@ -94,7 +98,9 @@ class HealthMonitor:
                         try:
                             await self.reporter.flush()
                         except Exception:
-                            self.logger.error("Error during forced flush", exc_info=True)
+                            self.logger.error(
+                                "Error during forced flush", exc_info=True
+                            )
                         stall_count = 0
                 else:
                     stall_count = 0
@@ -103,7 +109,9 @@ class HealthMonitor:
                 if current_time - self.last_heartbeat_time >= self.heartbeat_interval:
                     self.metrics["heartbeats"] += 1
                     self.last_heartbeat_time = current_time
-                    active_checks = len([t for t in asyncio.all_tasks() if "run_check" in str(t)])
+                    active_checks = len(
+                        [t for t in asyncio.all_tasks() if "run_check" in str(t)]
+                    )
 
                     # Get resource metrics for logging
                     resources: dict[str, Any] | None = None
@@ -120,7 +128,9 @@ class HealthMonitor:
                             "active_checks": active_checks,
                             "batch_size": len(self.reporter.current_batch),
                             "open_file_descriptors": (
-                                resources.get("open_file_descriptors") if resources else None
+                                resources.get("open_file_descriptors")
+                                if resources
+                                else None
                             ),
                             "fd_limit_soft": (
                                 resources.get("fd_limit_soft") if resources else None
@@ -159,7 +169,9 @@ class HealthMonitor:
 
             # Get FD limit (soft limit)
             try:
-                fd_soft_limit, fd_hard_limit = resource.getrlimit(resource.RLIMIT_NOFILE)
+                fd_soft_limit, fd_hard_limit = resource.getrlimit(
+                    resource.RLIMIT_NOFILE
+                )
                 metrics["fd_limit_soft"] = fd_soft_limit
                 metrics["fd_limit_hard"] = fd_hard_limit
                 metrics["fd_usage_percent"] = round((fd_count / fd_soft_limit) * 100, 1)
@@ -219,14 +231,18 @@ class HealthMonitor:
             "result_queue_size": self.result_queue.qsize(),
             "active_check_tasks": active_checks,
             "reporter_status": {
-                "running": (self.reporter.running if hasattr(self.reporter, "running") else None),
+                "running": (
+                    self.reporter.running if hasattr(self.reporter, "running") else None
+                ),
                 "batch_size": (
                     len(self.reporter.current_batch)
                     if hasattr(self.reporter, "current_batch")
                     else 0
                 ),
                 "batch_limit": (
-                    self.reporter.batch_size if hasattr(self.reporter, "batch_size") else None
+                    self.reporter.batch_size
+                    if hasattr(self.reporter, "batch_size")
+                    else None
                 ),
             },
         }

@@ -40,10 +40,14 @@ class BaseCheck(ABC):
             raise ValueError("Check configuration must include a 'check_id'")
 
         if "target" not in config:
-            raise ValueError(f"Check {config.get('name', 'unknown')} must have a 'target'")
+            raise ValueError(
+                f"Check {config.get('name', 'unknown')} must have a 'target'"
+            )
 
         if "check_type" not in config:
-            raise ValueError(f"Check {config.get('name', 'unknown')} must have a 'check_type'")
+            raise ValueError(
+                f"Check {config.get('name', 'unknown')} must have a 'check_type'"
+            )
 
     @abstractmethod
     async def run(self) -> dict[str, Any]:
