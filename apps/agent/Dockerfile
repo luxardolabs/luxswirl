@@ -30,13 +30,11 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 ENV POETRY_VERSION=1.8.2 \
-    POETRY_HOME="/opt/poetry" \
     POETRY_NO_INTERACTION=1 \
     POETRY_VIRTUALENVS_CREATE=false \
     POETRY_CACHE_DIR='/var/cache/pypoetry'
 
-RUN curl -sSL https://install.python-poetry.org | python3 - && \
-    ln -s /opt/poetry/bin/poetry /usr/local/bin/poetry
+RUN pip install --no-cache-dir "poetry==${POETRY_VERSION}"
 
 RUN useradd -m -u 1000 -s /bin/bash luxswirl
 
@@ -73,4 +71,9 @@ COPY --chown=luxswirl:luxswirl apps/agent/app /app/app
 COPY --chown=luxswirl:luxswirl apps/shared /app/shared
 ENV PYTHONPATH=/app
 
-CMD ["python", "-m", "app.agent_main"]
+# Liveness = the agent's own work, not a live process: app/health/check.py asserts the
+# heartbeat liveness stamp is fresh, so a wedged agent reads unhealthy (see that module).
+HEALTHCHECK --interval=60s --timeout=10s --start-period=120s --retries=3 \
+    CMD ["python", "-m", "app.health.check"]
+
+CMD ["python", "-m", "app.main"]
