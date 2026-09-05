@@ -56,7 +56,9 @@ class MySQLCheck(BaseCheck):
                 "Expected format: mysql://username:password@host:port/database"
             ) from e
 
-    def _parse_connection_string(self, connection_string: str) -> dict[str, str | int | None]:
+    def _parse_connection_string(
+        self, connection_string: str
+    ) -> dict[str, str | int | None]:
         """Parse MySQL connection string into components.
 
         Args:
@@ -87,7 +89,9 @@ class MySQLCheck(BaseCheck):
             A dictionary containing the check result
         """
         # Get connection string from either 'connection_string' or 'target'
-        connection_string = self.config.get("connection_string") or self.config.get("target")
+        connection_string = self.config.get("connection_string") or self.config.get(
+            "target"
+        )
         query = self.config.get("query", "SELECT 1")  # Default health check query
         timeout = self.config.get("timeout", 5)
         retries = self.config.get("retries", 1)

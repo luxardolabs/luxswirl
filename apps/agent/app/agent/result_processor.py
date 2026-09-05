@@ -174,7 +174,9 @@ class ResultProcessor:
                 headers["Authorization"] = f"Bearer {auth_key}"
 
             check_id = result.get("check_id")
-            check_result_id = result.get("result_id")  # UUID generated before check execution
+            check_result_id = result.get(
+                "result_id"
+            )  # UUID generated before check execution
             timestamp: float = result.get("timestamp", time.time())
             check_result_timestamp = datetime.fromtimestamp(timestamp).isoformat()
 

@@ -129,7 +129,9 @@ class AgentRegistration:
         """
         push_url = self.config.get("push_url", "http://localhost:9000")
         agent_id = self.config.get("agent_id")
-        registration_key = self.config.get("auth_key")  # This should be the registration key
+        registration_key = self.config.get(
+            "auth_key"
+        )  # This should be the registration key
 
         if not agent_id:
             self.logger.error("Cannot recover key: no agent_id")
@@ -155,7 +157,9 @@ class AgentRegistration:
                     "Recovering agent-specific key",
                     extra={"recovery_url": recovery_url},
                 )
-                response = await client.post(recovery_url, headers=headers, timeout=10.0)
+                response = await client.post(
+                    recovery_url, headers=headers, timeout=10.0
+                )
                 response.raise_for_status()
 
                 data = response.json()

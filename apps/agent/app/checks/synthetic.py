@@ -109,7 +109,9 @@ class SyntheticCheck(BaseCheck):
 
                 except TimeoutError:
                     result_data["status"] = "failure"
-                    result_data["errors"].append(f"Script execution timed out after {timeout}s")
+                    result_data["errors"].append(
+                        f"Script execution timed out after {timeout}s"
+                    )
                 except Exception as e:
                     result_data["status"] = "failure"
                     result_data["errors"].append(f"Script execution failed: {str(e)}")
@@ -126,7 +128,9 @@ class SyntheticCheck(BaseCheck):
 
                     # Capture screenshot
                     try:
-                        screenshot_bytes = await page.screenshot(type="png", full_page=True)
+                        screenshot_bytes = await page.screenshot(
+                            type="png", full_page=True
+                        )
                         result_data["artifacts"].append(
                             {
                                 "type": "screenshot",
@@ -137,12 +141,16 @@ class SyntheticCheck(BaseCheck):
                             }
                         )
                     except Exception as e:
-                        result_data["errors"].append(f"Failed to capture screenshot: {str(e)}")
+                        result_data["errors"].append(
+                            f"Failed to capture screenshot: {str(e)}"
+                        )
 
                     # Capture trace
                     try:
                         # Stop tracing and get bytes
-                        trace_path = f"/tmp/trace_{self.check_id}_{int(time.time())}.zip"
+                        trace_path = (
+                            f"/tmp/trace_{self.check_id}_{int(time.time())}.zip"
+                        )
                         await context.tracing.stop(path=trace_path)
 
                         # Read the trace file
@@ -164,7 +172,9 @@ class SyntheticCheck(BaseCheck):
 
                         os.remove(trace_path)
                     except Exception as e:
-                        result_data["errors"].append(f"Failed to capture trace: {str(e)}")
+                        result_data["errors"].append(
+                            f"Failed to capture trace: {str(e)}"
+                        )
 
                     # Close browser
                     await browser.close()
@@ -206,7 +216,9 @@ class SyntheticCheck(BaseCheck):
                 pass
 
         # Primary metric: script execution time (what users care about)
-        latency_ms = script_execution_ms if script_execution_ms else total_execution_time
+        latency_ms = (
+            script_execution_ms if script_execution_ms else total_execution_time
+        )
 
         # Store all timing metrics for reference in UI
         result_data["total_execution_time_ms"] = total_execution_time
@@ -270,7 +282,9 @@ class SyntheticCheck(BaseCheck):
             return {
                 "status": "failure",
                 "steps": [],
-                "errors": ["Script must define an async function called 'run_check(page)'"],
+                "errors": [
+                    "Script must define an async function called 'run_check(page)'"
+                ],
             }
 
         # Execute the run_check function

@@ -91,7 +91,9 @@ class LuxSwirlAgent:
 
         # Get agent performance config
         self.result_queue_timeout: float = config.get("result_queue_timeout", 1.0)
-        self.result_processor_retry_delay: float = config.get("result_processor_retry_delay", 1.0)
+        self.result_processor_retry_delay: float = config.get(
+            "result_processor_retry_delay", 1.0
+        )
         self.shutdown_timeout: float = config.get("shutdown_timeout", 5.0)
         self.main_loop_sleep: float = config.get("main_loop_sleep", 0.1)
         self.heartbeat_interval: int = config.get("heartbeat_interval", 60)
@@ -381,7 +383,9 @@ class LuxSwirlAgent:
         self.lifecycle_manager.running = True
 
         # Start result processor
-        self.result_processor_task = asyncio.create_task(self.result_processor.process_results())
+        self.result_processor_task = asyncio.create_task(
+            self.result_processor.process_results()
+        )
 
         # Start watchdog task if enabled
         if self.watchdog_enabled:
@@ -393,7 +397,9 @@ class LuxSwirlAgent:
         # Start heartbeat sender
         if self.config.get("enable_heartbeat", True):
             self.logger.info("Enabling heartbeat sender")
-            self.heartbeat_task = asyncio.create_task(self.heartbeat_sender.send_heartbeat())
+            self.heartbeat_task = asyncio.create_task(
+                self.heartbeat_sender.send_heartbeat()
+            )
 
         # Start job processor
         await self.job_processor.start()

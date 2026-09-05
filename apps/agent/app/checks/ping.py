@@ -60,7 +60,9 @@ class PingCheck(BaseCheck):
                 # Run the ping command with safe subprocess wrapper
                 # timeout includes the count * ping_timeout plus overhead from config
                 # e.g., 3 pings x 1s each = 3s minimum, plus grace period
-                subprocess_timeout = (count * timeout) + subprocess_config["grace_seconds"]
+                subprocess_timeout = (count * timeout) + subprocess_config[
+                    "grace_seconds"
+                ]
 
                 returncode, stdout, stderr = await run_subprocess_safely(
                     *ping_args,
@@ -79,7 +81,9 @@ class PingCheck(BaseCheck):
                     break
                 else:
                     stderr_output = (stderr or b"").decode("utf-8", errors="replace")
-                    error = f"Ping failed with return code {returncode}: {stderr_output}"
+                    error = (
+                        f"Ping failed with return code {returncode}: {stderr_output}"
+                    )
 
             except TimeoutError:
                 error = f"Ping timed out after {timeout}s"
@@ -158,7 +162,9 @@ class PingCheck(BaseCheck):
             stats["packet_loss"] = float(packet_loss_match.group(1))
 
         # Parse packets sent/received
-        packets_match = re.search(r"(\d+) packets transmitted, (\d+) (?:packets )?received", output)
+        packets_match = re.search(
+            r"(\d+) packets transmitted, (\d+) (?:packets )?received", output
+        )
         if packets_match:
             stats["sent"] = int(packets_match.group(1))
             stats["received"] = int(packets_match.group(2))

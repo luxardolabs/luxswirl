@@ -36,7 +36,9 @@ class JSONCheck(BaseCheck):
         # Check that target is a valid URL
         target = config.get("target", "")
         if not target.startswith(("http://", "https://")):
-            raise ValueError(f"JSON check target must start with http:// or https://: {target}")
+            raise ValueError(
+                f"JSON check target must start with http:// or https://: {target}"
+            )
 
         # Check for JSON path
         if "json_path" not in config:
@@ -44,7 +46,9 @@ class JSONCheck(BaseCheck):
 
         # Check for expected value
         if "expected_value" not in config:
-            raise ValueError(f"JSON check {config.get('name')} must have an 'expected_value'")
+            raise ValueError(
+                f"JSON check {config.get('name')} must have an 'expected_value'"
+            )
 
     async def run(self) -> dict[str, Any]:
         """Execute the JSON health check.
@@ -120,7 +124,9 @@ class JSONCheck(BaseCheck):
                 if last_error
                 else "Unknown error"
             )
-            return self.create_result(success=False, latency_ms=None, error=error_message)
+            return self.create_result(
+                success=False, latency_ms=None, error=error_message
+            )
 
         # Check status code first
         if http_response.status_code != expected_status:
@@ -181,7 +187,9 @@ class JSONCheck(BaseCheck):
         }
 
         # Compare actual value with expected value
-        success, error = self._compare_values(actual_value, expected_value, comparison_type)
+        success, error = self._compare_values(
+            actual_value, expected_value, comparison_type
+        )
 
         # Create and return the result
         return self.create_result(
