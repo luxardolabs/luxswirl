@@ -13,13 +13,11 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 ENV POETRY_VERSION=1.8.2 \
-    POETRY_HOME="/opt/poetry" \
     POETRY_NO_INTERACTION=1 \
     POETRY_VIRTUALENVS_CREATE=false \
     POETRY_CACHE_DIR='/var/cache/pypoetry'
 
-RUN curl -sSL https://install.python-poetry.org | python3 - && \
-    ln -s /opt/poetry/bin/poetry /usr/local/bin/poetry
+RUN pip install --no-cache-dir "poetry==${POETRY_VERSION}"
 
 RUN useradd -m -u 1000 -s /bin/bash luxswirl
 

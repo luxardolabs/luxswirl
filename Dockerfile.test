@@ -37,4 +37,7 @@ COPY apps/backend/tests /app/tests
 # `alembic upgrade head && alembic check` against the test DB (LUXSWIRL-178).
 COPY apps/backend/alembic /app/alembic
 COPY apps/backend/alembic.ini /app/alembic.ini
+# The emitted migration-chain verifier (`make db-verify` → repo.migrations_build_schema):
+# proves `alembic upgrade head` from EMPTY builds exactly what the models describe.
+COPY apps/backend/scripts /app/scripts
 ENV PYTHONPATH=/app

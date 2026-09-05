@@ -1,9 +1,21 @@
-[tool.poetry]
+[project]
 name = "luxswirl-backend"
-version = "1.0.21"
+# version: single source is the repo-root VERSION file (repo.version_single_source), read by
+# hatchling (repo.hatchling_build_backend). dependencies + requires-python stay Poetry-sourced
+# from [tool.poetry] below (declared dynamic so Poetry, not [project], owns them). No static
+# version literal anywhere in the repo.
+dynamic = ["version", "dependencies", "requires-python"]
+
+[tool.hatch.version]
+path = "../../VERSION"
+
+[tool.poetry]
+# App: deployed via `poetry install --no-root`, never packaged → non-package mode. Poetry manages
+# deps (below) but does not build/version the root, which is what allows the dynamic version above
+# (poetry package-mode would otherwise require a static [tool.poetry.version]).
+name = "luxswirl-backend"
 description = "LuxSwirl observability platform — FastAPI server + HTMX portal"
 authors = ["Luxardo Labs"]
-readme = "README.md"
 package-mode = false
 
 [tool.poetry.dependencies]
@@ -12,7 +24,7 @@ python = "^3.14"
 fastapi = "^0.136.0"
 uvicorn = {extras = ["standard"], version = "^0.46.0"}
 jinja2 = "^3.1.0"
-python-multipart = "^0.0.27"
+python-multipart = ">=0.0.31,<0.1.0"  # CVE-2026-53538/53539/53540 floor
 
 # Logging (shared/logger.py)
 python-json-logger = "^2.0.7"
@@ -24,7 +36,7 @@ alembic = "^1.13.1"
 
 # Pydantic
 pydantic = {extras = ["email"], version = "^2.5.3"}
-pydantic-settings = "^2.1.0"
+pydantic-settings = "^2.14.2"  # GHSA-4xgf-cpjx-pc3j floor
 
 # HTTP Client
 httpx = "^0.28.1"
@@ -32,7 +44,7 @@ requests = "^2.31.0"  # healthcheck
 
 # Async I/O
 aiofiles = "^25.1.0"
-aiosmtplib = "^5.0.0"
+aiosmtplib = "^5.1.2"  # CVE-2026-55558 floor
 
 # YAML & JSON (shared/config.py + import/export)
 pyyaml = "^6.0"
@@ -50,10 +62,16 @@ uuid7 = "^0.1.0"
 # Security
 python-jose = {extras = ["cryptography"], version = "^3.3.0"}
 bcrypt = "^5.0.0"
-cryptography = "^48.0.0"
+cryptography = "^50.0.0"  # CVE-2026-69247/69248/69249 + GHSA-537c-gmf6-5ccf floor
 
 # Rate Limiting
 slowapi = "^0.1.9"
+
+# Transitive-dependency CVE floors. These are pulled in by fastapi / python-jose, whose own
+# ranges still admit the vulnerable versions — so a re-lock alone cannot raise them; the floor
+# has to be declared here (luxaudit ONBOARDING: "a CVE fix needs a version floor").
+starlette = ">=1.3.1"   # CVE-2026-54282/54283 (via fastapi)
+pyasn1 = ">=0.6.4"      # CVE-2026-59884/59885/59886 (via python-jose)
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^9.0.0"
@@ -69,8 +87,10 @@ ipython = "^9.0.0"
 types-pyyaml = "^6.0.12.20240917"
 
 [build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+# Fleet's one build backend is hatchling (repo.hatchling_build_backend). Poetry stays the
+# dependency manager — deps live in [tool.poetry], poetry.lock untouched.
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 # ruff / mypy config is fleet-owned by luxlint (byte-identical, emitted from the
 # pinned image) — this repo intentionally carries none. See .luxlint.toml and

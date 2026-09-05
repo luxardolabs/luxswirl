@@ -1,9 +1,21 @@
-[tool.poetry]
+[project]
 name = "luxswirl-agent"
-version = "1.0.21"
+# version: single source is the repo-root VERSION file (repo.version_single_source), read by
+# hatchling (repo.hatchling_build_backend). dependencies + requires-python stay Poetry-sourced
+# from [tool.poetry] below (declared dynamic so Poetry, not [project], owns them). No static
+# version literal anywhere in the repo.
+dynamic = ["version", "dependencies", "requires-python"]
+
+[tool.hatch.version]
+path = "../../VERSION"
+
+[tool.poetry]
+# App: deployed via `poetry install --no-root`, never packaged → non-package mode. Poetry manages
+# deps (below) but does not build/version the root, which is what allows the dynamic version above
+# (poetry package-mode would otherwise require a static [tool.poetry.version]).
+name = "luxswirl-agent"
 description = "LuxSwirl observability platform — health-check agent"
 authors = ["Luxardo Labs"]
-readme = "README.md"
 package-mode = false
 
 [tool.poetry.dependencies]
@@ -12,7 +24,7 @@ python = "^3.14"
 httpx = "^0.28.1"
 
 # Credentials encryption (Fernet)
-cryptography = "^48.0.0"
+cryptography = "^50.0.0"  # CVE-2026-69247/69248/69249 + GHSA-537c-gmf6-5ccf floor
 
 # Config / schema models
 pydantic = "^2.5.3"
@@ -43,8 +55,10 @@ ruff = "^0.15.0"
 mypy = "^2.0.0"
 
 [build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+# Fleet's one build backend is hatchling (repo.hatchling_build_backend). Poetry stays the
+# dependency manager — deps live in [tool.poetry], poetry.lock untouched.
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 # ruff / mypy config is fleet-owned by luxlint (byte-identical, emitted from the
 # pinned image) — this repo intentionally carries none. See .luxlint.toml and
