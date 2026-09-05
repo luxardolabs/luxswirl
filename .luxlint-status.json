@@ -1,6 +1,6 @@
 {
   "guard": "luxlint",
-  "guard_version": "0.41.0",
+  "guard_version": "0.42.0",
   "repo": "/repo",
   "source": [
     "apps/backend/app",
@@ -61,14 +61,14 @@
       "rule": "lint.ruff",
       "status": "FAIL",
       "since": "0.1.0",
-      "violations": 316,
+      "violations": 315,
       "deferred": false
     },
     {
       "rule": "lint.format",
       "status": "FAIL",
       "since": "0.1.0",
-      "violations": 133,
+      "violations": 160,
       "deferred": false
     },
     {
@@ -163,6 +163,6 @@
     "XPASS": 0
   },
   "mypy": "separate: `luxlint --mypy` ([mypy].baseline ratchet)",
-  "commit": "140692413da923ae33b6c9d7b1cfdee3cc0daae2",
-  "generated_at": "2026-09-05T23:42:29Z"
+  "commit": "2b652317768d61720d765aa1b00f372b1e3f0d9f",
+  "generated_at": "2026-09-05T23:47:34Z"
 }
