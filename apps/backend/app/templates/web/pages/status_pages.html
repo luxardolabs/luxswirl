@@ -73,7 +73,7 @@
                             <!-- View Public Page -->
                             {% if page.is_public %}
                             <a
-                                href="/status/{{ page.slug }}"
+                                href="{{ page_urls[page.id].public }}"
                                 target="_blank"
                                 class="inline-flex p-1.5 bg-green-600/20 hover:bg-green-600/30 text-green-300 rounded border border-green-600/30 transition-colors"
                                 title="View Public Page"
@@ -84,7 +84,7 @@
 
                             <!-- Manage -->
                             <a
-                                href="/status-pages/{{ page.id }}/manage"
+                                href="{{ page_urls[page.id].manage }}"
                                 class="inline-flex p-1.5 bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 rounded border border-purple-600/30 transition-colors"
                                 title="Manage Items"
                             >
@@ -92,8 +92,8 @@
                             </a>
 
                             <!-- Edit -->
-                            {{ icon_edit(hx_get='/status-pages/' ~ page.id ~ '/edit-form', hx_target='#panel-container') }}
-                            {{ delete_icon_button(delete_url='/status-pages/' ~ page.id, target_id='status-page-' ~ page.id) }}
+                            {{ icon_edit(hx_get=page_urls[page.id].edit_form, hx_target='#panel-container') }}
+                            {{ delete_icon_button(delete_url=page_urls[page.id].delete, target_id='status-page-' ~ page.id) }}
                         </div>
                     </td>
                 </tr>

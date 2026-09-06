@@ -10,7 +10,7 @@
     {% call panel_content() %}
     <form
         {% if status_page %}
-        hx-post="/status-pages/{{ status_page.id }}/update"
+        hx-post="{{ sp_urls.update }}"
         {% else %}
         hx-post="/status-pages/create"
         {% endif %}

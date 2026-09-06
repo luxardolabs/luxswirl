@@ -7,6 +7,7 @@ the dashboard rendering view-model assembly via DashboardRender.
 """
 
 import json
+from dataclasses import dataclass
 from typing import Any
 from uuid import UUID
 
@@ -48,6 +49,37 @@ def _resolve_time_range(query_value: int | None, page_config: dict | None) -> in
     return cfg_minutes if cfg_minutes in ALLOWED_TIME_RANGES else 30
 
 
+@dataclass(frozen=True)
+class StatusPageUrls:
+    """Finished hrefs for one status page. Built by route NAME so a router path
+    change propagates on its own (fw.url_assembly_in_view)."""
+
+    edit_form: str
+    manage: str
+    delete: str
+    update: str
+    available_checks: str
+    public: str
+
+
+def build_status_page_urls(
+    request: Request, page_id: UUID, slug: str
+) -> StatusPageUrls:
+    # .path, not str(): url_for returns an absolute url built from the request's
+    # scheme/host, which behind TLS-terminating nginx can emit http:// into https://.
+    def u(name: str, **kw: object) -> str:
+        return request.url_for(name, **kw).path
+
+    return StatusPageUrls(
+        edit_form=u("edit_form", status_page_id=page_id),
+        manage=u("manage_status_page", status_page_id=page_id),
+        delete=u("delete_status_page", status_page_id=page_id),
+        update=u("update_status_page", status_page_id=page_id),
+        available_checks=u("get_available_checks", status_page_id=page_id),
+        public=u("view_public_status_page", slug=slug),
+    )
+
+
 class StatusPagesViewService:
     """View-layer wrapper for /status-pages and /status/{slug} endpoints."""
 
@@ -85,7 +117,12 @@ class StatusPagesViewService:
         pagination = build_pagination(
             page=page, per_page=per_page, total=total, filters=filters
         )
+        page_urls = {
+            sp.id: build_status_page_urls(request, sp.id, sp.slug)
+            for sp in status_pages
+        }
         return {
+            "page_urls": page_urls,
             "request": request,
             "current_user": current_user,
             "status_pages": status_pages,
@@ -119,6 +156,9 @@ class StatusPagesViewService:
             db, status_page_id
         )
         return {
+            "sp_urls": build_status_page_urls(
+                request, status_page.id, status_page.slug
+            ),
             "request": request,
             "current_user": current_user,
             "status_page": status_page,
@@ -145,6 +185,9 @@ class StatusPagesViewService:
         )
 
         return {
+            "sp_urls": build_status_page_urls(
+                request, status_page.id, status_page.slug
+            ),
             "request": request,
             "current_user": current_user,
             "status_page": status_page,
@@ -571,6 +614,15 @@ class StatusPagesViewService:
             },
             "time_range_options": ALLOWED_TIME_RANGES,
             "page_title": status_page.name,
+            # One finished href per time-range option, plus the polling partial's.
+            "time_range_urls": {
+                minutes: f"{request.url_for('view_public_status_page', slug=status_page.slug).path}"
+                f"?time_range={minutes}"
+                for minutes in ALLOWED_TIME_RANGES
+            },
+            "partial_url_base": request.url_for(
+                "view_public_status_page_partial", slug=status_page.slug
+            ).path,
         }, None
 
     @staticmethod
