@@ -27,7 +27,7 @@
         </div>
 
         <form
-            hx-post="/settings/users/{{ user.id }}/update"
+            hx-post="{{ user_urls.update }}"
             hx-target="#user-edit-result"
             hx-swap="innerHTML"
             class="space-y-4">
@@ -84,7 +84,7 @@
                         <p class="text-sm font-medium text-yellow-300">Account Locked</p>
                         <p class="text-xs text-dark-text-muted">Failed attempts: {{ user.failed_login_attempts }}</p>
                     </div>
-                    <form hx-post="/settings/users/{{ user.id }}/unlock" hx-swap="none" hx-on::after-request="window.location.reload()" class="inline">
+                    <form hx-post="{{ user_urls.unlock }}" hx-swap="none" hx-on::after-request="window.location.reload()" class="inline">
                         {{ btn_enable(label='Unlock') }}
                     </form>
                 </div>
@@ -100,7 +100,7 @@
                         <p class="text-xs text-dark-text-muted">Permanently remove user account</p>
                     </div>
                     {{ confirm_action_btn(icon_svg=ICO_TRASH, label='Delete', color='red',
-                        hx_post='/settings/users/' ~ user.id ~ '/delete',
+                        hx_post=user_urls.delete,
                         after='reload', title='Delete user') }}
                 </div>
             </div>

@@ -146,18 +146,18 @@
                 </td>
                 <td class="text-right">
                     <div class="flex items-center justify-end gap-2">
-                        {{ icon_edit(hx_get='/settings/users/' ~ user.id ~ '/edit-form', hx_target='#panel-container') }}
+                        {{ icon_edit(hx_get=user.urls.edit_form, hx_target='#panel-container') }}
 
                         <!-- Unlock (if locked) — Approve/Enable = green per /settings/components -->
                         {% if user.locked_until %}
                         {% set unlock_svg %}<span class="w-3.5 h-3.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/lock-closed.svg" %}</span>{% endset %}
-                        <form method="POST" action="/settings/users/{{ user.id }}/unlock" class="inline">
+                        <form method="POST" action="{{ user.urls.unlock }}" class="inline">
                             {{ icon_btn(unlock_svg, color='green', title='Unlock Account', extra_attrs='type="submit"') }}
                         </form>
                         {% endif %}
 
                         {% if user.id != current_user.id %}
-                        <form method="POST" action="/settings/users/{{ user.id }}/delete" onsubmit="return confirm('Are you sure you want to delete this user? This action cannot be undone.');" class="inline">
+                        <form method="POST" action="{{ user.urls.delete }}" onsubmit="return confirm('Are you sure you want to delete this user? This action cannot be undone.');" class="inline">
                             {{ icon_delete() }}
                         </form>
                         {% endif %}

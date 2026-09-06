@@ -26,6 +26,14 @@ from app.web.templates_config import templates
 logger = get_logger("luxswirl.web.services.settings")
 
 
+def build_setting_urls(request: Request, key: str) -> dict[str, str]:
+    """Finished update/reset hrefs for one setting, by route name."""
+    return {
+        "update": request.url_for("update_setting", key=key).path,
+        "reset": request.url_for("reset_setting", key=key).path,
+    }
+
+
 class SettingsViewService:
     """Service for settings web UI with web-specific logic."""
 
@@ -346,6 +354,14 @@ class SettingsViewService:
             include_revoked=not is_enabled if is_enabled is not None else False,
         )
         return {
+            # Finished hrefs per key, resolved by route name (fw.url_assembly_in_view).
+            "key_urls": {
+                k.id: {
+                    "revoke": request.url_for("revoke_key", key_id=k.id).path,
+                    "delete": request.url_for("delete_key", key_id=k.id).path,
+                }
+                for k in keys
+            },
             "request": request,
             "current_user": current_user,
             "registration_keys": keys,
@@ -370,30 +386,35 @@ class SettingsViewService:
         db: AsyncSession, request: Request, current_user: AuthedUser
     ) -> dict[str, Any]:
         """/settings/defaults — all configurable defaults grouped by category."""
+        groups = {
+            "check": await SettingsCoreService.get_settings_by_category(db, "check"),
+            "alert": await SettingsCoreService.get_settings_by_category(db, "alert"),
+            "system": await SettingsCoreService.get_settings_by_category(db, "system"),
+            "job": await SettingsCoreService.get_settings_by_category(db, "job"),
+            "general": await SettingsCoreService.get_settings_by_category(
+                db, "general"
+            ),
+            "database": await SettingsCoreService.get_settings_by_category(
+                db, "database"
+            ),
+        }
+        security_groups = await SettingsViewService.get_grouped_security_settings(db)
+        all_settings = [s for rows in groups.values() for s in rows] + [
+            s for rows in security_groups.values() for s in rows
+        ]
         return {
             "request": request,
             "current_user": current_user,
-            "check_settings": await SettingsCoreService.get_settings_by_category(
-                db, "check"
-            ),
-            "alert_settings": await SettingsCoreService.get_settings_by_category(
-                db, "alert"
-            ),
-            "system_settings": await SettingsCoreService.get_settings_by_category(
-                db, "system"
-            ),
-            "job_settings": await SettingsCoreService.get_settings_by_category(
-                db, "job"
-            ),
-            "security_groups": await SettingsViewService.get_grouped_security_settings(
-                db
-            ),
-            "general_settings": await SettingsCoreService.get_settings_by_category(
-                db, "general"
-            ),
-            "database_settings": await SettingsCoreService.get_settings_by_category(
-                db, "database"
-            ),
+            "setting_urls": {
+                st.key: build_setting_urls(request, st.key) for st in all_settings
+            },
+            "check_settings": groups["check"],
+            "alert_settings": groups["alert"],
+            "system_settings": groups["system"],
+            "job_settings": groups["job"],
+            "security_groups": security_groups,
+            "general_settings": groups["general"],
+            "database_settings": groups["database"],
             "page_title": "Settings - Defaults",
         }
 
@@ -407,6 +428,7 @@ class SettingsViewService:
     ) -> dict[str, Any]:
         """Setting-card partial context (used for update/reset responses)."""
         return {
+            "setting_urls": {setting.key: build_setting_urls(request, setting.key)},
             "request": request,
             "current_user": current_user,
             "setting": setting,

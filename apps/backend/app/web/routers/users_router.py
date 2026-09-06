@@ -191,7 +191,7 @@ async def edit_user_form(
             )
 
         context = WebUsersViewService().build_user_edit_form_context(
-            current_user=admin, edit_user=edit_user
+            request=request, current_user=admin, edit_user=edit_user
         )
         return templates.TemplateResponse(
             request,

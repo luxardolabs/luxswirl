@@ -5,9 +5,11 @@ This service provides user management functionality specifically for web UI,
 calling core user service and formatting responses for templates.
 """
 
+from dataclasses import dataclass
 from typing import cast
 from uuid import UUID
 
+from fastapi import Request
 from pydantic import ValidationError
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,6 +24,32 @@ from app.services.core.settings_core_service import SettingsCoreService
 from app.services.core.user_core_service import UserCoreService
 
 logger = get_logger("luxswirl.web.services.web_users")
+
+
+@dataclass(frozen=True)
+class UserUrls:
+    """Finished hrefs for one user row (fw.url_assembly_in_view)."""
+
+    edit_form: str
+    update: str
+    unlock: str
+    delete: str
+    reset_password: str
+
+
+def build_user_urls(request: Request, user_id: UUID) -> UserUrls:
+    # .path: url_for returns an absolute url from the request's scheme/host, which
+    # behind TLS-terminating nginx can emit http:// into an https:// page.
+    def u(name: str) -> str:
+        return str(request.url_for(name, user_id=user_id).path)
+
+    return UserUrls(
+        edit_form=u("edit_user_form"),
+        update=u("update_user_submit"),
+        unlock=u("unlock_user"),
+        delete=u("delete_user"),
+        reset_password=u("reset_user_password"),
+    )
 
 
 class UserRow:
@@ -44,6 +72,7 @@ class UserRow:
         self.password_changed_at = user.password_changed_at
         self.created_at = user.created_at
         self.session_count = session_count
+        self.urls: UserUrls | None = None
 
     @property
     def is_locked(self) -> bool:
@@ -338,6 +367,8 @@ class WebUsersViewService:
         users, total = await self.list_users(
             db, skip=skip, limit=per_page, role=role, is_active=is_active, search=search
         )
+        for row in users:
+            row.urls = build_user_urls(request, row.id)
         stats = await self.get_user_stats(db)
         filters = {"role": role, "is_active": is_active, "search": search}
         pagination = build_pagination(
@@ -369,9 +400,12 @@ class WebUsersViewService:
         }
 
     @staticmethod
-    def build_user_edit_form_context(*, current_user, edit_user: User) -> dict:
+    def build_user_edit_form_context(
+        *, request: Request, current_user, edit_user: User
+    ) -> dict:
         """Build context for the user edit form panel."""
         return {
+            "user_urls": build_user_urls(request, edit_user.id),
             "current_user": current_user,
             "user": edit_user,
             "role_options": options_for(UserRole),
@@ -399,6 +433,8 @@ class WebUsersViewService:
         users, total = await self.list_users(
             db, skip=skip, limit=per_page, role=role, is_active=is_active, search=search
         )
+        for row in users:
+            row.urls = build_user_urls(request, row.id)
         filters = {"role": role, "is_active": is_active, "search": search}
         pagination = build_pagination(
             page=page, per_page=per_page, total=total, filters=filters
