@@ -308,7 +308,7 @@ async def cancel_job(
     job_id: UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[str, Depends(verify_api_token)],
-):
+) -> None:
     """Cancel or delete a job."""
     job = await JobCoreService.cancel_job(db, job_id)
 

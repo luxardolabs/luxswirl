@@ -10,7 +10,12 @@ from uuid import UUID
 
 from pydantic import Field, field_validator
 
-from app.models.enum_model import JobStatus, JobType
+from app.models.enum_model import (
+    JobStatus,
+    JobType,
+    MaintenanceJobKind,
+    MaintenanceJobStatus,
+)
 from app.schemas.base_schema import BaseSchema, TimestampSchema
 
 
@@ -219,3 +224,16 @@ class JobDispatch(BaseSchema):
             }
         }
     }
+
+
+class MaintenanceJobEnqueuedResponse(BaseSchema):
+    """Acknowledgement that a maintenance job was queued for the worker.
+
+    The work itself (e.g. an agent delete cascading through checks and results)
+    runs in the in-process maintenance worker, so the request returns this
+    immediately instead of holding a long transaction.
+    """
+
+    job_id: UUID = Field(..., description="Id of the queued maintenance job")
+    status: MaintenanceJobStatus = Field(..., description="Queued job's status")
+    kind: MaintenanceJobKind = Field(..., description="What the job will do")

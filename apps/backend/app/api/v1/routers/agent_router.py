@@ -36,6 +36,7 @@ from app.schemas.agent_schema import (
     AgentUpdate,
 )
 from app.schemas.base_schema import ErrorResponse
+from app.schemas.job_schema import MaintenanceJobEnqueuedResponse
 from app.schemas.registration_key_schema import (
     AgentKeyRecoveryResponse,
     AgentKeyRegenerateResponse,
@@ -177,6 +178,7 @@ async def update_agent(
     status_code=status.HTTP_202_ACCEPTED,
     summary="Enqueue agent delete (async — runs in maintenance worker)",
     responses=_NOT_FOUND,
+    response_model=MaintenanceJobEnqueuedResponse,
 )
 async def delete_agent(
     agent_id: UUID,
@@ -381,6 +383,7 @@ async def agent_heartbeat(
     "/agents/{agent_id}/recover-key",
     summary="Recover agent API key",
     description="Agent calls this with registration token to get new agent-specific key",
+    response_model=AgentKeyRecoveryResponse,
 )
 async def recover_agent_key(
     agent_id: UUID,
@@ -421,7 +424,7 @@ async def get_agent_api_key(
     agent_id: UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
     authorization: Annotated[str | None, Header()] = None,
-):
+) -> None:
     await verify_registration_token(authorization, db)
 
     agent = await AgentCoreService.get_agent_by_id(db, agent_id)
@@ -450,6 +453,7 @@ async def get_agent_api_key(
     "/{agent_id}/regenerate-key",
     summary="Regenerate agent API key",
     description="Admin regenerates agent-specific key (revokes old key)",
+    response_model=AgentKeyRegenerateResponse,
 )
 async def regenerate_agent_key(
     agent_id: UUID,
@@ -478,7 +482,7 @@ async def revoke_agent_key(
     agent_id: UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[str, Depends(verify_api_token)],
-):
+) -> None:
     await AgentCoreService.revoke_agent_key(db, agent_id)
     logger.warning(
         "Admin revoked API key for agent",

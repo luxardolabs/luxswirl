@@ -265,7 +265,7 @@ async def delete_registration_key(
     hard_delete: Annotated[
         bool, Query(description="Permanently delete (dangerous)")
     ] = False,
-):
+) -> None:
     """
     Delete a registration key.
 
