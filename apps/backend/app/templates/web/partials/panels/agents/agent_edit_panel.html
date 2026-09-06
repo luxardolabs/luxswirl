@@ -16,7 +16,7 @@
         <!-- Agent Edit Form - agent name, hostname, tags, intervals -->
         <form
             id="agent-edit-form"
-            hx-patch="/agents/{{ agent.id }}"
+            hx-patch="{{ agent_urls.update }}"
             hx-target="#agent-edit-result"
             hx-swap="innerHTML"
             class="space-y-4"

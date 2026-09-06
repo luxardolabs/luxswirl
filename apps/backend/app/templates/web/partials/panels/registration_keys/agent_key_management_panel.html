@@ -75,7 +75,7 @@
                             The new key will be shown once and cannot be retrieved later.
                         </p>
                         {{ confirm_action_btn(icon_svg=ICO_KEY, label='Regenerate Key', color='amber',
-                            hx_post='/agents/' ~ agent.id ~ '/regenerate-key-web',
+                            hx_post=agent_urls.regenerate_key,
                             hx_target='#panel-container', hx_swap='innerHTML',
                             extra_classes='w-full',
                             title='Regenerate agent-specific key') }}
@@ -94,7 +94,7 @@
                             until a new key is generated or recovered using a registration key.
                         </p>
                         {{ confirm_action_btn(icon_svg=ICO_BAN, label='Revoke Key', color='red',
-                            hx_delete='/agents/' ~ agent.id ~ '/revoke-key-web',
+                            hx_delete=agent_urls.revoke_key,
                             after='reload',
                             extra_classes='w-full',
                             title='Revoke agent-specific key') }}
