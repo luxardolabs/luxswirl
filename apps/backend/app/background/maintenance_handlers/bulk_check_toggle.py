@@ -9,7 +9,7 @@ from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.maintenance_job_model import MaintenanceJob
-from app.services.views.checks_view_service import ChecksViewService
+from app.services.core.check_core_service import CheckCoreService
 
 logger = get_logger("luxswirl.maintenance.bulk_check_toggle")
 
@@ -30,7 +30,7 @@ async def handle(db: AsyncSession, job: MaintenanceJob) -> None:
         action,
         extra={"count": len(check_ids), "job_id": str(job.id)},
     )
-    result = await ChecksViewService.bulk_action(db, check_ids, action)
+    result = await CheckCoreService.bulk_action(db, check_ids, action)
     logger.info(
         "Bulk %s complete",
         action,

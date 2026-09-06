@@ -94,16 +94,6 @@ class JobsViewService:
     """Service for jobs page data aggregation."""
 
     @staticmethod
-    async def get_all_agents(db: AsyncSession) -> list:
-        """Get all distinct agents from jobs (excluding pending and rejected agents)."""
-        return await JobCoreService.get_agents_with_jobs(db)
-
-    @staticmethod
-    async def get_all_job_types(db: AsyncSession) -> list[str]:
-        """Get all distinct job types."""
-        return await JobCoreService.get_distinct_job_types(db)
-
-    @staticmethod
     async def list_jobs(
         db: AsyncSession,
         status: str | None = None,
@@ -167,50 +157,6 @@ class JobsViewService:
             job_rows.append(job_row)
 
         return job_rows, total
-
-    @staticmethod
-    async def get_job_summary(db: AsyncSession) -> dict:
-        """
-        Get summary statistics for jobs page header.
-
-        Returns:
-            Dictionary with summary stats
-        """
-        return await JobCoreService.get_job_status_summary(db)
-
-    # ====================================================================
-    # Web-specific wrapper methods (delegate to core services)
-    # ====================================================================
-
-    @staticmethod
-    async def get_job(db: AsyncSession, job_id: UUID):
-        """Get job by ID."""
-        return await JobCoreService.get_job(db, job_id)
-
-    @staticmethod
-    async def create_job(db: AsyncSession, job_data: JobCreate):
-        """Create a new job."""
-        return await JobCoreService.create_job(db, job_data)
-
-    @staticmethod
-    async def delete_job(db: AsyncSession, job_id: UUID):
-        """Delete a job."""
-        return await JobCoreService.delete_job(db, job_id)
-
-    @staticmethod
-    async def get_setting(db: AsyncSession, key: str, default):
-        """Get a setting value."""
-        return await SettingsCoreService.get_setting(db, key, default)
-
-    @staticmethod
-    async def get_agent_by_id(db: AsyncSession, agent_id: UUID):
-        """Get agent by ID."""
-        return await AgentCoreService.get_agent_by_id(db, agent_id)
-
-    @staticmethod
-    async def list_checks_for_agent(db: AsyncSession, agent_id: UUID):
-        """List checks for an agent."""
-        return await CheckCoreService.list_checks_for_agent(db, agent_id)
 
     @staticmethod
     async def list_agents(db: AsyncSession, **kwargs):
@@ -371,12 +317,12 @@ class JobsViewService:
     ) -> dict[str, Any]:
         """Full /jobs page context."""
         if per_page is None:
-            per_page = await JobsViewService.get_setting(
+            per_page = await SettingsCoreService.get_setting(
                 db, "general.default_page_size", 50
             )
         offset = (page - 1) * per_page
 
-        summary = await JobsViewService.get_job_summary(db)
+        summary = await JobCoreService.get_job_status_summary(db)
         job_rows, total = await JobsViewService.list_jobs(
             db=db,
             status=status,
@@ -387,8 +333,8 @@ class JobsViewService:
             limit=per_page,
             offset=offset,
         )
-        all_agents = await JobsViewService.get_all_agents(db)
-        all_job_types = await JobsViewService.get_all_job_types(db)
+        all_agents = await JobCoreService.get_agents_with_jobs(db)
+        all_job_types = await JobCoreService.get_distinct_job_types(db)
 
         filters = {
             "status": status,
@@ -462,7 +408,7 @@ class JobsViewService:
         Enriches network_scan results, attaches existing-check info, and
         bundles agents + form defaults for the create-checks side panel.
         """
-        job = await JobsViewService.get_job(db, job_id)
+        job = await JobCoreService.get_job(db, job_id)
         if not job:
             raise HTTPException(
                 status_code=http_status.HTTP_404_NOT_FOUND,
@@ -471,14 +417,14 @@ class JobsViewService:
 
         agent = None
         if job.agent_id:
-            agent = await JobsViewService.get_agent_by_id(db, job.agent_id)
+            agent = await AgentCoreService.get_agent_by_id(db, job.agent_id)
 
         if job.job_type == "network_scan" and job.result:
             job.result = NetworkScanCoreService.enrich_result(job.result)
 
         existing_checks: set[str] = set()
         if job.job_type == "network_scan" and job.result and job.agent_id:
-            checks = await JobsViewService.list_checks_for_agent(db, job.agent_id)
+            checks = await CheckCoreService.list_checks_for_agent(db, job.agent_id)
             existing_checks = {check.display_name for check in checks}
 
         available_check_tags = await CheckCoreService.get_all_check_tags(db)
@@ -584,7 +530,7 @@ class JobsViewService:
             params=params,
             priority=priority,
         )
-        job = await JobsViewService.create_job(db, job_data)
+        job = await JobCoreService.create_job(db, job_data)
         logger.info(
             "Created job via web UI",
             extra={"job_id": str(job.id), "job_type": job_type},
@@ -595,10 +541,10 @@ class JobsViewService:
     async def handle_delete_job(db: AsyncSession, job_id: UUID) -> None:
         """Delete a job. Raises NotFoundException (→ 404) if it doesn't exist;
         other failures propagate (→ 500). get_db() owns the transaction."""
-        job = await JobsViewService.get_job(db, job_id)
+        job = await JobCoreService.get_job(db, job_id)
         if not job:
             raise NotFoundException(f"Job not found: {job_id}")
-        await JobsViewService.delete_job(db, job_id)
+        await JobCoreService.delete_job(db, job_id)
         logger.info(
             "Deleted job via web UI",
             extra={"job_id": str(job_id)},

@@ -2,8 +2,7 @@
 
 job.params expects {"check_ids": ["uuid", ...]}.
 
-Delegates to CheckCoreService.bulk_action(action="delete") (via ChecksViewService,
-matching the sibling toggle/modify handlers) so the cascade through
+Delegates to CheckCoreService.bulk_action(action="delete") so the cascade through
 check_results AND the business invariant — bumping each affected agent's
 checks_updated_at to trigger a config reload — both run. Calling CheckCRUD
 directly here previously dropped the timestamp bump, leaving deleted checks
@@ -16,7 +15,7 @@ from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.maintenance_job_model import MaintenanceJob
-from app.services.views.checks_view_service import ChecksViewService
+from app.services.core.check_core_service import CheckCoreService
 
 logger = get_logger("luxswirl.maintenance.bulk_check_delete")
 
@@ -31,7 +30,7 @@ async def handle(db: AsyncSession, job: MaintenanceJob) -> None:
         "Bulk deleting checks (cascade)",
         extra={"count": len(check_ids), "job_id": str(job.id)},
     )
-    result = await ChecksViewService.bulk_action(db, check_ids, "delete")
+    result = await CheckCoreService.bulk_action(db, check_ids, "delete")
     logger.info(
         "Bulk deleted checks",
         extra={"result": result, "job_id": str(job.id)},

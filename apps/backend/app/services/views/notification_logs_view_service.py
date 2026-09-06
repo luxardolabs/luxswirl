@@ -188,41 +188,6 @@ class NotificationLogsViewService:
         )
 
     @staticmethod
-    async def get_all_alerts(db: AsyncSession) -> list[tuple[str, str]]:
-        """
-        Get all alerts for filter dropdown.
-
-        Returns:
-            List of (alert_id, alert_name) tuples
-        """
-        return await NotificationLogCoreService.get_all_alerts_for_dropdown(db)
-
-    @staticmethod
-    async def get_all_providers(db: AsyncSession) -> list[tuple[str, str]]:
-        """
-        Get all notification providers for filter dropdown.
-
-        Returns:
-            List of (provider_id, provider_name) tuples
-        """
-        return await NotificationLogCoreService.get_all_providers_for_dropdown(db)
-
-    @staticmethod
-    async def get_status_counts(db: AsyncSession) -> dict:
-        """
-        Get counts by status for summary stats.
-
-        Returns:
-            Dict with one key per known status (sent, failed, retrying, rate_limited,
-            deduplicated, suppressed) plus a `total` key.
-        """
-        return await NotificationLogCoreService.get_status_counts(db)
-
-    @staticmethod
-    async def get_setting(db, key: str, default):
-        return await SettingsCoreService.get_setting(db, key, default)
-
-    @staticmethod
     async def build_logs_page_context(
         db,
         *,
@@ -237,7 +202,7 @@ class NotificationLogsViewService:
     ) -> dict:
         """Build the full template context for /notification-logs."""
         if per_page is None:
-            per_page = await NotificationLogsViewService.get_setting(
+            per_page = await SettingsCoreService.get_setting(
                 db, "general.default_page_size", 50
             )
 
@@ -249,7 +214,7 @@ class NotificationLogsViewService:
             str(notification_provider_id) if notification_provider_id else None
         )
 
-        status_counts = await NotificationLogsViewService.get_status_counts(db)
+        status_counts = await NotificationLogCoreService.get_status_counts(db)
         log_rows, total = await NotificationLogsViewService.get_notification_logs(
             db=db,
             status=status,
@@ -259,8 +224,10 @@ class NotificationLogsViewService:
             limit=per_page,
             offset=offset,
         )
-        all_alerts = await NotificationLogsViewService.get_all_alerts(db)
-        all_providers = await NotificationLogsViewService.get_all_providers(db)
+        all_alerts = await NotificationLogCoreService.get_all_alerts_for_dropdown(db)
+        all_providers = await NotificationLogCoreService.get_all_providers_for_dropdown(
+            db
+        )
 
         filters = {
             "status": status,

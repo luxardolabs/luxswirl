@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.maintenance_job_model import MaintenanceJob
 from app.schemas.check_schema import BulkCheckCreateRequest
 from app.services.core.alert_core_service import AlertCoreService
-from app.services.views.checks_view_service import ChecksViewService
+from app.services.core.check_core_service import CheckCoreService
 
 logger = get_logger("luxswirl.maintenance.bulk_check_create")
 
@@ -43,7 +43,7 @@ async def handle(db: AsyncSession, job: MaintenanceJob) -> None:
         },
     )
 
-    result = await ChecksViewService.bulk_create_checks(db, agent_id, requests)
+    result = await CheckCoreService.bulk_create_checks(db, agent_id, requests)
 
     if alert_ids and result.results:
         check_ids = [r.check_id for r in result.results if r.check_id]
