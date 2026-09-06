@@ -7,7 +7,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
 from fastapi import status as http_status
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,7 +19,6 @@ from app.core.exceptions import AgentNotFoundException
 from app.core.query_params import PerPageFilter
 from app.db import get_db
 from app.services.views.agents_view_service import AgentsViewService
-from app.web.hx_responses import hx_empty_with_toast
 from app.web.render import status_message
 from app.web.templates_config import templates
 
@@ -205,19 +204,7 @@ async def force_reload_agent(
     current_user: EditorUserWeb,
 ):
     """Force agent to reload checks by updating checks_updated_at timestamp."""
-    try:
-        await AgentsViewService.force_reload(db, agent_id)
-        logger.info(
-            "Forced config reload for agent",
-            extra={"agent_id": str(agent_id)},
-        )
-        return JSONResponse({"success": True, "message": "Config reload triggered"})
-    except Exception as e:
-        logger.error("Error forcing agent reload", exc_info=True)
-        raise HTTPException(
-            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to force reload: {e}",
-        ) from e
+    return await AgentsViewService.force_reload(db, agent_id)
 
 
 # ---- Approval workflow (HTMX) -------------------------------------------
@@ -230,20 +217,7 @@ async def approve_agent_web(
     current_user: EditorUserWeb,
 ):
     """Approve agent via web UI (auto-generates API key)."""
-    try:
-        agent, _api_key = await AgentsViewService.approve_agent(db, agent_id)
-        display_name = agent.agent_name or agent.hostname or str(agent.id)
-        logger.info(
-            "Agent approved via web (API key auto-generated)",
-            extra={"agent_id": str(agent_id)},
-        )
-        return hx_empty_with_toast(
-            f"Agent '{display_name}' approved successfully",
-            extra_events={"refreshPage": {}},
-        )
-    except Exception:
-        logger.error("Error approving agent", exc_info=True)
-        raise
+    return await AgentsViewService.approve_agent(db, agent_id)
 
 
 @router.post("/agents/{agent_id}/reject-web", include_in_schema=False)
@@ -254,16 +228,7 @@ async def reject_agent_web(
     reason: Annotated[str | None, Query()] = None,
 ):
     """Reject agent via web UI."""
-    agent = await AgentsViewService.reject_agent(db, agent_id, reason)
-    logger.info(
-        "Agent rejected via web",
-        extra={"agent_id": str(agent_id)},
-    )
-    pending_count = await AgentsViewService.get_pending_count(db)
-    return hx_empty_with_toast(
-        f"Agent '{agent.agent_name or agent.hostname}' rejected",
-        extra_events={"updatePendingCount": {"count": pending_count}},
-    )
+    return await AgentsViewService.reject_agent(db, agent_id, reason)
 
 
 @router.post("/agents/{agent_id}/pause-web", include_in_schema=False)
@@ -273,12 +238,7 @@ async def pause_agent_web(
     current_user: EditorUserWeb,
     reason: Annotated[str | None, Query()] = None,
 ):
-    await AgentsViewService.pause_agent(db, agent_id, reason)
-    logger.info(
-        "Agent paused successfully",
-        extra={"agent_id": str(agent_id)},
-    )
-    return JSONResponse({"success": True})
+    return await AgentsViewService.pause_agent(db, agent_id, reason)
 
 
 @router.post("/agents/{agent_id}/resume-web", include_in_schema=False)
@@ -287,8 +247,7 @@ async def resume_agent_web(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: EditorUserWeb,
 ):
-    await AgentsViewService.resume_agent(db, agent_id)
-    return JSONResponse({"success": True})
+    return await AgentsViewService.resume_agent(db, agent_id)
 
 
 @router.post("/agents/{agent_id}/disable-web", include_in_schema=False)
@@ -298,8 +257,7 @@ async def disable_agent_web(
     current_user: EditorUserWeb,
     reason: Annotated[str | None, Query()] = None,
 ):
-    await AgentsViewService.disable_agent(db, agent_id, reason)
-    return JSONResponse({"success": True})
+    return await AgentsViewService.disable_agent(db, agent_id, reason)
 
 
 @router.post("/agents/{agent_id}/enable-web", include_in_schema=False)
@@ -308,8 +266,7 @@ async def enable_agent_web(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: EditorUserWeb,
 ):
-    await AgentsViewService.enable_agent(db, agent_id)
-    return JSONResponse({"success": True})
+    return await AgentsViewService.enable_agent(db, agent_id)
 
 
 # ---- Key management (HTMX) ----------------------------------------------
@@ -362,24 +319,13 @@ async def generate_key_web(
 ):
     """Generate initial API key for agent (if none exists)."""
     try:
-        agent, plaintext_key = await AgentsViewService.generate_agent_key(db, agent_id)
-        return templates.TemplateResponse(
-            request,
-            "panels/registration_keys/agent_key_generated_panel.html",
-            AgentsViewService.build_key_generated_panel_context(
-                request, current_user, agent, plaintext_key
-            ),
+        return await AgentsViewService.generate_agent_key(
+            db, request, current_user, agent_id
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except AgentNotFoundException:
         raise HTTPException(status_code=404, detail="Agent not found") from None
-    except Exception as e:
-        logger.error("Error generating key", exc_info=True)
-        raise HTTPException(
-            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to generate key: {e}",
-        ) from e
 
 
 @router.post(
@@ -395,24 +341,11 @@ async def regenerate_key_web(
 ):
     """Regenerate API key (revokes old)."""
     try:
-        agent, plaintext_key = await AgentsViewService.regenerate_agent_key(
-            db, agent_id
-        )
-        return templates.TemplateResponse(
-            request,
-            "panels/registration_keys/agent_key_generated_panel.html",
-            AgentsViewService.build_key_generated_panel_context(
-                request, current_user, agent, plaintext_key
-            ),
+        return await AgentsViewService.regenerate_agent_key(
+            db, request, current_user, agent_id
         )
     except AgentNotFoundException:
         raise HTTPException(status_code=404, detail="Agent not found") from None
-    except Exception as e:
-        logger.error("Error regenerating key", exc_info=True)
-        raise HTTPException(
-            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to regenerate key: {e}",
-        ) from e
 
 
 @router.delete("/agents/{agent_id}/revoke-key-web", include_in_schema=False)
@@ -423,15 +356,6 @@ async def revoke_key_web(
 ):
     """Revoke agent API key."""
     try:
-        await AgentsViewService.revoke_agent_key(db, agent_id)
-        return JSONResponse(
-            {"success": True, "message": "API key revoked successfully"}
-        )
+        return await AgentsViewService.revoke_agent_key(db, agent_id)
     except AgentNotFoundException:
         raise HTTPException(status_code=404, detail="Agent not found") from None
-    except Exception as e:
-        logger.error("Error revoking key", exc_info=True)
-        raise HTTPException(
-            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to revoke key: {e}",
-        ) from e
