@@ -51,11 +51,15 @@ async def collect_database_metrics() -> dict:
         )
 
         # Active connections
-        metrics["active_connections"] = await MonitoringCRUD.get_active_connection_count(db)
+        metrics[
+            "active_connections"
+        ] = await MonitoringCRUD.get_active_connection_count(db)
 
         # Table sizes (top 10)
         table_rows = await MonitoringCRUD.get_top_table_sizes(db, limit=10)
-        metrics["table_sizes"] = [{"table": row[0], "size_bytes": row[1]} for row in table_rows]
+        metrics["table_sizes"] = [
+            {"table": row[0], "size_bytes": row[1]} for row in table_rows
+        ]
 
         # TimescaleDB chunk count and compression stats. SAVEPOINT-guarded: a bare
         # try/except is NOT enough — once a query errors, the asyncpg transaction is
@@ -82,7 +86,9 @@ async def collect_database_metrics() -> dict:
                 approx = await MonitoringCRUD.get_check_results_approx_count(db)
             metrics["check_results_approx_rows"] = approx or 0
         except Exception as e:
-            logger.warning("Failed to get check_results approximate count", extra={"error": str(e)})
+            logger.warning(
+                "Failed to get check_results approximate count", extra={"error": str(e)}
+            )
             metrics["check_results_approx_rows"] = 0
 
         # Agent count
@@ -97,7 +103,9 @@ async def collect_database_metrics() -> dict:
         metrics["active_agent_count"] = len(active_agents_list)
 
         # Active checks (belonging to active agents)
-        metrics["active_check_count"] = await CheckCRUD.count_for_agents_seen_since(db, cutoff)
+        metrics["active_check_count"] = await CheckCRUD.count_for_agents_seen_since(
+            db, cutoff
+        )
 
         logger.info(
             "Collected database metrics",
@@ -145,7 +153,9 @@ async def collect_operational_metrics() -> dict:
                 s.value: int(job_summary.get(s.value, 0)) for s in JobStatus
             }
         except Exception as e:
-            logger.warning("Failed to collect job status counts", extra={"error": str(e)})
+            logger.warning(
+                "Failed to collect job status counts", extra={"error": str(e)}
+            )
             operational["job_status_counts"] = {}
 
         # Notification log status counts
@@ -156,7 +166,9 @@ async def collect_operational_metrics() -> dict:
                 s.value: counts_dict.get(s.value, 0) for s in NotificationStatus
             }
         except Exception as e:
-            logger.warning("Failed to collect notification status counts", extra={"error": str(e)})
+            logger.warning(
+                "Failed to collect notification status counts", extra={"error": str(e)}
+            )
             operational["notification_status_counts"] = {}
 
         logger.info(
@@ -165,7 +177,9 @@ async def collect_operational_metrics() -> dict:
                 "alerts_enabled": operational["alerts_enabled"],
                 "jobs_running": operational["job_status_counts"].get("running", 0),
                 "jobs_pending": operational["job_status_counts"].get("pending", 0),
-                "notifications_failed": operational["notification_status_counts"].get("failed", 0),
+                "notifications_failed": operational["notification_status_counts"].get(
+                    "failed", 0
+                ),
             },
         )
 

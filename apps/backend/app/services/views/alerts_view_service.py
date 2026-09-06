@@ -23,7 +23,9 @@ class AlertsViewService:
     """Web service for alert operations."""
 
     @staticmethod
-    async def get_alert_form_data(db: AsyncSession, alert_id: UUID | None = None) -> dict:
+    async def get_alert_form_data(
+        db: AsyncSession, alert_id: UUID | None = None
+    ) -> dict:
         """
         Get all data needed for alert create/edit form.
 
@@ -119,7 +121,9 @@ class AlertsViewService:
     @staticmethod
     async def set_alert_enabled(db: AsyncSession, alert_id: UUID, enabled: bool):
         """Enable/disable an alert (builds the partial AlertUpdate internally)."""
-        return await AlertCoreService.update_alert(db, alert_id, AlertUpdate(is_enabled=enabled))
+        return await AlertCoreService.update_alert(
+            db, alert_id, AlertUpdate(is_enabled=enabled)
+        )
 
     @staticmethod
     async def delete_alert(db: AsyncSession, alert_id: UUID):
@@ -148,7 +152,9 @@ class AlertsViewService:
 
     @staticmethod
     async def snooze_alert_check(db, alert_id, check_id, minutes: int = 15):
-        return await AlertCoreService.snooze_alert_check(db, alert_id, check_id, minutes=minutes)
+        return await AlertCoreService.snooze_alert_check(
+            db, alert_id, check_id, minutes=minutes
+        )
 
     @staticmethod
     async def unsnooze_alert_check(db, alert_id, check_id):

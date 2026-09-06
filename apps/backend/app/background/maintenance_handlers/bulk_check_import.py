@@ -39,10 +39,17 @@ async def handle(db: AsyncSession, job: MaintenanceJob) -> None:
     )
 
     await MaintenanceJobCoreService.update_progress(
-        db, job.id, {"message": f"Importing {len(checks_data)} check(s)", "total": len(checks_data)}
+        db,
+        job.id,
+        {
+            "message": f"Importing {len(checks_data)} check(s)",
+            "total": len(checks_data),
+        },
     )
 
-    result = await ImportExportViewService.import_checks_from_data(db, agent_id, checks_data, mode)
+    result = await ImportExportViewService.import_checks_from_data(
+        db, agent_id, checks_data, mode
+    )
 
     logger.info(
         "Bulk check import complete",

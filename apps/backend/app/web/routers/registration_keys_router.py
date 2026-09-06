@@ -12,7 +12,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth_deps import AdminUserWeb
 from app.db import get_db
-from app.services.views.registration_keys_view_service import RegistrationKeysViewService
+from app.services.views.registration_keys_view_service import (
+    RegistrationKeysViewService,
+)
 from app.web.hx_responses import hx_empty_with_toast
 from app.web.templates_config import templates
 
@@ -48,14 +50,18 @@ async def create_key(
             db, request, current_user, name, description
         )
         return templates.TemplateResponse(
-            request, "panels/registration_keys/registration_key_created_panel.html", context
+            request,
+            "panels/registration_keys/registration_key_created_panel.html",
+            context,
         )
     except Exception as e:
         logger.error("Error creating registration key", exc_info=True)
         return templates.TemplateResponse(
             request,
             "partials/error_message.html",
-            RegistrationKeysViewService.build_error_context(request, current_user, str(e)),
+            RegistrationKeysViewService.build_error_context(
+                request, current_user, str(e)
+            ),
             status_code=400,
         )
 
@@ -71,13 +77,17 @@ async def revoke_key(
     """Revoke a registration key."""
     try:
         await RegistrationKeysViewService.revoke_key(db, key_id, reason)
-        return HTMLResponse(content="", status_code=200, headers={"HX-Trigger": "refreshPage"})
+        return HTMLResponse(
+            content="", status_code=200, headers={"HX-Trigger": "refreshPage"}
+        )
     except Exception as e:
         logger.error("Error revoking registration key", exc_info=True)
         return templates.TemplateResponse(
             request,
             "partials/error_message.html",
-            RegistrationKeysViewService.build_error_context(request, current_user, str(e)),
+            RegistrationKeysViewService.build_error_context(
+                request, current_user, str(e)
+            ),
             status_code=400,
         )
 
@@ -98,6 +108,8 @@ async def delete_key(
         return templates.TemplateResponse(
             request,
             "partials/error_message.html",
-            RegistrationKeysViewService.build_error_context(request, current_user, str(e)),
+            RegistrationKeysViewService.build_error_context(
+                request, current_user, str(e)
+            ),
             status_code=400,
         )

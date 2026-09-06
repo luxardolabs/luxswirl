@@ -19,7 +19,9 @@ from app.core.query_params import (
     ProviderIdFilter,
 )
 from app.db import get_db
-from app.services.views.notification_logs_view_service import NotificationLogsViewService
+from app.services.views.notification_logs_view_service import (
+    NotificationLogsViewService,
+)
 from app.web.templates_config import templates
 
 logger = get_logger("luxswirl.web.routers.notification_logs")
@@ -52,7 +54,9 @@ async def notification_logs_page(
             page=page,
             per_page=per_page,
         )
-        return templates.TemplateResponse(request, "pages/notification_logs.html", context)
+        return templates.TemplateResponse(
+            request, "pages/notification_logs.html", context
+        )
     except Exception as e:
         logger.error("Error rendering notification logs page", exc_info=True)
         return templates.TemplateResponse(

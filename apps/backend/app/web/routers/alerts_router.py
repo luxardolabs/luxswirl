@@ -136,11 +136,15 @@ async def create_alert(
 
         # Handle optional integers
         resend_interval_str = form.get("resend_interval_minutes", "")
-        resend_interval_minutes = int(str(resend_interval_str)) if resend_interval_str else None
+        resend_interval_minutes = (
+            int(str(resend_interval_str)) if resend_interval_str else None
+        )
 
         max_resends_str = form.get("max_resends", "")
         max_resends = (
-            int(str(max_resends_str)) if max_resends_str and str(max_resends_str) != "0" else None
+            int(str(max_resends_str))
+            if max_resends_str and str(max_resends_str) != "0"
+            else None
         )
 
         # Parse form data for providers, checks, and thresholds using service
@@ -251,11 +255,15 @@ async def update_alert(
 
         # Handle optional integers
         resend_interval_str = form.get("resend_interval_minutes", "")
-        resend_interval_minutes = int(str(resend_interval_str)) if resend_interval_str else None
+        resend_interval_minutes = (
+            int(str(resend_interval_str)) if resend_interval_str else None
+        )
 
         max_resends_str = form.get("max_resends", "")
         max_resends = (
-            int(str(max_resends_str)) if max_resends_str and str(max_resends_str) != "0" else None
+            int(str(max_resends_str))
+            if max_resends_str and str(max_resends_str) != "0"
+            else None
         )
 
         # Build trigger config from form fields (if present)
@@ -372,7 +380,9 @@ async def toggle_alert(
         alert = await AlertsViewService.get_alert_by_id(db, alert_id)
 
         # Toggle enabled status (partial AlertUpdate built in the view seam)
-        alert = await AlertsViewService.set_alert_enabled(db, alert_id, not alert.is_enabled)
+        alert = await AlertsViewService.set_alert_enabled(
+            db, alert_id, not alert.is_enabled
+        )
 
         logger.info(
             "Toggled alert",
@@ -411,7 +421,9 @@ async def snooze_alert_check(
     request: Request,
     alert_id: Annotated[UUID, Query(description="Alert UUID")],
     check_id: Annotated[UUID, Query(description="Check UUID")],
-    log_id: Annotated[UUID, Query(description="Notification log UUID for the row to refresh")],
+    log_id: Annotated[
+        UUID, Query(description="Notification log UUID for the row to refresh")
+    ],
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: CurrentUserWeb,
 ):
@@ -421,7 +433,9 @@ async def snooze_alert_check(
     Returns the re-rendered notification log row partial (HTMX swap target) and
     an HX-Trigger toast event.
     """
-    mapping = await AlertsViewService.snooze_alert_check(db, alert_id, check_id, minutes=15)
+    mapping = await AlertsViewService.snooze_alert_check(
+        db, alert_id, check_id, minutes=15
+    )
     logger.info(
         "User snoozed alert-check relationship",
         extra={
@@ -442,7 +456,9 @@ async def unsnooze_alert_check(
     request: Request,
     alert_id: Annotated[UUID, Query(description="Alert UUID")],
     check_id: Annotated[UUID, Query(description="Check UUID")],
-    log_id: Annotated[UUID, Query(description="Notification log UUID for the row to refresh")],
+    log_id: Annotated[
+        UUID, Query(description="Notification log UUID for the row to refresh")
+    ],
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: CurrentUserWeb,
 ):
@@ -452,4 +468,6 @@ async def unsnooze_alert_check(
         "User un-snoozed alert-check relationship",
         extra={"username": current_user.username, "user_id": str(current_user.id)},
     )
-    return await render_log_row(request, db, log_id, "Snooze cleared — notifications resumed")
+    return await render_log_row(
+        request, db, log_id, "Snooze cleared — notifications resumed"
+    )

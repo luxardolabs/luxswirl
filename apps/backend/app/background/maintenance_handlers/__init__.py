@@ -1,12 +1,24 @@
 """Maintenance job handlers — register them with the worker at startup."""
 
 from app.background.maintenance_handlers.agent_delete import handle as _agent_delete
-from app.background.maintenance_handlers.bulk_check_create import handle as _bulk_check_create
-from app.background.maintenance_handlers.bulk_check_delete import handle as _bulk_check_delete
-from app.background.maintenance_handlers.bulk_check_import import handle as _bulk_check_import
-from app.background.maintenance_handlers.bulk_check_modify import handle as _bulk_check_modify
-from app.background.maintenance_handlers.bulk_check_toggle import handle as _bulk_check_toggle
-from app.background.maintenance_handlers.status_page_delete import handle as _status_page_delete
+from app.background.maintenance_handlers.bulk_check_create import (
+    handle as _bulk_check_create,
+)
+from app.background.maintenance_handlers.bulk_check_delete import (
+    handle as _bulk_check_delete,
+)
+from app.background.maintenance_handlers.bulk_check_import import (
+    handle as _bulk_check_import,
+)
+from app.background.maintenance_handlers.bulk_check_modify import (
+    handle as _bulk_check_modify,
+)
+from app.background.maintenance_handlers.bulk_check_toggle import (
+    handle as _bulk_check_toggle,
+)
+from app.background.maintenance_handlers.status_page_delete import (
+    handle as _status_page_delete,
+)
 from app.background.maintenance_worker import register_handler
 from app.models.enum_model import MaintenanceJobKind
 

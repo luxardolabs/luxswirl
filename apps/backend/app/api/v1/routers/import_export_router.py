@@ -115,7 +115,9 @@ async def import_checks(
         result = await CheckCoreService.bulk_import_checks(
             db, request.agent_id, request.checks, request.overwrite
         )
-        logger.info("Import complete", extra=result | {"agent_id": str(request.agent_id)})
+        logger.info(
+            "Import complete", extra=result | {"agent_id": str(request.agent_id)}
+        )
         return BulkImportResponse(total=len(request.checks), **result)
     except Exception as e:
         logger.error("Error during bulk import", exc_info=True)

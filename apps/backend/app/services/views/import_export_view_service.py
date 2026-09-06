@@ -119,7 +119,9 @@ class ImportExportViewService:
             try:
                 check_name = check_data.get("name")
                 if not check_name:
-                    result.errors.append({"check": "unknown", "error": "Missing check name"})
+                    result.errors.append(
+                        {"check": "unknown", "error": "Missing check name"}
+                    )
                     continue
 
                 # Check if exists
@@ -156,7 +158,10 @@ class ImportExportViewService:
                     target = check_data.get("target")
                     if not check_type or not target:
                         result.errors.append(
-                            {"check": check_name, "error": "Missing check_type or target"}
+                            {
+                                "check": check_name,
+                                "error": "Missing check_type or target",
+                            }
                         )
                         continue
                     await CheckCoreService.create_check(
@@ -183,7 +188,9 @@ class ImportExportViewService:
                     result.created += 1
 
             except Exception as e:
-                result.errors.append({"check": check_data.get("name", "unknown"), "error": str(e)})
+                result.errors.append(
+                    {"check": check_data.get("name", "unknown"), "error": str(e)}
+                )
                 logger.error(
                     "Error importing check",
                     extra={"check_name": check_data.get("name")},

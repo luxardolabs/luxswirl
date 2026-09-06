@@ -15,7 +15,9 @@ class StatusPageCRUD:
 
     @staticmethod
     async def get_by_id(db: AsyncSession, status_page_id: UUID) -> StatusPage | None:
-        result = await db.execute(select(StatusPage).where(StatusPage.id == status_page_id))
+        result = await db.execute(
+            select(StatusPage).where(StatusPage.id == status_page_id)
+        )
         return result.scalar_one_or_none()
 
     @staticmethod
@@ -38,7 +40,9 @@ class StatusPageCRUD:
             count_query = count_query.where(StatusPage.is_public == is_public)
 
         total = (await db.execute(count_query)).scalar_one()
-        result = await db.execute(query.order_by(StatusPage.name).limit(limit).offset(offset))
+        result = await db.execute(
+            query.order_by(StatusPage.name).limit(limit).offset(offset)
+        )
         return list(result.scalars().all()), total
 
     @staticmethod

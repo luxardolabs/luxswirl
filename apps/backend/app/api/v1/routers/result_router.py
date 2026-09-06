@@ -108,7 +108,9 @@ async def get_latest_results(
 ):
     """Get latest check results for an agent."""
     try:
-        results = await CheckResultCoreService.get_latest_results_for_agent(db, agent_name, minutes)
+        results = await CheckResultCoreService.get_latest_results_for_agent(
+            db, agent_name, minutes
+        )
 
         result_responses = []
         success_count = 0
@@ -184,7 +186,9 @@ async def get_check_history(
 ):
     """Get historical check results."""
     try:
-        results = await CheckResultCoreService.get_check_history(db, check_id, hours, limit)
+        results = await CheckResultCoreService.get_check_history(
+            db, check_id, hours, limit
+        )
 
         if not results:
             raise CheckNotFoundException("unknown", str(check_id))
@@ -225,7 +229,9 @@ async def get_check_history(
         # Get check info from first result
         first_result = results[0]
         agent_id = first_result.agent_id
-        check_name = first_result.check.display_name if first_result.check else "unknown"
+        check_name = (
+            first_result.check.display_name if first_result.check else "unknown"
+        )
         check_type = first_result.check.check_type if first_result.check else "unknown"
         target = first_result.check.target if first_result.check else "unknown"
 

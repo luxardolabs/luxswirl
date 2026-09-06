@@ -10,7 +10,10 @@ import httpx
 from fastapi.encoders import jsonable_encoder
 from shared.logger import get_logger
 
-from app.notifications.providers.base import BaseNotificationProvider, NotificationContext
+from app.notifications.providers.base import (
+    BaseNotificationProvider,
+    NotificationContext,
+)
 
 logger = get_logger("luxswirl.notifications.homeassistant")
 
@@ -39,7 +42,9 @@ class HomeAssistantNotificationProvider(BaseNotificationProvider):
         required_fields = ["post_url"]
         for field in required_fields:
             if field not in config:
-                raise ValueError(f"Home Assistant provider missing required field: {field}")
+                raise ValueError(
+                    f"Home Assistant provider missing required field: {field}"
+                )
 
         # Validate URL format
         url = config["post_url"]
@@ -196,4 +201,6 @@ class HomeAssistantNotificationProvider(BaseNotificationProvider):
     @classmethod
     def get_provider_description(cls) -> str:
         """Get provider description."""
-        return "Send webhook notifications to Home Assistant for automation and alerting"
+        return (
+            "Send webhook notifications to Home Assistant for automation and alerting"
+        )

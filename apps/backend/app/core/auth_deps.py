@@ -25,18 +25,21 @@ from app.core.security import (
     require_admin_web,
     require_editor_web,
 )
-from app.models.user_model import User
+from app.schemas.auth_schema import CurrentUserDTO
 
-# Plain type alias for the authenticated user, for layers that RECEIVE the user
-# as a positional argument rather than via `Depends()` — e.g. view services,
-# which routers hand `current_user` down to. They annotate `current_user:
-# AuthedUser` and import this instead of reaching into app.models.user_model
-# (the view layer consumes the auth boundary, not the ORM model directly).
-type AuthedUser = User
+# The authenticated principal for layers that RECEIVE the user as a positional
+# argument rather than via `Depends()` — e.g. view services, which routers hand
+# `current_user` down to.
+#
+# This is the DTO, NOT an alias of the User ORM model. A bare `type AuthedUser = User`
+# (what this used to be) only moves the import line: the ORM row still crosses the view
+# seam, so the lazy-load-out-of-session risk and the DB-schema coupling are both fully
+# intact while the guard can no longer see them. See `luxarch --playbook view-seam`.
+type AuthedUser = CurrentUserDTO
 
-CurrentUser = Annotated[User, Depends(get_current_user)]
-AdminUser = Annotated[User, Depends(require_admin)]
-CurrentUserWeb = Annotated[User, Depends(get_current_user_web)]
-AdminUserWeb = Annotated[User, Depends(require_admin_web)]
-EditorUserWeb = Annotated[User, Depends(require_editor_web)]
-OptionalUserWeb = Annotated[User | None, Depends(get_optional_user)]
+CurrentUser = Annotated[CurrentUserDTO, Depends(get_current_user)]
+AdminUser = Annotated[CurrentUserDTO, Depends(require_admin)]
+CurrentUserWeb = Annotated[CurrentUserDTO, Depends(get_current_user_web)]
+AdminUserWeb = Annotated[CurrentUserDTO, Depends(require_admin_web)]
+EditorUserWeb = Annotated[CurrentUserDTO, Depends(require_editor_web)]
+OptionalUserWeb = Annotated[CurrentUserDTO | None, Depends(get_optional_user)]

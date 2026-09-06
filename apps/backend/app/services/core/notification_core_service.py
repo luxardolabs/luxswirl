@@ -116,12 +116,16 @@ class NotificationCoreService:
         try:
             provider_class = NotificationRegistry.get(data.provider_type)
             if provider_class is None:
-                raise ValidationException(f"Unknown provider type: {data.provider_type}")
+                raise ValidationException(
+                    f"Unknown provider type: {data.provider_type}"
+                )
             provider_class(data.config)  # Validate config by instantiating
         except ValidationException:
             raise  # Re-raise validation exceptions as-is
         except Exception as e:
-            raise ValidationException(f"Invalid provider configuration: {str(e)}") from e
+            raise ValidationException(
+                f"Invalid provider configuration: {str(e)}"
+            ) from e
 
         # Create database record
         provider = NotificationProvider(
@@ -180,12 +184,16 @@ class NotificationCoreService:
             try:
                 provider_class = NotificationRegistry.get(provider.provider_type)
                 if provider_class is None:
-                    raise ValidationException(f"Unknown provider type: {provider.provider_type}")
+                    raise ValidationException(
+                        f"Unknown provider type: {provider.provider_type}"
+                    )
                 provider_class(data.config)  # Validate config by instantiating
             except ValidationException:
                 raise  # Re-raise validation exceptions as-is
             except Exception as e:
-                raise ValidationException(f"Invalid provider configuration: {str(e)}") from e
+                raise ValidationException(
+                    f"Invalid provider configuration: {str(e)}"
+                ) from e
 
             provider.config = data.config
 
@@ -376,7 +384,9 @@ class NotificationCoreService:
             return log_entry
 
         # Check rate limiting
-        is_rate_limited, reason = await NotificationCoreService._check_rate_limit(db, provider)
+        is_rate_limited, reason = await NotificationCoreService._check_rate_limit(
+            db, provider
+        )
         if is_rate_limited:
             # Log as rate limited
             log_entry = NotificationLog(
@@ -420,7 +430,9 @@ class NotificationCoreService:
                 check_success=context.success,
                 check_latency_ms=context.latency_ms,
                 status=(
-                    NotificationStatus.SENT.value if success else NotificationStatus.FAILED.value
+                    NotificationStatus.SENT.value
+                    if success
+                    else NotificationStatus.FAILED.value
                 ),
                 error_message=None if success else "Provider returned failure",
                 notification_hash=notification_hash,

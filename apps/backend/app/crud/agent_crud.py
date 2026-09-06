@@ -21,7 +21,9 @@ class AgentCRUD:
     @staticmethod
     async def get_stale_agent_names(db: AsyncSession, cutoff: datetime) -> list[str]:
         """Return names of agents whose last_seen is older than cutoff."""
-        result = await db.execute(select(Agent.agent_name).where(Agent.last_seen < cutoff))
+        result = await db.execute(
+            select(Agent.agent_name).where(Agent.last_seen < cutoff)
+        )
         return [name for name in result.scalars().all() if name]
 
     @staticmethod
@@ -40,15 +42,21 @@ class AgentCRUD:
     async def get_by_id_with_checks(db: AsyncSession, agent_id: UUID) -> Agent | None:
         """Fetch agent by id with checks loaded."""
         result = await db.execute(
-            select(Agent).where(Agent.id == agent_id).options(selectinload(Agent.checks))
+            select(Agent)
+            .where(Agent.id == agent_id)
+            .options(selectinload(Agent.checks))
         )
         return result.scalar_one_or_none()
 
     @staticmethod
-    async def get_by_name_with_checks(db: AsyncSession, agent_name: str) -> Agent | None:
+    async def get_by_name_with_checks(
+        db: AsyncSession, agent_name: str
+    ) -> Agent | None:
         """Fetch agent by agent_name with checks loaded."""
         result = await db.execute(
-            select(Agent).where(Agent.agent_name == agent_name).options(selectinload(Agent.checks))
+            select(Agent)
+            .where(Agent.agent_name == agent_name)
+            .options(selectinload(Agent.checks))
         )
         return result.scalar_one_or_none()
 
@@ -82,13 +90,17 @@ class AgentCRUD:
         if conditions:
             query = query.where(*conditions)
 
-        total_result = await db.execute(select(func.count()).select_from(query.subquery()))
+        total_result = await db.execute(
+            select(func.count()).select_from(query.subquery())
+        )
         total = total_result.scalar_one()
 
         result = await db.execute(
             query.offset(offset)
             .limit(limit)
-            .order_by(Agent.agent_name.asc().nullslast(), Agent.hostname.asc().nullslast())
+            .order_by(
+                Agent.agent_name.asc().nullslast(), Agent.hostname.asc().nullslast()
+            )
         )
         return list(result.scalars().all()), total
 
@@ -96,7 +108,9 @@ class AgentCRUD:
     async def count_pending(db: AsyncSession) -> int:
         """Count agents with approval_status == 'pending'."""
         result = await db.execute(
-            select(func.count()).select_from(Agent).where(Agent.approval_status == "pending")
+            select(func.count())
+            .select_from(Agent)
+            .where(Agent.approval_status == "pending")
         )
         return result.scalar_one()
 
@@ -117,7 +131,9 @@ class AgentCRUD:
         return list(result.scalars().all())
 
     @staticmethod
-    async def get_name_lastseen_pairs(db: AsyncSession) -> list[tuple[str, datetime | None]]:
+    async def get_name_lastseen_pairs(
+        db: AsyncSession,
+    ) -> list[tuple[str, datetime | None]]:
         """Return (agent_name, last_seen) pairs for all agents."""
         result = await db.execute(select(Agent.agent_name, Agent.last_seen))
         return [(row[0], row[1]) for row in result.all()]
@@ -167,7 +183,9 @@ class AgentCRUD:
     @staticmethod
     async def count_seen_since(db: AsyncSession, cutoff: datetime) -> int:
         """Count agents whose last_seen is >= cutoff."""
-        result = await db.execute(select(func.count(Agent.id)).where(Agent.last_seen >= cutoff))
+        result = await db.execute(
+            select(func.count(Agent.id)).where(Agent.last_seen >= cutoff)
+        )
         return result.scalar_one()
 
     @staticmethod

@@ -14,10 +14,10 @@ from fastapi import Request
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.auth_deps import AuthedUser
 from app.core.datetime_utils import utc_now
 from app.core.query_params import split_csv
 from app.models.agent_model import Agent
-from app.models.user_model import User
 from app.schemas.pagination_schema import build_pagination
 from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.check_core_service import CheckCoreService
@@ -148,7 +148,10 @@ class StatusViewService:
             Tuple of (status rows, total count)
         """
         # Get filtered checks with agents and total count from core service
-        checks_and_agents, total = await CheckResultCoreService.get_checks_with_agents_filtered(
+        (
+            checks_and_agents,
+            total,
+        ) = await CheckResultCoreService.get_checks_with_agents_filtered(
             db,
             agent_id=agent_id,
             check_type=check_type,
@@ -172,8 +175,12 @@ class StatusViewService:
         )
 
         # Batch query: Get 24h stats for all checks
-        stats_map = await CheckResultCoreService.get_24h_stats_batch(db, filtered_check_ids)
-        dependent_counts = await CheckCoreService.count_dependents_bulk(db, filtered_check_ids)
+        stats_map = await CheckResultCoreService.get_24h_stats_batch(
+            db, filtered_check_ids
+        )
+        dependent_counts = await CheckCoreService.count_dependents_bulk(
+            db, filtered_check_ids
+        )
 
         # Batch query: Get 15-minute bars for all checks (if requested)
         minute_bars_map: dict[UUID, list[dict]] = {}
@@ -205,9 +212,13 @@ class StatusViewService:
 
                         # Calculate avg latency (filter out None values)
                         latencies = [
-                            r.latency_ms for r in results_in_minute if r.latency_ms is not None
+                            r.latency_ms
+                            for r in results_in_minute
+                            if r.latency_ms is not None
                         ]
-                        avg_latency = sum(latencies) / len(latencies) if latencies else 0
+                        avg_latency = (
+                            sum(latencies) / len(latencies) if latencies else 0
+                        )
 
                         bar = {
                             "success": all_success,
@@ -242,11 +253,17 @@ class StatusViewService:
                 uptime_24h = (stats.successful / stats.total) * 100
 
             # Parse tags from check and agent (both are PostgreSQL arrays)
-            check_tags = [tag.strip() for tag in (check.tags or []) if tag and tag.strip()]
-            agent_tags = [tag.strip() for tag in (agent.tags or []) if tag and tag.strip()]
+            check_tags = [
+                tag.strip() for tag in (check.tags or []) if tag and tag.strip()
+            ]
+            agent_tags = [
+                tag.strip() for tag in (agent.tags or []) if tag and tag.strip()
+            ]
 
             # Get minute bars for this check (if requested)
-            minute_bars = minute_bars_map.get(check.id, []) if include_minute_bars else []
+            minute_bars = (
+                minute_bars_map.get(check.id, []) if include_minute_bars else []
+            )
 
             # Create status row
             status_row = StatusRow(
@@ -294,14 +311,16 @@ class StatusViewService:
             "enabled_checks": data["enabled_checks"],
             "up_count": data["up_count"],
             "down_count": data["down_count"],
-            "unknown_count": data["enabled_checks"] - data["up_count"] - data["down_count"],
+            "unknown_count": data["enabled_checks"]
+            - data["up_count"]
+            - data["down_count"],
             "active_agents": data["active_agents"],
             "overall_success_rate": round(overall_success_rate, 2),
         }
 
     @staticmethod
     async def build_oob_status_context(
-        db: AsyncSession, request: Request, current_user: User
+        db: AsyncSession, request: Request, current_user: AuthedUser
     ) -> dict[str, Any]:
         """
         Build the summary + status_rows context for OOB-swap responses.
@@ -315,7 +334,9 @@ class StatusViewService:
         if per_page_param:
             per_page = int(str(per_page_param))
         else:
-            per_page = await SettingsCoreService.get_setting(db, "general.default_page_size", 50)
+            per_page = await SettingsCoreService.get_setting(
+                db, "general.default_page_size", 50
+            )
         offset = (page - 1) * per_page
 
         summary = await StatusViewService.get_status_summary(db)
@@ -360,7 +381,9 @@ class StatusViewService:
     ) -> dict:
         """Build the full template context for /dashboard."""
         if per_page is None:
-            per_page = await SettingsCoreService.get_setting(db, "general.default_page_size", 50)
+            per_page = await SettingsCoreService.get_setting(
+                db, "general.default_page_size", 50
+            )
         offset = (page - 1) * per_page
 
         refresh_interval = await SettingsCoreService.get_setting(
@@ -389,7 +412,9 @@ class StatusViewService:
             "tags": tags,
             "search": search,
         }
-        pagination = build_pagination(page=page, per_page=per_page, total=total, filters=filters)
+        pagination = build_pagination(
+            page=page, per_page=per_page, total=total, filters=filters
+        )
 
         return {
             "request": request,
@@ -406,7 +431,9 @@ class StatusViewService:
         }
 
     @staticmethod
-    async def build_summary_partial_context(db: AsyncSession, *, request, current_user) -> dict:
+    async def build_summary_partial_context(
+        db: AsyncSession, *, request, current_user
+    ) -> dict:
         """Build context for the /internal/summary HTMX partial."""
         return {
             "request": request,

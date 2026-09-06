@@ -16,11 +16,11 @@ from shared.jobs.network_scan import NetworkScanJob
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.auth_deps import AuthedUser
 from app.core.exceptions import NotFoundException
 from app.models.agent_model import Agent  # noqa: F401  # used in type comment line 129
 from app.models.enum_model import JobStatus, JobType
 from app.models.job_model import Job
-from app.models.user_model import User
 from app.schemas.job_schema import JobCreate
 from app.schemas.pagination_schema import build_pagination
 from app.services.core.agent_core_service import AgentCoreService
@@ -234,7 +234,9 @@ class JobsViewService:
         """
         job = await JobCoreService.cancel_job(db, job_id)
         if not job:
-            raise NotFoundException(f"Job not found or already in terminal state: {job_id}")
+            raise NotFoundException(
+                f"Job not found or already in terminal state: {job_id}"
+            )
 
         logger.info("Cancelled job", extra={"job_id": str(job_id)})
         return job
@@ -271,7 +273,9 @@ class JobsViewService:
                             items_type = field_info.get("items", {}).get("type")
                             if items_type == "integer":
                                 params[field_name] = [
-                                    int(v.strip()) for v in value.split(",") if v.strip()
+                                    int(v.strip())
+                                    for v in value.split(",")
+                                    if v.strip()
                                 ]
                             else:
                                 params[field_name] = [
@@ -356,7 +360,7 @@ class JobsViewService:
     async def build_jobs_page_context(
         db: AsyncSession,
         request: Request,
-        current_user: User,
+        current_user: AuthedUser,
         status: str | None,
         job_type: str | None,
         agent_filter: str | None,
@@ -367,7 +371,9 @@ class JobsViewService:
     ) -> dict[str, Any]:
         """Full /jobs page context."""
         if per_page is None:
-            per_page = await JobsViewService.get_setting(db, "general.default_page_size", 50)
+            per_page = await JobsViewService.get_setting(
+                db, "general.default_page_size", 50
+            )
         offset = (page - 1) * per_page
 
         summary = await JobsViewService.get_job_summary(db)
@@ -391,11 +397,14 @@ class JobsViewService:
             "priority": priority,
             "created": created,
         }
-        pagination = build_pagination(page=page, per_page=per_page, total=total, filters=filters)
+        pagination = build_pagination(
+            page=page, per_page=per_page, total=total, filters=filters
+        )
 
         # Status dropdown options come from the canonical JobStatus enum.
         status_options = [
-            {"value": s.value, "label": s.value.replace("_", " ").title()} for s in JobStatus
+            {"value": s.value, "label": s.value.replace("_", " ").title()}
+            for s in JobStatus
         ]
 
         return {
@@ -416,7 +425,7 @@ class JobsViewService:
     async def build_jobs_table_partial_context(
         db: AsyncSession,
         request: Request,
-        current_user: User,
+        current_user: AuthedUser,
         status: str | None,
         job_type: str | None,
         agent_filter: str | None,
@@ -446,7 +455,7 @@ class JobsViewService:
 
     @staticmethod
     async def build_job_detail_context(
-        db: AsyncSession, request: Request, current_user: User, job_id: UUID
+        db: AsyncSession, request: Request, current_user: AuthedUser, job_id: UUID
     ) -> dict[str, Any]:
         """
         Job detail panel context. Raises HTTPException(404) if not found.
@@ -473,7 +482,9 @@ class JobsViewService:
             existing_checks = {check.display_name for check in checks}
 
         available_check_tags = await CheckCoreService.get_all_check_tags(db)
-        agents, _ = await JobsViewService.list_agents(db, limit=1000, exclude_pending=True)
+        agents, _ = await JobsViewService.list_agents(
+            db, limit=1000, exclude_pending=True
+        )
 
         check_defaults = await SettingsCoreService.get_check_defaults(db)
         alert_defaults = await SettingsCoreService.get_alert_defaults(db)
@@ -494,14 +505,16 @@ class JobsViewService:
     async def build_job_create_form_context(
         db: AsyncSession,
         request: Request,
-        current_user: User,
+        current_user: AuthedUser,
         job_type: str | None,
         agent_filter: str | None,
         priority: int,
         prefill_params: str | None,
     ) -> dict[str, Any]:
         """Job-creation side-panel form context."""
-        agents, _ = await JobsViewService.list_agents(db, limit=1000, exclude_pending=True)
+        agents, _ = await JobsViewService.list_agents(
+            db, limit=1000, exclude_pending=True
+        )
 
         prefill_data: dict = {}
         if prefill_params:
@@ -530,7 +543,7 @@ class JobsViewService:
 
     @staticmethod
     def build_error_partial_context(
-        request: Request, current_user: User, error: str
+        request: Request, current_user: AuthedUser, error: str
     ) -> dict[str, Any]:
         """Common error-partial context (matches partials/error_message.html shape)."""
         return {

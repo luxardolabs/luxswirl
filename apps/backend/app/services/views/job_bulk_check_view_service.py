@@ -35,10 +35,16 @@ class JobBulkCheckViewService:
 
         interval = int(form_data.get("interval") or check_defaults["interval_seconds"])
         timeout = int(form_data.get("timeout") or check_defaults["timeout_seconds"])
-        retry_attempts = int(form_data.get("retry_attempts") or check_defaults["retry_attempts"])
+        retry_attempts = int(
+            form_data.get("retry_attempts") or check_defaults["retry_attempts"]
+        )
         agent_id = form_data.get("agent_id")
         tags_str = form_data.get("tags", "")
-        tags = [tag.strip() for tag in tags_str.split(",") if tag.strip()] if tags_str else []
+        tags = (
+            [tag.strip() for tag in tags_str.split(",") if tag.strip()]
+            if tags_str
+            else []
+        )
 
         if not agent_id or agent_id == "":
             return None, "Agent is required. Please select an agent."
@@ -52,7 +58,9 @@ class JobBulkCheckViewService:
         if "verify_ssl" in form_data:
             verify_ssl_str = form_data.get("verify_ssl")
             verify_ssl = (
-                verify_ssl_str.lower() == "true" if verify_ssl_str else check_defaults["verify_ssl"]
+                verify_ssl_str.lower() == "true"
+                if verify_ssl_str
+                else check_defaults["verify_ssl"]
             )
 
         params = BulkCheckParams(
@@ -71,47 +79,65 @@ class JobBulkCheckViewService:
         db: AsyncSession, job_id: UUID, form_data: dict
     ) -> tuple[BulkCheckResult | None, str | None]:
         """Parse form, then delegate to core."""
-        params, error = await JobBulkCheckViewService._parse_bulk_form_data(db, form_data)
+        params, error = await JobBulkCheckViewService._parse_bulk_form_data(
+            db, form_data
+        )
         if error:
             return None, error
         assert params is not None
-        return await JobToCheckCoreService.create_ping_checks_from_job(db, job_id, params)
+        return await JobToCheckCoreService.create_ping_checks_from_job(
+            db, job_id, params
+        )
 
     @staticmethod
     async def create_web_checks_from_job(
         db: AsyncSession, job_id: UUID, form_data: dict
     ) -> tuple[BulkCheckResult | None, str | None]:
         """Parse form, then delegate to core."""
-        params, error = await JobBulkCheckViewService._parse_bulk_form_data(db, form_data)
+        params, error = await JobBulkCheckViewService._parse_bulk_form_data(
+            db, form_data
+        )
         if error:
             return None, error
         assert params is not None
-        return await JobToCheckCoreService.create_web_checks_from_job(db, job_id, params)
+        return await JobToCheckCoreService.create_web_checks_from_job(
+            db, job_id, params
+        )
 
     @staticmethod
     async def create_ssh_checks_from_job(
         db: AsyncSession, job_id: UUID, form_data: dict
     ) -> tuple[BulkCheckResult | None, str | None]:
         """Parse form, then delegate to core."""
-        params, error = await JobBulkCheckViewService._parse_bulk_form_data(db, form_data)
+        params, error = await JobBulkCheckViewService._parse_bulk_form_data(
+            db, form_data
+        )
         if error:
             return None, error
         assert params is not None
-        return await JobToCheckCoreService.create_ssh_checks_from_job(db, job_id, params)
+        return await JobToCheckCoreService.create_ssh_checks_from_job(
+            db, job_id, params
+        )
 
     @staticmethod
     async def create_database_checks_from_job(
         db: AsyncSession, job_id: UUID, form_data: dict
     ) -> tuple[BulkCheckResult | None, str | None]:
         """Parse form, then delegate to core."""
-        params, error = await JobBulkCheckViewService._parse_bulk_form_data(db, form_data)
+        params, error = await JobBulkCheckViewService._parse_bulk_form_data(
+            db, form_data
+        )
         if error:
             return None, error
         assert params is not None
-        return await JobToCheckCoreService.create_database_checks_from_job(db, job_id, params)
+        return await JobToCheckCoreService.create_database_checks_from_job(
+            db, job_id, params
+        )
 
     @staticmethod
-    async def quick_create_check(db: AsyncSession, form_data: dict) -> tuple[bool, str | None]:
+    async def quick_create_check(
+        db: AsyncSession, form_data: dict
+    ) -> tuple[bool, str | None]:
         """
         Parse form data from a per-host quick-action button (network scan UI)
         and create a single check.
@@ -141,7 +167,9 @@ class JobBulkCheckViewService:
             )
             verify_ssl_str = form_data.get("verify_ssl")
             verify_ssl = (
-                verify_ssl_str.lower() == "true" if verify_ssl_str else check_defaults["verify_ssl"]
+                verify_ssl_str.lower() == "true"
+                if verify_ssl_str
+                else check_defaults["verify_ssl"]
             )
 
         params = QuickCheckParams(
@@ -149,9 +177,13 @@ class JobBulkCheckViewService:
             check_type=check_type,
             target=target,
             display_name=display_name,
-            interval=int(form_data.get("interval") or check_defaults["interval_seconds"]),
+            interval=int(
+                form_data.get("interval") or check_defaults["interval_seconds"]
+            ),
             timeout=int(form_data.get("timeout") or check_defaults["timeout_seconds"]),
-            retry_attempts=int(form_data.get("retry_attempts") or check_defaults["retry_attempts"]),
+            retry_attempts=int(
+                form_data.get("retry_attempts") or check_defaults["retry_attempts"]
+            ),
             tags=tags,
             expected_status=expected_status,
             verify_ssl=verify_ssl,

@@ -27,7 +27,9 @@ from app.background import (
     stop_job_purge_task,
     stop_session_cleanup_task,
 )
-from app.background.maintenance_handlers import register_all as register_maintenance_handlers
+from app.background.maintenance_handlers import (
+    register_all as register_maintenance_handlers,
+)
 from app.background.maintenance_worker import (
     start_maintenance_worker,
     stop_maintenance_worker,
@@ -112,7 +114,9 @@ async def lifespan(app: FastAPI):
         user_service = UserCoreService()
         admin = await user_service.ensure_default_admin(db)
         if admin is not None:
-            logger.info("Default admin check complete", extra={"username": admin.username})
+            logger.info(
+                "Default admin check complete", extra={"username": admin.username}
+            )
         else:
             logger.info("No admin configured - first-run setup wizard enabled (/setup)")
 
@@ -193,7 +197,9 @@ app = FastAPI(
     lifespan=lifespan,
     docs_url="/docs" if settings.server.environment != "production" else None,
     redoc_url="/redoc" if settings.server.environment != "production" else None,
-    openapi_url=("/openapi.json" if settings.server.environment != "production" else None),
+    openapi_url=(
+        "/openapi.json" if settings.server.environment != "production" else None
+    ),
 )
 
 
@@ -262,7 +268,9 @@ async def value_error_handler(request: Request, exc: ValueError):
     Web routers used to catch these and render a 400 partial themselves; now
     they propagate here so the handling lives in exactly one place.
     """
-    get_logger("luxswirl.server").warning("Value error", extra={"error_message": str(exc)})
+    get_logger("luxswirl.server").warning(
+        "Value error", extra={"error_message": str(exc)}
+    )
     return render_error_response(
         request,
         status.HTTP_400_BAD_REQUEST,

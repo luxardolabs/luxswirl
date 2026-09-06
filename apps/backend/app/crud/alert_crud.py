@@ -72,7 +72,9 @@ class AlertCRUD:
         if is_global is not None:
             query = query.where(Alert.is_global == is_global)
 
-        total = (await db.scalar(select(func.count()).select_from(query.subquery()))) or 0
+        total = (
+            await db.scalar(select(func.count()).select_from(query.subquery()))
+        ) or 0
 
         result = await db.execute(
             query.options(selectinload(Alert.notification_mappings))
@@ -97,7 +99,9 @@ class AlertCRUD:
         return result.scalar_one_or_none()
 
     @staticmethod
-    async def delete_notif_mapping(db: AsyncSession, alert_id: UUID, provider_id: UUID) -> int:
+    async def delete_notif_mapping(
+        db: AsyncSession, alert_id: UUID, provider_id: UUID
+    ) -> int:
         result = await db.execute(
             delete(AlertNotificationMapping).where(
                 and_(
@@ -123,7 +127,9 @@ class AlertCRUD:
         return result.scalar_one_or_none()
 
     @staticmethod
-    async def delete_check_mapping(db: AsyncSession, alert_id: UUID, check_id: UUID) -> int:
+    async def delete_check_mapping(
+        db: AsyncSession, alert_id: UUID, check_id: UUID
+    ) -> int:
         result = await db.execute(
             delete(AlertCheckMapping).where(
                 and_(
@@ -138,7 +144,9 @@ class AlertCRUD:
     async def list_alert_ids_for_check(db: AsyncSession, check_id: UUID) -> list[UUID]:
         """All alert ids assigned to a check (regardless of enabled state)."""
         result = await db.execute(
-            select(AlertCheckMapping.alert_id).where(AlertCheckMapping.check_id == check_id)
+            select(AlertCheckMapping.alert_id).where(
+                AlertCheckMapping.check_id == check_id
+            )
         )
         return [row[0] for row in result.fetchall()]
 
@@ -157,7 +165,9 @@ class AlertCRUD:
         return [row[0] for row in result.fetchall()]
 
     @staticmethod
-    async def list_active_alerts_for_check(db: AsyncSession, check_id: UUID) -> Sequence[Alert]:
+    async def list_active_alerts_for_check(
+        db: AsyncSession, check_id: UUID
+    ) -> Sequence[Alert]:
         """Enabled, non-deleted alerts mapped to a check, with notification_mappings loaded."""
         result = await db.execute(
             select(Alert)
@@ -236,7 +246,9 @@ class AlertCRUD:
         return result.scalar_one_or_none()
 
     @staticmethod
-    async def get_check_result_by_id(db: AsyncSession, check_result_id: UUID) -> CheckResult | None:
+    async def get_check_result_by_id(
+        db: AsyncSession, check_result_id: UUID
+    ) -> CheckResult | None:
         result = await db.execute(
             select(CheckResult).where(CheckResult.id == check_result_id).limit(1)
         )

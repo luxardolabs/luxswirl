@@ -24,7 +24,9 @@ class ProfileViewService:
     """View-layer wrapper for /profile endpoints."""
 
     @staticmethod
-    def build_panel_context(request: Request, current_user: AuthedUser) -> dict[str, Any]:
+    def build_panel_context(
+        request: Request, current_user: AuthedUser
+    ) -> dict[str, Any]:
         """Initial-load panel context."""
         return {
             "request": request,
@@ -80,7 +82,9 @@ class ProfileViewService:
 
         auth_service = AuthCoreService()
         try:
-            await auth_service.change_password(db, user, current_password, new_password)
+            await auth_service.change_password(
+                db, user.id, current_password, new_password
+            )
         except ValueError as e:
             return "error", str(e)
 

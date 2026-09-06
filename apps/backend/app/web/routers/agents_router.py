@@ -37,8 +37,12 @@ async def agents_list_page(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: CurrentUserWeb,
     active_only: Annotated[bool, Query(description="Show only active agents")] = False,
-    search: Annotated[str, Query(description="Search agents by name, hostname, or IP")] = "",
-    hours: Annotated[int, Query(ge=1, le=24, description="Hours of metrics history")] = 4,
+    search: Annotated[
+        str, Query(description="Search agents by name, hostname, or IP")
+    ] = "",
+    hours: Annotated[
+        int, Query(ge=1, le=24, description="Hours of metrics history")
+    ] = 4,
     page: Annotated[int, Query(ge=1, description="Page number")] = 1,
     per_page: PerPageFilter = None,
 ):
@@ -62,7 +66,9 @@ async def agents_list_page(
         )
 
 
-@router.get("/agents/{agent_id}/edit-form", response_class=HTMLResponse, include_in_schema=False)
+@router.get(
+    "/agents/{agent_id}/edit-form", response_class=HTMLResponse, include_in_schema=False
+)
 async def agent_edit_form(
     agent_id: UUID,
     request: Request,
@@ -79,7 +85,9 @@ async def agent_edit_form(
                 status_code=http_status.HTTP_404_NOT_FOUND,
                 detail=f"Agent not found: {agent_id}",
             )
-        return templates.TemplateResponse(request, "panels/agents/agent_edit_panel.html", context)
+        return templates.TemplateResponse(
+            request, "panels/agents/agent_edit_panel.html", context
+        )
     except HTTPException:
         raise
     except Exception as e:
@@ -93,7 +101,9 @@ async def agent_edit_form(
 # ---- Mutations ----------------------------------------------------------
 
 
-@router.patch("/agents/{agent_id}", response_class=HTMLResponse, include_in_schema=False)
+@router.patch(
+    "/agents/{agent_id}", response_class=HTMLResponse, include_in_schema=False
+)
 async def update_agent_web(
     agent_id: UUID,
     request: Request,
@@ -137,10 +147,14 @@ async def update_agent_web(
             "log_level": log_level,
         },
     )
-    return status_message(request, "partials/agents/status_message.html", kind, message, status)
+    return status_message(
+        request, "partials/agents/status_message.html", kind, message, status
+    )
 
 
-@router.delete("/agents/{agent_id}", response_class=HTMLResponse, include_in_schema=False)
+@router.delete(
+    "/agents/{agent_id}", response_class=HTMLResponse, include_in_schema=False
+)
 async def delete_agent_web(
     request: Request,
     agent_id: UUID,
@@ -158,7 +172,9 @@ async def delete_agent_web(
     # polling partial is sent, so the job is visible to the first poll) and rolls
     # back on any exception. Same pattern as LUXSWIRL-164.
     try:
-        job = await AgentsViewService.enqueue_delete(db, agent_id, owner_id=current_user.id)
+        job = await AgentsViewService.enqueue_delete(
+            db, agent_id, owner_id=current_user.id
+        )
     except AgentNotFoundException:
         raise HTTPException(
             status_code=http_status.HTTP_404_NOT_FOUND,
@@ -379,7 +395,9 @@ async def regenerate_key_web(
 ):
     """Regenerate API key (revokes old)."""
     try:
-        agent, plaintext_key = await AgentsViewService.regenerate_agent_key(db, agent_id)
+        agent, plaintext_key = await AgentsViewService.regenerate_agent_key(
+            db, agent_id
+        )
         return templates.TemplateResponse(
             request,
             "panels/registration_keys/agent_key_generated_panel.html",
@@ -406,7 +424,9 @@ async def revoke_key_web(
     """Revoke agent API key."""
     try:
         await AgentsViewService.revoke_agent_key(db, agent_id)
-        return JSONResponse({"success": True, "message": "API key revoked successfully"})
+        return JSONResponse(
+            {"success": True, "message": "API key revoked successfully"}
+        )
     except AgentNotFoundException:
         raise HTTPException(status_code=404, detail="Agent not found") from None
     except Exception as e:

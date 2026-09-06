@@ -49,11 +49,17 @@ async def status_summary_partial(
             request=request,
             current_user=current_user,
         )
-        return templates.TemplateResponse(request, "partials/status_summary.html", context)
+        return templates.TemplateResponse(
+            request, "partials/status_summary.html", context
+        )
     except Exception as e:
         logger.error("Error rendering status summary partial", exc_info=True)
         return error_partial(
-            request, current_user, str(e), status_code=500, template="partials/error.html"
+            request,
+            current_user,
+            str(e),
+            status_code=500,
+            template="partials/error.html",
         )
 
 

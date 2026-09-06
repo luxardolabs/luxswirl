@@ -64,7 +64,9 @@ class AgentBase(BaseSchema):
 class AgentCreate(AgentBase):
     """Schema for creating a new agent."""
 
-    agent_run_id: str | None = Field(None, max_length=255, description="Current run ID (UUID)")
+    agent_run_id: str | None = Field(
+        None, max_length=255, description="Current run ID (UUID)"
+    )
 
     model_config = {
         "json_schema_extra": {
@@ -206,10 +208,16 @@ class AgentStatsResponse(BaseSchema):
     total_checks: int = Field(..., description="Total number of checks executed")
     successful_checks: int = Field(..., description="Number of successful checks")
     failed_checks: int = Field(..., description="Number of failed checks")
-    success_rate: float = Field(..., ge=0, le=100, description="Success rate percentage")
-    avg_latency_ms: float | None = Field(None, description="Average latency in milliseconds")
+    success_rate: float = Field(
+        ..., ge=0, le=100, description="Success rate percentage"
+    )
+    avg_latency_ms: float | None = Field(
+        None, description="Average latency in milliseconds"
+    )
     uptime_seconds: float = Field(..., description="Agent uptime in seconds")
-    last_check_time: datetime | None = Field(None, description="When last check was executed")
+    last_check_time: datetime | None = Field(
+        None, description="When last check was executed"
+    )
 
     model_config = {
         "json_schema_extra": {
@@ -259,7 +267,9 @@ class AgentHeartbeat(BaseSchema):
     cpu_percent: float | None = Field(None, description="CPU usage percentage")
     memory_mb: int | None = Field(None, description="Memory usage in MB")
     queue_depth: int = Field(0, description="Current result queue depth")
-    queue_max_size: int | None = Field(None, description="Max queue size since last heartbeat")
+    queue_max_size: int | None = Field(
+        None, description="Max queue size since last heartbeat"
+    )
 
     # Config state
     config_version: str | None = Field(None, description="Last fetched config version")
@@ -273,16 +283,28 @@ class AgentHeartbeat(BaseSchema):
     # Job queue stats (NEW)
     jobs_pending: int = Field(0, description="Jobs in queue waiting to run")
     jobs_running: int = Field(0, description="Jobs currently executing")
-    jobs_completed_since_last: int = Field(0, description="Jobs completed since last heartbeat")
-    jobs_failed_since_last: int = Field(0, description="Jobs failed since last heartbeat")
+    jobs_completed_since_last: int = Field(
+        0, description="Jobs completed since last heartbeat"
+    )
+    jobs_failed_since_last: int = Field(
+        0, description="Jobs failed since last heartbeat"
+    )
 
     # Error tracking
-    errors_since_last_heartbeat: int = Field(0, description="Errors since last heartbeat")
-    warnings_since_last_heartbeat: int = Field(0, description="Warnings since last heartbeat")
+    errors_since_last_heartbeat: int = Field(
+        0, description="Errors since last heartbeat"
+    )
+    warnings_since_last_heartbeat: int = Field(
+        0, description="Warnings since last heartbeat"
+    )
 
     # Shutdown tracking
-    is_shutdown: bool = Field(False, description="True if this is a final shutdown heartbeat")
-    agent_run_id: UUID | None = Field(None, description="Unique ID for this agent run session")
+    is_shutdown: bool = Field(
+        False, description="True if this is a final shutdown heartbeat"
+    )
+    agent_run_id: UUID | None = Field(
+        None, description="Unique ID for this agent run session"
+    )
     heartbeats_total: int | None = Field(
         None, description="Total heartbeats sent during this session"
     )
@@ -290,16 +312,26 @@ class AgentHeartbeat(BaseSchema):
     server_unreachable_count: int = Field(0, description="Failed server connections")
 
     # Reporter backlog metrics
-    stored_reports_count: int = Field(0, description="Number of stored reports waiting to send")
+    stored_reports_count: int = Field(
+        0, description="Number of stored reports waiting to send"
+    )
     stored_reports_oldest_timestamp: float | None = Field(
         None, description="Timestamp of oldest stored report"
     )
 
     # Resource monitoring (SWIRL-57: detect subprocess/FD leaks)
-    open_file_descriptors: int | None = Field(None, description="Number of open file descriptors")
-    fd_limit_soft: int | None = Field(None, description="Soft limit for file descriptors (ulimit)")
-    fd_usage_percent: float | None = Field(None, description="FD usage percentage vs soft limit")
-    subprocess_count: int | None = Field(None, description="Number of child subprocesses")
+    open_file_descriptors: int | None = Field(
+        None, description="Number of open file descriptors"
+    )
+    fd_limit_soft: int | None = Field(
+        None, description="Soft limit for file descriptors (ulimit)"
+    )
+    fd_usage_percent: float | None = Field(
+        None, description="FD usage percentage vs soft limit"
+    )
+    subprocess_count: int | None = Field(
+        None, description="Number of child subprocesses"
+    )
 
 
 class AgentHeartbeatResponse(BaseSchema):
@@ -310,14 +342,18 @@ class AgentHeartbeatResponse(BaseSchema):
     heartbeat_interval: int = Field(60, description="Heartbeat interval in seconds")
     check_sync_interval: int = Field(60, description="Check sync interval in seconds")
     message: str | None = Field(None, description="Optional message to agent")
-    jobs: list[dict] = Field(default_factory=list, description="Pending jobs to execute")
+    jobs: list[dict] = Field(
+        default_factory=list, description="Pending jobs to execute"
+    )
     approval_status: AgentApprovalStatus | None = Field(
         None,
         description="Agent approval status (pending/active/paused/disabled/rejected)",
     )
 
     # Reporter configuration
-    report_interval: int | None = Field(None, description="Reporter batch send interval in seconds")
+    report_interval: int | None = Field(
+        None, description="Reporter batch send interval in seconds"
+    )
     report_batch_size: int | None = Field(
         None, description="Reporter batch size (results per batch)"
     )
@@ -327,15 +363,23 @@ class AgentHeartbeatResponse(BaseSchema):
     report_process_interval: int | None = Field(
         None, description="Interval for processing stored reports"
     )
-    report_max_queue_size: int | None = Field(None, description="Maximum results queue size")
+    report_max_queue_size: int | None = Field(
+        None, description="Maximum results queue size"
+    )
     report_backpressure_threshold: float | None = Field(
         None, description="Backpressure threshold (0.0-1.0)"
     )
 
     # Performance tuning
-    max_concurrent_checks: int | None = Field(None, description="Maximum concurrent checks")
-    watchdog_interval: int | None = Field(None, description="Watchdog check interval in seconds")
-    watchdog_stall_threshold: int | None = Field(None, description="Watchdog stall threshold count")
+    max_concurrent_checks: int | None = Field(
+        None, description="Maximum concurrent checks"
+    )
+    watchdog_interval: int | None = Field(
+        None, description="Watchdog check interval in seconds"
+    )
+    watchdog_stall_threshold: int | None = Field(
+        None, description="Watchdog stall threshold count"
+    )
 
     # Logging configuration
     log_level: str | None = Field(

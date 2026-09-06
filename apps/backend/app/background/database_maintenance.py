@@ -146,7 +146,9 @@ async def _vacuum_table(db, table_name: str, full: bool = False) -> dict:
         size_sql = text("SELECT hypertable_size('check_results')")
     else:
         size_sql = text("SELECT pg_total_relation_size(:t)")
-    size_params: dict[str, Any] = {} if table_name == "check_results" else {"t": table_name}
+    size_params: dict[str, Any] = (
+        {} if table_name == "check_results" else {"t": table_name}
+    )
     vacuum_sql = _TABLE_SQL[table_name]["vacuum_full" if full else "vacuum"]
 
     try:
@@ -211,7 +213,9 @@ async def _get_table_bloat(db, table_name: str) -> dict:
     try:
         # Get actual size and row count
         if table_name == "check_results":
-            actual_size_result = await db.execute(text("SELECT hypertable_size('check_results')"))
+            actual_size_result = await db.execute(
+                text("SELECT hypertable_size('check_results')")
+            )
         else:
             actual_size_result = await db.execute(
                 text("SELECT pg_total_relation_size(:t)"), {"t": table_name}
@@ -406,7 +410,9 @@ async def _run_maintenance_cycle(db):
         )
 
         if notification_retention_days > 0:  # 0 = keep forever
-            notification_cutoff = utc_now() - timedelta(days=notification_retention_days)
+            notification_cutoff = utc_now() - timedelta(
+                days=notification_retention_days
+            )
 
             result = await db.execute(
                 text("DELETE FROM notification_logs WHERE created_at < :cutoff"),
@@ -419,7 +425,9 @@ async def _run_maintenance_cycle(db):
                 logger.info(
                     "Deleted old notification logs",
                     extra={
-                        "notifications_deleted": retention_stats["notifications_deleted"],
+                        "notifications_deleted": retention_stats[
+                            "notifications_deleted"
+                        ],
                         "older_than_days": notification_retention_days,
                     },
                 )
@@ -436,7 +444,9 @@ async def _run_maintenance_cycle(db):
             text("CALL refresh_continuous_aggregate('check_results_5min', NULL, NULL)")
         )
         await db.execute(
-            text("CALL refresh_continuous_aggregate('check_results_hourly', NULL, NULL)")
+            text(
+                "CALL refresh_continuous_aggregate('check_results_hourly', NULL, NULL)"
+            )
         )
         await db.execute(
             text("CALL refresh_continuous_aggregate('check_results_daily', NULL, NULL)")
@@ -495,7 +505,9 @@ async def _database_maintenance_loop():
                         "Maintenance summary",
                         extra={
                             "operation_count": len(report["vacuum_operations"]),
-                            "total_space_reclaimed_mb": report["total_space_reclaimed_mb"],
+                            "total_space_reclaimed_mb": report[
+                                "total_space_reclaimed_mb"
+                            ],
                         },
                     )
 

@@ -57,7 +57,9 @@ class JobConfiguration(UUIDBaseModel):
     )
 
     # Configuration
-    enabled: Mapped[bool] = mapped_column(Boolean, default=True, comment="Whether job is enabled")
+    enabled: Mapped[bool] = mapped_column(
+        Boolean, default=True, comment="Whether job is enabled"
+    )
     parameters: Mapped[dict[str, Any] | None] = mapped_column(
         JSONB, comment="Parameters passed to job function"
     )
@@ -121,8 +123,12 @@ class JobConfiguration(UUIDBaseModel):
         str_enum(SchedulerExecutionStatus, 20),
         comment="Last execution status",
     )
-    total_runs: Mapped[int] = mapped_column(Integer, default=0, comment="Total successful runs")
-    failed_runs: Mapped[int] = mapped_column(Integer, default=0, comment="Total failed runs")
+    total_runs: Mapped[int] = mapped_column(
+        Integer, default=0, comment="Total successful runs"
+    )
+    failed_runs: Mapped[int] = mapped_column(
+        Integer, default=0, comment="Total failed runs"
+    )
     average_duration: Mapped[float | None] = mapped_column(
         Float, comment="Average execution duration in seconds"
     )
@@ -143,7 +149,9 @@ class JobExecution(Base):
     )
 
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, comment="Execution UUID")
-    job_key: Mapped[str] = mapped_column(String(191), nullable=False, comment="Job identifier")
+    job_key: Mapped[str] = mapped_column(
+        String(191), nullable=False, comment="Job identifier"
+    )
     job_name: Mapped[str] = mapped_column(
         String(200), nullable=False, comment="Job display name at time of execution"
     )
@@ -167,8 +175,12 @@ class JobExecution(Base):
     )
 
     # Results
-    error_message: Mapped[str | None] = mapped_column(Text, comment="Error message if failed")
-    output: Mapped[dict[str, Any] | None] = mapped_column(JSONB, comment="Job output/result data")
+    error_message: Mapped[str | None] = mapped_column(
+        Text, comment="Error message if failed"
+    )
+    output: Mapped[dict[str, Any] | None] = mapped_column(
+        JSONB, comment="Job output/result data"
+    )
     records_processed: Mapped[int | None] = mapped_column(
         Integer, comment="Number of records processed"
     )

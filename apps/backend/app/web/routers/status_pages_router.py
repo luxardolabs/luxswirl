@@ -42,7 +42,9 @@ async def status_pages_list(
     request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: CurrentUserWeb,
-    is_public: Annotated[str, Query(description="Filter by public/private status")] = "all",
+    is_public: Annotated[
+        str, Query(description="Filter by public/private status")
+    ] = "all",
     page: Annotated[int, Query(ge=1, description="Page number")] = 1,
     per_page: PerPageFilter = None,
 ):
@@ -57,7 +59,9 @@ async def status_pages_list(
         return error_page(request, current_user, str(e), 500)
 
 
-@router.get("/status-pages/create-form", response_class=HTMLResponse, include_in_schema=False)
+@router.get(
+    "/status-pages/create-form", response_class=HTMLResponse, include_in_schema=False
+)
 async def create_form(
     request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -87,7 +91,9 @@ async def edit_form(
         context = await StatusPagesViewService.build_edit_form_context(
             db, request, current_user, status_page_id
         )
-        return templates.TemplateResponse(request, "partials/status_page_form.html", context)
+        return templates.TemplateResponse(
+            request, "partials/status_page_form.html", context
+        )
     except StatusPageNotFoundException as e:
         logger.error("Status page not found", exc_info=True)
         return error_partial(request, current_user, str(e), 404)
@@ -96,7 +102,9 @@ async def edit_form(
 # ---- create / update / delete --------------------------------------------
 
 
-@router.post("/status-pages/create", response_class=HTMLResponse, include_in_schema=False)
+@router.post(
+    "/status-pages/create", response_class=HTMLResponse, include_in_schema=False
+)
 async def create_status_page(
     request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -162,7 +170,9 @@ async def delete_status_page(
     maintenance worker on its own session so this request commits in <100ms.
     See LUXSWIRL-105.
     """
-    job = await StatusPagesViewService.enqueue_delete(db, status_page_id, owner_id=current_user.id)
+    job = await StatusPagesViewService.enqueue_delete(
+        db, status_page_id, owner_id=current_user.id
+    )
     return templates.TemplateResponse(
         request,
         "partials/maintenance/job_status.html",
@@ -189,7 +199,9 @@ async def manage_status_page(
         context = await StatusPagesViewService.build_manage_context(
             db, request, current_user, status_page_id
         )
-        return templates.TemplateResponse(request, "pages/status_page_manage.html", context)
+        return templates.TemplateResponse(
+            request, "pages/status_page_manage.html", context
+        )
     except StatusPageNotFoundException as e:
         logger.error("Status page not found", exc_info=True)
         return error_page(request, current_user, str(e), 404)
@@ -227,7 +239,9 @@ async def get_available_checks(
             tags,
             search,
         )
-        return templates.TemplateResponse(request, "partials/available_checks.html", context)
+        return templates.TemplateResponse(
+            request, "partials/available_checks.html", context
+        )
     except Exception:
         logger.error("Error getting available checks", exc_info=True)
         return HTMLResponse(content="", status_code=500)
@@ -288,7 +302,9 @@ async def remove_item_from_dashboard(
         )
     except Exception:
         logger.error("Error removing item", exc_info=True)
-        return hx_empty_with_toast("Failed to remove item", kind="error", status_code=500)
+        return hx_empty_with_toast(
+            "Failed to remove item", kind="error", status_code=500
+        )
 
 
 @router.post(
@@ -416,7 +432,9 @@ async def get_dashboard_items(
         context = await StatusPagesViewService.build_dashboard_items_context(
             db, request, current_user, status_page_id
         )
-        return templates.TemplateResponse(request, "partials/dashboard_items.html", context)
+        return templates.TemplateResponse(
+            request, "partials/dashboard_items.html", context
+        )
     except Exception:
         logger.error("Error getting dashboard items", exc_info=True)
         return HTMLResponse(content="", status_code=500)
@@ -439,23 +457,37 @@ async def view_public_status_page(
             db, request, current_user, slug, time_range
         )
         if signal == "redirect_login":
-            return RedirectResponse(url=f"/login?redirect=/status/{slug}", status_code=307)
+            return RedirectResponse(
+                url=f"/login?redirect=/status/{slug}", status_code=307
+            )
         if signal == "not_found":
             return public_error_page(
-                request, "This status page does not exist.", 404, title="Status page not found"
+                request,
+                "This status page does not exist.",
+                404,
+                title="Status page not found",
             )
-        return templates.TemplateResponse(request, "pages/status_page_public.html", context)
+        return templates.TemplateResponse(
+            request, "pages/status_page_public.html", context
+        )
     except StatusPageNotFoundException:
         logger.warning("Status page not found", extra={"slug": slug})
         return public_error_page(
-            request, "This status page does not exist.", 404, title="Status page not found"
+            request,
+            "This status page does not exist.",
+            404,
+            title="Status page not found",
         )
     except Exception:
         logger.error("Error rendering public status page", exc_info=True)
-        return public_error_page(request, "Something went wrong loading this status page.", 500)
+        return public_error_page(
+            request, "Something went wrong loading this status page.", 500
+        )
 
 
-@router.get("/status/{slug}/partial", response_class=HTMLResponse, include_in_schema=False)
+@router.get(
+    "/status/{slug}/partial", response_class=HTMLResponse, include_in_schema=False
+)
 async def view_public_status_page_partial(
     request: Request,
     slug: Annotated[str, Path(description="Status page slug")],

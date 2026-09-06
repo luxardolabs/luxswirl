@@ -30,7 +30,9 @@ async def database_health_page(
         context = await DatabaseHealthViewService.build_health_page_context(
             db, request, current_user
         )
-        return templates.TemplateResponse(request, "pages/database_health.html", context)
+        return templates.TemplateResponse(
+            request, "pages/database_health.html", context
+        )
     except Exception as e:
         logger.error("Error getting database health", exc_info=True)
         return templates.TemplateResponse(
@@ -56,7 +58,9 @@ async def database_health_refresh(
         context = await DatabaseHealthViewService.build_health_refresh_context(
             db, request, current_user
         )
-        return templates.TemplateResponse(request, "partials/database_health.html", context)
+        return templates.TemplateResponse(
+            request, "partials/database_health.html", context
+        )
     except Exception as e:
         logger.error("Error getting database health", exc_info=True)
         return HTMLResponse(
@@ -69,7 +73,9 @@ async def database_health_refresh(
 async def database_growth_chart_data(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: AdminUserWeb,
-    hours: Annotated[int, Query(ge=1, le=8760, description="Hours of data to fetch")] = 168,
+    hours: Annotated[
+        int, Query(ge=1, le=8760, description="Hours of data to fetch")
+    ] = 168,
 ):
     """JSON endpoint — get database growth chart data."""
     try:

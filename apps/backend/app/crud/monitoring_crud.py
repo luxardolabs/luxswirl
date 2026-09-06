@@ -23,7 +23,9 @@ class MonitoringCRUD:
     async def get_active_connection_count(db: AsyncSession) -> int | None:
         """Open backend connections to the current database."""
         result = await db.execute(
-            text("SELECT count(*) FROM pg_stat_activity WHERE datname = current_database()")
+            text(
+                "SELECT count(*) FROM pg_stat_activity WHERE datname = current_database()"
+            )
         )
         return result.scalar()
 

@@ -16,8 +16,12 @@ class CheckResultBase(BaseSchema):
 
     timestamp: datetime = Field(..., description="When the check was executed")
     success: bool = Field(..., description="Whether the check succeeded")
-    latency_ms: float | None = Field(None, ge=0, description="Check latency in milliseconds")
-    error: str | None = Field(None, max_length=4000, description="Error message if check failed")
+    latency_ms: float | None = Field(
+        None, ge=0, description="Check latency in milliseconds"
+    )
+    error: str | None = Field(
+        None, max_length=4000, description="Error message if check failed"
+    )
 
 
 class CheckResultCreate(CheckResultBase):
@@ -29,18 +33,28 @@ class CheckResultCreate(CheckResultBase):
     )
 
     # Check identification (UUID-based)
-    check_id: UUID | None = Field(None, description="Check UUID (None for internal checks)")
+    check_id: UUID | None = Field(
+        None, description="Check UUID (None for internal checks)"
+    )
     display_name: str = Field(..., max_length=255, description="Check display name")
 
     # Check metadata
     check_type: str = Field(..., max_length=50, description="Check type")
     target: str = Field(..., max_length=512, description="Check target")
 
-    error_type: str | None = Field(None, max_length=100, description="Error type/category")
-    http_status_code: int | None = Field(None, ge=100, le=599, description="HTTP status code")
-    http_response_time_ms: float | None = Field(None, ge=0, description="HTTP response time")
+    error_type: str | None = Field(
+        None, max_length=100, description="Error type/category"
+    )
+    http_status_code: int | None = Field(
+        None, ge=100, le=599, description="HTTP status code"
+    )
+    http_response_time_ms: float | None = Field(
+        None, ge=0, description="HTTP response time"
+    )
     metrics: dict[str, Any] | None = Field(None, description="Additional metrics")
-    response_data: str | None = Field(None, max_length=65535, description="Response body or data")
+    response_data: str | None = Field(
+        None, max_length=65535, description="Response body or data"
+    )
 
     model_config = {
         "json_schema_extra": {
@@ -111,7 +125,9 @@ class CheckResultListResponse(BaseSchema):
     total: int = Field(..., description="Total number of results")
     success_count: int = Field(..., description="Number of successful checks")
     failure_count: int = Field(..., description="Number of failed checks")
-    success_rate: float = Field(..., ge=0, le=100, description="Success rate percentage")
+    success_rate: float = Field(
+        ..., ge=0, le=100, description="Success rate percentage"
+    )
 
 
 class TimeSeriesDataPoint(BaseSchema):
@@ -131,7 +147,9 @@ class CheckHistoryResponse(BaseSchema):
     target: str = Field(..., description="Check target")
     start_time: datetime = Field(..., description="Start of time range")
     end_time: datetime = Field(..., description="End of time range")
-    data_points: list[CheckResultResponse] = Field(..., description="Time-series data points")
+    data_points: list[CheckResultResponse] = Field(
+        ..., description="Time-series data points"
+    )
     summary: CheckSummary = Field(..., description="Summary statistics")
 
 
@@ -141,10 +159,18 @@ class CheckSummary(BaseSchema):
     total_checks: int = Field(..., description="Total number of checks")
     successful_checks: int = Field(..., description="Number of successful checks")
     failed_checks: int = Field(..., description="Number of failed checks")
-    success_rate: float = Field(..., ge=0, le=100, description="Success rate percentage")
-    avg_latency_ms: float | None = Field(None, description="Average latency in milliseconds")
-    min_latency_ms: float | None = Field(None, description="Minimum latency in milliseconds")
-    max_latency_ms: float | None = Field(None, description="Maximum latency in milliseconds")
+    success_rate: float = Field(
+        ..., ge=0, le=100, description="Success rate percentage"
+    )
+    avg_latency_ms: float | None = Field(
+        None, description="Average latency in milliseconds"
+    )
+    min_latency_ms: float | None = Field(
+        None, description="Minimum latency in milliseconds"
+    )
+    max_latency_ms: float | None = Field(
+        None, description="Maximum latency in milliseconds"
+    )
     p50_latency_ms: float | None = Field(None, description="50th percentile latency")
     p95_latency_ms: float | None = Field(None, description="95th percentile latency")
     p99_latency_ms: float | None = Field(None, description="99th percentile latency")
@@ -205,7 +231,9 @@ class AgentReportResponse(BaseSchema):
     agent_id: UUID = Field(..., description="Agent UUID")
     received_at: datetime = Field(..., description="When report was received")
     results_processed: int = Field(..., description="Number of check results processed")
-    results_failed: int = Field(0, description="Number of check results that failed to process")
+    results_failed: int = Field(
+        0, description="Number of check results that failed to process"
+    )
     result_ids: dict[str, int] = Field(
         default_factory=dict,
         description="Map of check_id (UUID str) -> result_id (int) for artifact uploads",

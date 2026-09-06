@@ -15,7 +15,9 @@ from app.schemas.base_schema import BaseSchema, TimestampSchema
 class AlertBase(BaseSchema):
     """Base schema for Alert with common fields."""
 
-    name: str = Field(..., min_length=1, max_length=255, description="Name of the alert rule")
+    name: str = Field(
+        ..., min_length=1, max_length=255, description="Name of the alert rule"
+    )
     description: str | None = Field(None, description="Detailed description")
     trigger_type: AlertTriggerType = Field(
         ...,
@@ -44,7 +46,9 @@ class AlertBase(BaseSchema):
         ge=1,
         description="Maximum number of resends",
     )
-    custom_subject: str | None = Field(None, max_length=500, description="Custom subject template")
+    custom_subject: str | None = Field(
+        None, max_length=500, description="Custom subject template"
+    )
     custom_message: str | None = Field(None, description="Custom message body template")
 
 
@@ -175,8 +179,12 @@ class AlertListResponse(BaseSchema):
 class AlertNotificationMappingCreate(BaseSchema):
     """Schema for adding a notification provider to an alert."""
 
-    notification_provider_id: UUID = Field(..., description="Notification provider UUID")
-    is_enabled: bool = Field(default=True, description="Whether this mapping is enabled")
+    notification_provider_id: UUID = Field(
+        ..., description="Notification provider UUID"
+    )
+    is_enabled: bool = Field(
+        default=True, description="Whether this mapping is enabled"
+    )
 
 
 class AlertNotificationMappingUpdate(BaseSchema):
@@ -189,7 +197,9 @@ class AlertCheckMappingCreate(BaseSchema):
     """Schema for adding a check to an alert."""
 
     check_id: UUID = Field(..., description="Check UUID")
-    is_enabled: bool = Field(default=True, description="Whether this mapping is enabled")
+    is_enabled: bool = Field(
+        default=True, description="Whether this mapping is enabled"
+    )
     override_resend_interval: int | None = Field(
         None,
         ge=1,

@@ -77,7 +77,9 @@ async def list_registration_keys(
     db: Annotated[AsyncSession, Depends(get_db)],
     token: Annotated[str, Depends(verify_api_token)],
     skip: Annotated[int, Query(ge=0, description="Number of records to skip")] = 0,
-    limit: Annotated[int, Query(ge=1, le=1000, description="Maximum records to return")] = 100,
+    limit: Annotated[
+        int, Query(ge=1, le=1000, description="Maximum records to return")
+    ] = 100,
     include_revoked: Annotated[bool, Query(description="Include revoked keys")] = False,
 ):
     """
@@ -260,7 +262,9 @@ async def delete_registration_key(
     key_id: UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
     token: Annotated[str, Depends(verify_api_token)],
-    hard_delete: Annotated[bool, Query(description="Permanently delete (dangerous)")] = False,
+    hard_delete: Annotated[
+        bool, Query(description="Permanently delete (dangerous)")
+    ] = False,
 ):
     """
     Delete a registration key.

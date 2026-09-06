@@ -207,7 +207,9 @@ class BaseNotificationProvider(ABC):
             "{{NAME}}": context.check_name,
             "{{HOSTNAME_OR_URL}}": context.target,
             "{{STATUS}}": "UP" if context.success else "DOWN",
-            "{{LATENCY}}": (f"{context.latency_ms:.2f}ms" if context.latency_ms else "N/A"),
+            "{{LATENCY}}": (
+                f"{context.latency_ms:.2f}ms" if context.latency_ms else "N/A"
+            ),
             "{{AGENT}}": context.agent_name or "Unknown Agent",
             "{{TIMESTAMP}}": context.timestamp or "N/A",
             "{{ERROR_MESSAGE}}": context.error_message or "No error",

@@ -464,7 +464,9 @@ async def init_db() -> None:
                         """
                     )
                 )
-                logger.info("Added retention policy for check_results_daily: 1825 days (5 years)")
+                logger.info(
+                    "Added retention policy for check_results_daily: 1825 days (5 years)"
+                )
 
             except Exception:
                 logger.warning("TimescaleDB setup partially failed", exc_info=True)

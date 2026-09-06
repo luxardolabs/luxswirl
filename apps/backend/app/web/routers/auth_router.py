@@ -135,7 +135,9 @@ async def login_submit(
             value=token,
             httponly=cookie_config.session_cookie_httponly,
             secure=cookie_config.session_cookie_secure,
-            samesite=cast(Literal["lax", "strict", "none"], cookie_config.session_cookie_samesite),
+            samesite=cast(
+                Literal["lax", "strict", "none"], cookie_config.session_cookie_samesite
+            ),
             max_age=max_age_seconds,
             path=cookie_config.session_cookie_path,
         )
@@ -148,7 +150,9 @@ async def login_submit(
         value=token,
         httponly=cookie_config.session_cookie_httponly,
         secure=cookie_config.session_cookie_secure,
-        samesite=cast(Literal["lax", "strict", "none"], cookie_config.session_cookie_samesite),
+        samesite=cast(
+            Literal["lax", "strict", "none"], cookie_config.session_cookie_samesite
+        ),
         max_age=max_age_seconds,
         path=cookie_config.session_cookie_path,
     )

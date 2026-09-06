@@ -11,7 +11,10 @@ from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth_deps import AuthedUser
-from app.schemas.registration_key_schema import RegistrationKeyCreate, RegistrationKeyRevoke
+from app.schemas.registration_key_schema import (
+    RegistrationKeyCreate,
+    RegistrationKeyRevoke,
+)
 from app.services.core.registration_key_core_service import RegistrationKeyCoreService
 
 logger = get_logger("luxswirl.web.services.registration_keys")
@@ -21,7 +24,9 @@ class RegistrationKeysViewService:
     """View-layer wrapper for registration-key admin endpoints."""
 
     @staticmethod
-    def build_create_form_context(request: Request, current_user: AuthedUser) -> dict[str, Any]:
+    def build_create_form_context(
+        request: Request, current_user: AuthedUser
+    ) -> dict[str, Any]:
         """Empty-form partial context for the 'new key' modal."""
         return {
             "request": request,
@@ -41,7 +46,9 @@ class RegistrationKeysViewService:
         Create a key (delegates to core) and build the
         'created — copy this once' panel context with the plaintext value.
         """
-        data = RegistrationKeyCreate(name=name, description=description if description else None)
+        data = RegistrationKeyCreate(
+            name=name, description=description if description else None
+        )
         key, plaintext_key = await RegistrationKeyCoreService.create_key(db, data)
         logger.info(
             "Created registration key",

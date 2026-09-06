@@ -14,7 +14,9 @@ class SettingValue(BaseModel):
     """Schema for setting value storage."""
 
     value: Any = Field(..., description="The actual value")
-    type: str = Field(..., description="Value type: int, float, bool, string, list, dict")
+    type: str = Field(
+        ..., description="Value type: int, float, bool, string, list, dict"
+    )
 
     model_config = ConfigDict(
         json_schema_extra={

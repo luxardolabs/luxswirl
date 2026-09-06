@@ -7,6 +7,41 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.core.datetime_utils import utc_now
+from app.models.enum_model import UserRole
+
+
+class CurrentUserDTO(BaseModel):
+    """The authenticated principal, as it crosses the web seam.
+
+    The auth dependencies return THIS, never the `User` ORM model. Handing a view or a
+    template an ORM row means every attribute access can fire a lazy load outside the
+    request's session scope, and welds the presentation layer to the DB schema. This
+    carries columns only — no relationships — so it is safe to hold past the session.
+
+    Core services never take this: they take `user_id: UUID` and refetch (see
+    `luxarch --playbook view-seam`).
+    """
+
+    id: UUID
+    username: str
+    role: UserRole
+    full_name: str | None = None
+    is_active: bool
+    must_change_password: bool
+    last_login_at: datetime | None = None
+    locked_until: datetime | None = None
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+    @property
+    def is_locked(self) -> bool:
+        """Whether the account is currently locked out (mirrors User.is_locked)."""
+        if not self.locked_until:
+            return False
+        return utc_now() < self.locked_until
+
 
 class LoginRequest(BaseModel):
     """Request schema for user login."""

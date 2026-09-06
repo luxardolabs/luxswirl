@@ -112,12 +112,16 @@ class CheckResultCRUD:
         return result.scalars().all()
 
     @staticmethod
-    async def get_summary_stats_for_check(db: AsyncSession, check_id: UUID, cutoff) -> Any:
+    async def get_summary_stats_for_check(
+        db: AsyncSession, check_id: UUID, cutoff
+    ) -> Any:
         """Aggregate summary stats for a check since cutoff."""
         result = await db.execute(
             select(
                 func.count(CheckResult.id).label("total_checks"),
-                func.sum(func.cast(CheckResult.success, Integer)).label("successful_checks"),
+                func.sum(func.cast(CheckResult.success, Integer)).label(
+                    "successful_checks"
+                ),
                 func.avg(CheckResult.latency_ms).label("avg_latency_ms"),
                 func.min(CheckResult.latency_ms).label("min_latency_ms"),
                 func.max(CheckResult.latency_ms).label("max_latency_ms"),
@@ -137,9 +141,15 @@ class CheckResultCRUD:
         """p50/p95/p99 latency for a check since cutoff."""
         result = await db.execute(
             select(
-                func.percentile_cont(0.50).within_group(CheckResult.latency_ms).label("p50"),
-                func.percentile_cont(0.95).within_group(CheckResult.latency_ms).label("p95"),
-                func.percentile_cont(0.99).within_group(CheckResult.latency_ms).label("p99"),
+                func.percentile_cont(0.50)
+                .within_group(CheckResult.latency_ms)
+                .label("p50"),
+                func.percentile_cont(0.95)
+                .within_group(CheckResult.latency_ms)
+                .label("p95"),
+                func.percentile_cont(0.99)
+                .within_group(CheckResult.latency_ms)
+                .label("p99"),
             ).where(
                 and_(
                     CheckResult.check_id == check_id,
@@ -156,7 +166,9 @@ class CheckResultCRUD:
         result = await db.execute(
             select(
                 func.count(CheckResult.id).label("total_checks"),
-                func.sum(func.cast(CheckResult.success, Integer)).label("successful_checks"),
+                func.sum(func.cast(CheckResult.success, Integer)).label(
+                    "successful_checks"
+                ),
                 func.avg(CheckResult.latency_ms).label("avg_latency_ms"),
             ).where(CheckResult.timestamp >= cutoff)
         )
@@ -183,7 +195,9 @@ class CheckResultCRUD:
     @staticmethod
     async def delete_older_than(db: AsyncSession, cutoff) -> int:
         """Bulk delete check results with timestamp < cutoff. Returns rowcount."""
-        result = await db.execute(delete(CheckResult).where(CheckResult.timestamp < cutoff))
+        result = await db.execute(
+            delete(CheckResult).where(CheckResult.timestamp < cutoff)
+        )
         return result.rowcount or 0  # type: ignore[attr-defined]
 
     @staticmethod
@@ -193,10 +207,14 @@ class CheckResultCRUD:
         result = await db.execute(
             select(
                 func.count(CheckResult.id).label("total_checks"),
-                func.sum(func.cast(CheckResult.success, Integer)).label("successful_checks"),
+                func.sum(func.cast(CheckResult.success, Integer)).label(
+                    "successful_checks"
+                ),
                 func.avg(CheckResult.latency_ms).label("avg_latency_ms"),
                 func.max(CheckResult.timestamp).label("last_check_time"),
-            ).where(and_(CheckResult.agent_id == agent_id, CheckResult.timestamp >= since))
+            ).where(
+                and_(CheckResult.agent_id == agent_id, CheckResult.timestamp >= since)
+            )
         )
         return result.one()
 
@@ -347,7 +365,9 @@ class CheckResultCRUD:
                 .subquery()
             )
 
-            query = query.outerjoin(latest_result_cte, Check.id == latest_result_cte.c.check_id)
+            query = query.outerjoin(
+                latest_result_cte, Check.id == latest_result_cte.c.check_id
+            )
 
             if status == "up":
                 conditions.append(latest_result_cte.c.success.is_(True))
@@ -412,7 +432,9 @@ class CheckResultCRUD:
         return {row.check_id: row for row in result.all()}
 
     @staticmethod
-    async def get_24h_stats_batch(db: AsyncSession, check_ids: list[UUID]) -> dict[UUID, Any]:
+    async def get_24h_stats_batch(
+        db: AsyncSession, check_ids: list[UUID]
+    ) -> dict[UUID, Any]:
         """
         Batch query 24h success stats for multiple checks.
 
@@ -545,7 +567,9 @@ class CheckResultCRUD:
         # Active agents
 
         active_agents_result = await db.execute(
-            select(func.count(Agent.id)).where(Agent.last_seen >= utc_now() - timedelta(minutes=10))
+            select(func.count(Agent.id)).where(
+                Agent.last_seen >= utc_now() - timedelta(minutes=10)
+            )
         )
         active_agents = active_agents_result.scalar_one()
 
@@ -581,13 +605,17 @@ class CheckResultCRUD:
             Tuple of (Check, Agent) or None
         """
         query = (
-            select(Check, Agent).join(Agent, Check.agent_id == Agent.id).where(Check.id == check_id)
+            select(Check, Agent)
+            .join(Agent, Check.agent_id == Agent.id)
+            .where(Check.id == check_id)
         )
         result = await db.execute(query)
         return result.one_or_none()
 
     @staticmethod
-    async def get_bucketed_history(db: AsyncSession, check_id: UUID, hours: int) -> list:
+    async def get_bucketed_history(
+        db: AsyncSession, check_id: UUID, hours: int
+    ) -> list:
         """
         Get time-bucketed check result history using TimescaleDB time_bucket.
 
@@ -630,7 +658,9 @@ class CheckResultCRUD:
             LIMIT 500
             """
         )
-        result = await db.execute(history_query, {"check_id": check_id, "cutoff": cutoff})
+        result = await db.execute(
+            history_query, {"check_id": check_id, "cutoff": cutoff}
+        )
         return list(result.all())
 
     @staticmethod
@@ -658,7 +688,9 @@ class CheckResultCRUD:
         return list(result.scalars().all())
 
     @staticmethod
-    async def get_check_detail_stats(db: AsyncSession, check_id: UUID, hours: int) -> Any:
+    async def get_check_detail_stats(
+        db: AsyncSession, check_id: UUID, hours: int
+    ) -> Any:
         """
         Get stats for check detail panel (count, success, latencies).
 
@@ -682,7 +714,9 @@ class CheckResultCRUD:
         return result.one()
 
     @staticmethod
-    async def get_latest_result_for_check(db: AsyncSession, check_id: UUID) -> CheckResult | None:
+    async def get_latest_result_for_check(
+        db: AsyncSession, check_id: UUID
+    ) -> CheckResult | None:
         """
         Get the most recent result for a check.
 
@@ -699,7 +733,9 @@ class CheckResultCRUD:
         return result.scalar_one_or_none()
 
     @staticmethod
-    async def get_check_result_by_id(db: AsyncSession, check_result_id: UUID) -> CheckResult | None:
+    async def get_check_result_by_id(
+        db: AsyncSession, check_result_id: UUID
+    ) -> CheckResult | None:
         """Get a single check result by id (unique across the hypertable)."""
         query = select(CheckResult).where(CheckResult.id == check_result_id).limit(1)
         result = await db.execute(query)

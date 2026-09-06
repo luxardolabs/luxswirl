@@ -42,7 +42,9 @@ class CheckArtifact(Base, TableNameMixin, SerializerMixin):
     __table_args__ = (
         # Note: FK to check_results removed to allow TimescaleDB compression.
         # Both tables are hypertables with retention policies, so data ages out together.
-        Index("idx_check_artifacts_result_id", "check_result_id", "check_result_timestamp"),
+        Index(
+            "idx_check_artifacts_result_id", "check_result_id", "check_result_timestamp"
+        ),
         Index("idx_check_artifacts_check_id", "check_id"),
         Index("idx_check_artifacts_type", "artifact_type"),
         Index("idx_check_artifacts_created", "created_at"),

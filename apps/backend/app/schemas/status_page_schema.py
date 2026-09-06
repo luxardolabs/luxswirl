@@ -34,9 +34,13 @@ class StatusPageGroupItem(BaseSchema):
     """Schema for a group item in a status page."""
 
     type: Literal["group"] = Field("group", description="Item type")
-    name: str = Field(..., min_length=1, max_length=255, description="Group display name")
+    name: str = Field(
+        ..., min_length=1, max_length=255, description="Group display name"
+    )
     order: int = Field(..., ge=0, description="Display order")
-    filter: dict[str, Any] = Field(..., description="Filter configuration for checks in this group")
+    filter: dict[str, Any] = Field(
+        ..., description="Filter configuration for checks in this group"
+    )
     collapsed: bool = Field(False, description="Whether group is collapsed by default")
 
     model_config = {
@@ -64,8 +68,12 @@ class StatusPageBase(BaseSchema):
         max_length=255,
         description="URL-friendly slug (e.g., /status/production)",
     )
-    description: str | None = Field(None, max_length=1000, description="Optional description")
-    is_public: bool = Field(True, description="Whether the status page is publicly accessible")
+    description: str | None = Field(
+        None, max_length=1000, description="Optional description"
+    )
+    is_public: bool = Field(
+        True, description="Whether the status page is publicly accessible"
+    )
 
     @field_validator("slug")
     @classmethod
@@ -206,7 +214,9 @@ class StatusPageResponse(StatusPageInDB):
 class StatusPageListResponse(BaseSchema):
     """Schema for listing status pages."""
 
-    status_pages: list[StatusPageResponse] = Field(..., description="List of status pages")
+    status_pages: list[StatusPageResponse] = Field(
+        ..., description="List of status pages"
+    )
     total: int = Field(..., description="Total number of status pages")
     public_count: int = Field(..., description="Number of public status pages")
     private_count: int = Field(..., description="Number of private status pages")
@@ -228,7 +238,9 @@ class StatusPageAddCheckRequest(BaseSchema):
 class StatusPageAddGroupRequest(BaseSchema):
     """Schema for adding a group to a status page."""
 
-    name: str = Field(..., min_length=1, max_length=255, description="Group display name")
+    name: str = Field(
+        ..., min_length=1, max_length=255, description="Group display name"
+    )
     filter: dict[str, Any] = Field(..., description="Filter configuration for checks")
     order: int | None = Field(None, ge=0, description="Display order (defaults to end)")
     collapsed: bool = Field(False, description="Whether group is collapsed by default")

@@ -13,14 +13,20 @@ from app.models.enum_model import UserRole
 class UserCreate(BaseModel):
     """Request schema for creating a new user."""
 
-    username: str = Field(..., min_length=3, max_length=100, description="Username (unique)")
+    username: str = Field(
+        ..., min_length=3, max_length=100, description="Username (unique)"
+    )
     password: str = Field(
         ..., min_length=8, max_length=100, description="Password (min 8 characters)"
     )
-    role: UserRole = Field(UserRole.VIEWER, description="User role: admin, editor, viewer")
+    role: UserRole = Field(
+        UserRole.VIEWER, description="User role: admin, editor, viewer"
+    )
     full_name: str | None = Field(None, max_length=255, description="Full name")
     is_active: bool = Field(True, description="Whether user is active")
-    must_change_password: bool = Field(False, description="Force password change on first login")
+    must_change_password: bool = Field(
+        False, description="Force password change on first login"
+    )
 
     @field_validator("username")
     @classmethod
@@ -82,7 +88,9 @@ class UserUpdate(BaseModel):
 class UserPasswordReset(BaseModel):
     """Request schema for admin resetting user password."""
 
-    new_password: str = Field(..., min_length=8, max_length=100, description="New password")
+    new_password: str = Field(
+        ..., min_length=8, max_length=100, description="New password"
+    )
     must_change_password: bool = Field(
         True, description="Require user to change password on next login"
     )

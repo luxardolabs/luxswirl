@@ -104,8 +104,12 @@ async def get_metrics(
         return Response(status_code=404)
 
     # Get metrics settings from database
-    auth_required = await SettingsCoreService.get_setting(db, "metrics.auth_required", False)
-    configured_token = await SettingsCoreService.get_setting(db, "metrics.bearer_token", "")
+    auth_required = await SettingsCoreService.get_setting(
+        db, "metrics.auth_required", False
+    )
+    configured_token = await SettingsCoreService.get_setting(
+        db, "metrics.bearer_token", ""
+    )
 
     # Check if auth is required
     if auth_required:
@@ -124,10 +128,13 @@ async def get_metrics(
             token = authorization[7:]  # Remove "Bearer " prefix
 
             # Check against configured metrics token (if set) — constant-time.
-            if configured_token and hmac.compare_digest(token, configured_token):
-                authenticated = True
-            # Fall back to API tokens
-            elif any(hmac.compare_digest(token, t) for t in settings.security.auth_tokens):
+            if (
+                configured_token
+                and hmac.compare_digest(token, configured_token)
+                or any(
+                    hmac.compare_digest(token, t) for t in settings.security.auth_tokens
+                )
+            ):
                 authenticated = True
 
         # Reject if no valid auth method worked

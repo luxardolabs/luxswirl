@@ -76,7 +76,9 @@ class TimescaleCoreService:
 
         try:
             await TimescaleCRUD.remove_retention_policy(db, hypertable_name)
-            await TimescaleCRUD.add_retention_policy(db, hypertable_name, retention_days)
+            await TimescaleCRUD.add_retention_policy(
+                db, hypertable_name, retention_days
+            )
             logger.info(
                 "Updated retention policy",
                 extra={
@@ -105,7 +107,9 @@ class TimescaleCoreService:
 
         try:
             await TimescaleCRUD.remove_compression_policy(db, hypertable_name)
-            await TimescaleCRUD.add_compression_policy(db, hypertable_name, compress_after_days)
+            await TimescaleCRUD.add_compression_policy(
+                db, hypertable_name, compress_after_days
+            )
             logger.info(
                 "Updated compression policy",
                 extra={
@@ -160,14 +164,18 @@ class TimescaleCoreService:
             "total_chunks": total,
             "compressed_chunks": compressed,
             "uncompressed_chunks": uncompressed,
-            "compression_ratio": round(compressed / total * 100, 1) if total > 0 else 0.0,
+            "compression_ratio": round(compressed / total * 100, 1)
+            if total > 0
+            else 0.0,
         }
 
     @staticmethod
     async def get_retention_info(db: AsyncSession) -> list[dict]:
         """Get current retention policies."""
         rows = await TimescaleCRUD.get_retention_policies(db)
-        return [{"hypertable": name, "drop_after": drop_after} for name, drop_after in rows]
+        return [
+            {"hypertable": name, "drop_after": drop_after} for name, drop_after in rows
+        ]
 
     @staticmethod
     async def get_table_row_counts(db: AsyncSession) -> dict:
@@ -221,7 +229,9 @@ class TimescaleCoreService:
                     "artifacts_mb": artifacts_mb,
                     "checks_mb": checks_mb,
                     "agent_metrics_mb": agent_metrics_mb,
-                    "total_mb": round(results_mb + artifacts_mb + checks_mb + agent_metrics_mb, 2),
+                    "total_mb": round(
+                        results_mb + artifacts_mb + checks_mb + agent_metrics_mb, 2
+                    ),
                 }
             )
         return growth
@@ -235,5 +245,7 @@ class TimescaleCoreService:
             "compression": await TimescaleCoreService.get_compression_stats(db),
             "retention_policies": await TimescaleCoreService.get_retention_info(db),
             "row_counts": await TimescaleCoreService.get_table_row_counts(db),
-            "daily_growth": await TimescaleCoreService.get_daily_growth_rate(db, days=7),
+            "daily_growth": await TimescaleCoreService.get_daily_growth_rate(
+                db, days=7
+            ),
         }

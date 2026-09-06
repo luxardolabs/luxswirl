@@ -52,7 +52,9 @@ class JobExecutionCRUD:
         return execution
 
     @staticmethod
-    async def get_by_job_key(db: AsyncSession, job_key: str, limit: int = 10) -> list[JobExecution]:
+    async def get_by_job_key(
+        db: AsyncSession, job_key: str, limit: int = 10
+    ) -> list[JobExecution]:
         """Get recent executions for a job."""
         result = await db.execute(
             select(JobExecution)
@@ -74,7 +76,9 @@ class JobExecutionCRUD:
         Returns:
             Number of deleted records
         """
-        result = await db.execute(delete(JobExecution).where(JobExecution.started_at < cutoff_date))
+        result = await db.execute(
+            delete(JobExecution).where(JobExecution.started_at < cutoff_date)
+        )
         return int(result.rowcount)  # type: ignore[attr-defined]
 
 
@@ -128,5 +132,7 @@ class JobConfigurationCRUD:
     @staticmethod
     async def get_all_ordered(db: AsyncSession) -> list[JobConfiguration]:
         """Get all jobs ordered by display_name."""
-        result = await db.execute(select(JobConfiguration).order_by(JobConfiguration.display_name))
+        result = await db.execute(
+            select(JobConfiguration).order_by(JobConfiguration.display_name)
+        )
         return list(result.scalars().all())

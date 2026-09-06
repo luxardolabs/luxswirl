@@ -49,7 +49,9 @@ async def handle(db: AsyncSession, job: MaintenanceJob) -> None:
         check_ids = [r.check_id for r in result.results if r.check_id]
         for alert_id_str in alert_ids:
             if alert_id_str:
-                await AlertCoreService.bulk_assign_to_checks(db, UUID(alert_id_str), check_ids)
+                await AlertCoreService.bulk_assign_to_checks(
+                    db, UUID(alert_id_str), check_ids
+                )
 
     logger.info(
         "Bulk create complete",

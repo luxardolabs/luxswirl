@@ -111,7 +111,9 @@ async def register_agent(
 async def list_agents(
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[str, Depends(verify_api_token)],
-    active_only: Annotated[bool, Query(description="Only return active agents")] = False,
+    active_only: Annotated[
+        bool, Query(description="Only return active agents")
+    ] = False,
     page: Annotated[int, Query(ge=1, description="Page number")] = 1,
     page_size: Annotated[int, Query(ge=1, le=1000, description="Items per page")] = 50,
 ):
@@ -337,7 +339,9 @@ async def get_agent_stats(
     agent_id: UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[str, Depends(verify_api_token)],
-    hours: Annotated[int, Query(ge=1, le=720, description="Hours to include in stats")] = 24,
+    hours: Annotated[
+        int, Query(ge=1, le=720, description="Hours to include in stats")
+    ] = 24,
 ):
     return await AgentCoreService.get_agent_stats(db, agent_id, hours)
 

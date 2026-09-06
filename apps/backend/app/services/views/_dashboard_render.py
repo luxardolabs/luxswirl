@@ -67,7 +67,11 @@ class DashboardRender:
                 checks,
                 key=lambda c: (
                     c.latest_success if hasattr(c, "latest_success") else False,
-                    (c.latency_ms if hasattr(c, "latency_ms") and c.latency_ms else 999999),
+                    (
+                        c.latency_ms
+                        if hasattr(c, "latency_ms") and c.latency_ms
+                        else 999999
+                    ),
                 ),
                 reverse=reverse,
             )
@@ -77,7 +81,11 @@ class DashboardRender:
             return sorted(
                 checks,
                 key=lambda c: (
-                    (c.latency_ms if hasattr(c, "latency_ms") and c.latency_ms else 999999),
+                    (
+                        c.latency_ms
+                        if hasattr(c, "latency_ms") and c.latency_ms
+                        else 999999
+                    ),
                     not (c.latest_success if hasattr(c, "latest_success") else False),
                 ),
                 reverse=reverse,
@@ -97,7 +105,9 @@ class DashboardRender:
         return checks
 
     @staticmethod
-    async def get_check_details_map(db: AsyncSession, check_ids: list[UUID]) -> dict[UUID, Check]:
+    async def get_check_details_map(
+        db: AsyncSession, check_ids: list[UUID]
+    ) -> dict[UUID, Check]:
         """
         Get check details with status information for a list of check IDs.
 
@@ -226,7 +236,11 @@ class DashboardRender:
                 check_id_raw = item.get("check_id")
                 # Validate and convert to UUID
                 try:
-                    check_id = UUID(check_id_raw) if isinstance(check_id_raw, str) else check_id_raw
+                    check_id = (
+                        UUID(check_id_raw)
+                        if isinstance(check_id_raw, str)
+                        else check_id_raw
+                    )
                     if isinstance(check_id, UUID):
                         check_ids.append(check_id)
                 except ValueError, TypeError, AttributeError:
@@ -240,7 +254,9 @@ class DashboardRender:
                 for check_id_raw in item.get("checks", []):
                     try:
                         check_id = (
-                            UUID(check_id_raw) if isinstance(check_id_raw, str) else check_id_raw
+                            UUID(check_id_raw)
+                            if isinstance(check_id_raw, str)
+                            else check_id_raw
                         )
                         if isinstance(check_id, UUID):
                             check_ids.append(check_id)
@@ -253,7 +269,9 @@ class DashboardRender:
         return check_ids
 
     @staticmethod
-    async def get_checks_matching_filter(db: AsyncSession, filter: dict[str, Any]) -> list[Check]:
+    async def get_checks_matching_filter(
+        db: AsyncSession, filter: dict[str, Any]
+    ) -> list[Check]:
         """
         Get checks matching a dynamic filter configuration.
 
@@ -435,8 +453,10 @@ class DashboardRender:
         ]
         if failed_check_ids:
             # Get last failure timestamps via core service
-            failure_rows = await CheckResultCoreService.get_last_failure_timestamps_bulk(
-                db, failed_check_ids, hours
+            failure_rows = (
+                await CheckResultCoreService.get_last_failure_timestamps_bulk(
+                    db, failed_check_ids, hours
+                )
             )
 
             for row in failure_rows:
@@ -511,7 +531,9 @@ class DashboardRender:
                 # Pre-compute minute offsets for O(n) instead of O(n*m)
                 minute_bars_dict: dict[int, Any] = {}
                 for result_row in results:
-                    exact_minutes_ago = (now - result_row.timestamp).total_seconds() / 60
+                    exact_minutes_ago = (
+                        now - result_row.timestamp
+                    ).total_seconds() / 60
                     nearest_minute = round(exact_minutes_ago)
                     if 0 <= nearest_minute < minutes:
                         if nearest_minute not in minute_bars_dict:
@@ -520,7 +542,8 @@ class DashboardRender:
                             # Keep the one closest to the exact minute
                             existing = minute_bars_dict[nearest_minute]
                             existing_dist = abs(
-                                (now - existing.timestamp).total_seconds() / 60 - nearest_minute
+                                (now - existing.timestamp).total_seconds() / 60
+                                - nearest_minute
                             )
                             new_dist = abs(exact_minutes_ago - nearest_minute)
                             if new_dist < existing_dist:
@@ -554,7 +577,10 @@ class DashboardRender:
 
         # Bucketed approach for longer ranges — aggregation done in SQL
         all_buckets = await CheckResultCoreService.get_bucketed_status_bars_bulk(
-            db, check_ids, minutes=minutes + bucket_minutes, bucket_minutes=bucket_minutes
+            db,
+            check_ids,
+            minutes=minutes + bucket_minutes,
+            bucket_minutes=bucket_minutes,
         )
 
         # Group by check_id, index by bucket offset
@@ -624,7 +650,9 @@ class DashboardRender:
         )
 
         # Get check details with status
-        check_details_map_uuid = await DashboardRender.get_check_details_map(db, check_ids)
+        check_details_map_uuid = await DashboardRender.get_check_details_map(
+            db, check_ids
+        )
         logger.info(
             "Got checks in details map",
             extra={"count": len(check_details_map_uuid)},
@@ -672,7 +700,9 @@ class DashboardRender:
                         check_objects, sort_by, sort_direction
                     )
                     # Store sorted check IDs
-                    container_group_sorted_checks[idx] = [str(c.id) for c in sorted_checks]
+                    container_group_sorted_checks[idx] = [
+                        str(c.id) for c in sorted_checks
+                    ]
 
         return {
             "check_details_map": check_details_map,
@@ -718,9 +748,13 @@ class DashboardRender:
                 if check_id_str:
                     try:
                         check_id = (
-                            UUID(check_id_str) if isinstance(check_id_str, str) else check_id_str
+                            UUID(check_id_str)
+                            if isinstance(check_id_str, str)
+                            else check_id_str
                         )
-                        check = await DashboardRender.get_check_with_status(db, check_id)
+                        check = await DashboardRender.get_check_with_status(
+                            db, check_id
+                        )
                         if check:
                             check_map[check_id_str] = check
                             items_with_checks.append((item, [check_id_str]))
@@ -747,7 +781,9 @@ class DashboardRender:
                                 if isinstance(check_id_str, str)
                                 else check_id_str
                             )
-                            check = await DashboardRender.get_check_with_status(db, check_id)
+                            check = await DashboardRender.get_check_with_status(
+                                db, check_id
+                            )
                             if check:
                                 group_checks.append(check)
                         except ValueError, TypeError:
@@ -770,7 +806,7 @@ class DashboardRender:
         # Convert string keys to UUID objects for bulk queries
         all_check_ids_uuid = [
             UUID(check_id_str) if isinstance(check_id_str, str) else check_id_str
-            for check_id_str in check_map.keys()
+            for check_id_str in check_map
         ]
 
         if all_check_ids_uuid:
@@ -797,7 +833,9 @@ class DashboardRender:
             # check_map has string keys, but bulk methods return UUID keys - convert for lookup
             for check_id_str, check in check_map.items():
                 check_id_uuid = (
-                    UUID(check_id_str) if isinstance(check_id_str, str) else check_id_str
+                    UUID(check_id_str)
+                    if isinstance(check_id_str, str)
+                    else check_id_str
                 )
 
                 uptime_24h_data = uptime_24h_map.get(
@@ -840,7 +878,9 @@ class DashboardRender:
                 # Apply sorting if configured
                 sort_by = item.get("sort_by", "manual")
                 sort_direction = item.get("sort_direction", "asc")
-                group_checks = DashboardRender.sort_checks(group_checks, sort_by, sort_direction)
+                group_checks = DashboardRender.sort_checks(
+                    group_checks, sort_by, sort_direction
+                )
 
                 rendered_items.append(
                     {
@@ -855,7 +895,9 @@ class DashboardRender:
 
         # Calculate overall stats
         total_checks = len(all_checks)
-        checks_up = sum(1 for c in all_checks if hasattr(c, "latest_success") and c.latest_success)
+        checks_up = sum(
+            1 for c in all_checks if hasattr(c, "latest_success") and c.latest_success
+        )
         checks_down = total_checks - checks_up
 
         # Calculate overall uptime
@@ -883,7 +925,9 @@ class DashboardRender:
             "checks_down": checks_down,
             "rendered_items": rendered_items,
             "time_range_minutes": time_range_minutes,
-            "time_range_label": DashboardRender.format_time_range_label(time_range_minutes),
+            "time_range_label": DashboardRender.format_time_range_label(
+                time_range_minutes
+            ),
             "num_bars": num_bars,
             "bucket_minutes": bucket_size,
         }

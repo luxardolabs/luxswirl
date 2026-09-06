@@ -158,7 +158,9 @@ def humanize_seconds(seconds: int | None) -> str:
         parts.append(f"{hours}h")
     if minutes > 0:
         parts.append(f"{minutes}m")
-    if secs > 0 and not (weeks or days or hours):  # Only show seconds for short durations
+    if secs > 0 and not (
+        weeks or days or hours
+    ):  # Only show seconds for short durations
         parts.append(f"{secs}s")
 
     # Return first 2 parts for brevity (e.g., "1w 2d" or "3h 45m")

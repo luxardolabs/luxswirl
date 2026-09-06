@@ -344,7 +344,10 @@ class MetricsCollectorCoreService:
                 check_dns_record_count.labels(**dns_labels).set(dns["record_count"])
 
         # Database metrics (MySQL/PostgreSQL)
-        if check.check_type in ("mysql", "postgres") and check.check_type in metrics_data:
+        if (
+            check.check_type in ("mysql", "postgres")
+            and check.check_type in metrics_data
+        ):
             db_labels = {
                 "agent": agent.agent_name,
                 "check": check.display_name,
@@ -418,7 +421,9 @@ class MetricsCollectorCoreService:
 
         # Average check duration
         if metric.avg_check_duration_ms is not None:
-            agent_avg_check_duration_ms.labels(**labels).set(metric.avg_check_duration_ms)
+            agent_avg_check_duration_ms.labels(**labels).set(
+                metric.avg_check_duration_ms
+            )
 
         # Error tracking
         if metric.errors_count is not None and metric.errors_count > 0:
@@ -475,7 +480,10 @@ class MetricsCollectorCoreService:
         Args:
             metrics: Dict produced by collect_database_metrics()
         """
-        if "database_size_bytes" in metrics and metrics["database_size_bytes"] is not None:
+        if (
+            "database_size_bytes" in metrics
+            and metrics["database_size_bytes"] is not None
+        ):
             database_size_bytes.set(metrics["database_size_bytes"])
 
         if "agent_count" in metrics and metrics["agent_count"] is not None:
@@ -484,10 +492,16 @@ class MetricsCollectorCoreService:
         if "check_count" in metrics and metrics["check_count"] is not None:
             total_checks.set(metrics["check_count"])
 
-        if "active_agent_count" in metrics and metrics["active_agent_count"] is not None:
+        if (
+            "active_agent_count" in metrics
+            and metrics["active_agent_count"] is not None
+        ):
             active_agents.set(metrics["active_agent_count"])
 
-        if "active_check_count" in metrics and metrics["active_check_count"] is not None:
+        if (
+            "active_check_count" in metrics
+            and metrics["active_check_count"] is not None
+        ):
             active_checks.set(metrics["active_check_count"])
 
         if (
@@ -516,7 +530,10 @@ class MetricsCollectorCoreService:
         Args:
             operational: Dict produced by collect_operational_metrics()
         """
-        if "alerts_enabled" in operational and operational["alerts_enabled"] is not None:
+        if (
+            "alerts_enabled" in operational
+            and operational["alerts_enabled"] is not None
+        ):
             alerts_enabled.set(operational["alerts_enabled"])
 
         # Always update server uptime when operational refresh runs
@@ -525,7 +542,9 @@ class MetricsCollectorCoreService:
         for status, count in (operational.get("job_status_counts") or {}).items():
             jobs_status_count.labels(status=status).set(count)
 
-        for status, count in (operational.get("notification_status_counts") or {}).items():
+        for status, count in (
+            operational.get("notification_status_counts") or {}
+        ).items():
             notifications_total.labels(status=status).set(count)
 
     @staticmethod
@@ -541,7 +560,9 @@ class MetricsCollectorCoreService:
         return generate_latest(registry)
 
     @staticmethod
-    async def rebuild_from_database(db: AsyncSession, lookback_minutes: int = 10) -> None:
+    async def rebuild_from_database(
+        db: AsyncSession, lookback_minutes: int = 10
+    ) -> None:
         """
         Rebuild metrics from database on startup.
 
@@ -584,7 +605,9 @@ class MetricsCollectorCoreService:
             )
 
             for check_result, check in results:
-                MetricsCollectorCoreService.update_check_result(check_result, check, agent)
+                MetricsCollectorCoreService.update_check_result(
+                    check_result, check, agent
+                )
                 check_count += 1
 
         logger.info(

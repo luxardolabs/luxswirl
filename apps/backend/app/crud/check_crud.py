@@ -23,7 +23,9 @@ class CheckCRUD:
         db: AsyncSession, check_id: UUID, *, include_script_code: bool = False
     ) -> Check | None:
         """Get a check by id with agent loaded (optionally undeferring script_code)."""
-        query = select(Check).where(Check.id == check_id).options(selectinload(Check.agent))
+        query = (
+            select(Check).where(Check.id == check_id).options(selectinload(Check.agent))
+        )
         if include_script_code:
             query = query.options(undefer(Check.script_code))
         result = await db.execute(query)
@@ -43,7 +45,9 @@ class CheckCRUD:
         limit: int = 50,
     ) -> tuple[Sequence[Check], int]:
         """Paginated list of checks with agent loaded and filters applied."""
-        query = select(Check).options(selectinload(Check.agent), undefer(Check.script_code))
+        query = select(Check).options(
+            selectinload(Check.agent), undefer(Check.script_code)
+        )
         count_query = select(func.count(Check.id))
 
         if agent_id is not None:
@@ -73,7 +77,9 @@ class CheckCRUD:
 
         total = (await db.execute(count_query)).scalar_one()
         result = await db.execute(
-            query.order_by(Check.agent_id, Check.display_name).offset(offset).limit(limit)
+            query.order_by(Check.agent_id, Check.display_name)
+            .offset(offset)
+            .limit(limit)
         )
         return result.scalars().all(), total
 
@@ -89,12 +95,16 @@ class CheckCRUD:
         return result.scalars().all()
 
     @staticmethod
-    async def get_with_agent_by_ids(db: AsyncSession, check_ids: list[UUID]) -> Sequence[Check]:
+    async def get_with_agent_by_ids(
+        db: AsyncSession, check_ids: list[UUID]
+    ) -> Sequence[Check]:
         """Checks matching IDs with agent loaded."""
         if not check_ids:
             return []
         result = await db.execute(
-            select(Check).where(Check.id.in_(check_ids)).options(selectinload(Check.agent))
+            select(Check)
+            .where(Check.id.in_(check_ids))
+            .options(selectinload(Check.agent))
         )
         return result.scalars().all()
 
@@ -107,7 +117,9 @@ class CheckCRUD:
         return result.rowcount or 0  # type: ignore[attr-defined]
 
     @staticmethod
-    async def bulk_set_enabled(db: AsyncSession, check_ids: list[UUID], enabled: bool) -> int:
+    async def bulk_set_enabled(
+        db: AsyncSession, check_ids: list[UUID], enabled: bool
+    ) -> int:
         """Bulk update enabled flag. Returns rowcount."""
         if not check_ids:
             return 0
@@ -127,7 +139,9 @@ class CheckCRUD:
     @staticmethod
     async def count_dependents(db: AsyncSession, parent_check_id: UUID) -> int:
         result = await db.execute(
-            select(func.count(Check.id)).where(Check.depends_on_check_id == parent_check_id)
+            select(func.count(Check.id)).where(
+                Check.depends_on_check_id == parent_check_id
+            )
         )
         return result.scalar_one()
 
@@ -213,16 +227,17 @@ class CheckCRUD:
         checks_query = select(Check.tags).where(Check.tags.isnot(None))
         checks_result = await db.execute(checks_query)
         for row in checks_result.all():
-            if row[0]:
-                if isinstance(row[0], list):
-                    all_tags.update(tag.strip() for tag in row[0] if tag and tag.strip())
+            if row[0] and isinstance(row[0], list):
+                all_tags.update(tag.strip() for tag in row[0] if tag and tag.strip())
 
         # Agent tags (PostgreSQL array)
         agents_query = select(Agent.tags).where(Agent.tags.isnot(None))
         agents_result = await db.execute(agents_query)
         for agent_row in agents_result.all():
             if agent_row[0]:
-                all_tags.update(tag.strip() for tag in agent_row[0] if tag and tag.strip())
+                all_tags.update(
+                    tag.strip() for tag in agent_row[0] if tag and tag.strip()
+                )
 
         return sorted(all_tags)
 
@@ -241,6 +256,10 @@ class CheckCRUD:
         if not check_ids:
             return []
 
-        query = select(Check).where(Check.id.in_(check_ids)).options(selectinload(Check.agent))
+        query = (
+            select(Check)
+            .where(Check.id.in_(check_ids))
+            .options(selectinload(Check.agent))
+        )
         result = await db.execute(query)
         return list(result.scalars().all())

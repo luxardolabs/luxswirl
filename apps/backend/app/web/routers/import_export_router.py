@@ -128,7 +128,9 @@ async def export_checks(
         )
 
 
-@router.post("/agents/{agent_id}/import", response_class=HTMLResponse, include_in_schema=False)
+@router.post(
+    "/agents/{agent_id}/import", response_class=HTMLResponse, include_in_schema=False
+)
 async def import_checks(
     request: Request,
     agent_id: Annotated[UUID, Path(description="Agent ID")],

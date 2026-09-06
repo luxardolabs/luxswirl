@@ -33,7 +33,9 @@ class AuthCoreService:
     PASSWORD_BCRYPT_ROUNDS = 12
 
     @staticmethod
-    async def validate_password_complexity(db: AsyncSession, password: str) -> tuple[bool, str]:
+    async def validate_password_complexity(
+        db: AsyncSession, password: str
+    ) -> tuple[bool, str]:
         """
         Validate password against complexity rules from database settings.
 
@@ -72,7 +74,9 @@ class AuthCoreService:
             return False, "Password must contain at least one lowercase letter"
 
         # Check number requirement
-        if security_settings.get("require_number", True) and not any(c.isdigit() for c in password):
+        if security_settings.get("require_number", True) and not any(
+            c.isdigit() for c in password
+        ):
             return False, "Password must contain at least one digit"
 
         # Check special character requirement
@@ -85,7 +89,9 @@ class AuthCoreService:
                 )
 
         # Check against common passwords list
-        if security_settings.get("check_common_passwords", True) and is_common_password(password):
+        if security_settings.get("check_common_passwords", True) and is_common_password(
+            password
+        ):
             return False, "Password is too common. Please choose a stronger password"
 
         return True, ""
@@ -423,7 +429,9 @@ class AuthCoreService:
         )
         return count
 
-    async def logout_session_by_id(self, db: AsyncSession, user_id: UUID, session_id: UUID) -> bool:
+    async def logout_session_by_id(
+        self, db: AsyncSession, user_id: UUID, session_id: UUID
+    ) -> bool:
         """
         Logout a specific session (for user managing their sessions).
 
@@ -476,14 +484,14 @@ class AuthCoreService:
         return count
 
     async def change_password(
-        self, db: AsyncSession, user: User, current_password: str, new_password: str
+        self, db: AsyncSession, user_id: UUID, current_password: str, new_password: str
     ) -> bool:
         """
         Change user password.
 
         Args:
             db: Database session
-            user: User object
+            user_id: Id of the user whose password is changing
             current_password: Current password (for verification)
             new_password: New password
 
@@ -491,8 +499,15 @@ class AuthCoreService:
             True if password changed successfully
 
         Raises:
-            ValueError: If current password is incorrect or new password doesn't meet complexity requirements
+            ValueError: If the user is gone, the current password is incorrect, or the
+                new password doesn't meet complexity requirements
         """
+        # Core takes an id and refetches — the web layer's DTO never enters core, so the
+        # row mutated below is always a live, session-attached ORM object.
+        user = await UserCRUD.get_by_id(db, user_id)
+        if user is None:
+            raise ValueError("User not found")
+
         # Verify current password
         if not self.verify_password(current_password, user.password_hash):
             raise ValueError("Current password is incorrect")

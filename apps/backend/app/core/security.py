@@ -17,10 +17,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.datetime_utils import utc_now
 from app.db import get_db
+from app.schemas.auth_schema import CurrentUserDTO
 
 if TYPE_CHECKING:
     from app.models.agent_model import Agent
-    from app.models.user_model import User
 
 logger = get_logger("luxswirl.security")
 
@@ -31,7 +31,9 @@ logger = get_logger("luxswirl.security")
 
 
 async def get_current_user(
-    session_token: str | None = Cookie(None, alias=settings.security.session_cookie_name),
+    session_token: str | None = Cookie(
+        None, alias=settings.security.session_cookie_name
+    ),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -42,14 +44,16 @@ async def get_current_user(
         db: Database session
 
     Returns:
-        User object
+        The authenticated principal as a CurrentUserDTO — never the ORM model. The
+        conversion happens here, inside the request's session scope, so nothing
+        downstream can lazy-load off a detached row.
 
     Raises:
         HTTPException: If not authenticated or session invalid
 
     Usage:
         @router.get("/api/v1/me")
-        async def get_me(user: User = Depends(get_current_user)):
+        async def get_me(user: CurrentUser):
             return user
     """
     if not session_token:
@@ -70,13 +74,13 @@ async def get_current_user(
             detail="Invalid or expired session",
         )
 
-    # Session is valid, return user
-    return session.user
+    # Session is valid — convert to the DTO here, in session scope.
+    return CurrentUserDTO.model_validate(session.user)
 
 
 async def get_current_active_user(
-    current_user: User = Depends(get_current_user),
-):
+    current_user: CurrentUserDTO = Depends(get_current_user),
+) -> CurrentUserDTO:
     """
     Get current active user (must not be inactive or locked).
 
@@ -84,14 +88,14 @@ async def get_current_active_user(
         current_user: Current user from get_current_user
 
     Returns:
-        Active User object
+        Active CurrentUserDTO
 
     Raises:
         HTTPException: If user is inactive or locked
 
     Usage:
         @router.get("/api/v1/agents")
-        async def list_agents(user: User = Depends(get_current_active_user)):
+        async def list_agents(user: CurrentUserDTO = Depends(get_current_active_user)):
             return agents
     """
     if not current_user.is_active:
@@ -126,11 +130,13 @@ def require_role(*allowed_roles: str):
 
         # Or to get the user:
         @router.get("/api/v1/settings")
-        async def get_settings(user: User = Depends(require_role("admin", "editor"))):
+        async def get_settings(user: CurrentUserDTO = Depends(require_role("admin", "editor"))):
             ...
     """
 
-    async def role_checker(user: User = Depends(get_current_active_user)):
+    async def role_checker(
+        user: CurrentUserDTO = Depends(get_current_active_user),
+    ) -> CurrentUserDTO:
         """Check if user has required role."""
         if user.role not in allowed_roles:
             raise HTTPException(
@@ -143,7 +149,9 @@ def require_role(*allowed_roles: str):
 
 
 # Convenience dependencies for common role requirements
-async def require_admin(user: User = Depends(get_current_active_user)):
+async def require_admin(
+    user: CurrentUserDTO = Depends(get_current_active_user),
+) -> CurrentUserDTO:
     """Require admin role."""
     if user.role != "admin":
         raise HTTPException(
@@ -153,7 +161,9 @@ async def require_admin(user: User = Depends(get_current_active_user)):
     return user
 
 
-async def require_editor(user: User = Depends(get_current_active_user)):
+async def require_editor(
+    user: CurrentUserDTO = Depends(get_current_active_user),
+) -> CurrentUserDTO:
     """Require editor role or higher (admin, editor)."""
     if user.role not in ("admin", "editor"):
         raise HTTPException(
@@ -164,7 +174,9 @@ async def require_editor(user: User = Depends(get_current_active_user)):
 
 
 async def get_optional_user(
-    session_token: str | None = Cookie(None, alias=settings.security.session_cookie_name),
+    session_token: str | None = Cookie(
+        None, alias=settings.security.session_cookie_name
+    ),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -177,7 +189,7 @@ async def get_optional_user(
         db: Database session
 
     Returns:
-        User object or None
+        CurrentUserDTO or None
     """
     if not session_token:
         return None
@@ -193,7 +205,9 @@ async def get_optional_user(
 # ========================================================================
 
 
-async def _unauthenticated_web_redirect(request: Request, db: AsyncSession) -> HTTPException:
+async def _unauthenticated_web_redirect(
+    request: Request, db: AsyncSession
+) -> HTTPException:
     """Build the redirect for an unauthenticated web request.
 
     First run (no admin seeded from env and none in the DB) -> the /setup wizard,
@@ -207,7 +221,10 @@ async def _unauthenticated_web_redirect(request: Request, db: AsyncSession) -> H
         UserCRUD,  # noqa: inline-import (breaks core<->models import cycle)
     )
 
-    if not settings.security.initial_admin_password and await UserCRUD.get_first_admin(db) is None:
+    if (
+        not settings.security.initial_admin_password
+        and await UserCRUD.get_first_admin(db) is None
+    ):
         return HTTPException(
             status_code=status.HTTP_307_TEMPORARY_REDIRECT,
             headers={"Location": "/setup"},
@@ -220,7 +237,9 @@ async def _unauthenticated_web_redirect(request: Request, db: AsyncSession) -> H
 
 async def get_current_user_web(
     request: Request,
-    session_token: str | None = Cookie(None, alias=settings.security.session_cookie_name),
+    session_token: str | None = Cookie(
+        None, alias=settings.security.session_cookie_name
+    ),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -234,7 +253,7 @@ async def get_current_user_web(
         db: Database session
 
     Returns:
-        User object
+        The authenticated principal as a CurrentUserDTO (converted in session scope).
 
     Raises:
         HTTPException with 307 redirect to login (or /setup on first run)
@@ -252,14 +271,14 @@ async def get_current_user_web(
     if not session:
         raise await _unauthenticated_web_redirect(request, db)
 
-    # Session is valid, return user
-    return session.user
+    # Session is valid — convert to the DTO here, in session scope.
+    return CurrentUserDTO.model_validate(session.user)
 
 
 async def require_admin_web(
     request: Request,
-    current_user: User = Depends(get_current_user_web),
-):
+    current_user: CurrentUserDTO = Depends(get_current_user_web),
+) -> CurrentUserDTO:
     """Require admin role for web routes (redirects non-admins to home)."""
     if current_user.role != "admin":
         # Redirect to home page with error message
@@ -272,8 +291,8 @@ async def require_admin_web(
 
 async def require_editor_web(
     request: Request,
-    current_user: User = Depends(get_current_user_web),
-):
+    current_user: CurrentUserDTO = Depends(get_current_user_web),
+) -> CurrentUserDTO:
     """Require editor role or higher for web routes (redirects viewers to home)."""
     if current_user.role not in ("admin", "editor"):
         # Redirect to home page with error message
@@ -294,7 +313,9 @@ async def require_editor_web(
 # ========================================================================
 
 
-def create_access_token(data: dict[str, Any], expires_delta: timedelta | None = None) -> str:
+def create_access_token(
+    data: dict[str, Any], expires_delta: timedelta | None = None
+) -> str:
     """
     Create a JWT access token.
 
@@ -310,7 +331,9 @@ def create_access_token(data: dict[str, Any], expires_delta: timedelta | None = 
     if expires_delta:
         expire = utc_now() + expires_delta
     else:
-        expire = utc_now() + timedelta(minutes=settings.security.access_token_expire_minutes)
+        expire = utc_now() + timedelta(
+            minutes=settings.security.access_token_expire_minutes
+        )
 
     to_encode.update({"exp": expire})
     encoded_jwt: str = jwt.encode(
@@ -469,11 +492,15 @@ async def verify_registration_token(
     token = parts[1]
 
     # Import here to avoid circular dependency
-    from app.services.core.registration_key_core_service import RegistrationKeyCoreService
+    from app.services.core.registration_key_core_service import (
+        RegistrationKeyCoreService,
+    )
 
     # Validate against registration keys in database
     if db is not None:
-        reg_key = await RegistrationKeyCoreService.verify_key_and_update_usage(db, token)
+        reg_key = await RegistrationKeyCoreService.verify_key_and_update_usage(
+            db, token
+        )
         if reg_key:
             logger.info(
                 "Valid registration token used",
@@ -545,7 +572,9 @@ async def verify_agent_token(
     if agent.api_key_hash:
         # Validate token against agent's specific key
         try:
-            is_valid = bcrypt.checkpw(token.encode("utf-8"), agent.api_key_hash.encode("utf-8"))
+            is_valid = bcrypt.checkpw(
+                token.encode("utf-8"), agent.api_key_hash.encode("utf-8")
+            )
         except Exception:
             logger.error(
                 "Error verifying agent key",

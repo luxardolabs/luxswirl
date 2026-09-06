@@ -27,7 +27,12 @@ from app.crud.check_result_crud import CheckResultCRUD
 from app.models.check_model import Check
 from app.models.enum_model import AssignmentMode, CheckType
 from app.schemas.agent_schema import AgentCreate
-from app.schemas.check_schema import CheckCreate, CheckListResponse, CheckResponse, CheckUpdate
+from app.schemas.check_schema import (
+    CheckCreate,
+    CheckListResponse,
+    CheckResponse,
+    CheckUpdate,
+)
 from app.schemas.import_export_schema import CheckExport
 from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.alert_core_service import AlertCoreService
@@ -53,7 +58,9 @@ class CheckCoreService:
         Returns:
             Check model with agent relationship loaded
         """
-        check = await CheckCRUD.get_by_id(db, check_id, include_script_code=include_script_code)
+        check = await CheckCRUD.get_by_id(
+            db, check_id, include_script_code=include_script_code
+        )
         if not check:
             raise CheckNotFoundException("unknown", str(check_id))
         return check
@@ -125,7 +132,11 @@ class CheckCoreService:
         # Security: Validate synthetic check scripts using AST analysis
         # This blocks obvious attacks but is not a complete sandbox
         # Synthetic checks should only be used in trusted, self-hosted environments
-        if data.check_type == "synthetic" and hasattr(data, "script_code") and data.script_code:
+        if (
+            data.check_type == "synthetic"
+            and hasattr(data, "script_code")
+            and data.script_code
+        ):
             try:
                 validate_and_raise(data.script_code)
                 # SECURITY AUDIT: Log successful validation
@@ -169,9 +180,13 @@ class CheckCoreService:
             tags=data.tags,
             check_config=check_config if check_config else None,
             assignment_mode=(
-                data.assignment_mode if hasattr(data, "assignment_mode") else AssignmentMode.MANUAL
+                data.assignment_mode
+                if hasattr(data, "assignment_mode")
+                else AssignmentMode.MANUAL
             ),
-            agent_selector=(data.agent_selector if hasattr(data, "agent_selector") else None),
+            agent_selector=(
+                data.agent_selector if hasattr(data, "agent_selector") else None
+            ),
             script_code=data.script_code if hasattr(data, "script_code") else None,
             depends_on_check_id=getattr(data, "depends_on_check_id", None),
         )
@@ -233,7 +248,9 @@ class CheckCoreService:
             child = by_id.get(cid)
             if child is None:
                 raise ValidationException(f"Check {cid} not found")
-            child_dependents = sum(1 for c in all_checks if c.depends_on_check_id == cid)
+            child_dependents = sum(
+                1 for c in all_checks if c.depends_on_check_id == cid
+            )
             if child_dependents > 0:
                 raise ValidationException(
                     f"Check '{child.display_name}' is itself a parent — single-level only"
@@ -265,22 +282,34 @@ class CheckCoreService:
         return [c for c in all_checks if c.depends_on_check_id == parent_check_id]
 
     @staticmethod
-    async def list_potential_dependents(db: AsyncSession, parent_check_id: UUID) -> list[Check]:
+    async def list_potential_dependents(
+        db: AsyncSession, parent_check_id: UUID
+    ) -> list[Check]:
         """Checks that *could* become children of this parent.
 
         Excludes: the parent itself, any check that already has children, and
         the parent's chain ancestor (none in single-level v1, so trivial).
         """
         all_checks = await CheckCRUD.list_all(db)
-        parents_of_others = {c.depends_on_check_id for c in all_checks if c.depends_on_check_id}
-        return [c for c in all_checks if c.id != parent_check_id and c.id not in parents_of_others]
+        parents_of_others = {
+            c.depends_on_check_id for c in all_checks if c.depends_on_check_id
+        }
+        return [
+            c
+            for c in all_checks
+            if c.id != parent_check_id and c.id not in parents_of_others
+        ]
 
     @staticmethod
     async def get_dependency_info(db: AsyncSession, check_id: UUID) -> dict:
         """Bundle of parent + parent's latest result + dependent count for UI display."""
         check = await CheckCRUD.get_by_id(db, check_id)
         if check is None:
-            return {"parent_check": None, "parent_latest_result": None, "dependent_count": 0}
+            return {
+                "parent_check": None,
+                "parent_latest_result": None,
+                "dependent_count": 0,
+            }
 
         parent_check = None
         parent_latest_result = None
@@ -304,7 +333,11 @@ class CheckCoreService:
     ) -> list[Check]:
         """Checks that may be selected as a parent (excludes those already with a parent)."""
         all_checks = await CheckCRUD.list_all(db)
-        return [c for c in all_checks if c.depends_on_check_id is None and c.id != exclude_check_id]
+        return [
+            c
+            for c in all_checks
+            if c.depends_on_check_id is None and c.id != exclude_check_id
+        ]
 
     @staticmethod
     async def _validate_dependency(
@@ -464,7 +497,9 @@ class CheckCoreService:
             port=get_override("port", source.port),
             expect_value=get_override("expect_value", source.expect_value),
             # MySQL/Postgres check fields
-            connection_string=get_override("connection_string", source.connection_string),
+            connection_string=get_override(
+                "connection_string", source.connection_string
+            ),
             query=get_override("query", source.query),
             # Common fields
             retry_attempts=get_override("retry_attempts", source.retry_attempts),
@@ -492,14 +527,19 @@ class CheckCoreService:
         # 5. Copy alert assignments from source check
 
         try:
-            source_alert_ids = await AlertCoreService.get_alert_ids_for_check(db, source_check_id)
+            source_alert_ids = await AlertCoreService.get_alert_ids_for_check(
+                db, source_check_id
+            )
             for alert_id in source_alert_ids:
                 try:
                     await AlertCoreService.add_check(db, alert_id, cloned_check.id)
                 except Exception:
                     logger.warning(
                         "Failed to copy alert to cloned check",
-                        extra={"alert_id": str(alert_id), "cloned_check_id": str(cloned_check.id)},
+                        extra={
+                            "alert_id": str(alert_id),
+                            "cloned_check_id": str(cloned_check.id),
+                        },
                         exc_info=True,
                     )
         except Exception:
@@ -525,7 +565,11 @@ class CheckCoreService:
 
     @staticmethod
     async def update_check(
-        db: AsyncSession, check_id: UUID, data: CheckUpdate, *, actor_is_admin: bool = False
+        db: AsyncSession,
+        check_id: UUID,
+        data: CheckUpdate,
+        *,
+        actor_is_admin: bool = False,
     ) -> Check:
         """Update a check."""
         check = await CheckCoreService.get_check_by_id(db, check_id)
@@ -724,11 +768,15 @@ class CheckCoreService:
         Returns:
             List of all enabled checks
         """
-        checks, _ = await CheckCoreService.list_checks(db, enabled_only=True, limit=10000)
+        checks, _ = await CheckCoreService.list_checks(
+            db, enabled_only=True, limit=10000
+        )
         return checks
 
     @staticmethod
-    async def list_checks_for_agent(db: AsyncSession, agent_id: UUID) -> Sequence[Check]:
+    async def list_checks_for_agent(
+        db: AsyncSession, agent_id: UUID
+    ) -> Sequence[Check]:
         """List all checks for an agent."""
         agent = await AgentCoreService.get_agent_by_id(db, agent_id)
         if not agent:
@@ -752,7 +800,9 @@ class CheckCoreService:
         if not agent:
             await AgentCoreService.create_agent(
                 db,
-                AgentCreate(agent_name=str(agent_id), hostname=str(agent_id), version="imported"),
+                AgentCreate(
+                    agent_name=str(agent_id), hostname=str(agent_id), version="imported"
+                ),
             )
             logger.info("Created agent", extra={"agent_id": str(agent_id)})
 
@@ -805,7 +855,7 @@ class CheckCoreService:
                         ),
                     )
                     created += 1
-            except Exception as e:  # noqa: BLE001 — per-check isolation, collect + continue
+            except Exception as e:
                 errors.append({"check": check_data.name, "error": str(e)})
                 logger.error(
                     "Error importing check",
@@ -813,7 +863,12 @@ class CheckCoreService:
                     exc_info=True,
                 )
 
-        return {"created": created, "updated": updated, "skipped": skipped, "errors": errors}
+        return {
+            "created": created,
+            "updated": updated,
+            "skipped": skipped,
+            "errors": errors,
+        }
 
     @staticmethod
     async def delete_check(db: AsyncSession, check_id: UUID) -> None:
@@ -1052,7 +1107,9 @@ class CheckCoreService:
 
                 # Detect check type from scheme
                 if parsed.scheme in ("http", "https"):
-                    check_type = "http"  # Check type is "http" for both http:// and https://
+                    check_type = (
+                        "http"  # Check type is "http" for both http:// and https://
+                    )
                 elif parsed.scheme == "tcp":
                     check_type = "tcp"
                 elif not parsed.scheme:
@@ -1164,7 +1221,9 @@ class CheckCoreService:
 
                 # Detect check type from scheme
                 if parsed.scheme in ("http", "https"):
-                    check_type = "http"  # Check type is "http" for both http:// and https://
+                    check_type = (
+                        "http"  # Check type is "http" for both http:// and https://
+                    )
                     full_url = url_str
                 elif not parsed.scheme:
                     # Default to https if no scheme
@@ -1194,7 +1253,9 @@ class CheckCoreService:
 
                 if check_type == "http":
                     try:
-                        async with httpx.AsyncClient(timeout=5.0, verify=False) as client:
+                        async with httpx.AsyncClient(
+                            timeout=5.0, verify=False
+                        ) as client:
                             response = await client.get(full_url)
                             status_code = response.status_code
                             if 200 <= status_code < 400:
@@ -1235,7 +1296,9 @@ class CheckCoreService:
         return previews
 
     @staticmethod
-    async def assign_alerts(db: AsyncSession, check_id: UUID, alert_ids: list[UUID]) -> None:
+    async def assign_alerts(
+        db: AsyncSession, check_id: UUID, alert_ids: list[UUID]
+    ) -> None:
         """
         Assign multiple alerts to a check.
 
@@ -1268,7 +1331,9 @@ class CheckCoreService:
         )
 
     @staticmethod
-    def build_check_list_response(checks: list, agent_name: str | None = None) -> CheckListResponse:
+    def build_check_list_response(
+        checks: list, agent_name: str | None = None
+    ) -> CheckListResponse:
         """
         Build CheckListResponse from list of Check models.
 
@@ -1382,7 +1447,11 @@ class CheckCoreService:
     ) -> Check:
         """Clone a check and assign the supplied alerts in one workflow."""
         cloned_check = await CheckCoreService.clone_check(
-            db, source_check_id, target_agent_id, overrides, actor_is_admin=actor_is_admin
+            db,
+            source_check_id,
+            target_agent_id,
+            overrides,
+            actor_is_admin=actor_is_admin,
         )
         await AlertCoreService.sync_check_alerts(db, cloned_check.id, alert_ids)
         return cloned_check

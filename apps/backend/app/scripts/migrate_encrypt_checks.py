@@ -8,11 +8,10 @@ of target, check_config, and connection_string_encrypted fields.
 import asyncio
 import os
 
+from app.models.check_model import Check
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import attributes
-
-from app.models.check_model import Check
 
 DATABASE_URL = os.getenv(
     "DATABASE_URL", "postgresql+asyncpg://luxswirl:luxswirl@timescaledb:5432/luxswirl"

@@ -68,13 +68,17 @@ class JobCRUD:
 
         total = (await db.execute(count_query)).scalar_one()
         query = (
-            query.order_by(Job.priority.desc(), Job.created_at.desc()).offset(offset).limit(limit)
+            query.order_by(Job.priority.desc(), Job.created_at.desc())
+            .offset(offset)
+            .limit(limit)
         )
         result = await db.execute(query)
         return result.scalars().all(), total
 
     @staticmethod
-    async def get_pending_for_agent(db: AsyncSession, agent_id: UUID, limit: int) -> Sequence[Job]:
+    async def get_pending_for_agent(
+        db: AsyncSession, agent_id: UUID, limit: int
+    ) -> Sequence[Job]:
         """Jobs in 'pending' status for an agent, ordered by priority."""
         result = await db.execute(
             select(Job)
@@ -121,7 +125,9 @@ class JobCRUD:
         Returns:
             List of Agent objects
         """
-        agent_ids_query = select(Job.agent_id).distinct().where(Job.agent_id.isnot(None))
+        agent_ids_query = (
+            select(Job.agent_id).distinct().where(Job.agent_id.isnot(None))
+        )
         result = await db.execute(agent_ids_query)
         agent_ids = [row[0] for row in result.all()]
 
@@ -243,7 +249,9 @@ class JobCRUD:
         total_result = await db.execute(total_query)
         total = total_result.scalar_one()
 
-        status_query = select(Job.status, func.count(Job.id).label("count")).group_by(Job.status)
+        status_query = select(Job.status, func.count(Job.id).label("count")).group_by(
+            Job.status
+        )
         status_result = await db.execute(status_query)
         status_counts = {row.status: row.count for row in status_result.all()}
 

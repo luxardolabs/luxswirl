@@ -54,7 +54,9 @@ class CheckDetailViewService:
         return 4
 
     @staticmethod
-    async def get_check_detail(db: AsyncSession, check_id: UUID, hours: int = 4) -> dict | None:
+    async def get_check_detail(
+        db: AsyncSession, check_id: UUID, hours: int = 4
+    ) -> dict | None:
         """
         Get full check details including recent history.
 
@@ -75,7 +77,9 @@ class CheckDetailViewService:
         check, agent = row
 
         # Get recent results based on time range (bucketed by core service)
-        raw_rows = await CheckResultCoreService.get_bucketed_history(db, check_id, hours)
+        raw_rows = await CheckResultCoreService.get_bucketed_history(
+            db, check_id, hours
+        )
 
         history_models = [
             ResultProxy(
@@ -153,7 +157,9 @@ class CheckDetailViewService:
         # Data is already ordered ASC (oldest first) from database query
         if history:
             # Extract latency values
-            latencies = [h["latency_ms"] for h in history if h["latency_ms"] is not None]
+            latencies = [
+                h["latency_ms"] for h in history if h["latency_ms"] is not None
+            ]
 
             if latencies:
                 chart_data["has_data"] = True
@@ -162,7 +168,9 @@ class CheckDetailViewService:
                 max_latency = max(latencies)
                 min_latency = min(latencies)
                 range_latency = (
-                    max_latency - min_latency if max_latency > min_latency else max_latency
+                    max_latency - min_latency
+                    if max_latency > min_latency
+                    else max_latency
                 )
                 range_latency = range_latency if range_latency > 0 else 1
 
@@ -172,7 +180,9 @@ class CheckDetailViewService:
                 for i, h in enumerate(history):
                     if h["latency_ms"] is not None:
                         x = i * (800 / (num_points - 1)) if num_points > 1 else 400
-                        y = 180 - ((h["latency_ms"] - min_latency) / range_latency * 160)
+                        y = 180 - (
+                            (h["latency_ms"] - min_latency) / range_latency * 160
+                        )
                         points.append(
                             {
                                 "x": x,
@@ -287,8 +297,8 @@ class CheckDetailViewService:
         minute_bars = []
 
         # Get last 30 minutes of raw data for status bar
-        status_bar_results = await CheckResultCoreService.get_raw_results_for_status_bar(
-            db, check_id
+        status_bar_results = (
+            await CheckResultCoreService.get_raw_results_for_status_bar(db, check_id)
         )
 
         # Convert status bar results to dicts for Recent Events table (same format as history)
@@ -380,14 +390,16 @@ class CheckDetailViewService:
         artifacts = []
         if check.check_type == "synthetic":
             # Get most recent result
-            latest_check_result = await CheckResultCoreService.get_latest_result_for_check(
-                db, check_id
+            latest_check_result = (
+                await CheckResultCoreService.get_latest_result_for_check(db, check_id)
             )
 
             if latest_check_result:
                 # Fetch artifacts using proper foreign key relationship
-                artifacts_models = await CheckResultCoreService.get_artifacts_for_result(
-                    db, latest_check_result.id, latest_check_result.timestamp
+                artifacts_models = (
+                    await CheckResultCoreService.get_artifacts_for_result(
+                        db, latest_check_result.id, latest_check_result.timestamp
+                    )
                 )
 
                 # Convert to dicts without binary data
@@ -421,9 +433,15 @@ class CheckDetailViewService:
                 "successful": stats.successful or 0,
                 "failed": (stats.total or 0) - (stats.successful or 0),
                 "uptime_pct": round(uptime_pct, 2),
-                "avg_latency_ms": (round(stats.avg_latency, 2) if stats.avg_latency else None),
-                "min_latency_ms": (round(stats.min_latency, 2) if stats.min_latency else None),
-                "max_latency_ms": (round(stats.max_latency, 2) if stats.max_latency else None),
+                "avg_latency_ms": (
+                    round(stats.avg_latency, 2) if stats.avg_latency else None
+                ),
+                "min_latency_ms": (
+                    round(stats.min_latency, 2) if stats.min_latency else None
+                ),
+                "max_latency_ms": (
+                    round(stats.max_latency, 2) if stats.max_latency else None
+                ),
             },
             "artifacts": artifacts,
         }

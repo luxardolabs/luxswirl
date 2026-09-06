@@ -18,7 +18,9 @@ async def handle(db: AsyncSession, job: MaintenanceJob) -> None:
     action = job.params.get("action")
     raw_ids = job.params.get("check_ids") or []
     if action not in ("enable", "disable"):
-        raise ValueError(f"bulk_check_toggle expects action enable|disable, got {action!r}")
+        raise ValueError(
+            f"bulk_check_toggle expects action enable|disable, got {action!r}"
+        )
     if not raw_ids:
         logger.info("bulk_check_toggle with empty check_ids — nothing to do")
         return
