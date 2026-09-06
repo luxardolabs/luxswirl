@@ -436,3 +436,10 @@ export function init() {
         }
     });
 }
+
+// Loaded with <script type="module" src>, so the module self-initialises.
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+} else {
+    init();
+}

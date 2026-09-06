@@ -201,42 +201,12 @@
 
 </div>
 
-<script>
-// Simple relative time display with timezone conversion
-document.querySelectorAll('.timeago').forEach(el => {
-    const timestamp = new Date(el.dataset.timestamp);
-    const now = new Date();
-    const seconds = Math.floor((now - timestamp) / 1000);
+{# Server values reach the modules through data-* attributes, never a Jinja
+   expression inside a script tag (fw.js_in_files). #}
+<div id="status-bulk-config" hidden
+     data-total="{{ pagination.total }}"
+     data-per-page="{{ pagination.per_page }}"></div>
 
-    let text;
-    if (seconds < 60) {
-        text = seconds + 's ago';
-    } else if (seconds < 3600) {
-        text = Math.floor(seconds / 60) + 'm ago';
-    } else if (seconds < 86400) {
-        text = Math.floor(seconds / 3600) + 'h ago';
-    } else {
-        // For older timestamps, show local time instead of days
-        const timeStr = timestamp.toLocaleTimeString('en-US', {
-            hour: 'numeric',
-            minute: '2-digit',
-            hour12: true
-        }).toLowerCase();
-        text = timeStr;
-    }
-
-    el.textContent = text;
-    el.title = timestamp.toLocaleString(); // Full timestamp on hover
-});
-</script>
-
-<script type="module">
-import { init } from '/static/js/status-bulk.js';
-
-// Initialize bulk selection module
-init({
-    total: {{ pagination.total }},
-    perPage: {{ pagination.per_page }}
-});
-</script>
+<script type="module" src="/static/js/timeago.js?v={{ static_version }}"></script>
+<script type="module" src="/static/js/status-bulk.js?v={{ static_version }}"></script>
 {% endblock %}
