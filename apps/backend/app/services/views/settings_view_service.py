@@ -5,6 +5,7 @@ Provides web-specific functionality like value parsing and template cache update
 """
 
 from collections import defaultdict
+from dataclasses import dataclass
 from typing import Any
 
 from fastapi import Request, Response
@@ -26,12 +27,25 @@ from app.web.templates_config import templates
 logger = get_logger("luxswirl.web.services.settings")
 
 
-def build_setting_urls(request: Request, key: str) -> dict[str, str]:
-    """Finished update/reset hrefs for one setting, by route name."""
-    return {
-        "update": request.url_for("update_setting", key=key).path,
-        "reset": request.url_for("reset_setting", key=key).path,
-    }
+@dataclass(frozen=True)
+class SettingUrls:
+    """Finished update/reset hrefs for one setting.
+
+    A dataclass, not a dict: Jinja resolves `x.update` to dict.update — the bound
+    METHOD — before it ever tries the key, so a dict silently renders
+    "<built-in method update of dict object …>" into the form's hx-post.
+    """
+
+    update: str
+    reset: str
+
+
+def build_setting_urls(request: Request, key: str) -> SettingUrls:
+    """Resolve one setting's update/reset hrefs by route name."""
+    return SettingUrls(
+        update=str(request.url_for("update_setting", key=key).path),
+        reset=str(request.url_for("reset_setting", key=key).path),
+    )
 
 
 class SettingsViewService:
@@ -300,6 +314,20 @@ class SettingsViewService:
             "providers": providers,
             "total_providers": total,
             "available_types": NotificationCoreService.get_available_provider_types(),
+            "provider_urls": {
+                p.id: {
+                    "toggle": request.url_for("toggle_provider", provider_id=p.id).path,
+                    "test": request.url_for("web_test_provider", provider_id=p.id).path,
+                    "edit_form": request.url_for(
+                        "edit_provider_form", provider_id=p.id
+                    ).path,
+                    "delete": request.url_for(
+                        "web_delete_provider", provider_id=p.id
+                    ).path,
+                }
+                for p in providers
+            },
+            "provider_create_form_url": request.url_for("create_provider_form").path,
             "page_title": "Settings - Notifications",
         }
 
@@ -331,6 +359,16 @@ class SettingsViewService:
             page=page, per_page=per_page, total=total, filters=filters
         )
         return {
+            "alert_urls": {
+                a.id: {
+                    "edit_form": request.url_for("edit_alert_form", alert_id=a.id).path,
+                    "delete": request.url_for("web_delete_alert", alert_id=a.id).path,
+                    "toggle": request.url_for("toggle_alert", alert_id=a.id).path,
+                }
+                for a in alerts
+            },
+            "alerts_url": request.url_for("settings_alerts").path,
+            "alert_create_form_url": request.url_for("create_alert_form").path,
             "request": request,
             "current_user": current_user,
             "alerts": alerts,

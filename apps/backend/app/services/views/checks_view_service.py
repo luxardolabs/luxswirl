@@ -7,6 +7,7 @@ while providing web-specific functionality and data aggregation.
 
 import json
 from collections.abc import Sequence
+from dataclasses import dataclass
 from typing import Any, cast
 from uuid import UUID
 
@@ -32,6 +33,7 @@ from app.services.core.alert_core_service import AlertCoreService
 from app.services.core.check_core_service import CheckCoreService
 from app.services.core.maintenance_job_core_service import MaintenanceJobCoreService
 from app.services.core.settings_core_service import SettingsCoreService
+from app.services.views._job_status import build_job_status_context
 from app.web.hx_responses import hx_empty_with_toast
 from app.web.templates_config import templates
 
@@ -64,18 +66,33 @@ class CheckRow:
         self.updated_at = check.updated_at
 
 
-def build_check_form_urls(request: Request, check_id: UUID) -> dict[str, str]:
-    """Finished hrefs for the check form / dependents panels, resolved by route name."""
+@dataclass(frozen=True)
+class CheckFormUrls:
+    """Finished hrefs for the check form / dependents panels.
+
+    A dataclass, not a dict: Jinja resolves `x.update` to dict.update — the bound
+    METHOD — before it ever tries the key, so a dict silently renders
+    "<built-in method update of dict object …>" into the form's hx-post.
+    """
+
+    clone: str
+    update: str
+    dependents: str
+    update_dependents: str
+
+
+def build_check_form_urls(request: Request, check_id: UUID) -> CheckFormUrls:
+    """Resolve the check form / dependents panel hrefs by route name."""
 
     def u(name: str) -> str:
         return str(request.url_for(name, check_id=check_id).path)
 
-    return {
-        "clone": u("clone_check_handler"),
-        "update": u("update_check"),
-        "dependents": u("dependents_panel"),
-        "update_dependents": u("update_dependents"),
-    }
+    return CheckFormUrls(
+        clone=u("clone_check_handler"),
+        update=u("web_update_check"),
+        dependents=u("dependents_panel"),
+        update_dependents=u("update_dependents"),
+    )
 
 
 class ChecksViewService:
@@ -533,13 +550,22 @@ class ChecksViewService:
         return templates.TemplateResponse(
             request,
             "partials/maintenance/job_status.html",
-            {"job": job, "request": request, "current_user": current_user},
+            build_job_status_context(request, current_user, job),
         )
 
     @staticmethod
-    def build_toggle_button_context(check_id: UUID, enabled: bool) -> dict[str, Any]:
+    def build_toggle_button_context(
+        request: Request, check_id: UUID, enabled: bool
+    ) -> dict[str, Any]:
         """Context for the toggle-button partial."""
-        return {"check_id": check_id, "enabled": enabled}
+        return {
+            "check_id": check_id,
+            "enabled": enabled,
+            # .path, not str(): url_for returns an absolute url from the
+            # request's scheme/host, which behind TLS-terminating nginx can emit
+            # http:// into an https:// page.
+            "toggle_url": request.url_for("toggle_check", check_id=check_id).path,
+        }
 
     @staticmethod
     def assert_synthetic_admin_create(
@@ -894,7 +920,9 @@ class ChecksViewService:
             return ChecksViewService.error_response(request, current_user, str(e), 404)
 
     @staticmethod
-    async def toggle_check_handler(db: AsyncSession, check_id: UUID) -> dict[str, Any]:
+    async def toggle_check_handler(
+        db: AsyncSession, request: Request, check_id: UUID
+    ) -> dict[str, Any]:
         """Toggle enabled flag, return context for the toggle-button partial."""
         check = await CheckCoreService.get_check_by_id(db, check_id)
         updated_check = await CheckCoreService.update_check_with_alerts(
@@ -909,7 +937,7 @@ class ChecksViewService:
             },
         )
         return ChecksViewService.build_toggle_button_context(
-            check_id, updated_check.enabled
+            request, check_id, updated_check.enabled
         )
 
     @staticmethod

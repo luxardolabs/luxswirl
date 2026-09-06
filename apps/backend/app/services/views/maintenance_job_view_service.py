@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth_deps import AuthedUser
 from app.services.core.maintenance_job_core_service import MaintenanceJobCoreService
+from app.services.views._job_status import build_job_status_context
 
 
 class MaintenanceJobViewService:
@@ -19,8 +20,4 @@ class MaintenanceJobViewService:
         job_id: UUID,
     ) -> dict[str, Any]:
         job = await MaintenanceJobCoreService.get_by_id(db, job_id)
-        return {
-            "request": request,
-            "current_user": current_user,
-            "job": job,
-        }
+        return build_job_status_context(request, current_user, job)

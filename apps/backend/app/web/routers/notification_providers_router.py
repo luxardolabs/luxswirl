@@ -61,7 +61,11 @@ async def edit_provider_form(
     )
 
 
-@router.post("/notification-providers/create", response_class=HTMLResponse)
+@router.post(
+    "/notification-providers/create",
+    response_class=HTMLResponse,
+    name="web_create_provider",
+)
 async def create_provider(
     request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -78,7 +82,9 @@ async def create_provider(
 
 
 @router.post(
-    "/notification-providers/{provider_id}/update", response_class=HTMLResponse
+    "/notification-providers/{provider_id}/update",
+    response_class=HTMLResponse,
+    name="web_update_provider",
 )
 async def update_provider(
     request: Request,
@@ -96,7 +102,11 @@ async def update_provider(
     )
 
 
-@router.delete("/notification-providers/{provider_id}", response_class=HTMLResponse)
+@router.delete(
+    "/notification-providers/{provider_id}",
+    response_class=HTMLResponse,
+    name="web_delete_provider",
+)
 async def delete_provider(
     request: Request,
     provider_id: UUID,
@@ -124,7 +134,11 @@ async def toggle_provider(
     )
 
 
-@router.post("/notification-providers/{provider_id}/test", response_class=HTMLResponse)
+@router.post(
+    "/notification-providers/{provider_id}/test",
+    response_class=HTMLResponse,
+    name="web_test_provider",
+)
 async def test_provider(
     request: Request,
     provider_id: UUID,

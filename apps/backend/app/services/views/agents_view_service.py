@@ -463,6 +463,7 @@ class AgentsViewService:
             offset=offset,
             exclude_pending=True,
         )
+        pending_urls = {a.id: build_agent_urls(request, a.id) for a in pending_agents}
         pagination = build_pagination(
             page=page,
             per_page=per_page,
@@ -474,6 +475,7 @@ class AgentsViewService:
             },
         )
         return {
+            "pending_urls": pending_urls,
             "request": request,
             "current_user": current_user,
             "agent_data": agent_data,

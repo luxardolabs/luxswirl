@@ -34,7 +34,7 @@
     id="check-{{ row.check_id }}"
     class="p-4 hover:bg-dark-bg-secondary cursor-pointer transition-colors duration-200 check-row border-l-4"
     style="border-left-color: transparent;"
-    hx-get="/check/{{ row.check_id }}?hours=4"
+    hx-get="{{ row.detail_url }}"
     hx-target="#check-detail-panel"
     hx-swap="innerHTML"
     data-check-id="{{ row.check_id }}"

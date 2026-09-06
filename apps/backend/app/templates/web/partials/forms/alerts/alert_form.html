@@ -5,11 +5,7 @@
 {% call panel_wrapper(max_width='max-w-3xl') %}
     {{ panel_header('Edit Alert Rule' if alert else 'Create New Alert Rule', subtitle='Configure when and how notifications should be sent') }}
     <form
-        {% if alert %}
-            hx-post="/alerts/{{ alert.id }}/update"
-        {% else %}
-            hx-post="/alerts/create"
-        {% endif %}
+        hx-post="{{ form_action }}"
         hx-target="#panel-container"
         hx-swap="innerHTML"
         class="contents"

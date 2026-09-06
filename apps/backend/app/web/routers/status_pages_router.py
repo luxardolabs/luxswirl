@@ -24,6 +24,7 @@ from app.core.query_params import (
     TimeRangeFilter,
 )
 from app.db import get_db
+from app.services.views._job_status import build_job_status_context
 from app.services.views.status_pages_view_service import StatusPagesViewService
 from app.web.hx_responses import hx_toast_trigger
 from app.web.render import error_page, error_partial, public_error_page
@@ -56,7 +57,10 @@ async def status_pages_list(
 
 
 @router.get(
-    "/status-pages/create-form", response_class=HTMLResponse, include_in_schema=False
+    "/status-pages/create-form",
+    response_class=HTMLResponse,
+    include_in_schema=False,
+    name="status_page_create_form",
 )
 async def create_form(
     request: Request,
@@ -75,6 +79,7 @@ async def create_form(
     "/status-pages/{status_page_id}/edit-form",
     response_class=HTMLResponse,
     include_in_schema=False,
+    name="status_page_edit_form",
 )
 async def edit_form(
     request: Request,
@@ -172,7 +177,7 @@ async def delete_status_page(
     return templates.TemplateResponse(
         request,
         "partials/maintenance/job_status.html",
-        {"job": job, "request": request, "current_user": current_user},
+        build_job_status_context(request, current_user, job),
     )
 
 

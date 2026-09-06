@@ -17,7 +17,7 @@
                     <p class="text-sm text-dark-text-muted mb-4">
                         Download all {{ check_count }} checks for this agent as a JSON file.
                     </p>
-                    {{ btn_download(label='Download JSON', href='/agents/' ~ agent_id ~ '/export', extra_classes='inline-flex items-center', extra_attrs='download="' ~ agent_id ~ '-checks.json"') }}
+                    {{ btn_download(label='Download JSON', href=export_url, extra_classes='inline-flex items-center', extra_attrs='download="' ~ agent_id ~ '-checks.json"') }}
                 </div>
             </div>
         </div>
@@ -38,7 +38,7 @@
 
             <form
                 id="import-form"
-                hx-post="/agents/{{ agent_id }}/import"
+                hx-post="{{ import_url }}"
                 hx-encoding="multipart/form-data"
                 hx-target="#import-result"
                 hx-swap="innerHTML"

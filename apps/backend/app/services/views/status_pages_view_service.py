@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.auth_deps import AuthedUser
 from app.core.query_params import split_csv
 from app.models.enum_model import CheckHealthStatus, CheckType, MaintenanceJobKind
+from app.models.status_page_model import StatusPage
 from app.schemas.pagination_schema import build_pagination
 from app.schemas.status_page_schema import StatusPageCreate, StatusPageUpdate
 from app.services.core.check_core_service import CheckCoreService
@@ -71,13 +72,33 @@ def build_status_page_urls(
         return request.url_for(name, **kw).path
 
     return StatusPageUrls(
-        edit_form=u("edit_form", status_page_id=page_id),
+        edit_form=u("status_page_edit_form", status_page_id=page_id),
         manage=u("manage_status_page", status_page_id=page_id),
         delete=u("delete_status_page", status_page_id=page_id),
         update=u("update_status_page", status_page_id=page_id),
         available_checks=u("get_available_checks", status_page_id=page_id),
         public=u("view_public_status_page", slug=slug),
     )
+
+
+def _remove_item_urls(request: Request, status_page: StatusPage) -> list[str]:
+    """One finished remove href per dashboard item, indexed as the template loops.
+
+    The template renders `remove_item_urls[loop.index0]`, so the list order must
+    match `status_page.items`.
+
+    .path, not str(): url_for returns an absolute url from the request's
+    scheme/host, which behind TLS-terminating nginx can emit http:// into an
+    https:// page.
+    """
+    return [
+        request.url_for(
+            "remove_item_from_dashboard",
+            status_page_id=status_page.id,
+            item_index=index,
+        ).path
+        for index in range(len(status_page.items or []))
+    ]
 
 
 class StatusPagesViewService:
@@ -191,6 +212,7 @@ class StatusPagesViewService:
             "request": request,
             "current_user": current_user,
             "status_page": status_page,
+            "remove_item_urls": _remove_item_urls(request, status_page),
             "filtered_checks": filtered_checks,
             "dashboard_check_ids": set(dashboard_check_ids),
             **context,
@@ -252,6 +274,7 @@ class StatusPagesViewService:
             "request": request,
             "current_user": current_user,
             "status_page": status_page,
+            "remove_item_urls": _remove_item_urls(request, status_page),
             **context,
             "all_tags": all_tags,
         }
@@ -382,6 +405,7 @@ class StatusPagesViewService:
             "request": request,
             "current_user": current_user,
             "status_page": status_page,
+            "remove_item_urls": _remove_item_urls(request, status_page),
             **context,
         }, None
 
@@ -406,6 +430,7 @@ class StatusPagesViewService:
             "request": request,
             "current_user": current_user,
             "status_page": status_page,
+            "remove_item_urls": _remove_item_urls(request, status_page),
             **context,
         }
 
@@ -432,6 +457,7 @@ class StatusPagesViewService:
             "request": request,
             "current_user": current_user,
             "status_page": status_page,
+            "remove_item_urls": _remove_item_urls(request, status_page),
             **context,
         }
 
@@ -468,6 +494,7 @@ class StatusPagesViewService:
             "request": request,
             "current_user": current_user,
             "status_page": status_page,
+            "remove_item_urls": _remove_item_urls(request, status_page),
             **context,
         }, None
 
@@ -497,6 +524,7 @@ class StatusPagesViewService:
             "request": request,
             "current_user": current_user,
             "status_page": status_page,
+            "remove_item_urls": _remove_item_urls(request, status_page),
             **context,
         }
 
@@ -529,6 +557,7 @@ class StatusPagesViewService:
             "request": request,
             "current_user": current_user,
             "status_page": status_page,
+            "remove_item_urls": _remove_item_urls(request, status_page),
             **context,
         }
 
@@ -561,6 +590,7 @@ class StatusPagesViewService:
             "request": request,
             "current_user": current_user,
             "status_page": status_page,
+            "remove_item_urls": _remove_item_urls(request, status_page),
             **context,
             "all_tags": all_tags,
         }
