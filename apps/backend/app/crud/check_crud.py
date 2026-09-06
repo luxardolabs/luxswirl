@@ -41,7 +41,7 @@ class CheckCRUD:
         tag: str | None = None,
         search: str | None = None,
         exclude_internal: bool = False,
-        offset: int = 0,
+        skip: int = 0,
         limit: int = 50,
     ) -> tuple[Sequence[Check], int]:
         """Paginated list of checks with agent loaded and filters applied."""
@@ -77,9 +77,7 @@ class CheckCRUD:
 
         total = (await db.execute(count_query)).scalar_one()
         result = await db.execute(
-            query.order_by(Check.agent_id, Check.display_name)
-            .offset(offset)
-            .limit(limit)
+            query.order_by(Check.agent_id, Check.display_name).offset(skip).limit(limit)
         )
         return result.scalars().all(), total
 

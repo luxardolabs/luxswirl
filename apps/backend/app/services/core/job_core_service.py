@@ -145,7 +145,7 @@ class JobCoreService:
             server_only=server_only,
             status=status,
             job_type=job_type,
-            offset=offset,
+            skip=offset,
             limit=limit,
         )
 

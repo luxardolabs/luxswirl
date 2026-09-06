@@ -63,11 +63,12 @@ class AgentCRUD:
     @staticmethod
     async def list_filtered_paginated(
         db: AsyncSession,
+        *,
         active_only: bool = False,
         active_window_minutes: int = 10,
         search: str | None = None,
         exclude_pending: bool = False,
-        offset: int = 0,
+        skip: int = 0,
         limit: int = 100,
     ) -> tuple[list[Agent], int]:
         """Paginated list of agents with filters. Returns (agents, total)."""
@@ -96,7 +97,7 @@ class AgentCRUD:
         total = total_result.scalar_one()
 
         result = await db.execute(
-            query.offset(offset)
+            query.offset(skip)
             .limit(limit)
             .order_by(
                 Agent.agent_name.asc().nullslast(), Agent.hostname.asc().nullslast()

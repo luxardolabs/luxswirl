@@ -361,7 +361,7 @@ class AgentCoreService:
             active_window_minutes=active_window_minutes,
             search=search,
             exclude_pending=exclude_pending,
-            offset=offset,
+            skip=offset,
             limit=limit,
         )
 

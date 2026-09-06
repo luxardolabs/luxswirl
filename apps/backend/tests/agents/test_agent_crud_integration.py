@@ -191,7 +191,7 @@ class TestListFilteredPaginated:
             db.add(make_agent(agent_name=f"agent-{i:02d}"))
         await db.flush()
 
-        rows, total = await AgentCRUD.list_filtered_paginated(db, offset=2, limit=3)
+        rows, total = await AgentCRUD.list_filtered_paginated(db, skip=2, limit=3)
         assert total == 7
         assert len(rows) == 3
 

@@ -190,7 +190,7 @@ class StatusPageCoreService:
             Tuple of (status pages list, total count)
         """
         return await StatusPageCRUD.list_paginated(
-            db, is_public=is_public, offset=offset, limit=limit
+            db, is_public=is_public, skip=offset, limit=limit
         )
 
     @staticmethod

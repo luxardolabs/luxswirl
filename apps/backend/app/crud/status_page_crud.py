@@ -28,8 +28,9 @@ class StatusPageCRUD:
     @staticmethod
     async def list_paginated(
         db: AsyncSession,
+        *,
         is_public: bool | None = None,
-        offset: int = 0,
+        skip: int = 0,
         limit: int = 100,
     ) -> tuple[list[StatusPage], int]:
         """Paginated list of status pages, optionally filtered by is_public."""
@@ -41,7 +42,7 @@ class StatusPageCRUD:
 
         total = (await db.execute(count_query)).scalar_one()
         result = await db.execute(
-            query.order_by(StatusPage.name).limit(limit).offset(offset)
+            query.order_by(StatusPage.name).limit(limit).offset(skip)
         )
         return list(result.scalars().all()), total
 

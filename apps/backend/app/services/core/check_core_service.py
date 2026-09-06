@@ -392,8 +392,8 @@ class CheckCoreService:
     @staticmethod
     async def clone_check(
         db: AsyncSession,
-        source_check_id: UUID,
-        target_agent_id: UUID,
+        check_id: UUID,
+        agent_id: UUID,
         overrides: CheckCreate | None = None,
         skip_config_update: bool = False,
         *,
@@ -412,8 +412,8 @@ class CheckCoreService:
 
         Args:
             db: Database session
-            source_check_id: UUID of check to clone
-            target_agent_id: UUID of agent to assign cloned check to
+            check_id: UUID of check to clone
+            agent_id: UUID of agent to assign cloned check to
             overrides: Optional CheckCreate with fields to override
                        (e.g., new display_name, different interval)
             skip_config_update: If True, skip updating agent.checks_updated_at
@@ -429,8 +429,8 @@ class CheckCoreService:
             # Clone with same name
             cloned = await CheckCoreService.clone_check(
                 db,
-                source_check_id=source_uuid,
-                target_agent_id=target_agent_uuid
+                check_id=source_uuid,
+                agent_id=target_agent_uuid
             )
 
             # Clone with new name
@@ -440,22 +440,22 @@ class CheckCoreService:
             )
             cloned = await CheckCoreService.clone_check(
                 db,
-                source_check_id=source_uuid,
-                target_agent_id=target_agent_uuid,
+                check_id=source_uuid,
+                agent_id=target_agent_uuid,
                 overrides=overrides
             )
         """
         # 1. Fetch source check (include script_code for synthetic checks)
         source = await CheckCoreService.get_check_by_id(
-            db, source_check_id, include_script_code=True
+            db, check_id, include_script_code=True
         )
         if not source:
-            raise CheckNotFoundException("unknown", str(source_check_id))
+            raise CheckNotFoundException("unknown", str(check_id))
 
         # 2. Verify target agent exists
-        target_agent = await AgentCoreService.get_agent_by_id(db, target_agent_id)
+        target_agent = await AgentCoreService.get_agent_by_id(db, agent_id)
         if not target_agent:
-            raise AgentNotFoundException(str(target_agent_id))
+            raise AgentNotFoundException(str(agent_id))
 
         # 3. Build clone data - merge source with overrides
         def get_override(field_name: str, source_value):
@@ -520,7 +520,7 @@ class CheckCoreService:
         # 4. Create new check using existing create_check method
         cloned_check = await CheckCoreService.create_check(
             db,
-            target_agent_id,
+            agent_id,
             clone_data,
             skip_config_update=skip_config_update,
             actor_is_admin=actor_is_admin,
@@ -530,7 +530,7 @@ class CheckCoreService:
 
         try:
             source_alert_ids = await AlertCoreService.get_alert_ids_for_check(
-                db, source_check_id
+                db, check_id
             )
             for alert_id in source_alert_ids:
                 try:
@@ -547,7 +547,7 @@ class CheckCoreService:
         except Exception:
             logger.warning(
                 "Failed to copy alerts from source check",
-                extra={"source_check_id": str(source_check_id)},
+                extra={"check_id": str(check_id)},
                 exc_info=True,
             )
 
@@ -555,9 +555,9 @@ class CheckCoreService:
             "Cloned check",
             extra={
                 "source_check_name": source.fully_qualified_name,
-                "source_check_id": str(source.id),
+                "check_id": str(source.id),
                 "target_agent_name": target_agent.agent_name,
-                "target_agent_id": str(target_agent.id),
+                "agent_id": str(target_agent.id),
                 "cloned_check_name": cloned_check.display_name,
                 "cloned_check_id": str(cloned_check.id),
             },
@@ -758,7 +758,7 @@ class CheckCoreService:
             tag=tag,
             search=search,
             exclude_internal=exclude_internal,
-            offset=offset,
+            skip=offset,
             limit=limit,
         )
 
