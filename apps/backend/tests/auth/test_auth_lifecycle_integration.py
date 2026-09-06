@@ -20,10 +20,9 @@ _tests_root = str(Path(__file__).resolve().parent.parent)
 if _tests_root not in sys.path:
     sys.path.insert(0, _tests_root)
 
-from fixtures.factories import make_user  # noqa: E402
-
 from app.core.datetime_utils import utc_now  # noqa: E402
 from app.services.core.auth_core_service import AuthCoreService  # noqa: E402
+from fixtures.factories import make_user  # noqa: E402
 
 pytestmark = pytest.mark.integration
 
@@ -97,7 +96,9 @@ class TestAuthenticateUser:
             f"expected 2 failed attempts, got {user.failed_login_attempts} (user_id={user_id})"
         )
 
-    async def test_account_locks_after_max_failed_attempts(self, db: AsyncSession, auth):
+    async def test_account_locks_after_max_failed_attempts(
+        self, db: AsyncSession, auth
+    ):
         """5th failed attempt locks the account (per default
         security.max_failed_attempts)."""
         user = make_user(username="attacker")
@@ -133,7 +134,9 @@ class TestAuthenticateUser:
 
 
 class TestSessionLifecycle:
-    async def test_create_session_returns_token_and_persists(self, db: AsyncSession, auth):
+    async def test_create_session_returns_token_and_persists(
+        self, db: AsyncSession, auth
+    ):
         user = make_user()
         db.add(user)
         await db.flush()
@@ -160,7 +163,9 @@ class TestSessionLifecycle:
         assert loaded is not None
         assert loaded.user_id == user.id
 
-    async def test_verify_session_with_bogus_token_returns_none(self, db: AsyncSession, auth):
+    async def test_verify_session_with_bogus_token_returns_none(
+        self, db: AsyncSession, auth
+    ):
         assert await auth.verify_session(db, "not-a-real-token") is None
 
     async def test_verify_session_expired_returns_none(self, db: AsyncSession, auth):
@@ -301,7 +306,9 @@ class TestChangePassword:
         with pytest.raises(ValueError, match="Current password is incorrect"):
             await auth.change_password(db, user.id, "wrong-old", "NewPassword456!")
 
-    async def test_password_change_invalidates_existing_sessions(self, db: AsyncSession, auth):
+    async def test_password_change_invalidates_existing_sessions(
+        self, db: AsyncSession, auth
+    ):
         """Security: changing the password destroys all live sessions so a
         stolen session can't survive a password rotation."""
         user = make_user(username="rotator-with-sessions")

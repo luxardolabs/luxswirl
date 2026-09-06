@@ -18,8 +18,6 @@ _tests_root = str(Path(__file__).resolve().parent.parent)
 if _tests_root not in sys.path:
     sys.path.insert(0, _tests_root)
 
-from fixtures.factories import make_notification_provider  # noqa: E402
-
 from app.core.exceptions import NotFoundException, ValidationException  # noqa: E402
 from app.schemas.notification_provider_schema import (  # noqa: E402
     NotificationProviderCreate,
@@ -27,6 +25,7 @@ from app.schemas.notification_provider_schema import (  # noqa: E402
     NotificationProviderUpdate,
 )
 from app.services.core.notification_core_service import NotificationCoreService  # noqa: E402
+from fixtures.factories import make_notification_provider  # noqa: E402
 
 pytestmark = pytest.mark.integration
 
@@ -86,10 +85,14 @@ class TestCreateProvider:
         with pytest.raises(ValidationException, match="Invalid provider configuration"):
             await NotificationCoreService.create_provider(
                 db,
-                _create_data(config={"post_url": "http://169.254.169.254/latest/meta-data/"}),
+                _create_data(
+                    config={"post_url": "http://169.254.169.254/latest/meta-data/"}
+                ),
             )
 
-    async def test_webhook_additional_headers_masked_in_response(self, db: AsyncSession):
+    async def test_webhook_additional_headers_masked_in_response(
+        self, db: AsyncSession
+    ):
         """M-2 (LUXSWIRL-190): secrets in additional_headers must not be echoed back
         in plaintext on a read; header names stay visible."""
         provider = await NotificationCoreService.create_provider(
@@ -97,7 +100,10 @@ class TestCreateProvider:
             _create_data(
                 config={
                     "post_url": "https://hooks.example.test/notify",
-                    "additional_headers": {"Authorization": "Bearer super-secret", "X-Env": "prod"},
+                    "additional_headers": {
+                        "Authorization": "Bearer super-secret",
+                        "X-Env": "prod",
+                    },
                 }
             ),
         )
@@ -145,7 +151,9 @@ class TestGetProvider:
         db.add(p)
         await db.flush()
 
-        loaded = await NotificationCoreService.get_provider_by_id(db, p.id, include_deleted=True)
+        loaded = await NotificationCoreService.get_provider_by_id(
+            db, p.id, include_deleted=True
+        )
         assert loaded.id == p.id
 
 
@@ -175,7 +183,9 @@ class TestListProviders:
         db.add(make_notification_provider(provider_type="webhook"))
         await db.flush()
 
-        rows, total = await NotificationCoreService.list_providers(db, provider_type="webhook")
+        rows, total = await NotificationCoreService.list_providers(
+            db, provider_type="webhook"
+        )
         assert total == 2
         assert all(p.provider_type == "webhook" for p in rows)
 
@@ -259,7 +269,9 @@ class TestDeleteProvider:
         await NotificationCoreService.delete_provider(db, p.id, hard_delete=True)
 
         with pytest.raises(NotFoundException):
-            await NotificationCoreService.get_provider_by_id(db, p.id, include_deleted=True)
+            await NotificationCoreService.get_provider_by_id(
+                db, p.id, include_deleted=True
+            )
 
     async def test_missing_provider_raises(self, db: AsyncSession):
         with pytest.raises(NotFoundException):

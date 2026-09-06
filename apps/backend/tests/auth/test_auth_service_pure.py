@@ -7,7 +7,6 @@ all pure functions over inputs, no DB needed.
 from __future__ import annotations
 
 import pytest
-
 from app.services.core.auth_core_service import AuthCoreService
 
 pytestmark = pytest.mark.pure
@@ -44,7 +43,7 @@ class TestPasswordHashing:
         # bcrypt raises ValueError on malformed hashes; production code may want
         # to catch this. For now, document the behavior: verify_password raises
         # rather than swallowing. If that changes, this test should change too.
-        with pytest.raises(Exception):  # noqa: B017, PT011
+        with pytest.raises(Exception):  # noqa: B017
             AuthCoreService.verify_password("any-password", "not-a-hash")
 
 

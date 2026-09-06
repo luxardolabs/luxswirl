@@ -18,10 +18,9 @@ _tests_root = str(Path(__file__).resolve().parent.parent)
 if _tests_root not in sys.path:
     sys.path.insert(0, _tests_root)
 
-from fixtures.factories import make_agent, make_check  # noqa: E402
-
 from app.core.datetime_utils import utc_now  # noqa: E402
 from app.crud.check_crud import CheckCRUD  # noqa: E402
+from fixtures.factories import make_agent, make_check  # noqa: E402
 
 pytestmark = pytest.mark.integration
 
@@ -151,7 +150,9 @@ class TestListPaginated:
         await db.flush()
         db.add(make_check(agent_id=agent.id, display_name="db-primary"))
         db.add(make_check(agent_id=agent.id, display_name="cache", target="redis-host"))
-        db.add(make_check(agent_id=agent.id, display_name="other", target="other.example"))
+        db.add(
+            make_check(agent_id=agent.id, display_name="other", target="other.example")
+        )
         await db.flush()
 
         # Match on display_name

@@ -15,7 +15,6 @@ from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
 import pytest
-
 from app.services.core.alert_core_service import AlertCoreService
 
 pytestmark = pytest.mark.pure  # all tests in this module are pure-logic

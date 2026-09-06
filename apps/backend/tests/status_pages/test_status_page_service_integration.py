@@ -16,11 +16,10 @@ _tests_root = str(Path(__file__).resolve().parent.parent)
 if _tests_root not in sys.path:
     sys.path.insert(0, _tests_root)
 
-from fixtures.factories import make_agent, make_check  # noqa: E402
-
 from app.core.exceptions import NotFoundException  # noqa: E402
 from app.schemas.status_page_schema import StatusPageCreate, StatusPageUpdate  # noqa: E402
 from app.services.core.status_page_core_service import StatusPageCoreService  # noqa: E402
+from fixtures.factories import make_agent, make_check  # noqa: E402
 
 pytestmark = pytest.mark.integration
 
@@ -81,7 +80,9 @@ class TestCRUD:
 
     async def test_get_by_slug_missing_returns_none(self, db: AsyncSession):
         # By slug returns None (vs by ID which raises)
-        assert (await StatusPageCoreService.get_status_page_by_slug(db, "absent-slug")) is None
+        assert (
+            await StatusPageCoreService.get_status_page_by_slug(db, "absent-slug")
+        ) is None
 
     async def test_update_name_and_description(self, db: AsyncSession):
         page = await StatusPageCoreService.create_status_page(db, _create_data())

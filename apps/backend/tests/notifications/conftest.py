@@ -9,7 +9,6 @@ type is re-registered, so we guard.
 from __future__ import annotations
 
 import pytest
-
 from app.notifications.providers.email import EmailNotificationProvider
 from app.notifications.providers.homeassistant import HomeAssistantNotificationProvider
 from app.notifications.providers.webhook import WebhookNotificationProvider

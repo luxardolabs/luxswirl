@@ -183,7 +183,9 @@ class TestSecuritySettings:
         assert sec["max_failed_attempts"] > 0
         assert sec["session_lifetime_days"] > 0
 
-    async def test_get_without_ensure_returns_defaults_via_fallback(self, db: AsyncSession):
+    async def test_get_without_ensure_returns_defaults_via_fallback(
+        self, db: AsyncSession
+    ):
         """get_security_settings should be safe to call without prior
         ensure_default_settings — the per-key `get_setting` fallback
         provides default values."""

@@ -103,7 +103,9 @@ def assert_ip_allowed(
                 "SSRF protection: blocked IP",
                 extra={"resolved_ip": ip_str, "range": str(matched)},
             )
-            raise SsrfBlockedError(f"{ip_str} is in the blocked {label} range ({matched}).")
+            raise SsrfBlockedError(
+                f"{ip_str} is in the blocked {label} range ({matched})."
+            )
 
 
 def assert_target_allowed(

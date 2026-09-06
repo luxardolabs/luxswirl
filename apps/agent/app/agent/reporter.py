@@ -212,13 +212,15 @@ class Reporter:
         """Migrate legacy JSON files into SQLite (async wrapper)."""
         await asyncio.to_thread(self._migrate_json_files_sync)
 
-    async def start(self) -> None:
-        """Start the reporter."""
-        if self.running:
-            return
+    async def connect(self) -> None:
+        """Open the long-lived HTTP client (one per process, reused for its lifetime).
 
-        self.running = True
-        self.last_sent_time = time.time()
+        Building a client per request pays DNS + TCP + TLS setup on every batch and
+        heartbeat and defeats connection pooling; this one is opened once here and
+        closed in `close()`.
+        """
+        if self.client is not None:
+            return
 
         self.client = httpx.AsyncClient(
             timeout=30.0,
@@ -228,6 +230,22 @@ class Reporter:
                 "Authorization": f"Bearer {self.auth_key}",
             },
         )
+
+    async def close(self) -> None:
+        """Close the long-lived HTTP client. Safe to call when never connected."""
+        if self.client is not None:
+            await self.client.aclose()
+            self.client = None
+
+    async def start(self) -> None:
+        """Start the reporter."""
+        if self.running:
+            return
+
+        self.running = True
+        self.last_sent_time = time.time()
+
+        await self.connect()
 
         # Initialize SQLite storage
         if self.enable_local_storage:
@@ -260,9 +278,7 @@ class Reporter:
                 await self.flush()
 
             # Close the client
-            if self.client:
-                await self.client.aclose()
-                self.client = None
+            await self.close()
 
             # Wait for background tasks to complete with timeout
             tasks: list[asyncio.Task[None]] = []

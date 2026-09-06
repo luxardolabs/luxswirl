@@ -29,6 +29,8 @@ _tests_root = str(Path(__file__).resolve().parent.parent)
 if _tests_root not in sys.path:
     sys.path.insert(0, _tests_root)
 
+from app.core.datetime_utils import utc_now  # noqa: E402
+from app.crud.alert_crud import DEDUP_RELEVANT_STATUSES, AlertCRUD  # noqa: E402
 from fixtures.factories import (  # noqa: E402
     make_agent,
     make_alert,
@@ -39,9 +41,6 @@ from fixtures.factories import (  # noqa: E402
     make_notification_log,
     make_notification_provider,
 )
-
-from app.core.datetime_utils import utc_now  # noqa: E402
-from app.crud.alert_crud import DEDUP_RELEVANT_STATUSES, AlertCRUD  # noqa: E402
 
 pytestmark = pytest.mark.integration
 
@@ -69,7 +68,11 @@ async def _make_alert_with_check_and_provider(db: AsyncSession):
     await db.flush()
 
     db.add(make_alert_check_mapping(alert_id=alert.id, check_id=check.id))
-    db.add(make_alert_notification_mapping(alert_id=alert.id, notification_provider_id=provider.id))
+    db.add(
+        make_alert_notification_mapping(
+            alert_id=alert.id, notification_provider_id=provider.id
+        )
+    )
     await db.flush()
 
     return alert, check, provider, agent
@@ -226,12 +229,16 @@ class TestGetLastNotificationForDedup:
         )
 
         # Lookup for alert_a must return log_a, not log_b
-        result_a = await AlertCRUD.get_last_notification_for_dedup(db, alert_a.id, check.id)
+        result_a = await AlertCRUD.get_last_notification_for_dedup(
+            db, alert_a.id, check.id
+        )
         assert result_a is not None
         assert result_a.id == log_a.id
         assert result_a.notification_hash == "status:down"
 
-        result_b = await AlertCRUD.get_last_notification_for_dedup(db, alert_b.id, check.id)
+        result_b = await AlertCRUD.get_last_notification_for_dedup(
+            db, alert_b.id, check.id
+        )
         assert result_b is not None
         assert result_b.id == log_b.id
         assert result_b.notification_hash == "ssl:lte:7"
@@ -264,10 +271,14 @@ class TestGetLastNotificationForDedup:
             notification_hash="parent_down",
         )
 
-        result_a = await AlertCRUD.get_last_notification_for_dedup(db, alert.id, check_a.id)
+        result_a = await AlertCRUD.get_last_notification_for_dedup(
+            db, alert.id, check_a.id
+        )
         assert result_a.id == log_a.id
 
-        result_b = await AlertCRUD.get_last_notification_for_dedup(db, alert.id, check_b.id)
+        result_b = await AlertCRUD.get_last_notification_for_dedup(
+            db, alert.id, check_b.id
+        )
         assert result_b.id == log_b.id
 
 
@@ -322,9 +333,8 @@ class TestListActiveAlertsForCheck:
         """Mapping enable flag is independent of the alert's own enable flag —
         an alert can be enabled globally but disabled for a specific check."""
         alert, check, _, _ = await _make_alert_with_check_and_provider(db)
-        from sqlalchemy import select
-
         from app.models.alert_check_mapping_model import AlertCheckMapping
+        from sqlalchemy import select
 
         result = await db.execute(
             select(AlertCheckMapping).where(

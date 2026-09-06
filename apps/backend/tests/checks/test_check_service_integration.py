@@ -19,8 +19,6 @@ _tests_root = str(Path(__file__).resolve().parent.parent)
 if _tests_root not in sys.path:
     sys.path.insert(0, _tests_root)
 
-from fixtures.factories import make_agent, make_check  # noqa: E402
-
 from app.core.exceptions import (  # noqa: E402
     AgentNotFoundException,
     AuthorizationException,
@@ -29,6 +27,7 @@ from app.core.exceptions import (  # noqa: E402
 )
 from app.schemas.check_schema import CheckCreate, CheckUpdate  # noqa: E402
 from app.services.core.check_core_service import CheckCoreService  # noqa: E402
+from fixtures.factories import make_agent, make_check  # noqa: E402
 
 pytestmark = pytest.mark.integration
 
@@ -353,7 +352,9 @@ class TestUpdateCheck:
 
     async def test_missing_check_raises(self, db: AsyncSession):
         with pytest.raises(NotFoundException):
-            await CheckCoreService.update_check(db, uuid4(), CheckUpdate(display_name="x"))
+            await CheckCoreService.update_check(
+                db, uuid4(), CheckUpdate(display_name="x")
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -398,7 +399,9 @@ class TestValidateDependency:
 
     async def test_nonexistent_parent_rejected(self, db: AsyncSession):
         with pytest.raises(ValidationException, match="not found"):
-            await CheckCoreService._validate_dependency(db, uuid4(), own_check_id=uuid4())
+            await CheckCoreService._validate_dependency(
+                db, uuid4(), own_check_id=uuid4()
+            )
 
     async def test_grandparent_chain_rejected(self, db: AsyncSession):
         agent = make_agent()
@@ -412,7 +415,9 @@ class TestValidateDependency:
         await db.flush()
 
         with pytest.raises(ValidationException, match="already has a parent"):
-            await CheckCoreService._validate_dependency(db, parent.id, own_check_id=uuid4())
+            await CheckCoreService._validate_dependency(
+                db, parent.id, own_check_id=uuid4()
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -455,7 +460,9 @@ class TestDependencyQueries:
         # eligible because it has one. Verify that's enforced.
         from app.crud.check_crud import CheckCRUD
 
-        candidates = await CheckCoreService.list_eligible_parents(db, exclude_check_id=None)
+        candidates = await CheckCoreService.list_eligible_parents(
+            db, exclude_check_id=None
+        )
         candidate_ids = [c.id for c in candidates]
         assert free.id in candidate_ids
         assert already_child.id not in candidate_ids

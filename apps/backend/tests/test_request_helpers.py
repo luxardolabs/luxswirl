@@ -6,8 +6,10 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
-
-from app.core.request_helpers import client_ip_from_request, reset_trusted_networks_cache
+from app.core.request_helpers import (
+    client_ip_from_request,
+    reset_trusted_networks_cache,
+)
 
 
 def _make_request(direct_ip: str | None, xff: str = "") -> SimpleNamespace:

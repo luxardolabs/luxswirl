@@ -17,11 +17,10 @@ _tests_root = str(Path(__file__).resolve().parent.parent)
 if _tests_root not in sys.path:
     sys.path.insert(0, _tests_root)
 
-from fixtures.factories import make_agent, make_check  # noqa: E402
-
 from app.crud.check_crud import CheckCRUD  # noqa: E402
 from app.schemas.check_schema import CheckCreate, CheckUpdate  # noqa: E402
 from app.services.core.check_core_service import CheckCoreService  # noqa: E402
+from fixtures.factories import make_agent, make_check  # noqa: E402
 
 pytestmark = pytest.mark.integration
 
@@ -41,7 +40,9 @@ class TestBulkAction:
             db.add(c)
         await db.flush()
 
-        result = await CheckCoreService.bulk_action(db, [c.id for c in checks], "delete")
+        result = await CheckCoreService.bulk_action(
+            db, [c.id for c in checks], "delete"
+        )
         assert result["success_count"] == 3
         assert result["failure_count"] == 0
         # All gone
@@ -56,7 +57,9 @@ class TestBulkAction:
             db.add(c)
         await db.flush()
 
-        result = await CheckCoreService.bulk_action(db, [c.id for c in checks], "disable")
+        result = await CheckCoreService.bulk_action(
+            db, [c.id for c in checks], "disable"
+        )
         assert result["success_count"] == 2
 
         for c in await CheckCRUD.get_checks_by_ids(db, [c.id for c in checks]):
@@ -71,7 +74,9 @@ class TestBulkAction:
             db.add(c)
         await db.flush()
 
-        result = await CheckCoreService.bulk_action(db, [c.id for c in checks], "enable")
+        result = await CheckCoreService.bulk_action(
+            db, [c.id for c in checks], "enable"
+        )
         assert result["success_count"] == 2
 
     async def test_unknown_action_records_failure(self, db: AsyncSession):
@@ -220,7 +225,7 @@ class TestCloneCheck:
         agent = make_agent()
         db.add(agent)
         await db.flush()
-        with pytest.raises(Exception):  # noqa: B017, PT011
+        with pytest.raises(Exception):  # noqa: B017
             await CheckCoreService.clone_check(
                 db,
                 uuid4(),

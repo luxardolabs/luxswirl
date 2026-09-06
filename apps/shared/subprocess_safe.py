@@ -57,8 +57,12 @@ async def run_subprocess_safely(
     proc = None
     try:
         # Create subprocess with appropriate pipes
-        stdout_pipe = asyncio.subprocess.PIPE if capture_output else asyncio.subprocess.DEVNULL
-        stderr_pipe = asyncio.subprocess.PIPE if capture_output else asyncio.subprocess.DEVNULL
+        stdout_pipe = (
+            asyncio.subprocess.PIPE if capture_output else asyncio.subprocess.DEVNULL
+        )
+        stderr_pipe = (
+            asyncio.subprocess.PIPE if capture_output else asyncio.subprocess.DEVNULL
+        )
 
         proc = await asyncio.create_subprocess_exec(
             *args,

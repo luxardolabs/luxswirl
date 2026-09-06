@@ -14,6 +14,7 @@ from cryptography import x509
 from cryptography.hazmat.backends import default_backend
 from cryptography.utils import CryptographyDeprecationWarning
 
+from app.agent.http_client import check_client
 from app.checks._ssrf_http import ssrf_guarded_send
 from app.checks.base import BaseCheck
 
@@ -72,25 +73,26 @@ class HTTPCheck(BaseCheck):
         # Attempt the request with retries
         for _attempt in range(retries):
             try:
-                async with httpx.AsyncClient(timeout=timeout, verify=verify) as client:
-                    start_time = self.start_timer()
+                client = check_client(verify=verify)
+                start_time = self.start_timer()
 
-                    # SSRF: validate the resolved IP at fetch time — on the initial
-                    # URL AND every redirect hop — so a create→fetch DNS rebind or a
-                    # 3xx to 169.254.169.254 can't reach the cloud metadata endpoint.
-                    http_response = await ssrf_guarded_send(
-                        client,
-                        method,
-                        target,
-                        headers=headers,
-                        body=body,
-                        follow_redirects=cfg.get("follow_redirects", True),
-                    )
+                # SSRF: validate the resolved IP at fetch time — on the initial
+                # URL AND every redirect hop — so a create→fetch DNS rebind or a
+                # 3xx to 169.254.169.254 can't reach the cloud metadata endpoint.
+                http_response = await ssrf_guarded_send(
+                    client,
+                    method,
+                    target,
+                    headers=headers,
+                    body=body,
+                    follow_redirects=cfg.get("follow_redirects", True),
+                    timeout=timeout,
+                )
 
-                    latency = self.stop_timer(start_time)
+                latency = self.stop_timer(start_time)
 
-                    # If we got a response, break out of retry loop
-                    break
+                # If we got a response, break out of retry loop
+                break
 
             except httpx.RequestError as e:
                 last_error = e

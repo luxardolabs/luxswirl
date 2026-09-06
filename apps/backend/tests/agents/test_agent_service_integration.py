@@ -17,14 +17,13 @@ _tests_root = str(Path(__file__).resolve().parent.parent)
 if _tests_root not in sys.path:
     sys.path.insert(0, _tests_root)
 
-from fixtures.factories import make_agent  # noqa: E402
-
 from app.core.exceptions import (  # noqa: E402
     AgentNotFoundException,
     DuplicateResourceException,
 )
 from app.schemas.agent_schema import AgentCreate, AgentUpdate  # noqa: E402
 from app.services.core.agent_core_service import AgentCoreService  # noqa: E402
+from fixtures.factories import make_agent  # noqa: E402
 
 pytestmark = pytest.mark.integration
 
@@ -129,7 +128,9 @@ class TestUpdateAgent:
 
     async def test_missing_agent_raises(self, db: AsyncSession):
         with pytest.raises(AgentNotFoundException):
-            await AgentCoreService.update_agent(db, uuid4(), AgentUpdate(agent_name="x"))
+            await AgentCoreService.update_agent(
+                db, uuid4(), AgentUpdate(agent_name="x")
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -160,7 +161,9 @@ class TestApprovalWorkflow:
 
     async def test_reject_pending_agent(self, db: AsyncSession):
         pending = await AgentCoreService.register_agent(db, hostname="h")
-        rejected = await AgentCoreService.reject_agent(db, pending.id, reason="failed audit")
+        rejected = await AgentCoreService.reject_agent(
+            db, pending.id, reason="failed audit"
+        )
         assert rejected.approval_status == "rejected"
         assert rejected.status_reason == "failed audit"
 
@@ -197,17 +200,23 @@ class TestApprovalWorkflow:
 
 
 class TestApiKeyManagement:
-    async def test_regenerate_changes_hash_and_returns_plaintext(self, db: AsyncSession):
+    async def test_regenerate_changes_hash_and_returns_plaintext(
+        self, db: AsyncSession
+    ):
         pending = await AgentCoreService.register_agent(db, hostname="h")
         approved, original_key = await AgentCoreService.approve_agent(db, pending.id)
         original_hash = approved.api_key_hash
 
-        regenerated, new_key = await AgentCoreService.regenerate_agent_key(db, approved.id)
+        regenerated, new_key = await AgentCoreService.regenerate_agent_key(
+            db, approved.id
+        )
         assert new_key != original_key
         assert regenerated.api_key_hash != original_hash
         assert bcrypt.checkpw(new_key.encode(), regenerated.api_key_hash.encode())
         # Original key must NOT verify against new hash
-        assert not bcrypt.checkpw(original_key.encode(), regenerated.api_key_hash.encode())
+        assert not bcrypt.checkpw(
+            original_key.encode(), regenerated.api_key_hash.encode()
+        )
 
     async def test_revoke_clears_hash(self, db: AsyncSession):
         pending = await AgentCoreService.register_agent(db, hostname="h")

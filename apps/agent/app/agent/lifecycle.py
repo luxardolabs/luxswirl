@@ -14,6 +14,8 @@ from collections.abc import Callable
 
 from shared.logger import get_logger
 
+from app.agent.http_client import aclose_all
+
 logger = get_logger("luxswirl.agent.lifecycle")
 
 
@@ -153,6 +155,9 @@ class LifecycleManager:
 
             # Stop the job processor
             await self.job_processor.stop()
+
+            # Close the process-lifetime HTTP clients (server + check-target pools)
+            await aclose_all()
 
         except Exception:
             self.logger.error("Error during shutdown", exc_info=True)

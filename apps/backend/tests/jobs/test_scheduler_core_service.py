@@ -18,8 +18,6 @@ from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import select
-
 from app.models.enum_model import (
     SchedulerExecutionStatus,
     SchedulerJobCategory,
@@ -27,6 +25,7 @@ from app.models.enum_model import (
 )
 from app.models.scheduler_model import JobConfiguration, JobExecution
 from app.services.core.scheduler_core_service import SchedulerCoreService
+from sqlalchemy import select
 
 pytestmark = pytest.mark.integration
 
@@ -65,7 +64,9 @@ def _svc(result=None, *, raises: Exception | None = None) -> SchedulerCoreServic
 async def _get_job(maker, key: str) -> JobConfiguration:
     async with maker() as s:
         return (
-            await s.execute(select(JobConfiguration).where(JobConfiguration.job_key == key))
+            await s.execute(
+                select(JobConfiguration).where(JobConfiguration.job_key == key)
+            )
         ).scalar_one()
 
 
@@ -151,7 +152,9 @@ class TestProcessDueJobsPipeline:
     before running — the other half of LUXSWIRL-191."""
 
     async def test_due_job_is_leased_committed_dispatched_and_runs(self, worker_db):
-        key = await _seed_job(worker_db, next_run_at=datetime.now(UTC) - timedelta(seconds=1))
+        key = await _seed_job(
+            worker_db, next_run_at=datetime.now(UTC) - timedelta(seconds=1)
+        )
 
         svc = _svc(result={"ok": 1})
         await svc._process_due_jobs()
@@ -165,7 +168,9 @@ class TestProcessDueJobsPipeline:
         assert job.lease_token is None, "lease not released after run"
 
     async def test_not_due_job_is_left_alone(self, worker_db):
-        key = await _seed_job(worker_db, next_run_at=datetime.now(UTC) + timedelta(hours=1))
+        key = await _seed_job(
+            worker_db, next_run_at=datetime.now(UTC) + timedelta(hours=1)
+        )
 
         await _svc()._process_due_jobs()
         await asyncio.sleep(0.1)

@@ -9,14 +9,16 @@ agent (fetch time) rely on.
 from __future__ import annotations
 
 import pytest
+from app.core.check_target_validator import (
+    CheckTargetBlockedError,
+    validate_check_target,
+)
 from shared.ssrf import (
     SsrfBlockedError,
     assert_ip_allowed,
     assert_target_allowed,
     extract_host,
 )
-
-from app.core.check_target_validator import CheckTargetBlockedError, validate_check_target
 
 METADATA_IP = "169.254.169.254"  # AWS/GCP/Azure IMDS
 

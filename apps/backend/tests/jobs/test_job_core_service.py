@@ -10,12 +10,11 @@ from __future__ import annotations
 from uuid import uuid4
 
 import pytest
-from fixtures.factories import make_agent
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.core.exceptions import AgentNotFoundException
 from app.schemas.job_schema import JobCreate, JobResultSubmit
 from app.services.core.job_core_service import JobCoreService
+from fixtures.factories import make_agent
+from sqlalchemy.ext.asyncio import AsyncSession
 
 svc = JobCoreService
 
@@ -95,7 +94,9 @@ class TestJobLifecycle:
         out = await svc.submit_job_result(
             db,
             job.id,
-            JobResultSubmit(status="completed", result={"discovered_hosts": [{"ip": "10.0.0.7"}]}),
+            JobResultSubmit(
+                status="completed", result={"discovered_hosts": [{"ip": "10.0.0.7"}]}
+            ),
         )
         assert out.status == "completed"
         assert out.completed_at is not None
@@ -156,9 +157,13 @@ class TestDispatch:
 
     @staticmethod
     def _data(agent_id, job_type="network_scan"):
-        return JobCreate(job_type=job_type, params={"subnet": "10.0.0.0/24"}, agent_id=agent_id)
+        return JobCreate(
+            job_type=job_type, params={"subnet": "10.0.0.0/24"}, agent_id=agent_id
+        )
 
-    async def test_agent_gets_its_pending_jobs_in_dispatch_shape(self, db: AsyncSession):
+    async def test_agent_gets_its_pending_jobs_in_dispatch_shape(
+        self, db: AsyncSession
+    ):
         agent = await self._agent(db)
         await svc.create_job(db, self._data(agent.id, "network_scan"))
         await svc.create_job(db, self._data(agent.id, "network_discover"))

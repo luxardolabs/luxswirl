@@ -19,8 +19,6 @@ _tests_root = str(Path(__file__).resolve().parent.parent)
 if _tests_root not in sys.path:
     sys.path.insert(0, _tests_root)
 
-from fixtures.factories import make_agent, make_check  # noqa: E402
-
 from app.core.datetime_utils import utc_now  # noqa: E402
 from app.core.exceptions import AgentNotFoundException  # noqa: E402
 from app.crud.check_result_crud import CheckResultCRUD  # noqa: E402
@@ -29,6 +27,7 @@ from app.schemas.check_result_schema import (  # noqa: E402
     CheckResultCreate,
 )
 from app.services.core.check_result_core_service import CheckResultCoreService  # noqa: E402
+from fixtures.factories import make_agent, make_check  # noqa: E402
 
 pytestmark = pytest.mark.integration
 
@@ -211,7 +210,9 @@ class TestProcessAgentReport:
         # Per-check timestamp was preserved, not overwritten by batch ts
         assert abs((history[0].timestamp - per_check_time).total_seconds()) < 1
 
-    async def test_invalid_result_id_falls_back_to_generated_uuid(self, db: AsyncSession):
+    async def test_invalid_result_id_falls_back_to_generated_uuid(
+        self, db: AsyncSession
+    ):
         agent = make_agent()
         db.add(agent)
         await db.flush()

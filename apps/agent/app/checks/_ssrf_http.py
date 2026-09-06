@@ -20,13 +20,20 @@ async def ssrf_guarded_send(
     headers: dict[str, Any],
     body: Any = None,
     follow_redirects: bool,
+    timeout: float,
     max_redirects: int = 20,
 ) -> httpx.Response:
     """Send ``method url`` through ``client``, validating the SSRF policy on the
     initial URL and every redirect hop. Raises ``shared.ssrf.SsrfBlockedError`` if a
-    hop resolves into a blocked range (the http/json checks surface that as a failure)."""
+    hop resolves into a blocked range (the http/json checks surface that as a failure).
+
+    ``timeout`` is per-REQUEST on purpose: ``client`` is shared across checks (pooled by
+    TLS-verify setting), so a client-level timeout would apply one check's value to
+    every other check using the same pool."""
     content = None if method.upper() in ("GET", "HEAD", "OPTIONS") else body
-    request = client.build_request(method, url, headers=headers, content=content)
+    request = client.build_request(
+        method, url, headers=headers, content=content, timeout=timeout
+    )
     limit = max_redirects if follow_redirects else 0
     for _ in range(limit):
         assert_target_allowed(str(request.url), block_cloud_metadata=True)
@@ -34,6 +41,7 @@ async def ssrf_guarded_send(
         if not response.is_redirect or response.next_request is None:
             return response
         request = response.next_request
+        request.extensions["timeout"] = httpx.Timeout(timeout).as_dict()
     # Redirects disabled or limit reached — validate + issue the final hop.
     assert_target_allowed(str(request.url), block_cloud_metadata=True)
     return await client.send(request, follow_redirects=False)
