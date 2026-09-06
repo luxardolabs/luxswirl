@@ -54,7 +54,7 @@
         <!-- Reset Button (if modified) -->
         {% if current_value != default_value %}
         {{ icon_reset(title='Reset to default',
-                      hx_post='/settings/' ~ setting.key ~ '/reset',
+                      hx_post=setting_urls[setting.key].reset,
                       hx_target='#setting-' ~ setting.key|replace('.', '-'),
                       extra_classes='flex-shrink-0') }}
         {% endif %}
@@ -64,7 +64,7 @@
     <div class="space-y-2">
         <!-- Inline Edit Form -->
         <form
-            hx-post="/settings/{{ setting.key }}/update"
+            hx-post="{{ setting_urls[setting.key].update }}"
             hx-target="#setting-{{ setting.key|replace('.', '-') }}"
             hx-swap="outerHTML"
             class="flex items-center gap-2"
