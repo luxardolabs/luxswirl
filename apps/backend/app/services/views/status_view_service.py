@@ -17,7 +17,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.auth_deps import AuthedUser
 from app.core.datetime_utils import utc_now
 from app.core.query_params import split_csv
-from app.models.agent_model import Agent
 from app.schemas.pagination_schema import build_pagination
 from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.check_core_service import CheckCoreService
@@ -100,21 +99,6 @@ class StatusRow:
 
 class StatusViewService:
     """Service for status page data aggregation."""
-
-    @staticmethod
-    async def get_all_agents(db: AsyncSession) -> list[Agent]:
-        """Get all admitted agents (excluding pending and rejected agents)."""
-        return await AgentCoreService.get_admitted_agents(db)
-
-    @staticmethod
-    async def get_all_check_types(db: AsyncSession) -> list[str]:
-        """Get all distinct check types."""
-        return await CheckCoreService.get_distinct_check_types(db)
-
-    @staticmethod
-    async def get_all_tags(db: AsyncSession) -> list[str]:
-        """Get all distinct tags from both checks and agents."""
-        return await CheckCoreService.get_all_tags_combined(db)
 
     @staticmethod
     async def get_all_checks_status(
@@ -360,10 +344,6 @@ class StatusViewService:
         }
 
     @staticmethod
-    async def get_setting(db, key: str, default):
-        return await SettingsCoreService.get_setting(db, key, default)
-
-    @staticmethod
     async def build_dashboard_context(
         db: AsyncSession,
         *,
@@ -401,9 +381,9 @@ class StatusViewService:
             offset=offset,
             include_minute_bars=include_minute_bars,
         )
-        all_agents = await StatusViewService.get_all_agents(db)
-        all_types = await StatusViewService.get_all_check_types(db)
-        all_tags = await StatusViewService.get_all_tags(db)
+        all_agents = await AgentCoreService.get_admitted_agents(db)
+        all_types = await CheckCoreService.get_distinct_check_types(db)
+        all_tags = await CheckCoreService.get_all_tags_combined(db)
 
         filters = {
             "agent_id": str(agent_id) if agent_id else None,

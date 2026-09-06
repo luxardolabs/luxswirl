@@ -443,17 +443,8 @@ async def bulk_create_checks(
         if not agent:
             raise AgentNotFoundException(str(agent_id))
 
-        # Bulk create checks
-        result = await CheckCoreService.bulk_create_checks(db, agent.id, requests)
-
-        # Commit the transaction
-
-        return BulkCheckCreateResponse(
-            total=result["total"],
-            succeeded=result["succeeded"],
-            failed=result["failed"],
-            results=result["results"],
-        )
+        # Bulk create checks — core returns the response schema already
+        return await CheckCoreService.bulk_create_checks(db, agent.id, requests)
 
     except AgentNotFoundException:
         raise HTTPException(

@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.maintenance_job_model import MaintenanceJob
 from app.schemas.check_schema import CheckUpdate
 from app.services.core.alert_core_service import AlertCoreService
-from app.services.views.checks_view_service import ChecksViewService
+from app.services.core.check_core_service import CheckCoreService
 
 logger = get_logger("luxswirl.maintenance.bulk_check_modify")
 
@@ -39,7 +39,7 @@ async def handle(db: AsyncSession, job: MaintenanceJob) -> None:
     )
 
     update_data = CheckUpdate(**update_fields)
-    result = await ChecksViewService.bulk_modify(
+    result = await CheckCoreService.bulk_modify(
         db=db,
         check_ids=check_ids,
         update_data=update_data,

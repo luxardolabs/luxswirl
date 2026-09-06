@@ -124,26 +124,6 @@ class ChecksViewService:
         return list(agents)
 
     @staticmethod
-    async def get_all_check_types(db: AsyncSession) -> list[str]:
-        """
-        Get all unique check types from checks.
-
-        Returns:
-            List of check types (ping, http, tcp, json)
-        """
-        return await CheckCoreService.get_distinct_check_types(db)
-
-    @staticmethod
-    async def get_all_tags(db: AsyncSession) -> list[str]:
-        """
-        Get all unique tags from all checks.
-
-        Returns:
-            Sorted list of all unique tags
-        """
-        return await CheckCoreService.get_all_check_tags(db)
-
-    @staticmethod
     async def get_form_defaults(db: AsyncSession) -> dict:
         """
         Get all defaults needed for check forms.
@@ -176,20 +156,6 @@ class ChecksViewService:
         """Get all alerts for dropdowns."""
         alerts, _ = await AlertCoreService.list_alerts(db, limit=1000)
         return alerts
-
-    @staticmethod
-    async def get_check_by_id(
-        db: AsyncSession, check_id: UUID, include_script_code: bool = False
-    ):
-        """Get check by ID."""
-        return await CheckCoreService.get_check_by_id(
-            db, check_id, include_script_code=include_script_code
-        )
-
-    @staticmethod
-    async def get_alert_ids_for_check(db: AsyncSession, check_id: UUID) -> set[UUID]:
-        """Get alert IDs assigned to a check."""
-        return await AlertCoreService.get_alert_ids_for_check(db, check_id)
 
     @staticmethod
     async def build_dependents_panel_context(
@@ -307,12 +273,12 @@ class ChecksViewService:
         Returns:
             Dict with check, agents, alerts, and assigned_alert_ids
         """
-        check = await ChecksViewService.get_check_by_id(
+        check = await CheckCoreService.get_check_by_id(
             db, check_id, include_script_code=True
         )
         agents = await ChecksViewService.get_agents_list(db)
         alerts = await ChecksViewService.get_alerts_list(db)
-        assigned_alert_ids = await ChecksViewService.get_alert_ids_for_check(
+        assigned_alert_ids = await AlertCoreService.get_alert_ids_for_check(
             db, check.id
         )
 
@@ -331,7 +297,7 @@ class ChecksViewService:
         Returns:
             Dict with source_check, agents, alerts
         """
-        source_check = await ChecksViewService.get_check_by_id(db, check_id)
+        source_check = await CheckCoreService.get_check_by_id(db, check_id)
         agents = await ChecksViewService.get_agents_list(db)
         alerts = await ChecksViewService.get_alerts_list(db)
 
@@ -342,84 +308,19 @@ class ChecksViewService:
         }
 
     @staticmethod
-    async def create_check(
-        db: AsyncSession,
-        agent_id: UUID,
-        check_data: CheckCreate,
-        alert_ids: list[UUID],
-        *,
-        actor_is_admin: bool = False,
-    ):
-        """View-layer entry point. Workflow lives in CheckCoreService.create_check_with_alerts."""
-        return await CheckCoreService.create_check_with_alerts(
-            db, agent_id, check_data, alert_ids, actor_is_admin=actor_is_admin
-        )
+    async def get_all_check_types(db: AsyncSession) -> list[str]:
+        """
+        Get all unique check types from checks.
 
-    @staticmethod
-    async def update_check(
-        db: AsyncSession,
-        check_id: UUID,
-        update_data: CheckUpdate,
-        alert_ids: list[UUID] | None = None,
-        *,
-        actor_is_admin: bool = False,
-    ):
-        """View-layer entry point. Workflow lives in CheckCoreService.update_check_with_alerts."""
-        return await CheckCoreService.update_check_with_alerts(
-            db, check_id, update_data, alert_ids, actor_is_admin=actor_is_admin
-        )
-
-    @staticmethod
-    async def clone_check(
-        db: AsyncSession,
-        source_check_id: UUID,
-        target_agent_id: UUID,
-        overrides: CheckCreate | None,
-        alert_ids: list[UUID],
-        *,
-        actor_is_admin: bool = False,
-    ):
-        """View-layer entry point. Workflow lives in CheckCoreService.clone_check_with_alerts."""
-        return await CheckCoreService.clone_check_with_alerts(
-            db,
-            source_check_id,
-            target_agent_id,
-            overrides,
-            alert_ids,
-            actor_is_admin=actor_is_admin,
-        )
+        Returns:
+            List of check types (ping, http, tcp, json)
+        """
+        return await CheckCoreService.get_distinct_check_types(db)
 
     @staticmethod
     async def delete_check(db: AsyncSession, check_id: UUID):
         """Delete check."""
         return await CheckCoreService.delete_check(db, check_id)
-
-    @staticmethod
-    async def bulk_create_checks(
-        db: AsyncSession, agent_id: UUID, requests: list[BulkCheckCreateRequest]
-    ):
-        """Bulk create checks."""
-        return await CheckCoreService.bulk_create_checks(db, agent_id, requests)
-
-    @staticmethod
-    async def bulk_action(db: AsyncSession, check_ids: list[UUID], action: str):
-        """Perform bulk action on checks."""
-        return await CheckCoreService.bulk_action(db, check_ids, action)
-
-    @staticmethod
-    async def bulk_modify(db: AsyncSession, **kwargs):
-        """Bulk modify checks (pass-through to core service)."""
-        return await CheckCoreService.bulk_modify(db, **kwargs)
-
-    @staticmethod
-    async def bulk_preview_checks(url_list: list[str]):
-        """Preview checks from URL list."""
-        return await CheckCoreService.bulk_preview_checks(url_list)
-
-    @staticmethod
-    async def get_setting(db: AsyncSession, key: str, default):
-        """Get a setting value."""
-        return await SettingsCoreService.get_setting(db, key, default)
 
     @staticmethod
     async def get_available_agent_tags(db: AsyncSession) -> list[str]:
@@ -503,7 +404,7 @@ class ChecksViewService:
             "check": None,
             "agents": form_data["agents"],
             "alerts": form_data["alerts"],
-            "available_check_tags": await ChecksViewService.get_all_tags(db),
+            "available_check_tags": await CheckCoreService.get_all_check_tags(db),
             "available_tags": await ChecksViewService.get_available_agent_tags(db),
             "eligible_parent_checks": await ChecksViewService.get_eligible_parent_checks(
                 db
@@ -529,7 +430,7 @@ class ChecksViewService:
             "agents": form_data["agents"],
             "alerts": form_data["alerts"],
             "assigned_alert_ids": form_data["assigned_alert_ids"],
-            "available_check_tags": await ChecksViewService.get_all_tags(db),
+            "available_check_tags": await CheckCoreService.get_all_check_tags(db),
             "available_tags": await ChecksViewService.get_available_agent_tags(db),
             "eligible_parent_checks": await ChecksViewService.get_eligible_parent_checks(
                 db, exclude_check_id=check.id
@@ -553,10 +454,10 @@ class ChecksViewService:
             "check": check,
             "agents": form_data["agents"],
             "alerts": form_data["alerts"],
-            "assigned_alert_ids": await ChecksViewService.get_alert_ids_for_check(
+            "assigned_alert_ids": await AlertCoreService.get_alert_ids_for_check(
                 db, check.id
             ),
-            "available_check_tags": await ChecksViewService.get_all_tags(db),
+            "available_check_tags": await CheckCoreService.get_all_check_tags(db),
             "available_tags": await ChecksViewService.get_available_agent_tags(db),
             "eligible_parent_checks": await ChecksViewService.get_eligible_parent_checks(
                 db, exclude_check_id=check.id
@@ -778,7 +679,7 @@ class ChecksViewService:
                 ),
                 depends_on_check_id=form_kwargs.get("depends_on_check_id"),
             )
-            await ChecksViewService.create_check(
+            await CheckCoreService.create_check_with_alerts(
                 db,
                 resolved_id,
                 check_data,
@@ -818,7 +719,7 @@ class ChecksViewService:
     ) -> Response:
         """Orchestrate POST /checks/{id}/update. Synthetic admin gate, transform, update."""
         try:
-            check = await ChecksViewService.get_check_by_id(db, check_id)
+            check = await CheckCoreService.get_check_by_id(db, check_id)
             denial = ChecksViewService.assert_synthetic_admin_update(
                 form_kwargs["check_type"],
                 check,
@@ -863,7 +764,7 @@ class ChecksViewService:
                 ),
                 depends_on_check_id=form_kwargs.get("depends_on_check_id"),
             )
-            await ChecksViewService.update_check(
+            await CheckCoreService.update_check_with_alerts(
                 db,
                 check.id,
                 update_data,
@@ -904,7 +805,7 @@ class ChecksViewService:
     ) -> Response:
         """Orchestrate POST /checks/{id}/clone."""
         try:
-            source_check = await ChecksViewService.get_check_by_id(db, source_check_id)
+            source_check = await CheckCoreService.get_check_by_id(db, source_check_id)
 
             try:
                 (
@@ -952,7 +853,7 @@ class ChecksViewService:
                 ),
                 depends_on_check_id=form_kwargs.get("depends_on_check_id"),
             )
-            cloned_check = await ChecksViewService.clone_check(
+            cloned_check = await CheckCoreService.clone_check_with_alerts(
                 db,
                 source_check_id=source_check_id,
                 target_agent_id=resolved_id,
@@ -978,8 +879,8 @@ class ChecksViewService:
     @staticmethod
     async def toggle_check_handler(db: AsyncSession, check_id: UUID) -> dict[str, Any]:
         """Toggle enabled flag, return context for the toggle-button partial."""
-        check = await ChecksViewService.get_check_by_id(db, check_id)
-        updated_check = await ChecksViewService.update_check(
+        check = await CheckCoreService.get_check_by_id(db, check_id)
+        updated_check = await CheckCoreService.update_check_with_alerts(
             db, check.id, CheckUpdate(enabled=not check.enabled)
         )
         logger.info(
@@ -1006,7 +907,7 @@ class ChecksViewService:
         See LUXSWIRL-105.
         """
         try:
-            check = await ChecksViewService.get_check_by_id(db, check_id)
+            check = await CheckCoreService.get_check_by_id(db, check_id)
             job = await MaintenanceJobCoreService.enqueue(
                 db,
                 kind=MaintenanceJobKind.BULK_CHECK_DELETE,
@@ -1180,7 +1081,7 @@ class ChecksViewService:
             extra={"action": action, "check_count": len(check_ids_to_process)},
         )
 
-        result = await ChecksViewService.bulk_action(db, check_ids_to_process, action)
+        result = await CheckCoreService.bulk_action(db, check_ids_to_process, action)
         logger.info(
             "Bulk action complete",
             extra={
@@ -1212,7 +1113,7 @@ class ChecksViewService:
         url_list = [url.strip() for url in bulk_urls.split("\n") if url.strip()]
         if not url_list:
             return None
-        previews = await ChecksViewService.bulk_preview_checks(url_list)
+        previews = await CheckCoreService.bulk_preview_checks(url_list)
         return {
             "request": request,
             "current_user": current_user,
@@ -1231,7 +1132,7 @@ class ChecksViewService:
     ) -> dict[str, Any]:
         """Checks-table partial context."""
         if per_page is None:
-            per_page = await ChecksViewService.get_setting(
+            per_page = await SettingsCoreService.get_setting(
                 db, "general.default_page_size", 50
             )
         offset = (page - 1) * per_page

@@ -28,6 +28,8 @@ from app.models.check_model import Check
 from app.models.enum_model import AssignmentMode, CheckType
 from app.schemas.agent_schema import AgentCreate
 from app.schemas.check_schema import (
+    BulkCheckCreateRequest,
+    BulkCheckCreateResponse,
     CheckCreate,
     CheckListResponse,
     CheckResponse,
@@ -1075,8 +1077,8 @@ class CheckCoreService:
     async def bulk_create_checks(
         db: AsyncSession,
         agent_id: UUID,
-        requests: list,  # List of BulkCheckCreateRequest
-    ) -> dict:
+        requests: list[BulkCheckCreateRequest],
+    ) -> BulkCheckCreateResponse:
         """
         Bulk create checks from a list of URLs.
 
@@ -1086,7 +1088,7 @@ class CheckCoreService:
             requests: List of BulkCheckCreateRequest objects
 
         Returns:
-            Dict with bulk creation results:
+            Bulk creation results:
             {
                 "total": int,
                 "succeeded": int,
@@ -1194,12 +1196,12 @@ class CheckCoreService:
                 "total": len(requests),
             },
         )
-        return {
-            "total": len(requests),
-            "succeeded": succeeded,
-            "failed": failed,
-            "results": results,
-        }
+        return BulkCheckCreateResponse(
+            total=len(requests),
+            succeeded=succeeded,
+            failed=failed,
+            results=results,
+        )
 
     @staticmethod
     async def bulk_preview_checks(urls: list[str]) -> list[dict]:
