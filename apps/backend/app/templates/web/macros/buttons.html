@@ -410,6 +410,30 @@
 {# Tag pill button — clickable tag in a tag-browser/picker.
    Used in tag-browser dropdowns and click-to-add UIs.
    Color follows the same palette as icon_btn but at /10 bg opacity (subtler). #}
+{# One cell of an inline segmented switch (ALL/ANY, replicate/distribute…).
+   The container owns the sliding highlight; this is just the label + its
+   active/inactive text colour. #}
+{% macro segmented_option(label, id='', active=false, extra_attrs='', extra_classes='') %}
+{%- set state = 'text-brand-400' if active else 'text-dark-text-muted' -%}
+<button type="button"
+        {%- if id %} id="{{ id }}"{% endif %}
+        class="relative z-10 px-3 py-1.5 text-xs font-medium transition-colors duration-200 {{ state }}{{ ' ' ~ extra_classes if extra_classes else '' }}"
+        {{ extra_attrs | safe }}>{{ label }}</button>
+{% endmacro %}
+
+{# Rounded count pill for a client-side list filter (All 42 / New 7 / …). #}
+{% macro filter_pill(label, count, color='neutral', extra_attrs='', extra_classes='') %}
+{%- set palettes = {
+    'neutral': 'bg-dark-bg-tertiary text-dark-text-muted border-dark-border hover:border-dark-border-hover',
+    'brand':   'bg-brand-600/20 text-brand-300 border-brand-600/40',
+    'green':   'bg-green-600/20 text-green-300 border-green-600/40',
+    'blue':    'bg-blue-600/20 text-blue-300 border-blue-600/40'
+} -%}
+<button type="button"
+        class="{{ extra_classes ~ ' ' if extra_classes else '' }}px-2.5 py-1 text-xs rounded-full border transition-colors {{ palettes.get(color, palettes.neutral) }}"
+        {{ extra_attrs | safe }}>{{ label }} <span class="ml-1 opacity-70">{{ count }}</span></button>
+{% endmacro %}
+
 {% macro tag_pill_button(label, color='brand', extra_classes='', extra_attrs='') %}
 {%- set palettes = {
     'brand': 'bg-brand-600/10 hover:bg-brand-600/20 text-brand-300 hover:text-brand-200 border-brand-600/40 hover:border-brand-500/60',

@@ -2,15 +2,9 @@
             <div class="grid grid-cols-2 gap-3">
                 <div>
                     <label class="label text-sm" for="agent_name">Agent Name{% if agent.approval_status == 'pending' %} <span class="text-red-400">*</span>{% endif %}</label>
-                    <input
-                        type="text"
-                        id="agent_name"
-                        name="agent_name"
-                        value="{{ agent.agent_name or '' }}"
-                        class="input font-mono"
-                        placeholder="my-agent"
-                        {% if agent.approval_status == 'pending' %}required{% endif %}
-                    >
+                    {{ input(name='agent_name', class='input font-mono', placeholder='my-agent',
+                             value=(agent.agent_name or ''),
+                             required=(agent.approval_status == 'pending')) }}
                 </div>
                 <div>
                     <label class="label text-sm" for="hostname">Hostname</label>

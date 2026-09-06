@@ -1,4 +1,4 @@
-{% from 'macros/buttons.html' import text_btn, tag_pill_button %}
+{% from 'macros/buttons.html' import segmented_option, text_btn, tag_pill_button %}
 {% from 'macros/form_fields.html' import input %}
 <!-- Assignment selector for replicate/distribute modes -->
 <div class="space-y-4" data-selector-init='{"existingSelector": {% if check and check.agent_selector %}{{ check.agent_selector|tojson }}{% else %}null{% endif %}, "availableTags": {{ available_tags|tojson }}}'>
@@ -22,22 +22,10 @@
                 <div id="match-mode-slider" class="absolute left-1 top-1 bottom-1 w-[calc(50%-0.25rem)] bg-brand-600/20 border border-brand-600/50 rounded transition-all duration-200 ease-in-out"></div>
 
                 <!-- Toggle buttons -->
-                <button
-                    type="button"
-                    id="match-mode-all"
-                    data-set-match-mode="all"
-                    class="relative z-10 px-3 py-1.5 text-xs font-medium transition-colors duration-200 text-brand-400"
-                >
-                    ALL (AND)
-                </button>
-                <button
-                    type="button"
-                    id="match-mode-any"
-                    data-set-match-mode="any"
-                    class="relative z-10 px-3 py-1.5 text-xs font-medium transition-colors duration-200 text-dark-text-muted"
-                >
-                    ANY (OR)
-                </button>
+                {{ segmented_option('ALL (AND)', id='match-mode-all', active=true,
+                                    extra_attrs='data-set-match-mode="all"') }}
+                {{ segmented_option('ANY (OR)', id='match-mode-any',
+                                    extra_attrs='data-set-match-mode="any"') }}
                 <input type="hidden" id="tag-match-mode" value="all">
             </div>
         </div>

@@ -1,6 +1,6 @@
 {% from 'macros/cards.html' import stat_card %}
 {% from 'macros/badges.html' import check_type_badge, role_badge %}
-{% from 'macros/buttons.html' import icon_view, icon_edit, icon_delete, dashed_add_btn %}
+{% from 'macros/buttons.html' import icon_view, icon_edit, icon_delete, dashed_add_btn, text_btn %}
 {% from 'macros/form_fields.html' import checkbox, input, select, textarea %}
 {% from 'macros/status.html' import status_badge as check_status_badge %}
 {% from 'macros/page.html' import page_header %}
@@ -144,10 +144,11 @@
 
     <div class="card p-6">
         <div class="bg-dark-bg-primary rounded-lg p-4 border border-dark-border">
+            {%- set example_action %}{{ text_btn('', 'Add New', style='primary', size='sm', type='button') }}{% endset -%}
             {{ page_header(
                 title="Example Page Title",
                 description="This is how page headers render with a description and action buttons.",
-                actions='<button class="btn-primary btn-sm">Add New</button>'
+                actions=example_action
             ) }}
         </div>
     </div>

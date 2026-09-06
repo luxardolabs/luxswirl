@@ -1,5 +1,5 @@
 {% from 'macros/buttons.html' import btn_save, btn_create, btn_cancel_text %}
-{% from 'macros/form_fields.html' import checkbox, input, select %}
+{% from 'macros/form_fields.html' import checkbox, input, select, textarea %}
 {% from 'macros/panels.html' import panel_wrapper, panel_header, panel_content, panel_footer %}
 
 {% call panel_wrapper() %}
@@ -53,23 +53,15 @@
                     </label>
 
                     {% if field_schema.type == 'string' %}
-                        <input
-                            type="text"
-                            name="config_{{ field_name }}"
-                            class="input"
-                            value="{{ provider.config[field_name] if provider and field_name in provider.config else field_schema.default | default('') }}"
-                            {% if field_schema.required %}required{% endif %}
-                            {% if field_schema.placeholder %}placeholder="{{ field_schema.placeholder }}"{% endif %}
-                        >
+                        {{ input(name='config_' ~ field_name, class='input',
+                                 value=(provider.config[field_name] if provider and field_name in provider.config else field_schema.default | default('')),
+                                 required=field_schema.required,
+                                 placeholder=field_schema.placeholder | default('')) }}
 
                     {% elif field_schema.type == 'integer' %}
-                        <input
-                            type="number"
-                            name="config_{{ field_name }}"
-                            class="input"
-                            value="{{ provider.config[field_name] if provider and field_name in provider.config else field_schema.default | default('') }}"
-                            {% if field_schema.required %}required{% endif %}
-                        >
+                        {{ input(name='config_' ~ field_name, type='number', class='input',
+                                 value=(provider.config[field_name] if provider and field_name in provider.config else field_schema.default | default('')),
+                                 required=field_schema.required) }}
 
                     {% elif field_schema.type == 'boolean' %}
                         <label class="flex items-center gap-2 cursor-pointer">
@@ -78,37 +70,26 @@
                         </label>
 
                     {% elif field_schema.type == 'select' %}
-                        <select
-                            id="config_{{ field_name }}"
-                            name="config_{{ field_name }}"
-                            class="input"
-                            {% if field_schema.required %}required{% endif %}
-                        >
+                        {% call select(name='config_' ~ field_name, class='input',
+                                       required=field_schema.required) %}
                             {% for option in field_schema.options %}
                             <option value="{{ option.value }}" {% if (provider and provider.config.get(field_name) == option.value) or (not provider and field_schema.default == option.value) %}selected{% endif %}>
                                 {{ option.label }}
                             </option>
                             {% endfor %}
-                        </select>
+                        {% endcall %}
 
                     {% elif field_schema.type == 'json' %}
-                        <textarea
-                            name="config_{{ field_name }}"
-                            class="input font-mono text-sm"
-                            rows="4"
-                            {% if field_schema.required %}required{% endif %}
-                            {% if field_schema.placeholder %}placeholder="{{ field_schema.placeholder }}"{% endif %}
-                        >{{ provider.config[field_name] | tojson if provider and field_name in provider.config else '' }}</textarea>
+                        {{ textarea(name='config_' ~ field_name, class='input font-mono text-sm', rows=4,
+                                    required=field_schema.required,
+                                    placeholder=field_schema.placeholder | default(''),
+                                    value=(provider.config[field_name] | tojson if provider and field_name in provider.config else '')) }}
 
                     {% elif field_schema.type == 'password' %}
-                        <input
-                            type="password"
-                            name="config_{{ field_name }}"
-                            class="input"
-                            value="{{ provider.config[field_name] if provider and field_name in provider.config else '' }}"
-                            {% if field_schema.required %}required{% endif %}
-                            {% if field_schema.placeholder %}placeholder="{{ field_schema.placeholder }}"{% endif %}
-                        >
+                        {{ input(name='config_' ~ field_name, type='password', class='input',
+                                 value=(provider.config[field_name] if provider and field_name in provider.config else ''),
+                                 required=field_schema.required,
+                                 placeholder=field_schema.placeholder | default('')) }}
 
                     {% else %}
                         <!-- Fallback for unknown types -->

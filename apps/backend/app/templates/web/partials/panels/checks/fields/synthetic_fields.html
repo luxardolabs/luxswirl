@@ -1,3 +1,4 @@
+{% from 'macros/form_fields.html' import textarea %}
 <!-- Synthetic-specific fields -->
 <div id="synthetic-fields" class="space-y-4 {% if not check or check.check_type != 'synthetic' %}hidden{% endif %}">
     <!-- Security Warning Banner -->
@@ -36,13 +37,12 @@
 
     <div>
         <label class="label">Playwright Script Code</label>
-        <textarea
-            name="script_code"
-            id="script-code-textarea"
-            rows="15"
-            class="input font-mono text-sm"
-            placeholder="async def run_check(page):&#10;    steps = []&#10;    try:&#10;        # Navigate to your target URL&#10;        await page.goto('{{ check.target if check else 'https://example.com' }}')&#10;        steps.append('✅ Page loaded')&#10;        &#10;        # Your test logic here...&#10;        &#10;        return {&#10;            'status': 'success',&#10;            'steps': steps&#10;        }&#10;    except Exception as e:&#10;        return {&#10;            'status': 'failure',&#10;            'steps': steps,&#10;            'errors': [str(e)]&#10;        }"
-        >{{ check.script_code if check and check.script_code else '' }}</textarea>
+        {# The placeholder is a multi-line code sample with literal &#10; breaks and an
+           interpolated target, so it is built as a set-block rather than a quoted arg. #}
+        {%- set script_placeholder %}async def run_check(page):&#10;    steps = []&#10;    try:&#10;        # Navigate to your target URL&#10;        await page.goto('{{ check.target if check else 'https://example.com' }}')&#10;        steps.append('✅ Page loaded')&#10;        &#10;        # Your test logic here...&#10;        &#10;        return {&#10;            'status': 'success',&#10;            'steps': steps&#10;        }&#10;    except Exception as e:&#10;        return {&#10;            'status': 'failure',&#10;            'steps': steps,&#10;            'errors': [str(e)]&#10;        }{% endset -%}
+        {{ textarea(name='script_code', id='script-code-textarea', rows=15,
+                    class='input font-mono text-sm', placeholder=script_placeholder,
+                    value=(check.script_code if check and check.script_code else '')) }}
         <p class="text-xs text-dark-text-muted mt-1">
             Python async function using Playwright • Must define <code class="px-1 py-0.5 bg-dark-bg-tertiary rounded text-brand-400">run_check(page)</code> •
             Returns dict with <code class="px-1 py-0.5 bg-dark-bg-tertiary rounded text-brand-400">status</code> and <code class="px-1 py-0.5 bg-dark-bg-tertiary rounded text-brand-400">steps</code> •

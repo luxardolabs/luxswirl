@@ -84,16 +84,12 @@
                 <div class="flex items-center gap-2 flex-1">
                     <span class="text-xs text-dark-text-muted uppercase tracking-wide">Value:</span>
                     <div class="relative">
-                        <input
-                            type="number"
-                            name="value"
-                            aria-label="{{ setting.display_name }} value"
-                            value="{{ current_value }}"
-                            {% if value_type == 'float' %}step="0.01"{% else %}step="1"{% endif %}
-                            {% if setting.validation and setting.validation.min is defined %}min="{{ setting.validation.min }}"{% endif %}
-                            {% if setting.validation and setting.validation.max is defined %}max="{{ setting.validation.max }}"{% endif %}
-                            class="px-3 py-1.5 pr-12 text-sm bg-dark-bg-tertiary border border-dark-border rounded-md focus:outline-none focus:ring-2 focus:ring-brand-500"
-                        >
+                        {%- set number_attrs %}aria-label="{{ setting.display_name }} value" step="{{ '0.01' if value_type == 'float' else '1' }}"{% endset -%}
+                        {{ input(id=false, name='value', type='number', value=current_value,
+                                 min=(setting.validation.min if setting.validation and setting.validation.min is defined else none),
+                                 max=(setting.validation.max if setting.validation and setting.validation.max is defined else none),
+                                 class='px-3 py-1.5 pr-12 text-sm bg-dark-bg-tertiary border border-dark-border rounded-md focus:outline-none focus:ring-2 focus:ring-brand-500',
+                                 extra_attrs=number_attrs) }}
                         <!-- Unit Label -->
                         <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-dark-text-muted">
                             {% if 'seconds' in setting.key %}s{% elif 'minutes' in setting.key %}min{% elif 'days' in setting.key %}days{% elif 'milliseconds' in setting.key or '_ms' in setting.key %}ms{% endif %}

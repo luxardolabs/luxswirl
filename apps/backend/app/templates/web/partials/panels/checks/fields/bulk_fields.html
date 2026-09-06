@@ -1,19 +1,16 @@
+{% from 'macros/form_fields.html' import textarea %}
 <!-- Bulk Import fields -->
 <div id="bulk-fields" class="space-y-4 {% if not check or check.check_type != 'http-bulk' %}hidden{% endif %}">
     <div>
         <label class="label">URLs to Import</label>
-        <textarea
-            name="bulk_urls"
-            id="bulk-urls-textarea"
-            rows="8"
-            class="input font-mono text-sm"
-            placeholder="https://example.com&#10;https://api.github.com&#10;https://httpbin.org/status/200"
-            hx-post="/checks/bulk-preview"
-            hx-trigger="input changed delay:500ms"
-            hx-target="#bulk-preview-container"
-            hx-swap="innerHTML"
-            hx-include="this"
-        ></textarea>
+        {# The placeholder carries literal &#10; line breaks, so it is built as a
+           set-block: passing it as a quoted argument would escape the entities. #}
+        {%- set bulk_urls_placeholder %}https://example.com&#10;https://api.github.com&#10;https://httpbin.org/status/200{% endset -%}
+        {{ textarea(name='bulk_urls', id='bulk-urls-textarea', rows=8,
+                    class='input font-mono text-sm', placeholder=bulk_urls_placeholder,
+                    hx_post='/checks/bulk-preview', hx_trigger='input changed delay:500ms',
+                    hx_target='#bulk-preview-container', hx_swap='innerHTML',
+                    hx_include='this') }}
         <p class="text-xs text-dark-text-muted mt-1">
             One URL per line • Auto-detects HTTP/HTTPS • Preview appears below
         </p>

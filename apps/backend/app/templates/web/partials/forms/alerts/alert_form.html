@@ -234,13 +234,12 @@
 
             <div>
                 <label class="label">Custom Subject</label>
-                <input
-                    type="text"
-                    name="custom_subject"
-                    class="input font-mono text-sm"
-                    value="{{ alert.custom_subject if alert and alert.custom_subject else '' }}"
-                    placeholder="Variables: {{NAME}}, {{STATUS}}, {{HOSTNAME_OR_URL}}, {{LATENCY}}"
-                >
+                {# The placeholder advertises the alert template's OWN {{...}} variables,
+                   so the braces are data, not Jinja — quote them or Jinja renders
+                   "Variables: , , , " (which it did). #}
+                {{ input(id=false, name='custom_subject', class='input font-mono text-sm',
+                         value=(alert.custom_subject if alert and alert.custom_subject else ''),
+                         placeholder='Variables: {{NAME}}, {{STATUS}}, {{HOSTNAME_OR_URL}}, {{LATENCY}}') }}
             </div>
 
             <div>
