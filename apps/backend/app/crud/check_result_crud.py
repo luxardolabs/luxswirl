@@ -278,7 +278,19 @@ class CheckResultCRUD:
                     CheckResult.timestamp == latest_subquery.c.max_timestamp,
                 ),
             )
-            .where(CheckResult.agent_id == agent_id)
+            .where(
+                and_(
+                    CheckResult.agent_id == agent_id,
+                    # Same bound as the subquery. Semantically free — the join already
+                    # pins timestamp to a max_timestamp that is >= cutoff by
+                    # construction — but WITHOUT it the outer scan carries no time
+                    # predicate, so TimescaleDB cannot exclude chunks and reads every
+                    # chunk this agent has ever written. Measured on a 55M-row table:
+                    # 697,170 buffers -> 550, and startup stopped blowing the 5s
+                    # statement_timeout.
+                    CheckResult.timestamp >= cutoff,
+                )
+            )
         )
         result = await db.execute(results_query)
         return list(result.all())

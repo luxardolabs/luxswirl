@@ -26,7 +26,7 @@ services:
     # Compose never builds — `make build-dev` builds the baked :dev image first.
     image: ghcr.io/luxardolabs/luxswirl-agent:dev
 
-    command: ["python", "-m", "app.agent_main", "--debug"]
+    command: ["python", "-m", "app.main", "--debug"]
     environment:
       - LOG__LEVEL=DEBUG
 
