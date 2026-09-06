@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
+from fastapi import Request
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -41,6 +42,28 @@ class ResultProxy:
         return self._metrics
 
 
+def build_check_urls(request: Request, check_id: UUID, hours: int) -> dict[str, str]:
+    """Finished hrefs for one check's panel actions, resolved by route NAME.
+
+    .path, not str(): url_for returns an absolute url from the request's scheme/host,
+    which behind TLS-terminating nginx can emit http:// into an https:// page.
+    """
+
+    def u(name: str, **kw: object) -> str:
+        return str(request.url_for(name, **kw).path)
+
+    return {
+        "toggle": u("toggle_check", check_id=check_id),
+        "detail": f"{u('check_detail_panel', check_id=check_id)}?hours={hours}",
+        # The range selector posts its own ?hours=, so it needs the bare path.
+        "detail_base": u("check_detail_panel", check_id=check_id),
+        "clone_form": u("clone_form", check_id=check_id),
+        "dependents": u("dependents_panel", check_id=check_id),
+        "edit_form": u("edit_form", check_id=check_id),
+        "delete": u("delete_check", check_id=check_id),
+    }
+
+
 class CheckDetailViewService:
     """Service for check detail data."""
 
@@ -55,7 +78,7 @@ class CheckDetailViewService:
 
     @staticmethod
     async def get_check_detail(
-        db: AsyncSession, check_id: UUID, hours: int = 4
+        db: AsyncSession, request: Request, check_id: UUID, hours: int = 4
     ) -> dict | None:
         """
         Get full check details including recent history.
@@ -411,6 +434,13 @@ class CheckDetailViewService:
                         "size_bytes": artifact.size_bytes,
                         "created_at": artifact.created_at.isoformat(),
                         "check_result_id": str(artifact.check_result_id),
+                        # Finished hrefs, resolved by route name.
+                        "view_url": request.url_for(
+                            "view_artifact", artifact_id=artifact.id
+                        ).path,
+                        "viewer_url": request.url_for(
+                            "trace_viewer", artifact_id=artifact.id
+                        ).path,
                     }
                     for artifact in artifacts_models
                 ]
@@ -418,6 +448,14 @@ class CheckDetailViewService:
         dependency_info = await CheckCoreService.get_dependency_info(db, check_id)
 
         return {
+            "check_urls": build_check_urls(request, check_id, hours),
+            # The parent link points at a DIFFERENT check, so it needs its own href.
+            "parent_check_url": (
+                f"{request.url_for('check_detail_panel', check_id=dependency_info['parent_check'].id).path}"
+                f"?hours={hours}"
+                if dependency_info.get("parent_check")
+                else None
+            ),
             "check": check,
             "agent": agent,
             "history": history,

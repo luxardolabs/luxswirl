@@ -64,6 +64,20 @@ class CheckRow:
         self.updated_at = check.updated_at
 
 
+def build_check_form_urls(request: Request, check_id: UUID) -> dict[str, str]:
+    """Finished hrefs for the check form / dependents panels, resolved by route name."""
+
+    def u(name: str) -> str:
+        return str(request.url_for(name, check_id=check_id).path)
+
+    return {
+        "clone": u("clone_check_handler"),
+        "update": u("update_check"),
+        "dependents": u("dependents_panel"),
+        "update_dependents": u("update_dependents"),
+    }
+
+
 class ChecksViewService:
     """Service for checks page data aggregation."""
 
@@ -210,6 +224,7 @@ class ChecksViewService:
         )
 
         return {
+            "form_urls": build_check_form_urls(request, parent_check_id),
             "request": request,
             "current_user": current_user,
             "parent": parent,
@@ -424,6 +439,7 @@ class ChecksViewService:
             check.assignment_mode
         )
         return {
+            "form_urls": build_check_form_urls(request, check_id),
             "request": request,
             "current_user": current_user,
             "check": check,
@@ -449,6 +465,7 @@ class ChecksViewService:
         form_data = await ChecksViewService.get_check_clone_form_data(db, check_id)
         check = form_data["source_check"]
         return {
+            "form_urls": build_check_form_urls(request, check_id),
             "request": request,
             "current_user": current_user,
             "check": check,

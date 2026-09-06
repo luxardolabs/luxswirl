@@ -14,14 +14,14 @@
     ) }}
 
     <form id="dependents-panel"
-          hx-post="/checks/{{ parent.id }}/dependents"
+          hx-post="{{ form_urls.update_dependents }}"
           hx-swap="none"
           class="flex-1 flex flex-col min-h-0">
 
         {% call panel_content() %}
         <div class="space-y-5">
 
-            <div hx-get="/checks/{{ parent.id }}/dependents"
+            <div hx-get="{{ form_urls.dependents }}"
                  hx-target="closest [role=dialog]"
                  hx-swap="outerHTML"
                  hx-trigger="change from:.dep-filter, keyup changed delay:300ms from:input[name=search]"

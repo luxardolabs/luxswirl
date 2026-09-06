@@ -10,9 +10,9 @@
     {{ panel_header(h_title, subtitle=h_subtitle) }}
     <form
         {% if mode == 'clone' %}
-            hx-post="/checks/{{ check.id }}/clone"
+            hx-post="{{ form_urls.clone }}"
         {% elif check %}
-            hx-post="/checks/{{ check.id }}/update"
+            hx-post="{{ form_urls.update }}"
         {% else %}
             hx-post="/checks/create"
         {% endif %}
