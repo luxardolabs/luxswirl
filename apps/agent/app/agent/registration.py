@@ -11,6 +11,7 @@ from shared.logger import get_logger
 from shared.url_security import validate_server_url
 
 from app.agent.credentials import AgentCredentials
+from app.agent.http_client import server_client
 
 logger = get_logger("luxswirl.agent.registration")
 
@@ -72,37 +73,37 @@ class AgentRegistration:
             headers["Authorization"] = f"Bearer {auth_key}"
 
         try:
-            async with httpx.AsyncClient() as client:
+            client = server_client()
+            self.logger.info(
+                "Registering with server (using registration key)",
+                extra={"register_url": register_url},
+            )
+            response = await client.post(
+                register_url, json=payload, headers=headers, timeout=10.0
+            )
+            response.raise_for_status()
+
+            data = response.json()
+            agent_id = data.get("agent_id")
+            status = data.get("status")
+            message = data.get("message")
+
+            self.logger.info(
+                "Registration successful",
+                extra={"server_message": message, "status": status},
+            )
+
+            # Save credentials (without agent-specific key yet - will get it after approval)
+            if self.credentials.save(agent_id):
+                self.config["agent_id"] = agent_id
                 self.logger.info(
-                    "Registering with server (using registration key)",
-                    extra={"register_url": register_url},
+                    "Saved agent credentials",
+                    extra={"agent_id": str(agent_id)},
                 )
-                response = await client.post(
-                    register_url, json=payload, headers=headers, timeout=10.0
-                )
-                response.raise_for_status()
-
-                data = response.json()
-                agent_id = data.get("agent_id")
-                status = data.get("status")
-                message = data.get("message")
-
-                self.logger.info(
-                    "Registration successful",
-                    extra={"server_message": message, "status": status},
-                )
-
-                # Save credentials (without agent-specific key yet - will get it after approval)
-                if self.credentials.save(agent_id):
-                    self.config["agent_id"] = agent_id
-                    self.logger.info(
-                        "Saved agent credentials",
-                        extra={"agent_id": str(agent_id)},
-                    )
-                    return True
-                else:
-                    self.logger.error("Failed to save credentials")
-                    return False
+                return True
+            else:
+                self.logger.error("Failed to save credentials")
+                return False
 
         except httpx.HTTPStatusError as e:
             self.logger.error(
@@ -152,38 +153,36 @@ class AgentRegistration:
         headers = {"Authorization": f"Bearer {registration_key}"}
 
         try:
-            async with httpx.AsyncClient() as client:
-                self.logger.info(
-                    "Recovering agent-specific key",
-                    extra={"recovery_url": recovery_url},
-                )
-                response = await client.post(
-                    recovery_url, headers=headers, timeout=10.0
-                )
-                response.raise_for_status()
+            client = server_client()
+            self.logger.info(
+                "Recovering agent-specific key",
+                extra={"recovery_url": recovery_url},
+            )
+            response = await client.post(recovery_url, headers=headers, timeout=10.0)
+            response.raise_for_status()
 
-                data = response.json()
-                api_key = data.get("api_key")
-                message = data.get("message", "")
+            data = response.json()
+            api_key = data.get("api_key")
+            message = data.get("message", "")
 
-                if not api_key:
-                    self.logger.error("Recovery response missing api_key")
-                    return False
+            if not api_key:
+                self.logger.error("Recovery response missing api_key")
+                return False
 
-                self.logger.info(
-                    "Successfully retrieved agent-specific key",
-                    extra={"server_message": message},
-                )
+            self.logger.info(
+                "Successfully retrieved agent-specific key",
+                extra={"server_message": message},
+            )
 
-                # Save agent-specific key to credentials file
-                if self.credentials.save(agent_id, api_key):
-                    # Update config to use agent-specific key for future requests
-                    self.config["auth_key"] = api_key
-                    self.logger.info("Agent-specific key saved and activated")
-                    return True
-                else:
-                    self.logger.error("Failed to save agent-specific key")
-                    return False
+            # Save agent-specific key to credentials file
+            if self.credentials.save(agent_id, api_key):
+                # Update config to use agent-specific key for future requests
+                self.config["auth_key"] = api_key
+                self.logger.info("Agent-specific key saved and activated")
+                return True
+            else:
+                self.logger.error("Failed to save agent-specific key")
+                return False
 
         except httpx.HTTPStatusError as e:
             self.logger.error(

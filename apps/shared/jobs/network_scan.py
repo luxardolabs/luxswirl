@@ -14,10 +14,10 @@ import socket
 import time
 from typing import Any
 
-from shared.subprocess_safe import get_subprocess_config, run_subprocess_no_output
 from pydantic import BaseModel, Field, field_validator
 
 from shared.jobs.base import BaseJob
+from shared.subprocess_safe import get_subprocess_config, run_subprocess_no_output
 
 
 class NetworkScanParams(BaseModel):
@@ -73,7 +73,9 @@ class NetworkScanParams(BaseModel):
         if v:
             for port in v:
                 if not (1 <= port <= 65535):
-                    raise ValueError(f"Invalid port number: {port}. Must be between 1 and 65535")
+                    raise ValueError(
+                        f"Invalid port number: {port}. Must be between 1 and 65535"
+                    )
         return v
 
 
@@ -231,7 +233,9 @@ class NetworkScanJob(BaseJob):
 
         # Log sample of failed DNS lookups
         if hosts_without_dns > 0:
-            failed_samples = [h["ip"] for h in discovered_hosts if not h.get("hostname")][:5]
+            failed_samples = [
+                h["ip"] for h in discovered_hosts if not h.get("hostname")
+            ][:5]
             self.logger.info(
                 "Sample IPs without DNS",
                 extra={"sample_ips": failed_samples},
@@ -355,7 +359,9 @@ class NetworkScanJob(BaseJob):
             "Scanning chunks concurrently",
             extra={"chunk_count": len(chunks)},
         )
-        results = await asyncio.gather(*[scan_chunk(chunk, i) for i, chunk in enumerate(chunks)])
+        results = await asyncio.gather(
+            *[scan_chunk(chunk, i) for i, chunk in enumerate(chunks)]
+        )
 
         # Flatten results
         all_hosts = []

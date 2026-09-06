@@ -2,7 +2,7 @@
 Auth Router - API endpoints for authentication and session management.
 """
 
-from typing import Annotated, Literal, cast
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response, status
@@ -97,11 +97,9 @@ async def login(
     response.set_cookie(
         key=cookie_config.session_cookie_name,
         value=token,
-        httponly=cookie_config.session_cookie_httponly,
-        secure=cookie_config.session_cookie_secure,
-        samesite=cast(
-            Literal["lax", "strict", "none"], cookie_config.session_cookie_samesite
-        ),
+        httponly=True,
+        secure=True,
+        samesite="lax",
         max_age=max_age_seconds,
         path=cookie_config.session_cookie_path,
     )

@@ -25,7 +25,9 @@ DEFAULT_AGENT_CONFIG = {
     #   - Check results: {push_url} (POST)
     #   - Heartbeats: {base}/api/v1/agents/{agent_name}/heartbeat (POST)
     # Default uses luxswirl_server which is the service name in docker-compose
-    "push_url": os.environ.get("LUXSWIRL_SERVER_URL", "http://luxswirl_server:9000/api/v1/reports"),
+    "push_url": os.environ.get(
+        "LUXSWIRL_SERVER_URL", "http://luxswirl_server:9000/api/v1/reports"
+    ),
     # Reporting configuration
     "report_interval": 10,
     "report_batch_size": 5000,

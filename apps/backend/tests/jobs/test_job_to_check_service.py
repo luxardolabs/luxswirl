@@ -8,9 +8,6 @@ skipping, and the no-result error path.
 from __future__ import annotations
 
 import pytest
-from fixtures.factories import make_agent, make_check
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.schemas.job_schema import JobCreate
 from app.services.core.check_core_service import CheckCoreService
 from app.services.core.job_core_service import JobCoreService
@@ -19,6 +16,8 @@ from app.services.core.job_to_check_core_service import (
     JobToCheckCoreService,
     QuickCheckParams,
 )
+from fixtures.factories import make_agent, make_check
+from sqlalchemy.ext.asyncio import AsyncSession
 
 svc = JobToCheckCoreService
 pytestmark = pytest.mark.integration
@@ -32,7 +31,9 @@ async def _agent(db):
 
 
 async def _scan_job(db, result: dict):
-    job = await JobCoreService.create_job(db, JobCreate(job_type="network_scan", params={}))
+    job = await JobCoreService.create_job(
+        db, JobCreate(job_type="network_scan", params={})
+    )
     job.result = result
     await db.flush()
     return job
@@ -89,7 +90,9 @@ class TestCreatePingChecksFromJob:
 
     async def test_one_check_per_host(self, db: AsyncSession):
         a = await _agent(db)
-        job = await _scan_job(db, {"discovered_hosts": [{"ip": "10.0.0.1"}, {"ip": "10.0.0.2"}]})
+        job = await _scan_job(
+            db, {"discovered_hosts": [{"ip": "10.0.0.1"}, {"ip": "10.0.0.2"}]}
+        )
         res, err = await svc.create_ping_checks_from_job(db, job.id, self._params(a.id))
         assert err is None
         assert res.created_count == 2
@@ -99,7 +102,9 @@ class TestCreatePingChecksFromJob:
         # ping_<ip-with-dots-as-underscores>; 10.0.0.1 -> ping_10_0_0_1
         db.add(make_check(agent_id=a.id, display_name="ping_10_0_0_1"))
         await db.flush()
-        job = await _scan_job(db, {"discovered_hosts": [{"ip": "10.0.0.1"}, {"ip": "10.0.0.2"}]})
+        job = await _scan_job(
+            db, {"discovered_hosts": [{"ip": "10.0.0.1"}, {"ip": "10.0.0.2"}]}
+        )
         res, err = await svc.create_ping_checks_from_job(db, job.id, self._params(a.id))
         assert res.created_count == 1
         assert res.skipped_count == 1

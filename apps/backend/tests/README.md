@@ -2,25 +2,22 @@
 
 **Tracking issue:** LUXSWIRL-127
 
-A test platform for the LuxSwirl monitoring system. Tests are organized by
-**functional domain** (not by test type) so each directory mirrors a product
-area. Pure logic tests, integration tests, and API tests live side-by-side
-within each domain.
+A test platform for the LuxSwirl monitoring system. Tests are organized by **functional domain** (not by test type) so each directory mirrors a product area. Pure logic tests, integration tests, and API tests live side-by-side within each domain.
 
----
+______________________________________________________________________
 
 ## Tooling
 
-| Tool | Version | Purpose |
-|---|---|---|
-| **pytest** | 9.0 | Test runner |
-| **pytest-asyncio** | 1.3 | Async test support (LuxSwirl is fully async — FastAPI + asyncpg) |
-| **pytest-cov** | 7.0 | Coverage reporting |
-| **hypothesis** | 6.x | Property-based testing — generates random inputs to verify invariants (state-key stability, SSL band monotonicity, threshold-order invariance). Impossible to fabricate — they either find real counterexamples or they don't. |
-| **mutmut** | 3.x | Mutation testing — changes source code one line at a time and checks if any test fails. Surviving mutant = test gap. Verifies tests have teeth, not just coverage. |
-| **Faker** | 40.0 | Random fixture data (names, IPs, etc.) when factories need realistic-looking values |
+| Tool               | Version | Purpose                                                                                                                                                                                                                        |
+| ------------------ | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **pytest**         | 9.0     | Test runner                                                                                                                                                                                                                    |
+| **pytest-asyncio** | 1.3     | Async test support (LuxSwirl is fully async — FastAPI + asyncpg)                                                                                                                                                               |
+| **pytest-cov**     | 7.0     | Coverage reporting                                                                                                                                                                                                             |
+| **hypothesis**     | 6.x     | Property-based testing — generates random inputs to verify invariants (state-key stability, SSL band monotonicity, threshold-order invariance). Impossible to fabricate — they either find real counterexamples or they don't. |
+| **mutmut**         | 3.x     | Mutation testing — changes source code one line at a time and checks if any test fails. Surviving mutant = test gap. Verifies tests have teeth, not just coverage.                                                             |
+| **Faker**          | 40.0    | Random fixture data (names, IPs, etc.) when factories need realistic-looking values                                                                                                                                            |
 
----
+______________________________________________________________________
 
 ## Test Organization
 
@@ -47,68 +44,50 @@ tests/
 ### Why domain organization?
 
 - Adding a new product domain = add a new directory. No structural changes.
-- Each domain can contain pure logic, DB integration, and API tests — whatever
-  that domain needs.
+- Each domain can contain pure logic, DB integration, and API tests — whatever that domain needs.
 - Easy to find tests: "where are the alert tests?" → `tests/alerts/`.
 - Easy to run by domain: `pytest tests/alerts/`.
 
----
+______________________________________________________________________
 
 ## Test Tiers
 
 Every test must be tagged with a marker:
 
-| Marker | When to use | Speed | Requires |
-|---|---|---|---|
-| `@pytest.mark.pure` | Logic that touches no I/O. State-key computation, dedup decision rules, parsing, formatting. | Milliseconds per test. | Nothing. |
-| `@pytest.mark.integration` | Anything that hits the DB. CRUD methods, service methods that own transactions, queries that exercise indexes or constraints. | ~tens of ms per test. | `make test-db-up` first. |
-| `@pytest.mark.api` | Full request → response. FastAPI TestClient with overridden auth. | ~hundreds of ms per test. | DB up + app importable. |
+| Marker                     | When to use                                                                                                                   | Speed                     | Requires                 |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ------------------------- | ------------------------ |
+| `@pytest.mark.pure`        | Logic that touches no I/O. State-key computation, dedup decision rules, parsing, formatting.                                  | Milliseconds per test.    | Nothing.                 |
+| `@pytest.mark.integration` | Anything that hits the DB. CRUD methods, service methods that own transactions, queries that exercise indexes or constraints. | ~tens of ms per test.     | `make test-db-up` first. |
+| `@pytest.mark.api`         | Full request → response. FastAPI TestClient with overridden auth.                                                             | ~hundreds of ms per test. | DB up + app importable.  |
 
-Use `pytestmark = pytest.mark.<tier>` at the module level (not per-test) when
-every test in the file is the same tier — which it almost always is, because
-files are organized by tier within a domain.
+Use `pytestmark = pytest.mark.<tier>` at the module level (not per-test) when every test in the file is the same tier — which it almost always is, because files are organized by tier within a domain.
 
----
+______________________________________________________________________
 
 ## Anti-Fabrication Strategy
 
-Previous LLM-generated tests in other projects were fabricated: mocked all
-dependencies, guessed expected values, used tautological assertions. This
-suite uses four defenses:
+Previous LLM-generated tests in other projects were fabricated: mocked all dependencies, guessed expected values, used tautological assertions. This suite uses four defenses:
 
-1. **Hypothesis property tests** verify invariants that can't be faked.
-   `test_ssl_band_monotonic_in_days` runs hundreds of random day values and
-   asserts that lower days always produce equal-or-tighter bands. The
-   property is mathematical — fabricating it requires knowing the answer,
-   which defeats the point.
+1. **Hypothesis property tests** verify invariants that can't be faked. `test_ssl_band_monotonic_in_days` runs hundreds of random day values and asserts that lower days always produce equal-or-tighter bands. The property is mathematical — fabricating it requires knowing the answer, which defeats the point.
 
-2. **Mutmut mutation testing** changes the source code one line at a time
-   (flips `+` to `-`, changes `>` to `>=`, drops a `return`, etc.) and reruns
-   the tests. If no test fails, that mutation survived — meaning we have a
-   test gap. Target: ≥85% kill rate per module under test. Run with:
+1. **Mutmut mutation testing** changes the source code one line at a time (flips `+` to `-`, changes `>` to `>=`, drops a `return`, etc.) and reruns the tests. If no test fails, that mutation survived — meaning we have a test gap. Target: ≥85% kill rate per module under test. Run with:
+
    ```
    make mutmut-alerts          # mutate alert_core_service.py
    make mutmut-results         # see surviving mutants
    ```
 
-3. **No mocks in pure logic tests.** If a module is pure logic, test it
-   directly. No `unittest.mock`, no patching, no faking. If you need to mock
-   something to test it, that module isn't pure and the test belongs in the
-   `integration` tier with a real fixture.
+1. **No mocks in pure logic tests.** If a module is pure logic, test it directly. No `unittest.mock`, no patching, no faking. If you need to mock something to test it, that module isn't pure and the test belongs in the `integration` tier with a real fixture.
 
-4. **Real DB in integration tests.** Integration tests run against an actual
-   TimescaleDB (`compose.test.yaml`) on tmpfs. No SQLite. No in-memory fake.
-   Indexes, JSONB, hypertables, asyncpg behavior all match production.
+1. **Real DB in integration tests.** Integration tests run against an actual TimescaleDB (`compose.test.yaml`) on tmpfs. No SQLite. No in-memory fake. Indexes, JSONB, hypertables, asyncpg behavior all match production.
 
 ### What this catches
 
-Mocking the thing under test catches no bugs. Asserting that the function
-returns what you told the mock to return is tautology. Hypothesis + mutmut
-+ "no mocks in pure tests" together force tests to be about *behavior* —
-which means they break when behavior breaks. The flip side: writing them
-takes more thought up front, but each test is then load-bearing.
+Mocking the thing under test catches no bugs. Asserting that the function returns what you told the mock to return is tautology. Hypothesis + mutmut
 
----
+- "no mocks in pure tests" together force tests to be about *behavior* — which means they break when behavior breaks. The flip side: writing them takes more thought up front, but each test is then load-bearing.
+
+______________________________________________________________________
 
 ## How to Run
 
@@ -146,7 +125,7 @@ docker exec luxswirl_tests python -m pytest tests/alerts/ -m integration
 docker exec luxswirl_tests python -m pytest tests/alerts/ -m "not integration"
 ```
 
----
+______________________________________________________________________
 
 ## Writing a New Test
 
@@ -211,25 +190,21 @@ def test_my_invariant_holds_for_all_x(x):
     assert my_function(x) >= 0  # or whatever the invariant is
 ```
 
----
+______________________________________________________________________
 
 ## Reference Example
 
-**`tests/alerts/test_alert_crud_integration.py`** is the canonical example
-for how to write integration tests in this project. New domain tests should
-mirror its shape:
+**`tests/alerts/test_alert_crud_integration.py`** is the canonical example for how to write integration tests in this project. New domain tests should mirror its shape:
 
 - `pytestmark = pytest.mark.integration` at module level
 - Import `db` fixture from `fixtures.db`
 - Import factories from `fixtures.factories`
 - Test class per CRUD method (`TestGetX`, `TestListY`)
-- Each test creates its own scaffolding via factory functions and
-  `await db.flush()` — no shared fixtures between tests
+- Each test creates its own scaffolding via factory functions and `await db.flush()` — no shared fixtures between tests
 
-If your domain needs new factories, add them to `tests/fixtures/factories.py`
-following the existing `make_*` pattern.
+If your domain needs new factories, add them to `tests/fixtures/factories.py` following the existing `make_*` pattern.
 
----
+______________________________________________________________________
 
 ## Coverage Targets (LUXSWIRL-127)
 
@@ -242,7 +217,7 @@ following the existing `make_*` pattern.
 
 Mutmut kill rate target: ≥85% on covered modules.
 
----
+______________________________________________________________________
 
 ## Related
 

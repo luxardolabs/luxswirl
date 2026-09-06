@@ -11,8 +11,6 @@ from __future__ import annotations
 from uuid import uuid4
 
 import pytest
-from shared.ssrf import SsrfBlockedError
-
 from app.checks.dns import DNSCheck
 from app.checks.http import HTTPCheck
 from app.checks.json import JSONCheck
@@ -20,6 +18,7 @@ from app.checks.mysql import MySQLCheck
 from app.checks.ping import PingCheck
 from app.checks.postgres import PostgreSQLCheck
 from app.checks.tcp import TCPCheck
+from shared.ssrf import SsrfBlockedError
 
 pytestmark = pytest.mark.pure
 
@@ -27,7 +26,12 @@ METADATA_IP = "169.254.169.254"
 
 
 def _cfg(**overrides):
-    cfg = {"check_id": str(uuid4()), "name": "ssrf-test", "check_type": "ping", "retries": 1}
+    cfg = {
+        "check_id": str(uuid4()),
+        "name": "ssrf-test",
+        "check_type": "ping",
+        "retries": 1,
+    }
     cfg.update(overrides)
     return cfg
 
@@ -46,7 +50,9 @@ async def _assert_blocked(check):
 
 async def test_http_blocks_metadata():
     await _assert_blocked(
-        HTTPCheck(_cfg(check_type="http", target=f"http://{METADATA_IP}/latest/meta-data/"))
+        HTTPCheck(
+            _cfg(check_type="http", target=f"http://{METADATA_IP}/latest/meta-data/")
+        )
     )
 
 
@@ -75,7 +81,12 @@ async def test_dns_blocks_metadata_nameserver():
     pytest.importorskip("dns.asyncresolver")
     await _assert_blocked(
         DNSCheck(
-            _cfg(check_type="dns", target="example.com", record_type="A", nameserver=METADATA_IP)
+            _cfg(
+                check_type="dns",
+                target="example.com",
+                record_type="A",
+                nameserver=METADATA_IP,
+            )
         )
     )
 
@@ -84,7 +95,9 @@ async def test_mysql_blocks_metadata():
     pytest.importorskip("aiomysql")
     # The connection string lives in `target` (BaseCheck requires that field).
     await _assert_blocked(
-        MySQLCheck(_cfg(check_type="mysql", target=f"mysql://u:p@{METADATA_IP}:3306/db"))
+        MySQLCheck(
+            _cfg(check_type="mysql", target=f"mysql://u:p@{METADATA_IP}:3306/db")
+        )
     )
 
 
@@ -92,6 +105,8 @@ async def test_postgres_blocks_metadata():
     pytest.importorskip("asyncpg")
     await _assert_blocked(
         PostgreSQLCheck(
-            _cfg(check_type="postgres", target=f"postgresql://u:p@{METADATA_IP}:5432/db")
+            _cfg(
+                check_type="postgres", target=f"postgresql://u:p@{METADATA_IP}:5432/db"
+            )
         )
     )

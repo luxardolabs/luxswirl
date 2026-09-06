@@ -16,11 +16,10 @@ _tests_root = str(Path(__file__).resolve().parent.parent)
 if _tests_root not in sys.path:
     sys.path.insert(0, _tests_root)
 
-from fixtures.factories import make_user  # noqa: E402
-
 from app.core.config import settings  # noqa: E402
 from app.schemas.user_schema import UserCreate, UserUpdate  # noqa: E402
 from app.services.core.user_core_service import UserCoreService  # noqa: E402
+from fixtures.factories import make_user  # noqa: E402
 
 pytestmark = pytest.mark.integration
 
@@ -130,7 +129,7 @@ class TestUpdateUser:
         assert updated.full_name == "Just the name"
 
     async def test_missing_user_raises(self, db: AsyncSession, svc):
-        with pytest.raises(Exception):  # noqa: B017, PT011
+        with pytest.raises(Exception):  # noqa: B017
             await svc.update_user(db, uuid4(), UserUpdate(role="admin"))
 
 
@@ -214,13 +213,17 @@ class TestEnsureDefaultAdmin:
 
     async def test_creates_admin_from_config(self, db: AsyncSession, svc, monkeypatch):
         monkeypatch.setattr(settings.security, "initial_admin_username", "admin")
-        monkeypatch.setattr(settings.security, "initial_admin_password", "ComplexPass123!")
+        monkeypatch.setattr(
+            settings.security, "initial_admin_password", "ComplexPass123!"
+        )
         admin = await svc.ensure_default_admin(db)
         assert admin is not None
         assert admin.role == "admin"
         assert admin.must_change_password is True
 
-    async def test_defers_to_setup_when_no_password(self, db: AsyncSession, svc, monkeypatch):
+    async def test_defers_to_setup_when_no_password(
+        self, db: AsyncSession, svc, monkeypatch
+    ):
         monkeypatch.setattr(settings.security, "initial_admin_password", "")
         assert await svc.ensure_default_admin(db) is None
 

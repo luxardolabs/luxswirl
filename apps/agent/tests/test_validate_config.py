@@ -10,7 +10,6 @@ from __future__ import annotations
 from uuid import uuid4
 
 import pytest
-
 from app.checks.dns import DNSCheck
 from app.checks.http import HTTPCheck
 from app.checks.json import JSONCheck
@@ -135,7 +134,9 @@ class TestDNSValidation:
         DNSCheck(_base_cfg(check_type="dns", target="example.test", record_type="A"))
 
     def test_valid_cname_record(self):
-        DNSCheck(_base_cfg(check_type="dns", target="example.test", record_type="CNAME"))
+        DNSCheck(
+            _base_cfg(check_type="dns", target="example.test", record_type="CNAME")
+        )
 
     def test_missing_record_type_rejected(self):
         with pytest.raises(ValueError, match="record_type"):
@@ -279,7 +280,9 @@ class TestSyntheticValidation:
 
     def test_missing_script_rejected(self):
         with pytest.raises(ValueError, match="script_code"):
-            SyntheticCheck(_base_cfg(check_type="synthetic", target="https://example.test"))
+            SyntheticCheck(
+                _base_cfg(check_type="synthetic", target="https://example.test")
+            )
 
     def test_empty_script_rejected(self):
         with pytest.raises(ValueError, match="script_code"):

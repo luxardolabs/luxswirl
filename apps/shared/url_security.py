@@ -85,7 +85,9 @@ def validate_server_url(url: str) -> None:
         )
 
     # Unknown scheme
-    raise ValueError(f"Invalid URL scheme '{parsed.scheme}'. Must be http or https: {url}")
+    raise ValueError(
+        f"Invalid URL scheme '{parsed.scheme}'. Must be http or https: {url}"
+    )
 
 
 def _is_internal_destination(hostname: str) -> bool:

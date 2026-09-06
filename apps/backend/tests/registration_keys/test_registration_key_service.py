@@ -9,11 +9,13 @@ key must not authenticate.
 from __future__ import annotations
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.models.registration_key_model import RegistrationKey
-from app.schemas.registration_key_schema import RegistrationKeyCreate, RegistrationKeyRevoke
+from app.schemas.registration_key_schema import (
+    RegistrationKeyCreate,
+    RegistrationKeyRevoke,
+)
 from app.services.core.registration_key_core_service import RegistrationKeyCoreService
+from sqlalchemy.ext.asyncio import AsyncSession
 
 svc = RegistrationKeyCoreService
 

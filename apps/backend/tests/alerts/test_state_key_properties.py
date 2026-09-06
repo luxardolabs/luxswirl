@@ -19,10 +19,9 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
+from app.services.core.alert_core_service import AlertCoreService
 from hypothesis import given
 from hypothesis import strategies as st
-
-from app.services.core.alert_core_service import AlertCoreService
 
 pytestmark = pytest.mark.pure
 
@@ -33,7 +32,9 @@ def _alert(trigger_type: str, config: dict | None = None):
 
 def _ssl_result(days_until: int):
     r = SimpleNamespace()
-    r.get_metrics = lambda: {"response": {"ssl_certificate": {"days_until_expiration": days_until}}}
+    r.get_metrics = lambda: {
+        "response": {"ssl_certificate": {"days_until_expiration": days_until}}
+    }
     return r
 
 
@@ -61,7 +62,9 @@ def test_status_change_is_deterministic(success):
     value=st.integers(min_value=1, max_value=10000),
 )
 def test_threshold_key_is_deterministic(metric, operator, value):
-    alert = _alert("threshold", {"metric": metric, "operator": operator, "value": value})
+    alert = _alert(
+        "threshold", {"metric": metric, "operator": operator, "value": value}
+    )
     result = _status_result(False)
     k1 = AlertCoreService._compute_alert_state_key(alert, result)
     k2 = AlertCoreService._compute_alert_state_key(alert, result)

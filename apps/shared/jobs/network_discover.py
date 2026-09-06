@@ -12,10 +12,10 @@ import struct
 import time
 from typing import Any
 
-from shared.subprocess_safe import get_subprocess_config, run_subprocess_safely
 from pydantic import BaseModel
 
 from shared.jobs.base import BaseJob
+from shared.subprocess_safe import get_subprocess_config, run_subprocess_safely
 
 
 class NetworkDiscoverParams(BaseModel):
@@ -49,7 +49,9 @@ class NetworkDiscoverJob(BaseJob):
 
     # Display metadata
     display_name = "Network Discovery"
-    display_description = "Discover the agent's network topology and suggest scan targets"
+    display_description = (
+        "Discover the agent's network topology and suggest scan targets"
+    )
 
     async def execute(self) -> dict[str, Any]:
         """
@@ -96,7 +98,9 @@ class NetworkDiscoverJob(BaseJob):
             try:
                 default_gateway = await self._get_default_gateway_from_proc()
             except Exception:
-                self.logger.debug("Could not get gateway from /proc/net/route", exc_info=True)
+                self.logger.debug(
+                    "Could not get gateway from /proc/net/route", exc_info=True
+                )
 
         # If we found a gateway, check if it's a Docker bridge
         if default_gateway and self._is_docker_bridge_network(f"{default_gateway}/32"):
@@ -112,7 +116,9 @@ class NetworkDiscoverJob(BaseJob):
                 if real_gateway:
                     default_gateway = real_gateway  # Use real gateway as primary
             except Exception:
-                self.logger.debug("Could not discover real gateway via TTL", exc_info=True)
+                self.logger.debug(
+                    "Could not discover real gateway via TTL", exc_info=True
+                )
 
         # Get ARP table for active network detection
         try:

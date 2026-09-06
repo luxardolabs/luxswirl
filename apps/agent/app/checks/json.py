@@ -11,6 +11,7 @@ from typing import Any
 import httpx
 import jsonata
 
+from app.agent.http_client import check_client
 from app.checks._ssrf_http import ssrf_guarded_send
 from app.checks.base import BaseCheck
 
@@ -91,24 +92,25 @@ class JSONCheck(BaseCheck):
         # Attempt the request with retries
         for _attempt in range(retries):
             try:
-                async with httpx.AsyncClient(timeout=timeout, verify=verify) as client:
-                    start_time = self.start_timer()
+                client = check_client(verify=verify)
+                start_time = self.start_timer()
 
-                    # SSRF: validate the resolved IP at fetch time on the initial
-                    # URL and every redirect hop (blocks 3xx/rebind to metadata).
-                    http_response = await ssrf_guarded_send(
-                        client,
-                        method,
-                        target,
-                        headers=headers,
-                        body=body,
-                        follow_redirects=cfg.get("follow_redirects", True),
-                    )
+                # SSRF: validate the resolved IP at fetch time on the initial
+                # URL and every redirect hop (blocks 3xx/rebind to metadata).
+                http_response = await ssrf_guarded_send(
+                    client,
+                    method,
+                    target,
+                    headers=headers,
+                    body=body,
+                    follow_redirects=cfg.get("follow_redirects", True),
+                    timeout=timeout,
+                )
 
-                    latency = self.stop_timer(start_time)
+                latency = self.stop_timer(start_time)
 
-                    # If we got a response, break out of retry loop
-                    break
+                # If we got a response, break out of retry loop
+                break
 
             except httpx.RequestError as e:
                 last_error = e

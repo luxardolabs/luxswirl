@@ -14,7 +14,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
-
 from app.core.exceptions import ValidationException
 from app.services.core.alert_core_service import AlertCoreService
 from app.services.core.check_core_service import CheckCoreService
@@ -58,7 +57,9 @@ async def test_suppression_no_parent_returns_false():
     db = AsyncMock()
     db.add = MagicMock()
     check = _check(parent_id=None)
-    result = await AlertCoreService._handle_parent_suppression(db, _alert(), check, _check_result())
+    result = await AlertCoreService._handle_parent_suppression(
+        db, _alert(), check, _check_result()
+    )
     assert result is False
     db.add.assert_not_called()
 
@@ -105,7 +106,11 @@ async def test_suppression_parent_down_first_occurrence_writes_log_per_provider(
     parent_id = uuid4()
     parent = SimpleNamespace(display_name="gateway")
     check = _check(parent_id=parent_id, parent_check=parent)
-    mappings = [_provider_mapping(), _provider_mapping(), _provider_mapping(deleted=True)]
+    mappings = [
+        _provider_mapping(),
+        _provider_mapping(),
+        _provider_mapping(deleted=True),
+    ]
 
     with (
         patch(
@@ -139,7 +144,9 @@ async def test_suppression_parent_down_steady_state_dedups(monkeypatch):
     db = AsyncMock()
     db.add = MagicMock()
     parent_id = uuid4()
-    check = _check(parent_id=parent_id, parent_check=SimpleNamespace(display_name="gateway"))
+    check = _check(
+        parent_id=parent_id, parent_check=SimpleNamespace(display_name="gateway")
+    )
     last_row = SimpleNamespace(notification_hash="parent_down")
 
     with (
@@ -166,7 +173,9 @@ async def test_suppression_transition_from_other_state_writes_log():
     db = AsyncMock()
     db.add = MagicMock()
     parent_id = uuid4()
-    check = _check(parent_id=parent_id, parent_check=SimpleNamespace(display_name="gateway"))
+    check = _check(
+        parent_id=parent_id, parent_check=SimpleNamespace(display_name="gateway")
+    )
     last_row = SimpleNamespace(notification_hash="status:down")
     mappings = [_provider_mapping()]
 
@@ -210,24 +219,28 @@ async def test_validate_dependency_rejects_self_reference():
 @pytest.mark.asyncio
 async def test_validate_dependency_rejects_missing_parent():
     db = AsyncMock()
-    with patch(
-        "app.services.core.check_core_service.CheckCRUD.get_by_id",
-        AsyncMock(return_value=None),
+    with (
+        patch(
+            "app.services.core.check_core_service.CheckCRUD.get_by_id",
+            AsyncMock(return_value=None),
+        ),
+        pytest.raises(ValidationException, match="not found"),
     ):
-        with pytest.raises(ValidationException, match="not found"):
-            await CheckCoreService._validate_dependency(db, uuid4(), own_check_id=uuid4())
+        await CheckCoreService._validate_dependency(db, uuid4(), own_check_id=uuid4())
 
 
 @pytest.mark.asyncio
 async def test_validate_dependency_rejects_two_level_chain():
     db = AsyncMock()
     parent = SimpleNamespace(id=uuid4(), depends_on_check_id=uuid4())
-    with patch(
-        "app.services.core.check_core_service.CheckCRUD.get_by_id",
-        AsyncMock(return_value=parent),
+    with (
+        patch(
+            "app.services.core.check_core_service.CheckCRUD.get_by_id",
+            AsyncMock(return_value=parent),
+        ),
+        pytest.raises(ValidationException, match="Single-level"),
     ):
-        with pytest.raises(ValidationException, match="Single-level"):
-            await CheckCoreService._validate_dependency(db, parent.id, own_check_id=uuid4())
+        await CheckCoreService._validate_dependency(db, parent.id, own_check_id=uuid4())
 
 
 @pytest.mark.asyncio

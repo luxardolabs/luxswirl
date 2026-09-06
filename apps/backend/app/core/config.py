@@ -222,18 +222,10 @@ class SecuritySettings(BaseSettings):
         default="luxswirl_session",
         description="Name of session cookie (must be unique if multiple apps on same subdomain)",
     )
-    session_cookie_httponly: bool = Field(
-        default=True,
-        description="HTTPOnly flag for session cookie (prevents JavaScript access)",
-    )
-    session_cookie_secure: bool = Field(
-        default=True,
-        description="Secure flag for session cookie (HTTPS only)",
-    )
-    session_cookie_samesite: str = Field(
-        default="lax",
-        description="SameSite attribute for session cookie (strict/lax/none)",
-    )
+    # httponly / secure / samesite are deliberately NOT settings. They are written as
+    # literals at every set_cookie site (fw.secure_cookies): a dial lets a deployment
+    # silently downgrade every session cookie, and an indirection hides a call site that
+    # disagrees with the rest. Dev runs like prod. See `luxarch --playbook cookie-security`.
     session_cookie_path: str = Field(
         default="/",
         description="Path for session cookie",

@@ -12,12 +12,11 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from fixtures.factories import make_agent, make_alert, make_check
-
 from app.services.core.monitoring_core_service import (
     collect_database_metrics,
     collect_operational_metrics,
 )
+from fixtures.factories import make_agent, make_alert, make_check
 
 pytestmark = pytest.mark.integration
 

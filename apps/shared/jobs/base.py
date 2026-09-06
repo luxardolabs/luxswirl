@@ -154,4 +154,6 @@ class BaseJob(ABC):
 
     def __repr__(self) -> str:
         """String representation."""
-        return f"<{self.__class__.__name__}(job_id={self.job_id}, type={self.job_type})>"
+        return (
+            f"<{self.__class__.__name__}(job_id={self.job_id}, type={self.job_type})>"
+        )

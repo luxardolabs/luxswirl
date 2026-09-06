@@ -13,9 +13,6 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 import pytest
-from fixtures.factories import make_agent
-from sqlalchemy import select
-
 from app.crud.scheduler_crud import JobExecutionCRUD
 from app.models.agent_model import Agent
 from app.models.enum_model import SchedulerJobCategory
@@ -24,6 +21,8 @@ from app.services.core.cleanup_core_service import (
     cleanup_old_job_executions,
     cleanup_stale_agents,
 )
+from fixtures.factories import make_agent
+from sqlalchemy import select
 
 pytestmark = pytest.mark.integration
 
@@ -56,7 +55,9 @@ class TestCleanupOldJobExecutions:
 
         async with worker_db() as s:
             keys = (await s.execute(select(JobExecution.job_key))).scalars().all()
-        assert set(keys) == {"new"}, "old execution was not actually deleted + committed"
+        assert set(keys) == {"new"}, (
+            "old execution was not actually deleted + committed"
+        )
 
 
 class TestCleanupStaleAgents:
@@ -72,7 +73,9 @@ class TestCleanupStaleAgents:
 
         async with worker_db() as s:
             names = (await s.execute(select(Agent.agent_name))).scalars().all()
-        assert set(names) == {"fresh"}, "stale agent was not actually deleted + committed"
+        assert set(names) == {"fresh"}, (
+            "stale agent was not actually deleted + committed"
+        )
 
     async def test_no_stale_agents_is_a_noop(self, worker_db):
         async with worker_db() as s:

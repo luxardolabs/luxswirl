@@ -19,7 +19,6 @@ from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 import pytest
-
 from app.models.enum_model import SchedulerJobCategory, SchedulerTriggerType
 from app.models.scheduler_model import JobConfiguration
 from app.services.core.scheduler_core_service import SchedulerCoreService
@@ -90,7 +89,10 @@ class TestNextRunSchedulingMath:
         assert nxt > datetime.now(UTC) + timedelta(hours=23)
 
     def test_manual_never_reschedules(self):
-        assert _SVC._calculate_next_run(_job(trigger_type=SchedulerTriggerType.MANUAL)) is None
+        assert (
+            _SVC._calculate_next_run(_job(trigger_type=SchedulerTriggerType.MANUAL))
+            is None
+        )
 
 
 class TestPollLoopSurvivesABadIteration:

@@ -18,11 +18,10 @@ _tests_root = str(Path(__file__).resolve().parent.parent)
 if _tests_root not in sys.path:
     sys.path.insert(0, _tests_root)
 
-from fixtures.factories import make_agent, make_check  # noqa: E402
-
 from app.services.core.agent_assignment_core_service import (  # noqa: E402
     AgentAssignmentCoreService,
 )
+from fixtures.factories import make_agent, make_check  # noqa: E402
 
 assign = AgentAssignmentCoreService.get_assigned_agent_for_check
 
@@ -65,7 +64,9 @@ def test_rename_invariant() -> None:
     agents = _pool(5)
     cid = uuid4()
     a = assign(make_check(agent_id=uuid4(), id=cid, display_name="alpha"), agents).id
-    b = assign(make_check(agent_id=uuid4(), id=cid, display_name="totally-renamed"), agents).id
+    b = assign(
+        make_check(agent_id=uuid4(), id=cid, display_name="totally-renamed"), agents
+    ).id
     assert a == b
 
 

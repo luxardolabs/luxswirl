@@ -21,15 +21,14 @@ _tests_root = str(Path(__file__).resolve().parent.parent)
 if _tests_root not in sys.path:
     sys.path.insert(0, _tests_root)
 
+from app.core.datetime_utils import utc_now  # noqa: E402
+from app.crud.check_result_crud import CheckResultCRUD  # noqa: E402
 from fixtures.factories import (  # noqa: E402
     make_agent,
     make_check,
     make_check_result,
     make_check_result_batch,
 )
-
-from app.core.datetime_utils import utc_now  # noqa: E402
-from app.crud.check_result_crud import CheckResultCRUD  # noqa: E402
 
 pytestmark = pytest.mark.integration
 
@@ -56,9 +55,13 @@ class TestGetLatestPerCheckForAgent:
         db.add(check_b)
         await db.flush()
         # 3 results for A, 2 for B — should get 1 row per check (latest)
-        for r in make_check_result_batch(check_id=check_a.id, agent_id=agent.id, count=3):
+        for r in make_check_result_batch(
+            check_id=check_a.id, agent_id=agent.id, count=3
+        ):
             db.add(r)
-        for r in make_check_result_batch(check_id=check_b.id, agent_id=agent.id, count=2):
+        for r in make_check_result_batch(
+            check_id=check_b.id, agent_id=agent.id, count=2
+        ):
             db.add(r)
         await db.flush()
 
@@ -131,7 +134,9 @@ class TestGetHistoryForCheck:
 
     async def test_respects_limit(self, db: AsyncSession):
         agent, check = await _agent_with_check(db)
-        for r in make_check_result_batch(check_id=check.id, agent_id=agent.id, count=10):
+        for r in make_check_result_batch(
+            check_id=check.id, agent_id=agent.id, count=10
+        ):
             db.add(r)
         await db.flush()
 
@@ -257,7 +262,9 @@ class TestOverallStats:
         )
         await db.flush()
 
-        stats = await CheckResultCRUD.get_overall_stats(db, utc_now() - timedelta(hours=1))
+        stats = await CheckResultCRUD.get_overall_stats(
+            db, utc_now() - timedelta(hours=1)
+        )
         assert stats.total_checks == 2
         assert stats.successful_checks == 1
         assert stats.avg_latency_ms == pytest.approx(150.0)
@@ -277,7 +284,9 @@ class TestActivityCounters:
         db.add(stale)
         await db.flush()
 
-        count = await CheckResultCRUD.count_active_agents_since(db, now - timedelta(hours=1))
+        count = await CheckResultCRUD.count_active_agents_since(
+            db, now - timedelta(hours=1)
+        )
         assert count == 1
 
     async def test_count_active_checks_since(self, db: AsyncSession):
@@ -292,7 +301,9 @@ class TestActivityCounters:
         db.add(make_check(agent_id=stale_agent.id))
         await db.flush()
 
-        count = await CheckResultCRUD.count_active_checks_since(db, now - timedelta(hours=1))
+        count = await CheckResultCRUD.count_active_checks_since(
+            db, now - timedelta(hours=1)
+        )
         assert count == 2
 
     async def test_count_since(self, db: AsyncSession):

@@ -14,8 +14,9 @@ import time
 from datetime import datetime
 from typing import Any
 
-import httpx
 from shared.logger import get_logger
+
+from app.agent.http_client import server_client
 
 logger = get_logger("luxswirl.agent.result_processor")
 
@@ -198,31 +199,31 @@ class ResultProcessor:
                     }
 
                     # Upload to server
-                    async with httpx.AsyncClient(timeout=30.0) as client:
-                        response = await client.post(
-                            artifact_url,
-                            json=artifact_data,
-                            headers=headers,
-                        )
+                    client = server_client()
+                    response = await client.post(
+                        artifact_url,
+                        json=artifact_data,
+                        headers=headers,
+                    )
 
-                        if response.status_code == 201:
-                            self.logger.info(
-                                "Uploaded artifact",
-                                extra={
-                                    "artifact_filename": artifact["filename"],
-                                    "size_bytes": artifact["size_bytes"],
-                                    "artifact_type": artifact["type"],
-                                },
-                            )
-                        else:
-                            self.logger.error(
-                                "Failed to upload artifact",
-                                extra={
-                                    "artifact_filename": artifact["filename"],
-                                    "status_code": response.status_code,
-                                    "response_text": response.text,
-                                },
-                            )
+                    if response.status_code == 201:
+                        self.logger.info(
+                            "Uploaded artifact",
+                            extra={
+                                "artifact_filename": artifact["filename"],
+                                "size_bytes": artifact["size_bytes"],
+                                "artifact_type": artifact["type"],
+                            },
+                        )
+                    else:
+                        self.logger.error(
+                            "Failed to upload artifact",
+                            extra={
+                                "artifact_filename": artifact["filename"],
+                                "status_code": response.status_code,
+                                "response_text": response.text,
+                            },
+                        )
 
                 except Exception:
                     # Log but continue with other artifacts

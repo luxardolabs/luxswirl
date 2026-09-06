@@ -24,6 +24,7 @@ from cryptography.fernet import Fernet, InvalidToken
 from shared.logger import get_logger
 
 from app.agent.credentials import AgentCredentials
+from app.agent.http_client import server_client
 from app.checks.base import BaseCheck
 
 logger = get_logger("luxswirl.agent.check_manager")
@@ -255,17 +256,17 @@ class CheckManager:
             headers["Authorization"] = f"Bearer {auth_key}"
 
         try:
-            async with httpx.AsyncClient() as client:
-                response = await client.get(api_url, headers=headers, timeout=10.0)
-                response.raise_for_status()
-                data = response.json()
+            client = server_client()
+            response = await client.get(api_url, headers=headers, timeout=10.0)
+            response.raise_for_status()
+            data = response.json()
 
-                checks: list[dict[str, Any]] = data.get("checks", [])
-                self.logger.info(
-                    "Fetched checks from server",
-                    extra={"check_count": len(checks)},
-                )
-                return checks
+            checks: list[dict[str, Any]] = data.get("checks", [])
+            self.logger.info(
+                "Fetched checks from server",
+                extra={"check_count": len(checks)},
+            )
+            return checks
 
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 404:

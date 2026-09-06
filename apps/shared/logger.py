@@ -7,7 +7,6 @@ handler configuration. JSON output by default; LOG__FORMAT=text for plaintext.
 
 import json
 import logging
-import logging.handlers
 import os
 import re
 import sys
@@ -66,7 +65,9 @@ class CredentialFilter(logging.Filter):
     )
 
     # Extra keys whose values should always be scrubbed regardless of content
-    _SENSITIVE_KEYS = frozenset({"password", "api_key", "auth_key", "bearer", "token", "secret"})
+    _SENSITIVE_KEYS = frozenset(
+        {"password", "api_key", "auth_key", "bearer", "token", "secret"}
+    )
 
     def filter(self, record: logging.LogRecord) -> bool:
         if isinstance(record.msg, str):
@@ -77,7 +78,8 @@ class CredentialFilter(logging.Filter):
                 record.args = self._scrub_dict(record.args)
             elif isinstance(record.args, tuple):
                 record.args = tuple(
-                    self._scrub_value(arg) if isinstance(arg, str) else arg for arg in record.args
+                    self._scrub_value(arg) if isinstance(arg, str) else arg
+                    for arg in record.args
                 )
         # Scrub structured extras attached to the record (logger.info(..., extra={...}))
         for attr_name, attr_value in list(record.__dict__.items()):
@@ -114,7 +116,9 @@ class CredentialFilter(logging.Filter):
 class _LuxswirlJsonFormatter(jsonlogger.JsonFormatter):
     """JSON formatter with explicit standard fields."""
 
-    def add_fields(self, log_record: dict, record: logging.LogRecord, message_dict: dict) -> None:
+    def add_fields(
+        self, log_record: dict, record: logging.LogRecord, message_dict: dict
+    ) -> None:
         super().add_fields(log_record, record, message_dict)
         log_record["timestamp"] = self.formatTime(record, self.datefmt)
         log_record["level"] = record.levelname
@@ -126,7 +130,9 @@ class _LuxswirlJsonFormatter(jsonlogger.JsonFormatter):
             log_record["exception"] = {
                 "type": record.exc_info[0].__name__ if record.exc_info[0] else None,
                 "message": str(record.exc_info[1]) if record.exc_info[1] else None,
-                "traceback": self.formatException(record.exc_info) if record.exc_info else None,
+                "traceback": self.formatException(record.exc_info)
+                if record.exc_info
+                else None,
             }
 
 
@@ -184,7 +190,9 @@ def setup_logging(config: dict[str, Any] | None = None) -> None:
     global _INITIALIZED
     config = config or {}
 
-    level_name = (config.get("log_level") or os.environ.get("LOG__LEVEL", "INFO")).upper()
+    level_name = (
+        config.get("log_level") or os.environ.get("LOG__LEVEL", "INFO")
+    ).upper()
     fmt = (config.get("log_format") or os.environ.get("LOG__FORMAT", "json")).lower()
     service_name = config.get("service_name", "luxswirl")
 
@@ -209,7 +217,9 @@ def setup_logging(config: dict[str, Any] | None = None) -> None:
 
     # Console handler — single, attached to the namespace root
     console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setLevel(logging.DEBUG)  # handler accepts everything; loggers filter
+    console_handler.setLevel(
+        logging.DEBUG
+    )  # handler accepts everything; loggers filter
     console_handler.setFormatter(formatter)
 
     # Configure the namespace root logger ONCE
@@ -254,7 +264,9 @@ def configure_logging(config: dict[str, Any]) -> None:
     setup_logging(config)
 
 
-def get_logger(name: str = _ROOT_NAMESPACE, config: dict[str, Any] | None = None) -> logging.Logger:
+def get_logger(
+    name: str = _ROOT_NAMESPACE, config: dict[str, Any] | None = None
+) -> logging.Logger:
     """Return a logger. Lazy-initializes setup if not yet done.
 
     Args:
