@@ -163,5 +163,13 @@ class WebAuthViewService:
         ]
 
     @staticmethod
-    async def get_security_settings(db):
-        return await SettingsCoreService.get_security_settings(db)
+    async def get_session_cookie_max_age(db: AsyncSession) -> int:
+        """Session cookie Max-Age in seconds, from the configured lifetime in days.
+
+        The days→seconds conversion and the fallback are presentation concerns:
+        core stores the operator's setting, the web seam turns it into the value
+        the Set-Cookie header wants.
+        """
+        security_settings = await SettingsCoreService.get_security_settings(db)
+        lifetime_days = security_settings.get("session_lifetime_days", 7)
+        return int(lifetime_days) * 24 * 60 * 60
