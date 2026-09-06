@@ -11,5 +11,8 @@ from app.web.template_filters import register_filters
 
 # Single shared templates instance with all filters registered (package-relative
 # so it resolves regardless of CWD).
-templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
+# Fleet-canonical location: app/templates/web/, a sibling of app/static/.
+# Refs inside templates stay relative to THIS root ("pages/x.html").
+_TEMPLATE_ROOT = Path(__file__).resolve().parents[1] / "templates" / "web"
+templates = Jinja2Templates(directory=str(_TEMPLATE_ROOT))
 register_filters(templates.env)

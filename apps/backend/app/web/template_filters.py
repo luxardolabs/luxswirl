@@ -258,13 +258,13 @@ def timeago(dt: datetime | None, style: str = "short") -> str:
 
 
 def _compute_static_version() -> str:
-    """Compute a short cache-busting token from the newest mtime in web/static/.
+    """Compute a short cache-busting token from the newest mtime in app/static/.
 
     Appended as ?v=<token> on <script src> and <link href> tags so browsers
     refetch when any static file is updated. Computed once at app startup;
     an app restart picks up new file changes.
     """
-    static_root = Path(__file__).parent / "static"
+    static_root = Path(__file__).resolve().parents[1] / "static"
     try:
         newest_mtime = max(
             (p.stat().st_mtime for p in static_root.rglob("*") if p.is_file()),
