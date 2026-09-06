@@ -6,6 +6,7 @@ while providing web-specific functionality and data aggregation.
 """
 
 import asyncio
+from dataclasses import dataclass
 from datetime import timedelta
 from typing import Any
 from uuid import UUID
@@ -33,6 +34,57 @@ from app.web.templates_config import templates
 logger = get_logger("luxswirl.web.services.agents")
 
 
+@dataclass(frozen=True)
+class AgentUrls:
+    """Finished hrefs for one agent's row actions.
+
+    Built here with `request.url_for`, so route knowledge lives in the router and
+    the template just renders a string. A path spelled into a template can't be
+    grepped when the route moves (fw.url_assembly_in_view).
+    """
+
+    force_reload: str
+    edit_form: str
+    import_export_form: str
+    view_checks: str
+    key_management_panel: str
+    generate_key: str
+    approve: str
+    reject: str
+    pause: str
+    resume: str
+    disable: str
+    enable: str
+    delete: str
+
+
+def build_agent_urls(request: Request, agent_id: UUID) -> AgentUrls:
+    """Resolve every per-agent action URL by ROUTE NAME."""
+
+    def u(name: str) -> str:
+        # .path, not str(): url_for returns an ABSOLUTE url built from the scheme/host
+        # this request arrived with. Behind TLS-terminating nginx that risks emitting
+        # http:// links into an https:// page. Resolving by ROUTE NAME is the point;
+        # the rendered href stays root-relative, exactly as it was hand-written.
+        return request.url_for(name, agent_id=agent_id).path
+
+    return AgentUrls(
+        force_reload=u("force_reload_agent"),
+        edit_form=u("agent_edit_form"),
+        import_export_form=u("import_export_form"),
+        view_checks=f"{request.url_for('status_page').path}?agent_id={agent_id}",
+        key_management_panel=u("get_key_management_panel"),
+        generate_key=u("generate_key_web"),
+        approve=u("approve_agent_web"),
+        reject=u("reject_agent_web"),
+        pause=u("pause_agent_web"),
+        resume=u("resume_agent_web"),
+        disable=u("disable_agent_web"),
+        enable=u("enable_agent_web"),
+        delete=u("delete_agent_web"),
+    )
+
+
 class AgentData:
     """Data structure for agent list display."""
 
@@ -49,8 +101,10 @@ class AgentData:
         subprocess_sparkline: list[int | None],
         default_heartbeat: int,
         default_check_sync: int,
+        urls: AgentUrls,
     ):
         self.agent = agent
+        self.urls = urls
         self.total_checks = total_checks
         self.enabled_checks = enabled_checks
         self.cpu_sparkline = cpu_sparkline
@@ -69,6 +123,7 @@ class AgentsViewService:
     @staticmethod
     async def get_agents_with_check_counts(
         db: AsyncSession,
+        request: Request,
         active_only: bool = False,
         search: str | None = None,
         hours: int = 4,
@@ -216,6 +271,7 @@ class AgentsViewService:
                 subprocess_sparkline=subprocess_sparkline,
                 default_heartbeat=settings.server.default_heartbeat_interval,
                 default_check_sync=settings.server.default_check_sync_interval,
+                urls=build_agent_urls(request, agent.id),
             )
 
         # Execute all queries concurrently
@@ -393,6 +449,7 @@ class AgentsViewService:
         pending_agents = await AgentCoreService.get_pending_agents(db)
         agent_data, total = await AgentsViewService.get_agents_with_check_counts(
             db=db,
+            request=request,
             active_only=active_only,
             search=search if search else None,
             hours=hours,
