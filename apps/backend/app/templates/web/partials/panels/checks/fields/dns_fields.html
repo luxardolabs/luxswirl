@@ -1,10 +1,10 @@
-{% from 'macros/form_fields.html' import input %}
+{% from 'macros/form_fields.html' import input, select %}
 <!-- DNS-specific fields -->
 <div id="dns-fields" class="space-y-4 {% if not check or check.check_type != 'dns' %}hidden{% endif %}">
     <div class="grid grid-cols-2 gap-4">
         <div>
             <label class="label" for="record_type">Record Type</label>
-            <select name="record_type" id="record_type" class="input">
+            {% call select(name="record_type", id="record_type", class="input") %}
                 <option value="A" {% if check and check.record_type == 'A' %}selected{% endif %}>A (IPv4 Address)</option>
                 <option value="AAAA" {% if check and check.record_type == 'AAAA' %}selected{% endif %}>AAAA (IPv6 Address)</option>
                 <option value="CNAME" {% if check and check.record_type == 'CNAME' %}selected{% endif %}>CNAME (Canonical Name)</option>
@@ -15,7 +15,7 @@
                 <option value="SOA" {% if check and check.record_type == 'SOA' %}selected{% endif %}>SOA (Start of Authority)</option>
                 <option value="SRV" {% if check and check.record_type == 'SRV' %}selected{% endif %}>SRV (Service)</option>
                 <option value="CAA" {% if check and check.record_type == 'CAA' %}selected{% endif %}>CAA (Certificate Authority)</option>
-            </select>
+            {% endcall %}
             <p class="text-xs text-dark-text-muted mt-1">DNS record type to query</p>
         </div>
         <div>

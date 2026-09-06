@@ -1,4 +1,5 @@
 {% from 'macros/status.html' import status_badge, check_type_icon %}
+{% from 'macros/form_fields.html' import select %}
 {% from 'macros/buttons.html' import icon_btn, icon_edit, delete_icon_button, collapse_toggle, toggle_switch %}
 {% from 'macros/tables.html' import data_table %}
 
@@ -104,21 +105,13 @@
                 <!-- Time range selector -->
                 <div class="flex items-center gap-2">
                     <label class="text-xs text-dark-text-muted" for="hours">Range:</label>
-                    <select
-                        name="hours"
-                        id="hours"
-                        class="input text-xs py-1 px-2"
-                        hx-get="/check/{{ check_id }}"
-                        hx-target="#check-detail-panel"
-                        hx-swap="innerHTML"
-                        hx-trigger="change"
-                    >
+                    {% call select(name="hours", id="hours", hx_get=('/check/' ~ (check_id)), hx_target="#check-detail-panel", hx_trigger="change", hx_swap="innerHTML", class="input text-xs py-1 px-2") %}
                         <option value="4" {% if hours == 4 %}selected{% endif %}>4h</option>
                         <option value="8" {% if hours == 8 %}selected{% endif %}>8h</option>
                         <option value="24" {% if hours == 24 %}selected{% endif %}>24h</option>
                         <option value="72" {% if hours == 72 %}selected{% endif %}>3d</option>
                         <option value="168" {% if hours == 168 %}selected{% endif %}>7d</option>
-                    </select>
+                    {% endcall %}
                 </div>
             </div>
         </div>

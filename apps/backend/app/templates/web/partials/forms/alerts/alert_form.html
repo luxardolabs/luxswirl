@@ -1,5 +1,5 @@
 {% from 'macros/buttons.html' import btn_save, btn_create, btn_cancel_text %}
-{% from 'macros/form_fields.html' import checkbox, input, textarea %}
+{% from 'macros/form_fields.html' import checkbox, input, select, textarea %}
 {% from 'macros/panels.html' import panel_wrapper, panel_header, panel_content, panel_footer %}
 
 {% call panel_wrapper(max_width='max-w-3xl') %}
@@ -41,17 +41,12 @@
             {% if not alert %}
             <div>
                 <label class="label" for="trigger-type-select">Trigger Type <span class="text-red-400">*</span></label>
-                <select
-                    name="trigger_type"
-                    id="trigger-type-select"
-                    class="input"
-                    required
-                >
+                {% call select(name="trigger_type", id="trigger-type-select", required=true, class="input") %}
                     <option value="">Select trigger type...</option>
                     <option value="status_change">Status Change (Check Down)</option>
                     <option value="threshold">Latency Threshold</option>
                     <option value="ssl_cert_expiry">SSL Certificate Expiry</option>
-                </select>
+                {% endcall %}
             </div>
             {% else %}
             <input type="hidden" name="trigger_type" value="{{ alert.trigger_type }}">
@@ -78,14 +73,14 @@
                         <div class="grid grid-cols-2 gap-4">
                             <div>
                                 <label class="text-xs text-dark-text-muted block mb-1" for="trigger_threshold_operator">Operator</label>
-                                <select id="trigger_threshold_operator" name="trigger_threshold_operator" class="input" required>
+                                {% call select(name="trigger_threshold_operator", id="trigger_threshold_operator", required=true, class="input") %}
                                     {% set current_operator = alert.trigger_config.operator if alert.trigger_config.operator else '>' %}
                                     <option value=">" {% if current_operator == '>' %}selected{% endif %}>Greater than (&gt;)</option>
                                     <option value=">=" {% if current_operator == '>=' %}selected{% endif %}>Greater than or equal (&gt;=)</option>
                                     <option value="<" {% if current_operator == '<' %}selected{% endif %}>Less than (&lt;)</option>
                                     <option value="<=" {% if current_operator == '<=' %}selected{% endif %}>Less than or equal (&lt;=)</option>
                                     <option value="==" {% if current_operator == '==' %}selected{% endif %}>Equal to (==)</option>
-                                </select>
+                                {% endcall %}
                             </div>
                             <div>
                                 <label class="text-xs text-dark-text-muted block mb-1">Threshold (milliseconds)</label>

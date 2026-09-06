@@ -1,3 +1,4 @@
+{% from 'macros/form_fields.html' import select %}
 <!-- Database Health Dashboard -->
 <div class="space-y-4">
     <!-- Storage Breakdown Grid - All Hypertables -->
@@ -88,15 +89,13 @@
         <div class="p-4 border-b border-dark-border">
             <div class="flex items-center justify-between">
                 <h2 class="font-semibold text-dark-text-primary">Data Growth Over Time</h2>
-                <select id="growth-time-range"
-                        aria-label="Data growth time range"
-                        class="px-3 py-1.5 bg-dark-bg-tertiary border border-dark-border rounded-lg text-sm text-dark-text-primary focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500">
+                {% call select(id="growth-time-range", class="px-3 py-1.5 bg-dark-bg-tertiary border border-dark-border rounded-lg text-sm text-dark-text-primary focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500", extra_attrs='aria-label="Data growth time range"') %}
                     <option value="24">Last 24 Hours</option>
                     <option value="168" selected>Last 7 Days</option>
                     <option value="720">Last 30 Days</option>
                     <option value="2160">Last 90 Days</option>
                     <option value="8760">Last Year</option>
-                </select>
+                {% endcall %}
             </div>
         </div>
         <div class="p-6">

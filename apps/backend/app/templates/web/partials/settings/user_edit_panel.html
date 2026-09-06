@@ -1,5 +1,5 @@
 {% from 'macros/buttons.html' import btn_save, btn_enable, btn_delete_text, btn_cancel_text, confirm_action_btn %}
-{% from 'macros/form_fields.html' import checkbox, input %}
+{% from 'macros/form_fields.html' import checkbox, input, select %}
 {%- set ICO_TRASH %}<span class="w-3.5 h-3.5 mr-1.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/trash.svg" %}</span>{% endset %}
 {% from 'macros/panels.html' import panel_wrapper, panel_header, panel_content %}
 
@@ -44,11 +44,11 @@
             <!-- Role -->
             <div>
                 <label class="label text-sm" for="role">Role <span class="text-red-400">*</span></label>
-                <select id="role" name="role" class="input" required>
+                {% call select(name="role", id="role", required=true, class="input") %}
                     {% for opt in role_options %}
                     <option value="{{ opt.value }}" {% if user.role == opt.value %}selected{% endif %}>{{ opt.label }}</option>
                     {% endfor %}
-                </select>
+                {% endcall %}
             </div>
 
             <!-- Checkboxes -->

@@ -1,5 +1,5 @@
 {% from 'macros/panels.html' import panel_wrapper, panel_header, panel_content, panel_footer %}
-{% from 'macros/form_fields.html' import checkbox, input %}
+{% from 'macros/form_fields.html' import checkbox, input, select %}
 {% from 'macros/buttons.html' import btn_save, btn_cancel_text, text_btn %}
 {% from 'macros/status.html' import check_type_icon %}
 
@@ -28,18 +28,18 @@
                  hx-include="this"
                  class="grid grid-cols-2 gap-2">
                 {{ input(id=false, name="search", value=search, placeholder="Search name or target…", class="input col-span-2 dep-filter") }}
-                <select name="check_type" class="input dep-filter" aria-label="Filter by type">
+                {% call select(id=false, name="check_type", class="input dep-filter", extra_attrs='aria-label="Filter by type"') %}
                     <option value="">All types</option>
                     {% for t in all_types %}
                     <option value="{{ t }}" {% if check_type == t %}selected{% endif %}>{{ t }}</option>
                     {% endfor %}
-                </select>
-                <select name="agent_name" class="input dep-filter" aria-label="Filter by agent">
+                {% endcall %}
+                {% call select(id=false, name="agent_name", class="input dep-filter", extra_attrs='aria-label="Filter by agent"') %}
                     <option value="">All agents</option>
                     {% for a in all_agents %}
                     <option value="{{ a }}" {% if agent_name == a %}selected{% endif %}>{{ a }}</option>
                     {% endfor %}
-                </select>
+                {% endcall %}
                 {{ input(id=false, name="tags", value=tags, placeholder="Tag equals…", class="input dep-filter col-span-2") }}
             </div>
 

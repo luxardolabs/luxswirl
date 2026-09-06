@@ -1,6 +1,6 @@
 <!-- Network Scan Results -->
 {% from 'macros/buttons.html' import text_btn, btn_create, icon_btn, tag_pill_button %}
-{% from 'macros/form_fields.html' import input %}
+{% from 'macros/form_fields.html' import input, select %}
 {% from 'macros/tables.html' import data_table %}
 {% set result = job.result %}
 
@@ -73,21 +73,21 @@
             </div>
             <div>
                 <label for="default_verify_ssl" class="text-xs text-green-300/70 block mb-1">Verify SSL</label>
-                <select name="verify_ssl" id="default_verify_ssl" class="input input-sm w-full text-xs bg-dark-bg-primary border-2 border-dark-border focus:border-brand-500">
+                {% call select(name="verify_ssl", id="default_verify_ssl", class="input input-sm w-full text-xs bg-dark-bg-primary border-2 border-dark-border focus:border-brand-500") %}
                     <option value="false" {% if not check_defaults.verify_ssl %}selected{% endif %}>No (self-signed)</option>
                     <option value="true" {% if check_defaults.verify_ssl %}selected{% endif %}>Yes (valid certs)</option>
-                </select>
+                {% endcall %}
             </div>
             <div>
                 <label for="default_agent" class="text-xs text-green-300/70 block mb-1">Agent <span class="text-red-400">*</span></label>
-                <select name="agent_id" id="default_agent" class="input input-sm w-full text-xs bg-dark-bg-primary border-2 border-dark-border focus:border-brand-500" required>
+                {% call select(name="agent_id", id="default_agent", required=true, class="input input-sm w-full text-xs bg-dark-bg-primary border-2 border-dark-border focus:border-brand-500") %}
                     <option value="">Select agent...</option>
                     {% for a in agents %}
                     <option value="{{ a.id }}" {% if job.agent_id|string == a.id|string %}selected{% endif %}>
                         {{ a.agent_name or a.id }}{% if a.hostname %} ({{ a.hostname }}){% endif %}
                     </option>
                     {% endfor %}
-                </select>
+                {% endcall %}
             </div>
         </div>
         <!-- Third row: Tags -->
