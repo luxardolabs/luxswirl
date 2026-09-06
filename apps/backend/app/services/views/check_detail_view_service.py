@@ -447,5 +447,14 @@ class CheckDetailViewService:
         }
 
     @staticmethod
-    async def get_setting(db, key: str, default):
-        return await SettingsCoreService.get_setting(db, key, default)
+    async def resolve_default_chart_hours(db: AsyncSession) -> int:
+        """Hours of history the detail chart shows when the caller didn't pick a range.
+
+        Reads the configured default ("4h"/"24h"/"3d"/…) and converts it to hours —
+        both halves of that are presentation decisions, so they live here rather than
+        being reassembled by each router that needs a default.
+        """
+        time_range = await SettingsCoreService.get_setting(
+            db, "general.default_chart_time_range", "4h"
+        )
+        return CheckDetailViewService.parse_time_range_to_hours(time_range)

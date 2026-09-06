@@ -30,22 +30,7 @@ async def view_artifact(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     """View/download artifact binary data from web UI."""
-    artifact = await ArtifactsViewService.get_artifact_for_download(db, artifact_id)
-    if not artifact:
-        return Response(
-            content=b"Artifact not found",
-            status_code=404,
-            media_type="text/plain",
-        )
-
-    return Response(
-        content=artifact.data,
-        media_type=artifact.content_type,
-        headers={
-            "Content-Disposition": f'inline; filename="{artifact.filename}"',
-            "Content-Length": str(artifact.size_bytes),
-        },
-    )
+    return await ArtifactsViewService.build_artifact_download_response(db, artifact_id)
 
 
 @router.get(

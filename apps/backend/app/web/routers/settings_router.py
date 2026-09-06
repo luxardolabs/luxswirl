@@ -246,13 +246,8 @@ async def generate_metrics_token(
 ):
     """Generate new Prometheus metrics bearer token (shown once)."""
     try:
-        token = await SettingsViewService.generate_metrics_token(db)
-        return templates.TemplateResponse(
-            request,
-            "partials/settings/metrics_token.html",
-            SettingsViewService.build_metrics_token_context(
-                request, current_user, token
-            ),
+        return await SettingsViewService.render_new_metrics_token(
+            db, request, current_user
         )
     except Exception as e:
         logger.error("Error generating metrics token", exc_info=True)

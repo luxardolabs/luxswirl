@@ -35,10 +35,7 @@ async def check_detail_panel(
     try:
         # Get default chart time range from settings if not specified
         if hours is None:
-            time_range_str = await CheckDetailViewService.get_setting(
-                db, "general.default_chart_time_range", "4h"
-            )
-            hours = CheckDetailViewService.parse_time_range_to_hours(time_range_str)
+            hours = await CheckDetailViewService.resolve_default_chart_hours(db)
 
         detail = await CheckDetailViewService.get_check_detail(
             db, check_id, hours=hours

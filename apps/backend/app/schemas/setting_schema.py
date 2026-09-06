@@ -172,3 +172,20 @@ class AlertDefaults(BaseModel):
             }
         }
     )
+
+
+class DatabaseGrowthPoint(BaseModel):
+    """One bucket of the database-growth chart (storage by table category, MB)."""
+
+    timestamp: str | None
+    results_mb: float
+    artifacts_mb: float
+    checks_mb: float
+    agent_metrics_mb: float
+    total_mb: float
+
+
+class DatabaseGrowthResponse(BaseModel):
+    """Response for the database-growth chart endpoint."""
+
+    data: list[DatabaseGrowthPoint]
