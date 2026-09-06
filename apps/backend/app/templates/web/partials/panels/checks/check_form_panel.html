@@ -172,13 +172,13 @@
         </div>
 
         <!-- Check-type-specific fields (extracted to partials for maintainability) -->
-        {% include 'panels/checks/fields/http_fields.html' %}
-        {% include 'panels/checks/fields/json_fields.html' %}
-        {% include 'panels/checks/fields/dns_fields.html' %}
-        {% include 'panels/checks/fields/mysql_fields.html' %}
-        {% include 'panels/checks/fields/postgres_fields.html' %}
-        {% include 'panels/checks/fields/synthetic_fields.html' %}
-        {% include 'panels/checks/fields/bulk_fields.html' %}
+        {% include 'partials/panels/checks/fields/http_fields.html' %}
+        {% include 'partials/panels/checks/fields/json_fields.html' %}
+        {% include 'partials/panels/checks/fields/dns_fields.html' %}
+        {% include 'partials/panels/checks/fields/mysql_fields.html' %}
+        {% include 'partials/panels/checks/fields/postgres_fields.html' %}
+        {% include 'partials/panels/checks/fields/synthetic_fields.html' %}
+        {% include 'partials/panels/checks/fields/bulk_fields.html' %}
 
         <!-- Advanced Settings -->
         <div class="space-y-4">

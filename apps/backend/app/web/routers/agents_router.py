@@ -85,7 +85,7 @@ async def agent_edit_form(
                 detail=f"Agent not found: {agent_id}",
             )
         return templates.TemplateResponse(
-            request, "panels/agents/agent_edit_panel.html", context
+            request, "partials/panels/agents/agent_edit_panel.html", context
         )
     except HTTPException:
         raise
@@ -294,7 +294,9 @@ async def get_key_management_panel(
                 detail=f"Agent not found: {agent_id}",
             )
         return templates.TemplateResponse(
-            request, "panels/registration_keys/agent_key_management_panel.html", context
+            request,
+            "partials/panels/registration_keys/agent_key_management_panel.html",
+            context,
         )
     except HTTPException:
         raise

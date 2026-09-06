@@ -31,7 +31,7 @@ async def create_key_form(
     """HTMX partial — empty 'create new key' form."""
     return templates.TemplateResponse(
         request,
-        "panels/registration_keys/registration_key_form.html",
+        "partials/panels/registration_keys/registration_key_form.html",
         RegistrationKeysViewService.build_create_form_context(request, current_user),
     )
 
@@ -51,7 +51,7 @@ async def create_key(
         )
         return templates.TemplateResponse(
             request,
-            "panels/registration_keys/registration_key_created_panel.html",
+            "partials/panels/registration_keys/registration_key_created_panel.html",
             context,
         )
     except Exception as e:

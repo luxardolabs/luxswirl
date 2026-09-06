@@ -37,7 +37,7 @@ async def create_provider_form(
     try:
         return templates.TemplateResponse(
             request,
-            "panels/notifications/notification_provider_form.html",
+            "partials/panels/notifications/notification_provider_form.html",
             NotificationProvidersViewService.build_create_form_context(
                 request, current_user, provider_type
             ),
@@ -60,7 +60,7 @@ async def edit_provider_form(
     try:
         return templates.TemplateResponse(
             request,
-            "panels/notifications/notification_provider_form.html",
+            "partials/panels/notifications/notification_provider_form.html",
             await NotificationProvidersViewService.build_edit_form_context(
                 db, request, current_user, provider_id
             ),

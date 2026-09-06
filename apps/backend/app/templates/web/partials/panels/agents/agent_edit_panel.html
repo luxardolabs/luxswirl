@@ -11,7 +11,7 @@
     {{ panel_header(agent.agent_name or agent.id, title_size='lg', extra_left=extra_left) }}
     {% call panel_content() %}
         <!-- Actions Section (extracted to partial for maintainability) -->
-        {% include 'panels/agents/fields/actions.html' %}
+        {% include 'partials/panels/agents/fields/actions.html' %}
 
         <!-- Agent Edit Form - agent name, hostname, tags, intervals -->
         <form
@@ -25,16 +25,16 @@
             <div id="agent-edit-result"></div>
 
             <!-- Basic fields (extracted to partial for maintainability) -->
-            {% include 'panels/agents/fields/basic_fields.html' %}
+            {% include 'partials/panels/agents/fields/basic_fields.html' %}
 
             <!-- Reporter Configuration (extracted to partial for maintainability) -->
-            {% include 'panels/agents/fields/reporter_config.html' %}
+            {% include 'partials/panels/agents/fields/reporter_config.html' %}
 
             <!-- Performance Configuration (extracted to partial for maintainability) -->
-            {% include 'panels/agents/fields/performance_config.html' %}
+            {% include 'partials/panels/agents/fields/performance_config.html' %}
 
             <!-- Tags Section (extracted to partial for maintainability) -->
-            {% include 'panels/agents/fields/tags.html' %}
+            {% include 'partials/panels/agents/fields/tags.html' %}
 
 
             <!-- Action Buttons -->

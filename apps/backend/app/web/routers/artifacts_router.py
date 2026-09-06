@@ -54,4 +54,4 @@ async def trace_viewer(
             content=error or "Error", status_code=status_code, media_type="text/plain"
         )
 
-    return templates.TemplateResponse(request, "trace_viewer.html", context)
+    return templates.TemplateResponse(request, "pages/trace_viewer.html", context)
