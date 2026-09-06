@@ -63,3 +63,20 @@ def hx_toast_without_swap(message: str, kind: str = "error") -> HTMLResponse:
     response = hx_empty_with_toast(message, kind=kind)
     response.headers["HX-Reswap"] = "none"
     return response
+
+
+def hx_close_panel_and_refresh() -> HTMLResponse:
+    """ "Mutation succeeded" — close the side panel, then refresh the page.
+
+    Built through hx_trigger() rather than hand-writing the header value: the
+    comma-joined string form is valid HTMX but opaque to tooling, which reads
+    "closeSidePanel,refreshPage" as one event name with no listener. app.js
+    listens for each event on document.body.
+    """
+    return HTMLResponse(
+        content="",
+        status_code=200,
+        headers={
+            "HX-Trigger": hx_trigger({"closeSidePanel": None, "refreshPage": None})
+        },
+    )

@@ -26,7 +26,7 @@ from app.core.query_params import (
 from app.db import get_db
 from app.services.views.maintenance_job_view_service import MaintenanceJobViewService
 from app.services.views.status_pages_view_service import StatusPagesViewService
-from app.web.hx_responses import hx_toast_trigger
+from app.web.hx_responses import hx_close_panel_and_refresh, hx_toast_trigger
 from app.web.render import error_page, error_partial, public_error_page
 from app.web.templates_config import templates
 
@@ -120,11 +120,7 @@ async def create_status_page(
     await StatusPagesViewService.create_status_page(
         db, name, slug, description, is_public, status_bar_minutes
     )
-    return HTMLResponse(
-        content="",
-        status_code=200,
-        headers={"HX-Trigger": "closeSidePanel,refreshPage"},
-    )
+    return hx_close_panel_and_refresh()
 
 
 @router.post(
@@ -147,11 +143,7 @@ async def update_status_page(
     await StatusPagesViewService.update_status_page(
         db, status_page_id, name, slug, description, is_public, status_bar_minutes
     )
-    return HTMLResponse(
-        content="",
-        status_code=200,
-        headers={"HX-Trigger": "closeSidePanel,refreshPage"},
-    )
+    return hx_close_panel_and_refresh()
 
 
 @router.delete(

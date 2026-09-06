@@ -12,7 +12,7 @@ from typing import Any, cast
 from uuid import UUID
 
 from fastapi import Request
-from fastapi.responses import HTMLResponse, Response
+from fastapi.responses import Response
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -34,7 +34,7 @@ from app.services.core.check_core_service import CheckCoreService
 from app.services.core.maintenance_job_core_service import MaintenanceJobCoreService
 from app.services.core.settings_core_service import SettingsCoreService
 from app.services.views._job_status import build_job_status_context
-from app.web.hx_responses import hx_empty_with_toast
+from app.web.hx_responses import hx_close_panel_and_refresh, hx_empty_with_toast
 from app.web.templates_config import templates
 
 logger = get_logger("luxswirl.web.services.checks")
@@ -544,11 +544,7 @@ class ChecksViewService:
     @staticmethod
     def close_panel_response() -> Response:
         """'Mutation succeeded — close panel + refresh page' HTMX response."""
-        return HTMLResponse(
-            content="",
-            status_code=200,
-            headers={"HX-Trigger": "closeSidePanel,refreshPage"},
-        )
+        return hx_close_panel_and_refresh()
 
     @staticmethod
     def job_status_response(

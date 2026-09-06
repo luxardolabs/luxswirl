@@ -21,7 +21,7 @@ from app.db import get_db
 from app.services.views.alert_form_view_service import AlertFormViewService
 from app.services.views.alerts_view_service import AlertsViewService
 from app.services.views.checks_view_service import ChecksViewService
-from app.web.hx_responses import hx_empty_with_toast
+from app.web.hx_responses import hx_close_panel_and_refresh, hx_empty_with_toast
 from app.web.render import render_log_row
 from app.web.templates_config import templates
 
@@ -184,11 +184,7 @@ async def create_alert(
     )
 
     # Return success
-    return HTMLResponse(
-        content="",
-        status_code=200,
-        headers={"HX-Trigger": "closeSidePanel,refreshPage"},
-    )
+    return hx_close_panel_and_refresh()
 
 
 @router.post(
@@ -279,11 +275,7 @@ async def update_alert(
     )
 
     # Return success
-    return HTMLResponse(
-        content="",
-        status_code=200,
-        headers={"HX-Trigger": "closeSidePanel,refreshPage"},
-    )
+    return hx_close_panel_and_refresh()
 
 
 @router.delete(
