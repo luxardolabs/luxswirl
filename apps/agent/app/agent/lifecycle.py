@@ -1,7 +1,7 @@
 """
 Agent lifecycle management.
 
-Handles agent startup, shutdown, and signal handling including:
+Handles agent startup and shutdown including:
 - Graceful shutdown coordination
 - Final metrics reporting
 - Task cleanup
@@ -9,8 +9,6 @@ Handles agent startup, shutdown, and signal handling including:
 """
 
 import asyncio
-import signal
-from collections.abc import Callable
 
 from shared.logger import get_logger
 
@@ -20,7 +18,11 @@ logger = get_logger("luxswirl.agent.lifecycle")
 
 
 class LifecycleManager:
-    """Manages agent lifecycle including shutdown and signal handling."""
+    """Manages agent lifecycle: draining tasks and shutting down cleanly.
+
+    Signal handling is NOT here — app/main.py owns it, so there is exactly one
+    handler and it calls LuxSwirlAgent.shutdown() (which syncs the run-loop flag).
+    """
 
     def __init__(
         self,
@@ -64,19 +66,6 @@ class LifecycleManager:
         self.self_monitor_task: asyncio.Task[None] | None = None
         self.watchdog_task: asyncio.Task[None] | None = None
         self.heartbeat_task: asyncio.Task[None] | None = None
-
-    def register_signal_handlers(self) -> None:
-        """Register signal handlers for graceful shutdown."""
-        signals = (signal.SIGTERM, signal.SIGINT)
-        for s in signals:
-
-            def make_handler(sig: signal.Signals) -> Callable[[], None]:
-                def handler() -> None:
-                    asyncio.create_task(self.shutdown(sig))
-
-                return handler
-
-            asyncio.get_event_loop().add_signal_handler(s, make_handler(s))
 
     async def shutdown(self, signal=None) -> None:
         """

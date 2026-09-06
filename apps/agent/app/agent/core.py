@@ -312,10 +312,6 @@ class LuxSwirlAgent:
     # Main lifecycle methods
     # ========================================================================
 
-    def register_signal_handlers(self) -> None:
-        """Register signal handlers for graceful shutdown."""
-        self.lifecycle_manager.register_signal_handlers()
-
     async def shutdown(self, signal=None) -> None:
         """
         Shutdown the agent gracefully.
@@ -356,8 +352,13 @@ class LuxSwirlAgent:
             extra={"agent_id": str(self.config.get("agent_id"))},
         )
 
-        # Register signal handlers
-        self.register_signal_handlers()
+        # NOTE: signal handlers are installed ONCE, by app/main.py, before run() is
+        # awaited. They must call LuxSwirlAgent.shutdown() — which drains via the
+        # lifecycle manager AND syncs `running` back onto this object, so this loop
+        # ends and the process exits. Registering a second set here used to override
+        # main's with a handler that only cleared the LifecycleManager's own flag:
+        # the agent drained correctly but `self.running` stayed True, run() spun
+        # forever, and the container was SIGKILLed at the stop timeout.
 
         # Load checks
         await self.load_checks()
