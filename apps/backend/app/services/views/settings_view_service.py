@@ -372,6 +372,8 @@ class SettingsViewService:
             "request": request,
             "current_user": current_user,
             "alerts": alerts,
+            "total": total,
+            "per_page": per_page,
             "filters": filters,
             "pagination": pagination,
             "page_title": "Settings - Alerts",

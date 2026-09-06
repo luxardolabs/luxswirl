@@ -205,7 +205,7 @@
                     <div class="grid grid-cols-2 gap-4">
                         <div>
                             <label class="label">Max Retries</label>
-                            {{ input(id=false, name="max_retries", type="number", value=check.max_retries if check and check.max_retries else check_defaults.max_retries, min="0", max="10", class="input") }}
+                            {{ input(id=false, name="retry_attempts", type="number", value=check.retry_attempts if check and check.retry_attempts else check_defaults.retry_attempts, min="0", max="10", class="input") }}
                             <p class="text-xs text-dark-text-muted mt-1">Retries before marking as down</p>
                         </div>
 

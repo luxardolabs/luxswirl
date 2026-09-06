@@ -420,6 +420,9 @@ class ChecksViewService:
             "current_user": current_user,
             "mode_title": mode_title,
             "mode_description": mode_description,
+            # Standalone render: the form is switching modes, so the selector
+            # starts empty rather than seeded from an existing check.
+            "check": None,
             "selector_tags": "",
             "available_tags": available_tags,
         }
@@ -434,6 +437,10 @@ class ChecksViewService:
             "request": request,
             "current_user": current_user,
             "check": None,
+            # The panel is one template in three modes; it branches on this, so
+            # every context must name its mode (fw.jinja_strict_undefined).
+            "mode": "create",
+            "assigned_alert_ids": [],
             "agents": form_data["agents"],
             "alerts": form_data["alerts"],
             "available_check_tags": await CheckCoreService.get_all_check_tags(db),
@@ -460,6 +467,7 @@ class ChecksViewService:
             "request": request,
             "current_user": current_user,
             "check": check,
+            "mode": "edit",
             "agents": form_data["agents"],
             "alerts": form_data["alerts"],
             "assigned_alert_ids": form_data["assigned_alert_ids"],
