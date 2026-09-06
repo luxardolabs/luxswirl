@@ -1,5 +1,5 @@
 {% from 'macros/buttons.html' import btn_create, btn_cancel_text %}
-{% from 'macros/form_fields.html' import checkbox, input %}
+{% from 'macros/form_fields.html' import checkbox, input, select %}
 {% from 'macros/panels.html' import panel_wrapper, panel_header, panel_content, panel_footer %}
 
 {% call panel_wrapper() %}
@@ -36,11 +36,11 @@
             <!-- Role -->
             <div>
                 <label class="label text-sm" for="role">Role <span class="text-red-400">*</span></label>
-                <select id="role" name="role" class="input" required>
+                {% call select(name="role", id="role", required=true, class="input") %}
                     {% for opt in role_options %}
                     <option value="{{ opt.value }}">{{ opt.label }}</option>
                     {% endfor %}
-                </select>
+                {% endcall %}
             </div>
 
             <!-- Checkboxes -->

@@ -1,4 +1,4 @@
-{% from 'macros/form_fields.html' import input, render_field_from_schema %}
+{% from 'macros/form_fields.html' import input, render_field_from_schema, select %}
 {% from 'macros/buttons.html' import btn_create, btn_cancel_text %}
 {% from 'macros/panels.html' import panel_wrapper, panel_header, panel_content %}
 
@@ -19,21 +19,11 @@
                         <label for="job_type" class="block text-sm font-medium text-dark-text-primary mb-2">
                             Job Type <span class="text-red-400">*</span>
                         </label>
-                        <select
-                            id="job_type"
-                            name="job_type"
-                            class="input w-full"
-                            required
-                            hx-get="/jobs/create-form"
-                            hx-trigger="change"
-                            hx-target="#panel-container"
-                            hx-swap="innerHTML"
-                            hx-include="[name='agent_id'],[name='priority']"
-                        >
+                        {% call select(name="job_type", id="job_type", required=true, hx_get="/jobs/create-form", hx_target="#panel-container", hx_trigger="change", hx_include="[name='agent_id'],[name='priority']", hx_swap="innerHTML", class="input w-full") %}
                             <option value="">Select job type...</option>
                             <option value="network_discover" {% if prefill_job_type == 'network_discover' %}selected{% endif %}>Network Discover</option>
                             <option value="network_scan" {% if prefill_job_type == 'network_scan' %}selected{% endif %}>Network Scan</option>
-                        </select>
+                        {% endcall %}
                         <p class="text-xs text-dark-text-muted mt-1">Type of job to execute</p>
                     </div>
 
@@ -42,12 +32,7 @@
                         <label for="agent_id" class="block text-sm font-medium text-dark-text-primary mb-2">
                             Agent <span class="text-red-400">*</span>
                         </label>
-                        <select
-                            id="agent_id"
-                            name="agent_id"
-                            class="input w-full"
-                            required
-                        >
+                        {% call select(name="agent_id", id="agent_id", required=true, class="input w-full") %}
                             {% if not prefill_job_type or not job_types[prefill_job_type].requires_agent %}
                             <option value="server" {% if not prefill_agent_id or prefill_agent_id == 'server' %}selected{% endif %}>Server (Run locally)</option>
                             {% endif %}
@@ -56,7 +41,7 @@
                                 {{ agent.agent_name or agent.id }}{% if agent.hostname %} ({{ agent.hostname }}){% endif %}
                             </option>
                             {% endfor %}
-                        </select>
+                        {% endcall %}
                         <p class="text-xs text-dark-text-muted mt-1">
                             {% if prefill_job_type and job_types[prefill_job_type].requires_agent %}
                             Agent required (cannot run on server)

@@ -1,5 +1,5 @@
 {% from 'macros/badges.html' import badge %}
-{% from 'macros/form_fields.html' import checkbox, input, textarea %}
+{% from 'macros/form_fields.html' import checkbox, input, select, textarea %}
 {% from 'macros/buttons.html' import text_btn, btn_create, btn_save, btn_clone, btn_cancel_text, btn_refresh, tag_pill_button, collapse_toggle %}
 {% from 'macros/panels.html' import panel_wrapper, panel_header, panel_content, panel_footer %}
 
@@ -29,14 +29,14 @@
             <div class="grid grid-cols-2 gap-4">
                 <div>
                     <label class="label" for="agent_id">Agent</label>
-                    <select name="agent_id" id="agent_id" required class="input">
+                    {% call select(name="agent_id", id="agent_id", required=true, class="input") %}
                         <option value="">Select an agent...</option>
                         {% for agent in agents %}
                         <option value="{{ agent.id }}" {% if check and check.agent_id == agent.id %}selected{% endif %}>
                             {{ agent.agent_name or agent.id }}{% if agent.hostname %} ({{ agent.hostname }}){% endif %}
                         </option>
                         {% endfor %}
-                    </select>
+                    {% endcall %}
                     <p class="text-xs text-dark-text-muted mt-1">Agent to run this check</p>
                 </div>
 
@@ -75,16 +75,7 @@
 
             <div>
                 <label class="label" for="assignment-mode-select">Assignment Mode</label>
-                <select
-                    name="assignment_mode"
-                    id="assignment-mode-select"
-                    class="input"
-                    hx-get="/checks/assignment-mode-selector"
-                    hx-trigger="change"
-                    hx-target="#assignment-selector-container"
-                    hx-swap="innerHTML"
-                    hx-include="this"
-                >
+                {% call select(name="assignment_mode", id="assignment-mode-select", hx_get="/checks/assignment-mode-selector", hx_target="#assignment-selector-container", hx_trigger="change", hx_include="this", hx_swap="innerHTML", class="input") %}
                     <option value="manual" {% if check and check.assignment_mode == 'manual' or not check %}selected{% endif %}>
                         Manual - Assign to specific agent
                     </option>
@@ -94,7 +85,7 @@
                     <option value="distribute" {% if check and check.assignment_mode == 'distribute' %}selected{% endif %}>
                         Distribute - Split among matching agents
                     </option>
-                </select>
+                {% endcall %}
                 <p class="text-xs text-dark-text-muted mt-1">
                     {% if check and check.assignment_mode == 'replicate' %}
                         Replicate: Check runs on ALL agents matching selector (multi-region monitoring)
@@ -118,13 +109,13 @@
         <div class="grid grid-cols-2 gap-4">
             <div>
                 <label class="label" for="check-type-select">Check Type</label>
-                <select name="check_type" required class="input" id="check-type-select">
+                {% call select(name="check_type", id="check-type-select", required=true, class="input") %}
                     {% for opt in check_type_options %}
                     <option value="{{ opt.value }}" {% if check and check.check_type == opt.value %}selected{% endif %}>{{ opt.label }}</option>
                     {% endfor %}
                     {# UI-only pseudo-type: switches the form to bulk-import mode, not a real check_type #}
                     <option value="http-bulk" {% if check and check.check_type == 'http-bulk' %}selected{% endif %}>HTTP Bulk Import</option>
-                </select>
+                {% endcall %}
                 <p class="text-xs text-dark-text-muted mt-1">Type of health check to perform</p>
             </div>
 
@@ -354,7 +345,7 @@
         <!-- Depends On (cascade suppression) -->
         <div>
             <label class="label" for="depends_on_check_id">Depends On</label>
-            <select name="depends_on_check_id" id="depends_on_check_id" class="input">
+            {% call select(name="depends_on_check_id", id="depends_on_check_id", class="input") %}
                 <option value="">None (no dependency)</option>
                 {% for agent_name, parent_checks in (eligible_parent_checks or {}).items() %}
                 <optgroup label="Agent: {{ agent_name }}">
@@ -363,7 +354,7 @@
                     {% endfor %}
                 </optgroup>
                 {% endfor %}
-            </select>
+            {% endcall %}
             <p class="text-xs text-dark-text-muted mt-1">Suppress alerts for this check when its parent is failing — one alert for the root cause instead of one per downstream check. The parent must be monitored well enough to detect its own failure.</p>
         </div>
 

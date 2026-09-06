@@ -1,5 +1,5 @@
 {% from 'macros/buttons.html' import btn_save, btn_create, btn_cancel_text %}
-{% from 'macros/form_fields.html' import checkbox %}
+{% from 'macros/form_fields.html' import checkbox, select %}
 {% from 'macros/panels.html' import panel_wrapper, panel_header, panel_content %}
 
 {%- set h_title = 'Edit Status Page' if status_page else 'Create New Status Page' -%}
@@ -79,11 +79,7 @@
         <!-- Status Bar Time Range -->
         <div>
             <label for="status_bar_minutes" class="label">Status Bar Time Range</label>
-            <select
-                id="status_bar_minutes"
-                name="status_bar_minutes"
-                class="input"
-            >
+            {% call select(name="status_bar_minutes", id="status_bar_minutes", class="input") %}
                 {% set current_minutes = (status_page.config.status_bar_minutes if status_page and status_page.config and status_page.config.status_bar_minutes else 30) %}
                 <option value="30" {% if current_minutes == 30 %}selected{% endif %}>30 minutes</option>
                 <option value="60" {% if current_minutes == 60 %}selected{% endif %}>1 hour</option>
@@ -91,7 +87,7 @@
                 <option value="240" {% if current_minutes == 240 %}selected{% endif %}>4 hours</option>
                 <option value="480" {% if current_minutes == 480 %}selected{% endif %}>8 hours</option>
                 <option value="1440" {% if current_minutes == 1440 %}selected{% endif %}>24 hours</option>
-            </select>
+            {% endcall %}
             <p class="text-xs text-dark-text-muted mt-1">Default time range for the status bar visualization. Viewers can override this on the public page.</p>
         </div>
 

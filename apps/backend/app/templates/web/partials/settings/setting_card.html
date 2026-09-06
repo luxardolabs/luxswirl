@@ -1,5 +1,5 @@
 {% from 'macros/buttons.html' import icon_reset, btn_save %}
-{% from 'macros/form_fields.html' import checkbox, input %}
+{% from 'macros/form_fields.html' import checkbox, input, select %}
 <!-- Setting Card - Improved compact card design for defaults -->
 <div id="setting-{{ setting.key|replace('.', '-') }}" class="card p-4 hover:shadow-lg transition-all duration-200">
     <!-- Header with icon and title -->
@@ -107,16 +107,11 @@
                     <span class="text-xs text-dark-text-muted uppercase tracking-wide">Value:</span>
                     {% if setting.validation and setting.validation.enum %}
                         <!-- Dropdown for enum values - auto-saves on change -->
-                        <select
-                            name="value"
-                            aria-label="{{ setting.display_name }} value"
-                            onchange="this.form.requestSubmit()"
-                            class="pl-3 pr-8 py-1.5 text-sm bg-dark-bg-tertiary border border-dark-border rounded-md focus:outline-none focus:ring-2 focus:ring-brand-500"
-                        >
+                        {% call select(id=false, name="value", class="pl-3 pr-8 py-1.5 text-sm bg-dark-bg-tertiary border border-dark-border rounded-md focus:outline-none focus:ring-2 focus:ring-brand-500", extra_attrs=('aria-label="' ~ (setting.display_name) ~ ' value" onchange="this.form.requestSubmit()"')) %}
                             {% for option in setting.validation.enum %}
                             <option value="{{ option }}" {% if current_value == option %}selected{% endif %}>{{ option }}</option>
                             {% endfor %}
-                        </select>
+                        {% endcall %}
                     {% else %}
                         <!-- Text input for free-form strings -->
                         {{ input(id=false, name="value", value=current_value, class="flex-1 px-3 py-1.5 text-sm bg-dark-bg-tertiary border border-dark-border rounded-md focus:outline-none focus:ring-2 focus:ring-brand-500", extra_attrs=('aria-label="' ~ (setting.display_name) ~ ' value"')) }}

@@ -1,5 +1,5 @@
 {% from 'macros/buttons.html' import collapse_toggle %}
-{% from 'macros/form_fields.html' import input %}
+{% from 'macros/form_fields.html' import input, select %}
             <!-- Performance Configuration - Collapsible -->
             <div class="border border-dark-border rounded-lg overflow-hidden">
                 {{ collapse_toggle('Performance Tuning', toggle_attr='data-accordion-toggle') }}
@@ -17,18 +17,14 @@
                                 Log Level
                                 <span class="text-xs text-dark-text-muted font-normal">(default: INFO)</span>
                             </label>
-                            <select
-                                id="log_level"
-                                name="log_level"
-                                class="input input-sm font-mono text-sm"
-                            >
+                            {% call select(name="log_level", id="log_level", class="input input-sm font-mono text-sm") %}
                                 <option value="">-- Use Default --</option>
                                 <option value="DEBUG" {% if agent.log_level == 'DEBUG' %}selected{% endif %}>DEBUG</option>
                                 <option value="INFO" {% if agent.log_level == 'INFO' %}selected{% endif %}>INFO</option>
                                 <option value="WARNING" {% if agent.log_level == 'WARNING' %}selected{% endif %}>WARNING</option>
                                 <option value="ERROR" {% if agent.log_level == 'ERROR' %}selected{% endif %}>ERROR</option>
                                 <option value="CRITICAL" {% if agent.log_level == 'CRITICAL' %}selected{% endif %}>CRITICAL</option>
-                            </select>
+                            {% endcall %}
                         </div>
                     </div>
                     <div class="grid grid-cols-2 gap-3">

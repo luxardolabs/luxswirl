@@ -1,5 +1,5 @@
 {% from 'macros/buttons.html' import btn_save, btn_create, btn_cancel_text %}
-{% from 'macros/form_fields.html' import checkbox, input %}
+{% from 'macros/form_fields.html' import checkbox, input, select %}
 {% from 'macros/panels.html' import panel_wrapper, panel_header, panel_content, panel_footer %}
 
 {% call panel_wrapper() %}
@@ -21,23 +21,14 @@
         {% if not provider %}
         <div>
             <label class="label" for="provider-type-select">Notification Type</label>
-            <select
-                name="provider_type"
-                id="provider-type-select"
-                class="input"
-                required
-                hx-get="/notification-providers/create-form"
-                hx-target="#panel-container"
-                hx-swap="innerHTML"
-                hx-include="[name='friendly_name']"
-            >
+            {% call select(name="provider_type", id="provider-type-select", required=true, hx_get="/notification-providers/create-form", hx_target="#panel-container", hx_include="[name='friendly_name']", hx_swap="innerHTML", class="input") %}
                 <option value="">Select a provider type...</option>
                 {% for ptype in available_types %}
                 <option value="{{ ptype.type }}" {% if selected_type == ptype.type %}selected{% endif %}>
                     {{ ptype.name }}
                 </option>
                 {% endfor %}
-            </select>
+            {% endcall %}
             <p class="text-xs text-dark-text-muted mt-1">Choose how notifications should be sent</p>
         </div>
         {% else %}
