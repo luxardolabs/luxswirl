@@ -116,10 +116,7 @@ async def login_submit(
         },
     )
 
-    # Get session lifetime from database security settings
-    security_settings = await WebAuthViewService().get_security_settings(db)
-    session_lifetime_days = security_settings.get("session_lifetime_days", 7)
-    max_age_seconds = session_lifetime_days * 24 * 60 * 60
+    max_age_seconds = await WebAuthViewService.get_session_cookie_max_age(db)
 
     # Get cookie configuration from settings
     cookie_config = settings.security
