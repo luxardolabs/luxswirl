@@ -16,7 +16,7 @@ const getAlertDefaults = () => {
 function toggleCheckSelection(show) {
     const checkSelector = document.getElementById('check-selector');
     if (checkSelector) {
-        checkSelector.style.display = show ? 'block' : 'none';
+        checkSelector.classList.toggle('hidden', !show);
     }
 }
 
