@@ -1,6 +1,6 @@
 {
   "guard": "luxarch",
-  "guard_version": "0.135.0",
+  "guard_version": "0.138.0",
   "repo": "/repo",
   "targets": [
     {
@@ -263,7 +263,7 @@
           "rule": "fw.no_inline_html",
           "status": "FAIL",
           "since": "0.1.0",
-          "violations": 17,
+          "violations": 9,
           "deferred": false,
           "inert": false,
           "inert_reason": ""
@@ -1158,10 +1158,19 @@
           "deferred": false,
           "inert": false,
           "inert_reason": ""
+        },
+        {
+          "rule": "fw.route_no_broad_except",
+          "status": "PASS",
+          "since": "0.136.0",
+          "violations": 0,
+          "deferred": false,
+          "inert": false,
+          "inert_reason": ""
         }
       ],
       "summary": {
-        "PASS": 98,
+        "PASS": 99,
         "FAIL": 10,
         "XFAIL": 4,
         "XPASS": 0,
@@ -1320,6 +1329,24 @@
         "inert_reason": ""
       },
       {
+        "rule": "repo.release_docs_present",
+        "status": "PASS",
+        "since": "0.137.0",
+        "violations": 0,
+        "deferred": false,
+        "inert": false,
+        "inert_reason": ""
+      },
+      {
+        "rule": "repo.release_docs_current",
+        "status": "FAIL",
+        "since": "0.137.0",
+        "violations": 2,
+        "deferred": false,
+        "inert": false,
+        "inert_reason": ""
+      },
+      {
         "rule": "repo.schema_from_migrations",
         "status": "PASS",
         "since": "0.130.0",
@@ -1465,20 +1492,20 @@
       }
     ],
     "summary": {
-      "PASS": 24,
-      "FAIL": 0,
+      "PASS": 25,
+      "FAIL": 1,
       "XFAIL": 1,
       "XPASS": 0,
       "INERT": 0
     }
   },
   "summary": {
-    "PASS": 127,
-    "FAIL": 10,
+    "PASS": 129,
+    "FAIL": 11,
     "XFAIL": 5,
     "XPASS": 0,
     "INERT": 17
   },
-  "commit": "7512536c5685f2df26cefcc2edd6bff8452eb455",
-  "generated_at": "2026-09-06T18:47:11Z"
+  "commit": "01e95ebe7f30aa6b1340f7358573978ebc33b157",
+  "generated_at": "2026-09-06T18:58:55Z"
 }
