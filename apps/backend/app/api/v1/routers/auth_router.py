@@ -22,6 +22,7 @@ from app.schemas.auth_schema import (
     SessionResponse,
     UserResponse,
 )
+from app.schemas.base_schema import MessageResponse, SessionsTerminatedResponse
 from app.services.core.auth_core_service import AuthCoreService
 from app.services.core.settings_core_service import SettingsCoreService
 
@@ -118,7 +119,11 @@ async def login(
     )
 
 
-@router.post("/logout", status_code=status.HTTP_200_OK)
+@router.post(
+    "/logout",
+    status_code=status.HTTP_200_OK,
+    response_model=MessageResponse,
+)
 async def logout(
     response: Response,
     user: CurrentUser,
@@ -176,7 +181,11 @@ async def get_current_user_info(
     return UserResponse.model_validate(user)
 
 
-@router.post("/change-password", status_code=status.HTTP_200_OK)
+@router.post(
+    "/change-password",
+    status_code=status.HTTP_200_OK,
+    response_model=MessageResponse,
+)
 @limiter.limit(settings.security.login_rate_limit)
 async def change_password(
     request: Request,
@@ -237,7 +246,11 @@ async def list_my_sessions(
     )
 
 
-@router.delete("/sessions/{session_id}", status_code=status.HTTP_200_OK)
+@router.delete(
+    "/sessions/{session_id}",
+    status_code=status.HTTP_200_OK,
+    response_model=MessageResponse,
+)
 async def logout_session(
     session_id: str,
     user: CurrentUser,
@@ -282,7 +295,11 @@ async def logout_session(
         ) from None
 
 
-@router.post("/logout-all", status_code=status.HTTP_200_OK)
+@router.post(
+    "/logout-all",
+    status_code=status.HTTP_200_OK,
+    response_model=SessionsTerminatedResponse,
+)
 async def logout_all_sessions(
     response: Response,
     user: CurrentUser,
@@ -352,7 +369,11 @@ async def list_user_sessions_admin(
     )
 
 
-@router.post("/sessions/user/{user_id}/logout-all", status_code=status.HTTP_200_OK)
+@router.post(
+    "/sessions/user/{user_id}/logout-all",
+    status_code=status.HTTP_200_OK,
+    response_model=SessionsTerminatedResponse,
+)
 async def logout_user_sessions_admin(
     user_id: UUID,
     admin: AdminUser,

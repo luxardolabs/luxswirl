@@ -12,10 +12,11 @@ required = true
 
 [target.enums]
 declared = [
-  "AgentApprovalStatus", "AgentStatus", "AlertTriggerType", "CheckArtifactType",
-  "CheckErrorType", "CheckType", "JobStatus", "JobType", "NotificationProviderType",
-  "NotificationStatus", "SchedulerExecutionStatus", "SchedulerJobCategory",
-  "SchedulerTriggerType", "SettingCategory", "UserRole",
+  "AgentApprovalStatus", "AgentStatus", "AlertTriggerType", "AssignmentMode",
+  "CheckArtifactType", "CheckErrorType", "CheckHealthStatus", "CheckType",
+  "JobStatus", "JobType", "MaintenanceJobKind", "MaintenanceJobStatus",
+  "NotificationProviderType", "NotificationStatus", "SchedulerExecutionStatus",
+  "SchedulerJobCategory", "SchedulerTriggerType", "SettingCategory", "UserRole",
 ]
 labelled = ["UserRole", "CheckType"]
 

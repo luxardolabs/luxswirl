@@ -25,6 +25,7 @@ from app.schemas.alert_schema import (
     AlertResponse,
     AlertUpdate,
 )
+from app.schemas.base_schema import MappingCreatedResponse
 from app.services.core.alert_core_service import AlertCoreService
 
 router = APIRouter(prefix="/alerts", tags=["Alerts"])
@@ -228,7 +229,7 @@ async def delete_alert(
     hard_delete: Annotated[
         bool, Query(description="Permanently delete (not recommended)")
     ] = False,
-):
+) -> None:
     """Delete an alert."""
     try:
         await AlertCoreService.delete_alert(db, alert_id, hard_delete=hard_delete)
@@ -246,6 +247,7 @@ async def delete_alert(
     status_code=status.HTTP_201_CREATED,
     summary="Add notification provider to alert",
     description="Add a notification provider to an alert",
+    response_model=MappingCreatedResponse,
 )
 async def add_notification_provider(
     alert_id: Annotated[UUID, Path(description="Alert UUID")],
@@ -282,7 +284,7 @@ async def remove_notification_provider(
     provider_id: Annotated[UUID, Path(description="Provider UUID")],
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[str, Depends(verify_api_token)],
-):
+) -> None:
     """Remove a notification provider from an alert."""
     try:
         await AlertCoreService.remove_notification_provider(db, alert_id, provider_id)
@@ -300,6 +302,7 @@ async def remove_notification_provider(
     status_code=status.HTTP_201_CREATED,
     summary="Add check to alert",
     description="Add a check to an alert",
+    response_model=MappingCreatedResponse,
 )
 async def add_check(
     alert_id: Annotated[UUID, Path(description="Alert UUID")],
@@ -331,7 +334,7 @@ async def remove_check(
     check_id: Annotated[UUID, Path(description="Check UUID")],
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[str, Depends(verify_api_token)],
-):
+) -> None:
     """Remove a check from an alert."""
     try:
         await AlertCoreService.remove_check(db, alert_id, check_id)

@@ -44,3 +44,12 @@ class BulkImportResponse(BaseModel):
     updated: int
     skipped: int
     errors: list[dict[str, str]]
+
+
+class AgentChecksExport(BaseModel):
+    """An agent's checks, exported for backup or transfer to another agent."""
+
+    agent_id: UUID
+    agent_hostname: str | None = None
+    total_checks: int
+    checks: list[CheckExport]

@@ -250,3 +250,16 @@ class AgentReportResponse(BaseSchema):
             }
         }
     }
+
+
+class GlobalStatsResponse(BaseSchema):
+    """Aggregated check-result statistics across the whole install."""
+
+    total_checks: int
+    successful_checks: int
+    failed_checks: int
+    success_rate: float
+    avg_latency_ms: float | None = None
+    active_agents: int
+    active_checks: int
+    time_window_hours: int

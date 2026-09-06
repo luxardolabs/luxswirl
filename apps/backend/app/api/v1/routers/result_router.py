@@ -32,6 +32,7 @@ from app.schemas.check_result_schema import (
     CheckResultListResponse,
     CheckResultResponse,
     CheckSummary,
+    GlobalStatsResponse,
 )
 from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.check_result_core_service import CheckResultCoreService
@@ -295,6 +296,7 @@ async def get_check_summary(
     "/stats",
     summary="Get global statistics",
     description="Get aggregated statistics across all agents and checks",
+    response_model=GlobalStatsResponse,
 )
 async def get_global_stats(
     db: Annotated[AsyncSession, Depends(get_db)],

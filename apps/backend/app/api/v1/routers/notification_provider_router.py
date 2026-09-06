@@ -226,7 +226,7 @@ async def delete_provider(
     hard_delete: Annotated[
         bool, Query(description="Permanently delete (not recommended)")
     ] = False,
-):
+) -> None:
     """Delete a notification provider."""
     try:
         await NotificationCoreService.delete_provider(

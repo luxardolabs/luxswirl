@@ -292,7 +292,7 @@ async def delete_check(
     check_id: UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[str, Depends(verify_api_token)],
-):
+) -> None:
     """Delete a check."""
     try:
         # Bind {check_id} to the path {agent_id} before deleting (LUXSWIRL-190 L-5).

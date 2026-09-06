@@ -4,6 +4,7 @@ Base Pydantic schemas with common configurations.
 
 from datetime import datetime
 from typing import Any
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -32,6 +33,30 @@ class ResponseSchema(BaseSchema):
     success: bool = Field(..., description="Whether the request was successful")
     message: str | None = Field(None, description="Optional message")
     data: Any = Field(None, description="Response data")
+
+
+class MessageResponse(BaseSchema):
+    """A bare acknowledgement: the operation succeeded, here is what happened.
+
+    Used by routes whose only payload is a human-readable confirmation, so the
+    shape is still a real contract in openapi.json rather than an untyped dict.
+    """
+
+    message: str = Field(..., description="Human-readable result message")
+
+
+class SessionsTerminatedResponse(MessageResponse):
+    """Acknowledgement for a bulk logout, with how many sessions were ended."""
+
+    sessions_terminated: int = Field(
+        ..., ge=0, description="Number of sessions that were terminated"
+    )
+
+
+class MappingCreatedResponse(MessageResponse):
+    """Acknowledgement for creating a join-table mapping, with its id."""
+
+    mapping_id: UUID = Field(..., description="Id of the mapping that was created")
 
 
 class PaginationParams(BaseSchema):

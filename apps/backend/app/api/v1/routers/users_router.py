@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.auth_deps import AdminUser
 from app.core.query_params import ActiveFilter
 from app.db import get_db
+from app.schemas.base_schema import MessageResponse
 from app.schemas.user_schema import (
     UserCreate,
     UserListResponse,
@@ -196,7 +197,11 @@ async def update_user(
         ) from e
 
 
-@router.delete("/{user_id}", status_code=status.HTTP_200_OK)
+@router.delete(
+    "/{user_id}",
+    status_code=status.HTTP_200_OK,
+    response_model=MessageResponse,
+)
 async def delete_user(
     user_id: UUID,
     admin: AdminUser,
@@ -260,7 +265,11 @@ async def delete_user(
         ) from e
 
 
-@router.post("/{user_id}/reset-password", status_code=status.HTTP_200_OK)
+@router.post(
+    "/{user_id}/reset-password",
+    status_code=status.HTTP_200_OK,
+    response_model=MessageResponse,
+)
 async def reset_user_password(
     user_id: UUID,
     password_data: UserPasswordReset,

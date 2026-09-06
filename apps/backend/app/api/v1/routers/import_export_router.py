@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import AgentNotFoundException
 from app.db import get_db
 from app.schemas.import_export_schema import (
+    AgentChecksExport,
     BulkImportRequest,
     BulkImportResponse,
 )
@@ -24,7 +25,10 @@ logger = get_logger("luxswirl.api.import_export")
 router = APIRouter(prefix="/import-export", tags=["Import/Export"])
 
 
-@router.get("/export/{agent_id}")
+@router.get(
+    "/export/{agent_id}",
+    response_model=AgentChecksExport,
+)
 async def export_checks(
     agent_id: UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -127,7 +131,10 @@ async def import_checks(
         ) from e
 
 
-@router.get("/export-agent-config")
+@router.get(
+    "/export-agent-config",
+    response_model=AgentChecksExport,
+)
 async def export_agent_config() -> dict[str, Any]:
     """
     Export the default agent configuration with all checks.
