@@ -201,7 +201,7 @@
                             <div class="flex items-center gap-2">
                                 <span class="text-xs text-dark-text-muted">{{ (artifact.size_bytes / 1024)|round(1) }} KB</span>
                                 <a
-                                    href="/artifacts/{{ artifact.id }}/view"
+                                    href="{{ artifact.view_url }}"
                                     download="{{ artifact.filename }}"
                                     class="p-1 hover:bg-dark-bg-tertiary rounded transition-colors"
                                     title="Download {{ artifact.filename }}"
@@ -225,7 +225,7 @@
                         </div>
                         {% elif artifact.artifact_type == 'trace' %}
                         <div class="p-3 bg-blue-500/5 border-t border-blue-500/20">
-                            {{ btn_external(label='Open in Trace Viewer', href='/artifacts/' ~ artifact.id ~ '/viewer', extra_classes='w-full py-2 text-sm mb-2 hover:bg-brand-500 transition-colors', extra_attrs='target="_blank"') }}
+                            {{ btn_external(label='Open in Trace Viewer', href=artifact.viewer_url, extra_classes='w-full py-2 text-sm mb-2 hover:bg-brand-500 transition-colors', extra_attrs='target="_blank"') }}
                             <p class="text-xs text-dark-text-muted text-center">
                                 View timeline, network, console, and DOM snapshots
                             </p>

@@ -35,7 +35,9 @@ async def check_detail_panel(
     if hours is None:
         hours = await CheckDetailViewService.resolve_default_chart_hours(db)
 
-    detail = await CheckDetailViewService.get_check_detail(db, check_id, hours=hours)
+    detail = await CheckDetailViewService.get_check_detail(
+        db, request, check_id, hours=hours
+    )
 
     if not detail:
         return templates.TemplateResponse(
@@ -63,6 +65,8 @@ async def check_detail_panel(
             "check_id": check_id,
             "chart_data": detail["chart_data"],
             "artifacts": detail.get("artifacts", []),
+            "check_urls": detail["check_urls"],
+            "parent_check_url": detail.get("parent_check_url"),
         },
     )
 

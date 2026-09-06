@@ -26,27 +26,27 @@
                 <div class="flex items-center gap-2 flex-shrink-0">
                     <!-- Pause/Enable Toggle -->
                     {{ toggle_switch(check.enabled, size='sm',
-                                     hx_post='/checks/' ~ check.id ~ '/toggle',
+                                     hx_post=check_urls.toggle,
                                      hx_trigger='click',
                                      hx_swap='none',
                                      title=('Disable check' if check.enabled else 'Enable check'),
-                                     extra_attrs='hx-on::after-request="htmx.ajax(\'GET\', \'/check/' ~ check.id ~ '?hours=' ~ hours|string ~ '\', {target: \'#check-detail-panel\', swap: \'innerHTML\'})"') }}
+                                     extra_attrs='hx-on::after-request="htmx.ajax(\'GET\', \'' ~ check_urls.detail ~ '\', {target: \'#check-detail-panel\', swap: \'innerHTML\'})"') }}
 
                     <!-- Clone -->
                     {%- set clone_svg -%}<span class="w-3.5 h-3.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/document-duplicate.svg" %}</span>{%- endset -%}
-                    {{ icon_btn(clone_svg, color='purple', title='Clone Check', hx_get='/checks/' ~ check.id ~ '/clone-form', hx_target='#panel-container', hx_swap='innerHTML') }}
+                    {{ icon_btn(clone_svg, color='purple', title='Clone Check', hx_get=check_urls.clone_form, hx_target='#panel-container', hx_swap='innerHTML') }}
 
                     <!-- Manage dependents (hidden when this check has a parent — can't be both child and parent under single-level) -->
                     {% if not parent_check %}
                     {%- set dep_svg -%}<span class="w-3.5 h-3.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/arrow-long-down.svg" %}</span>{%- endset -%}
-                    {{ icon_btn(dep_svg, color='brand', title=('Manage dependents (' ~ dependent_count ~ ')') if dependent_count else 'Add dependents', hx_get='/checks/' ~ check.id ~ '/dependents', hx_target='#panel-container', hx_swap='innerHTML') }}
+                    {{ icon_btn(dep_svg, color='brand', title=('Manage dependents (' ~ dependent_count ~ ')') if dependent_count else 'Add dependents', hx_get=check_urls.dependents, hx_target='#panel-container', hx_swap='innerHTML') }}
                     {% endif %}
 
                     <!-- Edit -->
-                    {{ icon_edit(hx_get='/checks/' ~ check.id ~ '/edit-form', hx_target='#panel-container') }}
+                    {{ icon_edit(hx_get=check_urls.edit_form, hx_target='#panel-container') }}
 
                     <!-- Delete -->
-                    {{ delete_icon_button(delete_url='/checks/' ~ check.id, target_id='check-' ~ check.id) }}
+                    {{ delete_icon_button(delete_url=check_urls.delete, target_id='check-' ~ check.id) }}
                 </div>
             </div>
             <!-- Type and interval chips on second row -->
@@ -62,7 +62,7 @@
                     </span>
                     {% if parent_check %}
                     <span class="text-dark-text-muted">•</span>
-                    <a hx-get="/check/{{ parent_check.id }}?hours={{ hours }}"
+                    <a hx-get="{{ parent_check_url }}"
                        hx-target="#check-detail-panel"
                        hx-swap="innerHTML"
                        class="inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-medium rounded bg-dark-bg-tertiary text-dark-text-muted hover:text-dark-text-primary cursor-pointer transition-colors"
@@ -80,7 +80,7 @@
                     {% endif %}
                     {% if dependent_count and dependent_count > 0 %}
                     <span class="text-dark-text-muted">•</span>
-                    <a hx-get="/checks/{{ check.id }}/dependents"
+                    <a hx-get="{{ check_urls.dependents }}"
                        hx-target="#panel-container"
                        hx-swap="innerHTML"
                        class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded bg-brand-500/15 text-brand-300 hover:bg-brand-500/25 cursor-pointer"
@@ -91,7 +91,7 @@
                     {% endif %}
                     {% if not parent_check and (not dependent_count or dependent_count == 0) %}
                     <span class="text-dark-text-muted">•</span>
-                    <a hx-get="/checks/{{ check.id }}/dependents"
+                    <a hx-get="{{ check_urls.dependents }}"
                        hx-target="#panel-container"
                        hx-swap="innerHTML"
                        class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded border border-dashed border-dark-border text-dark-text-muted hover:text-dark-text-primary hover:border-brand-500/40 cursor-pointer"
@@ -105,7 +105,7 @@
                 <!-- Time range selector -->
                 <div class="flex items-center gap-2">
                     <label class="text-xs text-dark-text-muted" for="hours">Range:</label>
-                    {% call select(name="hours", id="hours", hx_get=('/check/' ~ (check_id)), hx_target="#check-detail-panel", hx_trigger="change", hx_swap="innerHTML", class="input text-xs py-1 px-2") %}
+                    {% call select(name="hours", id="hours", hx_get=check_urls.detail_base, hx_target="#check-detail-panel", hx_trigger="change", hx_swap="innerHTML", class="input text-xs py-1 px-2") %}
                         <option value="4" {% if hours == 4 %}selected{% endif %}>4h</option>
                         <option value="8" {% if hours == 8 %}selected{% endif %}>8h</option>
                         <option value="24" {% if hours == 24 %}selected{% endif %}>24h</option>
