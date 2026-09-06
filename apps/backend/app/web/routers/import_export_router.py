@@ -2,14 +2,11 @@
 Import/Export web router - web UI for bulk import/export of checks.
 """
 
-import json
-from datetime import datetime
-from io import BytesIO
 from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Form, Path, Request, UploadFile
-from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
+from fastapi.responses import HTMLResponse
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -39,24 +36,12 @@ async def import_export_form(
     Get the import/export form for an agent.
     """
     try:
-        # Get agent info
-        agent = await ImportExportViewService.get_agent_by_id(db, agent_id)
-        if not agent:
-            raise AgentNotFoundException(str(agent_id))
-
-        # Get check count
-        checks = await ImportExportViewService.list_checks_for_agent(db, agent_id)
-        check_count = len(checks)
-
         return templates.TemplateResponse(
             request,
             "partials/import_export_panel.html",
-            {
-                "current_user": current_user,
-                "agent": agent,
-                "agent_id": agent_id,
-                "check_count": check_count,
-            },
+            await ImportExportViewService.build_panel_context(
+                db, current_user, agent_id
+            ),
         )
 
     except AgentNotFoundException:
@@ -89,43 +74,11 @@ async def export_checks(
 ):
     """
     Export all checks for an agent as JSON download.
+
+    AgentNotFoundException (a LuxSwirlException) propagates to the global handler,
+    which renders it content-negotiated — the router does not hand-roll an error body.
     """
-    try:
-        # Verify agent exists
-        agent = await ImportExportViewService.get_agent_by_id(db, agent_id)
-        if not agent:
-            raise AgentNotFoundException(str(agent_id))
-
-        # Get all checks for agent
-        checks = await ImportExportViewService.list_checks_for_agent(db, agent_id)
-
-        # Convert to export format using service
-        export_data = ImportExportViewService.export_checks_to_dict(checks, agent)
-
-        # Create JSON file
-        json_str = json.dumps(export_data, indent=2)
-        json_bytes = BytesIO(json_str.encode())
-
-        # Return as download with timestamp
-        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-        filename = f"{agent_id}-checks-{timestamp}.json"
-        return StreamingResponse(
-            json_bytes,
-            media_type="application/json",
-            headers={"Content-Disposition": f"attachment; filename={filename}"},
-        )
-
-    except AgentNotFoundException:
-        return JSONResponse(
-            status_code=404,
-            content={"error": f"Agent '{agent_id}' not found"},
-        )
-    except Exception as e:
-        logger.error("Error exporting checks", exc_info=True)
-        return JSONResponse(
-            status_code=500,
-            content={"error": str(e)},
-        )
+    return await ImportExportViewService.build_export_download(db, agent_id)
 
 
 @router.post(

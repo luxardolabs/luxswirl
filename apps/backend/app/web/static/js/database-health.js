@@ -49,7 +49,7 @@ async function updateGrowthChart(hours) {
 
     try {
         // Fetch data from API
-        const response = await fetch(`/database-health/chart-data?hours=${hours}`);
+        const response = await fetch(`/api/v1/database-health/chart-data?hours=${hours}`);
         const result = await response.json();
 
         if (result.error) {

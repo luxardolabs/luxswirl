@@ -160,12 +160,7 @@ async def test_provider(
 ):
     """Send a test notification through this provider (toast feedback)."""
     try:
-        success, error_msg = await NotificationProvidersViewService.test_provider(
-            db, provider_id
-        )
-        if success:
-            return hx_empty_with_toast("Test notification sent successfully!")
-        return hx_empty_with_toast(f"Test failed: {error_msg}", kind="error")
+        return await NotificationProvidersViewService.test_provider(db, provider_id)
     except Exception as e:
         logger.error("Error testing provider", exc_info=True)
         return hx_empty_with_toast(str(e), kind="error")

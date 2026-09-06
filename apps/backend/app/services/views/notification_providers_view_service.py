@@ -12,6 +12,7 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import Request
+from fastapi.responses import HTMLResponse
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,6 +23,7 @@ from app.schemas.notification_provider_schema import (
     NotificationProviderUpdate,
 )
 from app.services.core.notification_core_service import NotificationCoreService
+from app.web.hx_responses import hx_empty_with_toast
 
 logger = get_logger("luxswirl.web.services.notification_providers")
 
@@ -142,11 +144,14 @@ class NotificationProvidersViewService:
         return provider
 
     @staticmethod
-    async def test_provider(
-        db: AsyncSession, provider_id: UUID
-    ) -> tuple[bool, str | None]:
-        """Send a test notification — pure delegation; (success, error_msg)."""
-        return await NotificationCoreService.test_provider(db, provider_id)
+    async def test_provider(db: AsyncSession, provider_id: UUID) -> HTMLResponse:
+        """Send a test notification and report the outcome as a toast."""
+        success, error_msg = await NotificationCoreService.test_provider(
+            db, provider_id
+        )
+        if success:
+            return hx_empty_with_toast("Test notification sent successfully!")
+        return hx_empty_with_toast(f"Test failed: {error_msg}", kind="error")
 
     @staticmethod
     def build_error_context(

@@ -8,7 +8,7 @@ template context for the trace viewer (filename, size formatting).
 from typing import Any
 from uuid import UUID
 
-from fastapi import Request
+from fastapi import Request, Response
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,9 +22,25 @@ class ArtifactsViewService:
     """View-layer wrapper for artifact endpoints."""
 
     @staticmethod
-    async def get_artifact_for_download(db: AsyncSession, artifact_id: UUID):
-        """Return the raw artifact or None if missing. Router handles response shape."""
-        return await ArtifactCoreService.get_artifact_by_id(db, artifact_id)
+    async def build_artifact_download_response(
+        db: AsyncSession, artifact_id: UUID
+    ) -> Response:
+        """Serve an artifact's bytes inline, or a 404 body if it is gone."""
+        artifact = await ArtifactCoreService.get_artifact_by_id(db, artifact_id)
+        if not artifact:
+            return Response(
+                content=b"Artifact not found",
+                status_code=404,
+                media_type="text/plain",
+            )
+        return Response(
+            content=artifact.data,
+            media_type=artifact.content_type,
+            headers={
+                "Content-Disposition": f'inline; filename="{artifact.filename}"',
+                "Content-Length": str(artifact.size_bytes),
+            },
+        )
 
     @staticmethod
     async def build_trace_viewer_context(

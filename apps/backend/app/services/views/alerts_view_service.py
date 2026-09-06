@@ -7,9 +7,11 @@ This layer isolates web routers from direct core service dependencies.
 
 from uuid import UUID
 
+from fastapi.responses import HTMLResponse
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.auth_deps import AuthedUser
 from app.models.enum_model import AlertTriggerType
 from app.schemas.alert_schema import AlertCreate, AlertUpdate
 from app.services.core.alert_core_service import AlertCoreService
@@ -21,6 +23,10 @@ logger = get_logger("luxswirl.web.services.alerts")
 
 class AlertsViewService:
     """Web service for alert operations."""
+
+    # How long the "snooze" button silences an alert-check pair. A presentation policy
+    # (what the button promises the user), so it lives in the view, not in core.
+    SNOOZE_MINUTES = 15
 
     @staticmethod
     async def get_alert_form_data(
@@ -137,25 +143,58 @@ class AlertsViewService:
         await AlertCoreService.delete_alert(db, alert_id, hard_delete=False)
 
     @staticmethod
-    async def get_alert_by_id(db: AsyncSession, alert_id: UUID):
+    async def snooze_alert_check(
+        db: AsyncSession, alert_id: UUID, check_id: UUID, current_user: AuthedUser
+    ) -> str:
+        """Snooze an alert-check pair for the standard window.
+
+        Returns the toast message the caller shows.
         """
-        Get a specific alert by ID.
-
-        Args:
-            db: Database session
-            alert_id: Alert ID
-
-        Returns:
-            Alert model
-        """
-        return await AlertCoreService.get_alert_by_id(db, alert_id)
-
-    @staticmethod
-    async def snooze_alert_check(db, alert_id, check_id, minutes: int = 15):
-        return await AlertCoreService.snooze_alert_check(
+        minutes = AlertsViewService.SNOOZE_MINUTES
+        mapping = await AlertCoreService.snooze_alert_check(
             db, alert_id, check_id, minutes=minutes
         )
+        logger.info(
+            "User snoozed alert-check relationship",
+            extra={
+                "username": current_user.username,
+                "user_id": str(current_user.id),
+                "snoozed_until": str(mapping.snoozed_until),
+                "alert_name": mapping.alert.name,
+                "alert_id": str(mapping.alert.id),
+                "check_name": mapping.check.display_name,
+                "check_id": str(mapping.check.id),
+            },
+        )
+        return f"Snoozed for {minutes} minutes"
 
     @staticmethod
-    async def unsnooze_alert_check(db, alert_id, check_id):
-        return await AlertCoreService.unsnooze_alert_check(db, alert_id, check_id)
+    async def unsnooze_alert_check(
+        db: AsyncSession, alert_id: UUID, check_id: UUID, current_user: AuthedUser
+    ) -> str:
+        """Clear a snooze so notifications resume; returns the toast message."""
+        await AlertCoreService.unsnooze_alert_check(db, alert_id, check_id)
+        logger.info(
+            "User un-snoozed alert-check relationship",
+            extra={"username": current_user.username, "user_id": str(current_user.id)},
+        )
+        return "Snooze cleared — notifications resumed"
+
+    @staticmethod
+    async def toggle_alert_enabled(db: AsyncSession, alert_id: UUID) -> HTMLResponse:
+        """Flip an alert's enabled flag and ask the page to refresh."""
+        alert = await AlertCoreService.get_alert_by_id(db, alert_id)
+        updated = await AlertsViewService.set_alert_enabled(
+            db, alert_id, not alert.is_enabled
+        )
+        logger.info(
+            "Toggled alert",
+            extra={
+                "alert_name": updated.name,
+                "alert_id": str(updated.id),
+                "is_enabled": updated.is_enabled,
+            },
+        )
+        return HTMLResponse(
+            content="", status_code=200, headers={"HX-Trigger": "refreshPage"}
+        )

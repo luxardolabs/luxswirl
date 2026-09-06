@@ -377,28 +377,7 @@ async def toggle_alert(
 ):
     """Toggle alert enabled/disabled status."""
     try:
-        alert = await AlertsViewService.get_alert_by_id(db, alert_id)
-
-        # Toggle enabled status (partial AlertUpdate built in the view seam)
-        alert = await AlertsViewService.set_alert_enabled(
-            db, alert_id, not alert.is_enabled
-        )
-
-        logger.info(
-            "Toggled alert",
-            extra={
-                "alert_name": alert.name,
-                "alert_id": str(alert.id),
-                "is_enabled": alert.is_enabled,
-            },
-        )
-
-        # Return empty to trigger refresh
-        return HTMLResponse(
-            content="",
-            status_code=200,
-            headers={"HX-Trigger": "refreshPage"},
-        )
+        return await AlertsViewService.toggle_alert_enabled(db, alert_id)
 
     except Exception as e:
         logger.error("Error toggling alert", exc_info=True)
@@ -433,22 +412,10 @@ async def snooze_alert_check(
     Returns the re-rendered notification log row partial (HTMX swap target) and
     an HX-Trigger toast event.
     """
-    mapping = await AlertsViewService.snooze_alert_check(
-        db, alert_id, check_id, minutes=15
+    message = await AlertsViewService.snooze_alert_check(
+        db, alert_id, check_id, current_user
     )
-    logger.info(
-        "User snoozed alert-check relationship",
-        extra={
-            "username": current_user.username,
-            "user_id": str(current_user.id),
-            "snoozed_until": str(mapping.snoozed_until),
-            "alert_name": mapping.alert.name,
-            "alert_id": str(mapping.alert.id),
-            "check_name": mapping.check.display_name,
-            "check_id": str(mapping.check.id),
-        },
-    )
-    return await render_log_row(request, db, log_id, "Snoozed for 15 minutes")
+    return await render_log_row(request, db, log_id, message)
 
 
 @router.delete("/alerts/snooze", response_class=HTMLResponse)
@@ -463,11 +430,7 @@ async def unsnooze_alert_check(
     current_user: CurrentUserWeb,
 ):
     """Un-snooze an alert-check relationship — resume notifications immediately."""
-    await AlertsViewService.unsnooze_alert_check(db, alert_id, check_id)
-    logger.info(
-        "User un-snoozed alert-check relationship",
-        extra={"username": current_user.username, "user_id": str(current_user.id)},
+    message = await AlertsViewService.unsnooze_alert_check(
+        db, alert_id, check_id, current_user
     )
-    return await render_log_row(
-        request, db, log_id, "Snooze cleared — notifications resumed"
-    )
+    return await render_log_row(request, db, log_id, message)

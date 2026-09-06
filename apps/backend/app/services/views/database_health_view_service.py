@@ -42,8 +42,3 @@ class DatabaseHealthViewService:
             "current_user": current_user,
             "health": health,
         }
-
-    @staticmethod
-    async def get_growth_chart_data(db: AsyncSession, hours: int) -> list[dict]:
-        """JSON payload for the growth chart."""
-        return await TimescaleCoreService.get_growth_chart_data(db, hours)

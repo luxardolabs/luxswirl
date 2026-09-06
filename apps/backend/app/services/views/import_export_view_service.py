@@ -7,10 +7,13 @@ and orchestrating the import process with proper error handling.
 
 import json
 from collections.abc import Sequence
+from datetime import datetime
+from io import BytesIO
+from typing import Any
 from uuid import UUID
 
 from fastapi import Request
-from fastapi.responses import Response
+from fastapi.responses import Response, StreamingResponse
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -213,12 +216,45 @@ class ImportExportViewService:
         return result
 
     @staticmethod
-    async def get_agent_by_id(db, agent_id):
-        return await AgentCoreService.get_agent_by_id(db, agent_id)
+    async def build_panel_context(
+        db: AsyncSession, current_user: AuthedUser, agent_id: UUID
+    ) -> dict[str, Any]:
+        """Import/export panel context for an agent.
+
+        Raises AgentNotFoundException if the agent is gone.
+        """
+        agent = await AgentCoreService.get_agent_by_id(db, agent_id)
+        if not agent:
+            raise AgentNotFoundException(str(agent_id))
+        checks = await CheckCoreService.list_checks_for_agent(db, agent_id)
+        return {
+            "current_user": current_user,
+            "agent": agent,
+            "agent_id": agent_id,
+            "check_count": len(checks),
+        }
 
     @staticmethod
-    async def list_checks_for_agent(db, agent_id):
-        return await CheckCoreService.list_checks_for_agent(db, agent_id)
+    async def build_export_download(
+        db: AsyncSession, agent_id: UUID
+    ) -> StreamingResponse:
+        """Export an agent's checks as a timestamped JSON download.
+
+        Raises AgentNotFoundException if the agent is gone.
+        """
+        agent = await AgentCoreService.get_agent_by_id(db, agent_id)
+        if not agent:
+            raise AgentNotFoundException(str(agent_id))
+        checks = await CheckCoreService.list_checks_for_agent(db, agent_id)
+        export_data = ImportExportViewService.export_checks_to_dict(checks, agent)
+        json_bytes = BytesIO(json.dumps(export_data, indent=2).encode())
+        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        filename = f"{agent_id}-checks-{timestamp}.json"
+        return StreamingResponse(
+            json_bytes,
+            media_type="application/json",
+            headers={"Content-Disposition": f"attachment; filename={filename}"},
+        )
 
     @staticmethod
     def _import_result_response(
@@ -250,7 +286,7 @@ class ImportExportViewService:
         before the response is sent, so the job is visible when the client polls.
         """
         try:
-            agent = await ImportExportViewService.get_agent_by_id(db, agent_id)
+            agent = await AgentCoreService.get_agent_by_id(db, agent_id)
             if not agent:
                 raise AgentNotFoundException(str(agent_id))
 

@@ -12,6 +12,7 @@ from app.api.v1.routers import (
     artifact_router,
     auth_router,
     check_router,
+    database_health_router,
     import_export_router,
     job_router,
     notification_provider_router,
@@ -29,6 +30,9 @@ api_router.include_router(users_router.router)  # User management
 api_router.include_router(agent_router.agent_ops_router)  # Agent operations (no prefix)
 api_router.include_router(agent_router.router)  # Agent management (with /agents prefix)
 api_router.include_router(check_router.router)  # Agent-facing check endpoints
+api_router.include_router(
+    database_health_router.router
+)  # Database growth chart (JSON, consumed by database-health.js)
 api_router.include_router(check_router.management_router)  # Management check endpoints
 api_router.include_router(result_router.router)
 api_router.include_router(import_export_router.router)

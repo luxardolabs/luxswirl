@@ -7,7 +7,7 @@ Provides web-specific functionality like value parsing and template cache update
 from collections import defaultdict
 from typing import Any
 
-from fastapi import Request
+from fastapi import Request, Response
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,6 +21,7 @@ from app.services.core.settings_core_service import SettingsCoreService
 from app.services.core.timescale_core_service import TimescaleCoreService
 from app.services.core.user_core_service import UserCoreService
 from app.web.template_filters import update_settings_cache
+from app.web.templates_config import templates
 
 logger = get_logger("luxswirl.web.services.settings")
 
@@ -439,9 +440,18 @@ class SettingsViewService:
     # ------------------------------------------------------------------
 
     @staticmethod
-    async def generate_metrics_token(db: AsyncSession) -> str:
-        """Generate new Prometheus metrics bearer token."""
-        return await SettingsCoreService.generate_metrics_token(db)
+    async def render_new_metrics_token(
+        db: AsyncSession, request: Request, current_user: AuthedUser
+    ) -> Response:
+        """Mint a new Prometheus bearer token and render the show-it-once partial."""
+        token = await SettingsCoreService.generate_metrics_token(db)
+        return templates.TemplateResponse(
+            request,
+            "partials/settings/metrics_token.html",
+            SettingsViewService.build_metrics_token_context(
+                request, current_user, token
+            ),
+        )
 
     @staticmethod
     async def toggle_metrics_enabled(db: AsyncSession):
