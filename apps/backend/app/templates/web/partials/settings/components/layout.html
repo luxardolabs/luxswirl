@@ -1,7 +1,7 @@
 {% from 'macros/cards.html' import stat_card %}
 {% from 'macros/badges.html' import check_type_badge, role_badge %}
 {% from 'macros/buttons.html' import icon_view, icon_edit, icon_delete, dashed_add_btn %}
-{% from 'macros/form_fields.html' import input, checkbox, select %}
+{% from 'macros/form_fields.html' import checkbox, input, select, textarea %}
 {% from 'macros/status.html' import status_badge as check_status_badge %}
 {% from 'macros/page.html' import page_header %}
 {% from 'macros/tables.html' import data_table %}
@@ -79,7 +79,7 @@
                     Checkbox — checkbox(name, checked, class)
                 </label>
                 <label class="label mt-4">Textarea (CSS class: textarea)</label>
-                <textarea class="textarea w-full" rows="2" placeholder="Multi-line content...">SELECT COUNT(*) FROM checks</textarea>
+                {{ textarea(rows="2", placeholder="Multi-line content...", class="textarea w-full", value="SELECT COUNT(*) FROM checks") }}
             </div>
         </div>
     </div>

@@ -1,4 +1,5 @@
 {% from 'macros/buttons.html' import btn_save, btn_enable, btn_delete_text, btn_cancel_text, confirm_action_btn %}
+{% from 'macros/form_fields.html' import checkbox, input %}
 {%- set ICO_TRASH %}<span class="w-3.5 h-3.5 mr-1.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/trash.svg" %}</span>{% endset %}
 {% from 'macros/panels.html' import panel_wrapper, panel_header, panel_content %}
 
@@ -37,14 +38,7 @@
             <!-- Full Name -->
             <div>
                 <label class="label text-sm" for="full_name">Full Name</label>
-                <input
-                    type="text"
-                    id="full_name"
-                    name="full_name"
-                    value="{{ user.full_name or '' }}"
-                    class="input w-full"
-                    placeholder="John Doe"
-                >
+                {{ input(name="full_name", value=user.full_name or '', placeholder="John Doe", id="full_name", class="input w-full") }}
             </div>
 
             <!-- Role -->
@@ -60,12 +54,12 @@
             <!-- Checkboxes -->
             <div class="space-y-2">
                 <label class="flex items-center gap-2 cursor-pointer text-sm text-dark-text-secondary">
-                    <input type="checkbox" name="is_active" value="true" {% if user.is_active %}checked{% endif %}>
+                    {{ checkbox(name="is_active", value="true", checked=(user.is_active)) }}
                     Account is active
                 </label>
 
                 <label class="flex items-center gap-2 cursor-pointer text-sm text-dark-text-secondary">
-                    <input type="checkbox" name="must_change_password" value="true" {% if user.must_change_password %}checked{% endif %}>
+                    {{ checkbox(name="must_change_password", value="true", checked=(user.must_change_password)) }}
                     Require password change on next login
                 </label>
             </div>

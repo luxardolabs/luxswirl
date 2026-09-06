@@ -1,4 +1,4 @@
-{% from 'macros/form_fields.html' import render_field_from_schema %}
+{% from 'macros/form_fields.html' import input, render_field_from_schema %}
 {% from 'macros/buttons.html' import btn_create, btn_cancel_text %}
 {% from 'macros/panels.html' import panel_wrapper, panel_header, panel_content %}
 
@@ -73,16 +73,7 @@
                         Priority
                     </label>
                     <div class="flex items-center gap-4">
-                        <input
-                            type="range"
-                            id="priority"
-                            name="priority"
-                            min="0"
-                            max="100"
-                            value="{{ prefill_priority or 0 }}"
-                            class="flex-1"
-                            data-priority-slider
-                        >
+                        {{ input(name="priority", type="range", value=prefill_priority or 0, id="priority", min="0", max="100", class="flex-1", extra_attrs="data-priority-slider") }}
                         <span id="priority-value" class="text-sm font-mono text-dark-text-primary w-12 text-right">{{ prefill_priority or 0 }}</span>
                     </div>
                     <div class="flex justify-between text-xs text-dark-text-muted mt-1">
@@ -155,30 +146,14 @@
                                     <label for="subnet" class="block text-sm font-medium text-dark-text-primary mb-2">
                                         Subnet <span class="text-red-400">*</span>
                                     </label>
-                                    <input
-                                        type="text"
-                                        id="subnet"
-                                        name="subnet"
-                                        class="input w-full font-mono"
-                                        required
-                                        value="{{ prefill_params.get('subnet') }}"
-                                        placeholder="192.168.1.0/24"
-                                    >
+                                    {{ input(name="subnet", value=prefill_params.get('subnet'), placeholder="192.168.1.0/24", id="subnet", required=true, class="input w-full font-mono") }}
                                     <p class="text-xs text-dark-text-muted mt-1">Network in CIDR notation</p>
                                 </div>
                                 <div>
                                     <label for="ports" class="block text-sm font-medium text-dark-text-primary mb-2">
                                         Ports
                                     </label>
-                                    <input
-                                        type="text"
-                                        id="ports"
-                                        name="ports"
-                                        class="input w-full font-mono"
-                                        data-type="array"
-                                        value="{{ prefill_params.get('ports', [22, 80, 443, 3306, 5432, 8080, 8443])|join(',') }}"
-                                        placeholder="22,80,443"
-                                    >
+                                    {{ input(name="ports", value=prefill_params.get('ports', [22, 80, 443, 3306, 5432, 8080, 8443])|join(','), placeholder="22,80,443", id="ports", class="input w-full font-mono", extra_attrs='data-type="array"') }}
                                     <p class="text-xs text-dark-text-muted mt-1">TCP ports to scan</p>
                                 </div>
                             </div>
@@ -189,31 +164,14 @@
                                     <label for="timeout" class="block text-sm font-medium text-dark-text-primary mb-2">
                                         Timeout <span class="text-red-400">*</span>
                                     </label>
-                                    <input
-                                        type="number"
-                                        id="timeout"
-                                        name="timeout"
-                                        class="input w-full"
-                                        required
-                                        value="{{ prefill_params.get('timeout') }}"
-                                        min="1"
-                                        max="30"
-                                    >
+                                    {{ input(name="timeout", type="number", value=prefill_params.get('timeout'), id="timeout", min="1", max="30", required=true, class="input w-full") }}
                                     <p class="text-xs text-dark-text-muted mt-1">Seconds per host (total)</p>
                                 </div>
                                 <div>
                                     <label for="max_concurrent" class="block text-sm font-medium text-dark-text-primary mb-2">
                                         Max Concurrent
                                     </label>
-                                    <input
-                                        type="number"
-                                        id="max_concurrent"
-                                        name="max_concurrent"
-                                        class="input w-full"
-                                        value="{{ prefill_params.get('max_concurrent') }}"
-                                        min="10"
-                                        max="500"
-                                    >
+                                    {{ input(name="max_concurrent", type="number", value=prefill_params.get('max_concurrent'), id="max_concurrent", min="10", max="500", class="input w-full") }}
                                     <p class="text-xs text-dark-text-muted mt-1">Parallel host scans</p>
                                 </div>
                             </div>

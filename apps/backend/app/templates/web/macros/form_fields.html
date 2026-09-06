@@ -115,11 +115,11 @@
                autocomplete=none, minlength=none, min=none, max=none, id=none,
                class='input w-full', hx_get='', hx_post='', hx_target='', hx_select='',
                hx_trigger='', hx_include='', hx_swap='', extra_attrs='') %}
-{%- set field_id = id if id else name -%}
+{%- set field_id = name if id is none else id -%}
 <input type="{{ type }}"
        {%- if field_id %} id="{{ field_id }}"{% endif %}
        {%- if name %} name="{{ name }}"{% endif %}
-       value="{{ value }}"
+       {%- if value != '' %} value="{{ value }}"{% endif %}
        {%- if placeholder %} placeholder="{{ placeholder }}"{% endif %}
        {%- if required %} required{% endif %}
        {%- if autofocus %} autofocus{% endif %}
@@ -138,12 +138,15 @@
        {{ extra_attrs | safe }}>
 {% endmacro %}
 
-{# Checkbox. `id` is rendered only when given (checkboxes often have neither name nor id). #}
-{% macro checkbox(name='', id=none, checked=false, class='', hx_get='', hx_post='',
-                  hx_target='', hx_select='', hx_trigger='', hx_include='', extra_attrs='') %}
-<input type="checkbox"
+{# Checkbox / radio — the same branded toggle input; pass type='radio' for a radio.
+   `id` is rendered only when given (these often have neither name nor id). #}
+{% macro checkbox(name='', id=none, checked=false, value='', type='checkbox', class='',
+                  hx_get='', hx_post='', hx_target='', hx_select='', hx_trigger='',
+                  hx_include='', extra_attrs='') %}
+<input type="{{ type }}"
        {%- if name %} name="{{ name }}"{% endif %}
        {%- if id %} id="{{ id }}"{% endif %}
+       {%- if value != '' %} value="{{ value }}"{% endif %}
        {%- if checked %} checked{% endif %}
        {%- if hx_get %} hx-get="{{ hx_get }}"{% endif %}
        {%- if hx_post %} hx-post="{{ hx_post }}"{% endif %}
@@ -155,12 +158,35 @@
        {{ extra_attrs | safe }}>
 {% endmacro %}
 
+{# Multi-line text field. `value` is the content; pass the body via value= rather than
+   a call-block so a caller can't accidentally inject unescaped markup. #}
+{% macro textarea(name='', value='', rows=3, placeholder='', required=false, id=none,
+                  class='input w-full', hx_get='', hx_post='', hx_target='', hx_trigger='',
+                  hx_select='', hx_include='', hx_swap='', extra_attrs='') %}
+{%- set field_id = name if id is none else id -%}
+<textarea
+        {%- if name %} name="{{ name }}"{% endif %}
+        {%- if field_id %} id="{{ field_id }}"{% endif %}
+        rows="{{ rows }}"
+        {%- if placeholder %} placeholder="{{ placeholder }}"{% endif %}
+        {%- if required %} required{% endif %}
+        {%- if hx_get %} hx-get="{{ hx_get }}"{% endif %}
+        {%- if hx_post %} hx-post="{{ hx_post }}"{% endif %}
+        {%- if hx_target %} hx-target="{{ hx_target }}"{% endif %}
+        {%- if hx_trigger %} hx-trigger="{{ hx_trigger }}"{% endif %}
+        {%- if hx_select %} hx-select="{{ hx_select }}"{% endif %}
+        {%- if hx_include %} hx-include="{{ hx_include }}"{% endif %}
+        {%- if hx_swap %} hx-swap="{{ hx_swap }}"{% endif %}
+        class="{{ class }}"
+        {{ extra_attrs | safe }}>{{ value }}</textarea>
+{% endmacro %}
+
 {# Select wrapper — the page supplies the <option> loop as the macro body:
    {% call select('agent_id', class='input') %}<option ...>…</option>{% endcall %} #}
 {% macro select(name='', id=none, class='input', required=false, hx_get='', hx_post='',
                 hx_target='', hx_select='', hx_trigger='', hx_include='', hx_swap='',
                 extra_attrs='') %}
-{%- set field_id = id if id else name -%}
+{%- set field_id = name if id is none else id -%}
 <select {% if name %}name="{{ name }}"{% endif %}
         {%- if field_id %} id="{{ field_id }}"{% endif %}
         {%- if required %} required{% endif %}

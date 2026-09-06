@@ -1,4 +1,5 @@
 {% from 'macros/buttons.html' import btn_create, btn_cancel_text %}
+{% from 'macros/form_fields.html' import input, textarea %}
 {% from 'macros/panels.html' import panel_wrapper, panel_header, panel_content, panel_footer %}
 
 {% call panel_wrapper(max_width='max-w-3xl') %}
@@ -26,13 +27,7 @@
                 Name
                 <span class="text-red-500">*</span>
             </label>
-            <input
-                type="text"
-                name="name"
-                required
-                placeholder="e.g., Production Agents"
-                class="input"
-            />
+            {{ input(id=false, name="name", placeholder="e.g., Production Agents", required=true, class="input") }}
             <p class="mt-1 text-xs text-dark-text-muted">
                 A descriptive name for this key (e.g., environment or location)
             </p>
@@ -41,12 +36,7 @@
         <!-- Description -->
         <div>
             <label class="label">Description (Optional)</label>
-            <textarea
-                name="description"
-                rows="3"
-                placeholder="Optional notes about this key's purpose..."
-                class="input"
-            ></textarea>
+            {{ textarea(id=false, name="description", rows="3", placeholder="Optional notes about this key's purpose...", class="input") }}
             <p class="mt-1 text-xs text-dark-text-muted">
                 Additional context about when and where this key should be used
             </p>

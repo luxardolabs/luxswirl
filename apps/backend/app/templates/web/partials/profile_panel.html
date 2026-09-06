@@ -1,4 +1,5 @@
 {% from 'macros/badges.html' import role_badge %}
+{% from 'macros/form_fields.html' import input %}
 {% from 'macros/buttons.html' import btn_save, btn_password, btn_cancel_text %}
 {% from 'macros/panels.html' import panel_wrapper, panel_header, panel_content %}
 
@@ -47,14 +48,7 @@
             <!-- Full Name -->
             <div>
                 <label class="label text-sm" for="full_name">Full Name</label>
-                <input
-                    type="text"
-                    id="full_name"
-                    name="full_name"
-                    value="{{ current_user.full_name or '' }}"
-                    class="input w-full"
-                    placeholder="John Doe"
-                >
+                {{ input(name="full_name", value=current_user.full_name or '', placeholder="John Doe", id="full_name", class="input w-full") }}
             </div>
 
             <!-- Submit Button -->
@@ -81,41 +75,18 @@
                 <!-- Current Password -->
                 <div>
                     <label class="label text-sm" for="current_password">Current Password <span class="text-red-400">*</span></label>
-                    <input
-                        type="password"
-                        id="current_password"
-                        name="current_password"
-                        required
-                        class="input font-mono"
-                        placeholder="••••••••"
-                    >
+                    {{ input(name="current_password", type="password", placeholder="••••••••", id="current_password", required=true, class="input font-mono") }}
                 </div>
 
                 <!-- New Password & Confirm - Two columns -->
                 <div class="grid grid-cols-2 gap-3">
                     <div>
                         <label class="label text-sm" for="new_password">New Password <span class="text-red-400">*</span></label>
-                        <input
-                            type="password"
-                            id="new_password"
-                            name="new_password"
-                            required
-                            minlength="8"
-                            class="input font-mono"
-                            placeholder="••••••••"
-                        >
+                        {{ input(name="new_password", type="password", placeholder="••••••••", id="new_password", minlength="8", required=true, class="input font-mono") }}
                     </div>
                     <div>
                         <label class="label text-sm" for="confirm_password">Confirm <span class="text-red-400">*</span></label>
-                        <input
-                            type="password"
-                            id="confirm_password"
-                            name="confirm_password"
-                            required
-                            minlength="8"
-                            class="input font-mono"
-                            placeholder="••••••••"
-                        >
+                        {{ input(name="confirm_password", type="password", placeholder="••••••••", id="confirm_password", minlength="8", required=true, class="input font-mono") }}
                     </div>
                 </div>
                 <p class="text-xs text-dark-text-muted -mt-2">Min 8 characters, must include uppercase, lowercase, and digit</p>

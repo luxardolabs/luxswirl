@@ -1,5 +1,6 @@
 <!-- Network Scan Results -->
 {% from 'macros/buttons.html' import text_btn, btn_create, icon_btn, tag_pill_button %}
+{% from 'macros/form_fields.html' import input %}
 {% from 'macros/tables.html' import data_table %}
 {% set result = job.result %}
 
@@ -53,26 +54,22 @@
         <div class="grid grid-cols-3 gap-3">
             <div>
                 <label class="text-xs text-green-300/70 block mb-1">Interval (s)</label>
-                <input type="number" name="interval" id="default_interval" value="{{ check_defaults.interval_seconds }}"
-                       class="input input-sm w-full text-xs bg-dark-bg-primary border-2 border-dark-border focus:border-brand-500" min="10" max="86400">
+                {{ input(name="interval", type="number", value=check_defaults.interval_seconds, id="default_interval", min="10", max="86400", class="input input-sm w-full text-xs bg-dark-bg-primary border-2 border-dark-border focus:border-brand-500") }}
             </div>
             <div>
                 <label class="text-xs text-green-300/70 block mb-1">Timeout (s)</label>
-                <input type="number" name="timeout" id="default_timeout" value="{{ check_defaults.timeout_seconds }}"
-                       class="input input-sm w-full text-xs bg-dark-bg-primary border-2 border-dark-border focus:border-brand-500" min="1" max="300">
+                {{ input(name="timeout", type="number", value=check_defaults.timeout_seconds, id="default_timeout", min="1", max="300", class="input input-sm w-full text-xs bg-dark-bg-primary border-2 border-dark-border focus:border-brand-500") }}
             </div>
             <div>
                 <label class="text-xs text-green-300/70 block mb-1">Retry Attempts</label>
-                <input type="number" name="retry_attempts" id="default_retry_attempts" value="{{ check_defaults.retry_attempts }}"
-                       class="input input-sm w-full text-xs bg-dark-bg-primary border-2 border-dark-border focus:border-brand-500" min="0" max="10">
+                {{ input(name="retry_attempts", type="number", value=check_defaults.retry_attempts, id="default_retry_attempts", min="0", max="10", class="input input-sm w-full text-xs bg-dark-bg-primary border-2 border-dark-border focus:border-brand-500") }}
             </div>
         </div>
         <!-- Second row: Expected Status, Verify SSL, Agent -->
         <div class="grid grid-cols-3 gap-3">
             <div>
                 <label class="text-xs text-green-300/70 block mb-1">Expected Status</label>
-                <input type="number" name="expected_status" id="default_expected_status" value="{{ check_defaults.expected_status }}"
-                       class="input input-sm w-full text-xs bg-dark-bg-primary border-2 border-dark-border focus:border-brand-500" min="100" max="599">
+                {{ input(name="expected_status", type="number", value=check_defaults.expected_status, id="default_expected_status", min="100", max="599", class="input input-sm w-full text-xs bg-dark-bg-primary border-2 border-dark-border focus:border-brand-500") }}
             </div>
             <div>
                 <label for="default_verify_ssl" class="text-xs text-green-300/70 block mb-1">Verify SSL</label>
@@ -100,13 +97,7 @@
                 <!-- Tags will be inserted here -->
             </div>
             <div class="flex gap-2 mt-2">
-                <input
-                    type="text"
-                    id="bulk-tag-input"
-                    class="input input-sm flex-1 text-xs bg-dark-bg-primary border-2 border-dark-border focus:border-brand-500"
-                    placeholder="e.g., production, monitoring"
-                    autocomplete="off"
-                >
+                {{ input(placeholder="e.g., production, monitoring", id="bulk-tag-input", autocomplete="off", class="input input-sm flex-1 text-xs bg-dark-bg-primary border-2 border-dark-border focus:border-brand-500") }}
                 {% set plus_svg %}<span class="w-3.5 h-3.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/plus.svg" %}</span>{% endset %}
                 {{ text_btn(plus_svg, 'Add', style='secondary', size='sm', type='button', extra_attrs='id="bulk-tag-add-btn" title="Add tag"', extra_classes='px-3 text-xs whitespace-nowrap') }}
                 {% if available_check_tags and available_check_tags|length > 0 %}

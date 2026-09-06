@@ -1,4 +1,5 @@
 {% from 'macros/panels.html' import panel_wrapper, panel_header, panel_content, panel_footer %}
+{% from 'macros/form_fields.html' import checkbox, input %}
 {% from 'macros/buttons.html' import btn_save, btn_cancel_text, text_btn %}
 {% from 'macros/status.html' import check_type_icon %}
 
@@ -26,9 +27,7 @@
                  hx-trigger="change from:.dep-filter, keyup changed delay:300ms from:input[name=search]"
                  hx-include="this"
                  class="grid grid-cols-2 gap-2">
-                <input type="text" name="search" value="{{ search }}"
-                       placeholder="Search name or target…"
-                       class="input col-span-2 dep-filter">
+                {{ input(id=false, name="search", value=search, placeholder="Search name or target…", class="input col-span-2 dep-filter") }}
                 <select name="check_type" class="input dep-filter" aria-label="Filter by type">
                     <option value="">All types</option>
                     {% for t in all_types %}
@@ -41,9 +40,7 @@
                     <option value="{{ a }}" {% if agent_name == a %}selected{% endif %}>{{ a }}</option>
                     {% endfor %}
                 </select>
-                <input type="text" name="tags" value="{{ tags }}"
-                       placeholder="Tag equals…"
-                       class="input dep-filter col-span-2">
+                {{ input(id=false, name="tags", value=tags, placeholder="Tag equals…", class="input dep-filter col-span-2") }}
             </div>
 
             <div class="flex items-center justify-between text-xs text-dark-text-muted">
@@ -61,11 +58,7 @@
                 {% if candidates %}
                     {% for c in candidates %}
                     <label class="flex items-center gap-3 p-3 hover:bg-dark-bg-tertiary/40 cursor-pointer">
-                        <input type="checkbox"
-                               name="dependent_ids"
-                               value="{{ c.id }}"
-                               {% if c.id in current_dependent_ids %}checked{% endif %}
-                               class="w-4 h-4 rounded text-brand-600 bg-dark-bg-primary border-dark-border focus:ring-brand-500">
+                        {{ checkbox(name="dependent_ids", value=c.id, checked=(c.id in current_dependent_ids), class="w-4 h-4 rounded text-brand-600 bg-dark-bg-primary border-dark-border focus:ring-brand-500") }}
                         <div class="flex items-center gap-1 text-dark-text-muted text-xs uppercase w-12">
                             {{ check_type_icon(c.check_type) }}
                             {{ c.check_type }}

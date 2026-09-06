@@ -1,4 +1,5 @@
 {% from 'macros/buttons.html' import btn_download, btn_upload %}
+{% from 'macros/form_fields.html' import checkbox, input %}
 {% from 'macros/panels.html' import panel_wrapper, panel_header, panel_content %}
 
 {% call panel_wrapper() %}
@@ -48,14 +49,14 @@
                     <label class="label mb-3">Import Mode</label>
                     <div class="space-y-2">
                         <label class="flex items-center p-3 border border-dark-border rounded-lg hover:bg-dark-bg-tertiary cursor-pointer transition-colors">
-                            <input type="radio" name="mode" value="merge" checked class="w-4 h-4 text-brand-600 focus:ring-brand-500 focus:ring-2">
+                            {{ checkbox(name="mode", value="merge", type='radio', checked=true, class="w-4 h-4 text-brand-600 focus:ring-brand-500 focus:ring-2") }}
                             <div class="ml-3">
                                 <div class="text-sm font-medium text-dark-text-primary">Merge</div>
                                 <div class="text-xs text-dark-text-muted">Add new checks, skip existing ones</div>
                             </div>
                         </label>
                         <label class="flex items-center p-3 border border-dark-border rounded-lg hover:bg-dark-bg-tertiary cursor-pointer transition-colors">
-                            <input type="radio" name="mode" value="replace" class="w-4 h-4 text-brand-600 focus:ring-brand-500 focus:ring-2">
+                            {{ checkbox(name="mode", value="replace", type='radio', class="w-4 h-4 text-brand-600 focus:ring-brand-500 focus:ring-2") }}
                             <div class="ml-3">
                                 <div class="text-sm font-medium text-dark-text-primary">Replace</div>
                                 <div class="text-xs text-dark-text-muted">Update existing checks with new values</div>
@@ -80,13 +81,7 @@
                         </p>
                         <p id="file-name" class="text-sm text-brand-400 mt-3 font-medium hidden"></p>
                     </div>
-                    <input
-                        type="file"
-                        id="file-input"
-                        name="file"
-                        accept=".json"
-                        class="hidden"
-                    >
+                    {{ input(name="file", type="file", id="file-input", class="hidden", extra_attrs='accept=".json"') }}
                 </div>
 
 
