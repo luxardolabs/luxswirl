@@ -7,7 +7,6 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Form, Path, Query, Request
 from fastapi.responses import HTMLResponse
-from pydantic import BeforeValidator
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,11 +19,16 @@ from app.core.query_params import (
     AgentIdFilter,
     CheckTypeFilter,
     PerPageFilter,
-    empty_to_none,
 )
 from app.db import get_db
 from app.services.views.checks_view_service import ChecksViewService
 from app.services.views.status_view_service import StatusViewService
+from app.web.check_form import (
+    CheckCloneFields,
+    CheckCreateFields,
+    CheckUpdateFields,
+    OptionalIdForm,
+)
 from app.web.hx_responses import hx_empty_with_toast
 from app.web.render import bulk_oob_response, error_partial, job_status_oob_response
 from app.web.templates_config import templates
@@ -32,11 +36,6 @@ from app.web.templates_config import templates
 logger = get_logger("luxswirl.web.routers.checks")
 
 router = APIRouter(tags=["Web UI - Checks"])
-
-# Optional UUID form field: an unselected dropdown posts "" — normalize to None
-# (empty_to_none) before UUID validation, mirroring the query-param filters.
-OptionalIdForm = Annotated[UUID | None, BeforeValidator(empty_to_none), Form()]
-
 
 # ---- HTMX selectors / forms ---------------------------------------------
 
@@ -143,59 +142,11 @@ async def clone_check_handler(
     check_id: Annotated[UUID, Path(description="Check UUID to clone")],
     current_user: EditorUserWeb,
     db: Annotated[AsyncSession, Depends(get_db)],
-    agent_id: Annotated[UUID, Form()],
-    display_name: Annotated[str, Form()],
-    check_type: Annotated[str, Form()],
-    target: Annotated[str, Form()],
-    enabled: Annotated[bool, Form()] = False,
-    interval: Annotated[int, Form()] = 60,
-    tags: Annotated[str, Form()] = "",
-    http_method: Annotated[str | None, Form()] = None,
-    expected_status: Annotated[int | None, Form()] = None,
-    json_path: Annotated[str | None, Form()] = None,
-    expected_value: Annotated[str | None, Form()] = None,
-    script_code: Annotated[str | None, Form()] = None,
-    alert_ids: Annotated[list[UUID], Form()] = [],  # noqa: B006
-    assignment_mode: Annotated[str, Form()] = "manual",
-    agent_selector: Annotated[str | None, Form()] = None,
-    description: Annotated[str, Form()] = "",
-    timeout_seconds: Annotated[str, Form()] = "",
-    verify_ssl: Annotated[bool, Form()] = True,
-    retry_attempts: Annotated[str, Form()] = "",
-    retry_interval_seconds: Annotated[str, Form()] = "",
-    resend_notification_after: Annotated[str, Form()] = "",
-    depends_on_check_id: OptionalIdForm = None,
+    fields: Annotated[CheckCloneFields, Depends()],
 ):
     """Create a clone of an existing check."""
     return await ChecksViewService.handle_clone_check_form(
-        db,
-        request,
-        check_id,
-        current_user,
-        {
-            "agent_id": agent_id,
-            "display_name": display_name,
-            "check_type": check_type,
-            "target": target,
-            "enabled": enabled,
-            "interval": interval,
-            "tags": tags,
-            "http_method": http_method,
-            "expected_status": expected_status,
-            "json_path": json_path,
-            "expected_value": expected_value,
-            "script_code": script_code,
-            "alert_ids": alert_ids,
-            "assignment_mode": assignment_mode,
-            "agent_selector": agent_selector,
-            "description": description,
-            "timeout_seconds": timeout_seconds,
-            "verify_ssl": verify_ssl,
-            "retry_attempts": retry_attempts,
-            "retry_interval_seconds": retry_interval_seconds,
-            "resend_notification_after": resend_notification_after,
-            "depends_on_check_id": depends_on_check_id,
-        },
+        db, request, check_id, current_user, fields.as_dict()
     )
 
 
@@ -204,72 +155,11 @@ async def create_check_assignment(
     request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: EditorUserWeb,
-    agent_id: Annotated[UUID, Form()],
-    check_type: Annotated[str, Form()],
-    display_name: Annotated[str, Form()] = "",
-    target: Annotated[str, Form()] = "",
-    enabled: Annotated[bool, Form()] = False,
-    interval: Annotated[int, Form()] = 60,
-    tags: Annotated[str, Form()] = "",
-    http_method: Annotated[str | None, Form()] = None,
-    expected_status: Annotated[int | None, Form()] = None,
-    json_path: Annotated[str | None, Form()] = None,
-    expected_value: Annotated[str | None, Form()] = None,
-    script_code: Annotated[str | None, Form()] = None,
-    created_by: Annotated[str | None, Form()] = None,
-    alert_ids: Annotated[list[UUID], Form()] = [],  # noqa: B006
-    assignment_mode: Annotated[str, Form()] = "manual",
-    agent_selector: Annotated[str | None, Form()] = None,
-    bulk_urls: Annotated[str, Form()] = "",
-    record_type: Annotated[str | None, Form()] = None,
-    nameserver: Annotated[str | None, Form()] = None,
-    port: Annotated[str | None, Form()] = None,
-    expect_value: Annotated[str | None, Form()] = None,
-    connection_string: Annotated[str | None, Form()] = None,
-    query: Annotated[str | None, Form()] = None,
-    description: Annotated[str, Form()] = "",
-    timeout_seconds: Annotated[str, Form()] = "",
-    verify_ssl: Annotated[bool, Form()] = True,
-    retry_attempts: Annotated[str, Form()] = "",
-    retry_interval_seconds: Annotated[str, Form()] = "",
-    resend_notification_after: Annotated[str, Form()] = "",
-    depends_on_check_id: OptionalIdForm = None,
+    fields: Annotated[CheckCreateFields, Depends()],
 ):
     """Create a new check (or bulk import if check_type is http-bulk)."""
     return await ChecksViewService.handle_create_check_form(
-        db,
-        request,
-        current_user,
-        {
-            "agent_id": agent_id,
-            "display_name": display_name,
-            "check_type": check_type,
-            "target": target,
-            "enabled": enabled,
-            "interval": interval,
-            "tags": tags,
-            "http_method": http_method,
-            "expected_status": expected_status,
-            "json_path": json_path,
-            "expected_value": expected_value,
-            "script_code": script_code,
-            "alert_ids": alert_ids,
-            "assignment_mode": assignment_mode,
-            "agent_selector": agent_selector,
-            "record_type": record_type,
-            "nameserver": nameserver,
-            "port": port,
-            "expect_value": expect_value,
-            "connection_string": connection_string,
-            "query": query,
-            "description": description,
-            "timeout_seconds": timeout_seconds,
-            "verify_ssl": verify_ssl,
-            "retry_attempts": retry_attempts,
-            "retry_interval_seconds": retry_interval_seconds,
-            "resend_notification_after": resend_notification_after,
-            "depends_on_check_id": depends_on_check_id,
-        },
+        db, request, current_user, fields.as_dict()
     )
 
 
@@ -284,69 +174,11 @@ async def update_check(
     check_id: Annotated[UUID, Path(description="Check UUID")],
     current_user: EditorUserWeb,
     db: Annotated[AsyncSession, Depends(get_db)],
-    display_name: Annotated[str, Form()],
-    check_type: Annotated[str, Form()],
-    target: Annotated[str, Form()],
-    interval: Annotated[int, Form()],
-    enabled: Annotated[bool, Form()] = False,
-    tags: Annotated[str, Form()] = "",
-    http_method: Annotated[str | None, Form()] = None,
-    expected_status: Annotated[int | None, Form()] = None,
-    json_path: Annotated[str | None, Form()] = None,
-    expected_value: Annotated[str | None, Form()] = None,
-    script_code: Annotated[str | None, Form()] = None,
-    alert_ids: Annotated[list[UUID], Form()] = [],  # noqa: B006
-    assignment_mode: Annotated[str, Form()] = "manual",
-    agent_selector: Annotated[str | None, Form()] = None,
-    record_type: Annotated[str | None, Form()] = None,
-    nameserver: Annotated[str | None, Form()] = None,
-    port: Annotated[str | None, Form()] = None,
-    expect_value: Annotated[str | None, Form()] = None,
-    connection_string: Annotated[str | None, Form()] = None,
-    query: Annotated[str | None, Form()] = None,
-    description: Annotated[str, Form()] = "",
-    timeout_seconds: Annotated[str, Form()] = "",
-    verify_ssl: Annotated[bool, Form()] = True,
-    retry_attempts: Annotated[str, Form()] = "",
-    retry_interval_seconds: Annotated[str, Form()] = "",
-    resend_notification_after: Annotated[str, Form()] = "",
-    depends_on_check_id: OptionalIdForm = None,
+    fields: Annotated[CheckUpdateFields, Depends()],
 ):
     """Update an existing check."""
     return await ChecksViewService.handle_update_check_form(
-        db,
-        request,
-        check_id,
-        current_user,
-        {
-            "display_name": display_name,
-            "check_type": check_type,
-            "target": target,
-            "enabled": enabled,
-            "interval": interval,
-            "tags": tags,
-            "http_method": http_method,
-            "expected_status": expected_status,
-            "json_path": json_path,
-            "expected_value": expected_value,
-            "script_code": script_code,
-            "alert_ids": alert_ids,
-            "assignment_mode": assignment_mode,
-            "agent_selector": agent_selector,
-            "record_type": record_type,
-            "nameserver": nameserver,
-            "port": port,
-            "expect_value": expect_value,
-            "connection_string": connection_string,
-            "query": query,
-            "description": description,
-            "timeout_seconds": timeout_seconds,
-            "verify_ssl": verify_ssl,
-            "retry_attempts": retry_attempts,
-            "retry_interval_seconds": retry_interval_seconds,
-            "resend_notification_after": resend_notification_after,
-            "depends_on_check_id": depends_on_check_id,
-        },
+        db, request, check_id, current_user, fields.as_dict()
     )
 
 
