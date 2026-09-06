@@ -56,6 +56,9 @@ class AgentUrls:
     disable: str
     enable: str
     delete: str
+    update: str
+    regenerate_key: str
+    revoke_key: str
 
 
 def build_agent_urls(request: Request, agent_id: UUID) -> AgentUrls:
@@ -82,6 +85,9 @@ def build_agent_urls(request: Request, agent_id: UUID) -> AgentUrls:
         disable=u("disable_agent_web"),
         enable=u("enable_agent_web"),
         delete=u("delete_agent_web"),
+        update=u("update_agent_web"),
+        regenerate_key=u("regenerate_key_web"),
+        revoke_key=u("revoke_key_web"),
     )
 
 
@@ -501,6 +507,7 @@ class AgentsViewService:
             "default_heartbeat": settings.server.default_heartbeat_interval,
             "default_check_sync": settings.server.default_check_sync_interval,
             "available_agent_tags": available_agent_tags,
+            "agent_urls": build_agent_urls(request, agent_id),
         }
 
     @staticmethod
@@ -515,6 +522,7 @@ class AgentsViewService:
             "request": request,
             "current_user": current_user,
             "agent": agent,
+            "agent_urls": build_agent_urls(request, agent_id),
         }
 
     @staticmethod
