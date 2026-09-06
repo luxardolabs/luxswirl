@@ -53,21 +53,10 @@ async def check_detail_panel(
     return templates.TemplateResponse(
         request,
         "partials/panels/checks/check_detail_panel.html",
-        {
-            "current_user": current_user,
-            "check": detail["check"],
-            "agent": detail["agent"],
-            "history": detail["history"],
-            "recent_results": detail.get("recent_results", []),
-            "minute_bars": detail["minute_bars"],
-            "stats": detail["stats"],
-            "hours": detail["hours"],
-            "check_id": check_id,
-            "chart_data": detail["chart_data"],
-            "artifacts": detail.get("artifacts", []),
-            "check_urls": detail["check_urls"],
-            "parent_check_url": detail.get("parent_check_url"),
-        },
+        # Hand the whole view-model through. Re-listing keys here silently dropped
+        # parent_check / parent_latest_result / dependent_count, so the panel's
+        # dependency section never rendered.
+        {"current_user": current_user, "check_id": check_id, **detail},
     )
 
 

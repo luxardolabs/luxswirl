@@ -99,8 +99,13 @@ Usage:
     <thead>
         <tr>
             {%- for col in columns %}
-            {%- set align_cls = 'text-' ~ col.align if col.align in ('right', 'center') else '' -%}
-            {%- set th_cls = (align_cls ~ ' ' ~ (col.width or '')) | trim -%}
+            {# align and width are documented as optional, and this macro owns that
+               contract — `is defined` rather than .get() so one macro serves both
+               dict and object callers under StrictUndefined. #}
+            {%- set col_align = col.align if col.align is defined else '' -%}
+            {%- set col_width = col.width if col.width is defined else '' -%}
+            {%- set align_cls = 'text-' ~ col_align if col_align in ('right', 'center') else '' -%}
+            {%- set th_cls = (align_cls ~ ' ' ~ col_width) | trim -%}
             <th scope="col"{% if th_cls %} class="{{ th_cls }}"{% endif %}>{{ col.label }}</th>
             {%- endfor %}
         </tr>

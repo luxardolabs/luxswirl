@@ -478,6 +478,7 @@ class AgentsViewService:
             "pending_urls": pending_urls,
             "request": request,
             "current_user": current_user,
+            "total": total,
             "agent_data": agent_data,
             "pending_agents": pending_agents,
             "active_only": active_only,
