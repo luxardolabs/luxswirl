@@ -54,17 +54,6 @@ async def import_export_form(
             },
             status_code=404,
         )
-    except Exception as e:
-        logger.error("Error loading import/export form", exc_info=True)
-        return templates.TemplateResponse(
-            request,
-            "partials/error_message.html",
-            {
-                "current_user": current_user,
-                "error": str(e),
-            },
-            status_code=500,
-        )
 
 
 @router.get("/agents/{agent_id}/export", include_in_schema=False)

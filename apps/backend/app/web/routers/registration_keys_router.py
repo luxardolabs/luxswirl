@@ -45,25 +45,14 @@ async def create_key(
     description: Annotated[str | None, Form()] = None,
 ):
     """Create a new registration key and show it once in a modal."""
-    try:
-        context = await RegistrationKeysViewService.create_key(
-            db, request, current_user, name, description
-        )
-        return templates.TemplateResponse(
-            request,
-            "partials/panels/registration_keys/registration_key_created_panel.html",
-            context,
-        )
-    except Exception as e:
-        logger.error("Error creating registration key", exc_info=True)
-        return templates.TemplateResponse(
-            request,
-            "partials/error_message.html",
-            RegistrationKeysViewService.build_error_context(
-                request, current_user, str(e)
-            ),
-            status_code=400,
-        )
+    context = await RegistrationKeysViewService.create_key(
+        db, request, current_user, name, description
+    )
+    return templates.TemplateResponse(
+        request,
+        "partials/panels/registration_keys/registration_key_created_panel.html",
+        context,
+    )
 
 
 @router.post("/registration-keys/{key_id}/revoke", response_class=HTMLResponse)
@@ -75,21 +64,10 @@ async def revoke_key(
     reason: Annotated[str | None, Form()] = None,
 ):
     """Revoke a registration key."""
-    try:
-        await RegistrationKeysViewService.revoke_key(db, key_id, reason)
-        return HTMLResponse(
-            content="", status_code=200, headers={"HX-Trigger": "refreshPage"}
-        )
-    except Exception as e:
-        logger.error("Error revoking registration key", exc_info=True)
-        return templates.TemplateResponse(
-            request,
-            "partials/error_message.html",
-            RegistrationKeysViewService.build_error_context(
-                request, current_user, str(e)
-            ),
-            status_code=400,
-        )
+    await RegistrationKeysViewService.revoke_key(db, key_id, reason)
+    return HTMLResponse(
+        content="", status_code=200, headers={"HX-Trigger": "refreshPage"}
+    )
 
 
 @router.delete("/registration-keys/{key_id}", response_class=HTMLResponse)
@@ -100,16 +78,5 @@ async def delete_key(
     current_user: AdminUserWeb,
 ):
     """Delete a registration key (soft delete)."""
-    try:
-        await RegistrationKeysViewService.delete_key(db, key_id)
-        return hx_empty_with_toast("Registration key deleted")
-    except Exception as e:
-        logger.error("Error deleting registration key", exc_info=True)
-        return templates.TemplateResponse(
-            request,
-            "partials/error_message.html",
-            RegistrationKeysViewService.build_error_context(
-                request, current_user, str(e)
-            ),
-            status_code=400,
-        )
+    await RegistrationKeysViewService.delete_key(db, key_id)
+    return hx_empty_with_toast("Registration key deleted")

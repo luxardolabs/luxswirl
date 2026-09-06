@@ -46,23 +46,10 @@ async def agents_list_page(
     per_page: PerPageFilter = None,
 ):
     """Agents list page — paginated."""
-    try:
-        context = await AgentsViewService.build_agents_list_context(
-            db, request, current_user, active_only, search, hours, page, per_page
-        )
-        return templates.TemplateResponse(request, "pages/agents.html", context)
-    except Exception as e:
-        logger.error("Error rendering agents page", exc_info=True)
-        return templates.TemplateResponse(
-            request,
-            "pages/error.html",
-            {
-                "current_user": current_user,
-                "error": str(e),
-                "page_title": "Error",
-            },
-            status_code=500,
-        )
+    context = await AgentsViewService.build_agents_list_context(
+        db, request, current_user, active_only, search, hours, page, per_page
+    )
+    return templates.TemplateResponse(request, "pages/agents.html", context)
 
 
 @router.get(
@@ -89,12 +76,6 @@ async def agent_edit_form(
         )
     except HTTPException:
         raise
-    except Exception as e:
-        logger.error("Error loading agent edit form", exc_info=True)
-        return HTMLResponse(
-            content=f'<div class="alert alert-error">Error loading edit form: {e}</div>',
-            status_code=500,
-        )
 
 
 # ---- Mutations ----------------------------------------------------------
@@ -300,12 +281,6 @@ async def get_key_management_panel(
         )
     except HTTPException:
         raise
-    except Exception as e:
-        logger.error("Error loading key management panel", exc_info=True)
-        return HTMLResponse(
-            content=f'<div class="alert alert-error">Error loading panel: {e}</div>',
-            status_code=500,
-        )
 
 
 @router.post(

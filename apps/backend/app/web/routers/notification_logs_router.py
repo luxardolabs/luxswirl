@@ -42,30 +42,15 @@ async def notification_logs_page(
     per_page: PerPageFilter = None,
 ):
     """Notification logs page - all notification attempts with pagination."""
-    try:
-        context = await NotificationLogsViewService.build_logs_page_context(
-            db,
-            request=request,
-            current_user=current_user,
-            status=status,
-            alert_id=alert_id,
-            notification_provider_id=notification_provider_id,
-            search=search,
-            page=page,
-            per_page=per_page,
-        )
-        return templates.TemplateResponse(
-            request, "pages/notification_logs.html", context
-        )
-    except Exception as e:
-        logger.error("Error rendering notification logs page", exc_info=True)
-        return templates.TemplateResponse(
-            request,
-            "pages/error.html",
-            {
-                "current_user": current_user,
-                "error": str(e),
-                "page_title": "Error",
-            },
-            status_code=500,
-        )
+    context = await NotificationLogsViewService.build_logs_page_context(
+        db,
+        request=request,
+        current_user=current_user,
+        status=status,
+        alert_id=alert_id,
+        notification_provider_id=notification_provider_id,
+        search=search,
+        page=page,
+        per_page=per_page,
+    )
+    return templates.TemplateResponse(request, "pages/notification_logs.html", context)

@@ -26,25 +26,10 @@ async def database_health_page(
     current_user: AdminUserWeb,
 ):
     """Database health page — comprehensive database metrics and monitoring."""
-    try:
-        context = await DatabaseHealthViewService.build_health_page_context(
-            db, request, current_user
-        )
-        return templates.TemplateResponse(
-            request, "pages/database_health.html", context
-        )
-    except Exception as e:
-        logger.error("Error getting database health", exc_info=True)
-        return templates.TemplateResponse(
-            request,
-            "pages/error.html",
-            {
-                "current_user": current_user,
-                "error": str(e),
-                "page_title": "Error",
-            },
-            status_code=500,
-        )
+    context = await DatabaseHealthViewService.build_health_page_context(
+        db, request, current_user
+    )
+    return templates.TemplateResponse(request, "pages/database_health.html", context)
 
 
 @router.get("/database-health/refresh", response_class=HTMLResponse)
@@ -54,16 +39,7 @@ async def database_health_refresh(
     current_user: AdminUserWeb,
 ):
     """HTMX endpoint — refresh database health metrics."""
-    try:
-        context = await DatabaseHealthViewService.build_health_refresh_context(
-            db, request, current_user
-        )
-        return templates.TemplateResponse(
-            request, "partials/database_health.html", context
-        )
-    except Exception as e:
-        logger.error("Error getting database health", exc_info=True)
-        return HTMLResponse(
-            content=f'<div class="text-red-500">Error loading database health: {str(e)}</div>',
-            status_code=500,
-        )
+    context = await DatabaseHealthViewService.build_health_refresh_context(
+        db, request, current_user
+    )
+    return templates.TemplateResponse(request, "partials/database_health.html", context)

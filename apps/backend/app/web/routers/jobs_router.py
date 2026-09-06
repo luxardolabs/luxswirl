@@ -19,7 +19,7 @@ from app.db import get_db
 from app.services.views.job_bulk_check_view_service import JobBulkCheckViewService
 from app.services.views.jobs_view_service import JobsViewService
 from app.web.hx_responses import hx_empty_with_toast
-from app.web.render import bulk_check_response, error_partial
+from app.web.render import bulk_check_response
 from app.web.templates_config import templates
 
 logger = get_logger("luxswirl.web.routers.jobs")
@@ -50,33 +50,19 @@ async def jobs_page(
     per_page: PerPageFilter = None,
 ):
     """Main jobs page — paginated list with filters."""
-    try:
-        context = await JobsViewService.build_jobs_page_context(
-            db,
-            request,
-            current_user,
-            status,
-            job_type,
-            agent_filter,
-            priority,
-            created,
-            page,
-            per_page,
-        )
-        return templates.TemplateResponse(request, "pages/jobs.html", context)
-    except Exception as e:
-        logger.error("Error rendering jobs page", exc_info=True)
-        return templates.TemplateResponse(
-            request,
-            "pages/error.html",
-            {
-                **JobsViewService.build_error_partial_context(
-                    request, current_user, str(e)
-                ),
-                "page_title": "Error",
-            },
-            status_code=500,
-        )
+    context = await JobsViewService.build_jobs_page_context(
+        db,
+        request,
+        current_user,
+        status,
+        job_type,
+        agent_filter,
+        priority,
+        created,
+        page,
+        per_page,
+    )
+    return templates.TemplateResponse(request, "pages/jobs.html", context)
 
 
 @router.get(
@@ -95,28 +81,19 @@ async def jobs_table_partial(
     per_page: Annotated[int, Query(ge=10, le=200)] = 25,
 ):
     """HTMX partial — jobs table for live updates (10s polling)."""
-    try:
-        context = await JobsViewService.build_jobs_table_partial_context(
-            db,
-            request,
-            current_user,
-            status,
-            job_type,
-            agent_filter,
-            priority,
-            created,
-            page,
-            per_page,
-        )
-        return templates.TemplateResponse(request, "partials/jobs_table.html", context)
-    except Exception as e:
-        logger.error("Error rendering jobs table partial", exc_info=True)
-        return templates.TemplateResponse(
-            request,
-            "partials/error.html",
-            JobsViewService.build_error_partial_context(request, current_user, str(e)),
-            status_code=500,
-        )
+    context = await JobsViewService.build_jobs_table_partial_context(
+        db,
+        request,
+        current_user,
+        status,
+        job_type,
+        agent_filter,
+        priority,
+        created,
+        page,
+        per_page,
+    )
+    return templates.TemplateResponse(request, "partials/jobs_table.html", context)
 
 
 @router.get(
@@ -138,11 +115,6 @@ async def job_detail_panel(
         )
     except HTTPException:
         raise
-    except Exception as e:
-        logger.error("Error loading job detail", exc_info=True)
-        return error_partial(
-            request, current_user, f"Error loading job details: {e}", 500
-        )
 
 
 @router.get("/jobs/create-form", response_class=HTMLResponse, include_in_schema=False)
@@ -160,16 +132,10 @@ async def job_create_form(
     ] = None,
 ):
     """Job creation form for the side panel."""
-    try:
-        context = await JobsViewService.build_job_create_form_context(
-            db, request, current_user, job_type, agent_filter, priority, prefill_params
-        )
-        return templates.TemplateResponse(
-            request, "partials/job_create_form.html", context
-        )
-    except Exception as e:
-        logger.error("Error loading job create form", exc_info=True)
-        return error_partial(request, current_user, f"Error loading form: {e}", 500)
+    context = await JobsViewService.build_job_create_form_context(
+        db, request, current_user, job_type, agent_filter, priority, prefill_params
+    )
+    return templates.TemplateResponse(request, "partials/job_create_form.html", context)
 
 
 # ---- Mutations ----------------------------------------------------------
