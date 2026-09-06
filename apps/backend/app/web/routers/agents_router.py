@@ -18,8 +18,8 @@ from app.core.auth_deps import (
 from app.core.exceptions import AgentNotFoundException
 from app.core.query_params import PerPageFilter
 from app.db import get_db
-from app.services.views._job_status import build_job_status_context
 from app.services.views.agents_view_service import AgentsViewService
+from app.services.views.maintenance_job_view_service import MaintenanceJobViewService
 from app.web.render import status_message
 from app.web.templates_config import templates
 
@@ -175,7 +175,7 @@ async def delete_agent_web(
     return templates.TemplateResponse(
         request,
         "partials/maintenance/job_status.html",
-        build_job_status_context(request, current_user, job),
+        MaintenanceJobViewService.build_status_context(request, current_user, job),
     )
 
 
