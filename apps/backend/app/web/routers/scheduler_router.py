@@ -16,6 +16,7 @@ from shared.logger import get_logger
 from app.core.auth_deps import AdminUserWeb
 from app.services.views.scheduler_view_service import SchedulerViewService
 from app.web.hx_responses import hx_empty_with_toast, hx_toast_trigger
+from app.web.render import error_partial
 from app.web.templates_config import templates
 
 logger = get_logger("luxswirl.web.routers.scheduler")
@@ -161,7 +162,4 @@ async def job_history(
         )
 
     except ValueError as e:
-        return HTMLResponse(
-            content=f'<div class="p-6 text-red-400">{str(e)}</div>',
-            status_code=404,
-        )
+        return error_partial(request, current_user, str(e), status_code=404)

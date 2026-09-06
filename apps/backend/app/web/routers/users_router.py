@@ -16,6 +16,7 @@ from app.core.auth_deps import AdminUser
 from app.core.query_params import ActiveFilter, PerPageFilter
 from app.db import get_db
 from app.services.views.web_users_view_service import WebUsersViewService
+from app.web.render import error_partial
 from app.web.templates_config import templates
 
 logger = get_logger("luxswirl.web.routers.users")
@@ -122,19 +123,7 @@ async def create_user_submit(
     )
 
     if error:
-        return HTMLResponse(
-            content=f"""
-            <div class="card bg-red-500/10 border-red-500/20 p-4 mb-4">
-                <div class="flex items-center gap-3">
-                    <svg class="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
-                    <span class="text-sm text-red-400 font-medium">{error}</span>
-                </div>
-            </div>
-            """,
-            status_code=400,
-        )
+        return error_partial(request, admin, error)
 
     assert new_user is not None
     logger.info(
@@ -176,19 +165,7 @@ async def edit_user_form(
         edit_user = await web_users.get_user(db, user_id)
 
         if not edit_user:
-            return HTMLResponse(
-                content="""
-                <div class="card bg-red-500/10 border-red-500/20 p-4">
-                    <div class="flex items-center gap-3">
-                        <svg class="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                        </svg>
-                        <span class="text-sm text-red-400 font-medium">User not found</span>
-                    </div>
-                </div>
-                """,
-                status_code=404,
-            )
+            return error_partial(request, admin, "User not found", status_code=404)
 
         context = WebUsersViewService().build_user_edit_form_context(
             request=request, current_user=admin, edit_user=edit_user
@@ -200,19 +177,7 @@ async def edit_user_form(
         )
 
     except ValueError:
-        return HTMLResponse(
-            content="""
-            <div class="card bg-red-500/10 border-red-500/20 p-4">
-                <div class="flex items-center gap-3">
-                    <svg class="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
-                    <span class="text-sm text-red-400 font-medium">Invalid user ID</span>
-                </div>
-            </div>
-            """,
-            status_code=400,
-        )
+        return error_partial(request, admin, "Invalid user ID", status_code=400)
 
 
 @router.post(
@@ -244,19 +209,7 @@ async def update_user_submit(
     )
 
     if error:
-        return HTMLResponse(
-            content=f"""
-            <div class="card bg-red-500/10 border-red-500/20 p-4 mb-4">
-                <div class="flex items-center gap-3">
-                    <svg class="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
-                    <span class="text-sm text-red-400 font-medium">{error}</span>
-                </div>
-            </div>
-            """,
-            status_code=400,
-        )
+        return error_partial(request, admin, error)
 
     assert updated_user is not None
     logger.info(
