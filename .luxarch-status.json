@@ -1,6 +1,6 @@
 {
   "guard": "luxarch",
-  "guard_version": "0.130.0",
+  "guard_version": "0.132.0",
   "repo": "/repo",
   "targets": [
     {
@@ -1131,14 +1131,32 @@
           "deferred": false,
           "inert": false,
           "inert_reason": ""
+        },
+        {
+          "rule": "fw.url_assembly_in_view",
+          "status": "INERT",
+          "since": "0.132.0",
+          "violations": 0,
+          "deferred": false,
+          "inert": true,
+          "inert_reason": "web templates aren't at the path this family scans \u2014 fix fw.web_templates_at_fleet_path FIRST (move them to app/templates/web/, or set a [templates].dir pointer to scan them where they are). Until then this rule scanned NOTHING and cannot verify your work \u2014 a \u2713 here would be hollow."
+        },
+        {
+          "rule": "fw.url_builder_not_in_template",
+          "status": "PASS",
+          "since": "0.132.0",
+          "violations": 0,
+          "deferred": false,
+          "inert": false,
+          "inert_reason": ""
         }
       ],
       "summary": {
-        "PASS": 94,
+        "PASS": 95,
         "FAIL": 6,
         "XFAIL": 4,
         "XPASS": 0,
-        "INERT": 21
+        "INERT": 22
       }
     },
     {
@@ -1302,6 +1320,15 @@
         "inert_reason": ""
       },
       {
+        "rule": "repo.metadata_naming_convention",
+        "status": "PASS",
+        "since": "0.131.0",
+        "violations": 0,
+        "deferred": false,
+        "inert": false,
+        "inert_reason": ""
+      },
+      {
         "rule": "repo.compose_conventions",
         "status": "PASS",
         "since": "0.37.0",
@@ -1429,7 +1456,7 @@
       }
     ],
     "summary": {
-      "PASS": 23,
+      "PASS": 24,
       "FAIL": 0,
       "XFAIL": 1,
       "XPASS": 0,
@@ -1437,12 +1464,12 @@
     }
   },
   "summary": {
-    "PASS": 122,
+    "PASS": 124,
     "FAIL": 6,
     "XFAIL": 5,
     "XPASS": 0,
-    "INERT": 22
+    "INERT": 23
   },
-  "commit": "1a16e75b32178a499491d7fcfbd276a9eb803e91",
-  "generated_at": "2026-09-06T04:03:13Z"
+  "commit": "7dea6ead3596b5f35464617ae97ec75479f9a0ab",
+  "generated_at": "2026-09-06T04:05:39Z"
 }
