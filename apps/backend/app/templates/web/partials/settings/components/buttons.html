@@ -1,4 +1,4 @@
-{% from 'macros/buttons.html' import icon_btn, icon_view, icon_edit, icon_run, icon_delete, icon_history, icon_toggle_on, icon_toggle_off, icon_reset, icon_cancel, btn_prev, btn_next, btn_save, btn_create, btn_delete_text, btn_cancel_text, btn_approve, btn_reject, btn_pause, btn_resume, btn_disable, btn_enable, btn_copy, btn_download, btn_upload, btn_clone, btn_external, btn_password, btn_regenerate, btn_revoke, btn_back, btn_refresh, btn_filter, btn_signin, btn_view_text, btn_edit_text, tag_pill_button, collapse_toggle, toggle_switch, link_btn %}
+{% from 'macros/buttons.html' import icon_btn, icon_view, icon_edit, icon_run, icon_delete, icon_history, icon_toggle_on, icon_toggle_off, icon_reset, icon_cancel, btn_prev, btn_next, btn_save, btn_create, btn_delete_text, btn_cancel_text, btn_approve, btn_reject, btn_pause, btn_resume, btn_disable, btn_enable, btn_copy, btn_download, btn_upload, btn_clone, btn_external, btn_password, btn_regenerate, btn_revoke, btn_back, btn_refresh, btn_filter, btn_signin, btn_view_text, btn_edit_text, text_btn, tag_pill_button, collapse_toggle, toggle_switch, link_btn %}
 
 {# ═══════════════════════════════════════════════════════════════════════
    ICON ACTION BUTTONS — macros/buttons.html
@@ -328,36 +328,36 @@
    CSS BUTTON CLASSES — input.css
    ═══════════════════════════════════════════════════════════════════════ #}
 <section>
-    <h2 class="text-lg font-semibold text-dark-text-primary mb-1">CSS Button Classes</h2>
-    <p class="text-sm text-dark-text-muted mb-4">Base CSS component classes from <code class="text-brand-400">input.css</code> — used by <code class="text-brand-400">text_btn</code> base macro.</p>
+    <h2 class="text-lg font-semibold text-dark-text-primary mb-1">Style &amp; Size Matrix</h2>
+    <p class="text-sm text-dark-text-muted mb-4">The <code class="text-brand-400">text_btn</code> base macro every pre-configured button above is built on. It composes the <code class="text-brand-400">input.css</code> component classes — <code class="text-brand-400">btn-primary</code> / <code class="text-brand-400">btn-secondary</code> / <code class="text-brand-400">btn-danger</code>, sized by <code class="text-brand-400">btn-sm</code> / <code class="text-brand-400">btn-xs</code> — so call the macro rather than the classes.</p>
 
     <div class="card p-6 space-y-6">
         <div>
             <h3 class="text-sm font-medium text-dark-text-secondary mb-3">Standard Size</h3>
             <div class="flex items-center gap-3">
-                <button class="btn-primary">Primary</button>
-                <button class="btn-secondary">Secondary</button>
-                <button class="btn-danger">Danger</button>
-                <button class="btn-primary" disabled>Disabled</button>
+                {{ text_btn('', 'Primary', style='primary', type='button') }}
+                {{ text_btn('', 'Secondary', style='secondary', type='button') }}
+                {{ text_btn('', 'Danger', style='danger', type='button') }}
+                {{ text_btn('', 'Disabled', style='primary', type='button', disabled=true) }}
             </div>
         </div>
 
         <div>
-            <h3 class="text-sm font-medium text-dark-text-secondary mb-3">Small Size (btn-sm)</h3>
+            <h3 class="text-sm font-medium text-dark-text-secondary mb-3">Small Size (size='sm')</h3>
             <div class="flex items-center gap-3">
-                <button class="btn-primary btn-sm">Primary</button>
-                <button class="btn-secondary btn-sm">Secondary</button>
-                <button class="btn-danger btn-sm">Danger</button>
-                <button class="btn-primary btn-sm" disabled>Disabled</button>
+                {{ text_btn('', 'Primary', style='primary', size='sm', type='button') }}
+                {{ text_btn('', 'Secondary', style='secondary', size='sm', type='button') }}
+                {{ text_btn('', 'Danger', style='danger', size='sm', type='button') }}
+                {{ text_btn('', 'Disabled', style='primary', size='sm', type='button', disabled=true) }}
             </div>
         </div>
 
         <div>
-            <h3 class="text-sm font-medium text-dark-text-secondary mb-3">Extra Small Size (btn-xs)</h3>
+            <h3 class="text-sm font-medium text-dark-text-secondary mb-3">Extra Small Size (size='xs')</h3>
             <div class="flex items-center gap-3">
-                <button class="btn-primary btn-xs">Primary</button>
-                <button class="btn-secondary btn-xs">Secondary</button>
-                <button class="btn-danger btn-xs">Danger</button>
+                {{ text_btn('', 'Primary', style='primary', size='xs', type='button') }}
+                {{ text_btn('', 'Secondary', style='secondary', size='xs', type='button') }}
+                {{ text_btn('', 'Danger', style='danger', size='xs', type='button') }}
             </div>
         </div>
     </div>

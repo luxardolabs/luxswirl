@@ -22,13 +22,13 @@ function toggleSidebar() {
     sidebar.classList.toggle('sidebar-collapsed');
     sidebar.classList.toggle('sidebar-expanded');
 
-    if (sidebar.classList.contains('sidebar-collapsed')) {
-        mainContent.style.marginLeft = '4rem';
-        mainContent.style.width = 'calc(100% - 4rem)';
-    } else {
-        mainContent.style.marginLeft = '16rem';
-        mainContent.style.width = 'calc(100% - 16rem)';
-    }
+    // Utility classes, not inline styles — the collapsed/expanded offset pair is
+    // declared in base.html and swapped here (fw.no_inline_style_in_pages).
+    const collapsed = sidebar.classList.contains('sidebar-collapsed');
+    mainContent.classList.toggle('ml-16', collapsed);
+    mainContent.classList.toggle('w-[calc(100%-4rem)]', collapsed);
+    mainContent.classList.toggle('ml-64', !collapsed);
+    mainContent.classList.toggle('w-[calc(100%-16rem)]', !collapsed);
 }
 
 /**
