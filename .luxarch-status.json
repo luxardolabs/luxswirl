@@ -909,18 +909,18 @@
         },
         {
           "rule": "fw.enums_declared",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.69.0",
-          "violations": 4,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": ""
         },
         {
           "rule": "fw.no_threaded_aliasing",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.75.0",
-          "violations": 4,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": ""
@@ -999,18 +999,18 @@
         },
         {
           "rule": "fw.strftime_is_display_only",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.89.0",
-          "violations": 1,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": ""
         },
         {
           "rule": "fw.crud_paginated_signature",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.90.0",
-          "violations": 7,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": ""
@@ -1044,9 +1044,9 @@
         },
         {
           "rule": "fw.json_routes_typed",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.100.0",
-          "violations": 24,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": ""
@@ -1134,8 +1134,8 @@
         }
       ],
       "summary": {
-        "PASS": 89,
-        "FAIL": 11,
+        "PASS": 94,
+        "FAIL": 6,
         "XFAIL": 4,
         "XPASS": 0,
         "INERT": 21
@@ -1437,12 +1437,12 @@
     }
   },
   "summary": {
-    "PASS": 117,
-    "FAIL": 11,
+    "PASS": 122,
+    "FAIL": 6,
     "XFAIL": 5,
     "XPASS": 0,
     "INERT": 22
   },
-  "commit": "4732b47968b6b1f43c973e319c9871c9110dcef0",
-  "generated_at": "2026-09-06T01:13:41Z"
+  "commit": "1a16e75b32178a499491d7fcfbd276a9eb803e91",
+  "generated_at": "2026-09-06T04:03:13Z"
 }
