@@ -1,9 +1,9 @@
 """
 Shared HTMX response helpers for web routers.
 
-Underscore-prefixed module — exempt from the `*_router.py` naming rule
-because it's a multi-consumer helper (used by every web router that needs
-to emit `HX-Trigger` events alongside an empty or partial body).
+Multi-consumer helper — every web router that emits `HX-Trigger` events
+alongside an empty or partial body builds the header here, so the
+`{event: detail}` shape and the `showToast` contract live in one place.
 """
 
 import json
@@ -51,3 +51,15 @@ def hx_empty_with_toast(
         status_code=status_code,
         headers={"HX-Trigger": hx_trigger(events)},
     )
+
+
+def hx_toast_without_swap(message: str, kind: str = "error") -> HTMLResponse:
+    """Report an outcome without letting HTMX swap the target away.
+
+    `HX-Reswap: none` overrides the element's own hx-swap, so a failed
+    destructive action leaves the row it targeted on screen next to the toast
+    explaining why nothing happened.
+    """
+    response = hx_empty_with_toast(message, kind=kind)
+    response.headers["HX-Reswap"] = "none"
+    return response
