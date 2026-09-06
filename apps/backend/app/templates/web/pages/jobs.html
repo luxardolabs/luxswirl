@@ -6,7 +6,7 @@
 
 {% block content %}
 {% set actions_html %}
-{{ btn_create(label='New Job', hx_get='/jobs/create-form' ~ ('?agent_id=' ~ filters.agent_id if filters.agent_id and filters.agent_id != '' else ''), hx_target='#panel-container', hx_swap='innerHTML') }}
+{{ btn_create(label='New Job', hx_get=create_form_url ~ ('?agent_id=' ~ filters.agent_id if filters.agent_id and filters.agent_id != '' else ''), hx_target='#panel-container', hx_swap='innerHTML') }}
 {% endset %}
 
 {{ page_header(

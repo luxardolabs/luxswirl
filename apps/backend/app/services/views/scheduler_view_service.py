@@ -5,9 +5,11 @@ Builds display-ready data structures for templates.
 Does NOT touch the database directly - delegates to scheduler_service.
 """
 
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import cast
 
+from fastapi import Request
 from shared.logger import get_logger
 
 from app.services.core.scheduler_core_service import scheduler_service
@@ -70,11 +72,35 @@ def _is_running(job) -> bool:
     return cast(bool, job.lease_expires_at > datetime.now(UTC))
 
 
+@dataclass(frozen=True)
+class SchedulerJobUrls:
+    """Finished hrefs for one scheduler job row (fw.url_assembly_in_view)."""
+
+    history: str
+    run: str
+    reset: str
+    toggle: str
+
+
+def build_scheduler_job_urls(request: Request, job_key: str) -> SchedulerJobUrls:
+    # .path: url_for returns an absolute url from the request's scheme/host, which
+    # behind TLS-terminating nginx can emit http:// into an https:// page.
+    def u(name: str) -> str:
+        return request.url_for(name, job_key=job_key).path
+
+    return SchedulerJobUrls(
+        history=u("job_history"),
+        run=u("run_job"),
+        reset=u("reset_job"),
+        toggle=u("toggle_job"),
+    )
+
+
 class SchedulerViewService:
     """View service for scheduler admin UI."""
 
     @staticmethod
-    async def get_list_context() -> dict:
+    async def get_list_context(request: Request) -> dict:
         """
         Build template context for the scheduler list page.
 
@@ -95,6 +121,7 @@ class SchedulerViewService:
                     "is_running": _is_running(job),
                     "avg_duration": _format_duration(job.average_duration),
                     "now": now,
+                    "urls": build_scheduler_job_urls(request, job.job_key),
                 }
             )
 
@@ -107,7 +134,7 @@ class SchedulerViewService:
         }
 
     @staticmethod
-    async def toggle_job(job_key: str) -> dict:
+    async def toggle_job(request: Request, job_key: str) -> dict:
         """
         Toggle job enabled state and return updated row context.
 
@@ -123,11 +150,12 @@ class SchedulerViewService:
             "status_color": STATUS_COLORS.get(job.last_status or "", "gray"),
             "is_running": _is_running(job),
             "avg_duration": _format_duration(job.average_duration),
+            "urls": build_scheduler_job_urls(request, job.job_key),
             "now": now,
         }
 
     @staticmethod
-    async def run_job(job_key: str) -> dict:
+    async def run_job(request: Request, job_key: str) -> dict:
         """
         Execute job synchronously and return updated row context.
 
@@ -158,7 +186,7 @@ class SchedulerViewService:
         return {"result": result, "row": row}
 
     @staticmethod
-    async def reset_job(job_key: str) -> dict:
+    async def reset_job(request: Request, job_key: str) -> dict:
         """
         Reset job and return updated row context.
 
@@ -174,6 +202,7 @@ class SchedulerViewService:
             "status_color": STATUS_COLORS.get(job.last_status or "", "gray"),
             "is_running": _is_running(job),
             "avg_duration": _format_duration(job.average_duration),
+            "urls": build_scheduler_job_urls(request, job.job_key),
             "now": now,
         }
 

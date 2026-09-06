@@ -16,7 +16,7 @@
             {% if job_rows %}
                 {% for row in job_rows %}
                 <tr id="job-row-{{ row.job_id }}"
-                    hx-get="/jobs/{{ row.job_id }}/detail"
+                    hx-get="{{ row.urls.detail }}"
                     hx-target="#panel-container"
                     hx-swap="innerHTML"
                     hx-trigger="click"
@@ -48,11 +48,11 @@
                     </td>
                     <td data-stop-propagation>
                         <div class="flex items-center gap-2">
-                            {{ icon_view(hx_get='/jobs/' ~ row.job_id ~ '/detail', hx_target='#panel-container') }}
+                            {{ icon_view(hx_get=row.urls.detail, hx_target='#panel-container') }}
                             {% if row.status in ['pending', 'assigned', 'running'] %}
-                            {{ cancel_icon_button(hx_post='/jobs/' ~ row.job_id ~ '/cancel', hx_confirm_text='Cancel job ' ~ row.job_type ~ '?') }}
+                            {{ cancel_icon_button(hx_post=row.urls.cancel, hx_confirm_text='Cancel job ' ~ row.job_type ~ '?') }}
                             {% endif %}
-                            {{ delete_icon_button(delete_url='/jobs/' ~ row.job_id, target_id='job-row-' ~ row.job_id) }}
+                            {{ delete_icon_button(delete_url=row.urls.delete, target_id='job-row-' ~ row.job_id) }}
                         </div>
                     </td>
                 </tr>

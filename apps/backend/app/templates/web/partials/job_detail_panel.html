@@ -143,13 +143,13 @@
             {% if job.status in ['pending', 'assigned', 'running'] %}
             <div class="flex-1">
                 {{ confirm_action_btn(icon_svg=ICO_X, label='Cancel Job', color='orange',
-                    hx_post='/jobs/' ~ job.id ~ '/cancel', after='reload',
+                    hx_post=job_urls.cancel, after='reload',
                     extra_classes='w-full', title='Cancel this job') }}
             </div>
             {% endif %}
             <div class="{% if job.status in ['pending', 'assigned', 'running'] %}flex-1{% else %}w-full{% endif %}">
                 {{ confirm_action_btn(icon_svg=ICO_TRASH, label='Delete Job', color='red',
-                    hx_delete='/jobs/' ~ job.id, after='reload',
+                    hx_delete=job_urls.delete, after='reload',
                     extra_classes='w-full', title='Delete this job') }}
             </div>
         </div>
