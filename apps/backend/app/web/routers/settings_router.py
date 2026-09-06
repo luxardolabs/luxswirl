@@ -14,6 +14,7 @@ from app.core.query_params import EnabledFilter, GlobalFilter, PerPageFilter
 from app.db import get_db
 from app.services.views.settings_view_service import SettingsViewService
 from app.web.hx_responses import hx_empty_with_toast, hx_toast_trigger
+from app.web.render import error_partial
 from app.web.templates_config import templates
 
 logger = get_logger("luxswirl.web.settings")
@@ -251,9 +252,7 @@ async def update_metrics_timeout(
         db, timeout_str
     )
     if error:
-        return HTMLResponse(
-            content=f'<div class="text-red-500">{error}</div>', status_code=400
-        )
+        return error_partial(request, current_user, error)
     return templates.TemplateResponse(
         request,
         "partials/settings/metrics_card.html",

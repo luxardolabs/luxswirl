@@ -165,13 +165,12 @@ def job_status_oob_response(
 ) -> HTMLResponse:
     """Render the maintenance job_status partial into the OOB status slot + a toast."""
     partial_html = templates.get_template(
-        "partials/maintenance/job_status.html"
+        "partials/maintenance/job_status_oob.html"
     ).render(
         **MaintenanceJobViewService.build_status_context(request, current_user, job)
     )
-    oob_body = f'<div id="maintenance-status-slot" hx-swap-oob="innerHTML">{partial_html}</div>'
     return HTMLResponse(
-        content=oob_body,
+        content=partial_html,
         status_code=200,
         headers={
             "HX-Trigger": hx_trigger(

@@ -1,0 +1,10 @@
+{#
+    Out-of-band wrapper for the maintenance job_status partial.
+
+    Actions that enqueue a job from somewhere other than the status slot (a bulk
+    action toolbar, an agent row) swap the poller into #maintenance-status-slot
+    while returning their own body. Same context as job_status.html.
+#}
+<div id="maintenance-status-slot" hx-swap-oob="innerHTML">
+    {% include 'partials/maintenance/job_status.html' %}
+</div>
