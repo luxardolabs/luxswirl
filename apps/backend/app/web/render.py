@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth_deps import AuthedUser
 from app.core.config import settings
-from app.services.views._job_status import build_job_status_context
+from app.services.views.maintenance_job_view_service import MaintenanceJobViewService
 from app.services.views.notification_logs_view_service import (
     NotificationLogsViewService,
 )
@@ -166,7 +166,9 @@ def job_status_oob_response(
     """Render the maintenance job_status partial into the OOB status slot + a toast."""
     partial_html = templates.get_template(
         "partials/maintenance/job_status.html"
-    ).render(**build_job_status_context(request, current_user, job))
+    ).render(
+        **MaintenanceJobViewService.build_status_context(request, current_user, job)
+    )
     oob_body = f'<div id="maintenance-status-slot" hx-swap-oob="innerHTML">{partial_html}</div>'
     return HTMLResponse(
         content=oob_body,

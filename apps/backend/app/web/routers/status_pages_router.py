@@ -24,7 +24,7 @@ from app.core.query_params import (
     TimeRangeFilter,
 )
 from app.db import get_db
-from app.services.views._job_status import build_job_status_context
+from app.services.views.maintenance_job_view_service import MaintenanceJobViewService
 from app.services.views.status_pages_view_service import StatusPagesViewService
 from app.web.hx_responses import hx_toast_trigger
 from app.web.render import error_page, error_partial, public_error_page
@@ -177,7 +177,7 @@ async def delete_status_page(
     return templates.TemplateResponse(
         request,
         "partials/maintenance/job_status.html",
-        build_job_status_context(request, current_user, job),
+        MaintenanceJobViewService.build_status_context(request, current_user, job),
     )
 
 
