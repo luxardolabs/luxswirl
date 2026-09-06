@@ -1,3 +1,4 @@
+{% from 'macros/form_fields.html' import input %}
 <!-- HTTP-specific fields -->
 <div id="http-fields" class="space-y-4 {% if not check or (check.check_type not in ['http', 'json']) %}hidden{% endif %}">
     <div class="grid grid-cols-2 gap-4">
@@ -13,14 +14,7 @@
         </div>
         <div>
             <label class="label">Expected Status</label>
-            <input
-                type="number"
-                name="expected_status"
-                value="{{ check.expected_status if check and check.expected_status else check_defaults.expected_status }}"
-                min="100"
-                max="599"
-                class="input"
-            >
+            {{ input(id=false, name="expected_status", type="number", value=check.expected_status if check and check.expected_status else check_defaults.expected_status, min="100", max="599", class="input") }}
             <p class="text-xs text-dark-text-muted mt-1">Expected HTTP status code</p>
         </div>
     </div>

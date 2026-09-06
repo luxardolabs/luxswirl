@@ -1,25 +1,14 @@
+{% from 'macros/form_fields.html' import input %}
 <!-- JSON-specific fields -->
 <div id="json-fields" class="space-y-4 {% if not check or check.check_type != 'json' %}hidden{% endif %}">
     <div>
         <label class="label">JSON Path</label>
-        <input
-            type="text"
-            name="json_path"
-            value="{{ check.json_path if check and check.json_path is not none else '' }}"
-            class="input"
-            placeholder="$.data.status"
-        >
+        {{ input(id=false, name="json_path", value=check.json_path if check and check.json_path is not none else '', placeholder="$.data.status", class="input") }}
         <p class="text-xs text-dark-text-muted mt-1">JSONPath expression to extract value</p>
     </div>
     <div>
         <label class="label">Expected Value</label>
-        <input
-            type="text"
-            name="expected_value"
-            value="{{ check.expected_value if check and check.expected_value is not none else '' }}"
-            class="input"
-            placeholder="ok"
-        >
+        {{ input(id=false, name="expected_value", value=check.expected_value if check and check.expected_value is not none else '', placeholder="ok", class="input") }}
         <p class="text-xs text-dark-text-muted mt-1">Expected value at JSON path</p>
     </div>
 </div>

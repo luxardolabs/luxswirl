@@ -1,4 +1,5 @@
 {% from 'macros/buttons.html' import btn_save, btn_create, btn_cancel_text %}
+{% from 'macros/form_fields.html' import checkbox, input %}
 {% from 'macros/panels.html' import panel_wrapper, panel_header, panel_content, panel_footer %}
 
 {% call panel_wrapper() %}
@@ -46,14 +47,7 @@
         <!-- Friendly Name (always visible) -->
         <div>
             <label class="label">Friendly Name</label>
-            <input
-                type="text"
-                name="friendly_name"
-                class="input"
-                value="{{ provider.friendly_name if provider else '' }}"
-                required
-                placeholder="e.g., Google SMTP, Primary Webhook"
-            >
+            {{ input(id=false, name="friendly_name", value=provider.friendly_name if provider else '', placeholder="e.g., Google SMTP, Primary Webhook", required=true, class="input") }}
             <p class="text-xs text-dark-text-muted mt-1">A descriptive name for this notification provider</p>
         </div>
 
@@ -92,13 +86,7 @@
 
                     {% elif field_schema.type == 'boolean' %}
                         <label class="flex items-center gap-2 cursor-pointer">
-                            <input
-                                type="checkbox"
-                                name="config_{{ field_name }}"
-                                value="true"
-                                {% if (provider and field_name in provider.config and provider.config[field_name]) or (not provider and field_schema.default) %}checked{% endif %}
-                                class="w-4 h-4 text-brand-500 bg-dark-bg-tertiary border-dark-border rounded focus:ring-brand-500 focus:ring-2"
-                            >
+                            {{ checkbox(name=('config_' ~ (field_name)), value="true", checked=((provider and field_name in provider.config and provider.config[field_name]) or (not provider and field_schema.default)), class="w-4 h-4 text-brand-500 bg-dark-bg-tertiary border-dark-border rounded focus:ring-brand-500 focus:ring-2") }}
                             <span class="text-sm text-dark-text-muted">Enable</span>
                         </label>
 
@@ -137,12 +125,7 @@
 
                     {% else %}
                         <!-- Fallback for unknown types -->
-                        <input
-                            type="text"
-                            name="config_{{ field_name }}"
-                            class="input"
-                            value="{{ provider.config[field_name] if provider and field_name in provider.config else field_schema.default | default('') }}"
-                        >
+                        {{ input(id=false, name=('config_' ~ (field_name)), value=provider.config[field_name] if provider and field_name in provider.config else field_schema.default | default(''), class="input") }}
                     {% endif %}
 
                     {% if field_schema.help_text %}
@@ -159,25 +142,13 @@
         <div class="pt-4 border-t border-dark-border space-y-4">
             <!-- Enable Provider -->
             <label class="flex items-center gap-2 cursor-pointer">
-                <input
-                    type="checkbox"
-                    name="is_enabled"
-                    value="true"
-                    {% if not provider or provider.is_enabled %}checked{% endif %}
-                    class="w-4 h-4 text-brand-500 bg-dark-bg-tertiary border-dark-border rounded"
-                >
+                {{ checkbox(name="is_enabled", value="true", checked=(not provider or provider.is_enabled), class="w-4 h-4 text-brand-500 bg-dark-bg-tertiary border-dark-border rounded") }}
                 <span class="text-sm font-medium">Enable this notification provider</span>
             </label>
 
             <!-- Default Enabled Option -->
             <label class="flex items-start gap-3 cursor-pointer">
-                <input
-                    type="checkbox"
-                    name="is_default_enabled"
-                    value="true"
-                    {% if provider and provider.is_default_enabled %}checked{% endif %}
-                    class="mt-1 w-4 h-4 text-brand-500 bg-dark-bg-tertiary border-dark-border rounded focus:ring-brand-500 focus:ring-2"
-                >
+                {{ checkbox(name="is_default_enabled", value="true", checked=(provider and provider.is_default_enabled), class="mt-1 w-4 h-4 text-brand-500 bg-dark-bg-tertiary border-dark-border rounded focus:ring-brand-500 focus:ring-2") }}
                 <div class="flex-1">
                     <span class="text-sm font-medium text-dark-text-primary">Default enabled</span>
                     <p class="text-xs text-dark-text-muted mt-1">

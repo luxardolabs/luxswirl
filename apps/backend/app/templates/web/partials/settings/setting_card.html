@@ -1,4 +1,5 @@
 {% from 'macros/buttons.html' import icon_reset, btn_save %}
+{% from 'macros/form_fields.html' import checkbox, input %}
 <!-- Setting Card - Improved compact card design for defaults -->
 <div id="setting-{{ setting.key|replace('.', '-') }}" class="card p-4 hover:shadow-lg transition-all duration-200">
     <!-- Header with icon and title -->
@@ -74,14 +75,7 @@
                 <!-- Boolean Toggle -->
                 <label class="flex items-center gap-2 cursor-pointer flex-1">
                     <span class="text-xs text-dark-text-muted uppercase tracking-wide">Value:</span>
-                    <input
-                        type="checkbox"
-                        name="value"
-                        value="true"
-                        {% if current_value %}checked{% endif %}
-                        onchange="this.form.requestSubmit()"
-                        class="sr-only peer"
-                    >
+                    {{ checkbox(name="value", value="true", checked=(current_value), class="sr-only peer", extra_attrs='onchange="this.form.requestSubmit()"') }}
                     <div class="relative w-11 h-6 bg-dark-bg-tertiary peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-brand-500 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-500"></div>
                     <span class="text-sm text-dark-text-primary">{% if current_value %}Enabled{% else %}Disabled{% endif %}</span>
                 </label>
@@ -125,13 +119,7 @@
                         </select>
                     {% else %}
                         <!-- Text input for free-form strings -->
-                        <input
-                            type="text"
-                            name="value"
-                            aria-label="{{ setting.display_name }} value"
-                            value="{{ current_value }}"
-                            class="flex-1 px-3 py-1.5 text-sm bg-dark-bg-tertiary border border-dark-border rounded-md focus:outline-none focus:ring-2 focus:ring-brand-500"
-                        >
+                        {{ input(id=false, name="value", value=current_value, class="flex-1 px-3 py-1.5 text-sm bg-dark-bg-tertiary border border-dark-border rounded-md focus:outline-none focus:ring-2 focus:ring-brand-500", extra_attrs=('aria-label="' ~ (setting.display_name) ~ ' value"')) }}
                     {% endif %}
                 </div>
                 {% if not (setting.validation and setting.validation.enum) %}

@@ -1,4 +1,5 @@
 {% from 'macros/buttons.html' import btn_create, btn_cancel_text %}
+{% from 'macros/form_fields.html' import checkbox, input %}
 {% from 'macros/panels.html' import panel_wrapper, panel_header, panel_content, panel_footer %}
 
 {% call panel_wrapper() %}
@@ -16,42 +17,20 @@
             <!-- Username -->
             <div>
                 <label class="label text-sm" for="username">Username <span class="text-red-400">*</span></label>
-                <input
-                    type="text"
-                    id="username"
-                    name="username"
-                    required
-                    pattern="[a-zA-Z0-9_-]+"
-                    class="input font-mono w-full"
-                    placeholder="john_doe"
-                >
+                {{ input(name="username", placeholder="john_doe", id="username", required=true, class="input font-mono w-full", extra_attrs='pattern="[a-zA-Z0-9_-]+"') }}
             </div>
 
             <!-- Password -->
             <div>
                 <label class="label text-sm" for="password">Password <span class="text-red-400">*</span></label>
-                <input
-                    type="password"
-                    id="password"
-                    name="password"
-                    required
-                    minlength="8"
-                    class="input font-mono"
-                    placeholder="••••••••"
-                >
+                {{ input(name="password", type="password", placeholder="••••••••", id="password", minlength="8", required=true, class="input font-mono") }}
                 <p class="text-xs text-dark-text-muted mt-1">Min 8 characters, must include uppercase, lowercase, and digit</p>
             </div>
 
             <!-- Full Name -->
             <div>
                 <label class="label text-sm" for="full_name">Full Name</label>
-                <input
-                    type="text"
-                    id="full_name"
-                    name="full_name"
-                    class="input"
-                    placeholder="John Doe"
-                >
+                {{ input(name="full_name", placeholder="John Doe", id="full_name", class="input") }}
             </div>
 
             <!-- Role -->
@@ -67,12 +46,12 @@
             <!-- Checkboxes -->
             <div class="space-y-2">
                 <label class="flex items-center gap-2 cursor-pointer text-sm text-dark-text-secondary">
-                    <input type="checkbox" name="is_active" value="true" checked>
+                    {{ checkbox(name="is_active", value="true", checked=true) }}
                     Account is active
                 </label>
 
                 <label class="flex items-center gap-2 cursor-pointer text-sm text-dark-text-secondary">
-                    <input type="checkbox" name="must_change_password" value="true" checked>
+                    {{ checkbox(name="must_change_password", value="true", checked=true) }}
                     Require password change on first login
                 </label>
             </div>

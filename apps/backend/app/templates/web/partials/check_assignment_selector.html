@@ -1,4 +1,5 @@
 {% from 'macros/buttons.html' import text_btn, tag_pill_button %}
+{% from 'macros/form_fields.html' import input %}
 <!-- Assignment selector for replicate/distribute modes -->
 <div class="space-y-4" data-selector-init='{"existingSelector": {% if check and check.agent_selector %}{{ check.agent_selector|tojson }}{% else %}null{% endif %}, "availableTags": {{ available_tags|tojson }}}'>
     <div class="card bg-blue-500/5 border-blue-500/20 p-4">
@@ -49,13 +50,7 @@
         <!-- Tag input with suggestions -->
         <div class="flex gap-2 mb-2">
             <div class="relative flex-1">
-                <input
-                    type="text"
-                    id="selector-tag-input"
-                    class="input font-mono"
-                    placeholder="Type tag name or browse existing tags..."
-                    autocomplete="off"
-                >
+                {{ input(placeholder="Type tag name or browse existing tags...", id="selector-tag-input", autocomplete="off", class="input font-mono") }}
 
                 <!-- Tag suggestions dropdown -->
                 <div id="tag-suggestions" class="hidden absolute z-10 w-full mt-1 bg-dark-bg-secondary border border-dark-border rounded-lg shadow-lg max-h-64 overflow-y-auto">

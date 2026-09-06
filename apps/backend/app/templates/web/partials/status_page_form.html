@@ -1,4 +1,5 @@
 {% from 'macros/buttons.html' import btn_save, btn_create, btn_cancel_text %}
+{% from 'macros/form_fields.html' import checkbox %}
 {% from 'macros/panels.html' import panel_wrapper, panel_header, panel_content %}
 
 {%- set h_title = 'Edit Status Page' if status_page else 'Create New Status Page' -%}
@@ -67,12 +68,7 @@
         <!-- Visibility -->
         <div>
             <label class="flex items-center gap-2 cursor-pointer">
-                <input
-                    type="checkbox"
-                    name="is_public"
-                    class="rounded"
-                    {% if not status_page or status_page.is_public %}checked{% endif %}
-                >
+                {{ checkbox(name="is_public", checked=(not status_page or status_page.is_public), class="rounded") }}
                 <span class="text-sm text-dark-text-secondary">Make this status page publicly accessible</span>
             </label>
             <p class="text-xs text-dark-text-muted mt-1 ml-6">

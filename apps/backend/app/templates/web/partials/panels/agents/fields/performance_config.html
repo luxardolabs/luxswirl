@@ -1,4 +1,5 @@
 {% from 'macros/buttons.html' import collapse_toggle %}
+{% from 'macros/form_fields.html' import input %}
             <!-- Performance Configuration - Collapsible -->
             <div class="border border-dark-border rounded-lg overflow-hidden">
                 {{ collapse_toggle('Performance Tuning', toggle_attr='data-accordion-toggle') }}
@@ -9,16 +10,7 @@
                                 Max Concurrent Checks
                                 <span class="text-xs text-dark-text-muted font-normal">(default: 200)</span>
                             </label>
-                            <input
-                                type="number"
-                                id="max_concurrent_checks"
-                                name="max_concurrent_checks"
-                                value="{{ agent.max_concurrent_checks if agent.max_concurrent_checks is not none else '' }}"
-                                class="input input-sm font-mono text-sm"
-                                placeholder="200"
-                                min="1"
-                                max="1000"
-                            >
+                            {{ input(name="max_concurrent_checks", type="number", value=agent.max_concurrent_checks if agent.max_concurrent_checks is not none else '', placeholder="200", id="max_concurrent_checks", min="1", max="1000", class="input input-sm font-mono text-sm") }}
                         </div>
                         <div>
                             <label class="label text-xs" for="log_level">
@@ -45,32 +37,14 @@
                                 Watchdog Interval (s)
                                 <span class="text-xs text-dark-text-muted font-normal">(default: 30s)</span>
                             </label>
-                            <input
-                                type="number"
-                                id="watchdog_interval"
-                                name="watchdog_interval"
-                                value="{{ agent.watchdog_interval if agent.watchdog_interval is not none else '' }}"
-                                class="input input-sm font-mono text-sm"
-                                placeholder="30"
-                                min="5"
-                                max="300"
-                            >
+                            {{ input(name="watchdog_interval", type="number", value=agent.watchdog_interval if agent.watchdog_interval is not none else '', placeholder="30", id="watchdog_interval", min="5", max="300", class="input input-sm font-mono text-sm") }}
                         </div>
                         <div>
                             <label class="label text-xs" for="watchdog_stall_threshold">
                                 Watchdog Stall Threshold
                                 <span class="text-xs text-dark-text-muted font-normal">(default: 3)</span>
                             </label>
-                            <input
-                                type="number"
-                                id="watchdog_stall_threshold"
-                                name="watchdog_stall_threshold"
-                                value="{{ agent.watchdog_stall_threshold if agent.watchdog_stall_threshold is not none else '' }}"
-                                class="input input-sm font-mono text-sm"
-                                placeholder="3"
-                                min="1"
-                                max="10"
-                            >
+                            {{ input(name="watchdog_stall_threshold", type="number", value=agent.watchdog_stall_threshold if agent.watchdog_stall_threshold is not none else '', placeholder="3", id="watchdog_stall_threshold", min="1", max="10", class="input input-sm font-mono text-sm") }}
                         </div>
                     </div>
                 </div>

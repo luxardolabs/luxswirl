@@ -1,4 +1,5 @@
 {% from 'macros/badges.html' import badge %}
+{% from 'macros/form_fields.html' import checkbox, input, textarea %}
 {% from 'macros/buttons.html' import text_btn, btn_create, btn_save, btn_clone, btn_cancel_text, btn_refresh, tag_pill_button, collapse_toggle %}
 {% from 'macros/panels.html' import panel_wrapper, panel_header, panel_content, panel_footer %}
 
@@ -129,15 +130,7 @@
 
             <div>
                 <label class="label">Interval (seconds)</label>
-                <input
-                    type="number"
-                    name="interval"
-                    value="{{ check.interval_seconds if check else check_defaults.interval_seconds }}"
-                    min="1"
-                    max="86400"
-                    required
-                    class="input"
-                >
+                {{ input(id=false, name="interval", type="number", value=check.interval_seconds if check else check_defaults.interval_seconds, min="1", max="86400", required=true, class="input") }}
                 <p class="text-xs text-dark-text-muted mt-1">How often to run this check (1-86400 seconds)</p>
             </div>
         </div>
@@ -197,12 +190,7 @@
                 <!-- Description -->
                 <div>
                     <label class="label">Description</label>
-                    <textarea
-                        name="description"
-                        class="input"
-                        rows="3"
-                        placeholder="Human-readable description of what this check monitors..."
-                    >{{ check.description if check else '' }}</textarea>
+                    {{ textarea(id=false, name="description", rows="3", placeholder="Human-readable description of what this check monitors...", class="input", value=check.description if check else '') }}
                     <p class="text-xs text-dark-text-muted mt-1">Optional description for documentation purposes</p>
                 </div>
 
@@ -210,14 +198,7 @@
                 <div class="grid grid-cols-2 gap-4">
                     <div>
                         <label class="label">Timeout (seconds)</label>
-                        <input
-                            type="number"
-                            name="timeout_seconds"
-                            value="{{ check.timeout_seconds if check and check.timeout_seconds else check_defaults.timeout_seconds }}"
-                            min="1"
-                            max="300"
-                            class="input"
-                        >
+                        {{ input(id=false, name="timeout_seconds", type="number", value=check.timeout_seconds if check and check.timeout_seconds else check_defaults.timeout_seconds, min="1", max="300", class="input") }}
                         <p class="text-xs text-dark-text-muted mt-1">Maximum time to wait for check response</p>
                     </div>
 
@@ -252,27 +233,13 @@
                     <div class="grid grid-cols-2 gap-4">
                         <div>
                             <label class="label">Max Retries</label>
-                            <input
-                                type="number"
-                                name="max_retries"
-                                value="{{ check.max_retries if check and check.max_retries else check_defaults.max_retries }}"
-                                min="0"
-                                max="10"
-                                class="input"
-                            >
+                            {{ input(id=false, name="max_retries", type="number", value=check.max_retries if check and check.max_retries else check_defaults.max_retries, min="0", max="10", class="input") }}
                             <p class="text-xs text-dark-text-muted mt-1">Retries before marking as down</p>
                         </div>
 
                         <div>
                             <label class="label">Retry Interval (seconds)</label>
-                            <input
-                                type="number"
-                                name="retry_interval_seconds"
-                                value="{{ check.retry_interval_seconds if check and check.retry_interval_seconds else check_defaults.retry_interval_seconds }}"
-                                min="1"
-                                max="300"
-                                class="input"
-                            >
+                            {{ input(id=false, name="retry_interval_seconds", type="number", value=check.retry_interval_seconds if check and check.retry_interval_seconds else check_defaults.retry_interval_seconds, min="1", max="300", class="input") }}
                             <p class="text-xs text-dark-text-muted mt-1">Wait time between retries</p>
                         </div>
                     </div>
@@ -281,15 +248,7 @@
                 <!-- Notification Resend Configuration -->
                 <div>
                     <label class="label">Resend Notification After</label>
-                    <input
-                        type="number"
-                        name="resend_notification_after"
-                        value="{{ check.resend_notification_after if check and check.resend_notification_after else '' }}"
-                        min="1"
-                        max="100"
-                        placeholder="Leave empty to disable"
-                        class="input"
-                    >
+                    {{ input(id=false, name="resend_notification_after", type="number", value=check.resend_notification_after if check and check.resend_notification_after else '', placeholder="Leave empty to disable", min="1", max="100", class="input") }}
                     <p class="text-xs text-dark-text-muted mt-1">Resend notification if down X times consecutively (leave empty to disable)</p>
                 </div>
             </div>
@@ -302,12 +261,7 @@
                 <!-- Tags will be inserted here -->
             </div>
             <div class="flex gap-2 mt-2">
-                <input
-                    type="text"
-                    id="tag-input"
-                    class="input flex-1"
-                    placeholder="Type a tag or browse existing tags..."
-                >
+                {{ input(placeholder="Type a tag or browse existing tags...", id="tag-input", class="input flex-1") }}
                 {% set plus_svg %}<span class="w-4 h-4 mr-1.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/plus.svg" %}</span>{% endset %}
                 {{ text_btn(plus_svg, 'Add', style='secondary', type='button', extra_attrs='data-add-tag', extra_classes='px-4') }}
                 {% if available_check_tags and available_check_tags|length > 0 %}
@@ -355,13 +309,7 @@
             <div class="card p-4 max-h-64 overflow-y-auto space-y-2">
                 {% for alert in alerts %}
                 <label class="flex items-start gap-3 p-3 border border-dark-border rounded-lg hover:border-brand-500/30 transition-colors cursor-pointer">
-                    <input
-                        type="checkbox"
-                        name="alert_ids"
-                        value="{{ alert.id }}"
-                        {% if assigned_alert_ids and alert.id in assigned_alert_ids %}checked{% endif %}
-                        class="mt-1 w-4 h-4 text-brand-500 bg-dark-bg-primary border-dark-border rounded"
-                    >
+                    {{ checkbox(name="alert_ids", value=alert.id, checked=(assigned_alert_ids and alert.id in assigned_alert_ids), class="mt-1 w-4 h-4 text-brand-500 bg-dark-bg-primary border-dark-border rounded") }}
                     <div class="flex-1">
                         <div class="flex items-center gap-2 mb-1">
                             <span class="font-medium text-dark-text-primary">{{ alert.name }}</span>

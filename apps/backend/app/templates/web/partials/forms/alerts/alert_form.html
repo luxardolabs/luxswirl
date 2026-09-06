@@ -1,4 +1,5 @@
 {% from 'macros/buttons.html' import btn_save, btn_create, btn_cancel_text %}
+{% from 'macros/form_fields.html' import checkbox, input, textarea %}
 {% from 'macros/panels.html' import panel_wrapper, panel_header, panel_content, panel_footer %}
 
 {% call panel_wrapper(max_width='max-w-3xl') %}
@@ -23,25 +24,12 @@
             <div class="grid grid-cols-2 gap-4">
                 <div>
                     <label class="label">Alert Name <span class="text-red-400">*</span></label>
-                    <input
-                        type="text"
-                        name="name"
-                        class="input"
-                        value="{{ alert.name if alert else '' }}"
-                        required
-                        placeholder="e.g., Critical Services Down"
-                    >
+                    {{ input(id=false, name="name", value=alert.name if alert else '', placeholder="e.g., Critical Services Down", required=true, class="input") }}
                 </div>
 
                 <div>
                     <label class="label">Description</label>
-                    <input
-                        type="text"
-                        name="description"
-                        class="input"
-                        value="{{ alert.description if alert and alert.description else '' }}"
-                        placeholder="Optional description"
-                    >
+                    {{ input(id=false, name="description", value=alert.description if alert and alert.description else '', placeholder="Optional description", class="input") }}
                 </div>
             </div>
         </div>
@@ -79,15 +67,7 @@
                     <div class="space-y-4">
                         <div>
                             <label class="label">Consecutive Failures <span class="text-red-400">*</span></label>
-                            <input
-                                type="number"
-                                name="trigger_consecutive_failures"
-                                class="input"
-                                value="{{ alert.trigger_config.consecutive_failures if alert and alert.trigger_config.consecutive_failures else alert_defaults.consecutive_failures }}"
-                                min="1"
-                                max="100"
-                                required
-                            >
+                            {{ input(id=false, name="trigger_consecutive_failures", type="number", value=alert.trigger_config.consecutive_failures if alert and alert.trigger_config.consecutive_failures else alert_defaults.consecutive_failures, min="1", max="100", required=true, class="input") }}
                             <p class="text-xs text-dark-text-muted mt-1">Number of consecutive failures before triggering alert</p>
                         </div>
                     </div>
@@ -109,15 +89,7 @@
                             </div>
                             <div>
                                 <label class="text-xs text-dark-text-muted block mb-1">Threshold (milliseconds)</label>
-                                <input
-                                    type="number"
-                                    name="trigger_threshold_value"
-                                    class="input"
-                                    value="{{ alert.trigger_config.value if alert.trigger_config.value else 1000 }}"
-                                    min="1"
-                                    required
-                                    placeholder="e.g., 1000"
-                                >
+                                {{ input(id=false, name="trigger_threshold_value", type="number", value=alert.trigger_config.value if alert.trigger_config.value else 1000, placeholder="e.g., 1000", min="1", required=true, class="input") }}
                             </div>
                         </div>
                         <p class="text-xs text-dark-text-muted mt-2">Example: "&gt; 1000" alerts when response time exceeds 1 second</p>
@@ -129,39 +101,27 @@
                         {% set selected_thresholds = alert.trigger_config.days_thresholds if alert and alert.trigger_config.days_thresholds else [30] %}
                         <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
                             <label class="flex items-center gap-2 p-2 hover:bg-dark-bg-tertiary rounded cursor-pointer">
-                                <input type="checkbox" name="trigger_days_threshold_7" value="7"
-                                       {% if 7 in selected_thresholds %}checked{% endif %}
-                                       class="w-4 h-4 text-brand-500 bg-dark-bg-primary border-dark-border rounded">
+                                {{ checkbox(name="trigger_days_threshold_7", value="7", checked=(7 in selected_thresholds), class="w-4 h-4 text-brand-500 bg-dark-bg-primary border-dark-border rounded") }}
                                 <span class="text-sm">7 days</span>
                             </label>
                             <label class="flex items-center gap-2 p-2 hover:bg-dark-bg-tertiary rounded cursor-pointer">
-                                <input type="checkbox" name="trigger_days_threshold_14" value="14"
-                                       {% if 14 in selected_thresholds %}checked{% endif %}
-                                       class="w-4 h-4 text-brand-500 bg-dark-bg-primary border-dark-border rounded">
+                                {{ checkbox(name="trigger_days_threshold_14", value="14", checked=(14 in selected_thresholds), class="w-4 h-4 text-brand-500 bg-dark-bg-primary border-dark-border rounded") }}
                                 <span class="text-sm">14 days</span>
                             </label>
                             <label class="flex items-center gap-2 p-2 hover:bg-dark-bg-tertiary rounded cursor-pointer">
-                                <input type="checkbox" name="trigger_days_threshold_21" value="21"
-                                       {% if 21 in selected_thresholds %}checked{% endif %}
-                                       class="w-4 h-4 text-brand-500 bg-dark-bg-primary border-dark-border rounded">
+                                {{ checkbox(name="trigger_days_threshold_21", value="21", checked=(21 in selected_thresholds), class="w-4 h-4 text-brand-500 bg-dark-bg-primary border-dark-border rounded") }}
                                 <span class="text-sm">21 days</span>
                             </label>
                             <label class="flex items-center gap-2 p-2 hover:bg-dark-bg-tertiary rounded cursor-pointer">
-                                <input type="checkbox" name="trigger_days_threshold_30" value="30"
-                                       {% if 30 in selected_thresholds %}checked{% endif %}
-                                       class="w-4 h-4 text-brand-500 bg-dark-bg-primary border-dark-border rounded">
+                                {{ checkbox(name="trigger_days_threshold_30", value="30", checked=(30 in selected_thresholds), class="w-4 h-4 text-brand-500 bg-dark-bg-primary border-dark-border rounded") }}
                                 <span class="text-sm">30 days</span>
                             </label>
                             <label class="flex items-center gap-2 p-2 hover:bg-dark-bg-tertiary rounded cursor-pointer">
-                                <input type="checkbox" name="trigger_days_threshold_60" value="60"
-                                       {% if 60 in selected_thresholds %}checked{% endif %}
-                                       class="w-4 h-4 text-brand-500 bg-dark-bg-primary border-dark-border rounded">
+                                {{ checkbox(name="trigger_days_threshold_60", value="60", checked=(60 in selected_thresholds), class="w-4 h-4 text-brand-500 bg-dark-bg-primary border-dark-border rounded") }}
                                 <span class="text-sm">60 days</span>
                             </label>
                             <label class="flex items-center gap-2 p-2 hover:bg-dark-bg-tertiary rounded cursor-pointer">
-                                <input type="checkbox" name="trigger_days_threshold_90" value="90"
-                                       {% if 90 in selected_thresholds %}checked{% endif %}
-                                       class="w-4 h-4 text-brand-500 bg-dark-bg-primary border-dark-border rounded">
+                                {{ checkbox(name="trigger_days_threshold_90", value="90", checked=(90 in selected_thresholds), class="w-4 h-4 text-brand-500 bg-dark-bg-primary border-dark-border rounded") }}
                                 <span class="text-sm">90 days</span>
                             </label>
                         </div>
@@ -178,13 +138,7 @@
             {% if not alert %}
             <div class="grid grid-cols-2 gap-2">
                 <label class="flex items-start gap-2 cursor-pointer p-2 border border-dark-border rounded-lg hover:border-brand-500/30 transition-colors">
-                    <input
-                        type="radio"
-                        name="is_global"
-                        value="true"
-                        class="mt-1 w-4 h-4 text-brand-500 bg-dark-bg-tertiary border-dark-border"
-                        checked
-                    >
+                    {{ checkbox(name="is_global", value="true", type='radio', checked=true, class="mt-1 w-4 h-4 text-brand-500 bg-dark-bg-tertiary border-dark-border") }}
                     <div class="flex-1">
                         <div class="flex items-center gap-2 mb-1">
                             <span class="w-4 h-4 text-brand-500 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/globe-americas.svg" %}</span>
@@ -195,12 +149,7 @@
                 </label>
 
                 <label class="flex items-start gap-2 cursor-pointer p-2 border border-dark-border rounded-lg hover:border-brand-500/30 transition-colors">
-                    <input
-                        type="radio"
-                        name="is_global"
-                        value="false"
-                        class="mt-1 w-4 h-4 text-brand-500 bg-dark-bg-tertiary border-dark-border"
-                    >
+                    {{ checkbox(name="is_global", value="false", type='radio', class="mt-1 w-4 h-4 text-brand-500 bg-dark-bg-tertiary border-dark-border") }}
                     <div class="flex-1">
                         <div class="flex items-center gap-2 mb-1">
                             <span class="w-4 h-4 text-brand-500 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/clipboard.svg" %}</span>
@@ -217,12 +166,7 @@
                 <div class="card p-3 max-h-64 overflow-y-auto space-y-2">
                     {% for check in checks %}
                     <label class="flex items-center gap-2 p-2 hover:bg-dark-bg-tertiary rounded cursor-pointer">
-                        <input
-                            type="checkbox"
-                            name="check_{{ check.id }}"
-                            value="{{ check.id }}"
-                            class="w-4 h-4 text-brand-500 bg-dark-bg-primary border-dark-border rounded"
-                        >
+                        {{ checkbox(name=('check_' ~ (check.id)), value=check.id, class="w-4 h-4 text-brand-500 bg-dark-bg-primary border-dark-border rounded") }}
                         <span class="text-sm">{{ check.agent.id if check.agent else 'unknown' }}:{{ check.display_name }}</span>
                     </label>
                     {% endfor %}
@@ -253,13 +197,7 @@
             <div class="space-y-1">
                 {% for provider in providers %}
                 <label class="flex items-center gap-2 p-2 border border-dark-border rounded hover:border-brand-500/30 transition-colors cursor-pointer">
-                    <input
-                        type="checkbox"
-                        name="provider_{{ provider.id }}"
-                        value="{{ provider.id }}"
-                        {% if provider.is_default_enabled %}checked{% endif %}
-                        class="w-4 h-4 text-brand-500 bg-dark-bg-primary border-dark-border rounded"
-                    >
+                    {{ checkbox(name=('provider_' ~ (provider.id)), value=provider.id, checked=(provider.is_default_enabled), class="w-4 h-4 text-brand-500 bg-dark-bg-primary border-dark-border rounded") }}
                     <div class="flex-1">
                         <div class="text-sm font-medium">{{ provider.friendly_name }}</div>
                         <div class="text-xs text-dark-text-muted">{{ provider.provider_type.replace('_', ' ') }}</div>
@@ -282,37 +220,17 @@
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                     <label class="label">Resend Interval (min)</label>
-                    <input
-                        type="number"
-                        name="resend_interval_minutes"
-                        class="input"
-                        value="{{ alert.resend_interval_minutes if alert else '' }}"
-                        min="1"
-                        placeholder="Optional"
-                    >
+                    {{ input(id=false, name="resend_interval_minutes", type="number", value=alert.resend_interval_minutes if alert else '', placeholder="Optional", min="1", class="input") }}
                 </div>
 
                 <div>
                     <label class="label">Max Resends</label>
-                    <input
-                        type="number"
-                        name="max_resends"
-                        class="input"
-                        value="{{ alert.max_resends if alert and alert.max_resends else '' }}"
-                        min="0"
-                        placeholder="0 = unlimited"
-                    >
+                    {{ input(id=false, name="max_resends", type="number", value=alert.max_resends if alert and alert.max_resends else '', placeholder="0 = unlimited", min="0", class="input") }}
                 </div>
 
                 <div class="flex items-end">
                     <label class="flex items-center gap-2 cursor-pointer p-2 border border-dark-border rounded">
-                        <input
-                            type="checkbox"
-                            name="notify_on_recovery"
-                            value="true"
-                            {% if (alert and alert.notify_on_recovery) or (not alert and alert_defaults.notify_on_recovery) %}checked{% endif %}
-                            class="w-4 h-4 text-brand-500 bg-dark-bg-tertiary border-dark-border rounded"
-                        >
+                        {{ checkbox(name="notify_on_recovery", value="true", checked=((alert and alert.notify_on_recovery) or (not alert and alert_defaults.notify_on_recovery)), class="w-4 h-4 text-brand-500 bg-dark-bg-tertiary border-dark-border rounded") }}
                         <span class="text-sm">Notify on Recovery</span>
                     </label>
                 </div>
@@ -336,25 +254,14 @@
 
             <div>
                 <label class="label">Custom Message</label>
-                <textarea
-                    name="custom_message"
-                    class="input font-mono text-sm"
-                    rows="3"
-                    placeholder="Leave blank for default"
-                >{{ alert.custom_message if alert and alert.custom_message else '' }}</textarea>
+                {{ textarea(id=false, name="custom_message", rows="3", placeholder="Leave blank for default", class="input font-mono text-sm", value=alert.custom_message if alert and alert.custom_message else '') }}
             </div>
         </div>
 
         <!-- Status Checkbox -->
         <div class="pt-3 border-t border-dark-border">
             <label class="flex items-center gap-2 cursor-pointer">
-                <input
-                    type="checkbox"
-                    name="is_enabled"
-                    value="true"
-                    {% if not alert or alert.is_enabled %}checked{% endif %}
-                    class="w-4 h-4 text-brand-500 bg-dark-bg-tertiary border-dark-border rounded"
-                >
+                {{ checkbox(name="is_enabled", value="true", checked=(not alert or alert.is_enabled), class="w-4 h-4 text-brand-500 bg-dark-bg-tertiary border-dark-border rounded") }}
                 <span class="text-sm font-medium">Enable this alert</span>
             </label>
         </div>

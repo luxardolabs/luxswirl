@@ -1,3 +1,4 @@
+{% from 'macros/form_fields.html' import input %}
 {% if previews and previews|length > 0 %}
 <div class="card p-4 bg-green-500/5 border-green-500/30">
     <div class="flex items-start gap-3 mb-4">
@@ -33,15 +34,7 @@
                 <span class="w-3 h-3 text-dark-text-muted flex-shrink-0 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/arrow-right.svg" %}</span>
 
                 <!-- Editable name -->
-                <input
-                    type="text"
-                    name="bulk_item_name"
-                    value="{{ preview.generated_name }}"
-                    class="text-xs font-mono bg-dark-bg-primary border border-dark-border rounded px-2 py-1 text-dark-text-primary focus:border-brand-500 focus:outline-none flex-1"
-                    placeholder="check-name"
-                    maxlength="255"
-                    title="Click to edit check name"
-                >
+                {{ input(id=false, name="bulk_item_name", value=preview.generated_name, placeholder="check-name", class="text-xs font-mono bg-dark-bg-primary border border-dark-border rounded px-2 py-1 text-dark-text-primary focus:border-brand-500 focus:outline-none flex-1", extra_attrs='maxlength="255" title="Click to edit check name"') }}
 
                 <!-- Hidden input to store URL for submission -->
                 <input type="hidden" name="bulk_item_url" value="{{ preview.url }}">
