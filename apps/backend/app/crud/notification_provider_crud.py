@@ -30,6 +30,7 @@ class NotificationProviderCRUD:
     @staticmethod
     async def list_paginated(
         db: AsyncSession,
+        *,
         skip: int = 0,
         limit: int = 100,
         provider_type: str | None = None,

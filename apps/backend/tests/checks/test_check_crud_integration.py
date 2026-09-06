@@ -185,7 +185,7 @@ class TestListPaginated:
             db.add(make_check(agent_id=agent.id, display_name=f"check-{i:02d}"))
         await db.flush()
 
-        rows, total = await CheckCRUD.list_paginated(db, offset=2, limit=2)
+        rows, total = await CheckCRUD.list_paginated(db, skip=2, limit=2)
         assert total == 5  # total ignores pagination
         assert len(rows) == 2
 

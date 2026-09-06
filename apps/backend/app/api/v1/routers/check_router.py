@@ -350,8 +350,8 @@ async def clone_check(
         # Clone check with overrides
         cloned_check = await CheckCoreService.clone_check(
             db,
-            source_check_id=check_id,
-            target_agent_id=agent_id,
+            check_id=check_id,
+            agent_id=agent_id,
             overrides=data if has_overrides else None,
             actor_is_admin=True,
         )

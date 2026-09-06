@@ -110,12 +110,13 @@ class NotificationLogCRUD:
     @staticmethod
     async def get_logs_paginated(
         db: AsyncSession,
+        *,
         status: str | None = None,
         alert_id: UUID | None = None,
         notification_provider_id: UUID | None = None,
         search: str | None = None,
         limit: int = 25,
-        offset: int = 0,
+        skip: int = 0,
     ) -> tuple[list, int]:
         """
         Get paginated notification logs with filters and joins.
@@ -153,7 +154,7 @@ class NotificationLogCRUD:
         stmt = NotificationLogCRUD._log_rows_query()
         if conditions:
             stmt = stmt.where(*conditions)
-        stmt = stmt.order_by(NotificationLog.sent_at.desc()).limit(limit).offset(offset)
+        stmt = stmt.order_by(NotificationLog.sent_at.desc()).limit(limit).offset(skip)
         result = await db.execute(stmt)
 
         return list(result.all()), total

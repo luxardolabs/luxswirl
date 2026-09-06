@@ -935,7 +935,7 @@ class ChecksViewService:
     async def _resolve_bulk_check_ids(
         db: AsyncSession,
         select_all: str,
-        agent: UUID | None,
+        agent_id: UUID | None,
         enabled: str,
         tag: str,
         check_ids: list[UUID],
@@ -945,7 +945,7 @@ class ChecksViewService:
         if select_all == "true":
             checks, _ = await ChecksViewService.get_checks(
                 db=db,
-                agent_id=agent,
+                agent_id=agent_id,
                 enabled_only=(enabled == "true") if enabled != "all" else False,
                 tag=tag or None,
                 limit=list_limit,
@@ -1125,7 +1125,7 @@ class ChecksViewService:
         db: AsyncSession,
         request: Request,
         current_user: AuthedUser,
-        agent: UUID | None,
+        agent_id: UUID | None,
         enabled: str,
         page: int,
         per_page: int | None,
@@ -1140,7 +1140,7 @@ class ChecksViewService:
 
         assignments, total = await ChecksViewService.get_checks(
             db=db,
-            agent_id=agent,
+            agent_id=agent_id,
             enabled_only=enabled_only if enabled != "all" else False,
             limit=per_page,
             offset=offset,
@@ -1152,7 +1152,7 @@ class ChecksViewService:
             "total": total,
             "page": page,
             "per_page": per_page,
-            "filters": {"agent": agent, "enabled": enabled},
+            "filters": {"agent_id": agent_id, "enabled": enabled},
         }
 
     @staticmethod

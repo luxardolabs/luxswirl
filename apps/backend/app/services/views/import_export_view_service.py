@@ -7,7 +7,6 @@ and orchestrating the import process with proper error handling.
 
 import json
 from collections.abc import Sequence
-from datetime import datetime
 from io import BytesIO
 from typing import Any
 from uuid import UUID
@@ -18,6 +17,7 @@ from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth_deps import AuthedUser
+from app.core.datetime_utils import utc_now
 from app.core.exceptions import AgentNotFoundException
 from app.models.agent_model import Agent
 from app.models.check_model import Check
@@ -248,8 +248,9 @@ class ImportExportViewService:
         checks = await CheckCoreService.list_checks_for_agent(db, agent_id)
         export_data = ImportExportViewService.export_checks_to_dict(checks, agent)
         json_bytes = BytesIO(json.dumps(export_data, indent=2).encode())
-        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-        filename = f"{agent_id}-checks-{timestamp}.json"
+        # Filename stamp: machine output, so it stays here — but UTC and sortable.
+        # `datetime.now()` here was naive server-local time.
+        filename = f"{agent_id}-checks-{utc_now().strftime('%Y%m%d_%H%M%S')}.json"
         return StreamingResponse(
             json_bytes,
             media_type="application/json",

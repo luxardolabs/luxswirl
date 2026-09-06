@@ -24,6 +24,7 @@ class RegistrationKeyCRUD:
     @staticmethod
     async def list_paginated(
         db: AsyncSession,
+        *,
         skip: int = 0,
         limit: int = 100,
         include_revoked: bool = False,

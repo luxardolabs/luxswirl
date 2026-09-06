@@ -48,7 +48,7 @@ class NotificationLogCoreService:
             notification_provider_id=notification_provider_id,
             search=search,
             limit=limit,
-            offset=offset,
+            skip=offset,
         )
 
     @staticmethod

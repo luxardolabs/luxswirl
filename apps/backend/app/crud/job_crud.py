@@ -43,11 +43,12 @@ class JobCRUD:
     @staticmethod
     async def list_paginated(
         db: AsyncSession,
+        *,
         agent_id: UUID | None = None,
         server_only: bool = False,
         status: str | None = None,
         job_type: str | None = None,
-        offset: int = 0,
+        skip: int = 0,
         limit: int = 50,
     ) -> tuple[Sequence[Job], int]:
         """Paginated list of jobs with filtering."""
@@ -69,7 +70,7 @@ class JobCRUD:
         total = (await db.execute(count_query)).scalar_one()
         query = (
             query.order_by(Job.priority.desc(), Job.created_at.desc())
-            .offset(offset)
+            .offset(skip)
             .limit(limit)
         )
         result = await db.execute(query)
