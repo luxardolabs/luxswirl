@@ -6,6 +6,7 @@ This web service acts as an aggregation layer, delegating to core services.
 """
 
 import json
+from dataclasses import dataclass
 from typing import Any
 from uuid import UUID
 
@@ -37,6 +38,28 @@ _JOB_REGISTRY: dict = {
 logger = get_logger("luxswirl.web.services.jobs")
 
 
+@dataclass(frozen=True)
+class JobUrls:
+    """Finished hrefs for one job row (fw.url_assembly_in_view)."""
+
+    detail: str
+    cancel: str
+    delete: str
+
+
+def build_job_urls(request: Request, job_id: UUID) -> JobUrls:
+    # .path: url_for returns an absolute url from the request's scheme/host, which
+    # behind TLS-terminating nginx can emit http:// into an https:// page.
+    def u(name: str) -> str:
+        return request.url_for(name, job_id=job_id).path
+
+    return JobUrls(
+        detail=u("job_detail_panel"),
+        cancel=u("cancel_job_web"),
+        delete=u("delete_job_web"),
+    )
+
+
 class JobRow:
     """Represents a single job row for UI display."""
 
@@ -55,8 +78,10 @@ class JobRow:
         has_result: bool,
         has_error: bool,
         tags: list[str] | None,
+        urls: JobUrls,
     ):
         self.job_id = job_id
+        self.urls = urls
         self.job_type = job_type
         self.agent_id = agent_id
         self.agent_name = agent_name or Job.SERVER_RUNNER
@@ -96,6 +121,7 @@ class JobsViewService:
     @staticmethod
     async def list_jobs(
         db: AsyncSession,
+        request: Request,
         status: str | None = None,
         job_type: str | None = None,
         agent_filter: str | None = None,
@@ -153,6 +179,7 @@ class JobsViewService:
                 has_result=job.result is not None,
                 has_error=job.error is not None,
                 tags=job.tags,
+                urls=build_job_urls(request, job.id),
             )
             job_rows.append(job_row)
 
@@ -325,6 +352,7 @@ class JobsViewService:
         summary = await JobCoreService.get_job_status_summary(db)
         job_rows, total = await JobsViewService.list_jobs(
             db=db,
+            request=request,
             status=status,
             job_type=job_type,
             agent_filter=agent_filter,
@@ -354,6 +382,7 @@ class JobsViewService:
         ]
 
         return {
+            "create_form_url": request.url_for("job_create_form").path,
             "request": request,
             "current_user": current_user,
             "summary": summary,
@@ -384,6 +413,7 @@ class JobsViewService:
         offset = (page - 1) * per_page
         job_rows, total = await JobsViewService.list_jobs(
             db=db,
+            request=request,
             status=status,
             job_type=job_type or None,
             agent_filter=agent_filter,
@@ -436,6 +466,7 @@ class JobsViewService:
         alert_defaults = await SettingsCoreService.get_alert_defaults(db)
 
         return {
+            "job_urls": build_job_urls(request, job_id),
             "request": request,
             "current_user": current_user,
             "job": job,

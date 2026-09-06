@@ -31,7 +31,7 @@ async def scheduler_page(
     """
     Scheduler admin page - lists all job configurations with controls.
     """
-    context = await SchedulerViewService.get_list_context()
+    context = await SchedulerViewService.get_list_context(request)
 
     return templates.TemplateResponse(
         request,
@@ -54,7 +54,7 @@ async def toggle_job(
     Toggle job enabled/disabled state. Returns updated job row partial.
     """
     try:
-        row = await SchedulerViewService.toggle_job(job_key)
+        row = await SchedulerViewService.toggle_job(request, job_key)
 
         response = templates.TemplateResponse(
             request,
@@ -85,7 +85,7 @@ async def run_job(
     Execute a job immediately. Returns updated job row partial.
     """
     try:
-        data = await SchedulerViewService.run_job(job_key)
+        data = await SchedulerViewService.run_job(request, job_key)
         result = data["result"]
         row = data["row"]
 
@@ -119,7 +119,7 @@ async def reset_job(
     Reset job retry state and re-enable. Returns updated job row partial.
     """
     try:
-        row = await SchedulerViewService.reset_job(job_key)
+        row = await SchedulerViewService.reset_job(request, job_key)
 
         response = templates.TemplateResponse(
             request,
