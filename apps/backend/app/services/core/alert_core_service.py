@@ -712,6 +712,8 @@ class AlertCoreService:
         return True
 
     @staticmethod
+    # dropped-input: one of the _evaluate_* family, dispatched by trigger type on a
+    # shared signature; a threshold reads only the result and its own config.
     async def _evaluate_threshold(
         db: AsyncSession,
         alert: Alert,
@@ -868,7 +870,7 @@ class AlertCoreService:
         # De-duplication: Check if we should send this notification
         # Industry best practice - don't spam notifications for same status
         decision = await AlertCoreService._should_send_notification(
-            db, alert, check, check_result, is_recovery
+            db, alert, check, check_result
         )
 
         if not decision.send:
@@ -1056,7 +1058,6 @@ class AlertCoreService:
         alert: Alert,
         check: Check,
         check_result: CheckResult,
-        is_recovery: bool,
     ) -> SendDecision:
         """Decide whether to send and, if so, classify the send as fresh vs resend.
 

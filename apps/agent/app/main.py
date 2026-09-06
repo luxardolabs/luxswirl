@@ -116,6 +116,8 @@ async def main():
         if args.config:
             # Load from specified file
             config_path = Path(args.config)
+            # blocking-io: one stat at process startup, before any check is
+            # scheduled — there is no concurrent work on the loop to stall.
             if not config_path.exists():
                 logger.error(
                     "Config file not found",
