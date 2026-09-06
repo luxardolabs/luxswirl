@@ -144,8 +144,12 @@ class SchedulerViewService:
         row = {
             "job": job,
             "schedule_display": _format_schedule(job) if job else "",
-            "category_color": CATEGORY_COLORS.get(job.category, "gray") if job else "gray",
-            "status_color": STATUS_COLORS.get(job.last_status or "", "gray") if job else "gray",
+            "category_color": CATEGORY_COLORS.get(job.category, "gray")
+            if job
+            else "gray",
+            "status_color": STATUS_COLORS.get(job.last_status or "", "gray")
+            if job
+            else "gray",
             "is_running": _is_running(job) if job else False,
             "avg_duration": _format_duration(job.average_duration) if job else "-",
             "now": now,

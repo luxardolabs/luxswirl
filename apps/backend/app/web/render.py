@@ -3,7 +3,7 @@
 Web routers must contain ONLY route handlers (LUXSWIRL-172) — the small,
 repeated "render an error/status partial" helpers that used to be duplicated as
 module-level functions in each router live here instead. This module is not a
-router, so it may import the User model and own these `templates.TemplateResponse`
+router, so it owns these `templates.TemplateResponse`
 builders.
 """
 
@@ -14,16 +14,18 @@ from fastapi import HTTPException, Request, status
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.auth_deps import AuthedUser
 from app.core.config import settings
-from app.models.user_model import User
-from app.services.views.notification_logs_view_service import NotificationLogsViewService
+from app.services.views.notification_logs_view_service import (
+    NotificationLogsViewService,
+)
 from app.web.hx_responses import hx_toast_trigger, hx_trigger
 from app.web.templates_config import templates
 
 
 def error_partial(
     request: Request,
-    current_user: User | None,
+    current_user: AuthedUser | None,
     error: str,
     status_code: int = status.HTTP_400_BAD_REQUEST,
     template: str = "partials/error_message.html",
@@ -40,7 +42,7 @@ def error_partial(
 
 def error_page(
     request: Request,
-    current_user: User | None,
+    current_user: AuthedUser | None,
     error: str,
     status_code: int = status.HTTP_500_INTERNAL_SERVER_ERROR,
     page_title: str = "Error",
@@ -66,7 +68,12 @@ def public_error_page(
     return templates.TemplateResponse(
         request,
         "pages/public_error.html",
-        {"error": error, "error_title": title, "page_title": title, "status_page": None},
+        {
+            "error": error,
+            "error_title": title,
+            "page_title": title,
+            "status_page": None,
+        },
         status_code=status_code,
     )
 
@@ -126,7 +133,9 @@ def status_message(
     context: dict[str, Any] = {"kind": kind, "message": message}
     if extra:
         context.update(extra)
-    return templates.TemplateResponse(request, template, context, status_code=status_code)
+    return templates.TemplateResponse(
+        request, template, context, status_code=status_code
+    )
 
 
 def toast_partial(
@@ -147,19 +156,26 @@ def toast_partial(
 
 
 def job_status_oob_response(
-    request: Request, current_user: User, job: Any, message: str, toast_kind: str = "success"
+    request: Request,
+    current_user: AuthedUser,
+    job: Any,
+    message: str,
+    toast_kind: str = "success",
 ) -> HTMLResponse:
     """Render the maintenance job_status partial into the OOB status slot + a toast."""
-    partial_html = templates.get_template("partials/maintenance/job_status.html").render(
-        job=job, request=request, current_user=current_user
-    )
+    partial_html = templates.get_template(
+        "partials/maintenance/job_status.html"
+    ).render(job=job, request=request, current_user=current_user)
     oob_body = f'<div id="maintenance-status-slot" hx-swap-oob="innerHTML">{partial_html}</div>'
     return HTMLResponse(
         content=oob_body,
         status_code=200,
         headers={
             "HX-Trigger": hx_trigger(
-                {"showToast": {"message": message, "type": toast_kind}, "bulkActionComplete": None}
+                {
+                    "showToast": {"message": message, "type": toast_kind},
+                    "bulkActionComplete": None,
+                }
             )
         },
     )
@@ -167,7 +183,9 @@ def job_status_oob_response(
 
 def bulk_oob_response(oob_context: dict, message: str, toast_kind: str) -> HTMLResponse:
     """Render the OOB-swap bulk-response template + HX-Trigger toast headers."""
-    body = templates.get_template("partials/checks/bulk_oob_response.html").render(**oob_context)
+    body = templates.get_template("partials/checks/bulk_oob_response.html").render(
+        **oob_context
+    )
     return HTMLResponse(
         content=body,
         status_code=200,
@@ -184,7 +202,7 @@ def bulk_oob_response(oob_context: dict, message: str, toast_kind: str) -> HTMLR
 
 def bulk_check_response(
     request: Request,
-    current_user: User,
+    current_user: AuthedUser,
     result: Any,
     error: str | None,
     success_label: str,

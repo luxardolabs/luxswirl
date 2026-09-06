@@ -24,7 +24,9 @@ class SessionCRUD:
     @staticmethod
     async def get_by_token_hash(db: AsyncSession, token_hash: str) -> Session | None:
         """Look up session by hashed token."""
-        result = await db.execute(select(Session).where(Session.token_hash == token_hash))
+        result = await db.execute(
+            select(Session).where(Session.token_hash == token_hash)
+        )
         return result.scalar_one_or_none()
 
     @staticmethod
@@ -39,7 +41,9 @@ class SessionCRUD:
         return list(result.scalars().all())
 
     @staticmethod
-    async def get_for_user(db: AsyncSession, session_id: UUID, user_id: UUID) -> Session | None:
+    async def get_for_user(
+        db: AsyncSession, session_id: UUID, user_id: UUID
+    ) -> Session | None:
         """Look up session that belongs to a user."""
         result = await db.execute(
             select(Session).where(Session.id == session_id, Session.user_id == user_id)
@@ -49,5 +53,7 @@ class SessionCRUD:
     @staticmethod
     async def list_expired(db: AsyncSession) -> list[Session]:
         """All sessions with expires_at <= now."""
-        result = await db.execute(select(Session).where(Session.expires_at <= utc_now()))
+        result = await db.execute(
+            select(Session).where(Session.expires_at <= utc_now())
+        )
         return list(result.scalars().all())

@@ -10,7 +10,10 @@ from typing import Any
 import aiosmtplib
 from shared.logger import get_logger
 
-from app.notifications.providers.base import BaseNotificationProvider, NotificationContext
+from app.notifications.providers.base import (
+    BaseNotificationProvider,
+    NotificationContext,
+)
 
 
 class EmailNotificationProvider(BaseNotificationProvider):

@@ -19,7 +19,9 @@ class CheckBase(BaseSchema):
     # CheckType IS the validation — bad value is a 422, no hand-maintained list.
     check_type: CheckType = Field(..., description="Type of check")
     target: str = Field(..., min_length=1, max_length=512, description="Check target")
-    description: str | None = Field(None, max_length=1000, description="Check description")
+    description: str | None = Field(
+        None, max_length=1000, description="Check description"
+    )
 
 
 class CheckCreate(CheckBase):
@@ -28,7 +30,9 @@ class CheckCreate(CheckBase):
     interval_seconds: int | None = Field(
         None, gt=0, le=86400, description="Check interval in seconds"
     )
-    timeout_seconds: int = Field(10, gt=0, le=300, description="Check timeout in seconds")
+    timeout_seconds: int = Field(
+        10, gt=0, le=300, description="Check timeout in seconds"
+    )
     enabled: bool = Field(True, description="Whether check is enabled")
 
     # Retry configuration
@@ -50,11 +54,14 @@ class CheckCreate(CheckBase):
         le=100,
         description="Resend notification if down X times consecutively (NULL = disabled)",
     )
-    tags: list[str] | None = Field(None, description="Tags for organizing/filtering checks")
+    tags: list[str] | None = Field(
+        None, description="Tags for organizing/filtering checks"
+    )
 
     # Agent assignment (Phase 2)
     assignment_mode: AssignmentMode = Field(
-        AssignmentMode.MANUAL, description="Assignment mode: manual, replicate, distribute"
+        AssignmentMode.MANUAL,
+        description="Assignment mode: manual, replicate, distribute",
     )
     agent_selector: dict | None = Field(
         None, description="Agent selector for replicate/distribute modes"
@@ -69,13 +76,19 @@ class CheckCreate(CheckBase):
     # These fields come from UI forms and get packed into check_config
     http_method: str | None = Field(None, max_length=10, description="HTTP method")
     verify_ssl: bool | None = Field(None, description="Verify SSL certificates")
-    expected_status: int | None = Field(None, ge=100, le=599, description="Expected HTTP status")
+    expected_status: int | None = Field(
+        None, ge=100, le=599, description="Expected HTTP status"
+    )
     json_path: str | None = Field(None, max_length=500, description="JSON path")
-    expected_value: str | None = Field(None, max_length=500, description="Expected value")
+    expected_value: str | None = Field(
+        None, max_length=500, description="Expected value"
+    )
     record_type: str | None = Field(None, max_length=10, description="DNS record type")
     nameserver: str | None = Field(None, max_length=255, description="DNS nameserver")
     port: int | None = Field(None, ge=1, le=65535, description="Port number")
-    expect_value: str | None = Field(None, max_length=500, description="Expected DNS value")
+    expect_value: str | None = Field(
+        None, max_length=500, description="Expected DNS value"
+    )
     connection_string: str | None = Field(
         None, max_length=1000, description="Database connection string"
     )
@@ -178,10 +191,16 @@ class CheckInDB(CheckBase, TimestampSchema):
 class CheckResponse(CheckInDB):
     """Schema for check API responses."""
 
-    fully_qualified_name: str = Field(..., description="Fully qualified check name (agent:check)")
+    fully_qualified_name: str = Field(
+        ..., description="Fully qualified check name (agent:check)"
+    )
     latest_status: str | None = Field(None, description="Latest check status")
-    latest_latency_ms: float | None = Field(None, description="Latest latency in milliseconds")
-    success_rate_24h: float | None = Field(None, description="24-hour success rate percentage")
+    latest_latency_ms: float | None = Field(
+        None, description="Latest latency in milliseconds"
+    )
+    success_rate_24h: float | None = Field(
+        None, description="24-hour success rate percentage"
+    )
 
     model_config = {
         "json_schema_extra": {
@@ -219,7 +238,9 @@ class CheckListResponse(BaseSchema):
 class BulkCheckCreateRequest(BaseSchema):
     """Schema for bulk check creation request (single item)."""
 
-    url: str = Field(..., min_length=1, max_length=512, description="URL or target to check")
+    url: str = Field(
+        ..., min_length=1, max_length=512, description="URL or target to check"
+    )
     display_name: str | None = Field(
         None,
         max_length=255,
@@ -228,16 +249,22 @@ class BulkCheckCreateRequest(BaseSchema):
     interval_seconds: int | None = Field(
         None, gt=0, le=86400, description="Check interval in seconds"
     )
-    timeout_seconds: int | None = Field(10, gt=0, le=300, description="Check timeout in seconds")
+    timeout_seconds: int | None = Field(
+        10, gt=0, le=300, description="Check timeout in seconds"
+    )
     enabled: bool = Field(True, description="Whether check is enabled")
-    tags: list[str] | None = Field(None, description="Tags for organizing/filtering checks")
+    tags: list[str] | None = Field(
+        None, description="Tags for organizing/filtering checks"
+    )
     expected_status: int | None = Field(
         None, ge=100, le=599, description="Expected HTTP status code"
     )
     http_method: str | None = Field(
         None, max_length=10, description="HTTP method (GET, POST, etc.)"
     )
-    verify_ssl: bool | None = Field(True, description="Verify SSL certificates for HTTPS")
+    verify_ssl: bool | None = Field(
+        True, description="Verify SSL certificates for HTTPS"
+    )
 
     model_config = {
         "json_schema_extra": {
@@ -259,7 +286,9 @@ class BulkCheckResult(BaseSchema):
     status: str = Field(..., description="Result status: 'success' or 'failed'")
     check_id: UUID | None = Field(None, description="Check UUID if successful")
     display_name: str | None = Field(None, description="Name assigned to the check")
-    check_type: str | None = Field(None, description="Detected check type (http, https, tcp, etc.)")
+    check_type: str | None = Field(
+        None, description="Detected check type (http, https, tcp, etc.)"
+    )
     error: str | None = Field(None, description="Error message if failed")
 
     model_config = {
@@ -282,7 +311,9 @@ class BulkCheckCreateResponse(BaseSchema):
     total: int = Field(..., description="Total number of checks requested")
     succeeded: int = Field(..., description="Number of successfully created checks")
     failed: int = Field(..., description="Number of failed checks")
-    results: list[BulkCheckResult] = Field(..., description="Detailed results for each check")
+    results: list[BulkCheckResult] = Field(
+        ..., description="Detailed results for each check"
+    )
 
     model_config = {
         "json_schema_extra": {

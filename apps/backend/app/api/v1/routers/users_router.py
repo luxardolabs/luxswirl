@@ -32,7 +32,9 @@ async def list_users(
     admin: AdminUser,
     db: Annotated[AsyncSession, Depends(get_db)],
     skip: Annotated[int, Query(ge=0, description="Number of records to skip")] = 0,
-    limit: Annotated[int, Query(ge=1, le=200, description="Maximum records to return")] = 50,
+    limit: Annotated[
+        int, Query(ge=1, le=200, description="Maximum records to return")
+    ] = 50,
     role: Annotated[str | None, Query(description="Filter by role")] = None,
     is_active: ActiveFilter = None,
     search: Annotated[str | None, Query(description="Search username or name")] = None,
@@ -311,7 +313,9 @@ async def reset_user_password(
             },
         )
 
-        return {"message": "Password reset successfully. All user sessions have been terminated."}
+        return {
+            "message": "Password reset successfully. All user sessions have been terminated."
+        }
 
     except ValueError as e:
         raise HTTPException(

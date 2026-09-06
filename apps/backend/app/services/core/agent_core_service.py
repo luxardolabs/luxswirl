@@ -130,7 +130,9 @@ class AgentCoreService:
             return agent, agent.id
 
         # replicate / distribute: pick first available agent as placeholder
-        agents, _ = await AgentCoreService.list_agents(db, limit=1, exclude_pending=True)
+        agents, _ = await AgentCoreService.list_agents(
+            db, limit=1, exclude_pending=True
+        )
         if not agents:
             raise AgentNotFoundException("No agents available")
         agent = agents[0]
@@ -180,7 +182,9 @@ class AgentCoreService:
         # Check if agent already exists
         existing = await AgentCoreService.get_agent_by_name(db, data.agent_name)
         if existing:
-            raise DuplicateResourceException(f"Agent with name '{data.agent_name}' already exists")
+            raise DuplicateResourceException(
+                f"Agent with name '{data.agent_name}' already exists"
+            )
 
         # Create new agent
         agent = Agent(
@@ -255,7 +259,9 @@ class AgentCoreService:
         return agent
 
     @staticmethod
-    async def update_agent(db: AsyncSession, agent_id: UUID, data: AgentUpdate) -> Agent:
+    async def update_agent(
+        db: AsyncSession, agent_id: UUID, data: AgentUpdate
+    ) -> Agent:
         """
         Update an agent.
 
@@ -456,9 +462,13 @@ class AgentCoreService:
         total_checks = row.total_checks or 0
         successful_checks = int(row.successful_checks or 0)
         failed_checks = total_checks - successful_checks
-        success_rate = (successful_checks / total_checks * 100) if total_checks > 0 else 0.0
+        success_rate = (
+            (successful_checks / total_checks * 100) if total_checks > 0 else 0.0
+        )
 
-        uptime_seconds = (utc_now() - agent.first_seen).total_seconds() if agent.first_seen else 0.0
+        uptime_seconds = (
+            (utc_now() - agent.first_seen).total_seconds() if agent.first_seen else 0.0
+        )
 
         return AgentStatsResponse(
             agent_name=agent.agent_name,
@@ -518,7 +528,9 @@ class AgentCoreService:
         agent.last_error = heartbeat.last_error_message
         agent.server_unreachable_count = heartbeat.server_unreachable_count
         agent.stored_reports_count = heartbeat.stored_reports_count
-        agent.stored_reports_oldest_timestamp = heartbeat.stored_reports_oldest_timestamp
+        agent.stored_reports_oldest_timestamp = (
+            heartbeat.stored_reports_oldest_timestamp
+        )
 
         # Update resource monitoring fields (SWIRL-57)
         agent.open_file_descriptors = heartbeat.open_file_descriptors
@@ -588,8 +600,12 @@ class AgentCoreService:
         """
         agent = await AgentCoreService.update_from_heartbeat(db, agent.id, heartbeat)
 
-        config_version = agent.checks_updated_at.isoformat() if agent.checks_updated_at else None
-        heartbeat_interval = agent.heartbeat_interval or settings.server.default_heartbeat_interval
+        config_version = (
+            agent.checks_updated_at.isoformat() if agent.checks_updated_at else None
+        )
+        heartbeat_interval = (
+            agent.heartbeat_interval or settings.server.default_heartbeat_interval
+        )
         check_sync_interval = (
             agent.check_sync_interval or settings.server.default_check_sync_interval
         )
@@ -686,7 +702,9 @@ class AgentCoreService:
         return agent, new_key
 
     @staticmethod
-    async def regenerate_agent_key(db: AsyncSession, agent_id: UUID) -> tuple[Agent, str]:
+    async def regenerate_agent_key(
+        db: AsyncSession, agent_id: UUID
+    ) -> tuple[Agent, str]:
         """
         Regenerate API key for agent (revokes old key).
 
@@ -796,7 +814,9 @@ class AgentCoreService:
         return agent, api_key
 
     @staticmethod
-    async def reject_agent(db: AsyncSession, agent_id: UUID, reason: str | None = None) -> Agent:
+    async def reject_agent(
+        db: AsyncSession, agent_id: UUID, reason: str | None = None
+    ) -> Agent:
         """
         Reject a pending agent.
 
@@ -823,7 +843,9 @@ class AgentCoreService:
         return agent
 
     @staticmethod
-    async def pause_agent(db: AsyncSession, agent_id: UUID, reason: str | None = None) -> Agent:
+    async def pause_agent(
+        db: AsyncSession, agent_id: UUID, reason: str | None = None
+    ) -> Agent:
         """
         Pause an active agent.
 
@@ -876,7 +898,9 @@ class AgentCoreService:
         return agent
 
     @staticmethod
-    async def disable_agent(db: AsyncSession, agent_id: UUID, reason: str | None = None) -> Agent:
+    async def disable_agent(
+        db: AsyncSession, agent_id: UUID, reason: str | None = None
+    ) -> Agent:
         """
         Disable an agent.
 
@@ -982,7 +1006,9 @@ class AgentCoreService:
         Returns:
             Sorted list of unique tag strings
         """
-        agents, _ = await AgentCoreService.list_agents(db, limit=10000, exclude_pending=True)
+        agents, _ = await AgentCoreService.list_agents(
+            db, limit=10000, exclude_pending=True
+        )
 
         tags_set = set()
         for agent in agents:

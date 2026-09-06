@@ -73,7 +73,9 @@ def load_or_generate(
 
     value = generator() if generator else secrets.token_urlsafe(nbytes)
     _write_file(path, value)
-    logger.info("Generated and persisted secret on first boot", extra={"secret_name": name})
+    logger.info(
+        "Generated and persisted secret on first boot", extra={"secret_name": name}
+    )
     return value, True
 
 

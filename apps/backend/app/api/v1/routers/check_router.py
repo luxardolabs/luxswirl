@@ -36,7 +36,9 @@ from app.services.core.check_core_service import CheckCoreService
 router = APIRouter(tags=["Checks"])
 
 # Management router (web UI / users call these)
-management_router = APIRouter(prefix="/agents/{agent_id}/checks", tags=["Checks - Management"])
+management_router = APIRouter(
+    prefix="/agents/{agent_id}/checks", tags=["Checks - Management"]
+)
 
 logger = get_logger("luxswirl.api.checks")
 
@@ -175,7 +177,9 @@ async def create_check(
 
         # API Bearer tokens are admin-equivalent by design (see SECURITY.md), so
         # synthetic checks are permitted on this path.
-        check = await CheckCoreService.create_check(db, agent.id, data, actor_is_admin=True)
+        check = await CheckCoreService.create_check(
+            db, agent.id, data, actor_is_admin=True
+        )
 
         fqn = f"{agent.agent_name or str(agent.id)}:{check.display_name}"
 
@@ -231,7 +235,9 @@ async def update_check(
         existing = await CheckCoreService.get_check_by_id(db, check_id)
         if existing.agent_id != agent_id:
             raise CheckNotFoundException("unknown", str(check_id))
-        check = await CheckCoreService.update_check(db, check_id, data, actor_is_admin=True)
+        check = await CheckCoreService.update_check(
+            db, check_id, data, actor_is_admin=True
+        )
 
         # Get agent for FQN
         agent = await AgentCoreService.get_agent_by_id(db, agent_id)

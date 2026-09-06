@@ -11,7 +11,10 @@ from fastapi.encoders import jsonable_encoder
 from shared.logger import get_logger
 
 from app.core.check_target_validator import validate_check_target
-from app.notifications.providers.base import BaseNotificationProvider, NotificationContext
+from app.notifications.providers.base import (
+    BaseNotificationProvider,
+    NotificationContext,
+)
 
 logger = get_logger("luxswirl.notifications.webhook")
 
@@ -47,7 +50,9 @@ class WebhookNotificationProvider(BaseNotificationProvider):
         # Validate URL format (basic check)
         url = config["post_url"]
         if not url.startswith(("http://", "https://")):
-            raise ValueError(f"Invalid webhook URL: {url}. Must start with http:// or https://")
+            raise ValueError(
+                f"Invalid webhook URL: {url}. Must start with http:// or https://"
+            )
 
         # SSRF protection: a webhook URL must not reach cloud-metadata / link-local
         # endpoints (e.g. 169.254.169.254). Private networks are allowed by default —
@@ -58,7 +63,9 @@ class WebhookNotificationProvider(BaseNotificationProvider):
         # Validate request body preset
         preset = config.get("request_body_preset", "json")
         if preset not in ["json", "form"]:
-            raise ValueError(f"Invalid request_body_preset: {preset}. Must be 'json' or 'form'")
+            raise ValueError(
+                f"Invalid request_body_preset: {preset}. Must be 'json' or 'form'"
+            )
 
         # Validate additional headers if provided
         if "additional_headers" in config:

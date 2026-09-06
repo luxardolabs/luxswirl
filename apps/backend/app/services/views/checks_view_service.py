@@ -15,6 +15,7 @@ from fastapi.responses import HTMLResponse, Response
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.auth_deps import AuthedUser
 from app.core.check_target_validator import CheckTargetBlockedError
 from app.core.exceptions import (
     AgentNotFoundException,
@@ -24,7 +25,6 @@ from app.core.synthetic_security import SyntheticSecurityError
 from app.models.agent_model import Agent
 from app.models.check_model import Check
 from app.models.enum_model import CheckType, MaintenanceJobKind, options_for
-from app.models.user_model import User
 from app.schemas.check_schema import BulkCheckCreateRequest, CheckCreate, CheckUpdate
 from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.alert_core_service import AlertCoreService
@@ -117,7 +117,9 @@ class ChecksViewService:
         Returns:
             List of Agent objects
         """
-        agents, _ = await AgentCoreService.list_agents(db, limit=10000, exclude_pending=True)
+        agents, _ = await AgentCoreService.list_agents(
+            db, limit=10000, exclude_pending=True
+        )
         return list(agents)
 
     @staticmethod
@@ -163,7 +165,9 @@ class ChecksViewService:
     @staticmethod
     async def get_agents_list(db: AsyncSession):
         """Get all agents for dropdowns (excludes pending)."""
-        agents, _ = await AgentCoreService.list_agents(db, limit=1000, exclude_pending=True)
+        agents, _ = await AgentCoreService.list_agents(
+            db, limit=1000, exclude_pending=True
+        )
         return agents
 
     @staticmethod
@@ -173,7 +177,9 @@ class ChecksViewService:
         return alerts
 
     @staticmethod
-    async def get_check_by_id(db: AsyncSession, check_id: UUID, include_script_code: bool = False):
+    async def get_check_by_id(
+        db: AsyncSession, check_id: UUID, include_script_code: bool = False
+    ):
         """Get check by ID."""
         return await CheckCoreService.get_check_by_id(
             db, check_id, include_script_code=include_script_code
@@ -188,7 +194,7 @@ class ChecksViewService:
     async def build_dependents_panel_context(
         db: AsyncSession,
         request: Request,
-        current_user: User,
+        current_user: AuthedUser,
         parent_check_id: UUID,
         check_type: CheckType | None = None,
         agent_name: str = "",
@@ -196,7 +202,9 @@ class ChecksViewService:
         search: str = "",
     ) -> dict[str, Any]:
         parent = await CheckCoreService.get_check_by_id(db, parent_check_id)
-        candidates = await CheckCoreService.list_potential_dependents(db, parent_check_id)
+        candidates = await CheckCoreService.list_potential_dependents(
+            db, parent_check_id
+        )
 
         search_lc = search.lower().strip()
         type_lc = check_type.lower().strip() if check_type else ""
@@ -226,7 +234,9 @@ class ChecksViewService:
             )
         )
 
-        current_ids = {c.id for c in candidates if c.depends_on_check_id == parent_check_id}
+        current_ids = {
+            c.id for c in candidates if c.depends_on_check_id == parent_check_id
+        }
         all_types = sorted({c.check_type for c in candidates})
         all_agents = sorted(
             {c.agent.agent_name for c in candidates if c.agent and c.agent.agent_name}
@@ -259,10 +269,14 @@ class ChecksViewService:
     async def get_eligible_parent_checks(
         db: AsyncSession, exclude_check_id: UUID | None = None
     ) -> dict[str, list[Check]]:
-        checks = await CheckCoreService.list_eligible_parents(db, exclude_check_id=exclude_check_id)
+        checks = await CheckCoreService.list_eligible_parents(
+            db, exclude_check_id=exclude_check_id
+        )
         grouped: dict[str, list[Check]] = {}
         for c in checks:
-            agent_name = c.agent.agent_name if c.agent and c.agent.agent_name else "unknown"
+            agent_name = (
+                c.agent.agent_name if c.agent and c.agent.agent_name else "unknown"
+            )
             grouped.setdefault(agent_name, []).append(c)
         for cs in grouped.values():
             cs.sort(key=lambda c: c.display_name.lower())
@@ -292,10 +306,14 @@ class ChecksViewService:
         Returns:
             Dict with check, agents, alerts, and assigned_alert_ids
         """
-        check = await ChecksViewService.get_check_by_id(db, check_id, include_script_code=True)
+        check = await ChecksViewService.get_check_by_id(
+            db, check_id, include_script_code=True
+        )
         agents = await ChecksViewService.get_agents_list(db)
         alerts = await ChecksViewService.get_alerts_list(db)
-        assigned_alert_ids = await ChecksViewService.get_alert_ids_for_check(db, check.id)
+        assigned_alert_ids = await ChecksViewService.get_alert_ids_for_check(
+            db, check.id
+        )
 
         return {
             "check": check,
@@ -411,7 +429,9 @@ class ChecksViewService:
             Sorted list of unique agent tags
         """
         available_tags = set()
-        agents, _ = await AgentCoreService.list_agents(db, limit=1000, exclude_pending=True)
+        agents, _ = await AgentCoreService.list_agents(
+            db, limit=1000, exclude_pending=True
+        )
         for agent in agents:
             for tag in agent.tags or []:
                 tag = tag.strip()
@@ -451,14 +471,16 @@ class ChecksViewService:
     async def build_assignment_mode_selector_context(
         db: AsyncSession,
         request: Request,
-        current_user: User,
+        current_user: AuthedUser,
         assignment_mode: str,
     ) -> dict[str, Any] | None:
         """HTMX selector partial. Returns None for manual mode (caller renders empty)."""
         if assignment_mode == "manual":
             return None
         available_tags = await ChecksViewService.get_available_agent_tags(db)
-        mode_title, mode_description = ChecksViewService.get_assignment_mode_text(assignment_mode)
+        mode_title, mode_description = ChecksViewService.get_assignment_mode_text(
+            assignment_mode
+        )
         return {
             "request": request,
             "current_user": current_user,
@@ -470,7 +492,7 @@ class ChecksViewService:
 
     @staticmethod
     async def build_create_form_context(
-        db: AsyncSession, request: Request, current_user: User
+        db: AsyncSession, request: Request, current_user: AuthedUser
     ) -> dict[str, Any]:
         """Empty 'new check' form context."""
         form_data = await ChecksViewService.get_check_create_form_data(db)
@@ -482,14 +504,16 @@ class ChecksViewService:
             "alerts": form_data["alerts"],
             "available_check_tags": await ChecksViewService.get_all_tags(db),
             "available_tags": await ChecksViewService.get_available_agent_tags(db),
-            "eligible_parent_checks": await ChecksViewService.get_eligible_parent_checks(db),
+            "eligible_parent_checks": await ChecksViewService.get_eligible_parent_checks(
+                db
+            ),
             "check_type_options": options_for(CheckType),
             **(await ChecksViewService.get_form_defaults(db)),
         }
 
     @staticmethod
     async def build_edit_form_context(
-        db: AsyncSession, request: Request, current_user: User, check_id: UUID
+        db: AsyncSession, request: Request, current_user: AuthedUser, check_id: UUID
     ) -> dict[str, Any]:
         """Populated edit form context (raises CheckNotFoundException)."""
         form_data = await ChecksViewService.get_check_edit_form_data(db, check_id)
@@ -517,7 +541,7 @@ class ChecksViewService:
 
     @staticmethod
     async def build_clone_form_context(
-        db: AsyncSession, request: Request, current_user: User, check_id: UUID
+        db: AsyncSession, request: Request, current_user: AuthedUser, check_id: UUID
     ) -> dict[str, Any]:
         """Populated clone form context (raises CheckNotFoundException)."""
         form_data = await ChecksViewService.get_check_clone_form_data(db, check_id)
@@ -528,7 +552,9 @@ class ChecksViewService:
             "check": check,
             "agents": form_data["agents"],
             "alerts": form_data["alerts"],
-            "assigned_alert_ids": await ChecksViewService.get_alert_ids_for_check(db, check.id),
+            "assigned_alert_ids": await ChecksViewService.get_alert_ids_for_check(
+                db, check.id
+            ),
             "available_check_tags": await ChecksViewService.get_all_tags(db),
             "available_tags": await ChecksViewService.get_available_agent_tags(db),
             "eligible_parent_checks": await ChecksViewService.get_eligible_parent_checks(
@@ -544,7 +570,7 @@ class ChecksViewService:
 
     @staticmethod
     def build_error_partial_context(
-        request: Request, current_user: User, error: str
+        request: Request, current_user: AuthedUser, error: str
     ) -> dict[str, Any]:
         """Common error-partial context."""
         return {
@@ -561,7 +587,7 @@ class ChecksViewService:
 
     @staticmethod
     def error_response(
-        request: Request, current_user: User, error: str, status_code: int
+        request: Request, current_user: AuthedUser, error: str, status_code: int
     ) -> Response:
         """Render the error-message partial as a response."""
         return templates.TemplateResponse(
@@ -581,7 +607,9 @@ class ChecksViewService:
         )
 
     @staticmethod
-    def job_status_response(request: Request, current_user: User, job: Any) -> Response:
+    def job_status_response(
+        request: Request, current_user: AuthedUser, job: Any
+    ) -> Response:
         """Render the maintenance-job polling partial for the side panel."""
         return templates.TemplateResponse(
             request,
@@ -595,7 +623,9 @@ class ChecksViewService:
         return {"check_id": check_id, "enabled": enabled}
 
     @staticmethod
-    def assert_synthetic_admin_create(check_type: str, current_user: User) -> str | None:
+    def assert_synthetic_admin_create(
+        check_type: str, current_user: AuthedUser
+    ) -> str | None:
         """Return error message if user can't create a synthetic check, else None."""
         if check_type == "synthetic" and current_user.role != "admin":
             logger.warning(
@@ -613,7 +643,7 @@ class ChecksViewService:
         new_check_type: str,
         existing_check: Check,
         script_code: str | None,
-        current_user: User,
+        current_user: AuthedUser,
     ) -> str | None:
         """Return error message if user can't update to/within a synthetic check."""
         if new_check_type == "synthetic" and current_user.role != "admin":
@@ -653,7 +683,7 @@ class ChecksViewService:
     async def handle_create_check_form(
         db: AsyncSession,
         request: Request,
-        current_user: User,
+        current_user: AuthedUser,
         form_kwargs: dict[str, Any],
     ) -> Response:
         """
@@ -661,7 +691,9 @@ class ChecksViewService:
         check create based on `check_type`. Synthetic checks require admin.
         """
         check_type = form_kwargs["check_type"]
-        denial = ChecksViewService.assert_synthetic_admin_create(check_type, current_user)
+        denial = ChecksViewService.assert_synthetic_admin_create(
+            check_type, current_user
+        )
         if denial is not None:
             return ChecksViewService.error_response(request, current_user, denial, 403)
 
@@ -740,7 +772,9 @@ class ChecksViewService:
                 verify_ssl=form_kwargs.get("verify_ssl", True),
                 retry_attempts=form_kwargs.get("retry_attempts", ""),
                 retry_interval_seconds=form_kwargs.get("retry_interval_seconds", ""),
-                resend_notification_after=form_kwargs.get("resend_notification_after", ""),
+                resend_notification_after=form_kwargs.get(
+                    "resend_notification_after", ""
+                ),
                 depends_on_check_id=form_kwargs.get("depends_on_check_id"),
             )
             await ChecksViewService.create_check(
@@ -778,7 +812,7 @@ class ChecksViewService:
         db: AsyncSession,
         request: Request,
         check_id: UUID,
-        current_user: User,
+        current_user: AuthedUser,
         form_kwargs: dict[str, Any],
     ) -> Response:
         """Orchestrate POST /checks/{id}/update. Synthetic admin gate, transform, update."""
@@ -791,11 +825,15 @@ class ChecksViewService:
                 current_user,
             )
             if denial is not None:
-                return ChecksViewService.error_response(request, current_user, denial, 403)
+                return ChecksViewService.error_response(
+                    request, current_user, denial, 403
+                )
 
             update_data = ChecksViewService.transform_form_data_for_update(
                 display_name=(
-                    form_kwargs["display_name"].strip() if form_kwargs.get("display_name") else None
+                    form_kwargs["display_name"].strip()
+                    if form_kwargs.get("display_name")
+                    else None
                 ),
                 target=form_kwargs.get("target"),
                 enabled=form_kwargs["enabled"],
@@ -819,7 +857,9 @@ class ChecksViewService:
                 verify_ssl=form_kwargs.get("verify_ssl"),
                 retry_attempts=form_kwargs.get("retry_attempts", ""),
                 retry_interval_seconds=form_kwargs.get("retry_interval_seconds", ""),
-                resend_notification_after=form_kwargs.get("resend_notification_after", ""),
+                resend_notification_after=form_kwargs.get(
+                    "resend_notification_after", ""
+                ),
                 depends_on_check_id=form_kwargs.get("depends_on_check_id"),
             )
             await ChecksViewService.update_check(
@@ -858,7 +898,7 @@ class ChecksViewService:
         db: AsyncSession,
         request: Request,
         source_check_id: UUID,
-        current_user: User,
+        current_user: AuthedUser,
         form_kwargs: dict[str, Any],
     ) -> Response:
         """Orchestrate POST /checks/{id}/clone."""
@@ -866,11 +906,16 @@ class ChecksViewService:
             source_check = await ChecksViewService.get_check_by_id(db, source_check_id)
 
             try:
-                target_agent, resolved_id = await AgentCoreService.resolve_for_assignment(
+                (
+                    target_agent,
+                    resolved_id,
+                ) = await AgentCoreService.resolve_for_assignment(
                     db, form_kwargs["agent_id"], form_kwargs["assignment_mode"]
                 )
             except AgentNotFoundException as e:
-                return ChecksViewService.error_response(request, current_user, str(e), 404)
+                return ChecksViewService.error_response(
+                    request, current_user, str(e), 404
+                )
 
             display_name = form_kwargs["display_name"]
             if not display_name or not display_name.strip():
@@ -901,7 +946,9 @@ class ChecksViewService:
                 verify_ssl=form_kwargs.get("verify_ssl", True),
                 retry_attempts=form_kwargs.get("retry_attempts", ""),
                 retry_interval_seconds=form_kwargs.get("retry_interval_seconds", ""),
-                resend_notification_after=form_kwargs.get("resend_notification_after", ""),
+                resend_notification_after=form_kwargs.get(
+                    "resend_notification_after", ""
+                ),
                 depends_on_check_id=form_kwargs.get("depends_on_check_id"),
             )
             cloned_check = await ChecksViewService.clone_check(
@@ -942,11 +989,13 @@ class ChecksViewService:
                 "enabled": updated_check.enabled,
             },
         )
-        return ChecksViewService.build_toggle_button_context(check_id, updated_check.enabled)
+        return ChecksViewService.build_toggle_button_context(
+            check_id, updated_check.enabled
+        )
 
     @staticmethod
     async def enqueue_check_delete(
-        db: AsyncSession, request: Request, current_user: User, check_id: UUID
+        db: AsyncSession, request: Request, current_user: AuthedUser, check_id: UUID
     ) -> Response:
         """Enqueue a background delete for a single check, returning the response.
 
@@ -1139,9 +1188,11 @@ class ChecksViewService:
             },
         )
 
-        action_past = {"enable": "Enabled", "disable": "Disabled", "delete": "Deleted"}.get(
-            action, action
-        )
+        action_past = {
+            "enable": "Enabled",
+            "disable": "Disabled",
+            "delete": "Deleted",
+        }.get(action, action)
         count = result["success_count"]
         message = f"{action_past} {count} check{'s' if count != 1 else ''}"
         if result["failure_count"] > 0:
@@ -1153,7 +1204,7 @@ class ChecksViewService:
     async def build_bulk_preview_context(
         db: AsyncSession,
         request: Request,
-        current_user: User,
+        current_user: AuthedUser,
         bulk_urls: str,
     ) -> dict[str, Any] | None:
         """Bulk preview partial context. Returns None if no URLs given."""
@@ -1171,7 +1222,7 @@ class ChecksViewService:
     async def build_table_partial_context(
         db: AsyncSession,
         request: Request,
-        current_user: User,
+        current_user: AuthedUser,
         agent: UUID | None,
         enabled: str,
         page: int,
@@ -1179,7 +1230,9 @@ class ChecksViewService:
     ) -> dict[str, Any]:
         """Checks-table partial context."""
         if per_page is None:
-            per_page = await ChecksViewService.get_setting(db, "general.default_page_size", 50)
+            per_page = await ChecksViewService.get_setting(
+                db, "general.default_page_size", 50
+            )
         offset = (page - 1) * per_page
         enabled_only = enabled == "true"
 
@@ -1316,7 +1369,9 @@ class ChecksViewService:
         # Parse optional integers
         timeout_seconds_int = ChecksViewService.parse_optional_int(timeout_seconds)
         retry_attempts_int = ChecksViewService.parse_optional_int(retry_attempts)
-        retry_interval_seconds_int = ChecksViewService.parse_optional_int(retry_interval_seconds)
+        retry_interval_seconds_int = ChecksViewService.parse_optional_int(
+            retry_interval_seconds
+        )
         resend_notification_after_int = ChecksViewService.parse_optional_int(
             resend_notification_after
         )
@@ -1418,7 +1473,9 @@ class ChecksViewService:
         # Parse optional integers
         timeout_seconds_int = ChecksViewService.parse_optional_int(timeout_seconds)
         retry_attempts_int = ChecksViewService.parse_optional_int(retry_attempts)
-        retry_interval_seconds_int = ChecksViewService.parse_optional_int(retry_interval_seconds)
+        retry_interval_seconds_int = ChecksViewService.parse_optional_int(
+            retry_interval_seconds
+        )
         resend_notification_after_int = ChecksViewService.parse_optional_int(
             resend_notification_after
         )
@@ -1510,7 +1567,9 @@ class ChecksViewService:
         """
         # Parse shared fields
         tags_list = ChecksViewService.parse_tags(tags)
-        timeout_seconds_int = ChecksViewService.parse_optional_int(timeout_seconds) or 10
+        timeout_seconds_int = (
+            ChecksViewService.parse_optional_int(timeout_seconds) or 10
+        )
         ChecksViewService.parse_optional_int(retry_attempts)
         ChecksViewService.parse_optional_int(retry_interval_seconds)
         ChecksViewService.parse_optional_int(resend_notification_after)

@@ -17,7 +17,7 @@ from app.services.core.alert_core_service import AlertCoreService
 from app.services.core.notification_core_service import NotificationCoreService
 from app.services.core.registration_key_core_service import RegistrationKeyCoreService
 from app.services.core.settings_core_service import SettingsCoreService
-from app.services.core.timescale_core_service import TimescaleCoreService  # noqa: F401
+from app.services.core.timescale_core_service import TimescaleCoreService
 from app.services.core.user_core_service import UserCoreService
 from app.web.template_filters import update_settings_cache
 
@@ -55,13 +55,17 @@ class SettingsViewService:
             parsed_value = SettingsViewService._parse_value(value, value_type)
 
             # Update setting
-            updated_setting = await SettingsCoreService.update_setting(db, key, parsed_value)
+            updated_setting = await SettingsCoreService.update_setting(
+                db, key, parsed_value
+            )
 
             # Update template filter cache if needed
             SettingsViewService._update_template_cache_if_needed(key, parsed_value)
 
             # Update TimescaleDB policies if database setting was changed
-            await SettingsViewService._update_timescale_policies_if_needed(db, key, parsed_value)
+            await SettingsViewService._update_timescale_policies_if_needed(
+                db, key, parsed_value
+            )
 
             return updated_setting, None
 
@@ -176,7 +180,9 @@ class SettingsViewService:
             Dict mapping subcategory names to lists of setting objects,
             sorted by subcategory name.
         """
-        all_security_settings = await SettingsCoreService.get_settings_by_category(db, "security")
+        all_security_settings = await SettingsCoreService.get_settings_by_category(
+            db, "security"
+        )
 
         security_groups = defaultdict(list)
         for setting in all_security_settings:
@@ -239,7 +245,9 @@ class SettingsViewService:
         if timeout_int < 30 or timeout_int > 3600:
             return None, "Timeout must be between 30 and 3600 seconds"
 
-        await SettingsCoreService.update_setting(db, "metrics.agent_timeout_seconds", timeout_int)
+        await SettingsCoreService.update_setting(
+            db, "metrics.agent_timeout_seconds", timeout_int
+        )
 
         metrics_settings = await SettingsCoreService.get_metrics_settings(db)
         return metrics_settings, None
@@ -296,7 +304,9 @@ class SettingsViewService:
     ) -> dict[str, Any]:
         """/settings/alerts page context (paginated, filtered)."""
         if per_page is None:
-            per_page = await SettingsCoreService.get_setting(db, "general.default_page_size", 50)
+            per_page = await SettingsCoreService.get_setting(
+                db, "general.default_page_size", 50
+            )
         offset = (page - 1) * per_page
         alerts, total = await AlertCoreService.list_alerts(
             db=db,
@@ -306,7 +316,9 @@ class SettingsViewService:
             is_global=is_global,
         )
         filters = {"is_enabled": is_enabled, "is_global": is_global}
-        pagination = build_pagination(page=page, per_page=per_page, total=total, filters=filters)
+        pagination = build_pagination(
+            page=page, per_page=per_page, total=total, filters=filters
+        )
         return {
             "request": request,
             "current_user": current_user,
@@ -340,7 +352,9 @@ class SettingsViewService:
         }
 
     @staticmethod
-    def build_components_context(request: Request, current_user: AuthedUser) -> dict[str, Any]:
+    def build_components_context(
+        request: Request, current_user: AuthedUser
+    ) -> dict[str, Any]:
         """/settings/components — purely presentational, no DB."""
         return {
             "request": request,
@@ -356,13 +370,27 @@ class SettingsViewService:
         return {
             "request": request,
             "current_user": current_user,
-            "check_settings": await SettingsCoreService.get_settings_by_category(db, "check"),
-            "alert_settings": await SettingsCoreService.get_settings_by_category(db, "alert"),
-            "system_settings": await SettingsCoreService.get_settings_by_category(db, "system"),
-            "job_settings": await SettingsCoreService.get_settings_by_category(db, "job"),
-            "security_groups": await SettingsViewService.get_grouped_security_settings(db),
-            "general_settings": await SettingsCoreService.get_settings_by_category(db, "general"),
-            "database_settings": await SettingsCoreService.get_settings_by_category(db, "database"),
+            "check_settings": await SettingsCoreService.get_settings_by_category(
+                db, "check"
+            ),
+            "alert_settings": await SettingsCoreService.get_settings_by_category(
+                db, "alert"
+            ),
+            "system_settings": await SettingsCoreService.get_settings_by_category(
+                db, "system"
+            ),
+            "job_settings": await SettingsCoreService.get_settings_by_category(
+                db, "job"
+            ),
+            "security_groups": await SettingsViewService.get_grouped_security_settings(
+                db
+            ),
+            "general_settings": await SettingsCoreService.get_settings_by_category(
+                db, "general"
+            ),
+            "database_settings": await SettingsCoreService.get_settings_by_category(
+                db, "database"
+            ),
             "page_title": "Settings - Defaults",
         }
 
@@ -416,13 +444,21 @@ class SettingsViewService:
     @staticmethod
     async def toggle_metrics_enabled(db: AsyncSession):
         """Toggle metrics endpoint on/off; return updated metrics_settings."""
-        current_value = await SettingsCoreService.get_setting(db, "metrics.enabled", True)
-        await SettingsCoreService.update_setting(db, "metrics.enabled", not current_value)
+        current_value = await SettingsCoreService.get_setting(
+            db, "metrics.enabled", True
+        )
+        await SettingsCoreService.update_setting(
+            db, "metrics.enabled", not current_value
+        )
         return await SettingsCoreService.get_metrics_settings(db)
 
     @staticmethod
     async def toggle_metrics_auth(db: AsyncSession):
         """Toggle metrics auth on/off; return updated metrics_settings."""
-        current_value = await SettingsCoreService.get_setting(db, "metrics.auth_required", False)
-        await SettingsCoreService.update_setting(db, "metrics.auth_required", not current_value)
+        current_value = await SettingsCoreService.get_setting(
+            db, "metrics.auth_required", False
+        )
+        await SettingsCoreService.update_setting(
+            db, "metrics.auth_required", not current_value
+        )
         return await SettingsCoreService.get_metrics_settings(db)

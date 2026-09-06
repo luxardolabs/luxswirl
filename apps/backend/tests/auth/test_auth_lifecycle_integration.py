@@ -285,7 +285,7 @@ class TestChangePassword:
         await db.flush()
         original_hash = user.password_hash
 
-        await auth.change_password(db, user, "TestPass123!", "NewPassword456!")
+        await auth.change_password(db, user.id, "TestPass123!", "NewPassword456!")
         await db.refresh(user)
         assert user.password_hash != original_hash
         # New password works
@@ -299,7 +299,7 @@ class TestChangePassword:
         await db.flush()
 
         with pytest.raises(ValueError, match="Current password is incorrect"):
-            await auth.change_password(db, user, "wrong-old", "NewPassword456!")
+            await auth.change_password(db, user.id, "wrong-old", "NewPassword456!")
 
     async def test_password_change_invalidates_existing_sessions(self, db: AsyncSession, auth):
         """Security: changing the password destroys all live sessions so a
@@ -311,5 +311,5 @@ class TestChangePassword:
             await auth.create_session(db, user)
         assert len(await auth.get_user_sessions(db, user.id)) == 3
 
-        await auth.change_password(db, user, "TestPass123!", "NewPassword456!")
+        await auth.change_password(db, user.id, "TestPass123!", "NewPassword456!")
         assert await auth.get_user_sessions(db, user.id) == []

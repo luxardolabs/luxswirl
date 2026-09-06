@@ -157,7 +157,9 @@ async def create_provider(
     try:
         provider = await NotificationCoreService.create_provider(db, data)
     except ValidationException as e:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from e
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)
+        ) from e
     except DuplicateResourceException as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) from e
 
@@ -193,7 +195,9 @@ async def update_provider(
     except NotFoundException as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
     except ValidationException as e:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from e
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)
+        ) from e
 
     return NotificationProviderResponse(
         id=provider.id,
@@ -219,11 +223,15 @@ async def delete_provider(
     provider_id: Annotated[UUID, Path(description="Provider UUID")],
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[str, Depends(verify_api_token)],
-    hard_delete: Annotated[bool, Query(description="Permanently delete (not recommended)")] = False,
+    hard_delete: Annotated[
+        bool, Query(description="Permanently delete (not recommended)")
+    ] = False,
 ):
     """Delete a notification provider."""
     try:
-        await NotificationCoreService.delete_provider(db, provider_id, hard_delete=hard_delete)
+        await NotificationCoreService.delete_provider(
+            db, provider_id, hard_delete=hard_delete
+        )
     except NotFoundException as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
 

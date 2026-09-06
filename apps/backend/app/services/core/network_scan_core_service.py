@@ -67,7 +67,9 @@ class NetworkScanCoreService:
             "ssh_servers": len(ssh_servers),
             "database_servers": len(database_servers),
             "other_services": len(other_hosts),
-            "no_open_ports": len([h for h in discovered_hosts if not h.get("open_ports")]),
+            "no_open_ports": len(
+                [h for h in discovered_hosts if not h.get("open_ports")]
+            ),
         }
 
         # Generate summary
@@ -116,7 +118,9 @@ class NetworkScanCoreService:
 
         # Add port-aware categorization (used by templates rendering "Monitor All Web/SSH/DB" buttons)
         enriched.update(
-            NetworkScanCoreService._categorize_by_scanned_ports(result, discovered_hosts)
+            NetworkScanCoreService._categorize_by_scanned_ports(
+                result, discovered_hosts
+            )
         )
 
         logger.info(
@@ -166,7 +170,9 @@ class NetworkScanCoreService:
                 if active_ports:
                     active_categories[category] = active_ports
 
-        categorized: dict[str, list[dict[str, Any]]] = {cat: [] for cat in active_categories}
+        categorized: dict[str, list[dict[str, Any]]] = {
+            cat: [] for cat in active_categories
+        }
 
         for host in discovered_hosts:
             open_ports = host.get("open_ports", [])
@@ -188,7 +194,9 @@ class NetworkScanCoreService:
                 if category in categorized:
                     categorized[category].append(host)
 
-        summary_parts = [f"{len(hosts)} {cat}" for cat, hosts in categorized.items() if hosts]
+        summary_parts = [
+            f"{len(hosts)} {cat}" for cat, hosts in categorized.items() if hosts
+        ]
         port_aware_summary = (
             f"Discovered {len(discovered_hosts)} host(s): {', '.join(summary_parts)}"
             if summary_parts

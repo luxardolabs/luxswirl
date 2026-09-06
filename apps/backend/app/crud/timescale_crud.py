@@ -15,7 +15,9 @@ class TimescaleCRUD:
     @staticmethod
     async def remove_retention_policy(db: AsyncSession, hypertable_name: str) -> None:
         await db.execute(
-            text(f"SELECT remove_retention_policy('{hypertable_name}', if_exists => TRUE)")
+            text(
+                f"SELECT remove_retention_policy('{hypertable_name}', if_exists => TRUE)"
+            )
         )
 
     @staticmethod
@@ -32,7 +34,9 @@ class TimescaleCRUD:
     @staticmethod
     async def remove_compression_policy(db: AsyncSession, hypertable_name: str) -> None:
         await db.execute(
-            text(f"SELECT remove_compression_policy('{hypertable_name}', if_exists => TRUE)")
+            text(
+                f"SELECT remove_compression_policy('{hypertable_name}', if_exists => TRUE)"
+            )
         )
 
     @staticmethod
@@ -210,7 +214,9 @@ class TimescaleCRUD:
         )
 
     @staticmethod
-    async def get_growth_buckets(db: AsyncSession, bucket: str, hours: int) -> list[tuple]:
+    async def get_growth_buckets(
+        db: AsyncSession, bucket: str, hours: int
+    ) -> list[tuple]:
         """Returns time-bucketed (timestamp, result_count, artifact_bytes, check_count, agent_metric_count)."""
         result = await db.execute(
             text(

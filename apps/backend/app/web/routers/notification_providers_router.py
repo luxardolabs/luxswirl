@@ -47,7 +47,9 @@ async def create_provider_form(
         return error_partial(request, current_user, str(e), 500)
 
 
-@router.get("/notification-providers/{provider_id}/edit-form", response_class=HTMLResponse)
+@router.get(
+    "/notification-providers/{provider_id}/edit-form", response_class=HTMLResponse
+)
 async def edit_provider_form(
     request: Request,
     provider_id: UUID,
@@ -88,7 +90,9 @@ async def create_provider(
         return error_partial(request, current_user, str(e), 400)
 
 
-@router.post("/notification-providers/{provider_id}/update", response_class=HTMLResponse)
+@router.post(
+    "/notification-providers/{provider_id}/update", response_class=HTMLResponse
+)
 async def update_provider(
     request: Request,
     provider_id: UUID,
@@ -98,7 +102,9 @@ async def update_provider(
     """Update an existing notification provider."""
     try:
         form = await request.form()
-        await NotificationProvidersViewService.update_provider(db, provider_id, dict(form))
+        await NotificationProvidersViewService.update_provider(
+            db, provider_id, dict(form)
+        )
         return HTMLResponse(
             content="",
             status_code=200,
@@ -125,7 +131,9 @@ async def delete_provider(
         return error_partial(request, current_user, str(e), 400)
 
 
-@router.post("/notification-providers/{provider_id}/toggle", response_class=HTMLResponse)
+@router.post(
+    "/notification-providers/{provider_id}/toggle", response_class=HTMLResponse
+)
 async def toggle_provider(
     request: Request,
     provider_id: UUID,
@@ -135,7 +143,9 @@ async def toggle_provider(
     """Toggle notification provider enabled/disabled status."""
     try:
         await NotificationProvidersViewService.toggle_provider(db, provider_id)
-        return HTMLResponse(content="", status_code=200, headers={"HX-Trigger": "refreshPage"})
+        return HTMLResponse(
+            content="", status_code=200, headers={"HX-Trigger": "refreshPage"}
+        )
     except Exception as e:
         logger.error("Error toggling provider", exc_info=True)
         return error_partial(request, current_user, str(e), 400)
@@ -150,7 +160,9 @@ async def test_provider(
 ):
     """Send a test notification through this provider (toast feedback)."""
     try:
-        success, error_msg = await NotificationProvidersViewService.test_provider(db, provider_id)
+        success, error_msg = await NotificationProvidersViewService.test_provider(
+            db, provider_id
+        )
         if success:
             return hx_empty_with_toast("Test notification sent successfully!")
         return hx_empty_with_toast(f"Test failed: {error_msg}", kind="error")

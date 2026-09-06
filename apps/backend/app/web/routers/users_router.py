@@ -48,7 +48,9 @@ async def users_page(
     return templates.TemplateResponse(request, "pages/settings/users.html", context)
 
 
-@router.get("/users/partials/table", response_class=HTMLResponse, include_in_schema=False)
+@router.get(
+    "/users/partials/table", response_class=HTMLResponse, include_in_schema=False
+)
 async def users_table_partial(
     request: Request,
     user: AdminUser,
@@ -70,7 +72,9 @@ async def users_table_partial(
         is_active=is_active,
         search=search,
     )
-    return templates.TemplateResponse(request, "partials/settings/users_table.html", context)
+    return templates.TemplateResponse(
+        request, "partials/settings/users_table.html", context
+    )
 
 
 @router.get("/users/create-form", response_class=HTMLResponse, include_in_schema=False)
@@ -153,7 +157,9 @@ async def create_user_submit(
     )
 
 
-@router.get("/users/{user_id}/edit-form", response_class=HTMLResponse, include_in_schema=False)
+@router.get(
+    "/users/{user_id}/edit-form", response_class=HTMLResponse, include_in_schema=False
+)
 async def edit_user_form(
     request: Request,
     user_id: UUID,
@@ -209,7 +215,9 @@ async def edit_user_form(
         )
 
 
-@router.post("/users/{user_id}/update", response_class=HTMLResponse, include_in_schema=False)
+@router.post(
+    "/users/{user_id}/update", response_class=HTMLResponse, include_in_schema=False
+)
 async def update_user_submit(
     request: Request,
     user_id: UUID,
@@ -330,9 +338,13 @@ async def reset_user_password(
     target_user = await web_users.get_user(db, user_id)
 
     if not target_user:
-        return RedirectResponse(url="/settings/users?error=User not found", status_code=302)
+        return RedirectResponse(
+            url="/settings/users?error=User not found", status_code=302
+        )
 
-    success, error = await web_users.reset_password(db, user_id, new_password, must_change)
+    success, error = await web_users.reset_password(
+        db, user_id, new_password, must_change
+    )
 
     if error:
         return RedirectResponse(

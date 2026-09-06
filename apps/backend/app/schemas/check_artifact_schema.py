@@ -21,7 +21,9 @@ class CheckArtifactCreate(BaseSchema):
 
     check_id: UUID = Field(..., description="Check UUID this artifact belongs to")
     check_result_id: UUID = Field(..., description="Check result UUID (from agent)")
-    check_result_timestamp: datetime = Field(..., description="Check result timestamp (from agent)")
+    check_result_timestamp: datetime = Field(
+        ..., description="Check result timestamp (from agent)"
+    )
     artifact_type: str = Field(
         ...,
         description="Type of artifact: screenshot, trace, video, har",
@@ -30,7 +32,9 @@ class CheckArtifactCreate(BaseSchema):
     content_type: str = Field(
         ..., description="MIME type: image/png, application/zip, video/mp4, etc"
     )
-    filename: str = Field(..., description="Original filename for download", max_length=255)
+    filename: str = Field(
+        ..., description="Original filename for download", max_length=255
+    )
     data_base64: str = Field(..., description="Binary artifact data (base64 encoded)")
 
     def get_binary_data(self) -> bytes:

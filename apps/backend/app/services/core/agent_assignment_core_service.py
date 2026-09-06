@@ -163,20 +163,28 @@ class AgentAssignmentCoreService:
 
             elif check.assignment_mode == "replicate":
                 # REPLICATE: Check runs on ALL matching agents
-                if AgentAssignmentCoreService.agent_matches_selector(agent, check.agent_selector):
+                if AgentAssignmentCoreService.agent_matches_selector(
+                    agent, check.agent_selector
+                ):
                     checks_to_run.append(check)
 
             elif check.assignment_mode == "distribute":
                 # DISTRIBUTE: Check assigned to ONE agent via hash
-                if AgentAssignmentCoreService.agent_matches_selector(agent, check.agent_selector):
+                if AgentAssignmentCoreService.agent_matches_selector(
+                    agent, check.agent_selector
+                ):
                     # Get all matching agents for this check
-                    matching_agents = await AgentAssignmentCoreService.get_matching_agents(
-                        db, check.agent_selector
+                    matching_agents = (
+                        await AgentAssignmentCoreService.get_matching_agents(
+                            db, check.agent_selector
+                        )
                     )
 
                     # Determine assigned agent via hash
-                    assigned_agent = AgentAssignmentCoreService.get_assigned_agent_for_check(
-                        check, matching_agents
+                    assigned_agent = (
+                        AgentAssignmentCoreService.get_assigned_agent_for_check(
+                            check, matching_agents
+                        )
                     )
 
                     # Add check if this agent was assigned

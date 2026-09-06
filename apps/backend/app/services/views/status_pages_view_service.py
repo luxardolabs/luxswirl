@@ -64,7 +64,9 @@ class StatusPagesViewService:
     ) -> dict[str, Any]:
         """Status-pages index (paginated)."""
         if per_page is None:
-            per_page = await SettingsCoreService.get_setting(db, "general.default_page_size", 50)
+            per_page = await SettingsCoreService.get_setting(
+                db, "general.default_page_size", 50
+            )
         offset = (page - 1) * per_page
 
         is_public_filter: bool | None = None
@@ -80,7 +82,9 @@ class StatusPagesViewService:
         private_count = await StatusPageCoreService.get_private_count(db)
 
         filters = {"is_public": is_public}
-        pagination = build_pagination(page=page, per_page=per_page, total=total, filters=filters)
+        pagination = build_pagination(
+            page=page, per_page=per_page, total=total, filters=filters
+        )
         return {
             "request": request,
             "current_user": current_user,
@@ -93,7 +97,9 @@ class StatusPagesViewService:
         }
 
     @staticmethod
-    def build_create_form_context(request: Request, current_user: AuthedUser) -> dict[str, Any]:
+    def build_create_form_context(
+        request: Request, current_user: AuthedUser
+    ) -> dict[str, Any]:
         """Empty status-page form."""
         return {
             "request": request,
@@ -103,10 +109,15 @@ class StatusPagesViewService:
 
     @staticmethod
     async def build_edit_form_context(
-        db: AsyncSession, request: Request, current_user: AuthedUser, status_page_id: UUID
+        db: AsyncSession,
+        request: Request,
+        current_user: AuthedUser,
+        status_page_id: UUID,
     ) -> dict[str, Any]:
         """Populated status-page form (raises StatusPageNotFoundException if missing)."""
-        status_page = await StatusPageCoreService.get_status_page_by_id(db, status_page_id)
+        status_page = await StatusPageCoreService.get_status_page_by_id(
+            db, status_page_id
+        )
         return {
             "request": request,
             "current_user": current_user,
@@ -115,14 +126,23 @@ class StatusPagesViewService:
 
     @staticmethod
     async def build_manage_context(
-        db: AsyncSession, request: Request, current_user: AuthedUser, status_page_id: UUID
+        db: AsyncSession,
+        request: Request,
+        current_user: AuthedUser,
+        status_page_id: UUID,
     ) -> dict[str, Any]:
         """Full manage page — items, filters, available checks."""
-        status_page = await StatusPageCoreService.get_status_page_by_id(db, status_page_id)
+        status_page = await StatusPageCoreService.get_status_page_by_id(
+            db, status_page_id
+        )
         context = await DashboardRender.build_dashboard_context(db, status_page)
         all_tags = await CheckCoreService.get_all_tags_combined(db)
-        filtered_checks = await DashboardRender.get_filtered_checks_with_status(db=db, limit=1000)
-        dashboard_check_ids = DashboardRender.extract_check_ids_from_items(status_page.items)
+        filtered_checks = await DashboardRender.get_filtered_checks_with_status(
+            db=db, limit=1000
+        )
+        dashboard_check_ids = DashboardRender.extract_check_ids_from_items(
+            status_page.items
+        )
 
         return {
             "request": request,
@@ -157,7 +177,9 @@ class StatusPagesViewService:
             search=search or None,
             limit=1000,
         )
-        status_page = await StatusPageCoreService.get_status_page_by_id(db, status_page_id)
+        status_page = await StatusPageCoreService.get_status_page_by_id(
+            db, status_page_id
+        )
         dashboard_check_ids = [
             item.get("check_id")
             for item in status_page.items
@@ -172,10 +194,15 @@ class StatusPagesViewService:
 
     @staticmethod
     async def build_dashboard_items_context(
-        db: AsyncSession, request: Request, current_user: AuthedUser, status_page_id: UUID
+        db: AsyncSession,
+        request: Request,
+        current_user: AuthedUser,
+        status_page_id: UUID,
     ) -> dict[str, Any]:
         """Dashboard items partial (used after filter changes)."""
-        status_page = await StatusPageCoreService.get_status_page_by_id(db, status_page_id)
+        status_page = await StatusPageCoreService.get_status_page_by_id(
+            db, status_page_id
+        )
         context = await DashboardRender.build_dashboard_context(db, status_page)
         all_tags = await CheckCoreService.get_all_tags_combined(db)
         return {
@@ -198,7 +225,9 @@ class StatusPagesViewService:
         status_bar_minutes: int,
     ):
         """Create a status page (validates status_bar_minutes)."""
-        config = {"status_bar_minutes": _normalize_status_bar_minutes(status_bar_minutes)}
+        config = {
+            "status_bar_minutes": _normalize_status_bar_minutes(status_bar_minutes)
+        }
         data = StatusPageCreate(
             name=name,
             slug=slug,
@@ -225,9 +254,13 @@ class StatusPagesViewService:
         status_bar_minutes: int,
     ):
         """Update a status page (merges existing config with new status_bar_minutes)."""
-        existing_page = await StatusPageCoreService.get_status_page_by_id(db, status_page_id)
+        existing_page = await StatusPageCoreService.get_status_page_by_id(
+            db, status_page_id
+        )
         existing_config = (existing_page.config or {}) if existing_page else {}
-        existing_config["status_bar_minutes"] = _normalize_status_bar_minutes(status_bar_minutes)
+        existing_config["status_bar_minutes"] = _normalize_status_bar_minutes(
+            status_bar_minutes
+        )
 
         data = StatusPageUpdate(
             name=name,
@@ -236,7 +269,9 @@ class StatusPagesViewService:
             is_public=is_public,
             config=existing_config,
         )
-        updated_page = await StatusPageCoreService.update_status_page(db, status_page_id, data)
+        updated_page = await StatusPageCoreService.update_status_page(
+            db, status_page_id, data
+        )
         logger.info(
             "Updated status page",
             extra={"slug": updated_page.slug, "status_page_id": str(updated_page.id)},
@@ -244,9 +279,13 @@ class StatusPagesViewService:
         return updated_page
 
     @staticmethod
-    async def enqueue_delete(db: AsyncSession, status_page_id: UUID, owner_id: UUID | None = None):
+    async def enqueue_delete(
+        db: AsyncSession, status_page_id: UUID, owner_id: UUID | None = None
+    ):
         """Enqueue a status_page_delete maintenance job. See LUXSWIRL-105."""
-        await StatusPageCoreService.get_status_page_by_id(db, status_page_id)  # 404 cleanly
+        await StatusPageCoreService.get_status_page_by_id(
+            db, status_page_id
+        )  # 404 cleanly
         return await MaintenanceJobCoreService.enqueue(
             db,
             kind=MaintenanceJobKind.STATUS_PAGE_DELETE,
@@ -280,7 +319,9 @@ class StatusPagesViewService:
         after add). check_id is UUID-validated at the router boundary.
         On success returns a context dict for the dashboard_item_single partial.
         """
-        status_page = await StatusPageCoreService.add_check_to_page(db, status_page_id, check_id)
+        status_page = await StatusPageCoreService.add_check_to_page(
+            db, status_page_id, check_id
+        )
         logger.info(
             "Added check to status page",
             extra={
@@ -340,7 +381,9 @@ class StatusPagesViewService:
             "Reordered items in status page",
             extra={"status_page_id": str(status_page_id)},
         )
-        status_page = await StatusPageCoreService.get_status_page_by_id(db, status_page_id)
+        status_page = await StatusPageCoreService.get_status_page_by_id(
+            db, status_page_id
+        )
         context = await DashboardRender.build_dashboard_context(db, status_page)
         return {
             "request": request,
@@ -425,7 +468,9 @@ class StatusPagesViewService:
     ) -> dict[str, Any]:
         """Update filters for a dynamic filter group, return dashboard_items context."""
         filter = json.loads(filter_json) if filter_json else {}
-        await StatusPageCoreService.update_group_filters(db, status_page_id, item_index, filter)
+        await StatusPageCoreService.update_group_filters(
+            db, status_page_id, item_index, filter
+        )
         logger.info(
             "Updated filters for group in status page",
             extra={
@@ -433,7 +478,9 @@ class StatusPagesViewService:
                 "status_page_id": str(status_page_id),
             },
         )
-        status_page = await StatusPageCoreService.get_status_page_by_id(db, status_page_id)
+        status_page = await StatusPageCoreService.get_status_page_by_id(
+            db, status_page_id
+        )
         context = await DashboardRender.build_dashboard_context(db, status_page)
         return {
             "request": request,

@@ -19,18 +19,28 @@ class JobBase(BaseSchema):
 
     # JobType IS the validation — bad value is a 422.
     job_type: JobType = Field(..., description="Type of job to execute")
-    agent_id: UUID | None = Field(None, description="Agent to run job on (null = server)")
+    agent_id: UUID | None = Field(
+        None, description="Agent to run job on (null = server)"
+    )
     params: dict = Field(default_factory=dict, description="Job-specific parameters")
-    priority: int = Field(0, ge=0, le=100, description="Job priority (higher = runs first)")
-    tags: list[str] | None = Field(None, description="Tags for organizing/filtering jobs")
+    priority: int = Field(
+        0, ge=0, le=100, description="Job priority (higher = runs first)"
+    )
+    tags: list[str] | None = Field(
+        None, description="Tags for organizing/filtering jobs"
+    )
 
 
 class JobCreate(JobBase):
     """Schema for creating a new job."""
 
     # Future fields (design now, implement in Phase 2)
-    schedule: dict | None = Field(None, description="Scheduling config (null = one-time job)")
-    automation_config: dict | None = Field(None, description="Automation rules (null = manual)")
+    schedule: dict | None = Field(
+        None, description="Scheduling config (null = one-time job)"
+    )
+    automation_config: dict | None = Field(
+        None, description="Automation rules (null = manual)"
+    )
 
     model_config = {
         "json_schema_extra": {
@@ -63,7 +73,9 @@ class JobResultSubmit(BaseSchema):
 
     status: str = Field(..., description="Final job status (completed or failed)")
     result: dict | None = Field(None, description="Job result data")
-    error: str | None = Field(None, max_length=5000, description="Error message if failed")
+    error: str | None = Field(
+        None, max_length=5000, description="Error message if failed"
+    )
 
     @field_validator("status")
     @classmethod
@@ -123,7 +135,9 @@ class JobResponse(JobInDB):
     """Schema for job API responses."""
 
     duration_seconds: float | None = Field(None, description="Job execution duration")
-    agent_hostname: str | None = Field(None, description="Hostname of agent that ran the job")
+    agent_hostname: str | None = Field(
+        None, description="Hostname of agent that ran the job"
+    )
 
     model_config = {
         "json_schema_extra": {
@@ -174,8 +188,12 @@ class JobQueueStats(BaseSchema):
 
     jobs_pending: int = Field(0, description="Jobs in queue waiting to run")
     jobs_running: int = Field(0, description="Jobs currently executing")
-    jobs_completed_since_last: int = Field(0, description="Jobs completed since last heartbeat")
-    jobs_failed_since_last: int = Field(0, description="Jobs failed since last heartbeat")
+    jobs_completed_since_last: int = Field(
+        0, description="Jobs completed since last heartbeat"
+    )
+    jobs_failed_since_last: int = Field(
+        0, description="Jobs failed since last heartbeat"
+    )
     queue_capacity: int = Field(5, description="Max concurrent jobs")
 
 
@@ -186,7 +204,9 @@ class JobDispatch(BaseSchema):
     job_type: str = Field(..., description="Job type")
     params: dict = Field(default_factory=dict, description="Job parameters")
     priority: int = Field(0, description="Job priority")
-    timeout_seconds: int = Field(300, ge=1, le=3600, description="Job execution timeout")
+    timeout_seconds: int = Field(
+        300, ge=1, le=3600, description="Job execution timeout"
+    )
 
     model_config = {
         "json_schema_extra": {

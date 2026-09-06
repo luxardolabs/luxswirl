@@ -173,7 +173,9 @@ class SerializerMixin:
                             # Collection relationship
                             result[relationship.key] = [
                                 (
-                                    item.to_dict(exclude=exclude, include_relationships=False)
+                                    item.to_dict(
+                                        exclude=exclude, include_relationships=False
+                                    )
                                     if hasattr(item, "to_dict")
                                     else str(item)
                                 )
@@ -182,7 +184,9 @@ class SerializerMixin:
                         else:
                             # Single relationship
                             result[relationship.key] = (
-                                value.to_dict(exclude=exclude, include_relationships=False)
+                                value.to_dict(
+                                    exclude=exclude, include_relationships=False
+                                )
                                 if hasattr(value, "to_dict")
                                 else str(value)
                             )
@@ -204,7 +208,9 @@ class BaseModel(Base, PrimaryKeyMixin, TimestampMixin, TableNameMixin, Serialize
     __abstract__ = True
 
 
-class UUIDBaseModel(Base, UUIDPrimaryKeyMixin, TimestampMixin, TableNameMixin, SerializerMixin):
+class UUIDBaseModel(
+    Base, UUIDPrimaryKeyMixin, TimestampMixin, TableNameMixin, SerializerMixin
+):
     """
     Base model with UUID primary key.
 

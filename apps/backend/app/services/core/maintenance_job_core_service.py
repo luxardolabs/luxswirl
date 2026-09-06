@@ -68,14 +68,20 @@ class MaintenanceJobCoreService:
         # No row inserted → an inflight job already exists for this target.
         # (A NULL target_id never conflicts, so target_id is non-None here.)
         assert target_id is not None
-        existing = await MaintenanceJobCRUD.get_inflight_for_target(db, kind_value, target_id)
+        existing = await MaintenanceJobCRUD.get_inflight_for_target(
+            db, kind_value, target_id
+        )
         if existing is None:
             raise RuntimeError(
                 f"enqueue hit ON CONFLICT but found no inflight job for {kind_value}/{target_id}"
             )
         logger.info(
             "Maintenance job already inflight — returning existing",
-            extra={"job_id": str(existing.id), "kind": kind_value, "target_id": str(target_id)},
+            extra={
+                "job_id": str(existing.id),
+                "kind": kind_value,
+                "target_id": str(target_id),
+            },
         )
         return existing
 
@@ -96,7 +102,9 @@ class MaintenanceJobCoreService:
         await MaintenanceJobCRUD.mark_failed(db, job_id, error)
 
     @staticmethod
-    async def update_progress(db: AsyncSession, job_id: UUID, progress: dict[str, Any]) -> None:
+    async def update_progress(
+        db: AsyncSession, job_id: UUID, progress: dict[str, Any]
+    ) -> None:
         await MaintenanceJobCRUD.update_progress(db, job_id, progress)
 
     @staticmethod

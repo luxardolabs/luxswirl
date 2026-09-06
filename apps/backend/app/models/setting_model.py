@@ -18,7 +18,9 @@ from app.models.base_model import (
 from app.models.enum_model import SettingCategory
 
 
-class Setting(Base, UUIDPrimaryKeyMixin, TimestampMixin, TableNameMixin, SerializerMixin):
+class Setting(
+    Base, UUIDPrimaryKeyMixin, TimestampMixin, TableNameMixin, SerializerMixin
+):
     """
     Setting model - stores configurable system defaults.
 

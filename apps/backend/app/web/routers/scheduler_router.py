@@ -79,7 +79,9 @@ async def toggle_job(
         )
 
         status = "enabled" if row["job"].enabled else "disabled"
-        response.headers["HX-Trigger"] = hx_toast_trigger(f"Job {row['job'].display_name} {status}")
+        response.headers["HX-Trigger"] = hx_toast_trigger(
+            f"Job {row['job'].display_name} {status}"
+        )
         return response
 
     except ValueError as e:
@@ -131,7 +133,9 @@ async def run_job(
             extra={"job_key": job_key},
             exc_info=True,
         )
-        return hx_empty_with_toast(f"Job failed: {str(e)}", kind="error", status_code=500)
+        return hx_empty_with_toast(
+            f"Job failed: {str(e)}", kind="error", status_code=500
+        )
 
 
 @router.post("/scheduler/jobs/{job_key}/reset", response_class=HTMLResponse)
@@ -155,7 +159,9 @@ async def reset_job(
             },
         )
 
-        response.headers["HX-Trigger"] = hx_toast_trigger(f"Job {row['job'].display_name} reset")
+        response.headers["HX-Trigger"] = hx_toast_trigger(
+            f"Job {row['job'].display_name} reset"
+        )
         return response
 
     except ValueError as e:

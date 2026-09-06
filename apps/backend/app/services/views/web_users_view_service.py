@@ -207,7 +207,9 @@ class WebUsersViewService:
             logger.error("Error updating user", exc_info=True)
             return None, "An error occurred while updating user"
 
-    async def delete_user(self, db: AsyncSession, user_id: UUID) -> tuple[bool, str | None]:
+    async def delete_user(
+        self, db: AsyncSession, user_id: UUID
+    ) -> tuple[bool, str | None]:
         """
         Delete user.
 
@@ -261,7 +263,9 @@ class WebUsersViewService:
             logger.error("Error resetting password", exc_info=True)
             return False, "An error occurred while resetting password"
 
-    async def unlock_user(self, db: AsyncSession, user_id: UUID) -> tuple[bool, str | None]:
+    async def unlock_user(
+        self, db: AsyncSession, user_id: UUID
+    ) -> tuple[bool, str | None]:
         """
         Unlock user account.
 
@@ -326,7 +330,9 @@ class WebUsersViewService:
     ) -> dict:
         """Build the full template context for /settings/users."""
         if per_page is None:
-            per_page = await SettingsCoreService.get_setting(db, "general.default_page_size", 50)
+            per_page = await SettingsCoreService.get_setting(
+                db, "general.default_page_size", 50
+            )
 
         skip = (page - 1) * per_page
         users, total = await self.list_users(
@@ -334,7 +340,9 @@ class WebUsersViewService:
         )
         stats = await self.get_user_stats(db)
         filters = {"role": role, "is_active": is_active, "search": search}
-        pagination = build_pagination(page=page, per_page=per_page, total=total, filters=filters)
+        pagination = build_pagination(
+            page=page, per_page=per_page, total=total, filters=filters
+        )
 
         return {
             "request": request,
@@ -343,7 +351,9 @@ class WebUsersViewService:
             "stats": stats,
             "pagination": pagination,
             # Filter dropdown uses short labels (just the role name title-cased)
-            "role_options": [{"value": r.value, "label": r.value.title()} for r in UserRole],
+            "role_options": [
+                {"value": r.value, "label": r.value.title()} for r in UserRole
+            ],
             "filters": filters,
         }
 
@@ -381,14 +391,18 @@ class WebUsersViewService:
     ) -> dict:
         """Build context for the /settings/users/partials/table HTMX partial."""
         if per_page is None:
-            per_page = await SettingsCoreService.get_setting(db, "general.default_page_size", 50)
+            per_page = await SettingsCoreService.get_setting(
+                db, "general.default_page_size", 50
+            )
 
         skip = (page - 1) * per_page
         users, total = await self.list_users(
             db, skip=skip, limit=per_page, role=role, is_active=is_active, search=search
         )
         filters = {"role": role, "is_active": is_active, "search": search}
-        pagination = build_pagination(page=page, per_page=per_page, total=total, filters=filters)
+        pagination = build_pagination(
+            page=page, per_page=per_page, total=total, filters=filters
+        )
 
         return {
             "request": request,

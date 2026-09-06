@@ -23,7 +23,9 @@ class StatusPageCoreService:
     """Service for status page operations."""
 
     @staticmethod
-    async def get_status_page_by_id(db: AsyncSession, status_page_id: UUID) -> StatusPage:
+    async def get_status_page_by_id(
+        db: AsyncSession, status_page_id: UUID
+    ) -> StatusPage:
         """
         Get status page by UUID.
 
@@ -57,7 +59,9 @@ class StatusPageCoreService:
         return await StatusPageCRUD.get_by_slug(db, slug)
 
     @staticmethod
-    async def create_status_page(db: AsyncSession, data: StatusPageCreate) -> StatusPage:
+    async def create_status_page(
+        db: AsyncSession, data: StatusPageCreate
+    ) -> StatusPage:
         """
         Create a new status page.
 
@@ -115,11 +119,15 @@ class StatusPageCoreService:
             StatusPageNotFoundException: If status page not found
             ValueError: If new slug already exists
         """
-        status_page = await StatusPageCoreService.get_status_page_by_id(db, status_page_id)
+        status_page = await StatusPageCoreService.get_status_page_by_id(
+            db, status_page_id
+        )
 
         # Check slug uniqueness if updating slug
         if data.slug and data.slug != status_page.slug:
-            existing = await StatusPageCoreService.get_status_page_by_slug(db, data.slug)
+            existing = await StatusPageCoreService.get_status_page_by_slug(
+                db, data.slug
+            )
             if existing:
                 raise ValueError(f"Status page with slug '{data.slug}' already exists")
 
@@ -150,7 +158,9 @@ class StatusPageCoreService:
         Raises:
             StatusPageNotFoundException: If status page not found
         """
-        status_page = await StatusPageCoreService.get_status_page_by_id(db, status_page_id)
+        status_page = await StatusPageCoreService.get_status_page_by_id(
+            db, status_page_id
+        )
 
         await db.delete(status_page)
         await db.flush()
@@ -202,7 +212,9 @@ class StatusPageCoreService:
         Raises:
             StatusPageNotFoundException: If status page not found
         """
-        status_page = await StatusPageCoreService.get_status_page_by_id(db, status_page_id)
+        status_page = await StatusPageCoreService.get_status_page_by_id(
+            db, status_page_id
+        )
         status_page.add_check(check_id, order)
         status_page.updated_at = utc_now()
 
@@ -245,7 +257,9 @@ class StatusPageCoreService:
         Raises:
             StatusPageNotFoundException: If status page not found
         """
-        status_page = await StatusPageCoreService.get_status_page_by_id(db, status_page_id)
+        status_page = await StatusPageCoreService.get_status_page_by_id(
+            db, status_page_id
+        )
         status_page.add_group(name, filter, order, collapsed)
         status_page.updated_at = utc_now()
 
@@ -280,7 +294,9 @@ class StatusPageCoreService:
         Raises:
             StatusPageNotFoundException: If status page not found
         """
-        status_page = await StatusPageCoreService.get_status_page_by_id(db, status_page_id)
+        status_page = await StatusPageCoreService.get_status_page_by_id(
+            db, status_page_id
+        )
         status_page.remove_item(index)
         status_page.updated_at = utc_now()
 
@@ -316,7 +332,9 @@ class StatusPageCoreService:
         Raises:
             StatusPageNotFoundException: If status page not found
         """
-        status_page = await StatusPageCoreService.get_status_page_by_id(db, status_page_id)
+        status_page = await StatusPageCoreService.get_status_page_by_id(
+            db, status_page_id
+        )
         status_page.reorder_item(from_index, to_index)
         status_page.updated_at = utc_now()
 
@@ -382,7 +400,9 @@ class StatusPageCoreService:
             StatusPageNotFoundException: If status page not found
         """
 
-        status_page = await StatusPageCoreService.get_status_page_by_id(db, status_page_id)
+        status_page = await StatusPageCoreService.get_status_page_by_id(
+            db, status_page_id
+        )
 
         logger.info(
             "Reorder request",
@@ -451,7 +471,9 @@ class StatusPageCoreService:
             StatusPageNotFoundException: If status page not found
         """
 
-        status_page = await StatusPageCoreService.get_status_page_by_id(db, status_page_id)
+        status_page = await StatusPageCoreService.get_status_page_by_id(
+            db, status_page_id
+        )
 
         if 0 <= item_index < len(status_page.items):
             item = status_page.items[item_index]
@@ -494,7 +516,9 @@ class StatusPageCoreService:
             StatusPageNotFoundException: If status page not found
         """
 
-        status_page = await StatusPageCoreService.get_status_page_by_id(db, status_page_id)
+        status_page = await StatusPageCoreService.get_status_page_by_id(
+            db, status_page_id
+        )
 
         if 0 <= item_index < len(status_page.items):
             item = status_page.items[item_index]
@@ -540,7 +564,9 @@ class StatusPageCoreService:
         Raises:
             StatusPageNotFoundException: If status page not found
         """
-        status_page = await StatusPageCoreService.get_status_page_by_id(db, status_page_id)
+        status_page = await StatusPageCoreService.get_status_page_by_id(
+            db, status_page_id
+        )
         status_page.update_group_sort(item_index, sort_by, sort_direction)
         status_page.updated_at = utc_now()
 

@@ -66,7 +66,9 @@ async def _run_handler(job: MaintenanceJob) -> None:
     """
     handler = HANDLERS.get(job.kind)
     if handler is None:
-        raise RuntimeError(f"No handler registered for maintenance job kind {job.kind!r}")
+        raise RuntimeError(
+            f"No handler registered for maintenance job kind {job.kind!r}"
+        )
 
     async with worker_session() as db:
         await db.execute(text("SET LOCAL statement_timeout = 0"))
@@ -79,7 +81,9 @@ async def _finalize(job_id, success: bool, error: str | None = None) -> None:
         if success:
             await MaintenanceJobCoreService.mark_done(db, job_id)
         else:
-            await MaintenanceJobCoreService.mark_failed(db, job_id, error or "Unknown error")
+            await MaintenanceJobCoreService.mark_failed(
+                db, job_id, error or "Unknown error"
+            )
 
 
 async def _periodic_cleanup_if_due(last_cleanup_at: list) -> None:
@@ -89,7 +93,9 @@ async def _periodic_cleanup_if_due(last_cleanup_at: list) -> None:
         return
     last_cleanup_at[:] = [now]
     async with worker_session() as db:
-        deleted = await MaintenanceJobCoreService.delete_old_terminal(db, now - _TERMINAL_RETENTION)
+        deleted = await MaintenanceJobCoreService.delete_old_terminal(
+            db, now - _TERMINAL_RETENTION
+        )
         if deleted:
             logger.info(
                 "Pruned terminal maintenance jobs",
@@ -152,7 +158,9 @@ async def start_maintenance_worker() -> None:
     async with worker_session() as db:
         await MaintenanceJobCoreService.mark_interrupted_on_restart(db)
 
-    _worker_task = asyncio.create_task(_maintenance_worker_loop(), name="maintenance_worker")
+    _worker_task = asyncio.create_task(
+        _maintenance_worker_loop(), name="maintenance_worker"
+    )
 
 
 async def stop_maintenance_worker() -> None:

@@ -19,7 +19,9 @@ class NotificationProviderCRUD:
         db: AsyncSession, provider_id: UUID, include_deleted: bool = False
     ) -> NotificationProvider | None:
         """Fetch a notification provider by id."""
-        query = select(NotificationProvider).where(NotificationProvider.id == provider_id)
+        query = select(NotificationProvider).where(
+            NotificationProvider.id == provider_id
+        )
         if not include_deleted:
             query = query.where(NotificationProvider.deleted_at.is_(None))
         result = await db.execute(query)

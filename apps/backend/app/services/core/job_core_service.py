@@ -385,7 +385,9 @@ class JobCoreService:
         Returns:
             Dictionary with job counts by status
         """
-        rows = await JobCRUD.get_status_counts(db, agent_id=agent_id, server_only=server_only)
+        rows = await JobCRUD.get_status_counts(
+            db, agent_id=agent_id, server_only=server_only
+        )
 
         stats = {
             "pending": 0,

@@ -39,7 +39,9 @@ class NotificationLogCRUD:
     @staticmethod
     async def delete_older_than(db: AsyncSession, cutoff) -> int:
         """Delete notification log records older than cutoff. Returns rowcount."""
-        result = await db.execute(delete(NotificationLog).where(NotificationLog.sent_at < cutoff))
+        result = await db.execute(
+            delete(NotificationLog).where(NotificationLog.sent_at < cutoff)
+        )
         return result.rowcount or 0  # type: ignore[attr-defined]
 
     @staticmethod
@@ -130,7 +132,9 @@ class NotificationLogCRUD:
         if alert_id:
             conditions.append(NotificationLog.alert_id == alert_id)
         if notification_provider_id:
-            conditions.append(NotificationLog.notification_provider_id == notification_provider_id)
+            conditions.append(
+                NotificationLog.notification_provider_id == notification_provider_id
+            )
         if search:
             pattern = f"%{search}%"
             conditions.append(
@@ -188,9 +192,9 @@ class NotificationLogCRUD:
         Returns:
             List of Row(id, friendly_name) objects
         """
-        query = select(NotificationProvider.id, NotificationProvider.friendly_name).order_by(
-            NotificationProvider.friendly_name
-        )
+        query = select(
+            NotificationProvider.id, NotificationProvider.friendly_name
+        ).order_by(NotificationProvider.friendly_name)
         result = await db.execute(query)
         return [tuple(row) for row in result.all()]
 

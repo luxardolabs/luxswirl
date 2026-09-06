@@ -99,4 +99,6 @@ async def create_first_admin(
     )
 
     # get_db() commits on clean return; redirect to login to sign in.
-    return RedirectResponse(url="/login?setup_complete=1", status_code=status.HTTP_302_FOUND)
+    return RedirectResponse(
+        url="/login?setup_complete=1", status_code=status.HTTP_302_FOUND
+    )

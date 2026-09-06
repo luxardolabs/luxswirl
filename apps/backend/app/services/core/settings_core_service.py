@@ -273,11 +273,15 @@ class SettingsCoreService:
             raise ValueError(f"Value {value} is less than minimum {validation['min']}")
 
         if "max" in validation and value > validation["max"]:
-            raise ValueError(f"Value {value} is greater than maximum {validation['max']}")
+            raise ValueError(
+                f"Value {value} is greater than maximum {validation['max']}"
+            )
 
         # Enum validation
         if "enum" in validation and value not in validation["enum"]:
-            raise ValueError(f"Value {value} not in allowed values: {validation['enum']}")
+            raise ValueError(
+                f"Value {value} not in allowed values: {validation['enum']}"
+            )
 
         # Timezone validation
         if validation.get("type") == "timezone":
@@ -458,7 +462,9 @@ class SettingsCoreService:
             )
 
         if api_rate_limit is not None:
-            await SettingsCoreService.update_setting(db, "security.api_rate_limit", api_rate_limit)
+            await SettingsCoreService.update_setting(
+                db, "security.api_rate_limit", api_rate_limit
+            )
 
         if registration_rate_limit is not None:
             await SettingsCoreService.update_setting(
@@ -480,7 +486,9 @@ class SettingsCoreService:
         """
         await SettingsCoreService.reset_setting(db, "security.session_lifetime_days")
         await SettingsCoreService.reset_setting(db, "security.max_failed_attempts")
-        await SettingsCoreService.reset_setting(db, "security.account_lock_duration_minutes")
+        await SettingsCoreService.reset_setting(
+            db, "security.account_lock_duration_minutes"
+        )
         await SettingsCoreService.reset_setting(db, "security.rate_limit_enabled")
         await SettingsCoreService.reset_setting(db, "security.login_rate_limit")
         await SettingsCoreService.reset_setting(db, "security.api_rate_limit")
@@ -498,9 +506,15 @@ class SettingsCoreService:
             Dict with general settings
         """
         return {
-            "timezone": await SettingsCoreService.get_setting(db, "general.timezone", "UTC"),
-            "date_format": await SettingsCoreService.get_setting(db, "general.date_format", "long"),
-            "time_format": await SettingsCoreService.get_setting(db, "general.time_format", "24h"),
+            "timezone": await SettingsCoreService.get_setting(
+                db, "general.timezone", "UTC"
+            ),
+            "date_format": await SettingsCoreService.get_setting(
+                db, "general.date_format", "long"
+            ),
+            "time_format": await SettingsCoreService.get_setting(
+                db, "general.time_format", "24h"
+            ),
             "default_page_size": await SettingsCoreService.get_setting(
                 db, "general.default_page_size", 50
             ),
@@ -524,11 +538,15 @@ class SettingsCoreService:
             Dict with metrics settings
         """
         return {
-            "enabled": await SettingsCoreService.get_setting(db, "metrics.enabled", True),
+            "enabled": await SettingsCoreService.get_setting(
+                db, "metrics.enabled", True
+            ),
             "auth_required": await SettingsCoreService.get_setting(
                 db, "metrics.auth_required", False
             ),
-            "bearer_token": await SettingsCoreService.get_setting(db, "metrics.bearer_token", ""),
+            "bearer_token": await SettingsCoreService.get_setting(
+                db, "metrics.bearer_token", ""
+            ),
             "agent_timeout_seconds": await SettingsCoreService.get_setting(
                 db, "metrics.agent_timeout_seconds", 300
             ),

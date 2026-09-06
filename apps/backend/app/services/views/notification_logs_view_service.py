@@ -163,7 +163,9 @@ class NotificationLogsViewService:
         return log_rows, total
 
     @staticmethod
-    async def get_log_row_by_id(db: AsyncSession, log_id: UUID) -> NotificationLogRow | None:
+    async def get_log_row_by_id(
+        db: AsyncSession, log_id: UUID
+    ) -> NotificationLogRow | None:
         """Fetch a single notification log row as a view model for partial re-render."""
         row = await NotificationLogCoreService.get_log_by_id(db, log_id)
         if row is None:
@@ -243,7 +245,9 @@ class NotificationLogsViewService:
         # Boundary already validated/normalized: enum-or-None, UUID-or-None. The
         # string-based crud + template comparisons want plain strings.
         alert_str = str(alert_id) if alert_id else None
-        provider_str = str(notification_provider_id) if notification_provider_id else None
+        provider_str = (
+            str(notification_provider_id) if notification_provider_id else None
+        )
 
         status_counts = await NotificationLogsViewService.get_status_counts(db)
         log_rows, total = await NotificationLogsViewService.get_notification_logs(
@@ -264,7 +268,9 @@ class NotificationLogsViewService:
             "notification_provider_id": provider_str,
             "search": search,
         }
-        pagination = build_pagination(page=page, per_page=per_page, total=total, filters=filters)
+        pagination = build_pagination(
+            page=page, per_page=per_page, total=total, filters=filters
+        )
 
         # Filter dropdown options come from the canonical enum, formatted for display.
         status_options = [

@@ -14,12 +14,12 @@ from fastapi import Request
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.auth_deps import AuthedUser
 from app.core.config import settings
 from app.core.datetime_utils import utc_now
 from app.core.exceptions import AgentNotFoundException
 from app.models.agent_model import Agent
 from app.models.enum_model import MaintenanceJobKind
-from app.models.user_model import User
 from app.schemas.agent_schema import AgentUpdate
 from app.schemas.pagination_schema import build_pagination
 from app.services.core.agent_core_service import AgentCoreService
@@ -106,26 +106,33 @@ class AgentsViewService:
 
             # Get sparkline data with smart bucketing (max 200 samples for performance)
             cutoff_time = utc_now() - timedelta(hours=hours)
-            all_metrics = await AgentCoreService.get_agent_metrics(db, agent.id, cutoff_time)
+            all_metrics = await AgentCoreService.get_agent_metrics(
+                db, agent.id, cutoff_time
+            )
 
             # Smart bucketing: ~200 samples max, but use appropriate aggregation per metric
             max_samples = 200
             if len(all_metrics) <= max_samples:
                 # Few enough points - use all data
                 cpu_sparkline = [
-                    float(m.cpu_percent) if m.cpu_percent is not None else None for m in all_metrics
+                    float(m.cpu_percent) if m.cpu_percent is not None else None
+                    for m in all_metrics
                 ]
                 memory_sparkline = [
-                    float(m.memory_mb) if m.memory_mb is not None else None for m in all_metrics
+                    float(m.memory_mb) if m.memory_mb is not None else None
+                    for m in all_metrics
                 ]
                 queue_sparkline: list[int | None] = [
-                    m.queue_depth if m.queue_depth is not None else 0 for m in all_metrics
+                    m.queue_depth if m.queue_depth is not None else 0
+                    for m in all_metrics
                 ]
                 checks_executed_sparkline: list[int | None] = [
                     m.checks_executed or 0 for m in all_metrics
                 ]
                 fd_sparkline = [
-                    m.open_file_descriptors if m.open_file_descriptors is not None else None
+                    m.open_file_descriptors
+                    if m.open_file_descriptors is not None
+                    else None
                     for m in all_metrics
                 ]
                 subprocess_sparkline = [
@@ -146,8 +153,12 @@ class AgentsViewService:
                     bucket = all_metrics[i : i + bucket_size]
 
                     # CPU: Average (typical usage)
-                    cpu_vals = [m.cpu_percent for m in bucket if m.cpu_percent is not None]
-                    cpu_sparkline.append(float(sum(cpu_vals) / len(cpu_vals)) if cpu_vals else None)
+                    cpu_vals = [
+                        m.cpu_percent for m in bucket if m.cpu_percent is not None
+                    ]
+                    cpu_sparkline.append(
+                        float(sum(cpu_vals) / len(cpu_vals)) if cpu_vals else None
+                    )
 
                     # Memory: Average (typical usage)
                     mem_vals = [m.memory_mb for m in bucket if m.memory_mb is not None]
@@ -156,11 +167,15 @@ class AgentsViewService:
                     )
 
                     # Queue Depth: MAX (catch spikes - critical for monitoring!)
-                    queue_vals = [m.queue_depth for m in bucket if m.queue_depth is not None]
+                    queue_vals = [
+                        m.queue_depth for m in bucket if m.queue_depth is not None
+                    ]
                     queue_sparkline.append(max(queue_vals) if queue_vals else 0)
 
                     # Checks Executed: SUM (total in bucket)
-                    checks_executed_sparkline.append(sum(m.checks_executed or 0 for m in bucket))
+                    checks_executed_sparkline.append(
+                        sum(m.checks_executed or 0 for m in bucket)
+                    )
 
                     # File Descriptors: MAX (catch leaks - critical!)
                     fd_vals = [
@@ -172,7 +187,9 @@ class AgentsViewService:
 
                     # Subprocesses: MAX (catch leaks - critical!)
                     sub_vals = [
-                        m.subprocess_count for m in bucket if m.subprocess_count is not None
+                        m.subprocess_count
+                        for m in bucket
+                        if m.subprocess_count is not None
                     ]
                     subprocess_sparkline.append(max(sub_vals) if sub_vals else None)
 
@@ -232,7 +249,9 @@ class AgentsViewService:
         return await AgentCoreService.delete_agent(db, agent_id)
 
     @staticmethod
-    async def enqueue_delete(db: AsyncSession, agent_id: UUID, owner_id: UUID | None = None):
+    async def enqueue_delete(
+        db: AsyncSession, agent_id: UUID, owner_id: UUID | None = None
+    ):
         """Enqueue an agent_delete maintenance job; returns the job row."""
         # 404 cleanly if the agent doesn't exist instead of queuing a doomed job.
         await AgentCoreService.get_agent_by_id(db, agent_id)
@@ -314,7 +333,7 @@ class AgentsViewService:
     async def build_agents_list_context(
         db: AsyncSession,
         request: Request,
-        current_user: User,
+        current_user: AuthedUser,
         active_only: bool,
         search: str,
         hours: int,
@@ -323,7 +342,9 @@ class AgentsViewService:
     ) -> dict[str, Any]:
         """Full /agents page context."""
         if per_page is None:
-            per_page = await AgentsViewService.get_setting(db, "general.default_page_size", 50)
+            per_page = await AgentsViewService.get_setting(
+                db, "general.default_page_size", 50
+            )
         agent_stale_threshold = await AgentsViewService.get_setting(
             db, "general.agent_stale_threshold_seconds", 300
         )
@@ -367,7 +388,7 @@ class AgentsViewService:
 
     @staticmethod
     async def build_edit_form_context(
-        db: AsyncSession, request: Request, current_user: User, agent_id: UUID
+        db: AsyncSession, request: Request, current_user: AuthedUser, agent_id: UUID
     ) -> dict[str, Any] | None:
         """Edit-form panel context. Returns None if agent not found."""
         agent = await AgentsViewService.get_agent_by_id(db, agent_id)
@@ -387,7 +408,7 @@ class AgentsViewService:
 
     @staticmethod
     async def build_key_management_panel_context(
-        db: AsyncSession, request: Request, current_user: User, agent_id: UUID
+        db: AsyncSession, request: Request, current_user: AuthedUser, agent_id: UUID
     ) -> dict[str, Any] | None:
         """Key-management-panel context. Returns None if agent not found."""
         agent = await AgentsViewService.get_agent_by_id(db, agent_id)
@@ -401,7 +422,7 @@ class AgentsViewService:
 
     @staticmethod
     def build_key_generated_panel_context(
-        request: Request, current_user: User, agent: Agent, plaintext_key: str
+        request: Request, current_user: AuthedUser, agent: Agent, plaintext_key: str
     ) -> dict[str, Any]:
         """'Key generated — copy this once' panel context."""
         return {
@@ -467,16 +488,27 @@ class AgentsViewService:
             _parse_int(form_kwargs.get("check_sync_interval"), "check_sync_interval")
             _parse_int(form_kwargs.get("report_interval"), "report_interval")
             _parse_int(form_kwargs.get("report_batch_size"), "report_batch_size")
-            _parse_int(form_kwargs.get("report_max_files_per_batch"), "report_max_files_per_batch")
-            _parse_int(form_kwargs.get("report_process_interval"), "report_process_interval")
-            _parse_int(form_kwargs.get("report_max_queue_size"), "report_max_queue_size")
+            _parse_int(
+                form_kwargs.get("report_max_files_per_batch"),
+                "report_max_files_per_batch",
+            )
+            _parse_int(
+                form_kwargs.get("report_process_interval"), "report_process_interval"
+            )
+            _parse_int(
+                form_kwargs.get("report_max_queue_size"), "report_max_queue_size"
+            )
             _parse_float(
                 form_kwargs.get("report_backpressure_threshold"),
                 "report_backpressure_threshold",
             )
-            _parse_int(form_kwargs.get("max_concurrent_checks"), "max_concurrent_checks")
+            _parse_int(
+                form_kwargs.get("max_concurrent_checks"), "max_concurrent_checks"
+            )
             _parse_int(form_kwargs.get("watchdog_interval"), "watchdog_interval")
-            _parse_int(form_kwargs.get("watchdog_stall_threshold"), "watchdog_stall_threshold")
+            _parse_int(
+                form_kwargs.get("watchdog_stall_threshold"), "watchdog_stall_threshold"
+            )
 
             log_level = form_kwargs.get("log_level")
             if log_level is not None:

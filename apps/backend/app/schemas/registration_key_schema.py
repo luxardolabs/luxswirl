@@ -13,7 +13,9 @@ from app.schemas.base_schema import BaseSchema, TimestampSchema
 class RegistrationKeyCreate(BaseSchema):
     """Schema for creating a new registration key."""
 
-    name: str = Field(..., min_length=1, max_length=255, description="Name for this key")
+    name: str = Field(
+        ..., min_length=1, max_length=255, description="Name for this key"
+    )
     description: str | None = Field(None, description="Optional notes about this key")
 
     model_config = {
@@ -68,7 +70,9 @@ class RegistrationKeyUpdate(BaseSchema):
 class RegistrationKeyRevoke(BaseSchema):
     """Schema for revoking a registration key."""
 
-    reason: str | None = Field(None, max_length=500, description="Reason for revocation")
+    reason: str | None = Field(
+        None, max_length=500, description="Reason for revocation"
+    )
 
     model_config = {
         "json_schema_extra": {
@@ -116,7 +120,9 @@ class RegistrationKeyResponse(TimestampSchema):
 class RegistrationKeyListResponse(BaseSchema):
     """Response containing list of registration keys."""
 
-    keys: list[RegistrationKeyResponse] = Field(..., description="List of registration keys")
+    keys: list[RegistrationKeyResponse] = Field(
+        ..., description="List of registration keys"
+    )
     total: int = Field(..., description="Total number of keys")
 
     model_config = {

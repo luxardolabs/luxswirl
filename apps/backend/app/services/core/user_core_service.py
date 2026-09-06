@@ -82,7 +82,9 @@ class UserCoreService:
             # No rollback here — the ValueError propagates to get_db(), which
             # owns the transaction and rolls back on any exception.
             if "username" in str(e):
-                raise ValueError(f"Username '{user_data.username}' already exists") from e
+                raise ValueError(
+                    f"Username '{user_data.username}' already exists"
+                ) from e
             raise ValueError(f"User creation failed: {e}") from e
 
     async def get_user_by_id(self, db: AsyncSession, user_id: UUID) -> User | None:
@@ -98,7 +100,9 @@ class UserCoreService:
         """
         return await UserCRUD.get_by_id(db, user_id)
 
-    async def get_user_by_username(self, db: AsyncSession, username: str) -> User | None:
+    async def get_user_by_username(
+        self, db: AsyncSession, username: str
+    ) -> User | None:
         """
         Get user by username.
 
@@ -144,7 +148,9 @@ class UserCoreService:
         )
         return list(users), total
 
-    async def update_user(self, db: AsyncSession, user_id: UUID, user_data: UserUpdate) -> User:
+    async def update_user(
+        self, db: AsyncSession, user_id: UUID, user_data: UserUpdate
+    ) -> User:
         """
         Update user information.
 

@@ -22,7 +22,9 @@ if TYPE_CHECKING:
     from app.models.check_model import Check
 
 
-class AlertCheckMapping(Base, UUIDPrimaryKeyMixin, TimestampMixin, TableNameMixin, SerializerMixin):
+class AlertCheckMapping(
+    Base, UUIDPrimaryKeyMixin, TimestampMixin, TableNameMixin, SerializerMixin
+):
     """
     Maps alerts to specific checks (many-to-many).
 

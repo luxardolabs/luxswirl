@@ -145,7 +145,9 @@ async def create_alert(
     try:
         alert = await AlertCoreService.create_alert(db, data)
     except ValidationException as e:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from e
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)
+        ) from e
     except DuplicateResourceException as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) from e
 
@@ -188,7 +190,9 @@ async def update_alert(
     except NotFoundException as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
     except ValidationException as e:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from e
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)
+        ) from e
 
     return AlertResponse(
         id=alert.id,
@@ -221,7 +225,9 @@ async def delete_alert(
     alert_id: Annotated[UUID, Path(description="Alert UUID")],
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[str, Depends(verify_api_token)],
-    hard_delete: Annotated[bool, Query(description="Permanently delete (not recommended)")] = False,
+    hard_delete: Annotated[
+        bool, Query(description="Permanently delete (not recommended)")
+    ] = False,
 ):
     """Delete an alert."""
     try:
@@ -249,11 +255,15 @@ async def add_notification_provider(
 ):
     """Add a notification provider to an alert."""
     try:
-        mapping = await AlertCoreService.add_notification_provider(db, alert_id, provider_id)
+        mapping = await AlertCoreService.add_notification_provider(
+            db, alert_id, provider_id
+        )
     except NotFoundException as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
     except ValidationException as e:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from e
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)
+        ) from e
 
     return {
         "message": "Notification provider added successfully",
@@ -303,7 +313,9 @@ async def add_check(
     except NotFoundException as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
     except ValidationException as e:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from e
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)
+        ) from e
 
     return {"message": "Check added successfully", "mapping_id": str(mapping.id)}
 

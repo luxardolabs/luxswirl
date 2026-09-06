@@ -51,9 +51,9 @@ class CheckResultCoreService:
                 return raw_cert_data
 
             # Parse expiration date (format: 'Jan 1 00:00:00 2025 GMT')
-            expiration_date = datetime.strptime(expiration_str, "%b %d %H:%M:%S %Y %Z").replace(
-                tzinfo=UTC
-            )
+            expiration_date = datetime.strptime(
+                expiration_str, "%b %d %H:%M:%S %Y %Z"
+            ).replace(tzinfo=UTC)
 
             # Calculate days until expiration
             now = datetime.now(UTC)
@@ -108,7 +108,9 @@ class CheckResultCoreService:
         metrics_dict = data.metrics or {}
         if "response" in metrics_dict and "ssl_certificate" in metrics_dict["response"]:
             raw_cert = metrics_dict["response"]["ssl_certificate"]
-            computed_cert = await CheckResultCoreService.compute_ssl_cert_info(db, raw_cert)
+            computed_cert = await CheckResultCoreService.compute_ssl_cert_info(
+                db, raw_cert
+            )
             metrics_dict["response"]["ssl_certificate"] = computed_cert
 
         # Extract metrics if present
@@ -168,7 +170,9 @@ class CheckResultCoreService:
             raise AgentNotFoundException(agent_name)
 
         cutoff_time = utc_now() - timedelta(minutes=minutes)
-        return await CheckResultCRUD.get_latest_per_check_for_agent(db, agent.id, cutoff_time)
+        return await CheckResultCRUD.get_latest_per_check_for_agent(
+            db, agent.id, cutoff_time
+        )
 
     @staticmethod
     async def get_check_history(
@@ -192,7 +196,9 @@ class CheckResultCoreService:
         check = await CheckCoreService.get_check_by_id(db, check_id)
 
         cutoff_time = utc_now() - timedelta(hours=hours)
-        return await CheckResultCRUD.get_history_for_check(db, check.id, cutoff_time, limit)
+        return await CheckResultCRUD.get_history_for_check(
+            db, check.id, cutoff_time, limit
+        )
 
     @staticmethod
     async def get_check_summary(
@@ -215,12 +221,16 @@ class CheckResultCoreService:
 
         cutoff_time = utc_now() - timedelta(hours=hours)
 
-        row = await CheckResultCRUD.get_summary_stats_for_check(db, check.id, cutoff_time)
+        row = await CheckResultCRUD.get_summary_stats_for_check(
+            db, check.id, cutoff_time
+        )
 
         total_checks = row.total_checks or 0
         successful_checks = int(row.successful_checks or 0)
         failed_checks = total_checks - successful_checks
-        success_rate = (successful_checks / total_checks * 100) if total_checks > 0 else 0.0
+        success_rate = (
+            (successful_checks / total_checks * 100) if total_checks > 0 else 0.0
+        )
 
         p50_latency_ms = None
         p95_latency_ms = None
@@ -281,7 +291,9 @@ class CheckResultCoreService:
         )
 
         # Update agent's last_seen
-        agent = await AgentCoreService.update_agent_last_seen(db, agent.id, report.agent_run_id)
+        agent = await AgentCoreService.update_agent_last_seen(
+            db, agent.id, report.agent_run_id
+        )
 
         results_processed = 0
         results_failed = 0
@@ -338,9 +350,14 @@ class CheckResultCoreService:
 
                 # Process SSL cert info if present in metrics
                 metrics_dict = check_data.metrics or {}
-                if "response" in metrics_dict and "ssl_certificate" in metrics_dict["response"]:
+                if (
+                    "response" in metrics_dict
+                    and "ssl_certificate" in metrics_dict["response"]
+                ):
                     raw_cert = metrics_dict["response"]["ssl_certificate"]
-                    computed_cert = await CheckResultCoreService.compute_ssl_cert_info(db, raw_cert)
+                    computed_cert = await CheckResultCoreService.compute_ssl_cert_info(
+                        db, raw_cert
+                    )
                     metrics_dict["response"]["ssl_certificate"] = computed_cert
 
                 # Convert metrics to JSON if present
@@ -364,7 +381,9 @@ class CheckResultCoreService:
 
                 # Prepare check result for bulk insert with all fields
                 # Use check's individual timestamp, not batch timestamp
-                check_timestamp = check_data.timestamp if check_data.timestamp else timestamp
+                check_timestamp = (
+                    check_data.timestamp if check_data.timestamp else timestamp
+                )
                 rows_to_insert.append(
                     {
                         "id": result_id,  # agent's UUID (or generated fallback)
@@ -375,7 +394,9 @@ class CheckResultCoreService:
                         "latency_ms": check_data.latency_ms,
                         "error": check_data.error,
                         "error_type": (
-                            check_data.error_type if hasattr(check_data, "error_type") else None
+                            check_data.error_type
+                            if hasattr(check_data, "error_type")
+                            else None
                         ),
                         "http_status_code": (
                             check_data.http_status_code
@@ -411,7 +432,9 @@ class CheckResultCoreService:
         # chunks transparently, so late data no longer rejects.)
         inserted_results: list[CheckResult] = []
         if rows_to_insert:
-            inserted_results = await CheckResultCRUD.bulk_insert_idempotent(db, rows_to_insert)
+            inserted_results = await CheckResultCRUD.bulk_insert_idempotent(
+                db, rows_to_insert
+            )
 
         logger.info(
             "Processed report from agent",
@@ -428,7 +451,9 @@ class CheckResultCoreService:
         for check_result in inserted_results:
             try:
                 check = check_map[check_result.check_id]
-                MetricsCollectorCoreService.update_check_result(check_result, check, agent)
+                MetricsCollectorCoreService.update_check_result(
+                    check_result, check, agent
+                )
             except Exception:
                 logger.error("Error updating Prometheus metrics", exc_info=True)
 
@@ -484,7 +509,9 @@ class CheckResultCoreService:
         total_checks = row.total_checks or 0
         successful_checks = int(row.successful_checks or 0)
         failed_checks = total_checks - successful_checks
-        success_rate = (successful_checks / total_checks * 100) if total_checks > 0 else 0.0
+        success_rate = (
+            (successful_checks / total_checks * 100) if total_checks > 0 else 0.0
+        )
 
         active_agents = await CheckResultCRUD.count_active_agents_since(db, cutoff_time)
         active_checks = await CheckResultCRUD.count_active_checks_since(db, cutoff_time)
@@ -494,7 +521,9 @@ class CheckResultCoreService:
             "successful_checks": successful_checks,
             "failed_checks": failed_checks,
             "success_rate": round(success_rate, 2),
-            "avg_latency_ms": (round(row.avg_latency_ms, 2) if row.avg_latency_ms else None),
+            "avg_latency_ms": (
+                round(row.avg_latency_ms, 2) if row.avg_latency_ms else None
+            ),
             "active_agents": active_agents,
             "active_checks": active_checks,
             "time_window_hours": hours,
@@ -535,7 +564,9 @@ class CheckResultCoreService:
     @staticmethod
     async def get_latest_results_batch(db, check_ids, cutoff_minutes=32):
         """Batch query latest results for checks. Delegates to CRUD."""
-        return await CheckResultCRUD.get_latest_results_batch(db, check_ids, cutoff_minutes)
+        return await CheckResultCRUD.get_latest_results_batch(
+            db, check_ids, cutoff_minutes
+        )
 
     @staticmethod
     async def get_24h_stats_batch(db, check_ids):
@@ -565,7 +596,9 @@ class CheckResultCoreService:
     @staticmethod
     async def get_raw_results_for_status_bar(db, check_id, minutes=30):
         """Get raw results for status bar. Delegates to CRUD."""
-        return await CheckResultCRUD.get_raw_results_for_status_bar(db, check_id, minutes)
+        return await CheckResultCRUD.get_raw_results_for_status_bar(
+            db, check_id, minutes
+        )
 
     @staticmethod
     async def get_check_detail_stats(db, check_id, hours):
@@ -597,15 +630,21 @@ class CheckResultCoreService:
     @staticmethod
     async def get_last_failure_timestamps_bulk(db, check_ids, hours=168):
         """Bulk last failure timestamps. Delegates to CRUD."""
-        return await CheckResultCRUD.get_last_failure_timestamps_bulk(db, check_ids, hours)
+        return await CheckResultCRUD.get_last_failure_timestamps_bulk(
+            db, check_ids, hours
+        )
 
     @staticmethod
     async def get_results_for_status_bars_bulk(db, check_ids, minutes=32):
         """Bulk results for status bars. Delegates to CRUD."""
-        return await CheckResultCRUD.get_results_for_status_bars_bulk(db, check_ids, minutes)
+        return await CheckResultCRUD.get_results_for_status_bars_bulk(
+            db, check_ids, minutes
+        )
 
     @staticmethod
-    async def get_bucketed_status_bars_bulk(db, check_ids, minutes=32, bucket_minutes=1):
+    async def get_bucketed_status_bars_bulk(
+        db, check_ids, minutes=32, bucket_minutes=1
+    ):
         """Bucketed/aggregated status bars for larger time ranges. Delegates to CRUD."""
         return await CheckResultCRUD.get_bucketed_status_bars_bulk(
             db, check_ids, minutes, bucket_minutes

@@ -70,14 +70,18 @@ async def jobs_page(
             request,
             "pages/error.html",
             {
-                **JobsViewService.build_error_partial_context(request, current_user, str(e)),
+                **JobsViewService.build_error_partial_context(
+                    request, current_user, str(e)
+                ),
                 "page_title": "Error",
             },
             status_code=500,
         )
 
 
-@router.get("/jobs/partials/table", response_class=HTMLResponse, include_in_schema=False)
+@router.get(
+    "/jobs/partials/table", response_class=HTMLResponse, include_in_schema=False
+)
 async def jobs_table_partial(
     request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -115,7 +119,9 @@ async def jobs_table_partial(
         )
 
 
-@router.get("/jobs/{job_id}/detail", response_class=HTMLResponse, include_in_schema=False)
+@router.get(
+    "/jobs/{job_id}/detail", response_class=HTMLResponse, include_in_schema=False
+)
 async def job_detail_panel(
     job_id: UUID,
     request: Request,
@@ -124,13 +130,19 @@ async def job_detail_panel(
 ):
     """Job detail panel for the side panel."""
     try:
-        context = await JobsViewService.build_job_detail_context(db, request, current_user, job_id)
-        return templates.TemplateResponse(request, "partials/job_detail_panel.html", context)
+        context = await JobsViewService.build_job_detail_context(
+            db, request, current_user, job_id
+        )
+        return templates.TemplateResponse(
+            request, "partials/job_detail_panel.html", context
+        )
     except HTTPException:
         raise
     except Exception as e:
         logger.error("Error loading job detail", exc_info=True)
-        return error_partial(request, current_user, f"Error loading job details: {e}", 500)
+        return error_partial(
+            request, current_user, f"Error loading job details: {e}", 500
+        )
 
 
 @router.get("/jobs/create-form", response_class=HTMLResponse, include_in_schema=False)
@@ -152,7 +164,9 @@ async def job_create_form(
         context = await JobsViewService.build_job_create_form_context(
             db, request, current_user, job_type, agent_filter, priority, prefill_params
         )
-        return templates.TemplateResponse(request, "partials/job_create_form.html", context)
+        return templates.TemplateResponse(
+            request, "partials/job_create_form.html", context
+        )
     except Exception as e:
         logger.error("Error loading job create form", exc_info=True)
         return error_partial(request, current_user, f"Error loading form: {e}", 500)
@@ -276,7 +290,9 @@ async def bulk_create_database_checks(
     result, error = await JobBulkCheckViewService.create_database_checks_from_job(
         db, job_id, dict(form_data)
     )
-    return bulk_check_response(request, current_user, result, error, "database check(s)")
+    return bulk_check_response(
+        request, current_user, result, error, "database check(s)"
+    )
 
 
 @router.post(
@@ -296,7 +312,9 @@ async def quick_create_check_from_host(
     network-scan detail naturally on next visit so duplicate-detect works.
     """
     form_data = await request.form()
-    created, error = await JobBulkCheckViewService.quick_create_check(db, dict(form_data))
+    created, error = await JobBulkCheckViewService.quick_create_check(
+        db, dict(form_data)
+    )
     if created:
         display_name = form_data.get("display_name", "check")
         return hx_empty_with_toast(f"Check '{display_name}' created")

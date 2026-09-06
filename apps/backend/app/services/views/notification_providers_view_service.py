@@ -15,8 +15,8 @@ from fastapi import Request
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.auth_deps import AuthedUser
 from app.models.notification_provider_model import NotificationProvider
-from app.models.user_model import User
 from app.schemas.notification_provider_schema import (
     NotificationProviderCreate,
     NotificationProviderUpdate,
@@ -42,7 +42,7 @@ class NotificationProvidersViewService:
 
     @staticmethod
     def build_create_form_context(
-        request: Request, current_user: User, provider_type: str | None
+        request: Request, current_user: AuthedUser, provider_type: str | None
     ) -> dict[str, Any]:
         """Form context for the 'new provider' modal (or type-selector)."""
         return {
@@ -55,7 +55,7 @@ class NotificationProvidersViewService:
 
     @staticmethod
     async def build_edit_form_context(
-        db: AsyncSession, request: Request, current_user: User, provider_id: UUID
+        db: AsyncSession, request: Request, current_user: AuthedUser, provider_id: UUID
     ) -> dict[str, Any]:
         """Form context for editing an existing provider."""
         provider = await NotificationCoreService.get_provider_by_id(db, provider_id)
@@ -98,7 +98,9 @@ class NotificationProvidersViewService:
             is_enabled=form.get("is_enabled") == "true",
             is_default_enabled=form.get("is_default_enabled") == "true",
         )
-        provider = await NotificationCoreService.update_provider(db, provider_id, update_data)
+        provider = await NotificationCoreService.update_provider(
+            db, provider_id, update_data
+        )
         logger.info(
             "Updated notification provider",
             extra={
@@ -111,18 +113,24 @@ class NotificationProvidersViewService:
     @staticmethod
     async def delete_provider(db: AsyncSession, provider_id: UUID) -> None:
         """Soft-delete a provider — pure delegation."""
-        await NotificationCoreService.delete_provider(db, provider_id, hard_delete=False)
+        await NotificationCoreService.delete_provider(
+            db, provider_id, hard_delete=False
+        )
         logger.info(
             "Deleted notification provider",
             extra={"provider_id": str(provider_id)},
         )
 
     @staticmethod
-    async def toggle_provider(db: AsyncSession, provider_id: UUID) -> NotificationProvider:
+    async def toggle_provider(
+        db: AsyncSession, provider_id: UUID
+    ) -> NotificationProvider:
         """Read current state, flip is_enabled, persist."""
         provider = await NotificationCoreService.get_provider_by_id(db, provider_id)
         update_data = NotificationProviderUpdate(is_enabled=not provider.is_enabled)
-        provider = await NotificationCoreService.update_provider(db, provider_id, update_data)
+        provider = await NotificationCoreService.update_provider(
+            db, provider_id, update_data
+        )
         logger.info(
             "Toggled provider",
             extra={
@@ -134,12 +142,16 @@ class NotificationProvidersViewService:
         return provider
 
     @staticmethod
-    async def test_provider(db: AsyncSession, provider_id: UUID) -> tuple[bool, str | None]:
+    async def test_provider(
+        db: AsyncSession, provider_id: UUID
+    ) -> tuple[bool, str | None]:
         """Send a test notification — pure delegation; (success, error_msg)."""
         return await NotificationCoreService.test_provider(db, provider_id)
 
     @staticmethod
-    def build_error_context(request: Request, current_user: User, error: str) -> dict[str, Any]:
+    def build_error_context(
+        request: Request, current_user: AuthedUser, error: str
+    ) -> dict[str, Any]:
         """Common error-partial context."""
         return {
             "request": request,

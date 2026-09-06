@@ -509,7 +509,9 @@ class AlertCoreService:
 
         # Evaluate each alert
         for alert in all_alerts:
-            should_fire = await AlertCoreService._should_fire_alert(db, alert, check, check_result)
+            should_fire = await AlertCoreService._should_fire_alert(
+                db, alert, check, check_result
+            )
 
             if should_fire:
                 await AlertCoreService._fire_alert(db, alert, check, check_result)
@@ -601,7 +603,9 @@ class AlertCoreService:
             return "repeated_failure:active"
 
         if trigger_type == "ssl_cert_expiry":
-            thresholds = sorted(config.get("days_thresholds") or [config.get("days_threshold", 30)])
+            thresholds = sorted(
+                config.get("days_thresholds") or [config.get("days_threshold", 30)]
+            )
             metrics = check_result.get_metrics() or {}
             ssl_cert = metrics.get("response", {}).get("ssl_certificate") or {}
             days_until = ssl_cert.get("days_until_expiration")
@@ -675,7 +679,9 @@ class AlertCoreService:
 
         # Check for recovery (error -> success)
         if current_status == "success" and alert.notify_on_recovery:
-            recent_results = await AlertCRUD.get_recent_results_for_check(db, check.id, 2)
+            recent_results = await AlertCRUD.get_recent_results_for_check(
+                db, check.id, 2
+            )
 
             if len(recent_results) >= 2:
                 previous_status = "success" if recent_results[1].success else "error"
@@ -813,7 +819,9 @@ class AlertCoreService:
         if not alert.notify_on_recovery:
             return False
 
-        last_notification = await AlertCRUD.get_last_notification_for_dedup(db, alert.id, check.id)
+        last_notification = await AlertCRUD.get_last_notification_for_dedup(
+            db, alert.id, check.id
+        )
         if last_notification is None or last_notification.notification_hash is None:
             return False
         return last_notification.notification_hash.startswith("ssl:lte:")
@@ -934,7 +942,9 @@ class AlertCoreService:
             )
 
             # Log any failures
-            for (provider_id, _), task_result in zip(notification_tasks, results, strict=False):
+            for (provider_id, _), task_result in zip(
+                notification_tasks, results, strict=False
+            ):
                 if isinstance(task_result, BaseException):
                     logger.error(
                         "Failed to send notification via provider",
@@ -961,20 +971,28 @@ class AlertCoreService:
         if parent_latest is None or parent_latest.success:
             return False
 
-        parent_name = check.parent_check.display_name if check.parent_check else "parent"
+        parent_name = (
+            check.parent_check.display_name if check.parent_check else "parent"
+        )
         reason = f"Suppressed: parent check '{parent_name}' is down"
         # Distinct state key so dedup treats "parent down → parent up" as a transition
         # and the child's real alert state can fire when the parent recovers (LUXSWIRL-148).
-        state_key = AlertCoreService._compute_alert_state_key(alert, check_result, parent_down=True)
+        state_key = AlertCoreService._compute_alert_state_key(
+            alert, check_result, parent_down=True
+        )
 
         # LUXSWIRL-148: route the suppression-row write through the same dedup that
         # `_fire_alert` uses, so steady-state parent-down doesn't produce one row per
         # check execution. The first time the leaf enters parent-down we write a row
         # for the audit trail; subsequent ticks see the same hash and skip.
-        should_log = await AlertCoreService._should_log_suppression(db, alert, check, state_key)
+        should_log = await AlertCoreService._should_log_suppression(
+            db, alert, check, state_key
+        )
 
         if should_log:
-            mappings = await AlertCRUD.list_active_notif_mappings_for_alert(db, alert.id)
+            mappings = await AlertCRUD.list_active_notif_mappings_for_alert(
+                db, alert.id
+            )
             now = utc_now()
             for mapping in mappings:
                 provider = mapping.notification_provider
@@ -1021,7 +1039,9 @@ class AlertCoreService:
         Uses the same dedup-relevant lookup as `_should_send_notification` so audit
         rows aren't duplicated tick-by-tick. See LUXSWIRL-148.
         """
-        last_notification = await AlertCRUD.get_last_notification_for_dedup(db, alert.id, check.id)
+        last_notification = await AlertCRUD.get_last_notification_for_dedup(
+            db, alert.id, check.id
+        )
         if last_notification is None:
             return True
         if last_notification.notification_hash is None:
@@ -1087,14 +1107,18 @@ class AlertCoreService:
         # Most recent dedup-relevant notification row (any status that represents
         # "we already audited this alert+check," not just successful delivery).
         # See LUXSWIRL-145 for why `sent`-only caused dedup amnesia.
-        last_notification = await AlertCRUD.get_last_notification_for_dedup(db, alert.id, check.id)
+        last_notification = await AlertCRUD.get_last_notification_for_dedup(
+            db, alert.id, check.id
+        )
 
         # No previous notification - always send (fresh state, not a resend)
         if not last_notification:
             logger.debug("No previous notification found - sending")
             return SendDecision(send=True, is_resend=False, resend_count=0)
 
-        current_state_key = AlertCoreService._compute_alert_state_key(alert, check_result)
+        current_state_key = AlertCoreService._compute_alert_state_key(
+            alert, check_result
+        )
 
         if last_notification.notification_hash is not None:
             # Hash-based dedup (LUXSWIRL-147). The key encodes the alert's logical
@@ -1119,7 +1143,9 @@ class AlertCoreService:
                 db, last_notification.check_result_id
             )
             if not last_check_result:
-                logger.debug("Last notification's check result not found (retention?) - sending")
+                logger.debug(
+                    "Last notification's check result not found (retention?) - sending"
+                )
                 return SendDecision(send=True, is_resend=False, resend_count=0)
             if last_check_result.success != check_result.success:
                 logger.debug(
@@ -1156,9 +1182,14 @@ class AlertCoreService:
             if alert.max_resends is not None and next_count > alert.max_resends:
                 logger.debug(
                     "Max resends reached - skipping notification",
-                    extra={"max_resends": alert.max_resends, "prior_count": prior_count},
+                    extra={
+                        "max_resends": alert.max_resends,
+                        "prior_count": prior_count,
+                    },
                 )
-                return SendDecision(send=False, is_resend=True, resend_count=prior_count)
+                return SendDecision(
+                    send=False, is_resend=True, resend_count=prior_count
+                )
             return SendDecision(send=True, is_resend=True, resend_count=next_count)
 
         logger.debug(

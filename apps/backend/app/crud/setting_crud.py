@@ -27,5 +27,7 @@ class SettingCRUD:
 
     @staticmethod
     async def list_all(db: AsyncSession) -> Sequence[Setting]:
-        result = await db.execute(select(Setting).order_by(Setting.category, Setting.key))
+        result = await db.execute(
+            select(Setting).order_by(Setting.category, Setting.key)
+        )
         return result.scalars().all()

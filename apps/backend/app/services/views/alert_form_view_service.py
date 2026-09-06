@@ -43,19 +43,19 @@ class AlertFormViewService:
         """
         # Collect provider IDs from checkboxes (parsed to UUID at the boundary)
         provider_ids: list[UUID] = []
-        for key in form.keys():
+        for key in form:
             if key.startswith("provider_"):
                 provider_ids.append(UUID(form[key]))
 
         # Collect check IDs from checkboxes (parsed to UUID at the boundary)
         check_ids: list[UUID] = []
-        for key in form.keys():
+        for key in form:
             if key.startswith("check_"):
                 check_ids.append(UUID(form[key]))
 
         # Collect days thresholds for SSL cert expiry (if present)
         collected_thresholds: list[int] = []
-        for key in form.keys():
+        for key in form:
             if key.startswith("trigger_days_threshold_"):
                 collected_thresholds.append(int(form[key]))
 

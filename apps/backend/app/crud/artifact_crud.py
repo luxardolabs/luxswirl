@@ -17,12 +17,16 @@ class ArtifactCRUD:
     @staticmethod
     async def delete_older_than(db: AsyncSession, cutoff: datetime) -> int:
         """Delete artifacts created before cutoff. Returns rowcount."""
-        result = await db.execute(delete(CheckArtifact).where(CheckArtifact.created_at < cutoff))
+        result = await db.execute(
+            delete(CheckArtifact).where(CheckArtifact.created_at < cutoff)
+        )
         return result.rowcount or 0  # type: ignore[attr-defined]
 
     @staticmethod
     async def get_by_id(db: AsyncSession, artifact_id: UUID) -> CheckArtifact | None:
-        result = await db.execute(select(CheckArtifact).where(CheckArtifact.id == artifact_id))
+        result = await db.execute(
+            select(CheckArtifact).where(CheckArtifact.id == artifact_id)
+        )
         return result.scalar_one_or_none()
 
     @staticmethod
@@ -69,7 +73,9 @@ class ArtifactCRUD:
 
     @staticmethod
     async def delete_by_id(db: AsyncSession, artifact_id: UUID) -> int:
-        result = await db.execute(delete(CheckArtifact).where(CheckArtifact.id == artifact_id))
+        result = await db.execute(
+            delete(CheckArtifact).where(CheckArtifact.id == artifact_id)
+        )
         return result.rowcount or 0  # type: ignore[attr-defined]
 
     @staticmethod

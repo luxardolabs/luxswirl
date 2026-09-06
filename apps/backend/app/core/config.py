@@ -21,8 +21,12 @@ class DatabaseSettings(BaseSettings):
     )
     echo: bool = Field(default=False, description="Echo SQL statements")
     pool_size: int = Field(default=20, ge=1, le=100, description="Connection pool size")
-    max_overflow: int = Field(default=10, ge=0, le=50, description="Max overflow connections")
-    pool_pre_ping: bool = Field(default=True, description="Verify connections before use")
+    max_overflow: int = Field(
+        default=10, ge=0, le=50, description="Max overflow connections"
+    )
+    pool_pre_ping: bool = Field(
+        default=True, description="Verify connections before use"
+    )
 
     model_config = SettingsConfigDict(
         env_prefix="DATABASE_",
@@ -39,8 +43,12 @@ class ServerSettings(BaseSettings):
         default="development",
         description="Environment",
     )
-    workers: int = Field(default=1, ge=1, le=16, description="Number of worker processes")
-    reload: bool = Field(default=False, description="Enable auto-reload for development")
+    workers: int = Field(
+        default=1, ge=1, le=16, description="Number of worker processes"
+    )
+    reload: bool = Field(
+        default=False, description="Enable auto-reload for development"
+    )
 
     # CORS settings
     # CRITICAL: Set this to your public-facing URL that users access in their browser
@@ -304,7 +312,9 @@ class Settings(BaseSettings):
 
     app_name: str = Field(default="LuxSwirl", description="Application name")
     app_version: str = Field(default="dev", description="Application version")
-    build_timestamp: str = Field(default="unknown", description="Build timestamp (ISO 8601)")
+    build_timestamp: str = Field(
+        default="unknown", description="Build timestamp (ISO 8601)"
+    )
     environment: Literal["development", "staging", "production"] = Field(
         default="development",
         description="Environment",

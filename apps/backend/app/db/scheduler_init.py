@@ -25,7 +25,9 @@ async def init_scheduler_defaults(db: AsyncSession) -> None:
         configs_created = 0
         for config_data in DEFAULT_JOB_CONFIGURATIONS:
             result = await db.execute(
-                select(JobConfiguration).where(JobConfiguration.job_key == config_data["job_key"])
+                select(JobConfiguration).where(
+                    JobConfiguration.job_key == config_data["job_key"]
+                )
             )
             existing = result.scalar_one_or_none()
 

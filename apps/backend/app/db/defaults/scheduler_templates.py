@@ -31,7 +31,9 @@ DEFAULT_JOB_CONFIGURATIONS: list[dict[str, Any]] = [
         "parameters": {"days_to_keep": 90},
         "trigger_type": TRIGGER_CRON,
         "cron_expression": "0 2 * * *",  # Daily at 2 AM
-        "next_run_at": datetime.now(UTC).replace(hour=2, minute=0, second=0, microsecond=0)
+        "next_run_at": datetime.now(UTC).replace(
+            hour=2, minute=0, second=0, microsecond=0
+        )
         + timedelta(days=1),
         "max_runtime_seconds": 300,
         "notify_on_failure": True,
@@ -47,7 +49,9 @@ DEFAULT_JOB_CONFIGURATIONS: list[dict[str, Any]] = [
         "parameters": {"days_to_keep": 30},
         "trigger_type": TRIGGER_CRON,
         "cron_expression": "30 2 * * *",  # Daily at 2:30 AM
-        "next_run_at": datetime.now(UTC).replace(hour=2, minute=30, second=0, microsecond=0)
+        "next_run_at": datetime.now(UTC).replace(
+            hour=2, minute=30, second=0, microsecond=0
+        )
         + timedelta(days=1),
         "max_runtime_seconds": 300,
         "notify_on_failure": True,
@@ -78,7 +82,9 @@ DEFAULT_JOB_CONFIGURATIONS: list[dict[str, Any]] = [
         "parameters": {"days_to_keep": 30},
         "trigger_type": TRIGGER_CRON,
         "cron_expression": "30 3 * * *",  # Daily at 3:30 AM
-        "next_run_at": datetime.now(UTC).replace(hour=3, minute=30, second=0, microsecond=0)
+        "next_run_at": datetime.now(UTC).replace(
+            hour=3, minute=30, second=0, microsecond=0
+        )
         + timedelta(days=1),
         "max_runtime_seconds": 300,
         "notify_on_failure": True,

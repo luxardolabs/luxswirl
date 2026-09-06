@@ -40,7 +40,9 @@ async def check_detail_panel(
             )
             hours = CheckDetailViewService.parse_time_range_to_hours(time_range_str)
 
-        detail = await CheckDetailViewService.get_check_detail(db, check_id, hours=hours)
+        detail = await CheckDetailViewService.get_check_detail(
+            db, check_id, hours=hours
+        )
 
         if not detail:
             return templates.TemplateResponse(
@@ -83,7 +85,9 @@ async def check_detail_panel(
         )
 
 
-@router.get("/checks/detail/empty", response_class=HTMLResponse, include_in_schema=False)
+@router.get(
+    "/checks/detail/empty", response_class=HTMLResponse, include_in_schema=False
+)
 async def check_detail_empty(
     request: Request,
     current_user: CurrentUserWeb,

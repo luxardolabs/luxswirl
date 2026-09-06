@@ -121,7 +121,9 @@ class SchedulerCoreService:
         """Execute a single job."""
         async with worker_session() as db:
             # Verify we still hold the lease
-            job = await JobConfigurationCRUD.get_by_job_key_with_lease(db, job_key, lease_token)
+            job = await JobConfigurationCRUD.get_by_job_key_with_lease(
+                db, job_key, lease_token
+            )
 
             if not job:
                 logger.warning("Lost lease for job", extra={"job_key": job_key})
@@ -163,7 +165,9 @@ class SchedulerCoreService:
                 errors = result.get("errors") if isinstance(result, dict) else None
                 has_errors = False
                 if errors is not None:
-                    has_errors = len(errors) > 0 if isinstance(errors, list) else errors > 0
+                    has_errors = (
+                        len(errors) > 0 if isinstance(errors, list) else errors > 0
+                    )
                 final_status = (
                     SchedulerExecutionStatus.WARNING
                     if has_errors
@@ -183,13 +187,16 @@ class SchedulerCoreService:
                 job.total_runs += 1
 
                 logger.info(
-                    "Job completed" + (" with errors" if has_errors else " successfully"),
+                    "Job completed"
+                    + (" with errors" if has_errors else " successfully"),
                     extra={"job_key": job_key, "duration": execution.duration_seconds},
                 )
 
             except TimeoutError:
                 execution.status = SchedulerExecutionStatus.FAILED
-                execution.error_message = f"Job timed out after {job.max_runtime_seconds} seconds"
+                execution.error_message = (
+                    f"Job timed out after {job.max_runtime_seconds} seconds"
+                )
                 execution.completed_at = datetime.now(UTC)
                 await self._handle_job_failure(db, job, execution.error_message)
                 logger.error("Job timed out", extra={"job_key": job_key})
@@ -355,7 +362,9 @@ class SchedulerCoreService:
             await db.flush()
             await db.refresh(job)
 
-            logger.info("Toggled job", extra={"job_key": job_key, "enabled": job.enabled})
+            logger.info(
+                "Toggled job", extra={"job_key": job_key, "enabled": job.enabled}
+            )
             return job
 
     async def execute_job_synchronously(self, job_key: str) -> dict:
@@ -416,7 +425,9 @@ class SchedulerCoreService:
                 errors = result.get("errors") if isinstance(result, dict) else None
                 has_errors = False
                 if errors is not None:
-                    has_errors = len(errors) > 0 if isinstance(errors, list) else errors > 0
+                    has_errors = (
+                        len(errors) > 0 if isinstance(errors, list) else errors > 0
+                    )
                 final_status = (
                     SchedulerExecutionStatus.WARNING
                     if has_errors
@@ -439,7 +450,9 @@ class SchedulerCoreService:
 
             except TimeoutError:
                 execution.status = SchedulerExecutionStatus.FAILED
-                execution.error_message = f"Job timed out after {job.max_runtime_seconds} seconds"
+                execution.error_message = (
+                    f"Job timed out after {job.max_runtime_seconds} seconds"
+                )
                 execution.completed_at = datetime.now(UTC)
                 job.last_status = SchedulerExecutionStatus.FAILED
                 job.failed_runs += 1

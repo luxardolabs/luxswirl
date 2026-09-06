@@ -19,7 +19,9 @@ class ArtifactCoreService:
     """Service for check artifact operations."""
 
     @staticmethod
-    async def create_artifact(db: AsyncSession, data: CheckArtifactCreate) -> CheckArtifact:
+    async def create_artifact(
+        db: AsyncSession, data: CheckArtifactCreate
+    ) -> CheckArtifact:
         """Create a new check artifact.
 
         Args:
@@ -73,7 +75,9 @@ class ArtifactCoreService:
             raise
 
     @staticmethod
-    async def get_artifact_by_id(db: AsyncSession, artifact_id: UUID) -> CheckArtifact | None:
+    async def get_artifact_by_id(
+        db: AsyncSession, artifact_id: UUID
+    ) -> CheckArtifact | None:
         """Get artifact by ID.
 
         Args:
@@ -132,7 +136,9 @@ class ArtifactCoreService:
         """
         # check_artifacts is a hypertable partitioned by created_at, so the
         # listing query is bounded on it — source the result's timestamp first.
-        check_result = await CheckResultCoreService.get_check_result_by_id(db, check_result_id)
+        check_result = await CheckResultCoreService.get_check_result_by_id(
+            db, check_result_id
+        )
         if check_result is None:
             return []
         artifacts = await ArtifactCRUD.list_by_check_result(
@@ -189,7 +195,9 @@ class ArtifactCoreService:
             Number of artifacts deleted
         """
         keep_ids = await ArtifactCRUD.get_recent_ids_for_check(db, check_id, keep_count)
-        deleted_count = await ArtifactCRUD.delete_for_check_excluding(db, check_id, keep_ids)
+        deleted_count = await ArtifactCRUD.delete_for_check_excluding(
+            db, check_id, keep_ids
+        )
 
         if deleted_count > 0:
             logger.info(

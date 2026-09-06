@@ -16,7 +16,12 @@ from app.core.auth_deps import (
     EditorUserWeb,
 )
 from app.core.exceptions import CheckNotFoundException
-from app.core.query_params import AgentIdFilter, CheckTypeFilter, PerPageFilter, empty_to_none
+from app.core.query_params import (
+    AgentIdFilter,
+    CheckTypeFilter,
+    PerPageFilter,
+    empty_to_none,
+)
 from app.db import get_db
 from app.services.views.checks_view_service import ChecksViewService
 from app.services.views.status_view_service import StatusViewService
@@ -53,7 +58,9 @@ async def assignment_mode_selector(
     )
     if context is None:
         return HTMLResponse(content="")
-    return templates.TemplateResponse(request, "partials/check_assignment_selector.html", context)
+    return templates.TemplateResponse(
+        request, "partials/check_assignment_selector.html", context
+    )
 
 
 @router.get("/checks/create-form", response_class=HTMLResponse, include_in_schema=False)
@@ -63,11 +70,17 @@ async def create_form(
     current_user: CurrentUserWeb,
 ):
     """Get the create form for a new check."""
-    context = await ChecksViewService.build_create_form_context(db, request, current_user)
-    return templates.TemplateResponse(request, "panels/checks/check_form_panel.html", context)
+    context = await ChecksViewService.build_create_form_context(
+        db, request, current_user
+    )
+    return templates.TemplateResponse(
+        request, "panels/checks/check_form_panel.html", context
+    )
 
 
-@router.get("/checks/{check_id}/edit-form", response_class=HTMLResponse, include_in_schema=False)
+@router.get(
+    "/checks/{check_id}/edit-form", response_class=HTMLResponse, include_in_schema=False
+)
 async def edit_form(
     request: Request,
     check_id: Annotated[UUID, Path(description="Check UUID")],
@@ -79,13 +92,19 @@ async def edit_form(
         context = await ChecksViewService.build_edit_form_context(
             db, request, current_user, check_id
         )
-        return templates.TemplateResponse(request, "panels/checks/check_form_panel.html", context)
+        return templates.TemplateResponse(
+            request, "panels/checks/check_form_panel.html", context
+        )
     except CheckNotFoundException as e:
         logger.error("Check not found", exc_info=True)
         return error_partial(request, current_user, str(e), 404)
 
 
-@router.get("/checks/{check_id}/clone-form", response_class=HTMLResponse, include_in_schema=False)
+@router.get(
+    "/checks/{check_id}/clone-form",
+    response_class=HTMLResponse,
+    include_in_schema=False,
+)
 async def clone_form(
     request: Request,
     check_id: Annotated[UUID, Path(description="Check UUID to clone")],
@@ -97,7 +116,9 @@ async def clone_form(
         context = await ChecksViewService.build_clone_form_context(
             db, request, current_user, check_id
         )
-        return templates.TemplateResponse(request, "panels/checks/check_form_panel.html", context)
+        return templates.TemplateResponse(
+            request, "panels/checks/check_form_panel.html", context
+        )
     except CheckNotFoundException as e:
         logger.error("Check not found", exc_info=True)
         return error_partial(request, current_user, str(e), 404)
@@ -106,7 +127,9 @@ async def clone_form(
 # ---- Mutations ----------------------------------------------------------
 
 
-@router.post("/checks/{check_id}/clone", response_class=HTMLResponse, include_in_schema=False)
+@router.post(
+    "/checks/{check_id}/clone", response_class=HTMLResponse, include_in_schema=False
+)
 async def clone_check_handler(
     request: Request,
     check_id: Annotated[UUID, Path(description="Check UUID to clone")],
@@ -242,7 +265,9 @@ async def create_check_assignment(
     )
 
 
-@router.post("/checks/{check_id}/update", response_class=HTMLResponse, include_in_schema=False)
+@router.post(
+    "/checks/{check_id}/update", response_class=HTMLResponse, include_in_schema=False
+)
 async def update_check(
     request: Request,
     check_id: Annotated[UUID, Path(description="Check UUID")],
@@ -314,7 +339,9 @@ async def update_check(
     )
 
 
-@router.post("/checks/{check_id}/toggle", response_class=HTMLResponse, include_in_schema=False)
+@router.post(
+    "/checks/{check_id}/toggle", response_class=HTMLResponse, include_in_schema=False
+)
 async def toggle_check(
     request: Request,
     check_id: Annotated[UUID, Path(description="Check UUID")],
@@ -323,10 +350,14 @@ async def toggle_check(
 ):
     """Toggle check enabled/disabled status."""
     context = await ChecksViewService.toggle_check_handler(db, check_id)
-    return templates.TemplateResponse(request, "partials/checks/toggle_button.html", context)
+    return templates.TemplateResponse(
+        request, "partials/checks/toggle_button.html", context
+    )
 
 
-@router.delete("/checks/{check_id}", response_class=HTMLResponse, include_in_schema=False)
+@router.delete(
+    "/checks/{check_id}", response_class=HTMLResponse, include_in_schema=False
+)
 async def delete_check(
     request: Request,
     check_id: Annotated[UUID, Path(description="Check UUID")],
@@ -334,7 +365,9 @@ async def delete_check(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     """Delete a check (enqueues a background cascade — see LUXSWIRL-105)."""
-    return await ChecksViewService.enqueue_check_delete(db, request, current_user, check_id)
+    return await ChecksViewService.enqueue_check_delete(
+        db, request, current_user, check_id
+    )
 
 
 # ---- Dependents management ----------------------------------------------
@@ -367,7 +400,9 @@ async def dependents_panel(
             tags=tags,
             search=search,
         )
-        return templates.TemplateResponse(request, "panels/checks/dependents_panel.html", context)
+        return templates.TemplateResponse(
+            request, "panels/checks/dependents_panel.html", context
+        )
     except CheckNotFoundException as e:
         return error_partial(request, current_user, str(e), 404)
 
@@ -386,13 +421,17 @@ async def update_dependents(
 ):
     added, removed = await ChecksViewService.set_dependents(db, check_id, dependent_ids)
     msg = f"Updated dependents: +{added} −{removed}"
-    return hx_empty_with_toast(msg, extra_events={"closeSidePanel": {}, "refreshPage": {}})
+    return hx_empty_with_toast(
+        msg, extra_events={"closeSidePanel": {}, "refreshPage": {}}
+    )
 
 
 # ---- Bulk operations ----------------------------------------------------
 
 
-@router.post("/checks/bulk-action", response_class=HTMLResponse, include_in_schema=False)
+@router.post(
+    "/checks/bulk-action", response_class=HTMLResponse, include_in_schema=False
+)
 async def bulk_action(
     request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -426,14 +465,23 @@ async def bulk_action(
         return job_status_oob_response(request, current_user, job, msg)
 
     # Small N enable/disable: stay synchronous.
-    _success, _failure, message, toast_kind = await ChecksViewService.execute_bulk_action(
+    (
+        _success,
+        _failure,
+        message,
+        toast_kind,
+    ) = await ChecksViewService.execute_bulk_action(
         db, action, select_all, agent, enabled, tag, check_ids
     )
-    oob_context = await StatusViewService.build_oob_status_context(db, request, current_user)
+    oob_context = await StatusViewService.build_oob_status_context(
+        db, request, current_user
+    )
     return bulk_oob_response(oob_context, message, toast_kind)
 
 
-@router.post("/checks/bulk-modify", response_class=HTMLResponse, include_in_schema=False)
+@router.post(
+    "/checks/bulk-modify", response_class=HTMLResponse, include_in_schema=False
+)
 async def bulk_modify(
     request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -473,7 +521,9 @@ async def bulk_modify(
     )
 
 
-@router.post("/checks/bulk-preview", response_class=HTMLResponse, include_in_schema=False)
+@router.post(
+    "/checks/bulk-preview", response_class=HTMLResponse, include_in_schema=False
+)
 async def bulk_check_preview(
     request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -504,7 +554,9 @@ async def checks_table_partial(
         context = await ChecksViewService.build_table_partial_context(
             db, request, current_user, agent, enabled, page, per_page
         )
-        return templates.TemplateResponse(request, "partials/checks_table.html", context)
+        return templates.TemplateResponse(
+            request, "partials/checks_table.html", context
+        )
     except Exception as e:
         logger.error("Error rendering check assignments table", exc_info=True)
         return error_partial(request, current_user, str(e), 500)

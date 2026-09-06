@@ -50,13 +50,19 @@ def split_csv(value: str | None) -> list[str] | None:
 
 # ── Closed-set filters: typed by the enum (single source of truth) ──────────
 JobStatusFilter = Annotated[
-    JobStatus | None, BeforeValidator(empty_to_none), Query(description="Filter by job status")
+    JobStatus | None,
+    BeforeValidator(empty_to_none),
+    Query(description="Filter by job status"),
 ]
 JobTypeFilter = Annotated[
-    JobType | None, BeforeValidator(empty_to_none), Query(description="Filter by job type")
+    JobType | None,
+    BeforeValidator(empty_to_none),
+    Query(description="Filter by job type"),
 ]
 CheckTypeFilter = Annotated[
-    CheckType | None, BeforeValidator(empty_to_none), Query(description="Filter by check type")
+    CheckType | None,
+    BeforeValidator(empty_to_none),
+    Query(description="Filter by check type"),
 ]
 HealthStatusFilter = Annotated[
     CheckHealthStatus | None,
@@ -76,7 +82,9 @@ ProviderTypeFilter = Annotated[
 
 # ── Reference filters: a specific instance id (UUID), not a closed set ──────
 ProviderIdFilter = Annotated[
-    UUID | None, BeforeValidator(empty_to_none), Query(description="Filter by provider id")
+    UUID | None,
+    BeforeValidator(empty_to_none),
+    Query(description="Filter by provider id"),
 ]
 AlertIdFilter = Annotated[
     UUID | None, BeforeValidator(empty_to_none), Query(description="Filter by alert id")
@@ -104,11 +112,17 @@ TimeRangeFilter = Annotated[
     Query(description="Status bar time range in minutes"),
 ]
 EnabledFilter = Annotated[
-    bool | None, BeforeValidator(empty_to_none), Query(description="Filter by enabled status")
+    bool | None,
+    BeforeValidator(empty_to_none),
+    Query(description="Filter by enabled status"),
 ]
 GlobalFilter = Annotated[
-    bool | None, BeforeValidator(empty_to_none), Query(description="Filter by global status")
+    bool | None,
+    BeforeValidator(empty_to_none),
+    Query(description="Filter by global status"),
 ]
 ActiveFilter = Annotated[
-    bool | None, BeforeValidator(empty_to_none), Query(description="Filter by active status")
+    bool | None,
+    BeforeValidator(empty_to_none),
+    Query(description="Filter by active status"),
 ]

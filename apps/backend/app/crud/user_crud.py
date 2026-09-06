@@ -27,7 +27,9 @@ class UserCRUD:
 
     @staticmethod
     async def count_active(db: AsyncSession) -> int:
-        result = await db.execute(select(func.count(User.id)).where(User.is_active.is_(True)))
+        result = await db.execute(
+            select(func.count(User.id)).where(User.is_active.is_(True))
+        )
         return result.scalar_one()
 
     @staticmethod
@@ -55,8 +57,12 @@ class UserCRUD:
                 )
             )
 
-        total = (await db.execute(select(func.count()).select_from(stmt.subquery()))).scalar_one()
-        result = await db.execute(stmt.order_by(User.created_at.desc()).offset(skip).limit(limit))
+        total = (
+            await db.execute(select(func.count()).select_from(stmt.subquery()))
+        ).scalar_one()
+        result = await db.execute(
+            stmt.order_by(User.created_at.desc()).offset(skip).limit(limit)
+        )
         return result.scalars().all(), total
 
     @staticmethod
@@ -72,7 +78,9 @@ class UserCRUD:
     @staticmethod
     async def count_locked(db: AsyncSession) -> int:
         """Users with locked_until still in the future."""
-        result = await db.execute(select(func.count(User.id)).where(User.locked_until > utc_now()))
+        result = await db.execute(
+            select(func.count(User.id)).where(User.locked_until > utc_now())
+        )
         return result.scalar_one()
 
     @staticmethod

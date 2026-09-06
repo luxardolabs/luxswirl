@@ -16,7 +16,9 @@ class RegistrationKeyCRUD:
     @staticmethod
     async def get_by_id(db: AsyncSession, key_id: UUID) -> RegistrationKey | None:
         """Fetch a registration key by id."""
-        result = await db.execute(select(RegistrationKey).where(RegistrationKey.id == key_id))
+        result = await db.execute(
+            select(RegistrationKey).where(RegistrationKey.id == key_id)
+        )
         return result.scalar_one_or_none()
 
     @staticmethod

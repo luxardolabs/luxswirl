@@ -99,7 +99,9 @@ async def login(
         value=token,
         httponly=cookie_config.session_cookie_httponly,
         secure=cookie_config.session_cookie_secure,
-        samesite=cast(Literal["lax", "strict", "none"], cookie_config.session_cookie_samesite),
+        samesite=cast(
+            Literal["lax", "strict", "none"], cookie_config.session_cookie_samesite
+        ),
         max_age=max_age_seconds,
         path=cookie_config.session_cookie_path,
     )
@@ -113,7 +115,9 @@ async def login(
         },
     )
 
-    return LoginResponse(message="Login successful", user=UserResponse.model_validate(user))
+    return LoginResponse(
+        message="Login successful", user=UserResponse.model_validate(user)
+    )
 
 
 @router.post("/logout", status_code=status.HTTP_200_OK)
@@ -197,7 +201,7 @@ async def change_password(
 
     try:
         await auth_service.change_password(
-            db, user, password_data.current_password, password_data.new_password
+            db, user.id, password_data.current_password, password_data.new_password
         )
         logger.info(
             "User changed their password",

@@ -16,7 +16,9 @@ from app.models.maintenance_job_model import MaintenanceJob
 class MaintenanceJobCRUD:
     @staticmethod
     async def get_by_id(db: AsyncSession, job_id: UUID) -> MaintenanceJob | None:
-        result = await db.execute(select(MaintenanceJob).where(MaintenanceJob.id == job_id))
+        result = await db.execute(
+            select(MaintenanceJob).where(MaintenanceJob.id == job_id)
+        )
         return result.scalar_one_or_none()
 
     @staticmethod
@@ -30,7 +32,10 @@ class MaintenanceJobCRUD:
                     MaintenanceJob.kind == kind,
                     MaintenanceJob.target_id == target_id,
                     MaintenanceJob.status.in_(
-                        [MaintenanceJobStatus.QUEUED.value, MaintenanceJobStatus.RUNNING.value]
+                        [
+                            MaintenanceJobStatus.QUEUED.value,
+                            MaintenanceJobStatus.RUNNING.value,
+                        ]
                     ),
                 )
             )
@@ -122,9 +127,13 @@ class MaintenanceJobCRUD:
         )
 
     @staticmethod
-    async def update_progress(db: AsyncSession, job_id: UUID, progress: dict[str, Any]) -> None:
+    async def update_progress(
+        db: AsyncSession, job_id: UUID, progress: dict[str, Any]
+    ) -> None:
         await db.execute(
-            update(MaintenanceJob).where(MaintenanceJob.id == job_id).values(progress=progress)
+            update(MaintenanceJob)
+            .where(MaintenanceJob.id == job_id)
+            .values(progress=progress)
         )
 
     @staticmethod

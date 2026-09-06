@@ -10,6 +10,7 @@ from typing import Any, cast
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.auth_deps import AuthedUser
 from app.models.session_model import Session
 from app.models.user_model import User
 from app.schemas.auth_schema import ChangePasswordRequest
@@ -106,14 +107,14 @@ class WebAuthViewService:
         return cast(bool, await self.auth_service.logout(db, token))
 
     async def change_password(
-        self, db: AsyncSession, user: User, request: ChangePasswordRequest
+        self, db: AsyncSession, user: AuthedUser, request: ChangePasswordRequest
     ) -> tuple[bool, str | None]:
         """
         Change user password.
 
         Args:
             db: Database session
-            user: User changing password
+            user: The authenticated principal changing their password
             request: Password change request
 
         Returns:
@@ -122,7 +123,7 @@ class WebAuthViewService:
         try:
             await self.auth_service.change_password(
                 db,
-                user,
+                user.id,
                 current_password=request.current_password,
                 new_password=request.new_password,
             )
@@ -133,7 +134,9 @@ class WebAuthViewService:
             logger.error("Password change error", exc_info=True)
             return False, "An error occurred while changing password"
 
-    async def get_user_sessions(self, db: AsyncSession, user: User) -> list[dict[str, Any]]:
+    async def get_user_sessions(
+        self, db: AsyncSession, user: User
+    ) -> list[dict[str, Any]]:
         """
         Get user's active sessions formatted for web UI.
 

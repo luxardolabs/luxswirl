@@ -138,7 +138,9 @@ class NotificationRegistry:
         provider_class = cls.get(provider_type)
         if not provider_class:
             available = ", ".join(cls.get_provider_types())
-            raise ValueError(f"Unknown provider type: {provider_type}. Available: {available}")
+            raise ValueError(
+                f"Unknown provider type: {provider_type}. Available: {available}"
+            )
 
         return provider_class(config)
 

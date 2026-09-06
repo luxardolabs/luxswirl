@@ -52,7 +52,9 @@ async def update_profile(
     )
 
 
-@router.post("/profile/change-password", response_class=HTMLResponse, include_in_schema=False)
+@router.post(
+    "/profile/change-password", response_class=HTMLResponse, include_in_schema=False
+)
 async def change_password(
     request: Request,
     current_password: Annotated[str, Form()],

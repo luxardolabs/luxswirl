@@ -32,7 +32,9 @@ async def _session_cleanup_loop():
     while True:
         try:
             # Wait for interval
-            await asyncio.sleep(CLEANUP_INTERVAL_HOURS * 3600)  # Convert hours to seconds
+            await asyncio.sleep(
+                CLEANUP_INTERVAL_HOURS * 3600
+            )  # Convert hours to seconds
 
             # Cleanup expired sessions
             async with worker_session() as db:

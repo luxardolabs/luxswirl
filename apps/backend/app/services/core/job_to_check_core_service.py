@@ -75,7 +75,9 @@ class JobToCheckCoreService:
             return None, "Job not found or has no discovered hosts"
 
         discovered_hosts = job.result.get("discovered_hosts", [])
-        existing_checks = await CheckCoreService.list_checks_for_agent(db, params.agent_id)
+        existing_checks = await CheckCoreService.list_checks_for_agent(
+            db, params.agent_id
+        )
         existing_check_names = {check.display_name for check in existing_checks}
 
         created_count = 0
@@ -131,7 +133,9 @@ class JobToCheckCoreService:
         result = NetworkScanCoreService.enrich_result(job.result)
         web_hosts = result.get("categorized_hosts", {}).get("web", [])
 
-        existing_checks = await CheckCoreService.list_checks_for_agent(db, params.agent_id)
+        existing_checks = await CheckCoreService.list_checks_for_agent(
+            db, params.agent_id
+        )
         existing_check_names = {check.display_name for check in existing_checks}
 
         web_ports = [80, 443, 8080, 8443, 8000, 3000, 5000]
@@ -194,7 +198,9 @@ class JobToCheckCoreService:
         result = NetworkScanCoreService.enrich_result(job.result)
         ssh_hosts = result.get("categorized_hosts", {}).get("ssh", [])
 
-        existing_checks = await CheckCoreService.list_checks_for_agent(db, params.agent_id)
+        existing_checks = await CheckCoreService.list_checks_for_agent(
+            db, params.agent_id
+        )
         existing_check_names = {check.display_name for check in existing_checks}
 
         ssh_ports = [22, 2222]
@@ -251,7 +257,9 @@ class JobToCheckCoreService:
         Returns (created, error_message). `created` is False (with error_message
         set) if the check name already exists for the agent or validation fails.
         """
-        existing_checks = await CheckCoreService.list_checks_for_agent(db, params.agent_id)
+        existing_checks = await CheckCoreService.list_checks_for_agent(
+            db, params.agent_id
+        )
         if any(check.display_name == params.display_name for check in existing_checks):
             return False, "Check already exists"
 
@@ -263,7 +271,9 @@ class JobToCheckCoreService:
             timeout_seconds=params.timeout,
             retry_attempts=params.retry_attempts,
             enabled=True,
-            expected_status=params.expected_status if params.check_type == "http" else None,
+            expected_status=params.expected_status
+            if params.check_type == "http"
+            else None,
             verify_ssl=params.verify_ssl if params.check_type == "http" else True,
             tags=params.tags,
         )
@@ -290,7 +300,9 @@ class JobToCheckCoreService:
         result = NetworkScanCoreService.enrich_result(job.result)
         db_hosts = result.get("categorized_hosts", {}).get("database", [])
 
-        existing_checks = await CheckCoreService.list_checks_for_agent(db, params.agent_id)
+        existing_checks = await CheckCoreService.list_checks_for_agent(
+            db, params.agent_id
+        )
         existing_check_names = {check.display_name for check in existing_checks}
 
         db_ports = [3306, 5432, 5433, 27017, 6379, 1433, 1521]

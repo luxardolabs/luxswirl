@@ -158,7 +158,9 @@ async def list_jobs(
         )
 
     # Get stats
-    stats = await JobCoreService.get_job_stats(db, agent_id=agent_uuid, server_only=server_only)
+    stats = await JobCoreService.get_job_stats(
+        db, agent_id=agent_uuid, server_only=server_only
+    )
 
     return JobListResponse(
         jobs=job_responses,
@@ -334,4 +336,6 @@ async def get_job_stats(
 ):
     """Get job statistics."""
     agent_uuid, server_only = JobCoreService.resolve_runner_filter(agent_filter)
-    return await JobCoreService.get_job_stats(db, agent_id=agent_uuid, server_only=server_only)
+    return await JobCoreService.get_job_stats(
+        db, agent_id=agent_uuid, server_only=server_only
+    )

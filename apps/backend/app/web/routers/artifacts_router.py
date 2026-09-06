@@ -65,6 +65,8 @@ async def trace_viewer(
     )
     if error or context is None:
         status_code = 404 if error == "Artifact not found" else 400
-        return Response(content=error or "Error", status_code=status_code, media_type="text/plain")
+        return Response(
+            content=error or "Error", status_code=status_code, media_type="text/plain"
+        )
 
     return templates.TemplateResponse(request, "trace_viewer.html", context)
