@@ -37,9 +37,9 @@ if (document.readyState === 'loading') {
     {% set actions_html %}
     {{ btn_back(href='/status-pages') }}
     {% if status_page.is_public %}
-    {{ btn_view_text(label='View', href='/status/' ~ status_page.slug, extra_attrs='target="_blank"') }}
+    {{ btn_view_text(label='View', href=sp_urls.public, extra_attrs='target="_blank"') }}
     {% endif %}
-    {{ btn_edit_text(label='Settings', size='', hx_get='/status-pages/' ~ status_page.id ~ '/edit-form', hx_target='#panel-container', hx_swap='innerHTML') }}
+    {{ btn_edit_text(label='Settings', size='', hx_get=sp_urls.edit_form, hx_target='#panel-container', hx_swap='innerHTML') }}
     {% endset %}
 
     {{ page_header(
@@ -101,7 +101,7 @@ if (document.readyState === 'loading') {
                     <!-- Agent filter -->
                     <div>
                         <label for="filter-agent" class="block text-xs font-medium text-dark-text-secondary uppercase tracking-wider mb-1.5">Agent</label>
-                        {% call select('agent_id', id='filter-agent', class='input text-sm w-full', hx_get='/status-pages/' ~ status_page.id ~ '/available-checks', hx_target='#available-checks-list', hx_swap='innerHTML', hx_include="[name='agent_id'],[name='check_type'],[name='status'],[name='tags'],[name='search']") %}
+                        {% call select('agent_id', id='filter-agent', class='input text-sm w-full', hx_get=sp_urls.available_checks, hx_target='#available-checks-list', hx_swap='innerHTML', hx_include="[name='agent_id'],[name='check_type'],[name='status'],[name='tags'],[name='search']") %}
                             <option value="">All Agents</option>
                             {% for agent in all_agents %}
                             <option value="{{ agent.id }}">{{ agent.agent_name or agent.id }}</option>
@@ -112,7 +112,7 @@ if (document.readyState === 'loading') {
                     <!-- Type filter -->
                     <div>
                         <label for="filter-type" class="block text-xs font-medium text-dark-text-secondary uppercase tracking-wider mb-1.5">Type</label>
-                        {% call select('check_type', id='filter-type', class='input text-sm w-full', hx_get='/status-pages/' ~ status_page.id ~ '/available-checks', hx_target='#available-checks-list', hx_swap='innerHTML', hx_include="[name='agent_id'],[name='check_type'],[name='status'],[name='tags'],[name='search']") %}
+                        {% call select('check_type', id='filter-type', class='input text-sm w-full', hx_get=sp_urls.available_checks, hx_target='#available-checks-list', hx_swap='innerHTML', hx_include="[name='agent_id'],[name='check_type'],[name='status'],[name='tags'],[name='search']") %}
                             <option value="">All Types</option>
                             {% for check_type in all_types %}
                             <option value="{{ check_type }}">{{ check_type }}</option>
@@ -124,7 +124,7 @@ if (document.readyState === 'loading') {
                 <!-- Status filter -->
                 <div>
                     <label for="filter-status" class="block text-xs font-medium text-dark-text-secondary uppercase tracking-wider mb-1.5">Status</label>
-                    {% call select('status', id='filter-status', class='input text-sm w-full', hx_get='/status-pages/' ~ status_page.id ~ '/available-checks', hx_target='#available-checks-list', hx_swap='innerHTML', hx_include="[name='agent_id'],[name='check_type'],[name='status'],[name='tags'],[name='search']") %}
+                    {% call select('status', id='filter-status', class='input text-sm w-full', hx_get=sp_urls.available_checks, hx_target='#available-checks-list', hx_swap='innerHTML', hx_include="[name='agent_id'],[name='check_type'],[name='status'],[name='tags'],[name='search']") %}
                         <option value="">All Status</option>
                         <option value="up">Up</option>
                         <option value="down">Down</option>
@@ -148,7 +148,7 @@ if (document.readyState === 'loading') {
                 <!-- Search -->
                 <div>
                     <label class="block text-xs font-medium text-dark-text-secondary uppercase tracking-wider mb-1.5">Search</label>
-                    {{ input('search', type='text', id='filter-search', placeholder='Filter by name or target...', class='input text-sm w-full', hx_get='/status-pages/' ~ status_page.id ~ '/available-checks', hx_target='#available-checks-list', hx_swap='innerHTML', hx_trigger='keyup changed delay:300ms', hx_include="[name='agent_id'],[name='check_type'],[name='status'],[name='tags'],[name='search']") }}
+                    {{ input('search', type='text', id='filter-search', placeholder='Filter by name or target...', class='input text-sm w-full', hx_get=sp_urls.available_checks, hx_target='#available-checks-list', hx_swap='innerHTML', hx_trigger='keyup changed delay:300ms', hx_include="[name='agent_id'],[name='check_type'],[name='status'],[name='tags'],[name='search']") }}
                 </div>
             </div>
 
