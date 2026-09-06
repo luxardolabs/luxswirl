@@ -43,15 +43,9 @@
                 <div id="display-name-field">
                     <label class="label">Display Name</label>
                     <div class="flex gap-2">
-                        <input
-                            type="text"
-                            name="display_name"
-                            id="check-name-input"
-                            value="{% if mode == 'clone' %}{{ suggested_name }}{% elif check %}{{ check.display_name }}{% endif %}"
-                            required
-                            class="input flex-1"
-                            placeholder="ping_gateway"
-                        >
+                        {{ input(name='display_name', id='check-name-input', required=true,
+                                 class='input flex-1', placeholder='ping_gateway',
+                                 value=(suggested_name if mode == 'clone' else (check.display_name if check else ''))) }}
                         {% if not check or mode == 'clone' %}
                         {{ btn_refresh(label='', extra_classes='px-3', extra_attrs='type="button" data-generate-check-name title="Auto-generate display name from type and target"') }}
                         {% endif %}
@@ -129,15 +123,9 @@
         <!-- Target (hidden for bulk) -->
         <div id="target-field">
             <label class="label">Target</label>
-            <input
-                type="text"
-                name="target"
-                value="{{ check.target if check else '' }}"
-                required
-                class="input"
-                id="target-input"
-                placeholder="{% if check %}{% if check.check_type == 'ping' %}192.168.1.1 or hostname.example.com{% elif check.check_type == 'http' %}https://example.com/api/health{% elif check.check_type == 'tcp' %}hostname.example.com:3306{% elif check.check_type == 'dns' %}example.com{% elif check.check_type == 'json' %}https://api.example.com/status{% elif check.check_type == 'mysql' %}mysql://username:password@host:3306/database{% elif check.check_type == 'postgres' %}postgres://username:password@host:5432/database{% else %}192.168.1.1 or https://example.com{% endif %}{% else %}192.168.1.1 or https://example.com{% endif %}"
-            >
+            {%- set target_placeholder %}{% if check %}{% if check.check_type == 'ping' %}192.168.1.1 or hostname.example.com{% elif check.check_type == 'http' %}https://example.com/api/health{% elif check.check_type == 'tcp' %}hostname.example.com:3306{% elif check.check_type == 'dns' %}example.com{% elif check.check_type == 'json' %}https://api.example.com/status{% elif check.check_type == 'mysql' %}mysql://username:password@host:3306/database{% elif check.check_type == 'postgres' %}postgres://username:password@host:5432/database{% else %}192.168.1.1 or https://example.com{% endif %}{% else %}192.168.1.1 or https://example.com{% endif %}{% endset -%}
+            {{ input(name='target', id='target-input', required=true, class='input',
+                     value=(check.target if check else ''), placeholder=target_placeholder) }}
             <p class="text-xs text-dark-text-muted mt-1" id="target-hint">
                 {% if check %}
                     {% if check.check_type == 'ping' %}IP address or hostname to ping
@@ -201,16 +189,9 @@
                                     <label class="text-sm font-medium text-dark-text-primary">Verify SSL Certificates</label>
                                     <p class="text-xs text-dark-text-muted mt-1">Disable for self-signed certs</p>
                                 </div>
-                                <input
-                                    type="checkbox"
-                                    name="verify_ssl"
-                                    {% if check %}
-                                        {% if check and check.verify_ssl or not check and check_defaults.verify_ssl %}checked{% endif %}
-                                    {% else %}
-                                        checked
-                                    {% endif %}
-                                    class="w-5 h-5 rounded border-dark-border bg-dark-bg-tertiary text-brand-600 focus:ring-brand-500 focus:ring-2"
-                                >
+                                {{ checkbox(name='verify_ssl',
+                                            checked=(check.verify_ssl if check else true),
+                                            class='w-5 h-5 rounded border-dark-border bg-dark-bg-tertiary text-brand-600 focus:ring-brand-500 focus:ring-2') }}
                             </div>
                         </div>
                     </div>
@@ -365,16 +346,9 @@
                     <label class="text-sm font-medium text-dark-text-primary">Enable Check</label>
                     <p class="text-xs text-dark-text-muted mt-1">When disabled, this check will not run</p>
                 </div>
-                <input
-                    type="checkbox"
-                    name="enabled"
-                    {% if check %}
-                        {% if check.enabled %}checked{% endif %}
-                    {% else %}
-                        checked
-                    {% endif %}
-                    class="w-5 h-5 rounded border-dark-border bg-dark-bg-tertiary text-brand-600 focus:ring-brand-500 focus:ring-2"
-                >
+                {{ checkbox(name='enabled',
+                            checked=(check.enabled if check else true),
+                            class='w-5 h-5 rounded border-dark-border bg-dark-bg-tertiary text-brand-600 focus:ring-brand-500 focus:ring-2') }}
             </div>
         </div>
 

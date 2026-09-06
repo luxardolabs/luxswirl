@@ -1,3 +1,4 @@
+{% from 'macros/form_fields.html' import input %}
 <!-- Generated Token Display -->
 {% if generated %}
 <div class="p-4 rounded-lg bg-green-500/10 border border-green-500/30 animate-pulse-once">
@@ -12,13 +13,8 @@
             <!-- Token with copy and download buttons -->
             <div>
                 <div class="flex items-center gap-2">
-                    <input
-                        type="text"
-                        value="{{ token }}"
-                        readonly
-                        id="metrics-token-value"
-                        class="flex-1 px-3 py-2 bg-dark-bg-tertiary border border-dark-border rounded-lg text-sm font-mono text-dark-text-primary focus:outline-none focus:border-brand-500"
-                    />
+                    {{ input(id='metrics-token-value', value=token, extra_attrs='readonly',
+                             class='flex-1 px-3 py-2 bg-dark-bg-tertiary border border-dark-border rounded-lg text-sm font-mono text-dark-text-primary focus:outline-none focus:border-brand-500') }}
                     {% from 'macros/buttons.html' import btn_copy, btn_download %}
                     {{ btn_copy(label='', extra_classes='px-3 py-2', extra_attrs='data-copy-token="' ~ token ~ '" id="copy-token-btn" title="Copy to clipboard"') }}
                     {{ btn_download(label='', extra_classes='px-3 py-2', style='secondary', extra_attrs='data-download-token="' ~ token ~ '" title="Download as file" type="button"') }}

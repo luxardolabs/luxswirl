@@ -1,5 +1,5 @@
 <!-- Network Scan Results -->
-{% from 'macros/buttons.html' import text_btn, btn_create, icon_btn, tag_pill_button %}
+{% from 'macros/buttons.html' import text_btn, btn_create, filter_pill, icon_btn, tag_pill_button %}
 {% from 'macros/form_fields.html' import input, select %}
 {% from 'macros/tables.html' import data_table %}
 {% set result = job.result %}
@@ -199,18 +199,12 @@
             </div>
         </div>
         <div class="flex items-center gap-1" id="host-filter-pills">
-            <button type="button" data-host-filter="all"
-                class="host-filter-pill px-2.5 py-1 text-xs rounded-full border transition-colors bg-dark-bg-tertiary text-dark-text-muted border-dark-border hover:border-dark-border-hover">
-                All <span class="ml-1 opacity-70">{{ result.discovered_hosts|length }}</span>
-            </button>
-            <button type="button" data-host-filter="new"
-                class="host-filter-pill px-2.5 py-1 text-xs rounded-full border transition-colors bg-green-600/20 text-green-300 border-green-600/40">
-                New <span class="ml-1 opacity-70">{{ ns.new_count }}</span>
-            </button>
-            <button type="button" data-host-filter="monitored"
-                class="host-filter-pill px-2.5 py-1 text-xs rounded-full border transition-colors bg-dark-bg-tertiary text-dark-text-muted border-dark-border hover:border-dark-border-hover">
-                Monitored <span class="ml-1 opacity-70">{{ ns.monitored_count }}</span>
-            </button>
+            {{ filter_pill('All', result.discovered_hosts|length, extra_classes='host-filter-pill',
+                           extra_attrs='data-host-filter="all"') }}
+            {{ filter_pill('New', ns.new_count, color='green', extra_classes='host-filter-pill',
+                           extra_attrs='data-host-filter="new"') }}
+            {{ filter_pill('Monitored', ns.monitored_count, extra_classes='host-filter-pill',
+                           extra_attrs='data-host-filter="monitored"') }}
         </div>
     </div>
 

@@ -1,5 +1,5 @@
 {% from 'macros/buttons.html' import btn_save, btn_create, btn_cancel_text %}
-{% from 'macros/form_fields.html' import checkbox, select %}
+{% from 'macros/form_fields.html' import checkbox, input, select, textarea %}
 {% from 'macros/panels.html' import panel_wrapper, panel_header, panel_content %}
 
 {%- set h_title = 'Edit Status Page' if status_page else 'Create New Status Page' -%}
@@ -21,15 +21,8 @@
         <!-- Name -->
         <div>
             <label for="name" class="label">Name</label>
-            <input
-                type="text"
-                id="name"
-                name="name"
-                class="input"
-                placeholder="Production Status"
-                value="{% if status_page %}{{ status_page.name }}{% endif %}"
-                required
-            >
+            {{ input(name='name', class='input', placeholder='Production Status',
+                     value=(status_page.name if status_page else ''), required=true) }}
             <p class="text-xs text-dark-text-muted mt-1">Display name for the status page</p>
         </div>
 
@@ -38,16 +31,9 @@
             <label for="slug" class="label">Slug</label>
             <div class="flex items-center gap-2">
                 <span class="text-sm text-dark-text-muted">/status/</span>
-                <input
-                    type="text"
-                    id="slug"
-                    name="slug"
-                    class="input flex-1"
-                    placeholder="production"
-                    pattern="[a-z0-9\-_]+"
-                    value="{% if status_page %}{{ status_page.slug }}{% endif %}"
-                    required
-                >
+                {{ input(name='slug', class='input flex-1', placeholder='production',
+                         value=(status_page.slug if status_page else ''), required=true,
+                         extra_attrs='pattern="[a-z0-9\-_]+"') }}
             </div>
             <p class="text-xs text-dark-text-muted mt-1">URL-friendly identifier (lowercase, alphanumeric, hyphens, underscores)</p>
         </div>
@@ -55,13 +41,9 @@
         <!-- Description -->
         <div>
             <label for="description" class="label">Description (Optional)</label>
-            <textarea
-                id="description"
-                name="description"
-                class="input"
-                rows="3"
-                placeholder="Status page for all production services"
-            >{% if status_page %}{{ status_page.description }}{% endif %}</textarea>
+            {{ textarea(name='description', class='input', rows=3,
+                        placeholder='Status page for all production services',
+                        value=(status_page.description if status_page else '')) }}
             <p class="text-xs text-dark-text-muted mt-1">Brief description of what this status page shows</p>
         </div>
 
