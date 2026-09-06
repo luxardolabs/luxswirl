@@ -109,14 +109,16 @@
    ═══════════════════════════════════════════════════════════════════════════ #}
 
 {# Text-like input (text/password/email/number). Label + wrapper stay in the page. #}
-{% macro input(name, type='text', value='', placeholder='', required=false, autofocus=false,
+{# `name` is optional: a JS-driven field (filter box, sort control) has no form name,
+   and emitting name="" would submit an empty key. Same convention as checkbox(). #}
+{% macro input(name='', type='text', value='', placeholder='', required=false, autofocus=false,
                autocomplete=none, minlength=none, min=none, max=none, id=none,
                class='input w-full', hx_get='', hx_post='', hx_target='', hx_select='',
                hx_trigger='', hx_include='', hx_swap='', extra_attrs='') %}
 {%- set field_id = id if id else name -%}
 <input type="{{ type }}"
-       id="{{ field_id }}"
-       name="{{ name }}"
+       {%- if field_id %} id="{{ field_id }}"{% endif %}
+       {%- if name %} name="{{ name }}"{% endif %}
        value="{{ value }}"
        {%- if placeholder %} placeholder="{{ placeholder }}"{% endif %}
        {%- if required %} required{% endif %}
@@ -155,12 +157,12 @@
 
 {# Select wrapper — the page supplies the <option> loop as the macro body:
    {% call select('agent_id', class='input') %}<option ...>…</option>{% endcall %} #}
-{% macro select(name, id=none, class='input', required=false, hx_get='', hx_post='',
+{% macro select(name='', id=none, class='input', required=false, hx_get='', hx_post='',
                 hx_target='', hx_select='', hx_trigger='', hx_include='', hx_swap='',
                 extra_attrs='') %}
 {%- set field_id = id if id else name -%}
-<select name="{{ name }}"
-        id="{{ field_id }}"
+<select {% if name %}name="{{ name }}"{% endif %}
+        {%- if field_id %} id="{{ field_id }}"{% endif %}
         {%- if required %} required{% endif %}
         {%- if hx_get %} hx-get="{{ hx_get }}"{% endif %}
         {%- if hx_post %} hx-post="{{ hx_post }}"{% endif %}

@@ -31,19 +31,33 @@
 {# ═══════════════════════════════════════════════════════════════════════════
    ICON SQUARE BUTTON - Base macro for tiny action buttons
    ═══════════════════════════════════════════════════════════════════════════ #}
-{% macro icon_btn(icon_svg, color='brand', title='', disabled=false, href='', hx_get='', hx_post='', hx_delete='', hx_target='', hx_swap='', hx_vals='', hx_include='', extra_attrs='', extra_classes='') %}
-{% set colors = {
-    'brand': 'bg-brand-600/20 hover:bg-brand-600/30 text-brand-300 border-brand-600/30',
-    'green': 'bg-green-600/20 hover:bg-green-600/30 text-green-300 border-green-600/30',
-    'yellow': 'bg-yellow-600/20 hover:bg-yellow-600/30 text-yellow-300 border-yellow-600/30',
-    'orange': 'bg-orange-600/20 hover:bg-orange-600/30 text-orange-300 border-orange-600/30',
-    'red': 'bg-red-600/20 hover:bg-red-600/30 text-red-300 border-red-600/30',
-    'blue': 'bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border-blue-600/30',
-    'purple': 'bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border-purple-600/30',
-    'muted': 'bg-gray-600/20 text-gray-500 border-gray-600/30 cursor-not-allowed opacity-50'
+{# `active` renders the pressed state (the stronger /30 fill) — for a toggle such as a
+   sort control, where one option in a group is the current one. #}
+{% macro icon_btn(icon_svg, color='brand', title='', disabled=false, active=false, href='', hx_get='', hx_post='', hx_delete='', hx_target='', hx_swap='', hx_vals='', hx_include='', extra_attrs='', extra_classes='') %}
+{# The base fill is kept SEPARATE from the rest so `active` can REPLACE it. Emitting
+   both bg-<c>/20 and bg-<c>/30 would leave the winner to CSS source order, not intent. #}
+{% set fills = {
+    'brand': 'brand', 'green': 'green', 'yellow': 'yellow', 'orange': 'orange',
+    'red': 'red', 'blue': 'blue', 'purple': 'purple', 'pink': 'pink'
+} %}
+{% set rest = {
+    'brand': 'hover:bg-brand-600/30 text-brand-300 border-brand-600/30',
+    'green': 'hover:bg-green-600/30 text-green-300 border-green-600/30',
+    'yellow': 'hover:bg-yellow-600/30 text-yellow-300 border-yellow-600/30',
+    'orange': 'hover:bg-orange-600/30 text-orange-300 border-orange-600/30',
+    'red': 'hover:bg-red-600/30 text-red-300 border-red-600/30',
+    'blue': 'hover:bg-blue-600/30 text-blue-300 border-blue-600/30',
+    'purple': 'hover:bg-purple-600/30 text-purple-300 border-purple-600/30',
+    'pink': 'hover:bg-pink-600/30 text-pink-300 border-pink-600/30'
 } %}
 {% set c = 'muted' if disabled else color %}
-{% set css = "p-1.5 w-7 h-7 flex items-center justify-center rounded border transition-colors " ~ colors.get(c, colors.brand) ~ " " ~ extra_classes %}
+{%- if c == 'muted' -%}
+{% set palette = 'bg-gray-600/20 text-gray-500 border-gray-600/30 cursor-not-allowed opacity-50' %}
+{%- else -%}
+{% set hue = fills.get(c, 'brand') %}
+{% set palette = 'bg-' ~ hue ~ '-600/' ~ ('30' if active else '20') ~ ' ' ~ rest.get(c, rest.brand) %}
+{%- endif -%}
+{% set css = "p-1.5 w-7 h-7 flex items-center justify-center rounded border transition-colors " ~ palette ~ " " ~ extra_classes %}
 {% if href and not disabled %}
 <a href="{{ href }}" class="{{ css }}" title="{{ title }}"{% if title %} aria-label="{{ title }}"{% endif %} {{ extra_attrs | safe }}>
     {{ icon_svg }}
