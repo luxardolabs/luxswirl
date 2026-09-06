@@ -14,7 +14,6 @@ from app.core.query_params import EnabledFilter, GlobalFilter, PerPageFilter
 from app.db import get_db
 from app.services.views.settings_view_service import SettingsViewService
 from app.web.hx_responses import hx_empty_with_toast, hx_toast_trigger
-from app.web.render import error_page
 from app.web.templates_config import templates
 
 logger = get_logger("luxswirl.web.settings")
@@ -32,14 +31,8 @@ async def settings_landing(
     current_user: AdminUserWeb,
 ):
     """Settings landing page."""
-    try:
-        context = await SettingsViewService.build_landing_context(
-            db, request, current_user
-        )
-        return templates.TemplateResponse(request, "pages/settings/index.html", context)
-    except Exception as e:
-        logger.error("Error rendering settings landing page", exc_info=True)
-        return error_page(request, current_user, str(e))
+    context = await SettingsViewService.build_landing_context(db, request, current_user)
+    return templates.TemplateResponse(request, "pages/settings/index.html", context)
 
 
 @router.get("/settings/notifications", response_class=HTMLResponse)
@@ -49,16 +42,12 @@ async def settings_notifications(
     current_user: AdminUserWeb,
 ):
     """Notification providers settings page."""
-    try:
-        context = await SettingsViewService.build_notifications_context(
-            db, request, current_user
-        )
-        return templates.TemplateResponse(
-            request, "pages/settings/notifications.html", context
-        )
-    except Exception as e:
-        logger.error("Error rendering notifications settings", exc_info=True)
-        return error_page(request, current_user, str(e))
+    context = await SettingsViewService.build_notifications_context(
+        db, request, current_user
+    )
+    return templates.TemplateResponse(
+        request, "pages/settings/notifications.html", context
+    )
 
 
 @router.get("/settings/alerts", response_class=HTMLResponse)
@@ -72,16 +61,10 @@ async def settings_alerts(
     per_page: PerPageFilter = None,
 ):
     """Alert rules settings page."""
-    try:
-        context = await SettingsViewService.build_alerts_context(
-            db, request, current_user, is_enabled, is_global, page, per_page
-        )
-        return templates.TemplateResponse(
-            request, "pages/settings/alerts.html", context
-        )
-    except Exception as e:
-        logger.error("Error rendering alerts settings", exc_info=True)
-        return error_page(request, current_user, str(e))
+    context = await SettingsViewService.build_alerts_context(
+        db, request, current_user, is_enabled, is_global, page, per_page
+    )
+    return templates.TemplateResponse(request, "pages/settings/alerts.html", context)
 
 
 @router.get("/settings/registration-keys", response_class=HTMLResponse)
@@ -92,16 +75,12 @@ async def settings_registration_keys(
     is_enabled: EnabledFilter = None,
 ):
     """Registration keys + Prometheus metrics settings page."""
-    try:
-        context = await SettingsViewService.build_registration_keys_context(
-            db, request, current_user, is_enabled
-        )
-        return templates.TemplateResponse(
-            request, "pages/settings/registration_keys.html", context
-        )
-    except Exception as e:
-        logger.error("Error rendering registration keys settings", exc_info=True)
-        return error_page(request, current_user, str(e))
+    context = await SettingsViewService.build_registration_keys_context(
+        db, request, current_user, is_enabled
+    )
+    return templates.TemplateResponse(
+        request, "pages/settings/registration_keys.html", context
+    )
 
 
 @router.get("/settings/components", response_class=HTMLResponse)
@@ -137,16 +116,10 @@ async def settings_defaults(
     current_user: AdminUserWeb,
 ):
     """System defaults settings page — all configurable defaults."""
-    try:
-        context = await SettingsViewService.build_defaults_context(
-            db, request, current_user
-        )
-        return templates.TemplateResponse(
-            request, "pages/settings/defaults.html", context
-        )
-    except Exception as e:
-        logger.error("Error rendering defaults settings", exc_info=True)
-        return error_page(request, current_user, str(e))
+    context = await SettingsViewService.build_defaults_context(
+        db, request, current_user
+    )
+    return templates.TemplateResponse(request, "pages/settings/defaults.html", context)
 
 
 # ---- HTMX setting card mutations ----------------------------------------
@@ -194,13 +167,6 @@ async def update_setting(
         return hx_empty_with_toast(
             f"Validation error: {e}", kind="error", status_code=400
         )
-    except Exception as e:
-        logger.error(
-            "Error updating setting",
-            extra={"setting_key": key},
-            exc_info=True,
-        )
-        return hx_empty_with_toast(f"Error: {e}", kind="error", status_code=500)
 
 
 @router.post("/settings/{key}/reset", response_class=HTMLResponse)
@@ -211,28 +177,18 @@ async def reset_setting(
     current_user: AdminUserWeb,
 ):
     """Reset a setting to its default; returns the refreshed setting card."""
-    try:
-        updated_setting = await SettingsViewService.reset_setting_with_cache_update(
-            db, key
-        )
-        response = templates.TemplateResponse(
-            request,
-            "partials/settings/setting_card.html",
-            SettingsViewService.build_setting_card_context(
-                request, current_user, updated_setting
-            ),
-        )
-        response.headers["HX-Trigger"] = hx_toast_trigger(
-            f"Setting '{updated_setting.display_name}' reset to default"
-        )
-        return response
-    except Exception as e:
-        logger.error(
-            "Error resetting setting",
-            extra={"setting_key": key},
-            exc_info=True,
-        )
-        return hx_empty_with_toast(f"Error: {e}", kind="error", status_code=500)
+    updated_setting = await SettingsViewService.reset_setting_with_cache_update(db, key)
+    response = templates.TemplateResponse(
+        request,
+        "partials/settings/setting_card.html",
+        SettingsViewService.build_setting_card_context(
+            request, current_user, updated_setting
+        ),
+    )
+    response.headers["HX-Trigger"] = hx_toast_trigger(
+        f"Setting '{updated_setting.display_name}' reset to default"
+    )
+    return response
 
 
 # ---- Metrics card mutations ---------------------------------------------
@@ -245,15 +201,7 @@ async def generate_metrics_token(
     current_user: AdminUserWeb,
 ):
     """Generate new Prometheus metrics bearer token (shown once)."""
-    try:
-        return await SettingsViewService.render_new_metrics_token(
-            db, request, current_user
-        )
-    except Exception as e:
-        logger.error("Error generating metrics token", exc_info=True)
-        return HTMLResponse(
-            content=f'<div class="text-red-500">Error: {e}</div>', status_code=500
-        )
+    return await SettingsViewService.render_new_metrics_token(db, request, current_user)
 
 
 @router.post("/settings/metrics/toggle-enabled", response_class=HTMLResponse)
@@ -263,20 +211,14 @@ async def toggle_metrics_enabled(
     current_user: AdminUserWeb,
 ):
     """Toggle Prometheus metrics endpoint on/off."""
-    try:
-        metrics_settings = await SettingsViewService.toggle_metrics_enabled(db)
-        return templates.TemplateResponse(
-            request,
-            "partials/settings/metrics_card.html",
-            SettingsViewService.build_metrics_card_context(
-                request, current_user, metrics_settings
-            ),
-        )
-    except Exception as e:
-        logger.error("Error toggling metrics endpoint", exc_info=True)
-        return HTMLResponse(
-            content=f'<div class="text-red-500">Error: {e}</div>', status_code=500
-        )
+    metrics_settings = await SettingsViewService.toggle_metrics_enabled(db)
+    return templates.TemplateResponse(
+        request,
+        "partials/settings/metrics_card.html",
+        SettingsViewService.build_metrics_card_context(
+            request, current_user, metrics_settings
+        ),
+    )
 
 
 @router.post("/settings/metrics/toggle-auth", response_class=HTMLResponse)
@@ -286,20 +228,14 @@ async def toggle_metrics_auth(
     current_user: AdminUserWeb,
 ):
     """Toggle Prometheus metrics authentication on/off."""
-    try:
-        metrics_settings = await SettingsViewService.toggle_metrics_auth(db)
-        return templates.TemplateResponse(
-            request,
-            "partials/settings/metrics_card.html",
-            SettingsViewService.build_metrics_card_context(
-                request, current_user, metrics_settings
-            ),
-        )
-    except Exception as e:
-        logger.error("Error toggling metrics auth", exc_info=True)
-        return HTMLResponse(
-            content=f'<div class="text-red-500">Error: {e}</div>', status_code=500
-        )
+    metrics_settings = await SettingsViewService.toggle_metrics_auth(db)
+    return templates.TemplateResponse(
+        request,
+        "partials/settings/metrics_card.html",
+        SettingsViewService.build_metrics_card_context(
+            request, current_user, metrics_settings
+        ),
+    )
 
 
 @router.post("/settings/metrics/update-timeout", response_class=HTMLResponse)
@@ -309,25 +245,19 @@ async def update_metrics_timeout(
     current_user: AdminUserWeb,
 ):
     """Update agent timeout threshold."""
-    try:
-        form_data = await request.form()
-        timeout_str = str(form_data.get("timeout") or "")
-        metrics_settings, error = await SettingsViewService.update_metrics_timeout(
-            db, timeout_str
-        )
-        if error:
-            return HTMLResponse(
-                content=f'<div class="text-red-500">{error}</div>', status_code=400
-            )
-        return templates.TemplateResponse(
-            request,
-            "partials/settings/metrics_card.html",
-            SettingsViewService.build_metrics_card_context(
-                request, current_user, metrics_settings
-            ),
-        )
-    except Exception as e:
-        logger.error("Error updating metrics timeout", exc_info=True)
+    form_data = await request.form()
+    timeout_str = str(form_data.get("timeout") or "")
+    metrics_settings, error = await SettingsViewService.update_metrics_timeout(
+        db, timeout_str
+    )
+    if error:
         return HTMLResponse(
-            content=f'<div class="text-red-500">Error: {e}</div>', status_code=500
+            content=f'<div class="text-red-500">{error}</div>', status_code=400
         )
+    return templates.TemplateResponse(
+        request,
+        "partials/settings/metrics_card.html",
+        SettingsViewService.build_metrics_card_context(
+            request, current_user, metrics_settings
+        ),
+    )

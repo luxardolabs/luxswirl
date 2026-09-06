@@ -25,7 +25,7 @@ from app.core.query_params import (
 )
 from app.db import get_db
 from app.services.views.status_pages_view_service import StatusPagesViewService
-from app.web.hx_responses import hx_empty_with_toast, hx_toast_trigger
+from app.web.hx_responses import hx_toast_trigger
 from app.web.render import error_page, error_partial, public_error_page
 from app.web.templates_config import templates
 
@@ -49,14 +49,10 @@ async def status_pages_list(
     per_page: PerPageFilter = None,
 ):
     """Status pages list page — manage custom status dashboards."""
-    try:
-        context = await StatusPagesViewService.build_list_context(
-            db, request, current_user, is_public, page, per_page
-        )
-        return templates.TemplateResponse(request, "pages/status_pages.html", context)
-    except Exception as e:
-        logger.error("Error rendering status pages list", exc_info=True)
-        return error_page(request, current_user, str(e), 500)
+    context = await StatusPagesViewService.build_list_context(
+        db, request, current_user, is_public, page, per_page
+    )
+    return templates.TemplateResponse(request, "pages/status_pages.html", context)
 
 
 @router.get(
@@ -205,9 +201,6 @@ async def manage_status_page(
     except StatusPageNotFoundException as e:
         logger.error("Status page not found", exc_info=True)
         return error_page(request, current_user, str(e), 404)
-    except Exception as e:
-        logger.error("Error rendering manage page", exc_info=True)
-        return error_page(request, current_user, str(e), 500)
 
 
 @router.get(
@@ -227,24 +220,20 @@ async def get_available_checks(
     search: Annotated[str, Query(description="Search query")] = "",
 ):
     """Get filtered list of available checks for adding to dashboard."""
-    try:
-        context = await StatusPagesViewService.build_available_checks_context(
-            db,
-            request,
-            current_user,
-            status_page_id,
-            agent_id,
-            check_type,
-            status,
-            tags,
-            search,
-        )
-        return templates.TemplateResponse(
-            request, "partials/available_checks.html", context
-        )
-    except Exception:
-        logger.error("Error getting available checks", exc_info=True)
-        return HTMLResponse(content="", status_code=500)
+    context = await StatusPagesViewService.build_available_checks_context(
+        db,
+        request,
+        current_user,
+        status_page_id,
+        agent_id,
+        check_type,
+        status,
+        tags,
+        search,
+    )
+    return templates.TemplateResponse(
+        request, "partials/available_checks.html", context
+    )
 
 
 @router.post(
@@ -260,21 +249,17 @@ async def add_check_to_dashboard(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     """Add a check to the dashboard. Returns refreshed dashboard_items partial."""
-    try:
-        context, error = await StatusPagesViewService.add_check_to_dashboard(
-            db, request, current_user, status_page_id, check_id
-        )
-        if error == "no_items":
-            return HTMLResponse(content="", status_code=500)
-        return templates.TemplateResponse(
-            request,
-            "partials/dashboard_items.html",
-            context,
-            headers={"HX-Trigger": hx_toast_trigger("Check added to dashboard")},
-        )
-    except Exception:
-        logger.error("Error adding check", exc_info=True)
+    context, error = await StatusPagesViewService.add_check_to_dashboard(
+        db, request, current_user, status_page_id, check_id
+    )
+    if error == "no_items":
         return HTMLResponse(content="", status_code=500)
+    return templates.TemplateResponse(
+        request,
+        "partials/dashboard_items.html",
+        context,
+        headers={"HX-Trigger": hx_toast_trigger("Check added to dashboard")},
+    )
 
 
 @router.delete(
@@ -290,21 +275,15 @@ async def remove_item_from_dashboard(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     """Remove an item from the dashboard."""
-    try:
-        context = await StatusPagesViewService.remove_item_from_dashboard(
-            db, request, current_user, status_page_id, item_index
-        )
-        return templates.TemplateResponse(
-            request,
-            "partials/dashboard_items.html",
-            context,
-            headers={"HX-Trigger": hx_toast_trigger("Item removed from dashboard")},
-        )
-    except Exception:
-        logger.error("Error removing item", exc_info=True)
-        return hx_empty_with_toast(
-            "Failed to remove item", kind="error", status_code=500
-        )
+    context = await StatusPagesViewService.remove_item_from_dashboard(
+        db, request, current_user, status_page_id, item_index
+    )
+    return templates.TemplateResponse(
+        request,
+        "partials/dashboard_items.html",
+        context,
+        headers={"HX-Trigger": hx_toast_trigger("Item removed from dashboard")},
+    )
 
 
 @router.post(
@@ -428,16 +407,10 @@ async def get_dashboard_items(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     """Get dashboard items HTML (used for refreshing after filter changes)."""
-    try:
-        context = await StatusPagesViewService.build_dashboard_items_context(
-            db, request, current_user, status_page_id
-        )
-        return templates.TemplateResponse(
-            request, "partials/dashboard_items.html", context
-        )
-    except Exception:
-        logger.error("Error getting dashboard items", exc_info=True)
-        return HTMLResponse(content="", status_code=500)
+    context = await StatusPagesViewService.build_dashboard_items_context(
+        db, request, current_user, status_page_id
+    )
+    return templates.TemplateResponse(request, "partials/dashboard_items.html", context)
 
 
 # ---- public view ----------------------------------------------------------
@@ -478,11 +451,6 @@ async def view_public_status_page(
             404,
             title="Status page not found",
         )
-    except Exception:
-        logger.error("Error rendering public status page", exc_info=True)
-        return public_error_page(
-            request, "Something went wrong loading this status page.", 500
-        )
 
 
 @router.get(
@@ -496,15 +464,11 @@ async def view_public_status_page_partial(
     time_range: TimeRangeFilter = None,
 ):
     """Partial refresh endpoint for public status page (HTMX polling)."""
-    try:
-        context, status_code = await StatusPagesViewService.build_public_view_partial(
-            db, request, current_user, slug, time_range
-        )
-        if status_code is not None:
-            return HTMLResponse(content="", status_code=status_code)
-        return templates.TemplateResponse(
-            request, "partials/status_page_public_content.html", context
-        )
-    except Exception:
-        logger.error("Error rendering public status page partial", exc_info=True)
-        return HTMLResponse(content="", status_code=500)
+    context, status_code = await StatusPagesViewService.build_public_view_partial(
+        db, request, current_user, slug, time_range
+    )
+    if status_code is not None:
+        return HTMLResponse(content="", status_code=status_code)
+    return templates.TemplateResponse(
+        request, "partials/status_page_public_content.html", context
+    )

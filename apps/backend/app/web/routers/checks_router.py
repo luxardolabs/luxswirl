@@ -550,13 +550,7 @@ async def checks_table_partial(
     per_page: PerPageFilter = None,
 ):
     """Check assignments table partial for HTMX updates."""
-    try:
-        context = await ChecksViewService.build_table_partial_context(
-            db, request, current_user, agent, enabled, page, per_page
-        )
-        return templates.TemplateResponse(
-            request, "partials/checks_table.html", context
-        )
-    except Exception as e:
-        logger.error("Error rendering check assignments table", exc_info=True)
-        return error_partial(request, current_user, str(e), 500)
+    context = await ChecksViewService.build_table_partial_context(
+        db, request, current_user, agent, enabled, page, per_page
+    )
+    return templates.TemplateResponse(request, "partials/checks_table.html", context)

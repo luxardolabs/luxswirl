@@ -31,30 +31,17 @@ async def scheduler_page(
     """
     Scheduler admin page - lists all job configurations with controls.
     """
-    try:
-        context = await SchedulerViewService.get_list_context()
+    context = await SchedulerViewService.get_list_context()
 
-        return templates.TemplateResponse(
-            request,
-            "pages/scheduler.html",
-            {
-                "current_user": current_user,
-                "page_title": "Scheduler",
-                **context,
-            },
-        )
-    except Exception as e:
-        logger.error("Error rendering scheduler page", exc_info=True)
-        return templates.TemplateResponse(
-            request,
-            "pages/error.html",
-            {
-                "current_user": current_user,
-                "error": str(e),
-                "page_title": "Error",
-            },
-            status_code=500,
-        )
+    return templates.TemplateResponse(
+        request,
+        "pages/scheduler.html",
+        {
+            "current_user": current_user,
+            "page_title": "Scheduler",
+            **context,
+        },
+    )
 
 
 @router.post("/scheduler/jobs/{job_key}/toggle", response_class=HTMLResponse)
@@ -86,13 +73,6 @@ async def toggle_job(
 
     except ValueError as e:
         return hx_empty_with_toast(str(e), kind="error", status_code=404)
-    except Exception as e:
-        logger.error(
-            "Error toggling job",
-            extra={"job_key": job_key},
-            exc_info=True,
-        )
-        return hx_empty_with_toast(f"Error: {str(e)}", kind="error", status_code=500)
 
 
 @router.post("/scheduler/jobs/{job_key}/run", response_class=HTMLResponse)
@@ -127,15 +107,6 @@ async def run_job(
 
     except ValueError as e:
         return hx_empty_with_toast(str(e), kind="error", status_code=404)
-    except Exception as e:
-        logger.error(
-            "Error running job",
-            extra={"job_key": job_key},
-            exc_info=True,
-        )
-        return hx_empty_with_toast(
-            f"Job failed: {str(e)}", kind="error", status_code=500
-        )
 
 
 @router.post("/scheduler/jobs/{job_key}/reset", response_class=HTMLResponse)
@@ -166,13 +137,6 @@ async def reset_job(
 
     except ValueError as e:
         return hx_empty_with_toast(str(e), kind="error", status_code=404)
-    except Exception as e:
-        logger.error(
-            "Error resetting job",
-            extra={"job_key": job_key},
-            exc_info=True,
-        )
-        return hx_empty_with_toast(f"Error: {str(e)}", kind="error", status_code=500)
 
 
 @router.get("/scheduler/jobs/{job_key}/history", response_class=HTMLResponse)
@@ -200,14 +164,4 @@ async def job_history(
         return HTMLResponse(
             content=f'<div class="p-6 text-red-400">{str(e)}</div>',
             status_code=404,
-        )
-    except Exception as e:
-        logger.error(
-            "Error loading job history",
-            extra={"job_key": job_key},
-            exc_info=True,
-        )
-        return HTMLResponse(
-            content=f'<div class="p-6 text-red-400">Error: {str(e)}</div>',
-            status_code=500,
         )

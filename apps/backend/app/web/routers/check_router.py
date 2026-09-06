@@ -32,54 +32,39 @@ async def check_detail_panel(
     """
     Check detail panel for split-screen layout - opened when clicking a check row on dashboard.
     """
-    try:
-        # Get default chart time range from settings if not specified
-        if hours is None:
-            hours = await CheckDetailViewService.resolve_default_chart_hours(db)
+    if hours is None:
+        hours = await CheckDetailViewService.resolve_default_chart_hours(db)
 
-        detail = await CheckDetailViewService.get_check_detail(
-            db, check_id, hours=hours
-        )
+    detail = await CheckDetailViewService.get_check_detail(db, check_id, hours=hours)
 
-        if not detail:
-            return templates.TemplateResponse(
-                request,
-                "partials/error.html",
-                {
-                    "current_user": current_user,
-                    "error": f"Check {check_id} not found",
-                },
-                status_code=404,
-            )
-
-        return templates.TemplateResponse(
-            request,
-            "partials/panels/checks/check_detail_panel.html",
-            {
-                "current_user": current_user,
-                "check": detail["check"],
-                "agent": detail["agent"],
-                "history": detail["history"],
-                "recent_results": detail.get("recent_results", []),
-                "minute_bars": detail["minute_bars"],
-                "stats": detail["stats"],
-                "hours": detail["hours"],
-                "check_id": check_id,
-                "chart_data": detail["chart_data"],
-                "artifacts": detail.get("artifacts", []),
-            },
-        )
-    except Exception as e:
-        logger.error("Error rendering check detail", exc_info=True)
+    if not detail:
         return templates.TemplateResponse(
             request,
             "partials/error.html",
             {
                 "current_user": current_user,
-                "error": str(e),
+                "error": f"Check {check_id} not found",
             },
-            status_code=500,
+            status_code=404,
         )
+
+    return templates.TemplateResponse(
+        request,
+        "partials/panels/checks/check_detail_panel.html",
+        {
+            "current_user": current_user,
+            "check": detail["check"],
+            "agent": detail["agent"],
+            "history": detail["history"],
+            "recent_results": detail.get("recent_results", []),
+            "minute_bars": detail["minute_bars"],
+            "stats": detail["stats"],
+            "hours": detail["hours"],
+            "check_id": check_id,
+            "chart_data": detail["chart_data"],
+            "artifacts": detail.get("artifacts", []),
+        },
+    )
 
 
 @router.get(
