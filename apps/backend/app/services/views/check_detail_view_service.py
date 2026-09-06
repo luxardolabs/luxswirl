@@ -59,8 +59,8 @@ def build_check_urls(request: Request, check_id: UUID, hours: int) -> dict[str, 
         "detail_base": u("check_detail_panel", check_id=check_id),
         "clone_form": u("clone_form", check_id=check_id),
         "dependents": u("dependents_panel", check_id=check_id),
-        "edit_form": u("edit_form", check_id=check_id),
-        "delete": u("delete_check", check_id=check_id),
+        "edit_form": u("check_edit_form", check_id=check_id),
+        "delete": u("web_delete_check", check_id=check_id),
     }
 
 

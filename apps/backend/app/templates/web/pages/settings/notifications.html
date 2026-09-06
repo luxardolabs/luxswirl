@@ -19,7 +19,7 @@
         <div>
             {{ section_header('Notification Providers', 'Configure how LuxSwirl sends alerts • ' ~ total_providers ~ ' total providers') }}
         </div>
-        {{ btn_create(label='Add Notification', hx_get='/notification-providers/create-form', hx_target='#panel-container', hx_swap='innerHTML') }}
+        {{ btn_create(label='Add Notification', hx_get=provider_create_form_url, hx_target='#panel-container', hx_swap='innerHTML') }}
     </div>
 
     <!-- Provider List -->
@@ -72,16 +72,16 @@
             <!-- Actions -->
             <div class="flex items-center gap-2 pt-3 border-t border-dark-border">
                 {% if provider.is_enabled %}
-                    {{ btn_disable(extra_classes='flex-1', extra_attrs='hx-post="/notification-providers/' ~ provider.id ~ '/toggle" hx-swap="none" title="Disable"') }}
+                    {{ btn_disable(extra_classes='flex-1', extra_attrs='hx-post="' ~ provider_urls[provider.id].toggle ~ '" hx-swap="none" title="Disable"') }}
                 {% else %}
-                    {{ btn_enable(extra_classes='flex-1', extra_attrs='hx-post="/notification-providers/' ~ provider.id ~ '/toggle" hx-swap="none" title="Enable"') }}
+                    {{ btn_enable(extra_classes='flex-1', extra_attrs='hx-post="' ~ provider_urls[provider.id].toggle ~ '" hx-swap="none" title="Enable"') }}
                 {% endif %}
                 {% set test_spinner %}<span class="htmx-indicator absolute inset-0 flex items-center justify-center bg-dark-bg-tertiary/80 rounded" id="test-spinner-{{ provider.id }}"><span class="animate-spin h-4 w-4 text-brand-500 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/arrow-path.svg" %}</span></span>{% endset %}
                 {{ text_btn(test_spinner, 'Test', style='secondary', size='sm', type='button',
                             extra_classes='flex-1 relative',
-                            extra_attrs='hx-post="/notification-providers/' ~ provider.id ~ '/test" hx-swap="none" hx-indicator="#test-spinner-' ~ provider.id ~ '" title="Send test notification"') }}
-                {{ btn_edit_text(extra_classes='flex-1', hx_get='/notification-providers/' ~ provider.id ~ '/edit-form', hx_target='#panel-container', hx_swap='innerHTML') }}
-                {{ delete_icon_button(delete_url='/notification-providers/' ~ provider.id, target_id='provider-' ~ provider.id) }}
+                            extra_attrs='hx-post="' ~ provider_urls[provider.id].test ~ '" hx-swap="none" hx-indicator="#test-spinner-' ~ provider.id ~ '" title="Send test notification"') }}
+                {{ btn_edit_text(extra_classes='flex-1', hx_get=provider_urls[provider.id].edit_form, hx_target='#panel-container', hx_swap='innerHTML') }}
+                {{ delete_icon_button(delete_url=provider_urls[provider.id].delete, target_id='provider-' ~ provider.id) }}
             </div>
         </div>
         {% endfor %}
@@ -93,7 +93,7 @@
         <h3 class="text-lg font-semibold mb-2">No notification providers yet</h3>
         <p class="text-dark-text-muted mb-4">Get started by adding your first notification provider</p>
         {% set bell_svg %}<span class="w-4 h-4 mr-1.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/bell.svg" %}</span>{% endset %}
-        {{ text_btn(bell_svg, 'Add Your First Provider', style='primary', hx_get='/notification-providers/create-form', hx_target='#panel-container', hx_swap='innerHTML') }}
+        {{ text_btn(bell_svg, 'Add Your First Provider', style='primary', hx_get=provider_create_form_url, hx_target='#panel-container', hx_swap='innerHTML') }}
     </div>
     {% endif %}
 </div>

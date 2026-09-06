@@ -67,5 +67,11 @@ class ArtifactsViewService:
             "artifact_id": str(artifact_id),
             "filename": artifact.filename,
             "size_kb": round(artifact.size_bytes / 1024, 1),
+            # .path, not str(): url_for returns an absolute url from the
+            # request's scheme/host, which behind TLS-terminating nginx can emit
+            # http:// into an https:// page.
+            "download_url": request.url_for(
+                "view_artifact", artifact_id=artifact_id
+            ).path,
         }
         return context, None

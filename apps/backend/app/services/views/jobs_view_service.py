@@ -8,6 +8,7 @@ This web service acts as an aggregation layer, delegating to core services.
 import json
 from dataclasses import dataclass
 from typing import Any
+from urllib.parse import urlencode
 from uuid import UUID
 
 from fastapi import HTTPException, Request
@@ -51,13 +52,67 @@ def build_job_urls(request: Request, job_id: UUID) -> JobUrls:
     # .path: url_for returns an absolute url from the request's scheme/host, which
     # behind TLS-terminating nginx can emit http:// into an https:// page.
     def u(name: str) -> str:
-        return request.url_for(name, job_id=job_id).path
+        return str(request.url_for(name, job_id=job_id).path)
 
     return JobUrls(
         detail=u("job_detail_panel"),
         cancel=u("cancel_job_web"),
         delete=u("delete_job_web"),
     )
+
+
+@dataclass(frozen=True)
+class ScanActionUrls:
+    """Finished hrefs for the network-scan quick-action buttons."""
+
+    bulk_ping: str
+    bulk_web: str
+    bulk_ssh: str
+    bulk_database: str
+    quick_create: str
+
+
+def build_scan_action_urls(request: Request, job_id: UUID) -> ScanActionUrls:
+    # .path: url_for returns an absolute url from the request's scheme/host, which
+    # behind TLS-terminating nginx can emit http:// into an https:// page.
+    def u(name: str) -> str:
+        return str(request.url_for(name, job_id=job_id).path)
+
+    return ScanActionUrls(
+        bulk_ping=u("bulk_create_ping_checks"),
+        bulk_web=u("bulk_create_web_checks"),
+        bulk_ssh=u("bulk_create_ssh_checks"),
+        bulk_database=u("bulk_create_database_checks"),
+        quick_create=u("quick_create_check_from_host"),
+    )
+
+
+def build_scan_form_urls(request: Request, job: Job) -> dict[str, str]:
+    """Prefilled "scan this subnet" create-form hrefs, keyed by subnet.
+
+    A network_discover result offers one scan per discovered subnet (the
+    inferred network plus each interface's suggested_scan). The prefill payload
+    is query state, so it is encoded here rather than concatenated in the
+    template.
+    """
+    result = job.result or {}
+    subnets = {result.get("inferred_network")}
+    subnets.update(
+        iface.get("suggested_scan") for iface in result.get("interfaces") or []
+    )
+    base = request.url_for("job_create_form").path
+
+    def form_url(subnet: str) -> str:
+        query = urlencode(
+            {
+                "job_type": "network_scan",
+                "agent_id": job.runner_token,
+                "prefill_params": json.dumps({"subnet": subnet}),
+            }
+        )
+        return f"{base}?{query}"
+
+    return {subnet: form_url(subnet) for subnet in subnets if subnet}
 
 
 class JobRow:
@@ -467,6 +522,8 @@ class JobsViewService:
 
         return {
             "job_urls": build_job_urls(request, job_id),
+            "scan_action_urls": build_scan_action_urls(request, job_id),
+            "scan_form_urls": build_scan_form_urls(request, job),
             "request": request,
             "current_user": current_user,
             "job": job,

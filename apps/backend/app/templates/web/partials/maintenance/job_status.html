@@ -17,7 +17,7 @@
             {% elif job.status == 'failed' %}border-red-700 bg-red-900/20 text-red-300
             {% else %}border-dark-border bg-dark-bg-tertiary text-dark-text-muted{% endif %}"
      {% if not is_terminal %}
-     hx-get="/maintenance/{{ job.id }}/status"
+     hx-get="{{ job_status_url }}"
      hx-trigger="every 1s"
      hx-swap="outerHTML"
      {% endif %}

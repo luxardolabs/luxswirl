@@ -7,6 +7,7 @@ This layer isolates web routers from direct core service dependencies.
 
 from uuid import UUID
 
+from fastapi import Request
 from fastapi.responses import HTMLResponse
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -30,17 +31,18 @@ class AlertsViewService:
 
     @staticmethod
     async def get_alert_form_data(
-        db: AsyncSession, alert_id: UUID | None = None
+        db: AsyncSession, request: Request, alert_id: UUID | None = None
     ) -> dict:
         """
         Get all data needed for alert create/edit form.
 
         Args:
             db: Database session
+            request: Request, for reversing route names into URLs
             alert_id: Alert ID for edit form, None for create form
 
         Returns:
-            Dict with alert, providers, checks
+            Dict with alert, providers, checks, form_action
         """
         # Get alert if editing
         alert = None
@@ -53,10 +55,19 @@ class AlertsViewService:
         # Get all checks for assignment
         checks = await CheckCoreService.list_all_checks(db)
 
+        # The form posts to update when editing, create otherwise. Reverse the
+        # route name so the path lives with the route, not in the template.
+        form_action = (
+            request.url_for("web_update_alert", alert_id=alert_id).path
+            if alert_id
+            else request.url_for("web_create_alert").path
+        )
+
         return {
             "alert": alert,
             "providers": providers,
             "checks": checks,
+            "form_action": form_action,
         }
 
     @staticmethod

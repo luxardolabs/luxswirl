@@ -76,7 +76,7 @@
         </div>
 
         {% set scan_svg %}<span class="w-4 h-4 mr-2 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/cpu-chip.svg" %}</span>{% endset %}
-        {{ text_btn(scan_svg, 'Scan This Network →', style='primary', type='button', hx_get='/jobs/create-form?job_type=network_scan&agent_id=' ~ job.runner_token ~ '&prefill_params=' ~ ({'subnet': result.inferred_network}|tojson|urlencode), hx_target='#panel-container', hx_swap='innerHTML', extra_classes='w-full mt-4') }}
+        {{ text_btn(scan_svg, 'Scan This Network →', style='primary', type='button', hx_get=scan_form_urls[result.inferred_network], hx_target='#panel-container', hx_swap='innerHTML', extra_classes='w-full mt-4') }}
     </div>
 </div>
 {% endif %}
@@ -110,7 +110,7 @@
                     <td>
                         {% if iface.get('suggested_scan') %}
                         {% set scan_sm_svg %}<span class="w-3 h-3 mr-1 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/cpu-chip.svg" %}</span>{% endset %}
-                        {{ text_btn(scan_sm_svg, 'Scan', style='primary', type='button', hx_get='/jobs/create-form?job_type=network_scan&agent_id=' ~ job.runner_token ~ '&prefill_params=' ~ ({'subnet': iface.suggested_scan}|tojson|urlencode), hx_target='#panel-container', hx_swap='innerHTML', extra_attrs='title="Scan ' ~ iface.suggested_scan ~ '"', extra_classes='text-xs px-2 py-1') }}
+                        {{ text_btn(scan_sm_svg, 'Scan', style='primary', type='button', hx_get=scan_form_urls[iface.suggested_scan], hx_target='#panel-container', hx_swap='innerHTML', extra_attrs='title="Scan ' ~ iface.suggested_scan ~ '"', extra_classes='text-xs px-2 py-1') }}
                         {% else %}
                         <span class="text-dark-text-muted">-</span>
                         {% endif %}

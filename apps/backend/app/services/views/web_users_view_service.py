@@ -46,9 +46,9 @@ def build_user_urls(request: Request, user_id: UUID) -> UserUrls:
     return UserUrls(
         edit_form=u("edit_user_form"),
         update=u("update_user_submit"),
-        unlock=u("unlock_user"),
-        delete=u("delete_user"),
-        reset_password=u("reset_user_password"),
+        unlock=u("web_unlock_user"),
+        delete=u("web_delete_user"),
+        reset_password=u("web_reset_user_password"),
     )
 
 

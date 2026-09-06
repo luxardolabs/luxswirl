@@ -156,8 +156,8 @@ async def login_submit(
     return response
 
 
-@router.get("/logout", include_in_schema=False)
-@router.post("/logout", include_in_schema=False)
+@router.get("/logout", include_in_schema=False, name="web_logout")
+@router.post("/logout", include_in_schema=False, name="web_logout")
 async def logout(
     request: Request,
     response: Response,

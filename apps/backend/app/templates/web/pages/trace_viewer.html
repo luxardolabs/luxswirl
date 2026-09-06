@@ -59,7 +59,7 @@
                 <p class="text-xs text-dark-text-muted mb-2">Or download and view locally:</p>
                 <div class="flex gap-2">
                     {% set download_attrs %}download="{{ filename }}"{% endset %}
-                    {{ btn_download(label='Download Trace', href='/artifacts/' ~ artifact_id ~ '/view', style='secondary', extra_classes='flex-1 py-2 text-sm', extra_attrs=download_attrs) }}
+                    {{ btn_download(label='Download Trace', href=download_url, style='secondary', extra_classes='flex-1 py-2 text-sm', extra_attrs=download_attrs) }}
                     {{ btn_copy(label='Copy CLI Command', extra_classes='flex-1 py-2 text-sm', extra_attrs='onclick="copyCommand()" title="Copy CLI command"') }}
                 </div>
 
@@ -73,7 +73,7 @@
     <iframe id="trace-frame" style="display: none;"></iframe>
 
     <script>
-        const traceUrl = '/artifacts/{{ artifact_id }}/view';
+        const traceUrl = '{{ download_url }}';
         const filename = '{{ filename }}';
 
         async function openTraceViewer() {
@@ -114,7 +114,7 @@
                             <p class="text-dark-text-muted mb-6">
                                 Drag and drop <code class="px-2 py-1 bg-dark-bg-tertiary rounded text-brand-400">${filename}</code> into the trace viewer window.
                             </p>
-                            <a href="/artifacts/{{ artifact_id }}/view" download="${filename}" class="btn-primary">
+                            <a href="{{ download_url }}" download="${filename}" class="btn-primary">
                                 Download Trace File
                             </a>
                         </div>

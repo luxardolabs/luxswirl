@@ -125,21 +125,21 @@
     <div class="flex flex-wrap gap-2">
         {% set ping_svg %}<span class="w-4 h-4 mr-1 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/chart-bar.svg" %}</span>{% endset %}
         {% set ping_label %}<span>Ping All {{ result.discovered_hosts|length }} Hosts</span><div id="ping-spinner" class="htmx-indicator liquid-luxswirl ml-2"><div></div><div></div><div></div><div></div></div>{% endset %}
-        {{ text_btn(ping_svg, ping_label, style='primary', size='sm', type='button', hx_post='/jobs/' ~ job.id ~ '/create-checks/bulk-ping', hx_target='#quick-actions-feedback', hx_swap='innerHTML', extra_attrs='hx-include="[name=\'interval\'],[name=\'timeout\'],[name=\'retry_attempts\'],[name=\'agent_id\'],[name=\'tags\']" hx-disabled-elt="this" hx-indicator="#ping-spinner"', extra_classes='flex items-center') }}
+        {{ text_btn(ping_svg, ping_label, style='primary', size='sm', type='button', hx_post=scan_action_urls.bulk_ping, hx_target='#quick-actions-feedback', hx_swap='innerHTML', extra_attrs='hx-include="[name=\'interval\'],[name=\'timeout\'],[name=\'retry_attempts\'],[name=\'agent_id\'],[name=\'tags\']" hx-disabled-elt="this" hx-indicator="#ping-spinner"', extra_classes='flex items-center') }}
         {% if result.categorized_hosts.web and result.categorized_hosts.web|length > 0 %}
         {% set web_svg %}<span class="w-4 h-4 mr-1 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/globe-alt.svg" %}</span>{% endset %}
         {% set web_label %}<span>Monitor All Web ({{ result.categorized_hosts.web|length }})</span><div id="web-spinner" class="htmx-indicator liquid-luxswirl ml-2"><div></div><div></div><div></div><div></div></div>{% endset %}
-        {{ text_btn(web_svg, web_label, style='secondary', size='sm', type='button', hx_post='/jobs/' ~ job.id ~ '/create-checks/bulk-web', hx_target='#quick-actions-feedback', hx_swap='innerHTML', extra_attrs='hx-include="[name=\'interval\'],[name=\'timeout\'],[name=\'retry_attempts\'],[name=\'agent_id\'],[name=\'expected_status\'],[name=\'verify_ssl\'],[name=\'tags\']" hx-disabled-elt="this" hx-indicator="#web-spinner"', extra_classes='flex items-center') }}
+        {{ text_btn(web_svg, web_label, style='secondary', size='sm', type='button', hx_post=scan_action_urls.bulk_web, hx_target='#quick-actions-feedback', hx_swap='innerHTML', extra_attrs='hx-include="[name=\'interval\'],[name=\'timeout\'],[name=\'retry_attempts\'],[name=\'agent_id\'],[name=\'expected_status\'],[name=\'verify_ssl\'],[name=\'tags\']" hx-disabled-elt="this" hx-indicator="#web-spinner"', extra_classes='flex items-center') }}
         {% endif %}
         {% if result.categorized_hosts.ssh and result.categorized_hosts.ssh|length > 0 %}
         {% set ssh_svg %}<span class="w-4 h-4 mr-1 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/command-line.svg" %}</span>{% endset %}
         {% set ssh_label %}<span>Monitor All SSH ({{ result.categorized_hosts.ssh|length }})</span><div id="ssh-spinner" class="htmx-indicator liquid-luxswirl ml-2"><div></div><div></div><div></div><div></div></div>{% endset %}
-        {{ text_btn(ssh_svg, ssh_label, style='secondary', size='sm', type='button', hx_post='/jobs/' ~ job.id ~ '/create-checks/bulk-ssh', hx_target='#quick-actions-feedback', hx_swap='innerHTML', extra_attrs='hx-include="[name=\'interval\'],[name=\'timeout\'],[name=\'retry_attempts\'],[name=\'agent_id\'],[name=\'tags\']" hx-disabled-elt="this" hx-indicator="#ssh-spinner"', extra_classes='flex items-center') }}
+        {{ text_btn(ssh_svg, ssh_label, style='secondary', size='sm', type='button', hx_post=scan_action_urls.bulk_ssh, hx_target='#quick-actions-feedback', hx_swap='innerHTML', extra_attrs='hx-include="[name=\'interval\'],[name=\'timeout\'],[name=\'retry_attempts\'],[name=\'agent_id\'],[name=\'tags\']" hx-disabled-elt="this" hx-indicator="#ssh-spinner"', extra_classes='flex items-center') }}
         {% endif %}
         {% if result.categorized_hosts.database and result.categorized_hosts.database|length > 0 %}
         {% set db_svg %}<span class="w-4 h-4 mr-1 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/circle-stack.svg" %}</span>{% endset %}
         {% set db_label %}<span>Monitor All Database ({{ result.categorized_hosts.database|length }})</span><div id="db-spinner" class="htmx-indicator liquid-luxswirl ml-2"><div></div><div></div><div></div><div></div></div>{% endset %}
-        {{ text_btn(db_svg, db_label, style='secondary', size='sm', type='button', hx_post='/jobs/' ~ job.id ~ '/create-checks/bulk-database', hx_target='#quick-actions-feedback', hx_swap='innerHTML', extra_attrs='hx-include="[name=\'interval\'],[name=\'timeout\'],[name=\'retry_attempts\'],[name=\'agent_id\'],[name=\'tags\']" hx-disabled-elt="this" hx-indicator="#db-spinner"', extra_classes='flex items-center') }}
+        {{ text_btn(db_svg, db_label, style='secondary', size='sm', type='button', hx_post=scan_action_urls.bulk_database, hx_target='#quick-actions-feedback', hx_swap='innerHTML', extra_attrs='hx-include="[name=\'interval\'],[name=\'timeout\'],[name=\'retry_attempts\'],[name=\'agent_id\'],[name=\'tags\']" hx-disabled-elt="this" hx-indicator="#db-spinner"', extra_classes='flex items-center') }}
         {% endif %}
     </div>
 
@@ -264,7 +264,7 @@
                    will render it as disabled on next reload, making this purely a
                    client-side nicety. #}
                 {% set on_success_disable = 'hx-on::after-request="if(event.detail.successful){this.classList.add(\'opacity-30\',\'cursor-not-allowed\',\'pointer-events-none\');this.title=\'Check created\'}"' %}
-                {% set quick_create_url = '/jobs/' ~ job.id ~ '/quick-create-check' %}
+                {% set quick_create_url = scan_action_urls.quick_create %}
                 {% set quick_include = "[name='interval'],[name='timeout'],[name='retry_attempts'],[name='agent_id'],[name='tags'],[name='expected_status'],[name='verify_ssl']" %}
 
                 {% if host.open_ports and host.open_ports|length > 0 %}

@@ -53,6 +53,10 @@ class NotificationProvidersViewService:
             "provider": None,
             "selected_type": provider_type,
             "available_types": NotificationCoreService.get_available_provider_types(),
+            # .path, not str(): url_for returns an absolute url from the
+            # request's scheme/host, which behind TLS-terminating nginx can emit
+            # http:// into an https:// page.
+            "form_action": request.url_for("web_create_provider").path,
         }
 
     @staticmethod
@@ -67,6 +71,9 @@ class NotificationProvidersViewService:
             "provider": provider,
             "selected_type": provider.provider_type,
             "available_types": NotificationCoreService.get_available_provider_types(),
+            "form_action": request.url_for(
+                "web_update_provider", provider_id=provider_id
+            ).path,
         }
 
     @staticmethod

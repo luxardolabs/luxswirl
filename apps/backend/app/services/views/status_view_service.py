@@ -64,6 +64,26 @@ class StatusRow:
         self.minute_bars = minute_bars or []
         self.depends_on_check_id = depends_on_check_id
         self.dependent_count = dependent_count
+        # Set by attach_row_urls() when these rows are headed for a template.
+        # Rows built purely for status lookup (DashboardRender) never render, so
+        # they legitimately have no URL — hence the loud property below rather
+        # than a default that would silently emit an empty hx-get.
+        self._detail_url: str | None = None
+
+    @property
+    def detail_url(self) -> str:
+        """Finished href for this check's detail panel.
+
+        Raises:
+            RuntimeError: If the row was built without a request. A row that a
+                template renders must go through attach_row_urls() first.
+        """
+        if self._detail_url is None:
+            raise RuntimeError(
+                f"StatusRow({self.check_id}).detail_url is unset — call "
+                "StatusViewService.attach_row_urls(request, rows) before rendering."
+            )
+        return self._detail_url
 
     @property
     def status_class(self) -> str:
@@ -275,6 +295,21 @@ class StatusViewService:
         return status_rows, total
 
     @staticmethod
+    def attach_row_urls(
+        request: Request, rows: list[StatusRow], *, hours: int = 4
+    ) -> list[StatusRow]:
+        """Resolve each row's detail href by route name, for rows about to render.
+
+        .path, not str(): url_for returns an absolute url from the request's
+        scheme/host, which behind TLS-terminating nginx can emit http:// into an
+        https:// page.
+        """
+        for row in rows:
+            path = request.url_for("check_detail_panel", check_id=row.check_id).path
+            row._detail_url = f"{path}?hours={hours}"
+        return rows
+
+    @staticmethod
     async def get_status_summary(db: AsyncSession) -> dict:
         """
         Get summary statistics for status page header.
@@ -336,6 +371,7 @@ class StatusViewService:
             offset=offset,
             include_minute_bars=True,
         )
+        StatusViewService.attach_row_urls(request, status_rows)
         return {
             "request": request,
             "current_user": current_user,
@@ -381,6 +417,7 @@ class StatusViewService:
             offset=offset,
             include_minute_bars=include_minute_bars,
         )
+        StatusViewService.attach_row_urls(request, status_rows)
         all_agents = await AgentCoreService.get_admitted_agents(db)
         all_types = await CheckCoreService.get_distinct_check_types(db)
         all_tags = await CheckCoreService.get_all_tags_combined(db)

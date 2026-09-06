@@ -5,11 +5,7 @@
 {% call panel_wrapper() %}
     {{ panel_header('Edit Notification' if provider else 'Setup Notification', subtitle='Configure notification provider settings') }}
     <form
-        {% if provider %}
-            hx-post="/notification-providers/{{ provider.id }}/update"
-        {% else %}
-            hx-post="/notification-providers/create"
-        {% endif %}
+        hx-post="{{ form_action }}"
         hx-target="#panel-container"
         hx-swap="innerHTML"
         class="contents"

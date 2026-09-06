@@ -279,7 +279,7 @@ async def update_user_submit(
     )
 
 
-@router.post("/users/{user_id}/delete", include_in_schema=False)
+@router.post("/users/{user_id}/delete", include_in_schema=False, name="web_delete_user")
 async def delete_user(
     user_id: UUID,
     admin: AdminUser,
@@ -320,7 +320,11 @@ async def delete_user(
     )
 
 
-@router.post("/users/{user_id}/reset-password", include_in_schema=False)
+@router.post(
+    "/users/{user_id}/reset-password",
+    include_in_schema=False,
+    name="web_reset_user_password",
+)
 async def reset_user_password(
     request: Request,
     user_id: UUID,
@@ -367,7 +371,7 @@ async def reset_user_password(
     )
 
 
-@router.post("/users/{user_id}/unlock", include_in_schema=False)
+@router.post("/users/{user_id}/unlock", include_in_schema=False, name="web_unlock_user")
 async def unlock_user(
     user_id: UUID,
     admin: AdminUser,

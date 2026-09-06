@@ -63,7 +63,12 @@ async def assignment_mode_selector(
     )
 
 
-@router.get("/checks/create-form", response_class=HTMLResponse, include_in_schema=False)
+@router.get(
+    "/checks/create-form",
+    response_class=HTMLResponse,
+    include_in_schema=False,
+    name="check_create_form",
+)
 async def create_form(
     request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -79,7 +84,10 @@ async def create_form(
 
 
 @router.get(
-    "/checks/{check_id}/edit-form", response_class=HTMLResponse, include_in_schema=False
+    "/checks/{check_id}/edit-form",
+    response_class=HTMLResponse,
+    include_in_schema=False,
+    name="check_edit_form",
 )
 async def edit_form(
     request: Request,
@@ -266,7 +274,10 @@ async def create_check_assignment(
 
 
 @router.post(
-    "/checks/{check_id}/update", response_class=HTMLResponse, include_in_schema=False
+    "/checks/{check_id}/update",
+    response_class=HTMLResponse,
+    include_in_schema=False,
+    name="web_update_check",
 )
 async def update_check(
     request: Request,
@@ -349,14 +360,17 @@ async def toggle_check(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     """Toggle check enabled/disabled status."""
-    context = await ChecksViewService.toggle_check_handler(db, check_id)
+    context = await ChecksViewService.toggle_check_handler(db, request, check_id)
     return templates.TemplateResponse(
         request, "partials/checks/toggle_button.html", context
     )
 
 
 @router.delete(
-    "/checks/{check_id}", response_class=HTMLResponse, include_in_schema=False
+    "/checks/{check_id}",
+    response_class=HTMLResponse,
+    include_in_schema=False,
+    name="web_delete_check",
 )
 async def delete_check(
     request: Request,

@@ -81,7 +81,7 @@
                 <div class="flex items-center gap-2 ml-4">
                     <!-- Approve -->
                     <form
-                        hx-post="/agents/{{ agent.id }}/approve-web"
+                        hx-post="{{ pending_urls[agent.id].approve }}"
                         hx-target="#pending-agent-{{ agent.id }}"
                         hx-swap="outerHTML swap:0.5s"
                         class="inline"
@@ -89,7 +89,7 @@
                         {{ btn_approve(extra_attrs='title="Approve agent"') }}
                     </form>
                     {{ confirm_action_btn(icon_svg=ICO_X, label='Reject', color='red',
-                        hx_post='/agents/' ~ agent.id ~ '/reject-web',
+                        hx_post=pending_urls[agent.id].reject,
                         hx_target='#pending-agent-' ~ agent.id|string,
                         hx_swap='outerHTML swap:0.5s',
                         title='Reject agent') }}

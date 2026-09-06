@@ -26,6 +26,7 @@ from app.schemas.check_schema import CheckCreate, CheckUpdate
 from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.check_core_service import CheckCoreService
 from app.services.core.maintenance_job_core_service import MaintenanceJobCoreService
+from app.services.views._job_status import build_job_status_context
 from app.web.templates_config import templates
 
 logger = get_logger("luxswirl.web.services.import_export")
@@ -217,7 +218,7 @@ class ImportExportViewService:
 
     @staticmethod
     async def build_panel_context(
-        db: AsyncSession, current_user: AuthedUser, agent_id: UUID
+        db: AsyncSession, request: Request, current_user: AuthedUser, agent_id: UUID
     ) -> dict[str, Any]:
         """Import/export panel context for an agent.
 
@@ -232,6 +233,11 @@ class ImportExportViewService:
             "agent": agent,
             "agent_id": agent_id,
             "check_count": len(checks),
+            # .path, not str(): url_for returns an absolute url from the
+            # request's scheme/host, which behind TLS-terminating nginx can emit
+            # http:// into an https:// page.
+            "export_url": request.url_for("web_export_checks", agent_id=agent_id).path,
+            "import_url": request.url_for("web_import_checks", agent_id=agent_id).path,
         }
 
     @staticmethod
@@ -327,7 +333,7 @@ class ImportExportViewService:
             return templates.TemplateResponse(
                 request,
                 "partials/maintenance/job_status.html",
-                {"job": job, "request": request, "current_user": current_user},
+                build_job_status_context(request, current_user, job),
             )
         except AgentNotFoundException:
             return ImportExportViewService._import_result_response(

@@ -40,7 +40,7 @@ async def import_export_form(
             request,
             "partials/import_export_panel.html",
             await ImportExportViewService.build_panel_context(
-                db, current_user, agent_id
+                db, request, current_user, agent_id
             ),
         )
 
@@ -56,7 +56,9 @@ async def import_export_form(
         )
 
 
-@router.get("/agents/{agent_id}/export", include_in_schema=False)
+@router.get(
+    "/agents/{agent_id}/export", include_in_schema=False, name="web_export_checks"
+)
 async def export_checks(
     agent_id: Annotated[UUID, Path(description="Agent ID")],
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -71,7 +73,10 @@ async def export_checks(
 
 
 @router.post(
-    "/agents/{agent_id}/import", response_class=HTMLResponse, include_in_schema=False
+    "/agents/{agent_id}/import",
+    response_class=HTMLResponse,
+    include_in_schema=False,
+    name="web_import_checks",
 )
 async def import_checks(
     request: Request,

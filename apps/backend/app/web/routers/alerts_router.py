@@ -37,7 +37,7 @@ async def create_alert_form(
     current_user: CurrentUserWeb,
 ):
     """HTMX partial - returns form for creating a new alert."""
-    form_data = await AlertsViewService.get_alert_form_data(db)
+    form_data = await AlertsViewService.get_alert_form_data(db, request)
 
     # Get form defaults
 
@@ -62,7 +62,7 @@ async def edit_alert_form(
     current_user: CurrentUserWeb,
 ):
     """HTMX partial - returns form for editing an existing alert."""
-    form_data = await AlertsViewService.get_alert_form_data(db, alert_id)
+    form_data = await AlertsViewService.get_alert_form_data(db, request, alert_id)
 
     # Get form defaults
 
@@ -79,7 +79,7 @@ async def edit_alert_form(
     )
 
 
-@router.post("/alerts/create", response_class=HTMLResponse)
+@router.post("/alerts/create", response_class=HTMLResponse, name="web_create_alert")
 async def create_alert(
     request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -191,7 +191,9 @@ async def create_alert(
     )
 
 
-@router.post("/alerts/{alert_id}/update", response_class=HTMLResponse)
+@router.post(
+    "/alerts/{alert_id}/update", response_class=HTMLResponse, name="web_update_alert"
+)
 async def update_alert(
     request: Request,
     alert_id: UUID,
@@ -284,7 +286,9 @@ async def update_alert(
     )
 
 
-@router.delete("/alerts/{alert_id}", response_class=HTMLResponse)
+@router.delete(
+    "/alerts/{alert_id}", response_class=HTMLResponse, name="web_delete_alert"
+)
 async def delete_alert(
     request: Request,
     alert_id: UUID,
