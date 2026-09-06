@@ -1,7 +1,7 @@
 {% extends "layouts/base.html" %}
 {% from 'macros/settings.html' import settings_nav, section_header %}
 {% from 'macros/page.html' import page_header %}
-{% from 'macros/buttons.html' import icon_edit, icon_delete, icon_btn, btn_create %}
+{% from 'macros/buttons.html' import icon_edit, icon_btn, btn_create, confirm_action_btn %}
 {% from 'macros/badges.html' import badge, role_badge %}
 {% from 'macros/filters.html' import filter_card, filter_select, filter_search %}
 {% from 'macros/tables.html' import pagination_controls, data_table %}
@@ -106,7 +106,7 @@
         {'label': 'Actions', 'align': 'right'},
     ]) %}
             {% for user in users %}
-            <tr>
+            <tr id="user-{{ user.id }}">
                 <td>
                     <div class="max-w-xs">
                         <div class="flex items-center gap-2">
@@ -157,9 +157,10 @@
                         {% endif %}
 
                         {% if user.id != current_user.id %}
-                        <form method="POST" action="{{ user.urls.delete }}" onsubmit="return confirm('Are you sure you want to delete this user? This action cannot be undone.');" class="inline">
-                            {{ icon_delete() }}
-                        </form>
+                        {% set delete_svg %}<span class="w-3.5 h-3.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/trash.svg" %}</span>{% endset %}
+                        {{ confirm_action_btn(icon_svg=delete_svg, color='red', title='Delete User',
+                                              hx_post=user.urls.delete,
+                                              hx_target='#user-' ~ user.id, hx_swap='outerHTML') }}
                         {% endif %}
                     </div>
                 </td>

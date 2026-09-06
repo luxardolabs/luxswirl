@@ -16,10 +16,23 @@ from app.core.auth_deps import AdminUser
 from app.core.query_params import ActiveFilter, PerPageFilter
 from app.db import get_db
 from app.services.views.web_users_view_service import WebUsersViewService
+from app.web.hx_responses import hx_empty_with_toast
 from app.web.render import error_partial
 from app.web.templates_config import templates
 
 logger = get_logger("luxswirl.web.routers.users")
+
+
+def _delete_failed(message: str) -> HTMLResponse:
+    """Report a failed delete without swapping the row out.
+
+    HX-Reswap: none tells HTMX to leave the row alone, so the user still sees
+    the account they tried to delete alongside the error toast.
+    """
+    response = hx_empty_with_toast(message, kind="error")
+    response.headers["HX-Reswap"] = "none"
+    return response
+
 
 router = APIRouter(prefix="/settings", tags=["Web UI - Users"])
 
@@ -246,18 +259,12 @@ async def delete_user(
 
     # Prevent deleting self
     if admin.id == user_id:
-        return RedirectResponse(
-            url="/settings/users?error=Cannot delete your own account",
-            status_code=302,
-        )
+        return _delete_failed("Cannot delete your own account")
 
     success, error = await web_users.delete_user(db, user_id)
 
     if error:
-        return RedirectResponse(
-            url=f"/settings/users?error={error}",
-            status_code=302,
-        )
+        return _delete_failed(error)
 
     logger.warning(
         "Admin deleted user via web UI",
@@ -267,10 +274,9 @@ async def delete_user(
         },
     )
 
-    return RedirectResponse(
-        url="/settings/users?success=User deleted successfully",
-        status_code=302,
-    )
+    # Empty body: the arm-then-fire button swaps the row out (hx-swap="outerHTML"),
+    # and the toast is the confirmation.
+    return hx_empty_with_toast("User deleted successfully")
 
 
 @router.post(
