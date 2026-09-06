@@ -11,7 +11,6 @@ from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
 from shared.logger import configure_logging, get_logger
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -73,7 +72,7 @@ from app.web.routers.setup_router import router as setup_router
 from app.web.routers.status_pages_router import router as status_pages_router
 from app.web.routers.status_router import router as status_router
 from app.web.routers.users_router import router as web_users_router
-from app.web.template_filters import register_filters, update_settings_cache
+from app.web.template_filters import update_settings_cache
 
 # Create module-level logger for middleware (before lifespan)
 logger = get_logger("luxswirl.server")
@@ -323,13 +322,10 @@ async def general_exception_handler(request: Request, exc: Exception):
     )
 
 
-# Mount static files (package-relative so it resolves regardless of CWD)
-_WEB_DIR = Path(__file__).parent / "web"
-app.mount("/static", StaticFiles(directory=str(_WEB_DIR / "static")), name="static")
-
-# Configure Jinja2 templates with custom filters
-templates = Jinja2Templates(directory=str(_WEB_DIR / "templates"))
-register_filters(templates.env)
+# Mount static files (package-relative so it resolves regardless of CWD).
+# Fleet-canonical location: app/static/, a sibling of app/templates/.
+_APP_DIR = Path(__file__).parent
+app.mount("/static", StaticFiles(directory=str(_APP_DIR / "static")), name="static")
 
 # Include routers
 app.include_router(metrics_router)  # Prometheus metrics (root level /metrics)

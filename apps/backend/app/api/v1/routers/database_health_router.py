@@ -1,7 +1,7 @@
 """
 Database health API endpoints.
 
-The growth chart is a JSON contract consumed by web/static/js/database-health.js.
+The growth chart is a JSON contract consumed by app/static/js/database-health.js.
 It lives here, not in the web router, because a web router serves HTML only
 (fw.web_routers_single_surface) — one router, one surface.
 """
