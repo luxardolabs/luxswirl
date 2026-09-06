@@ -10,7 +10,8 @@ from datetime import timedelta
 from typing import Any
 from uuid import UUID
 
-from fastapi import Request
+from fastapi import Request, Response
+from fastapi.responses import HTMLResponse
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -26,6 +27,8 @@ from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.check_core_service import CheckCoreService
 from app.services.core.maintenance_job_core_service import MaintenanceJobCoreService
 from app.services.core.settings_core_service import SettingsCoreService
+from app.web.hx_responses import hx_empty_with_toast
+from app.web.templates_config import templates
 
 logger = get_logger("luxswirl.web.services.agents")
 
@@ -221,23 +224,9 @@ class AgentsViewService:
         return agent_data, total
 
     # ====================================================================
-    # Web-specific wrapper methods (delegate to core services)
+    # Web-specific operations. Each owns the core call AND the response/context —
+    # a view that only relays to core is a hollow seam (fw.no_passthrough_view_service).
     # ====================================================================
-
-    @staticmethod
-    async def get_agent_by_id(db: AsyncSession, agent_id: UUID):
-        """Get agent by ID."""
-        return await AgentCoreService.get_agent_by_id(db, agent_id)
-
-    @staticmethod
-    async def get_all_tags(db: AsyncSession) -> list[str]:
-        """Get all unique tags from all agents."""
-        return await AgentCoreService.get_all_tags(db)
-
-    @staticmethod
-    async def update_agent(db: AsyncSession, agent_id: UUID, update_data: AgentUpdate):
-        """Update an agent."""
-        return await AgentCoreService.update_agent(db, agent_id, update_data)
 
     @staticmethod
     async def delete_agent(db: AsyncSession, agent_id: UUID):
@@ -262,68 +251,119 @@ class AgentsViewService:
             owner_id=owner_id,
         )
 
-    @staticmethod
-    async def get_pending_count(db: AsyncSession) -> int:
-        """Get count of pending agents."""
-        return await AgentCoreService.get_pending_count(db)
+    # Agent lifecycle actions. Each of these owns BOTH the core call and the HTMX
+    # response: the view is the web seam, so the display name, the toast text and the
+    # follow-up events are its job, not the router's. Returning the response here also
+    # keeps these routes on ONE surface (HTML) — they used to hand back JSON that the
+    # UI never read (fw.web_routers_single_surface).
 
     @staticmethod
-    async def get_setting(db: AsyncSession, key: str, default):
-        """Get a setting value."""
-        return await SettingsCoreService.get_setting(db, key, default)
-
-    # ------------------------------------------------------------------
-    # Agent lifecycle pass-throughs (so the router stays dumb).
-    # ------------------------------------------------------------------
+    def _display_name(agent: Agent) -> str:
+        """How an agent is named to the user, in one place."""
+        return agent.agent_name or agent.hostname or str(agent.id)
 
     @staticmethod
-    async def get_pending_agents(db: AsyncSession):
-        """List pending agents (not paginated)."""
-        return await AgentCoreService.get_pending_agents(db)
+    async def approve_agent(db: AsyncSession, agent_id: UUID) -> HTMLResponse:
+        """Approve an agent (auto-generating its API key) and report it."""
+        agent, _api_key = await AgentCoreService.approve_agent(db, agent_id)
+        logger.info("Agent approved via web", extra={"agent_id": str(agent_id)})
+        return hx_empty_with_toast(
+            f"Agent '{AgentsViewService._display_name(agent)}' approved successfully",
+            extra_events={"refreshPage": {}},
+        )
 
     @staticmethod
-    async def approve_agent(db: AsyncSession, agent_id: UUID):
-        """Approve agent + auto-generate API key. Returns (Agent, api_key)."""
-        return await AgentCoreService.approve_agent(db, agent_id)
+    async def reject_agent(
+        db: AsyncSession, agent_id: UUID, reason: str | None
+    ) -> HTMLResponse:
+        """Reject an agent and refresh the pending-count badge."""
+        agent = await AgentCoreService.reject_agent(db, agent_id, reason)
+        logger.info("Agent rejected via web", extra={"agent_id": str(agent_id)})
+        pending_count = await AgentCoreService.get_pending_count(db)
+        return hx_empty_with_toast(
+            f"Agent '{AgentsViewService._display_name(agent)}' rejected",
+            extra_events={"updatePendingCount": {"count": pending_count}},
+        )
 
     @staticmethod
-    async def reject_agent(db: AsyncSession, agent_id: UUID, reason: str | None):
-        """Reject agent. Returns Agent."""
-        return await AgentCoreService.reject_agent(db, agent_id, reason)
+    async def pause_agent(
+        db: AsyncSession, agent_id: UUID, reason: str | None
+    ) -> HTMLResponse:
+        agent = await AgentCoreService.pause_agent(db, agent_id, reason)
+        logger.info("Agent paused successfully", extra={"agent_id": str(agent_id)})
+        return hx_empty_with_toast(
+            f"Agent '{AgentsViewService._display_name(agent)}' paused"
+        )
 
     @staticmethod
-    async def pause_agent(db: AsyncSession, agent_id: UUID, reason: str | None):
-        return await AgentCoreService.pause_agent(db, agent_id, reason)
+    async def resume_agent(db: AsyncSession, agent_id: UUID) -> HTMLResponse:
+        agent = await AgentCoreService.resume_agent(db, agent_id)
+        return hx_empty_with_toast(
+            f"Agent '{AgentsViewService._display_name(agent)}' resumed"
+        )
 
     @staticmethod
-    async def resume_agent(db: AsyncSession, agent_id: UUID):
-        return await AgentCoreService.resume_agent(db, agent_id)
+    async def disable_agent(
+        db: AsyncSession, agent_id: UUID, reason: str | None
+    ) -> HTMLResponse:
+        agent = await AgentCoreService.disable_agent(db, agent_id, reason)
+        return hx_empty_with_toast(
+            f"Agent '{AgentsViewService._display_name(agent)}' disabled"
+        )
 
     @staticmethod
-    async def disable_agent(db: AsyncSession, agent_id: UUID, reason: str | None):
-        return await AgentCoreService.disable_agent(db, agent_id, reason)
+    async def enable_agent(db: AsyncSession, agent_id: UUID) -> HTMLResponse:
+        agent = await AgentCoreService.enable_agent(db, agent_id)
+        return hx_empty_with_toast(
+            f"Agent '{AgentsViewService._display_name(agent)}' enabled"
+        )
 
     @staticmethod
-    async def enable_agent(db: AsyncSession, agent_id: UUID):
-        return await AgentCoreService.enable_agent(db, agent_id)
+    async def force_reload(db: AsyncSession, agent_id: UUID) -> HTMLResponse:
+        await AgentCoreService.force_reload(db, agent_id)
+        logger.info("Forced config reload for agent", extra={"agent_id": str(agent_id)})
+        return hx_empty_with_toast("Config reload triggered")
 
     @staticmethod
-    async def force_reload(db: AsyncSession, agent_id: UUID):
-        return await AgentCoreService.force_reload(db, agent_id)
+    async def generate_agent_key(
+        db: AsyncSession, request: Request, current_user: AuthedUser, agent_id: UUID
+    ) -> Response:
+        """Generate the initial API key and render the show-it-once panel.
+
+        Raises ValueError if the agent already has a key.
+        """
+        agent, plaintext_key = await AgentCoreService.generate_agent_key(db, agent_id)
+        return AgentsViewService._render_key_panel(
+            request, current_user, agent, plaintext_key
+        )
 
     @staticmethod
-    async def generate_agent_key(db: AsyncSession, agent_id: UUID):
-        """Generate initial API key. Returns (Agent, plaintext_key). Raises ValueError if key exists."""
-        return await AgentCoreService.generate_agent_key(db, agent_id)
+    async def regenerate_agent_key(
+        db: AsyncSession, request: Request, current_user: AuthedUser, agent_id: UUID
+    ) -> Response:
+        """Regenerate the API key (revoking the old one) and render the panel."""
+        agent, plaintext_key = await AgentCoreService.regenerate_agent_key(db, agent_id)
+        return AgentsViewService._render_key_panel(
+            request, current_user, agent, plaintext_key
+        )
 
     @staticmethod
-    async def regenerate_agent_key(db: AsyncSession, agent_id: UUID):
-        """Regenerate API key (revokes old). Returns (Agent, plaintext_key)."""
-        return await AgentCoreService.regenerate_agent_key(db, agent_id)
+    def _render_key_panel(
+        request: Request, current_user: AuthedUser, agent: Agent, plaintext_key: str
+    ) -> Response:
+        """Render the 'key generated — copy it once' panel."""
+        return templates.TemplateResponse(
+            request,
+            "panels/registration_keys/agent_key_generated_panel.html",
+            AgentsViewService.build_key_generated_panel_context(
+                request, current_user, agent, plaintext_key
+            ),
+        )
 
     @staticmethod
-    async def revoke_agent_key(db: AsyncSession, agent_id: UUID):
-        return await AgentCoreService.revoke_agent_key(db, agent_id)
+    async def revoke_agent_key(db: AsyncSession, agent_id: UUID) -> HTMLResponse:
+        await AgentCoreService.revoke_agent_key(db, agent_id)
+        return hx_empty_with_toast("API key revoked successfully")
 
     # ------------------------------------------------------------------
     # Page / partial / form context builders.
@@ -342,15 +382,15 @@ class AgentsViewService:
     ) -> dict[str, Any]:
         """Full /agents page context."""
         if per_page is None:
-            per_page = await AgentsViewService.get_setting(
+            per_page = await SettingsCoreService.get_setting(
                 db, "general.default_page_size", 50
             )
-        agent_stale_threshold = await AgentsViewService.get_setting(
+        agent_stale_threshold = await SettingsCoreService.get_setting(
             db, "general.agent_stale_threshold_seconds", 300
         )
         offset = (page - 1) * per_page
 
-        pending_agents = await AgentsViewService.get_pending_agents(db)
+        pending_agents = await AgentCoreService.get_pending_agents(db)
         agent_data, total = await AgentsViewService.get_agents_with_check_counts(
             db=db,
             active_only=active_only,
@@ -391,10 +431,10 @@ class AgentsViewService:
         db: AsyncSession, request: Request, current_user: AuthedUser, agent_id: UUID
     ) -> dict[str, Any] | None:
         """Edit-form panel context. Returns None if agent not found."""
-        agent = await AgentsViewService.get_agent_by_id(db, agent_id)
+        agent = await AgentCoreService.get_agent_by_id(db, agent_id)
         if not agent:
             return None
-        available_agent_tags = await AgentsViewService.get_all_tags(db)
+        available_agent_tags = await AgentCoreService.get_all_tags(db)
         check_count = len(agent.checks) if agent.checks else 0
         return {
             "request": request,
@@ -411,7 +451,7 @@ class AgentsViewService:
         db: AsyncSession, request: Request, current_user: AuthedUser, agent_id: UUID
     ) -> dict[str, Any] | None:
         """Key-management-panel context. Returns None if agent not found."""
-        agent = await AgentsViewService.get_agent_by_id(db, agent_id)
+        agent = await AgentCoreService.get_agent_by_id(db, agent_id)
         if not agent:
             return None
         return {
@@ -516,7 +556,7 @@ class AgentsViewService:
                 update_dict["log_level"] = ll if ll else None
 
             update_data = AgentUpdate(**update_dict)
-            await AgentsViewService.update_agent(db, agent_id, update_data)
+            await AgentCoreService.update_agent(db, agent_id, update_data)
             await AgentsViewService.force_reload(db, agent_id)
             logger.info(
                 "Updated agent via web UI",
