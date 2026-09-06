@@ -265,10 +265,10 @@
         {% endif %}
 
         <!-- Check-type-specific metrics -->
-        {% include 'panels/checks/metrics/dns_metrics.html' %}
-        {% include 'panels/checks/metrics/mysql_metrics.html' %}
-        {% include 'panels/checks/metrics/postgres_metrics.html' %}
-        {% include 'panels/checks/metrics/synthetic_metrics.html' %}
+        {% include 'partials/panels/checks/metrics/dns_metrics.html' %}
+        {% include 'partials/panels/checks/metrics/mysql_metrics.html' %}
+        {% include 'partials/panels/checks/metrics/postgres_metrics.html' %}
+        {% include 'partials/panels/checks/metrics/synthetic_metrics.html' %}
 
         <!-- Recent Events (Accordion) -->
         <div class="card overflow-hidden">

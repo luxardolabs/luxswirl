@@ -74,7 +74,7 @@ async def create_form(
         db, request, current_user
     )
     return templates.TemplateResponse(
-        request, "panels/checks/check_form_panel.html", context
+        request, "partials/panels/checks/check_form_panel.html", context
     )
 
 
@@ -93,7 +93,7 @@ async def edit_form(
             db, request, current_user, check_id
         )
         return templates.TemplateResponse(
-            request, "panels/checks/check_form_panel.html", context
+            request, "partials/panels/checks/check_form_panel.html", context
         )
     except CheckNotFoundException as e:
         logger.error("Check not found", exc_info=True)
@@ -117,7 +117,7 @@ async def clone_form(
             db, request, current_user, check_id
         )
         return templates.TemplateResponse(
-            request, "panels/checks/check_form_panel.html", context
+            request, "partials/panels/checks/check_form_panel.html", context
         )
     except CheckNotFoundException as e:
         logger.error("Check not found", exc_info=True)
@@ -401,7 +401,7 @@ async def dependents_panel(
             search=search,
         )
         return templates.TemplateResponse(
-            request, "panels/checks/dependents_panel.html", context
+            request, "partials/panels/checks/dependents_panel.html", context
         )
     except CheckNotFoundException as e:
         return error_partial(request, current_user, str(e), 404)

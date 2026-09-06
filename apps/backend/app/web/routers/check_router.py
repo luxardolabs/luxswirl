@@ -54,7 +54,7 @@ async def check_detail_panel(
 
         return templates.TemplateResponse(
             request,
-            "panels/checks/check_detail_panel.html",
+            "partials/panels/checks/check_detail_panel.html",
             {
                 "current_user": current_user,
                 "check": detail["check"],

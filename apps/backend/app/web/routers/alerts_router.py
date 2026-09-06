@@ -47,7 +47,7 @@ async def create_alert_form(
 
         return templates.TemplateResponse(
             request,
-            "forms/alerts/alert_form.html",
+            "partials/forms/alerts/alert_form.html",
             {
                 "current_user": current_user,
                 **form_data,
@@ -86,7 +86,7 @@ async def edit_alert_form(
 
         return templates.TemplateResponse(
             request,
-            "forms/alerts/alert_form.html",
+            "partials/forms/alerts/alert_form.html",
             {
                 "current_user": current_user,
                 **form_data,

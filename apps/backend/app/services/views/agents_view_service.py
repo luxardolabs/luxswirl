@@ -354,7 +354,7 @@ class AgentsViewService:
         """Render the 'key generated — copy it once' panel."""
         return templates.TemplateResponse(
             request,
-            "panels/registration_keys/agent_key_generated_panel.html",
+            "partials/panels/registration_keys/agent_key_generated_panel.html",
             AgentsViewService.build_key_generated_panel_context(
                 request, current_user, agent, plaintext_key
             ),
