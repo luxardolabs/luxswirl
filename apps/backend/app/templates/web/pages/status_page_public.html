@@ -86,17 +86,6 @@
     {% include 'partials/status_page_public_content.html' %}
 </div>
 
-<script>
-// Disable fade-in animation on HTMX refreshes
-document.addEventListener('htmx:afterSwap', function(event) {
-    if (event.detail.target.id === 'status-content') {
-        var cards = event.detail.target.querySelectorAll('.animate-fade-in');
-        cards.forEach(function(card) {
-            card.classList.remove('animate-fade-in');
-            card.style.opacity = '1';
-        });
-    }
-});
-</script>
+<script type="module" src="/static/js/status-page-public.js?v={{ static_version }}"></script>
 
 {% endblock %}

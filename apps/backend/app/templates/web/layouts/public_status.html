@@ -59,16 +59,6 @@
     {% block scripts %}{% endblock %}
 
     <!-- Auto-update timestamp -->
-    <script>
-        function updateTimestamp() {
-            const el = document.querySelector('#last-updated span');
-            if (el) {
-                el.textContent = 'just now';
-            }
-        }
-
-        // Update timestamp on HTMX refresh
-        document.body.addEventListener('htmx:afterSwap', updateTimestamp);
-    </script>
+    <script type="module" src="/static/js/public-status.js?v={{ static_version }}"></script>
 </body>
 </html>

@@ -219,9 +219,13 @@ function bulkModify() {
 }
 
 // Initialize module with event delegation
-export function init(options) {
-    pageTotal = options.total;
-    pageSize = options.perPage;
+export function init() {
+    // Page size + match count come from #status-bulk-config's data-* attributes,
+    // which the template renders (fw.js_in_files: no Jinja inside a <script>).
+    const config = document.getElementById('status-bulk-config');
+    if (!config) return;
+    pageTotal = Number(config.dataset.total);
+    pageSize = Number(config.dataset.perPage);
 
     // Toggle selection mode button
     document.getElementById('toggle-selection-mode')?.addEventListener('click', toggleSelectionMode);
@@ -307,4 +311,12 @@ export function init(options) {
             document.getElementById('bulk-modify-form')?.reset();
         }
     });
+}
+
+
+// Loaded with <script type="module" src>, so the module self-initialises.
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+} else {
+    init();
 }

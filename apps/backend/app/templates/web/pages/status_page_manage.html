@@ -5,15 +5,7 @@
 
 {% block head %}
 <script src="/static/js/vendor/sortable.min.js?v={{ static_version }}"></script>
-<script type="module">
-import { init } from '/static/js/dashboard-manage.js';
-// Initialize when DOM is ready
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
-} else {
-    init();
-}
-</script>
+<script type="module" src="/static/js/dashboard-manage.js?v={{ static_version }}"></script>
 {% endblock %}
 
 {% block content %}
