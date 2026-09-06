@@ -79,7 +79,7 @@ async def test_snoozed_returns_skip():
         AsyncMock(return_value=mapping),
     ):
         d = await AlertCoreService._should_send_notification(
-            db, _alert(), _check(), _result(), is_recovery=False
+            db, _alert(), _check(), _result()
         )
     assert d == SendDecision(send=False, is_resend=False, resend_count=0)
 
@@ -99,7 +99,7 @@ async def test_expired_snooze_proceeds_to_dedup():
         ),
     ):
         d = await AlertCoreService._should_send_notification(
-            db, _alert(), _check(), _result(), is_recovery=False
+            db, _alert(), _check(), _result()
         )
     # Expired snooze + no prior → fresh fire
     assert d == SendDecision(send=True, is_resend=False, resend_count=0)
@@ -124,7 +124,7 @@ async def test_no_prior_notification_sends_fresh():
         ),
     ):
         d = await AlertCoreService._should_send_notification(
-            db, _alert(), _check(), _result(), is_recovery=False
+            db, _alert(), _check(), _result()
         )
     assert d == SendDecision(send=True, is_resend=False, resend_count=0)
 
@@ -154,7 +154,6 @@ async def test_state_transition_resets_resend_counter():
             _alert(resend_interval_minutes=5),
             _check(),
             _result(success=False),
-            is_recovery=False,
         )
     assert d == SendDecision(send=True, is_resend=False, resend_count=0)
 
@@ -178,7 +177,6 @@ async def test_same_state_no_resend_configured_skips():
             _alert(resend_interval_minutes=None),
             _check(),
             _result(success=False),
-            is_recovery=False,
         )
     assert d == SendDecision(send=False, is_resend=False, resend_count=0)
 
@@ -206,7 +204,6 @@ async def test_same_state_within_resend_interval_skips():
             _alert(resend_interval_minutes=5),
             _check(),
             _result(success=False),
-            is_recovery=False,
         )
     assert d == SendDecision(send=False, is_resend=False, resend_count=0)
 
@@ -234,7 +231,6 @@ async def test_same_state_resend_interval_elapsed_increments_counter():
             _alert(resend_interval_minutes=5),
             _check(),
             _result(success=False),
-            is_recovery=False,
         )
     assert d == SendDecision(send=True, is_resend=True, resend_count=3)
 
@@ -263,7 +259,6 @@ async def test_max_resends_reached_skips_but_marks_is_resend():
             _alert(resend_interval_minutes=5, max_resends=3),
             _check(),
             _result(success=False),
-            is_recovery=False,
         )
     assert d == SendDecision(send=False, is_resend=True, resend_count=3)
 
@@ -291,7 +286,6 @@ async def test_max_resends_not_yet_reached_proceeds():
             _alert(resend_interval_minutes=5, max_resends=5),
             _check(),
             _result(success=False),
-            is_recovery=False,
         )
     assert d == SendDecision(send=True, is_resend=True, resend_count=3)
 
@@ -327,7 +321,6 @@ async def test_legacy_prior_without_hash_falls_back_to_success_comparison():
             _alert(),
             _check(),
             _result(success=False),
-            is_recovery=False,
         )
     assert d == SendDecision(send=True, is_resend=False, resend_count=0)
 
@@ -356,7 +349,6 @@ async def test_legacy_prior_without_hash_same_success_no_resend_skips():
             _alert(resend_interval_minutes=None),
             _check(),
             _result(success=False),
-            is_recovery=False,
         )
     assert d == SendDecision(send=False, is_resend=False, resend_count=0)
 
@@ -385,7 +377,6 @@ async def test_legacy_prior_check_result_missing_treats_as_fresh():
             _alert(),
             _check(),
             _result(success=False),
-            is_recovery=False,
         )
     assert d == SendDecision(send=True, is_resend=False, resend_count=0)
 

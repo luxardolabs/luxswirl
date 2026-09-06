@@ -246,6 +246,7 @@ class SchedulerCoreService:
                     "backoff_seconds": backoff,
                     "retry_count": job.retry_count,
                     "retry_limit": job.retry_limit,
+                    "error": error,
                 },
             )
         else:
@@ -253,7 +254,11 @@ class SchedulerCoreService:
             job.enabled = False
             logger.error(
                 "Job disabled after max failures",
-                extra={"job_key": job.job_key, "retry_limit": job.retry_limit},
+                extra={
+                    "job_key": job.job_key,
+                    "retry_limit": job.retry_limit,
+                    "error": error,
+                },
             )
 
     def _calculate_next_run(self, job: JobConfiguration) -> datetime | None:
