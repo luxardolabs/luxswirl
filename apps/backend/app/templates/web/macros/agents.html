@@ -39,12 +39,12 @@
             </div>
         </div>
         <div class="flex flex-wrap items-center gap-2">
-            {{ btn_refresh(label='Reload', size='sm', hx_post='/agents/' ~ item.agent.id ~ '/force-reload', extra_attrs='hx-swap="none" hx-on::after-request="if(event.detail.successful) { htmx.trigger(\'#main-content\', \'refresh\'); showToast(\'Config reload triggered\', \'success\'); }" title="Force agent to reload checks"') }}
-            {{ btn_edit_text(hx_get='/agents/' ~ item.agent.id ~ '/edit-form', hx_target='#panel-container', hx_swap='innerHTML') }}
+            {{ btn_refresh(label='Reload', size='sm', hx_post=item.urls.force_reload, extra_attrs='hx-swap="none" hx-on::after-request="if(event.detail.successful) { htmx.trigger(\'#main-content\', \'refresh\'); showToast(\'Config reload triggered\', \'success\'); }" title="Force agent to reload checks"') }}
+            {{ btn_edit_text(hx_get=item.urls.edit_form, hx_target='#panel-container', hx_swap='innerHTML') }}
             {% set import_export_svg %}<span class="w-4 h-4 mr-1.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/arrow-up-tray.svg" %}</span>{% endset %}
-            {{ text_btn(import_export_svg, 'Import / Export', style='secondary', size='sm', hx_get='/agents/' ~ item.agent.id ~ '/import-export-form', hx_target='#panel-container', hx_swap='innerHTML') }}
+            {{ text_btn(import_export_svg, 'Import / Export', style='secondary', size='sm', hx_get=item.urls.import_export_form, hx_target='#panel-container', hx_swap='innerHTML') }}
             {% set view_checks_svg %}<span class="w-4 h-4 mr-1.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/clipboard.svg" %}</span>{% endset %}
-            {{ text_btn(view_checks_svg, 'View Checks', style='primary', size='sm', href='/dashboard?agent_id=' ~ item.agent.id) }}
+            {{ text_btn(view_checks_svg, 'View Checks', style='primary', size='sm', href=item.urls.view_checks) }}
         </div>
     </div>
 
@@ -129,7 +129,7 @@
                     <div class="text-xs text-orange-400">Never Used</div>
                     {% endif %}
                     {{ link_btn('Manage', color='brand',
-                                hx_get='/agents/' ~ item.agent.id ~ '/key-management-panel',
+                                hx_get=item.urls.key_management_panel,
                                 hx_target='#panel-container', hx_swap='innerHTML') }}
                 </div>
             {% else %}
@@ -144,7 +144,7 @@
                     </div>
                     {%- set ICO_KEY %}<span class="w-3.5 h-3.5 mr-1.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/key.svg" %}</span>{% endset %}
                     {{ confirm_action_btn(icon_svg=ICO_KEY, label='Generate Agent Key', color='brand',
-                                          hx_post='/agents/' ~ item.agent.id ~ '/generate-key-web',
+                                          hx_post=item.urls.generate_key,
                                           hx_target='#panel-container', hx_swap='innerHTML',
                                           extra_classes='col-span-2',
                                           title='Generate agent-specific API key') }}
