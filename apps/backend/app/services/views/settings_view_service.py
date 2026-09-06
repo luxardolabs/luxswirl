@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth_deps import AuthedUser
 from app.schemas.pagination_schema import build_pagination
+from app.schemas.setting_schema import SettingResponse
 from app.services.core.alert_core_service import AlertCoreService
 from app.services.core.notification_core_service import NotificationCoreService
 from app.services.core.registration_key_core_service import RegistrationKeyCoreService
@@ -32,7 +33,7 @@ class SettingsViewService:
         db: AsyncSession,
         key: str,
         value: str,
-    ) -> tuple[Any, str | None]:
+    ) -> tuple[SettingResponse | None, str | None]:
         """
         Update a setting with automatic value parsing based on type.
 
@@ -67,7 +68,8 @@ class SettingsViewService:
                 db, key, parsed_value
             )
 
-            return updated_setting, None
+            # Convert at the view seam: the template gets a schema, not an ORM row.
+            return SettingResponse.model_validate(updated_setting), None
 
         except ValueError as e:
             return None, f"Invalid value format: {str(e)}"
@@ -195,7 +197,7 @@ class SettingsViewService:
     async def reset_setting_with_cache_update(
         db: AsyncSession,
         key: str,
-    ) -> Any:
+    ) -> SettingResponse:
         """
         Reset a setting to its default value and update template cache if needed.
 
@@ -217,7 +219,7 @@ class SettingsViewService:
                 extra={"setting_key": key, "reset_value": reset_value},
             )
 
-        return updated_setting
+        return SettingResponse.model_validate(updated_setting)
 
     @staticmethod
     async def update_metrics_timeout(
@@ -400,7 +402,7 @@ class SettingsViewService:
 
     @staticmethod
     def build_setting_card_context(
-        request: Request, current_user: AuthedUser, setting: Any
+        request: Request, current_user: AuthedUser, setting: SettingResponse
     ) -> dict[str, Any]:
         """Setting-card partial context (used for update/reset responses)."""
         return {
@@ -411,7 +413,7 @@ class SettingsViewService:
 
     @staticmethod
     def build_metrics_card_context(
-        request: Request, current_user: AuthedUser, metrics_settings: Any
+        request: Request, current_user: AuthedUser, metrics_settings: dict[str, Any]
     ) -> dict[str, Any]:
         """Metrics-card partial context."""
         return {

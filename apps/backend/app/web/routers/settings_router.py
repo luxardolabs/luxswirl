@@ -165,11 +165,14 @@ async def update_setting(
         updated_setting, error = await SettingsViewService.update_setting_with_parsing(
             db, key, value
         )
-        if error:
+        if updated_setting is None:
+            # `error` is always set on the failure path; narrowing on the VALUE (not the
+            # message) is what makes that contract checkable.
+            message = error or "Could not update setting"
             return hx_empty_with_toast(
-                error,
+                message,
                 kind="error",
-                status_code=404 if "not found" in error.lower() else 400,
+                status_code=404 if "not found" in message.lower() else 400,
             )
         response = templates.TemplateResponse(
             request,

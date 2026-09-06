@@ -3,7 +3,7 @@ Settings service - business logic for configurable system defaults.
 """
 
 import secrets
-from typing import Any, ClassVar
+from typing import Any, ClassVar, TypeVar, cast, overload
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from shared.logger import get_logger
@@ -13,8 +13,11 @@ from app.core.default_settings import DEFAULT_SETTINGS
 from app.core.exceptions import NotFoundException
 from app.crud.setting_crud import SettingCRUD
 from app.models.setting_model import Setting
+from app.schemas.setting_schema import SettingScalar
 
 logger = get_logger("luxswirl.services.settings")
+
+_T = TypeVar("_T")
 
 
 class SettingsCoreService:
@@ -22,12 +25,20 @@ class SettingsCoreService:
 
     _cache: ClassVar[dict[str, Any]] = {}
 
+    @overload
+    @staticmethod
+    async def get_setting(db: AsyncSession, key: str) -> SettingScalar: ...
+
+    @overload
+    @staticmethod
+    async def get_setting(db: AsyncSession, key: str, default: _T) -> _T: ...
+
     @staticmethod
     async def get_setting(
         db: AsyncSession,
         key: str,
-        default: Any = None,
-    ) -> Any:
+        default: SettingScalar | _T = None,
+    ) -> SettingScalar | _T:
         """
         Get a setting value by key.
 
@@ -39,7 +50,12 @@ class SettingsCoreService:
             default: Default value to return if setting not found
 
         Returns:
-            The typed value of the setting, or default if not found
+            The typed value of the setting, or `default` if not found.
+
+            The return type follows the DEFAULT: a setting has one declared value type,
+            and every caller passes a default of that type, so `get_setting(db, k, 50)`
+            is an `int` to mypy. Typing this `Any` instead blinded every caller — it hid
+            `timedelta(days=<a dict>)` and `compare_digest(<a list>)` shaped bugs.
         """
         setting = await SettingCRUD.get_by_key(db, key)
 
@@ -50,8 +66,8 @@ class SettingsCoreService:
             )
             return default
 
-        # Return typed value
-        return setting.typed_value
+        # Return typed value (declared per setting; see the docstring)
+        return cast("SettingScalar | _T", setting.typed_value)
 
     @staticmethod
     async def get_setting_object(
@@ -104,7 +120,7 @@ class SettingsCoreService:
     async def update_setting(
         db: AsyncSession,
         key: str,
-        new_value: Any,
+        new_value: SettingScalar,
     ) -> Setting:
         """
         Update a setting value.
@@ -183,7 +199,7 @@ class SettingsCoreService:
         db: AsyncSession,
         key: str,
         category: str,
-        value: Any,
+        value: SettingScalar,
         display_name: str,
         description: str | None = None,
         validation: dict[str, Any] | None = None,
@@ -254,7 +270,7 @@ class SettingsCoreService:
         logger.debug("Settings cache cleared")
 
     @staticmethod
-    def _validate_value(value: Any, validation: dict[str, Any]) -> None:
+    def _validate_value(value: SettingScalar, validation: dict[str, Any]) -> None:
         """
         Validate a value against validation rules.
 
@@ -285,6 +301,10 @@ class SettingsCoreService:
 
         # Timezone validation
         if validation.get("type") == "timezone":
+            if not isinstance(value, str):
+                raise ValueError(
+                    f"Invalid timezone: {value!r}. Must be a string IANA timezone name"
+                )
             try:
                 ZoneInfo(value)
             except ZoneInfoNotFoundError:
