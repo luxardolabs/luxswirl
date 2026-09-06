@@ -378,12 +378,12 @@
         },
         {
           "rule": "fw.selects_accessible",
-          "status": "INERT",
+          "status": "PASS",
           "since": "0.1.0",
           "violations": 0,
           "deferred": false,
-          "inert": true,
-          "inert_reason": "web templates aren't at the path this family scans \u2014 fix fw.web_templates_at_fleet_path FIRST (move them to app/templates/web/, or set a [templates].dir pointer to scan them where they are). Until then this rule scanned NOTHING and cannot verify your work \u2014 a \u2713 here would be hollow."
+          "inert": false,
+          "inert_reason": ""
         },
         {
           "rule": "fw.no_redundant_commit",
@@ -540,18 +540,18 @@
         },
         {
           "rule": "fw.no_browser_confirm_in_templates",
-          "status": "PASS",
+          "status": "FAIL",
           "since": "0.2.0",
-          "violations": 0,
+          "violations": 2,
           "deferred": false,
           "inert": false,
           "inert_reason": ""
         },
         {
           "rule": "fw.no_inline_style_in_pages",
-          "status": "PASS",
+          "status": "FAIL",
           "since": "0.2.0",
-          "violations": 0,
+          "violations": 25,
           "deferred": false,
           "inert": false,
           "inert_reason": ""
@@ -657,9 +657,9 @@
         },
         {
           "rule": "fw.no_hand_rolled_components_in_pages",
-          "status": "PASS",
+          "status": "FAIL",
           "since": "0.9.1",
-          "violations": 0,
+          "violations": 158,
           "deferred": false,
           "inert": false,
           "inert_reason": ""
@@ -702,12 +702,12 @@
         },
         {
           "rule": "fw.component_registry",
-          "status": "INERT",
+          "status": "FAIL",
           "since": "0.15.0",
-          "violations": 0,
+          "violations": 6,
           "deferred": false,
-          "inert": true,
-          "inert_reason": "web templates aren't at the path this family scans \u2014 fix fw.web_templates_at_fleet_path FIRST (move them to app/templates/web/, or set a [templates].dir pointer to scan them where they are). Until then this rule scanned NOTHING and cannot verify your work \u2014 a \u2713 here would be hollow."
+          "inert": false,
+          "inert_reason": ""
         },
         {
           "rule": "fw.layout",
@@ -792,18 +792,18 @@
         },
         {
           "rule": "fw.web_templates_at_fleet_path",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.46.0",
-          "violations": 108,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": ""
         },
         {
           "rule": "fw.static_js_at_fleet_path",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.47.0",
-          "violations": 25,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": ""
@@ -819,12 +819,12 @@
         },
         {
           "rule": "fw.template_refs_resolve",
-          "status": "INERT",
+          "status": "FAIL",
           "since": "0.54.0",
-          "violations": 0,
+          "violations": 1,
           "deferred": false,
-          "inert": true,
-          "inert_reason": "web templates aren't at the path this family scans \u2014 fix fw.web_templates_at_fleet_path FIRST (move them to app/templates/web/, or set a [templates].dir pointer to scan them where they are). Until then this rule scanned NOTHING and cannot verify your work \u2014 a \u2713 here would be hollow."
+          "inert": false,
+          "inert_reason": ""
         },
         {
           "rule": "fw.no_orphan_pages",
@@ -833,7 +833,7 @@
           "violations": 0,
           "deferred": false,
           "inert": true,
-          "inert_reason": "web templates aren't at the path this family scans \u2014 fix fw.web_templates_at_fleet_path FIRST (move them to app/templates/web/, or set a [templates].dir pointer to scan them where they are). Until then this rule scanned NOTHING and cannot verify your work \u2014 a \u2713 here would be hollow."
+          "inert_reason": "this app renders a page by a computed name (a non-literal TemplateResponse), so an unreferenced page can't be proven dead. Orphan detection runs only when every render uses a literal template name."
         },
         {
           "rule": "fw.tenant_route_reachability",
@@ -950,7 +950,7 @@
           "violations": 0,
           "deferred": false,
           "inert": true,
-          "inert_reason": "web templates aren't at the path this family scans \u2014 fix fw.web_templates_at_fleet_path FIRST (move them to app/templates/web/, or set a [templates].dir pointer to scan them where they are). Until then this rule scanned NOTHING and cannot verify your work \u2014 a \u2713 here would be hollow."
+          "inert_reason": "this app renders a template by a non-literal TemplateResponse, or includes one by a computed name with no pinnable literal prefix ({% include some_var %}), so an unreferenced partial can't be proven dead. (A computed include WITH a literal prefix \u2014 {% include 'x/' ~ v %}, or a var set to one \u2014 is scoped to that subtree, not a global stand-down.) Run `--sweep orphan-templates` to LIST the no-static-reference partials for review (NOT a clearance)."
         },
         {
           "rule": "fw.mutating_route_authenticated",
@@ -1017,12 +1017,12 @@
         },
         {
           "rule": "fw.template_role_placement",
-          "status": "INERT",
+          "status": "FAIL",
           "since": "0.99.0",
-          "violations": 0,
+          "violations": 29,
           "deferred": false,
-          "inert": true,
-          "inert_reason": "web templates aren't at the path this family scans \u2014 fix fw.web_templates_at_fleet_path FIRST (move them to app/templates/web/, or set a [templates].dir pointer to scan them where they are). Until then this rule scanned NOTHING and cannot verify your work \u2014 a \u2713 here would be hollow."
+          "inert": false,
+          "inert_reason": ""
         },
         {
           "rule": "fw.api_routers_dont_import_views",
@@ -1053,9 +1053,9 @@
         },
         {
           "rule": "fw.js_in_files",
-          "status": "PASS",
+          "status": "FAIL",
           "since": "0.105.0",
-          "violations": 0,
+          "violations": 11,
           "deferred": false,
           "inert": false,
           "inert_reason": ""
@@ -1071,12 +1071,12 @@
         },
         {
           "rule": "fw.templates_compile",
-          "status": "INERT",
+          "status": "PASS",
           "since": "0.107.0",
           "violations": 0,
           "deferred": false,
-          "inert": true,
-          "inert_reason": "no web-templates dir found (nothing to compile)"
+          "inert": false,
+          "inert_reason": ""
         },
         {
           "rule": "fw.color_mode_tokens",
@@ -1134,12 +1134,12 @@
         },
         {
           "rule": "fw.url_assembly_in_view",
-          "status": "INERT",
+          "status": "FAIL",
           "since": "0.132.0",
-          "violations": 0,
+          "violations": 96,
           "deferred": false,
-          "inert": true,
-          "inert_reason": "web templates aren't at the path this family scans \u2014 fix fw.web_templates_at_fleet_path FIRST (move them to app/templates/web/, or set a [templates].dir pointer to scan them where they are). Until then this rule scanned NOTHING and cannot verify your work \u2014 a \u2713 here would be hollow."
+          "inert": false,
+          "inert_reason": ""
         },
         {
           "rule": "fw.url_builder_not_in_template",
@@ -1153,10 +1153,10 @@
       ],
       "summary": {
         "PASS": 95,
-        "FAIL": 6,
+        "FAIL": 12,
         "XFAIL": 4,
         "XPASS": 0,
-        "INERT": 22
+        "INERT": 16
       }
     },
     {
@@ -1465,11 +1465,11 @@
   },
   "summary": {
     "PASS": 124,
-    "FAIL": 6,
+    "FAIL": 12,
     "XFAIL": 5,
     "XPASS": 0,
-    "INERT": 23
+    "INERT": 17
   },
-  "commit": "7dea6ead3596b5f35464617ae97ec75479f9a0ab",
-  "generated_at": "2026-09-06T04:05:39Z"
+  "commit": "19425159a8d5636c05e00e40824bc71faf7d927b",
+  "generated_at": "2026-09-06T04:12:18Z"
 }
