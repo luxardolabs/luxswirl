@@ -18,7 +18,7 @@ from app.db import get_db
 from app.services.views.notification_providers_view_service import (
     NotificationProvidersViewService,
 )
-from app.web.hx_responses import hx_empty_with_toast
+from app.web.hx_responses import hx_close_panel_and_refresh, hx_empty_with_toast
 from app.web.templates_config import templates
 
 logger = get_logger("luxswirl.web.notification_providers")
@@ -74,11 +74,7 @@ async def create_provider(
     """Create a new notification provider."""
     form = await request.form()
     await NotificationProvidersViewService.create_provider(db, dict(form))
-    return HTMLResponse(
-        content="",
-        status_code=200,
-        headers={"HX-Trigger": "closeSidePanel,refreshPage"},
-    )
+    return hx_close_panel_and_refresh()
 
 
 @router.post(
@@ -95,11 +91,7 @@ async def update_provider(
     """Update an existing notification provider."""
     form = await request.form()
     await NotificationProvidersViewService.update_provider(db, provider_id, dict(form))
-    return HTMLResponse(
-        content="",
-        status_code=200,
-        headers={"HX-Trigger": "closeSidePanel,refreshPage"},
-    )
+    return hx_close_panel_and_refresh()
 
 
 @router.delete(
