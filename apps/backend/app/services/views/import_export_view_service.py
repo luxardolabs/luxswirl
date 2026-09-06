@@ -7,7 +7,6 @@ and orchestrating the import process with proper error handling.
 
 import json
 from collections.abc import Sequence
-from typing import Any
 from uuid import UUID
 
 from fastapi import Request
@@ -15,7 +14,10 @@ from fastapi.responses import Response
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.auth_deps import AuthedUser
 from app.core.exceptions import AgentNotFoundException
+from app.models.agent_model import Agent
+from app.models.check_model import Check
 from app.models.enum_model import CheckType, MaintenanceJobKind
 from app.schemas.check_schema import CheckCreate, CheckUpdate
 from app.services.core.agent_core_service import AgentCoreService
@@ -50,7 +52,7 @@ class ImportExportViewService:
     """Service for check import/export operations."""
 
     @staticmethod
-    def export_checks_to_dict(checks: Sequence[Any], agent: Any) -> dict:
+    def export_checks_to_dict(checks: Sequence[Check], agent: Agent) -> dict:
         """
         Transform checks to export format.
 
@@ -220,7 +222,7 @@ class ImportExportViewService:
 
     @staticmethod
     def _import_result_response(
-        request: Request, current_user: Any, error: str, status_code: int
+        request: Request, current_user: AuthedUser, error: str, status_code: int
     ) -> Response:
         """Render the import-result partial for an error/validation failure."""
         return templates.TemplateResponse(
@@ -234,7 +236,7 @@ class ImportExportViewService:
     async def handle_import(
         db: AsyncSession,
         request: Request,
-        current_user: Any,
+        current_user: AuthedUser,
         agent_id: UUID,
         content: bytes,
         mode: str,

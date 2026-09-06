@@ -25,6 +25,7 @@ from app.core.synthetic_security import SyntheticSecurityError
 from app.models.agent_model import Agent
 from app.models.check_model import Check
 from app.models.enum_model import CheckType, MaintenanceJobKind, options_for
+from app.models.maintenance_job_model import MaintenanceJob
 from app.schemas.check_schema import BulkCheckCreateRequest, CheckCreate, CheckUpdate
 from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.alert_core_service import AlertCoreService
@@ -608,7 +609,7 @@ class ChecksViewService:
 
     @staticmethod
     def job_status_response(
-        request: Request, current_user: AuthedUser, job: Any
+        request: Request, current_user: AuthedUser, job: MaintenanceJob
     ) -> Response:
         """Render the maintenance-job polling partial for the side panel."""
         return templates.TemplateResponse(

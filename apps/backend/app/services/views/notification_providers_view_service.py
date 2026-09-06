@@ -26,7 +26,7 @@ from app.services.core.notification_core_service import NotificationCoreService
 logger = get_logger("luxswirl.web.services.notification_providers")
 
 
-def _parse_config_json(raw: Any) -> dict[str, Any]:
+def _parse_config_json(raw: str | None) -> dict[str, Any]:
     """Parse the form's config_json field; raise ValueError with a friendly message."""
     try:
         parsed = json.loads(str(raw))

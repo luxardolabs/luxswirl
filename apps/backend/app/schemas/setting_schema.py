@@ -9,6 +9,11 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.enum_model import SettingCategory
 
+# A setting's stored value. The closed set the storage format documents ("int, float,
+# bool, string, list, dict") — written as a real union so mypy can see it, rather than
+# `Any`, which is the type-check dodge fw.no_any_typed_service_boundary exists to catch.
+type SettingScalar = str | int | float | bool | list[Any] | dict[str, Any] | None
+
 
 class SettingValue(BaseModel):
     """Schema for setting value storage."""
