@@ -1,6 +1,6 @@
 {
   "guard": "luxarch",
-  "guard_version": "0.128.0",
+  "guard_version": "0.130.0",
   "repo": "/repo",
   "targets": [
     {
@@ -270,9 +270,9 @@
         },
         {
           "rule": "fw.router_size",
-          "status": "PASS",
+          "status": "FAIL",
           "since": "0.1.0",
-          "violations": 0,
+          "violations": 1,
           "deferred": false,
           "inert": false,
           "inert_reason": ""
@@ -810,9 +810,9 @@
         },
         {
           "rule": "fw.secure_cookies",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.51.0",
-          "violations": 3,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": ""
@@ -938,7 +938,7 @@
           "rule": "fw.no_passthrough_view_service",
           "status": "FAIL",
           "since": "0.78.0",
-          "violations": 58,
+          "violations": 5,
           "deferred": false,
           "inert": false,
           "inert_reason": ""
@@ -990,18 +990,18 @@
         },
         {
           "rule": "fw.no_any_typed_service_boundary",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.88.0",
-          "violations": 14,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": ""
         },
         {
           "rule": "fw.strftime_is_display_only",
-          "status": "PASS",
+          "status": "FAIL",
           "since": "0.89.0",
-          "violations": 0,
+          "violations": 1,
           "deferred": false,
           "inert": false,
           "inert_reason": ""
@@ -1035,9 +1035,9 @@
         },
         {
           "rule": "fw.web_routers_single_surface",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.100.0",
-          "violations": 8,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": ""
@@ -1134,8 +1134,8 @@
         }
       ],
       "summary": {
-        "PASS": 88,
-        "FAIL": 12,
+        "PASS": 89,
+        "FAIL": 11,
         "XFAIL": 4,
         "XPASS": 0,
         "INERT": 21
@@ -1174,18 +1174,18 @@
         },
         {
           "rule": "collector.client_lifecycle",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.1.0",
-          "violations": 2,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": ""
         },
         {
           "rule": "collector.no_per_request_http",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.1.0",
-          "violations": 6,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": ""
@@ -1201,8 +1201,8 @@
         }
       ],
       "summary": {
-        "PASS": 3,
-        "FAIL": 2,
+        "PASS": 5,
+        "FAIL": 0,
         "XFAIL": 0,
         "XPASS": 0,
         "INERT": 1
@@ -1287,6 +1287,15 @@
         "rule": "repo.migrations_build_schema",
         "status": "PASS",
         "since": "0.120.0",
+        "violations": 0,
+        "deferred": false,
+        "inert": false,
+        "inert_reason": ""
+      },
+      {
+        "rule": "repo.schema_from_migrations",
+        "status": "PASS",
+        "since": "0.130.0",
         "violations": 0,
         "deferred": false,
         "inert": false,
@@ -1420,7 +1429,7 @@
       }
     ],
     "summary": {
-      "PASS": 22,
+      "PASS": 23,
       "FAIL": 0,
       "XFAIL": 1,
       "XPASS": 0,
@@ -1428,12 +1437,12 @@
     }
   },
   "summary": {
-    "PASS": 113,
-    "FAIL": 14,
+    "PASS": 117,
+    "FAIL": 11,
     "XFAIL": 5,
     "XPASS": 0,
     "INERT": 22
   },
-  "commit": "2b652317768d61720d765aa1b00f372b1e3f0d9f",
-  "generated_at": "2026-09-05T23:47:34Z"
+  "commit": "4732b47968b6b1f43c973e319c9871c9110dcef0",
+  "generated_at": "2026-09-06T01:13:41Z"
 }
