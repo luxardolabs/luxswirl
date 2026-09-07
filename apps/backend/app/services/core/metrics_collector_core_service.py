@@ -590,10 +590,13 @@ class MetricsCollectorCoreService:
         for agent in agents:
             MetricsCollectorCoreService.update_agent_status(agent)
 
-        # Get latest agent metrics for each agent
+        # Latest agent metrics, one query for the whole fleet rather than one
+        # per agent — this runs on every scrape.
+        latest_metrics = await AgentCRUD.get_latest_metrics(
+            db, [agent.id for agent in agents]
+        )
         for agent in agents:
-            latest_metric = await AgentCRUD.get_latest_metric(db, agent.id)
-
+            latest_metric = latest_metrics.get(agent.id)
             if latest_metric:
                 MetricsCollectorCoreService.update_agent_metrics(latest_metric, agent)
 
