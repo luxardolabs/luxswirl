@@ -633,6 +633,3 @@ class AgentsViewService:
             return "success", "Agent updated successfully!", 200
         except AgentNotFoundException:
             return "error", f"Agent not found: {agent_id}", 404
-        except Exception as e:
-            logger.error("Error updating agent", exc_info=True)
-            return "error", str(e), 500

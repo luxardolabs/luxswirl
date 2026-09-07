@@ -204,9 +204,6 @@ class WebUsersViewService:
             return user, None
         except ValueError as e:
             return None, str(e)
-        except Exception:
-            logger.error("Error creating user", exc_info=True)
-            return None, "An error occurred while creating user"
 
     async def update_user(
         self,
@@ -232,9 +229,6 @@ class WebUsersViewService:
             return user, None
         except ValueError as e:
             return None, str(e)
-        except Exception:
-            logger.error("Error updating user", exc_info=True)
-            return None, "An error occurred while updating user"
 
     async def delete_user(
         self, db: AsyncSession, user_id: UUID
@@ -249,14 +243,10 @@ class WebUsersViewService:
         Returns:
             Tuple of (success, error message if failed)
         """
-        try:
-            success = await self.user_service.delete_user(db, user_id)
-            if not success:
-                return False, "User not found"
-            return True, None
-        except Exception:
-            logger.error("Error deleting user", exc_info=True)
-            return False, "An error occurred while deleting user"
+        success = await self.user_service.delete_user(db, user_id)
+        if not success:
+            return False, "User not found"
+        return True, None
 
     async def reset_password(
         self,
@@ -288,9 +278,6 @@ class WebUsersViewService:
             return True, None
         except ValueError as e:
             return False, str(e)
-        except Exception:
-            logger.error("Error resetting password", exc_info=True)
-            return False, "An error occurred while resetting password"
 
     async def unlock_user(
         self, db: AsyncSession, user_id: UUID
@@ -310,9 +297,6 @@ class WebUsersViewService:
             return True, None
         except ValueError as e:
             return False, str(e)
-        except Exception:
-            logger.error("Error unlocking user", exc_info=True)
-            return False, "An error occurred while unlocking user"
 
     async def ensure_default_admin(self, db: AsyncSession) -> User | None:
         """

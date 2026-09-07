@@ -47,6 +47,8 @@ async def _job_purge_loop():
         except asyncio.CancelledError:
             logger.info("Job purge task cancelled")
             break
+        # swallowed-exceptions: daemon loop — one transient DB error must not
+        # kill the purge task for the life of the process.
         except Exception:
             logger.error("Error in job purge task", exc_info=True)
             # Continue running despite errors

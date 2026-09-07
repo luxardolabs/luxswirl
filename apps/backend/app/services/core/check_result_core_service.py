@@ -4,7 +4,7 @@ CheckResult service - business logic for check result operations and analytics.
 
 import json
 from collections.abc import Sequence
-from datetime import UTC, datetime, timedelta
+from datetime import timedelta
 from typing import Any
 from uuid import UUID
 
@@ -14,6 +14,7 @@ from uuid_extensions import uuid7
 
 from app.core.datetime_utils import utc_now
 from app.core.exceptions import AgentNotFoundException
+from app.core.ssl_expiry import ssl_expiry_fields
 from app.crud.check_result_crud import CheckResultCRUD
 from app.models.check_result_model import CheckResult
 from app.schemas.check_result_schema import (
@@ -45,45 +46,23 @@ class CheckResultCoreService:
         Returns:
             Dictionary with computed cert info including days_until_expiration, expired, expires_soon
         """
-        try:
-            expiration_str = raw_cert_data.get("expiration_date")
-            if not expiration_str:
-                return raw_cert_data
-
-            # Parse expiration date (format: 'Jan 1 00:00:00 2025 GMT')
-            expiration_date = datetime.strptime(
-                expiration_str, "%b %d %H:%M:%S %Y %Z"
-            ).replace(tzinfo=UTC)
-
-            # Calculate days until expiration
-            now = datetime.now(UTC)
-            days_until_expiration = (expiration_date - now).days
-
-            # Fetch SSL thresholds from settings
-            ssl_warning_days = await SettingsCoreService.get_setting(
-                db, "ssl_cert_warning_days", default=30
-            )
-            ssl_critical_days = await SettingsCoreService.get_setting(
-                db, "ssl_cert_critical_days", default=14
-            )
-
-            # Compute status flags based on configurable thresholds
-            expired = days_until_expiration < 0
-            expires_soon = 0 < days_until_expiration <= ssl_warning_days
-            expires_critical = 0 < days_until_expiration <= ssl_critical_days
-
-            # Return original data plus computed fields
-            return {
-                **raw_cert_data,
-                "days_until_expiration": days_until_expiration,
-                "expired": expired,
-                "expires_soon": expires_soon,
-                "expires_critical": expires_critical,
-            }
-
-        except Exception:
-            logger.warning("Failed to compute SSL cert info", exc_info=True)
-            return raw_cert_data
+        # The thresholds are operator-configurable; they live under the
+        # `alert.` prefix, which this lookup used to omit — so a configured
+        # warning/critical window was silently ignored in favour of the default.
+        warning_days = await SettingsCoreService.get_setting(
+            db, "alert.ssl_cert_warning_days", default=30
+        )
+        critical_days = await SettingsCoreService.get_setting(
+            db, "alert.ssl_cert_critical_days", default=14
+        )
+        return {
+            **raw_cert_data,
+            **ssl_expiry_fields(
+                raw_cert_data.get("expiration_date"),
+                warning_days=warning_days,
+                critical_days=critical_days,
+            ),
+        }
 
     @staticmethod
     async def create_check_result(

@@ -96,13 +96,6 @@ class SettingsViewService:
 
         except ValueError as e:
             return None, f"Invalid value format: {str(e)}"
-        except Exception as e:
-            logger.error(
-                "Error updating setting",
-                extra={"setting_key": key},
-                exc_info=True,
-            )
-            return None, str(e)
 
     @staticmethod
     def _parse_value(value: str, value_type: str | None):
