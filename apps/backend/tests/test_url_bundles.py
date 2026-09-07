@@ -17,7 +17,12 @@ import pathlib
 
 import pytest
 
-VIEWS = pathlib.Path(__file__).resolve().parents[1] / "app" / "services" / "views"
+_APP = pathlib.Path(__file__).resolve().parents[1] / "app"
+# View services build the bundles; app/core holds the pure shapers some of them
+# delegate to, so both are scanned.
+SCANNED = sorted(
+    [*(_APP / "services" / "views").glob("*.py"), *(_APP / "core").glob("*.py")]
+)
 DICT_ATTRS = frozenset(dir(dict))
 
 
@@ -34,7 +39,7 @@ def _is_url_call(node: ast.expr) -> bool:
     return False
 
 
-@pytest.mark.parametrize("path", sorted(VIEWS.glob("*.py")), ids=lambda p: p.name)
+@pytest.mark.parametrize("path", SCANNED, ids=lambda p: p.name)
 def test_no_url_bundle_key_shadows_a_dict_method(path: pathlib.Path) -> None:
     tree = ast.parse(path.read_text(), filename=str(path))
     offenders = []

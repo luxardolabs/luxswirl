@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from uuid import uuid4
+from uuid import UUID
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -47,7 +47,10 @@ async def authed_client(db, monkeypatch):
     app.dependency_overrides.clear()
 
 
-def _routes(agent_id):
+AGENT_ID = UUID("00000000-0000-0000-0000-0000000000ab")
+
+
+def _routes(agent_id=AGENT_ID):
     """(method, url, json) for each import/export route."""
     return [
         ("GET", f"/api/v1/import-export/export/{agent_id}", None),
@@ -60,13 +63,13 @@ def _routes(agent_id):
     ]
 
 
-@pytest.mark.parametrize("method,url,body", _routes(uuid4()), ids=lambda v: str(v)[:40])
+@pytest.mark.parametrize("method,url,body", _routes(), ids=lambda v: str(v)[:40])
 async def test_anonymous_is_rejected(authed_client, method, url, body):
     resp = await authed_client.request(method, url, json=body)
     assert resp.status_code == 401, f"{method} {url} answered an anonymous caller"
 
 
-@pytest.mark.parametrize("method,url,body", _routes(uuid4()), ids=lambda v: str(v)[:40])
+@pytest.mark.parametrize("method,url,body", _routes(), ids=lambda v: str(v)[:40])
 async def test_a_wrong_token_is_rejected(authed_client, method, url, body):
     resp = await authed_client.request(
         method, url, json=body, headers={"Authorization": "Bearer not-the-token"}
