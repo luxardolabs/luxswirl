@@ -21,10 +21,17 @@ from app.core.datetime_utils import utc_now
 from app.core.exceptions import AgentNotFoundException
 from app.crud.job_crud import JobCRUD
 from app.models.agent_model import Agent
-from app.models.enum_model import JobStatus, JobType
+from app.models.enum_model import SERVER_RUNNER, JobStatus, JobType
 from app.models.job_model import Job
-from app.schemas.job_schema import JobCreate, JobDispatch, JobResultSubmit
+from app.schemas.job_schema import (
+    JobCreate,
+    JobDispatch,
+    JobInDB,
+    JobListRow,
+    JobResultSubmit,
+)
 from app.services.core._job_enrichers import enrich_job_result
+from app.services.core.network_scan_core_service import NetworkScanCoreService
 from app.services.core.settings_core_service import SettingsCoreService
 
 logger = get_logger("luxswirl.services.job")
@@ -40,7 +47,7 @@ class JobCoreService:
         """
         if not token:
             return None, False
-        if token == Job.SERVER_RUNNER:
+        if token == SERVER_RUNNER:
             return None, True
         return UUID(token), False
 
@@ -114,6 +121,24 @@ class JobCoreService:
             Job instance or None if not found
         """
         return await JobCRUD.get_by_id(db, job_id)
+
+    @staticmethod
+    async def get_job_detail(db: AsyncSession, job_id: UUID) -> JobInDB | None:
+        """The job as the detail panel needs it — enriched, and a DTO.
+
+        A network_scan result is enriched here rather than in the view: the
+        view used to write the enriched payload back onto the ORM row, which
+        both put business logic above the seam and risked flushing a display
+        transform into the database.
+        """
+        job = await JobCoreService.get_job(db, job_id)
+        if job is None:
+            return None
+
+        detail = JobInDB.model_validate(job)
+        if detail.job_type == JobType.NETWORK_SCAN and detail.result:
+            detail.result = NetworkScanCoreService.enrich_result(detail.result)
+        return detail
 
     @staticmethod
     async def list_jobs(
@@ -510,7 +535,7 @@ class JobCoreService:
         created: str | None = None,
         limit: int = 25,
         offset: int = 0,
-    ) -> tuple[list[tuple], int]:
+    ) -> tuple[list[JobListRow], int]:
         """
         List jobs with agent data, filtering, and pagination.
 
@@ -526,9 +551,9 @@ class JobCoreService:
             offset: Pagination offset
 
         Returns:
-            Tuple of (list of (Job, Agent|None) tuples, total count)
+            Tuple of (job rows, total count)
         """
-        return await JobCRUD.list_jobs_with_agents(
+        rows, total = await JobCRUD.list_jobs_with_agents(
             db,
             status=status,
             job_type=job_type,
@@ -539,6 +564,24 @@ class JobCoreService:
             limit=limit,
             offset=offset,
         )
+        return [
+            JobListRow(
+                id=job.id,
+                job_type=job.job_type,
+                agent_id=job.agent_id,
+                agent_name=agent.agent_name if agent else None,
+                status=job.status,
+                priority=job.priority,
+                created_at=job.created_at,
+                started_at=job.started_at,
+                completed_at=job.completed_at,
+                duration_seconds=job.duration_seconds,
+                has_result=job.result is not None,
+                has_error=job.error is not None,
+                tags=job.tags,
+            )
+            for job, agent in rows
+        ], total
 
     @staticmethod
     async def get_job_status_summary(db: AsyncSession) -> dict:

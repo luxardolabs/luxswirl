@@ -11,6 +11,7 @@ from uuid import UUID
 from pydantic import Field, field_validator
 
 from app.models.enum_model import (
+    SERVER_RUNNER,
     JobStatus,
     JobType,
     MaintenanceJobKind,
@@ -34,6 +35,15 @@ class JobBase(BaseSchema):
     tags: list[str] | None = Field(
         None, description="Tags for organizing/filtering jobs"
     )
+
+    @property
+    def runner_token(self) -> str:
+        """The runner as a UI/URL token: the agent UUID string, or the server.
+
+        A job runs on a runner: a specific agent, or the server itself
+        (agent_id IS NULL). Callers use this instead of comparing to NULL.
+        """
+        return str(self.agent_id) if self.agent_id else SERVER_RUNNER
 
 
 class JobCreate(JobBase):
@@ -175,6 +185,37 @@ class JobResponse(JobInDB):
             }
         }
     }
+
+
+class JobListRow(BaseSchema):
+    """One row of the jobs table, as the web seam receives it.
+
+    The listing joins a job to its agent, so this carries the agent's name
+    alongside the job's own columns rather than handing the view a
+    (Job, Agent | None) tuple of ORM rows. duration_seconds and the two
+    has_* flags are derived here because they are what the table renders — the
+    template never sees the result or error payload itself, only whether there
+    is one.
+    """
+
+    id: UUID
+    job_type: str
+    agent_id: UUID | None = None
+    agent_name: str | None = None
+    status: str
+    priority: int
+    created_at: datetime | None = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    duration_seconds: float | None = None
+    has_result: bool = False
+    has_error: bool = False
+    tags: list[str] | None = None
+
+    @property
+    def runner_token(self) -> str:
+        """The runner as a UI/URL token: the agent UUID string, or the server."""
+        return str(self.agent_id) if self.agent_id else SERVER_RUNNER
 
 
 class JobListResponse(BaseSchema):

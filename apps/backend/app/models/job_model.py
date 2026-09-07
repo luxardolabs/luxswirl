@@ -3,7 +3,7 @@ Job model - Tasks dispatched to agents for discovery, diagnostics, and maintenan
 """
 
 from datetime import datetime, timedelta
-from typing import Any, ClassVar, cast
+from typing import Any, cast
 from uuid import UUID, uuid4
 
 from sqlalchemy import JSON, DateTime, Index, Integer, String, Text, Uuid
@@ -11,7 +11,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.datetime_utils import utc_now
 from app.models.base_model import Base, TimestampMixin, str_enum
-from app.models.enum_model import JobStatus, JobType
+from app.models.enum_model import SERVER_RUNNER, JobStatus, JobType
 
 
 class Job(Base, TimestampMixin):
@@ -210,9 +210,6 @@ class Job(Base, TimestampMixin):
     # itself (agent_id IS NULL). Everything goes through here instead of
     # comparing to NULL / "server" inline.
     # ------------------------------------------------------------------
-    SERVER_RUNNER: ClassVar[str] = "server"
-    """UI/filter token for the server runner (a Job with no assigned agent)."""
-
     @property
     def runs_on_server(self) -> bool:
         """True when this job runs on the server itself (no assigned agent)."""
@@ -221,7 +218,7 @@ class Job(Base, TimestampMixin):
     @property
     def runner_token(self) -> str:
         """The runner as a UI/URL token: the agent UUID string, or SERVER_RUNNER."""
-        return str(self.agent_id) if self.agent_id else self.SERVER_RUNNER
+        return str(self.agent_id) if self.agent_id else SERVER_RUNNER
 
     def assign(self) -> None:
         """Mark job as assigned to agent."""
