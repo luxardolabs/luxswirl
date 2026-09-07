@@ -25,8 +25,8 @@ from app.core.exceptions import (
 from app.core.synthetic_security import SyntheticSecurityError
 from app.models.check_model import Check
 from app.models.enum_model import CheckType, MaintenanceJobKind, options_for
-from app.models.maintenance_job_model import MaintenanceJob
 from app.schemas.check_schema import BulkCheckCreateRequest, CheckCreate, CheckUpdate
+from app.schemas.maintenance_job_schema import MaintenanceJobResponse
 from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.alert_core_service import AlertCoreService
 from app.services.core.check_core_service import CheckCoreService
@@ -522,7 +522,7 @@ class ChecksViewService:
 
     @staticmethod
     def job_status_response(
-        request: Request, current_user: AuthedUser, job: MaintenanceJob
+        request: Request, current_user: AuthedUser, job: MaintenanceJobResponse
     ) -> Response:
         """Render the maintenance-job polling partial for the side panel."""
         return templates.TemplateResponse(
@@ -1034,7 +1034,7 @@ class ChecksViewService:
     ):
         """Resolve selection + enqueue bulk_check_modify job.
 
-        Returns (MaintenanceJob, resolved_count). See LUXSWIRL-105.
+        Returns (MaintenanceJobResponse, resolved_count). See LUXSWIRL-105.
         """
         ids = await ChecksViewService._resolve_bulk_check_ids(
             db, select_all, agent, enabled, tag, check_ids, list_limit=10000

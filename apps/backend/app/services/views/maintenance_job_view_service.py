@@ -7,7 +7,7 @@ from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth_deps import AuthedUser
-from app.models.maintenance_job_model import MaintenanceJob
+from app.schemas.maintenance_job_schema import MaintenanceJobResponse
 from app.services.core.maintenance_job_core_service import MaintenanceJobCoreService
 from app.services.views._job_status import build_job_status_context
 
@@ -22,7 +22,7 @@ class MaintenanceJobViewService:
 
     @staticmethod
     def build_status_context(
-        request: Request, current_user: AuthedUser | None, job: MaintenanceJob
+        request: Request, current_user: AuthedUser | None, job: MaintenanceJobResponse
     ) -> dict[str, Any]:
         """Context for an already-loaded job (the enqueue path — no refetch)."""
         return build_job_status_context(request, current_user, job)

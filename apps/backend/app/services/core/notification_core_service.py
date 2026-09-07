@@ -2,7 +2,6 @@
 Notification service - business logic for notification provider operations.
 """
 
-from collections.abc import Sequence
 from datetime import timedelta
 from uuid import UUID
 
@@ -20,6 +19,7 @@ from app.notifications.providers.base import NotificationContext
 from app.notifications.registry import NotificationRegistry
 from app.schemas.notification_provider_schema import (
     NotificationProviderCreate,
+    NotificationProviderInDB,
     NotificationProviderUpdate,
 )
 
@@ -28,6 +28,24 @@ logger = get_logger("luxswirl.services.notification")
 
 class NotificationCoreService:
     """Service for notification provider operations."""
+
+    @staticmethod
+    async def get_provider(
+        db: AsyncSession,
+        provider_id: UUID,
+        include_deleted: bool = False,
+    ) -> NotificationProviderInDB:
+        """The provider as the web seam holds it — a DTO, not the ORM row.
+
+        Deliberately NOT NotificationProviderResponse: that schema masks
+        password/token/header values, and the edit form re-renders the saved
+        secret so an operator can save without retyping it. The API keeps the
+        masking through its response_model.
+        """
+        provider = await NotificationCoreService.get_provider_by_id(
+            db, provider_id, include_deleted
+        )
+        return NotificationProviderInDB.model_validate(provider)
 
     @staticmethod
     async def get_provider_by_id(
@@ -65,7 +83,7 @@ class NotificationCoreService:
         limit: int = 100,
         provider_type: str | None = None,
         include_deleted: bool = False,
-    ) -> tuple[Sequence[NotificationProvider], int]:
+    ) -> tuple[list[NotificationProviderInDB], int]:
         """
         List notification providers with pagination.
 
@@ -79,19 +97,20 @@ class NotificationCoreService:
         Returns:
             Tuple of (providers list, total count)
         """
-        return await NotificationProviderCRUD.list_paginated(
+        providers, total = await NotificationProviderCRUD.list_paginated(
             db,
             skip=skip,
             limit=limit,
             provider_type=provider_type,
             include_deleted=include_deleted,
         )
+        return [NotificationProviderInDB.model_validate(p) for p in providers], total
 
     @staticmethod
     async def create_provider(
         db: AsyncSession,
         data: NotificationProviderCreate,
-    ) -> NotificationProvider:
+    ) -> NotificationProviderInDB:
         """
         Create a new notification provider.
 
@@ -150,14 +169,14 @@ class NotificationCoreService:
             },
         )
 
-        return provider
+        return NotificationProviderInDB.model_validate(provider)
 
     @staticmethod
     async def update_provider(
         db: AsyncSession,
         provider_id: UUID,
         data: NotificationProviderUpdate,
-    ) -> NotificationProvider:
+    ) -> NotificationProviderInDB:
         """
         Update a notification provider.
 
@@ -217,7 +236,7 @@ class NotificationCoreService:
             extra={"provider_id": str(provider.id)},
         )
 
-        return provider
+        return NotificationProviderInDB.model_validate(provider)
 
     @staticmethod
     async def delete_provider(

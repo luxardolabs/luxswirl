@@ -10,11 +10,11 @@ from typing import Any
 from fastapi import Request
 
 from app.core.auth_deps import AuthedUser
-from app.models.maintenance_job_model import MaintenanceJob
+from app.schemas.maintenance_job_schema import MaintenanceJobResponse
 
 
 def build_job_status_context(
-    request: Request, current_user: AuthedUser | None, job: MaintenanceJob
+    request: Request, current_user: AuthedUser | None, job: MaintenanceJobResponse
 ) -> dict[str, Any]:
     """Context for partials/maintenance/job_status.html.
 
