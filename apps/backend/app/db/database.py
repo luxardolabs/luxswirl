@@ -468,6 +468,8 @@ async def init_db() -> None:
                     "Added retention policy for check_results_daily: 1825 days (5 years)"
                 )
 
+            # swallowed-exceptions: boot-time policy setup is best-effort —
+            # the app runs on plain PostgreSQL without these policies.
             except Exception:
                 logger.warning("TimescaleDB setup partially failed", exc_info=True)
         else:
@@ -503,6 +505,8 @@ async def check_db_health() -> bool:
         async with engine.connect() as conn:
             await conn.execute(text("SELECT 1"))
         return True
+    # swallowed-exceptions: returning False IS the contract — a health check
+    # reports unhealthy rather than raising at its caller.
     except Exception:
         logger.error("Database health check failed", exc_info=True)
         return False

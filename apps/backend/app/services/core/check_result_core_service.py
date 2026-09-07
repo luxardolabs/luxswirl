@@ -118,6 +118,8 @@ class CheckResultCoreService:
         # Evaluate alerts for this check result
         try:
             await AlertCoreService.evaluate_check_result(db, result)
+        # swallowed-exceptions: the result is already stored — losing the
+        # measurement because alerting failed would be the worse outcome.
         except Exception:
             logger.error(
                 "Error evaluating alerts for check result",
@@ -433,6 +435,8 @@ class CheckResultCoreService:
                 MetricsCollectorCoreService.update_check_result(
                     check_result, check, agent
                 )
+            # swallowed-exceptions: per-result metrics update — the batch is
+            # already committed, so one failed gauge must not drop the rest.
             except Exception:
                 logger.error("Error updating Prometheus metrics", exc_info=True)
 
@@ -443,6 +447,8 @@ class CheckResultCoreService:
             try:
                 await AlertCoreService.evaluate_check_result(db, check_result)
                 alerts_evaluated += 1
+            # swallowed-exceptions: per-result alert evaluation runs after the
+            # batch commits — one bad alert must not stop the others firing.
             except Exception:
                 logger.error(
                     "Error evaluating alerts for check result",

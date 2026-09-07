@@ -68,6 +68,8 @@ class RegistrationKeyCoreService:
         """
         try:
             return bcrypt.checkpw(key.encode("utf-8"), key_hash.encode("utf-8"))
+        # swallowed-exceptions: fail closed — any bcrypt error is a failed
+        # verification, never an accepted key.
         except Exception:
             logger.error("Error verifying registration key", exc_info=True)
             return False
