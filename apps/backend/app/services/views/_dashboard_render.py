@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.datetime_utils import utc_now
 from app.core.sparkline import sparkline_path
 from app.models.check_model import Check
-from app.models.status_page_model import StatusPage
+from app.schemas.status_page_schema import StatusPageInDB
 from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.check_core_service import CheckCoreService
 from app.services.core.check_result_core_service import CheckResultCoreService
@@ -634,7 +634,7 @@ class DashboardRender:
     @staticmethod
     async def build_dashboard_context(
         db: AsyncSession,
-        status_page: StatusPage,
+        status_page: StatusPageInDB,
     ) -> dict[str, Any]:
         """
         Build complete context for rendering dashboard items.
@@ -642,7 +642,7 @@ class DashboardRender:
 
         Args:
             db: Database session
-            status_page: StatusPage object
+            status_page: The status page being rendered
 
         Returns:
             Dictionary with check_details_map, all_agents, all_types, filter_group_matches
@@ -730,7 +730,7 @@ class DashboardRender:
     @staticmethod
     async def render_public_dashboard(
         db: AsyncSession,
-        status_page: StatusPage,
+        status_page: StatusPageInDB,
         time_range_minutes: int = 30,
     ) -> dict[str, Any]:
         """
@@ -739,7 +739,7 @@ class DashboardRender:
 
         Args:
             db: Database session
-            status_page: StatusPage object
+            status_page: The status page being rendered
             time_range_minutes: Number of minutes for status bars (default 30)
 
         Returns:
