@@ -328,11 +328,6 @@ class ChecksViewService:
         }
 
     @staticmethod
-    async def delete_check(db: AsyncSession, check_id: UUID):
-        """Delete check."""
-        return await CheckCoreService.delete_check(db, check_id)
-
-    @staticmethod
     async def get_available_agent_tags(db: AsyncSession) -> list[str]:
         """
         Get all available agent tags for assignment selector.

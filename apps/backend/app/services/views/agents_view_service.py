@@ -292,15 +292,6 @@ class AgentsViewService:
     # ====================================================================
 
     @staticmethod
-    async def delete_agent(db: AsyncSession, agent_id: UUID):
-        """Sync delete — kept for internal/test callers only.
-
-        Web routes go through enqueue_delete() so the cascade runs in the
-        maintenance worker. See LUXSWIRL-105.
-        """
-        return await AgentCoreService.delete_agent(db, agent_id)
-
-    @staticmethod
     async def enqueue_delete(
         db: AsyncSession, agent_id: UUID, owner_id: UUID | None = None
     ):
