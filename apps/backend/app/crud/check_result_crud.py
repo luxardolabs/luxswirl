@@ -217,6 +217,12 @@ class CheckResultCRUD:
         """
         For a single agent, return list of (CheckResult, Check) pairs where
         CheckResult is the latest per check_id since cutoff.
+
+        Production reads the fleet in one round-trip through
+        `get_latest_results_for_agents_with_check` below. This single-agent form
+        is kept deliberately as that query's equivalence oracle in
+        tests/test_batched_reads.py — it is the reference the batched shape is
+        pinned against, not a leftover caller.
         """
         latest_subquery = (
             select(
@@ -253,6 +259,61 @@ class CheckResultCRUD:
                     # chunk this agent has ever written. Measured on a 55M-row table:
                     # 697,170 buffers -> 550, and startup stopped blowing the 5s
                     # statement_timeout.
+                    CheckResult.timestamp >= cutoff,
+                )
+            )
+        )
+        result = await db.execute(results_query)
+        return list(result.all())
+
+    @staticmethod
+    async def get_latest_results_for_agents_with_check(
+        db: AsyncSession, agent_ids: Sequence[UUID], cutoff: datetime
+    ) -> list[Row[tuple[CheckResult, Check]]]:
+        """The single-agent read above, widened to many agents in one query.
+
+        Same shape and same time bound — only the agent predicate changes from
+        `== one` to `IN (many)`. Chunk exclusion is driven by the timestamp
+        predicate, which is unchanged, so the scan covers the same chunks once
+        instead of once per agent (the Prometheus rebuild used to issue one
+        query per agent in the fleet).
+
+        Returns:
+            (CheckResult, Check) pairs — the latest result per check since cutoff.
+        """
+        if not agent_ids:
+            return []
+
+        latest_subquery = (
+            select(
+                CheckResult.check_id,
+                func.max(CheckResult.timestamp).label("max_timestamp"),
+            )
+            .where(
+                and_(
+                    CheckResult.agent_id.in_(agent_ids),
+                    CheckResult.timestamp >= cutoff,
+                )
+            )
+            .group_by(CheckResult.check_id)
+            .subquery()
+        )
+
+        results_query = (
+            select(CheckResult, Check)
+            .join(Check, CheckResult.check_id == Check.id)
+            .join(
+                latest_subquery,
+                and_(
+                    CheckResult.check_id == latest_subquery.c.check_id,
+                    CheckResult.timestamp == latest_subquery.c.max_timestamp,
+                ),
+            )
+            .where(
+                and_(
+                    CheckResult.agent_id.in_(agent_ids),
+                    # Carries the time predicate onto the outer scan too — see
+                    # the note on the single-agent version above.
                     CheckResult.timestamp >= cutoff,
                 )
             )

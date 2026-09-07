@@ -600,18 +600,24 @@ class MetricsCollectorCoreService:
             if latest_metric:
                 MetricsCollectorCoreService.update_agent_metrics(latest_metric, agent)
 
-        # Get latest check results for each check
+        # One query for the fleet's latest results, not one per agent. The
+        # result rows carry their own agent_id, so map back rather than
+        # nesting the read inside the agent loop.
+        agents_by_id = {agent.id: agent for agent in agents}
         check_count = 0
-        for agent in agents:
-            results = await CheckResultCRUD.get_latest_results_for_agent_with_check(
-                db, agent.id, cutoff
+        for (
+            check_result,
+            check,
+        ) in await CheckResultCRUD.get_latest_results_for_agents_with_check(
+            db, list(agents_by_id), cutoff
+        ):
+            reporting_agent = agents_by_id.get(check_result.agent_id)
+            if reporting_agent is None:
+                continue
+            MetricsCollectorCoreService.update_check_result(
+                check_result, check, reporting_agent
             )
-
-            for check_result, check in results:
-                MetricsCollectorCoreService.update_check_result(
-                    check_result, check, agent
-                )
-                check_count += 1
+            check_count += 1
 
         logger.info(
             "Metrics rebuilt",

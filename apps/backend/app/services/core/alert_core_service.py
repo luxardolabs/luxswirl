@@ -446,8 +446,11 @@ class AlertCoreService:
         if not alert:
             raise ValueError(f"Alert not found: {alert_id}")
 
+        # One query for the whole selection's current assignments; the writes
+        # below still run per check, but the reads no longer scale with it.
+        assigned = await AlertCRUD.list_alert_ids_for_checks(db, check_ids)
         for cid in check_ids:
-            existing = list(await AlertCoreService.get_alert_ids_for_check(db, cid))
+            existing = list(assigned.get(cid, ()))
             if alert_id not in existing:
                 existing.append(alert_id)
                 await AlertCoreService.sync_check_alerts(db, cid, existing)

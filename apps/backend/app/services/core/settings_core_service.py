@@ -367,8 +367,9 @@ class SettingsCoreService:
         not yet exist and never overwrites an operator-changed value. Called
         once at startup; replaces _init_default_settings + the ensure_*_defaults.
         """
+        existing = await SettingCRUD.existing_keys(db)
         for entry in DEFAULT_SETTINGS:
-            if await SettingCRUD.get_by_key(db, entry["key"]) is not None:
+            if entry["key"] in existing:
                 continue
             await SettingsCoreService.create_setting(
                 db=db,
