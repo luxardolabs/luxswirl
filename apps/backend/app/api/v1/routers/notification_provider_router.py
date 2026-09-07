@@ -158,7 +158,7 @@ async def create_provider(
         provider = await NotificationCoreService.create_provider(db, data)
     except ValidationException as e:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(e)
         ) from e
     except DuplicateResourceException as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) from e
@@ -196,7 +196,7 @@ async def update_provider(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
     except ValidationException as e:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(e)
         ) from e
 
     return NotificationProviderResponse(

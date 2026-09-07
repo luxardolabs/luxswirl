@@ -187,6 +187,52 @@ async def create_alert(
     return hx_close_panel_and_refresh()
 
 
+# The literal /alerts/snooze routes are declared BEFORE the /alerts/{alert_id}
+# ones: Starlette matches in registration order, so a parameterised path
+# registered first swallows the literal one — DELETE /alerts/snooze was reaching
+# delete_alert with alert_id="snooze" and 422ing, which made unsnooze
+# unreachable.
+@router.post("/alerts/snooze", response_class=HTMLResponse)
+async def snooze_alert_check(
+    request: Request,
+    alert_id: Annotated[UUID, Query(description="Alert UUID")],
+    check_id: Annotated[UUID, Query(description="Check UUID")],
+    log_id: Annotated[
+        UUID, Query(description="Notification log UUID for the row to refresh")
+    ],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: CurrentUserWeb,
+):
+    """
+    Snooze an alert-check relationship for 15 more minutes.
+
+    Returns the re-rendered notification log row partial (HTMX swap target) and
+    an HX-Trigger toast event.
+    """
+    message = await AlertsViewService.snooze_alert_check(
+        db, alert_id, check_id, current_user
+    )
+    return await render_log_row(request, db, log_id, message)
+
+
+@router.delete("/alerts/snooze", response_class=HTMLResponse)
+async def unsnooze_alert_check(
+    request: Request,
+    alert_id: Annotated[UUID, Query(description="Alert UUID")],
+    check_id: Annotated[UUID, Query(description="Check UUID")],
+    log_id: Annotated[
+        UUID, Query(description="Notification log UUID for the row to refresh")
+    ],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: CurrentUserWeb,
+):
+    """Un-snooze an alert-check relationship — resume notifications immediately."""
+    message = await AlertsViewService.unsnooze_alert_check(
+        db, alert_id, check_id, current_user
+    )
+    return await render_log_row(request, db, log_id, message)
+
+
 @router.post(
     "/alerts/{alert_id}/update", response_class=HTMLResponse, name="web_update_alert"
 )
@@ -307,44 +353,3 @@ async def toggle_alert(
 
 
 # Snooze endpoints - manage alert-check relationship notification pausing
-
-
-@router.post("/alerts/snooze", response_class=HTMLResponse)
-async def snooze_alert_check(
-    request: Request,
-    alert_id: Annotated[UUID, Query(description="Alert UUID")],
-    check_id: Annotated[UUID, Query(description="Check UUID")],
-    log_id: Annotated[
-        UUID, Query(description="Notification log UUID for the row to refresh")
-    ],
-    db: Annotated[AsyncSession, Depends(get_db)],
-    current_user: CurrentUserWeb,
-):
-    """
-    Snooze an alert-check relationship for 15 more minutes.
-
-    Returns the re-rendered notification log row partial (HTMX swap target) and
-    an HX-Trigger toast event.
-    """
-    message = await AlertsViewService.snooze_alert_check(
-        db, alert_id, check_id, current_user
-    )
-    return await render_log_row(request, db, log_id, message)
-
-
-@router.delete("/alerts/snooze", response_class=HTMLResponse)
-async def unsnooze_alert_check(
-    request: Request,
-    alert_id: Annotated[UUID, Query(description="Alert UUID")],
-    check_id: Annotated[UUID, Query(description="Check UUID")],
-    log_id: Annotated[
-        UUID, Query(description="Notification log UUID for the row to refresh")
-    ],
-    db: Annotated[AsyncSession, Depends(get_db)],
-    current_user: CurrentUserWeb,
-):
-    """Un-snooze an alert-check relationship — resume notifications immediately."""
-    message = await AlertsViewService.unsnooze_alert_check(
-        db, alert_id, check_id, current_user
-    )
-    return await render_log_row(request, db, log_id, message)

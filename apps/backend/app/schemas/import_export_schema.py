@@ -53,3 +53,17 @@ class AgentChecksExport(BaseModel):
     agent_hostname: str | None = None
     total_checks: int
     checks: list[CheckExport]
+
+
+class AgentConfigExport(BaseModel):
+    """The bundled default agent config's checks, for seeding a new install.
+
+    Separate from AgentChecksExport because this one describes a config file,
+    not a registered agent: its `agent_id` is the config's agent NAME
+    ("docker-agent"), which is not a UUID. Declaring it as one made the route
+    fail response validation on every call.
+    """
+
+    agent_id: str
+    total_checks: int
+    checks: list[CheckExport]

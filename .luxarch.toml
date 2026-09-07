@@ -44,6 +44,7 @@ cascading_delete_calls = [
 ]
 uuid_typing = [
   { path = "core/exceptions.py", name = "agent_id", evidence = "raised not-found message arg, not the column" },
+  { path = "schemas/import_export_schema.py", name = "agent_id", evidence = "AgentConfigExport mirrors the agent CONFIG FILE's `agent_id` key, which is an identifier STRING (\"docker-agent\") — not a registered agent's UUID. Typing it UUID is what made GET /export-agent-config fail response validation on every call" },
 ]
 enum_freetext_columns = [
   { path = "app/models/check_artifact_model.py", column = "content_type", evidence = "MIME, open set" },
@@ -127,6 +128,13 @@ surface = "dark-bg-primary"
 "surface-3" = "dark-bg-tertiary"
 border = "dark-border"
 "surface-muted" = "dark-surface-muted"
+
+[target.route_smoke]
+# The asserter lives in tests/_route_smoke.py and is loaded as a pytest plugin
+# from tests/conftest.py. It pairs with filterwarnings=error: a deprecation only
+# fails a test on a line some test executes, and this makes that "every route".
+enabled = true
+exempt = ["/health", "/metrics", "/api/v1/agents/{agent_id}/regenerate-key"]
 
 [target.tenant]
 # luxswirl is single-organisation: agents, checks, results, alerts and status

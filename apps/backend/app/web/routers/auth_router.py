@@ -55,6 +55,10 @@ async def login_page(
             "current_user": user,  # Will be None for anonymous users
             "redirect": redirect or "/",
             "error": None,
+            # The form pre-fills this after a failed POST; the GET must name it
+            # too, or the page it renders has no username field to fill.
+            "username": "",
+            "page_title": "Sign In",
         },
     )
 
@@ -96,6 +100,7 @@ async def login_submit(
                 "redirect": redirect,
                 "error": "Invalid username or password",
                 "username": username,  # Pre-fill username,
+                "page_title": "Sign In",
             },
             status_code=status.HTTP_401_UNAUTHORIZED,
         )

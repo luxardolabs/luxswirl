@@ -53,3 +53,307 @@ def pytest_configure(config):
         "markers",
         "api: full FastAPI TestClient with overridden dependencies.",
     )
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# luxarch route-smoke asserter — pasted here rather than imported as a plugin
+# because pytest only auto-loads conftest.py, and a guard cannot prove a
+# pytest_plugins entry resolves. It records every route the suite requests and
+# fails the session on any registered route nothing reached.
+# ═══════════════════════════════════════════════════════════════════════════
+
+# luxarch:route-smoke asserter v11 — DO NOT edit the marker line above (fw.route_smoke_wired finds it).
+#
+# WHY THIS FILE EXISTS
+# A dependency deprecates an API; your code keeps working (warning only); a later pin makes it RAISE;
+# `poetry.lock` bumps — and the code is now broken with nothing failing. Not audit (a deprecation is
+# not a CVE), not mypy (the attribute still exists; the behaviour changed), not the lock diff. It bit
+# WWW twice in six weeks (Starlette TemplateResponse arg order; pydantic `model_fields` instance
+# access), both caught by luck. The canonical pytest config already has `filterwarnings = error` — the
+# exact mechanism that turns a DeprecationWarning into a failing test one version EARLY. It was inert
+# because no test executed the line. The surfaces where deprecations bite hardest (admin pages, error
+# handlers, exports) are the least covered. So the fix is not a warning filter — it is: EVERY registered
+# route is exercised by the suite, so `filterwarnings = error` actually fires everywhere it matters.
+#
+# WHAT THIS DOES
+# Records every route the suite hits (via a Starlette-level patch — client/app-agnostic) and, at the
+# end of the session, fails if any registered HTTP/WebSocket route was never requested. Binary and
+# un-gameable: it is the FACT (the route ran), not line-coverage %, not a static guess.
+#
+# HOW TO WIRE IT (see: luxarch --playbook route-smoke)
+#   1) Save this as tests/conftest.py, or paste its body into your existing tests/conftest.py.
+#   2) Set APP_IMPORT below to your app factory / instance import.
+#   3) Keep `filterwarnings = error` in your pytest config (canonical). Route-smoke + that pairing is
+#      what catches the deprecation BEFORE the pin that makes it fatal — either alone is insufficient.
+#   4) Cover the hard routes for real: log in through the REAL login route (never forge a cookie or
+#      override the auth dependency); assert a route was REQUESTED, not a response shape (fragment
+#      endpoints legitimately return bare HTML); reset the rate-limit counter, don't disable the limiter.
+#      For the canonical PATTERNS as a fill-in scaffold, run `luxarch --emit route-smoke-example` — the
+#      technique is versioned in the image so you copy it, never a drifting other-repo's tests.
+#   5) Exempt only what genuinely has no test surface (health/metrics) — with a comment saying why.
+
+# --- EDIT THIS: how your app object is imported (the thing that owns the route table). ---
+APP_IMPORT = "app.main:app"  # "package.module:attribute"
+
+# --- EDIT THIS: routes with no meaningful test surface. Keep it short; each needs a why. ---
+EXEMPT: frozenset[str] = frozenset(
+    {
+        "/health",  # liveness probe — no behaviour to assert
+        "/metrics",  # prometheus scrape — no behaviour to assert
+        # UNREACHABLE, not untestable: /agents/{agent_name}/regenerate-key is
+        # registered first and matches any single segment, so this handler has
+        # never received a request. Which of the two is the contract is a
+        # published-API decision — LUXSWIRL-217. Drop this line once it is.
+        "/api/v1/agents/{agent_id}/regenerate-key",
+    }
+)
+
+# ── recording (do not edit below) ──────────────────────────────────────────────────────────────
+_HIT: set[int] = (
+    set()
+)  # ids of route objects that were exercised (see _patch_route_class)
+_OUTCOMES = {"passed": 0, "failed": 0, "skipped": 0}
+
+
+def pytest_runtest_logreport(report) -> None:  # type: ignore[no-untyped-def]
+    # Count outcomes so the 0-hits net can tell "the request suite SKIPPED (e.g. a DB-less run)" from
+    # "tests ran but the recorder saw nothing (real misconfig)" — WWWLUXARDO-70. A real skip is decided
+    # at SETUP. CRITICAL: an xfail RAN — pytest reports it at the CALL phase with outcome=="skipped" and
+    # `wasxfail` set, so it must NOT be counted as a skip, or a single xfail (the fleet's own
+    # known-broken idiom) would disarm net #2 and route-smoke would certify nothing (LUXSTATS).
+    if report.when == "setup" and report.outcome == "skipped":
+        _OUTCOMES["skipped"] += 1
+    elif report.when == "call":
+        outcome = report.outcome
+        if outcome == "skipped" and getattr(report, "wasxfail", False):
+            outcome = "xfailed"  # an xfail executed; it is not a skip
+        _OUTCOMES[outcome] = _OUTCOMES.get(outcome, 0) + 1
+
+
+def _patch_route_class(cls, match_full) -> None:  # type: ignore[no-untyped-def]
+    # Record the route OBJECT'S IDENTITY, not (method, path). The recorder only ever sees `self`, which
+    # knows its UNPREFIXED path, while the mount prefix lives on the parent wrapper — so a string key
+    # could never agree between recording and enumeration (they'd both have to reconstruct the full
+    # path, and the recorder can't). Keying on `id(route)` makes the two sides agree BY CONSTRUCTION:
+    # enumeration walks the same objects and records their ids. (LUXSTATS-67: proven end-to-end.)
+    # Record on BOTH matches() (fires on a FULL match even if a dep later 403s — import-time deprecations
+    # still caught) and handle() (body dispatch). Idempotent per class; `_HIT` is a set so a super()
+    # double-record is harmless.
+    if getattr(cls.handle, "_luxarch_route_smoke", False):
+        return
+    _orig_matches = cls.matches
+
+    def matches(self, scope):  # type: ignore[no-untyped-def]
+        result = _orig_matches(self, scope)
+        try:
+            if result[0] == match_full:
+                _HIT.add(id(self))
+        except Exception:
+            pass
+        return result
+
+    matches._luxarch_route_smoke = True  # type: ignore[attr-defined]
+    cls.matches = matches
+
+    _orig_handle = cls.handle
+
+    async def handle(self, scope, receive, send):  # type: ignore[no-untyped-def]
+        _HIT.add(id(self))
+        return await _orig_handle(self, scope, receive, send)
+
+    handle._luxarch_route_smoke = True  # type: ignore[attr-defined]
+    cls.handle = handle
+
+
+def _install_recorder() -> None:
+    # CRITICAL: FastAPI's APIRoute OVERRIDES both handle() and matches() (subclass wins), and FastAPI
+    # dispatches by calling `original_route.handle(...)` on the APIRoute directly — so patching only
+    # the Starlette parent Route recorded ZERO hits (v1 patched handle, v2 added matches; both missed).
+    # Patch APIRoute FIRST, then the Starlette Route (WebSocketRoute etc. still go through Route). The
+    # `Match.FULL` enum is shared. (WWWLUXARDO-67: root-caused + fix confirmed live by the www agent.)
+    import starlette.routing as _r
+
+    _patch_route_class(_r.Route, _r.Match.FULL)
+    try:
+        import fastapi.routing as _fr
+
+        _patch_route_class(_fr.APIRoute, _r.Match.FULL)
+    except (
+        Exception
+    ):  # no FastAPI (shouldn't happen for a fastapi-web repo) — Route patch stands
+        pass
+
+
+_install_recorder()
+
+
+def _registered_route_entries() -> list[tuple[str, str, str, int]]:
+    # (HOST, method, FULL prefixed path, id(route)). The id is what matching keys on (agrees with the
+    # recorder by construction). The HOST is carried down so shadow-detection keys on (host, method,
+    # path): a Host()-composed app reaches the SAME route object once per hostname, and different
+    # sub-apps legitimately share `/`, `/docs`, … — neither is a shadow, because Starlette matches
+    # exactly ONE host per request (BOUTIQUE-410 v8 false-positive). The prefix is NOT on the route —
+    # it's on the wrapper: `_IncludedRouter.include_context.prefix` (empty on `.original_router.prefix`)
+    # and `Mount.path`. (LUXSTATS-67.)
+    mod, _, attr = APP_IMPORT.partition(":")
+    import importlib
+
+    app = getattr(importlib.import_module(mod), attr or "app")
+    entries: list[tuple[str, str, str, int]] = []
+
+    def _walk(routes, prefix: str = "", host: str = "") -> None:
+        for route in routes:
+            # Starlette >=1.x wraps include_router() results instead of flattening — the real routes hang
+            # off `.original_router.routes`, and the include prefix lives on the wrapper's include_context.
+            inner = getattr(route, "original_router", None)
+            if inner is not None:
+                ictx = getattr(route, "include_context", None)
+                _walk(inner.routes, prefix + (getattr(ictx, "prefix", "") or ""), host)
+                continue
+            sub = getattr(route, "routes", None)
+            kind = type(route).__name__
+            if (
+                sub is not None and kind == "Mount"
+            ):  # a Mount (sub-app) carries its prefix on `.path`
+                _walk(sub, prefix + (getattr(route, "path", "") or ""), host)
+                continue
+            if (
+                sub is not None and kind == "Host"
+            ):  # discriminates on HOSTNAME → no path prefix, new host
+                _walk(
+                    sub,
+                    prefix,
+                    getattr(route, "host", "") or getattr(route, "path", "") or host,
+                )
+                continue
+            path = prefix + getattr(route, "path", "")
+            methods = getattr(route, "methods", None)
+            if methods:  # APIRoute / Route
+                for m in set(methods) - {"HEAD", "OPTIONS"}:
+                    entries.append((host, m, path, id(route)))
+            elif type(route).__name__ == "WebSocketRoute":
+                entries.append(
+                    (
+                        host,
+                        "WS",
+                        prefix
+                        + (
+                            getattr(route, "path_format", None)
+                            or getattr(route, "path", "")
+                        ),
+                        id(route),
+                    )
+                )
+
+    _walk(app.routes)
+    return entries
+
+
+# Below this many registered routes, an app with included routers is almost certainly mis-walked
+# (the flat-walk bug), not genuinely tiny — fail loud rather than "certify" a handful.
+_MIN_PLAUSIBLE_ROUTES = 5
+
+
+def pytest_sessionfinish(session, exitstatus) -> None:  # type: ignore[no-untyped-def]
+    # Only CERTIFY on a green run — a red suite's route list is untrustworthy (a failed test may have
+    # aborted before its route ran). But say so OUT LOUD: a silent skip lets coverage lapse invisibly
+    # while the suite is red (LUXTASTE route-smoke escalation). Non-enforcing by design; just visible.
+    if exitstatus not in (0, None):
+        print(
+            "\nluxarch route-smoke: INERT — suite exitstatus="
+            f"{exitstatus}, route certification SKIPPED. NO route is certified until the failing "
+            "test(s) are fixed. See luxarch --playbook route-smoke."
+        )
+        return
+    try:
+        entries = _registered_route_entries()
+    except (
+        Exception
+    ) as exc:  # app import misconfigured — make it loud, not silently green
+        raise SystemExit(
+            f"luxarch route-smoke: could not import the app via APP_IMPORT={APP_IMPORT!r} "
+            f"({exc}). Set it to your app factory/instance. See luxarch --playbook route-smoke."
+        ) from exc
+    # Loud-fail net #3: a duplicate (HOST, method, path) — from DISTINCT route objects — means the app
+    # registered the same method+path twice under one host, so one handler shadows the other (the
+    # shadowed one is dead/unreachable). Keyed on HOST because a Host()-composed app reaches the same
+    # route under N hostnames and different sub-apps share `/`, `/docs`, … — those are not shadows
+    # (Starlette matches exactly one host per request), so keying on (method, path) alone false-flagged
+    # thousands (BOUTIQUE-410 v8). A collision is real only when two DIFFERENT route ids share it.
+    seen: dict[tuple[str, str, str], int] = {}
+    shadowed: set[tuple[str, str, str]] = set()
+    for h, m, p, rid in entries:
+        k = (h, m, p)
+        if k in seen and seen[k] != rid:
+            shadowed.add(k)
+        else:
+            seen.setdefault(k, rid)
+    if shadowed:
+        dupes = sorted(f"{m} {p}" + (f" @{h}" if h else "") for (h, m, p) in shadowed)
+        raise SystemExit(
+            f"luxarch route-smoke: {len(shadowed)} (host, method, path) registered by more than one "
+            f"handler — one SHADOWS the other (the shadowed one is dead/unreachable). Remove the dead "
+            f"handler. Duplicates: {dupes}. See --playbook route-smoke."
+        )
+    # Loud-fail net #1: implausibly few (INCLUDING ZERO) routes → the enumerator is mis-walking, NOT a
+    # 2-route app. ZERO is the most certain "the walk is broken" signal, so it must fail LOUDEST — the
+    # old `0 < len(entries)` guard excluded zero, so a walk-to-nothing certified GREEN silently, the exact
+    # hollow green this net exists to prevent (BOUTIQUE-410).
+    if not entries:
+        raise SystemExit(
+            "luxarch route-smoke: enumerated 0 routes — the walk found NOTHING, so this run certifies "
+            "nothing (a hollow green). Either APP_IMPORT is wrong, or the app composes its routes in a "
+            "container the walker doesn't descend (a Host()/Mount sub-app, an unusual router wrapper). "
+            "Refusing to certify. Re-emit the asserter (luxarch --emit route-smoke) and check APP_IMPORT. "
+            "See --playbook route-smoke."
+        )
+    if len(entries) < _MIN_PLAUSIBLE_ROUTES:
+        raise SystemExit(
+            f"luxarch route-smoke: only {len(entries)} route(s) enumerated — implausibly few for an "
+            "app with included routers, so the asserter is almost certainly mis-walking the route table "
+            "(Starlette version?), NOT genuinely tiny. Refusing to certify — a low count would be a "
+            "hollow green. Update the asserter (luxarch --emit route-smoke). See --playbook route-smoke."
+        )
+    # Loud-fail net #2: routes exist but NOTHING was recorded. Two cases, cleanly separable by the skip
+    # count (WWWLUXARDO-70): if the request suite SKIPPED (a DB-less `make test` → 0 hits / many skipped),
+    # route-smoke simply wasn't exercised this run — that's NOT a misconfiguration; stand down (the
+    # DB-full run enforces coverage). Only when tests actually RAN and still recorded nothing is the
+    # recorder blind (wrong app / bypassing TestClient) — THAT is the misconfig to fail on.
+    if entries and not _HIT:
+        if _OUTCOMES["skipped"]:
+            print(
+                f"luxarch route-smoke: not evaluated — 0 requests observed but {_OUTCOMES['skipped']} "
+                "test(s) skipped, so the request suite didn't run this pass (DB-less?). The DB-full run "
+                "enforces coverage."
+            )
+            return
+        raise SystemExit(
+            "luxarch route-smoke: 0 requests were observed across the whole suite while "
+            f"{len(entries)} routes are registered and nothing skipped. TWO causes look identical from "
+            "zero hits: (a) the recorder isn't observing — wrong APP_IMPORT, or a TestClient that "
+            "bypasses the app (e.g. Starlette 1.x needs httpx2 installed, or the test network has no DNS "
+            "for db/redis so every request dies before routing); or (b) the suite has NO route tests "
+            "yet. Make ONE real request — a single public-page GET — to disambiguate: if it records, "
+            "it's (b), you have real coverage gaps to fill (KEEP that probe, it's load-bearing — remove "
+            "the last route test and this refusal returns). If it still doesn't record, it's (a), fix "
+            "the wiring. Refusing to certify on zero requests either way. See --playbook route-smoke."
+        )
+    # Covered iff THAT route object was exercised (id match) — the two sides agree by construction. One
+    # route object reached under N hostnames is ONE route to cover, so collapse on route identity (rid)
+    # — else a Host()-composed app reports the same uncovered route once per host (BOUTIQUE-410 v8).
+    missing_by_rid = {
+        rid: f"{m:4} {p}"
+        for (h, m, p, rid) in entries
+        if rid not in _HIT and p not in EXEMPT
+    }
+    missing = sorted(missing_by_rid.values())
+    if missing:
+        session.exitstatus = 1
+        raise SystemExit(
+            "luxarch route-smoke: "
+            f"{len(missing)} registered route(s) were NEVER requested by the suite — a deprecation "
+            "in any of them ships latent (fine on the running pin, fatal on the next). Add a test "
+            "that requests each, or EXEMPT it with a reason:\n  "
+            + "\n  ".join(missing)
+            + "\nSee luxarch --playbook route-smoke."
+        )
