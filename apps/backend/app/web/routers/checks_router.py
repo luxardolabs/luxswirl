@@ -379,5 +379,3 @@ async def bulk_check_preview(
     if context is None:
         return HTMLResponse(content="", status_code=200)
     return templates.TemplateResponse(request, "partials/bulk_preview.html", context)
-
-

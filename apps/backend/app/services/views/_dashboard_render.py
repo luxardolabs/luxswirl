@@ -683,6 +683,10 @@ class DashboardRender:
 
                 if "filter" in item:
                     # Dynamic filter group
+                    # n-plus-one: bounded by the page's group count, not rows, and
+                    # each group carries its own agent/type/tag/search filter with its
+                    # own 1000-row cap — there is no single predicate to batch them
+                    # into without de-multiplexing the rows back per group.
                     matching_checks = await DashboardRender.get_checks_matching_filter(
                         db, item.get("filter", {})
                     )
@@ -773,6 +777,8 @@ class DashboardRender:
             elif item_type == "group":
                 group_checks = []
                 if "filter" in item:
+                    # n-plus-one: same as the private dashboard above — one query per
+                    # group on the page, each with its own filter and row cap.
                     matching_checks = await DashboardRender.get_checks_matching_filter(
                         db, item.get("filter", {})
                     )

@@ -1009,16 +1009,35 @@ class CheckCoreService:
         errors = []
         affected_agents = set()  # Track agents that need config_version update
 
+        # One query for the whole selection, and one for the target agent —
+        # both were being re-issued per check, and the agent is the same every
+        # time round the loop. A check id that no longer resolves still fails
+        # on its own below, exactly as the per-check read did.
+        checks_by_id = {
+            check.id: check
+            for check in await CheckCRUD.get_checks_by_ids(db, check_ids)
+        }
+        # get_agent_by_id RAISES when the agent is gone, so resolve it here and
+        # keep the miss as a per-check failure — the loop used to record one
+        # failure per check for a bad target, and callers count on that shape.
+        new_agent = None
+        new_agent_error: str | None = None
+        if new_agent_id:
+            try:
+                new_agent = await AgentCoreService.get_agent_by_id(db, new_agent_id)
+            except AgentNotFoundException:
+                new_agent_error = f"Target agent {new_agent_id} not found"
+
         for check_id in check_ids:
             try:
-                check = await CheckCoreService.get_check_by_id(db, check_id)
+                check = checks_by_id.get(check_id)
+                if not check:
+                    raise CheckNotFoundException("unknown", str(check_id))
 
                 # If changing agent, update the agent_id to preserve historical data
                 if new_agent_id and new_agent_id != check.agent_id:
-                    # Verify new agent exists
-                    new_agent = await AgentCoreService.get_agent_by_id(db, new_agent_id)
                     if not new_agent:
-                        raise ValueError(f"Target agent {new_agent_id} not found")
+                        raise ValueError(new_agent_error or "Target agent not found")
 
                     # Track both old and new agents for config sync
                     old_agent = check.agent

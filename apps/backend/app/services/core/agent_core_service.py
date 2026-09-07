@@ -75,6 +75,25 @@ class AgentCoreService:
         )
 
     @staticmethod
+    async def get_hostnames_by_ids(
+        db: AsyncSession, agent_ids: Sequence[UUID]
+    ) -> dict[UUID, str]:
+        """
+        Resolve many agent hostnames in one query.
+
+        For labelling a page of rows that each name an agent — one round-trip
+        instead of one per distinct agent.
+
+        Args:
+            db: Database session
+            agent_ids: Agent UUIDs to resolve
+
+        Returns:
+            agent_id -> hostname, omitting ids that no longer exist
+        """
+        return await AgentCRUD.get_hostnames_by_ids(db, agent_ids)
+
+    @staticmethod
     async def get_agent_by_id(db: AsyncSession, agent_id: UUID) -> Agent:
         """
         Get agent by UUID.

@@ -171,6 +171,31 @@ class AlertCRUD:
         return [row[0] for row in result.fetchall()]
 
     @staticmethod
+    async def list_alert_ids_for_checks(
+        db: AsyncSession, check_ids: Sequence[UUID]
+    ) -> dict[UUID, set[UUID]]:
+        """Alert ids per check, in one round-trip.
+
+        The bulk-assign path needs every target check's current assignments
+        before it can append to them; asking per check costs one query per
+        check in the selection.
+
+        Returns:
+            check_id -> its alert ids, omitting checks with none.
+        """
+        if not check_ids:
+            return {}
+        result = await db.execute(
+            select(AlertCheckMapping.check_id, AlertCheckMapping.alert_id).where(
+                AlertCheckMapping.check_id.in_(check_ids)
+            )
+        )
+        by_check: dict[UUID, set[UUID]] = {}
+        for check_id, alert_id in result:
+            by_check.setdefault(check_id, set()).add(alert_id)
+        return by_check
+
+    @staticmethod
     async def list_global_enabled_alert_ids(db: AsyncSession) -> list[UUID]:
         """Ids of all enabled, non-deleted, global alerts."""
         result = await db.execute(

@@ -184,6 +184,29 @@ class AgentCRUD:
         return {metric.agent_id: metric for metric in result.scalars()}
 
     @staticmethod
+    async def get_hostnames_by_ids(
+        db: AsyncSession, agent_ids: Sequence[UUID]
+    ) -> dict[UUID, str]:
+        """Hostname per agent, in one round-trip.
+
+        Selects the two columns rather than whole Agent rows: the caller wants
+        a label, and a page of jobs can span every agent in the fleet.
+
+        Args:
+            db: Database session.
+            agent_ids: The agents to fetch for.
+
+        Returns:
+            agent_id -> hostname, omitting agents that do not exist.
+        """
+        if not agent_ids:
+            return {}
+        result = await db.execute(
+            select(Agent.id, Agent.hostname).where(Agent.id.in_(agent_ids))
+        )
+        return {row.id: row.hostname for row in result}
+
+    @staticmethod
     async def get_admitted_agents(db: AsyncSession) -> list[Agent]:
         """
         Get all admitted agents — those past registration triage.

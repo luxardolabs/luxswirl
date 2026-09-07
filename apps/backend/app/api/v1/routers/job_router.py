@@ -118,18 +118,15 @@ async def list_jobs(
         limit=page_size,
     )
 
-    # Get agent hostnames for jobs
-    agent_cache = {}
+    # One query for the whole page's agents, not one per distinct agent — a
+    # page of jobs can span the entire fleet.
+    hostnames = await AgentCoreService.get_hostnames_by_ids(
+        db, [job.agent_id for job in jobs if job.agent_id]
+    )
 
     job_responses = []
     for job in jobs:
-        agent_hostname = None
-        if job.agent_id and job.agent_id not in agent_cache:
-            agent = await AgentCoreService.get_agent_by_id(db, job.agent_id)
-            agent_cache[job.agent_id] = agent.hostname if agent else None
-
-        if job.agent_id:
-            agent_hostname = agent_cache.get(job.agent_id)
+        agent_hostname = hostnames.get(job.agent_id) if job.agent_id else None
 
         job_responses.append(
             JobResponse(

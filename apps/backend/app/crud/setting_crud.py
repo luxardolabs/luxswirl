@@ -19,6 +19,17 @@ class SettingCRUD:
         return result.scalar_one_or_none()
 
     @staticmethod
+    async def existing_keys(db: AsyncSession) -> set[str]:
+        """Every setting key currently stored, in one round-trip.
+
+        Seeding asks "does this key exist?" once per default; asking the
+        database that separately each time costs one query per default at
+        every startup.
+        """
+        result = await db.execute(select(Setting.key))
+        return set(result.scalars())
+
+    @staticmethod
     async def list_by_category(db: AsyncSession, category: str) -> Sequence[Setting]:
         result = await db.execute(
             select(Setting).where(Setting.category == category).order_by(Setting.key)
