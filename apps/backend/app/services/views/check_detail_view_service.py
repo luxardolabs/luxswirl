@@ -4,7 +4,6 @@ Check detail service - provides detailed check information for side panel.
 
 import json
 from collections import defaultdict
-from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
@@ -13,6 +12,7 @@ from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.datetime_utils import utc_now
+from app.core.ssl_expiry import ssl_expiry_fields
 from app.services.core.check_core_service import CheckCoreService
 from app.services.core.check_result_core_service import CheckResultCoreService
 from app.services.core.settings_core_service import SettingsCoreService
@@ -40,51 +40,6 @@ class ResultProxy:
             except json.JSONDecodeError, TypeError:
                 return {}
         return self._metrics
-
-
-def ssl_expiry_fields(expiration_date: str | None) -> dict[str, object]:
-    """Expiry flags for an agent-reported certificate, always fully populated.
-
-    Returned whether or not the date parses, so the panel never reads a
-    half-filled certificate: `days_until_expiration` is None when the expiry is
-    unknown and every flag is False.
-
-    Args:
-        expiration_date: The agent's reported expiry, e.g. "Jan 15 23:59:59 2025 GMT".
-
-    Returns:
-        expiration_date (echoed back so the panel always has it) plus
-        days_until_expiration and the expired / expires_soon / expires_critical flags.
-    """
-    unknown: dict[str, object] = {
-        "expiration_date": expiration_date,
-        "days_until_expiration": None,
-        "expired": False,
-        "expires_soon": False,
-        "expires_critical": False,
-    }
-    if not expiration_date:
-        return unknown
-
-    try:
-        exp_date = datetime.strptime(expiration_date, "%b %d %H:%M:%S %Y %Z")
-    except ValueError:
-        # A cert whose expiry we cannot read is exactly the one an operator needs
-        # to hear about — the old code discarded this and rendered nothing.
-        logger.warning(
-            "Unparseable SSL certificate expiration date — expiry not shown",
-            extra={"expiration_date": expiration_date},
-        )
-        return unknown
-
-    days_remaining = (exp_date.replace(tzinfo=UTC) - datetime.now(UTC)).days
-    return {
-        "expiration_date": expiration_date,
-        "days_until_expiration": days_remaining,
-        "expired": days_remaining < 0,
-        "expires_soon": 0 <= days_remaining <= 30,
-        "expires_critical": 0 <= days_remaining <= 7,
-    }
 
 
 def build_check_urls(request: Request, check_id: UUID, hours: int) -> dict[str, str]:
@@ -161,6 +116,12 @@ class CheckDetailViewService:
             for row in raw_rows
         ]
 
+        # The operator configures these; the panel must agree with the values
+        # stored at ingest, so both read the same settings.
+        alert_defaults = await SettingsCoreService.get_alert_defaults(db)
+        ssl_warning_days = alert_defaults["ssl_cert_warning_days"]
+        ssl_critical_days = alert_defaults["ssl_cert_critical_days"]
+
         # Convert history to dicts and process SSL certs
         history: list[dict[str, Any]] = []
         for result in history_models:
@@ -178,7 +139,13 @@ class CheckDetailViewService:
                 response = history_item["additional_data"].get("response", {})
                 ssl_cert = response.get("ssl_certificate")
                 if ssl_cert:
-                    ssl_cert.update(ssl_expiry_fields(ssl_cert.get("expiration_date")))
+                    ssl_cert.update(
+                        ssl_expiry_fields(
+                            ssl_cert.get("expiration_date"),
+                            warning_days=ssl_warning_days,
+                            critical_days=ssl_critical_days,
+                        )
+                    )
 
             history.append(history_item)
 

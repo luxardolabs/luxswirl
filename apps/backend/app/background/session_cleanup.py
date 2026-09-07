@@ -48,6 +48,8 @@ async def _session_cleanup_loop():
         except asyncio.CancelledError:
             logger.info("Session cleanup task cancelled")
             break
+        # swallowed-exceptions: daemon loop — one transient DB error must not
+        # kill the cleanup task for the life of the process.
         except Exception:
             logger.error("Error in session cleanup task", exc_info=True)
             # Continue running despite errors

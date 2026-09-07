@@ -5,6 +5,9 @@ The check detail panel reads `expired` / `expires_soon` / `expires_critical` /
 agent's date string parsed, and an unparseable date was swallowed — so a cert
 whose expiry could not be read simply showed nothing, which is the one case an
 operator most needs to see.
+
+The thresholds are the operator's, so they are arguments here rather than
+constants: the ingest path and the panel must agree on the same windows.
 """
 
 from __future__ import annotations
@@ -12,8 +15,8 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from app.services.views import check_detail_view_service
-from app.services.views.check_detail_view_service import ssl_expiry_fields
+from app.core import ssl_expiry as ssl_expiry_module
+from app.core.ssl_expiry import ssl_expiry_fields
 
 KEYS = {
     "expiration_date",
@@ -36,7 +39,7 @@ def _in(days: int) -> str:
     [None, "", "not a date", "2025-01-15T23:59:59Z", "Feb 30 00:00:00 2025 GMT"],
 )
 def test_unreadable_expiry_still_returns_every_field(value: str | None) -> None:
-    fields = ssl_expiry_fields(value)
+    fields = ssl_expiry_fields(value, warning_days=30, critical_days=7)
     assert set(fields) == KEYS
     assert fields["days_until_expiration"] is None
     assert fields["expired"] is False
@@ -48,11 +51,11 @@ def test_unparseable_date_is_logged(monkeypatch: pytest.MonkeyPatch) -> None:
     """The app logger does not propagate to root, so assert on it directly."""
     warnings: list[str] = []
     monkeypatch.setattr(
-        check_detail_view_service.logger,
+        ssl_expiry_module.logger,
         "warning",
         lambda msg, **kw: warnings.append(msg),
     )
-    ssl_expiry_fields("not a date")
+    ssl_expiry_fields("not a date", warning_days=30, critical_days=7)
     assert warnings == [
         "Unparseable SSL certificate expiration date — expiry not shown"
     ]
@@ -62,11 +65,11 @@ def test_missing_date_is_not_logged(monkeypatch: pytest.MonkeyPatch) -> None:
     """No date at all is a plain absence, not a parse failure worth warning about."""
     warnings: list[str] = []
     monkeypatch.setattr(
-        check_detail_view_service.logger,
+        ssl_expiry_module.logger,
         "warning",
         lambda msg, **kw: warnings.append(msg),
     )
-    ssl_expiry_fields(None)
+    ssl_expiry_fields(None, warning_days=30, critical_days=7)
     assert warnings == []
 
 
@@ -83,7 +86,7 @@ def test_missing_date_is_not_logged(monkeypatch: pytest.MonkeyPatch) -> None:
     ],
 )
 def test_expiry_windows(days: int, expired: bool, soon: bool, critical: bool) -> None:
-    fields = ssl_expiry_fields(_in(days))
+    fields = ssl_expiry_fields(_in(days), warning_days=30, critical_days=7)
     assert fields["days_until_expiration"] == days
     assert fields["expired"] is expired
     assert fields["expires_soon"] is soon
@@ -93,4 +96,25 @@ def test_expiry_windows(days: int, expired: bool, soon: bool, critical: bool) ->
 def test_expiration_date_is_echoed_back() -> None:
     """The panel renders the raw string too, so it must survive the transform."""
     raw = _in(10)
-    assert ssl_expiry_fields(raw)["expiration_date"] == raw
+    assert (
+        ssl_expiry_fields(raw, warning_days=30, critical_days=7)["expiration_date"]
+        == raw
+    )
+
+
+def test_thresholds_come_from_the_caller() -> None:
+    """A 20-day-out cert is 'soon' under a 30-day window and fine under a 14-day one."""
+    raw = _in(20)
+    wide = ssl_expiry_fields(raw, warning_days=30, critical_days=14)
+    narrow = ssl_expiry_fields(raw, warning_days=14, critical_days=7)
+    assert wide["expires_soon"] is True
+    assert narrow["expires_soon"] is False
+
+
+def test_expiring_today_is_soon_and_critical() -> None:
+    """0 days out is the most urgent not-yet-expired state, not a gap."""
+    fields = ssl_expiry_fields(_in(0), warning_days=30, critical_days=7)
+    assert fields["days_until_expiration"] == 0
+    assert fields["expired"] is False
+    assert fields["expires_soon"] is True
+    assert fields["expires_critical"] is True

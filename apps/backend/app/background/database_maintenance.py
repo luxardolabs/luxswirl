@@ -179,6 +179,8 @@ async def _vacuum_table(db, table_name: str, full: bool = False) -> dict:
             "success": True,
         }
 
+    # swallowed-exceptions: per-table result — the failure is returned as
+    # success=False + error so the run reports it and the remaining tables still run.
     except Exception as e:
         logger.error(
             "Error vacuuming table",
@@ -255,6 +257,8 @@ async def _get_table_bloat(db, table_name: str) -> dict:
             "bloat_percentage": round(bloat_pct, 2),
         }
 
+    # swallowed-exceptions: per-table result — the failure is returned in the
+    # dict so the report shows it and the remaining tables are still measured.
     except Exception as e:
         logger.error(
             "Error calculating bloat",
@@ -453,6 +457,8 @@ async def _run_maintenance_cycle(db):
         )
         await db.commit()
         logger.info("  ✓ Continuous aggregates refreshed")
+    # swallowed-exceptions: the aggregate refresh is one step of a longer
+    # maintenance run — failing it must not abandon the vacuum stats that follow.
     except Exception:
         logger.warning("Error refreshing continuous aggregates", exc_info=True)
 
@@ -514,6 +520,8 @@ async def _database_maintenance_loop():
         except asyncio.CancelledError:
             logger.info("Database maintenance task cancelled")
             break
+        # swallowed-exceptions: daemon loop — one transient DB error must not
+        # kill the maintenance task for the life of the process.
         except Exception:
             logger.error("Error in database maintenance task", exc_info=True)
             # Continue running despite errors

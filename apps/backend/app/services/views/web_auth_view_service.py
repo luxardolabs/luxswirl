@@ -130,9 +130,6 @@ class WebAuthViewService:
             return True, None
         except ValueError as e:
             return False, str(e)
-        except Exception:
-            logger.error("Password change error", exc_info=True)
-            return False, "An error occurred while changing password"
 
     async def get_user_sessions(
         self, db: AsyncSession, user: User
