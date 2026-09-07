@@ -12,6 +12,8 @@ from typing import Any
 
 from shared.logger import get_logger
 
+from app.core.scan_check_names import PORT_CATEGORIES
+
 logger = get_logger("luxswirl.services.jobs.network_scan")
 
 
@@ -154,13 +156,9 @@ class NetworkScanCoreService:
         """
         scanned_ports = result.get("scan_params", {}).get("ports", [])
 
-        # Common conventions; only categories with at least one scanned port survive
-        port_categories: dict[str, list[int]] = {
-            "web": [80, 443, 8080, 8443, 8000, 3000, 5000],
-            "ssh": [22, 2222],
-            "database": [3306, 5432, 5433, 27017, 6379, 1433, 1521],
-            "other": [],
-        }
+        # Shared with the creation path and the scan panel; only categories with at
+        # least one scanned port survive.
+        port_categories: dict[str, list[int]] = {**PORT_CATEGORIES, "other": []}
         active_categories: dict[str, list[int]] = {}
         for category, ports in port_categories.items():
             if category == "other":

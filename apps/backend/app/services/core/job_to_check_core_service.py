@@ -16,6 +16,7 @@ from uuid import UUID
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.scan_check_names import PORT_CATEGORIES
 from app.models.enum_model import CheckType
 from app.schemas.check_schema import CheckCreate
 from app.services.core.check_core_service import CheckCoreService
@@ -138,7 +139,7 @@ class JobToCheckCoreService:
         )
         existing_check_names = {check.display_name for check in existing_checks}
 
-        web_ports = [80, 443, 8080, 8443, 8000, 3000, 5000]
+        web_ports = PORT_CATEGORIES["web"]
         created_count = 0
         skipped_count = 0
 
@@ -203,7 +204,7 @@ class JobToCheckCoreService:
         )
         existing_check_names = {check.display_name for check in existing_checks}
 
-        ssh_ports = [22, 2222]
+        ssh_ports = PORT_CATEGORIES["ssh"]
         created_count = 0
         skipped_count = 0
 
@@ -305,7 +306,7 @@ class JobToCheckCoreService:
         )
         existing_check_names = {check.display_name for check in existing_checks}
 
-        db_ports = [3306, 5432, 5433, 27017, 6379, 1433, 1521]
+        db_ports = PORT_CATEGORIES["database"]
         created_count = 0
         skipped_count = 0
 
