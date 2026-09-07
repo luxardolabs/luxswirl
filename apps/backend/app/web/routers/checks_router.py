@@ -15,11 +15,7 @@ from app.core.auth_deps import (
     EditorUserWeb,
 )
 from app.core.exceptions import CheckNotFoundException
-from app.core.query_params import (
-    AgentIdFilter,
-    CheckTypeFilter,
-    PerPageFilter,
-)
+from app.core.query_params import CheckTypeFilter
 from app.db import get_db
 from app.services.views.checks_view_service import ChecksViewService
 from app.services.views.status_view_service import StatusViewService
@@ -385,18 +381,3 @@ async def bulk_check_preview(
     return templates.TemplateResponse(request, "partials/bulk_preview.html", context)
 
 
-@router.get("/checks/table", response_class=HTMLResponse, include_in_schema=False)
-async def checks_table_partial(
-    request: Request,
-    db: Annotated[AsyncSession, Depends(get_db)],
-    current_user: CurrentUserWeb,
-    agent: AgentIdFilter = None,
-    enabled: Annotated[str, Query(description="Filter by enabled status")] = "all",
-    page: Annotated[int, Query(ge=1, description="Page number")] = 1,
-    per_page: PerPageFilter = None,
-):
-    """Check assignments table partial for HTMX updates."""
-    context = await ChecksViewService.build_table_partial_context(
-        db, request, current_user, agent, enabled, page, per_page
-    )
-    return templates.TemplateResponse(request, "partials/checks_table.html", context)
