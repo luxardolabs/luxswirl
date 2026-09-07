@@ -250,6 +250,7 @@ class CheckCoreService:
             child = by_id.get(cid)
             if child is None:
                 raise ValidationException(f"Check {cid} not found")
+            # post-db-filter: the dependency rules need the whole check set (who is already a parent, who has a parent), so it is one read then several in-memory passes rather than N queries
             child_dependents = sum(
                 1 for c in all_checks if c.depends_on_check_id == cid
             )
@@ -258,6 +259,7 @@ class CheckCoreService:
                     f"Check '{child.display_name}' is itself a parent — single-level only"
                 )
 
+        # post-db-filter: the dependency rules need the whole check set (who is already a parent, who has a parent), so it is one read then several in-memory passes rather than N queries
         current = {c.id for c in all_checks if c.depends_on_check_id == parent_check_id}
         to_add = desired - current
         to_remove = current - desired
@@ -280,8 +282,12 @@ class CheckCoreService:
 
     @staticmethod
     async def list_dependents(db: AsyncSession, parent_check_id: UUID) -> list[Check]:
-        all_checks = await CheckCRUD.list_all(db)
-        return [c for c in all_checks if c.depends_on_check_id == parent_check_id]
+        """Checks that depend on the given parent.
+
+        The predicate is a plain column equality, so the query does it rather
+        than loading every check and filtering in Python.
+        """
+        return list(await CheckCRUD.list_dependents(db, parent_check_id))
 
     @staticmethod
     async def list_potential_dependents(
@@ -293,9 +299,11 @@ class CheckCoreService:
         the parent's chain ancestor (none in single-level v1, so trivial).
         """
         all_checks = await CheckCRUD.list_all(db)
+        # post-db-filter: the dependency rules need the whole check set (who is already a parent, who has a parent), so it is one read then several in-memory passes rather than N queries
         parents_of_others = {
             c.depends_on_check_id for c in all_checks if c.depends_on_check_id
         }
+        # post-db-filter: the dependency rules need the whole check set (who is already a parent, who has a parent), so it is one read then several in-memory passes rather than N queries
         return [
             c
             for c in all_checks
@@ -335,6 +343,7 @@ class CheckCoreService:
     ) -> list[Check]:
         """Checks that may be selected as a parent (excludes those already with a parent)."""
         all_checks = await CheckCRUD.list_all(db)
+        # post-db-filter: the dependency rules need the whole check set (who is already a parent, who has a parent), so it is one read then several in-memory passes rather than N queries
         return [
             c
             for c in all_checks

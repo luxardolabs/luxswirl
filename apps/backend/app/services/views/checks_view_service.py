@@ -232,11 +232,13 @@ class ChecksViewService:
             )
         )
 
+        # post-db-filter: dependency eligibility needs the full candidate set; the tag list is aggregated across rows
         current_ids = {
             c.id for c in candidates if c.depends_on_check_id == parent_check_id
         }
         all_types = sorted({c.check_type for c in candidates})
         all_agents = sorted(
+            # post-db-filter: dependency eligibility needs the full candidate set; the tag list is aggregated across rows
             {c.agent.agent_name for c in candidates if c.agent and c.agent.agent_name}
         )
 
@@ -371,6 +373,7 @@ class ChecksViewService:
                 tag = tag.strip()
                 if tag:
                     available_tags.add(tag)
+        # post-db-filter: dependency eligibility needs the full candidate set; the tag list is aggregated across rows
         return sorted(available_tags)
 
     @staticmethod

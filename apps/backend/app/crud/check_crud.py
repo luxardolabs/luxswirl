@@ -135,6 +135,24 @@ class CheckCRUD:
         return list(result.scalars().all())
 
     @staticmethod
+    async def list_dependents(
+        db: AsyncSession, parent_check_id: UUID
+    ) -> Sequence[Check]:
+        """Checks that depend on the given parent.
+
+        Args:
+            db: Database session.
+            parent_check_id: The parent whose children to list.
+
+        Returns:
+            The dependent checks.
+        """
+        result = await db.execute(
+            select(Check).where(Check.depends_on_check_id == parent_check_id)
+        )
+        return list(result.scalars().all())
+
+    @staticmethod
     async def count_dependents(db: AsyncSession, parent_check_id: UUID) -> int:
         result = await db.execute(
             select(func.count(Check.id)).where(
