@@ -171,7 +171,9 @@ async def main():
             try:
                 await agent.shutdown()
             except Exception:
-                pass
+                # Already unwinding an unhandled exception; a failed shutdown
+                # must not replace it, but it still gets recorded.
+                logger.error("Shutdown failed while handling a crash", exc_info=True)
         return 1
 
     return 0

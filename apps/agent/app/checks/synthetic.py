@@ -11,8 +11,11 @@ import traceback
 from typing import Any
 
 from playwright.async_api import async_playwright
+from shared.logger import get_logger
 
 from app.checks.base import BaseCheck
+
+logger = get_logger("luxswirl.agent.checks.synthetic")
 
 
 class SyntheticCheck(BaseCheck):
@@ -123,8 +126,14 @@ class SyntheticCheck(BaseCheck):
                         result_data["browser_timing"] = await page.evaluate(
                             "() => JSON.parse(JSON.stringify(window.performance.timing))"
                         )
-                    except Exception:
-                        pass
+                    except Exception as timing_error:
+                        # Timing is a nice-to-have on top of the check result —
+                        # a closed or crashed page loses it, which is not a
+                        # check failure but is worth a line.
+                        logger.debug(
+                            "Could not read browser timing after synthetic run",
+                            extra={"error": str(timing_error)},
+                        )
 
                     # Capture screenshot
                     try:
@@ -212,8 +221,12 @@ class SyntheticCheck(BaseCheck):
                 nav_start = browser_timing.get("navigationStart")
                 if load_end and nav_start:
                     browser_latency_ms = load_end - nav_start
-            except Exception:
-                pass
+            except TypeError:
+                # window.performance.timing came back with non-numeric values.
+                logger.debug(
+                    "Non-numeric browser timing — latency not derived",
+                    extra={"browser_timing": browser_timing},
+                )
 
         # Primary metric: script execution time (what users care about)
         latency_ms = (

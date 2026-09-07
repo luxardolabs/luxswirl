@@ -5,6 +5,7 @@ PostgreSQL Check Module - Implements PostgreSQL database health checks.
 from typing import Any
 from urllib.parse import urlparse
 
+from shared.logger import get_logger
 from shared.ssrf import assert_target_allowed
 
 from app.checks.base import BaseCheck
@@ -15,6 +16,9 @@ try:
     ASYNCPG_AVAILABLE = True
 except ImportError:
     ASYNCPG_AVAILABLE = False
+
+
+logger = get_logger("luxswirl.agent.checks.postgres")
 
 
 class PostgreSQLCheck(BaseCheck):
@@ -182,8 +186,14 @@ class PostgreSQLCheck(BaseCheck):
                 if conn:
                     try:
                         await conn.close()
-                    except Exception:
-                        pass
+                    except Exception as close_error:
+                        # Best-effort close: a failure here must not mask the
+                        # check result, but a connection we cannot close is a
+                        # leak worth seeing in the log.
+                        logger.warning(
+                            "Failed to close PostgreSQL connection after check",
+                            extra={"error": str(close_error)},
+                        )
 
         # Create the result with PostgreSQL data in metrics
         return self.create_result(
