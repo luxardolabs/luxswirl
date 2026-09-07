@@ -51,9 +51,6 @@ class ProfileViewService:
             updated_user = await user_service.update_user(db, user.id, update_data)
         except ValueError as e:
             return "error", str(e)
-        except Exception:
-            logger.error("Error updating user", exc_info=True)
-            return "error", "An error occurred while updating user"
         if not updated_user:
             return "error", "User not found"
         logger.info(

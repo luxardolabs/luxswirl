@@ -569,6 +569,8 @@ class AgentCoreService:
         try:
             MetricsCollectorCoreService.update_agent_status(agent)
             MetricsCollectorCoreService.update_agent_metrics(metric, agent)
+        # swallowed-exceptions: metrics are downstream of ingestion — a
+        # Prometheus update must not reject the agent's heartbeat.
         except Exception:
             logger.error("Error updating Prometheus metrics", exc_info=True)
 

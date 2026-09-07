@@ -1284,6 +1284,8 @@ class CheckCoreService:
                     "validation_message": validation_message,
                     "status_code": status_code,
                 }
+            # swallowed-exceptions: per-URL bulk preview — the failure IS the
+            # result, returned as an error row the operator sees before importing.
             except Exception as e:
                 return {
                     "url": url_str,

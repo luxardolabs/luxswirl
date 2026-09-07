@@ -61,6 +61,8 @@ class NetworkDiscoverCoreService:
                                         "cidr": cidr,
                                     },
                                 )
+                        # swallowed-exceptions: per-interface enrichment — an
+                        # interface we cannot read still leaves the others usable.
                         except Exception:
                             logger.debug(
                                 "Error checking gateway for interface",
@@ -107,6 +109,8 @@ class NetworkDiscoverCoreService:
                     f"For full interface visibility, consider using 'network_mode: host'."
                 )
 
+            # swallowed-exceptions: the inferred network is an extra hint on
+            # top of the discovery result, not the result itself.
             except Exception:
                 logger.debug(
                     "Could not infer network from gateway",

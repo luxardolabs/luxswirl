@@ -114,8 +114,10 @@ class EncryptedString(TypeDecorator):
             # Not encrypted - return plaintext as-is
             # This handles migration from plaintext to encrypted
             return value
+        # swallowed-exceptions: a row we cannot decrypt still has to load —
+        # failing the read would take out every page that touches the table,
+        # and the error is recorded.
         except Exception:
-            # Other error - log and return as-is
             logger.error("Failed to decrypt field", exc_info=True)
             return value
 
@@ -216,6 +218,9 @@ class EncryptedJSON(TypeDecorator):
                 return cast(dict | list, json.loads(value))
             except json.JSONDecodeError:
                 return None
+        # swallowed-exceptions: a row we cannot decrypt still has to load —
+        # failing the read would take out every page that touches the table,
+        # and the error is recorded.
         except Exception:
             logger.error("Failed to decrypt JSON field", exc_info=True)
             return None

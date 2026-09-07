@@ -339,6 +339,8 @@ class ImportExportViewService:
             return ImportExportViewService._import_result_response(
                 request, current_user, f"Agent '{agent_id}' not found", 404
             )
+        # swallowed-exceptions: the import surface renders the failure back to
+        # the operator with the reason, which is the handling.
         except Exception as e:
             logger.error("Error during import", exc_info=True)
             return ImportExportViewService._import_result_response(
