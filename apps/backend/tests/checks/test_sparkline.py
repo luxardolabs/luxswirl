@@ -9,7 +9,7 @@ spike rather than a dip.
 
 from __future__ import annotations
 
-from app.services.views._sparkline import sparkline_path
+from app.core.sparkline import sparkline_path
 
 
 def _bar(success, latency, minutes_ago=0):

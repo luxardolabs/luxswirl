@@ -8,7 +8,7 @@ for creation is also a port the panel counts.
 
 from __future__ import annotations
 
-from app.services.views._network_scan_view import build_scan_view
+from app.core.scan_panel import build_scan_view
 
 
 def _host(ip, hostname=None, ports=None):

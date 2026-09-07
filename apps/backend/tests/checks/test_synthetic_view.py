@@ -7,7 +7,7 @@ each step's duration out of a second dict by loop variable.
 
 from __future__ import annotations
 
-from app.services.views._synthetic_view import build_synthetic_view
+from app.core.synthetic_timings import build_synthetic_view
 
 
 def test_no_synthetic_block_is_zeroed():

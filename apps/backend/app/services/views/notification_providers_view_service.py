@@ -42,7 +42,7 @@ def _parse_config_json(raw: str | None) -> dict[str, Any]:
 def build_provider_config_fields(
     available_types: list[dict[str, Any]],
     selected_type: str | None,
-    provider: Any | None,
+    provider: NotificationProvider | None,
 ) -> list[dict[str, Any]]:
     """The selected provider type's config fields, ready to render.
 

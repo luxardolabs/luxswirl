@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth_deps import AuthedUser
 from app.core.exceptions import NotFoundException
+from app.core.scan_panel import build_scan_view
 from app.models.agent_model import Agent  # noqa: F401  # used in type comment line 129
 from app.models.enum_model import JobStatus, JobType
 from app.models.job_model import Job
@@ -30,7 +31,6 @@ from app.services.core.check_core_service import CheckCoreService
 from app.services.core.job_core_service import JobCoreService
 from app.services.core.network_scan_core_service import NetworkScanCoreService
 from app.services.core.settings_core_service import SettingsCoreService
-from app.services.views._network_scan_view import build_scan_view
 
 _JOB_REGISTRY: dict = {
     "network_scan": NetworkScanJob,

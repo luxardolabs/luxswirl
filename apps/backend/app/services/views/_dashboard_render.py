@@ -9,12 +9,12 @@ from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.datetime_utils import utc_now
+from app.core.sparkline import sparkline_path
 from app.models.check_model import Check
 from app.models.status_page_model import StatusPage
 from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.check_core_service import CheckCoreService
 from app.services.core.check_result_core_service import CheckResultCoreService
-from app.services.views._sparkline import sparkline_path
 from app.services.views.status_view_service import StatusViewService
 
 logger = get_logger("luxswirl.web.services.dashboard")
