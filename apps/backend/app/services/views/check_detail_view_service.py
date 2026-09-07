@@ -42,6 +42,51 @@ class ResultProxy:
         return self._metrics
 
 
+def ssl_expiry_fields(expiration_date: str | None) -> dict[str, object]:
+    """Expiry flags for an agent-reported certificate, always fully populated.
+
+    Returned whether or not the date parses, so the panel never reads a
+    half-filled certificate: `days_until_expiration` is None when the expiry is
+    unknown and every flag is False.
+
+    Args:
+        expiration_date: The agent's reported expiry, e.g. "Jan 15 23:59:59 2025 GMT".
+
+    Returns:
+        expiration_date (echoed back so the panel always has it) plus
+        days_until_expiration and the expired / expires_soon / expires_critical flags.
+    """
+    unknown: dict[str, object] = {
+        "expiration_date": expiration_date,
+        "days_until_expiration": None,
+        "expired": False,
+        "expires_soon": False,
+        "expires_critical": False,
+    }
+    if not expiration_date:
+        return unknown
+
+    try:
+        exp_date = datetime.strptime(expiration_date, "%b %d %H:%M:%S %Y %Z")
+    except ValueError:
+        # A cert whose expiry we cannot read is exactly the one an operator needs
+        # to hear about — the old code discarded this and rendered nothing.
+        logger.warning(
+            "Unparseable SSL certificate expiration date — expiry not shown",
+            extra={"expiration_date": expiration_date},
+        )
+        return unknown
+
+    days_remaining = (exp_date.replace(tzinfo=UTC) - datetime.now(UTC)).days
+    return {
+        "expiration_date": expiration_date,
+        "days_until_expiration": days_remaining,
+        "expired": days_remaining < 0,
+        "expires_soon": 0 <= days_remaining <= 30,
+        "expires_critical": 0 <= days_remaining <= 7,
+    }
+
+
 def build_check_urls(request: Request, check_id: UUID, hours: int) -> dict[str, str]:
     """Finished hrefs for one check's panel actions, resolved by route NAME.
 
@@ -127,30 +172,13 @@ class CheckDetailViewService:
                 "additional_data": result.get_metrics(),  # SSL cert already computed by the server
             }
 
-            # Process SSL certificate info if present
+            # Complete the certificate the agent reported: the panel reads the
+            # expiry flags unconditionally, so they are set for every cert.
             if history_item["additional_data"]:
                 response = history_item["additional_data"].get("response", {})
                 ssl_cert = response.get("ssl_certificate")
-                if ssl_cert and ssl_cert.get("expiration_date"):
-                    try:
-                        # Parse SSL date format (e.g., "Jan 15 23:59:59 2025 GMT")
-                        exp_date = datetime.strptime(
-                            ssl_cert["expiration_date"], "%b %d %H:%M:%S %Y %Z"
-                        )
-                        exp_date = exp_date.replace(tzinfo=UTC)  # aware for comparison
-                        now = datetime.now(UTC)
-
-                        # Calculate days until expiration
-                        days_remaining = (exp_date - now).days
-
-                        # Add calculated fields
-                        ssl_cert["days_until_expiration"] = days_remaining
-                        ssl_cert["expired"] = days_remaining < 0
-                        ssl_cert["expires_soon"] = 0 <= days_remaining <= 30
-                        ssl_cert["expires_critical"] = 0 <= days_remaining <= 7
-                    except Exception:
-                        # If date parsing fails, leave fields unset
-                        pass
+                if ssl_cert:
+                    ssl_cert.update(ssl_expiry_fields(ssl_cert.get("expiration_date")))
 
             history.append(history_item)
 

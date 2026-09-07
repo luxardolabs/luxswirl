@@ -5,6 +5,7 @@ MySQL/MariaDB Check Module - Implements MySQL/MariaDB database health checks.
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
+from shared.logger import get_logger
 from shared.ssrf import assert_target_allowed
 
 from app.checks.base import BaseCheck
@@ -15,6 +16,9 @@ try:
     AIOMYSQL_AVAILABLE = True
 except ImportError:
     AIOMYSQL_AVAILABLE = False
+
+
+logger = get_logger("luxswirl.agent.checks.mysql")
 
 
 class MySQLCheck(BaseCheck):
@@ -236,8 +240,14 @@ class MySQLCheck(BaseCheck):
                 if conn:
                     try:
                         conn.close()
-                    except Exception:
-                        pass
+                    except Exception as close_error:
+                        # Best-effort close: a failure here must not mask the
+                        # check result, but a connection we cannot close is a
+                        # leak worth seeing in the log.
+                        logger.warning(
+                            "Failed to close MySQL connection after check",
+                            extra={"error": str(close_error)},
+                        )
 
         # Create the result with MySQL data in metrics
         return self.create_result(
