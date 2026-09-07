@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.datetime_utils import utc_now
 from app.core.ssl_expiry import ssl_expiry_fields
+from app.services.views._synthetic_view import build_synthetic_view
 from app.services.core.check_core_service import CheckCoreService
 from app.services.core.check_result_core_service import CheckResultCoreService
 from app.services.core.settings_core_service import SettingsCoreService
@@ -139,6 +140,12 @@ class CheckDetailViewService:
                 response = history_item["additional_data"].get("response", {})
                 ssl_cert = response.get("ssl_certificate")
                 if ssl_cert:
+                    # The panel renders the raw notAfter string trimmed; trim it
+                    # here so the template only renders.
+                    expiry = ssl_cert.get("expiration_date")
+                    ssl_cert["expiration_display"] = (
+                        expiry[:20] if expiry else "Unknown"
+                    )
                     ssl_cert.update(
                         ssl_expiry_fields(
                             ssl_cert.get("expiration_date"),
@@ -428,6 +435,10 @@ class CheckDetailViewService:
                         "filename": artifact.filename,
                         "size_bytes": artifact.size_bytes,
                         "created_at": artifact.created_at.isoformat(),
+                        # The aware datetime, formatted at the edge by the
+                        # format_datetime filter so it lands in the viewer's zone.
+                        "created_at_dt": artifact.created_at,
+                        "size_kb": round(artifact.size_bytes / 1024, 1),
                         "check_result_id": str(artifact.check_result_id),
                         # Finished hrefs, resolved by route name.
                         "view_url": request.url_for(
@@ -442,7 +453,9 @@ class CheckDetailViewService:
 
         dependency_info = await CheckCoreService.get_dependency_info(db, check_id)
 
+        latest_metrics = history[0]["additional_data"] if history else {}
         return {
+            **build_synthetic_view((latest_metrics or {}).get("synthetic")),
             "check_urls": build_check_urls(request, check_id, hours),
             # The parent link points at a DIFFERENT check, so it needs its own href.
             "parent_check_url": (

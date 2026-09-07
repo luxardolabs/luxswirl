@@ -244,7 +244,7 @@
                 </div>
                 <div>
                     <p class="text-dark-text-muted text-xs mb-1">Expiration Date</p>
-                    <p class="font-mono text-dark-text-primary text-xs">{{ ssl_cert.expiration_date[:20] if ssl_cert.expiration_date else 'Unknown' }}</p>
+                    <p class="font-mono text-dark-text-primary text-xs">{{ ssl_cert.expiration_display }}</p>
                 </div>
                 <div>
                     <p class="text-dark-text-muted text-xs mb-1">Subject</p>
