@@ -164,14 +164,13 @@ async def edit_user_form(
     web_users = WebUsersViewService()
 
     try:
-        edit_user = await web_users.get_user(db, user_id)
+        context = await web_users.build_user_edit_panel_context(
+            db, request=request, current_user=admin, user_id=user_id
+        )
 
-        if not edit_user:
+        if context is None:
             return error_partial(request, admin, "User not found", status_code=404)
 
-        context = WebUsersViewService().build_user_edit_form_context(
-            request=request, current_user=admin, edit_user=edit_user
-        )
         return templates.TemplateResponse(
             request,
             "partials/settings/user_edit_panel.html",
@@ -287,20 +286,13 @@ async def reset_user_password(
 
     web_users = WebUsersViewService()
 
-    target_user = await web_users.get_user(db, user_id)
-
-    if not target_user:
-        return RedirectResponse(
-            url="/settings/users?error=User not found", status_code=302
-        )
-
-    success, error = await web_users.reset_password(
+    target_user, error = await web_users.reset_password(
         db, user_id, new_password, must_change
     )
 
-    if error:
+    if error or target_user is None:
         return RedirectResponse(
-            url=f"/settings/users?error={error}",
+            url=f"/settings/users?error={error or 'User not found'}",
             status_code=302,
         )
 
@@ -331,16 +323,13 @@ async def unlock_user(
 
     web_users = WebUsersViewService()
 
-    success, error = await web_users.unlock_user(db, user_id)
+    unlocked_user, error = await web_users.unlock_user(db, user_id)
 
-    if error:
+    if error or unlocked_user is None:
         return RedirectResponse(
-            url=f"/settings/users?error={error}",
+            url=f"/settings/users?error={error or 'User not found'}",
             status_code=302,
         )
-
-    unlocked_user = await web_users.get_user(db, user_id)
-    assert unlocked_user is not None
 
     logger.info(
         "Admin unlocked user via web UI",
