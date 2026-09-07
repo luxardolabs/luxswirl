@@ -15,6 +15,7 @@ from app.core.security import verify_api_token
 from app.db import get_db
 from app.schemas.import_export_schema import (
     AgentChecksExport,
+    AgentConfigExport,
     BulkImportRequest,
     BulkImportResponse,
 )
@@ -146,7 +147,7 @@ async def import_checks(
 
 @router.get(
     "/export-agent-config",
-    response_model=AgentChecksExport,
+    response_model=AgentConfigExport,
 )
 async def export_agent_config(
     _: Annotated[str, Depends(verify_api_token)],

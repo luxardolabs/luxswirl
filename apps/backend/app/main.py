@@ -8,6 +8,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Request, status
+from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -280,17 +281,24 @@ async def value_error_handler(request: Request, exc: ValueError):
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
-    """Handle request validation errors."""
+    """Handle request validation errors.
+
+    The errors carry the offending `input`, which for a body that is not valid
+    JSON is raw bytes — not serializable. Rendering them straight made the
+    handler itself raise, so a client sending the wrong content-type got a 500
+    instead of the 422 that describes what was wrong.
+    """
+    errors = jsonable_encoder(exc.errors())
     get_logger("luxswirl.server").warning(
         "Validation error",
-        extra={"validation_errors": exc.errors()},
+        extra={"validation_errors": errors},
     )
     return render_error_response(
         request,
-        status.HTTP_422_UNPROCESSABLE_ENTITY,
+        status.HTTP_422_UNPROCESSABLE_CONTENT,
         "Request validation failed",
         error_code="VALIDATION_ERROR",
-        detail=exc.errors(),
+        detail=errors,
     )
 
 
