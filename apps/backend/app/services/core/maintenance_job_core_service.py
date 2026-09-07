@@ -16,17 +16,18 @@ from app.core.exceptions import NotFoundException
 from app.crud.maintenance_job_crud import MaintenanceJobCRUD
 from app.models.enum_model import MaintenanceJobKind
 from app.models.maintenance_job_model import MaintenanceJob
+from app.schemas.maintenance_job_schema import MaintenanceJobResponse
 
 logger = get_logger("luxswirl.services.maintenance_job")
 
 
 class MaintenanceJobCoreService:
     @staticmethod
-    async def get_by_id(db: AsyncSession, job_id: UUID) -> MaintenanceJob:
+    async def get_by_id(db: AsyncSession, job_id: UUID) -> MaintenanceJobResponse:
         job = await MaintenanceJobCRUD.get_by_id(db, job_id)
         if job is None:
             raise NotFoundException(f"Maintenance job {job_id} not found")
-        return job
+        return MaintenanceJobResponse.model_validate(job)
 
     @staticmethod
     async def enqueue(
@@ -36,7 +37,7 @@ class MaintenanceJobCoreService:
         target_id: UUID | None,
         params: dict[str, Any] | None = None,
         owner_id: UUID | None = None,
-    ) -> MaintenanceJob:
+    ) -> MaintenanceJobResponse:
         """Insert an intent row, idempotently.
 
         The partial unique index ``(kind, target_id) WHERE status IN (queued,
@@ -63,7 +64,7 @@ class MaintenanceJobCoreService:
                     "owner_id": str(owner_id) if owner_id else None,
                 },
             )
-            return job
+            return MaintenanceJobResponse.model_validate(job)
 
         # No row inserted → an inflight job already exists for this target.
         # (A NULL target_id never conflicts, so target_id is non-None here.)
@@ -83,7 +84,7 @@ class MaintenanceJobCoreService:
                 "target_id": str(target_id),
             },
         )
-        return existing
+        return MaintenanceJobResponse.model_validate(existing)
 
     @staticmethod
     async def claim_next(db: AsyncSession) -> MaintenanceJob | None:

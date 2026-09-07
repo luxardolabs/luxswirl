@@ -17,9 +17,9 @@ from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth_deps import AuthedUser
-from app.models.notification_provider_model import NotificationProvider
 from app.schemas.notification_provider_schema import (
     NotificationProviderCreate,
+    NotificationProviderInDB,
     NotificationProviderUpdate,
 )
 from app.services.core.notification_core_service import NotificationCoreService
@@ -42,7 +42,7 @@ def _parse_config_json(raw: str | None) -> dict[str, Any]:
 def build_provider_config_fields(
     available_types: list[dict[str, Any]],
     selected_type: str | None,
-    provider: NotificationProvider | None,
+    provider: NotificationProviderInDB | None,
 ) -> list[dict[str, Any]]:
     """The selected provider type's config fields, ready to render.
 
@@ -143,7 +143,7 @@ class NotificationProvidersViewService:
         db: AsyncSession, request: Request, current_user: AuthedUser, provider_id: UUID
     ) -> dict[str, Any]:
         """Form context for editing an existing provider."""
-        provider = await NotificationCoreService.get_provider_by_id(db, provider_id)
+        provider = await NotificationCoreService.get_provider(db, provider_id)
         available_types = NotificationCoreService.get_available_provider_types()
         return {
             "request": request,
@@ -160,7 +160,7 @@ class NotificationProvidersViewService:
         }
 
     @staticmethod
-    async def create_provider(db: AsyncSession, form: dict) -> NotificationProvider:
+    async def create_provider(db: AsyncSession, form: dict) -> NotificationProviderInDB:
         """Parse a create form, build the schema, delegate to core."""
         provider_data = NotificationProviderCreate(
             provider_type=form.get("provider_type", ""),
@@ -182,7 +182,7 @@ class NotificationProvidersViewService:
     @staticmethod
     async def update_provider(
         db: AsyncSession, provider_id: UUID, form: dict
-    ) -> NotificationProvider:
+    ) -> NotificationProviderInDB:
         """Parse an update form, build the schema, delegate to core."""
         update_data = NotificationProviderUpdate(
             friendly_name=form.get("friendly_name", ""),
@@ -216,9 +216,9 @@ class NotificationProvidersViewService:
     @staticmethod
     async def toggle_provider(
         db: AsyncSession, provider_id: UUID
-    ) -> NotificationProvider:
+    ) -> NotificationProviderInDB:
         """Read current state, flip is_enabled, persist."""
-        provider = await NotificationCoreService.get_provider_by_id(db, provider_id)
+        provider = await NotificationCoreService.get_provider(db, provider_id)
         update_data = NotificationProviderUpdate(is_enabled=not provider.is_enabled)
         provider = await NotificationCoreService.update_provider(
             db, provider_id, update_data
