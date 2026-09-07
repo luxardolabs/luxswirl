@@ -51,6 +51,11 @@ enum_freetext_columns = [
 hypertable_unbounded = [
   { file = "artifact_crud", func = "get_stats_for_check", evidence = "check_artifacts is retention-scoped + filtered by check_id (indexed); a time bound prunes nothing (LUXSWIRL-180)" },
 ]
+tenant_cross = [
+  { function = "get_by_token_hash", evidence = "the session token IS the credential — this is the pre-auth lookup that establishes who the caller is, so there is no user to scope by yet" },
+  { function = "delete_expired_before", evidence = "session cleanup task — deletes by expiry across every user by design" },
+  { function = "list_expired", evidence = "session cleanup task — reads by expiry across every user by design" },
+]
 auth_public = [
   { function = "agent_heartbeat", evidence = "authenticates in the body via _authenticate_heartbeat() — accepts the agent-specific key OR the registration token, so it cannot use a Depends that assumes one" },
   { function = "create_first_admin", evidence = "first-run setup: re-checks needs_setup() and redirects to /login the moment any user exists, so it is only reachable on an empty install" },
@@ -83,6 +88,22 @@ deps = [
 admin_url_patterns = ["/settings", "/registration-keys", "/users"]
 require_names = ["require_admin", "require_admin_web", "AdminUser", "AdminUserWeb"]
 
+[target.tenant]
+# luxswirl is single-organisation: agents, checks, results, alerts and status
+# pages are shared, gated by role rather than owned by a user. The one genuinely
+# per-user table is sessions, so `user_id` is the ownership discriminator and
+# this rule answers "can one user read or revoke another's session by id?".
+column = "user_id"
+
+[target.tenant.auth]
+# Which auth marker a route carries decides whether reaching an unscoped session
+# query is a leak. Admin is privileged; a plain signed-in user is not; the agent
+# API-token routes are the system/collector tier.
+superuser = ["AdminUser", "AdminUserWeb", "require_admin", "require_admin_web"]
+tenant_user = ["CurrentUser", "CurrentUserWeb", "EditorUserWeb", "get_current_user"]
+collector = ["verify_api_token", "verify_agent_token"]
+public_paths = ["login", "setup", "logout"]
+
 [target.csrf]
 # luxswirl runs cookie auth on SameSite=Lax with no CSRF-token layer, so the
 # no-state-changing-GET invariant is the whole defense. See --playbook
@@ -97,6 +118,7 @@ logout_get_allowed = true
 no_nesting = true
 
 [target.templates]
+lint_logic = true
 # Evidence-backed template carve-outs (substring match on path). In luxarch <=0.2.0
 # these lived hardcoded in the image; 0.2.1 moved them out to the repo's own config
 # (they were luxswirl data, not fleet standard). Every template rule honors this list.

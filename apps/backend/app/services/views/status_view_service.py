@@ -325,14 +325,25 @@ class StatusViewService:
             else 0.0
         )
 
+        enabled = data["enabled_checks"]
+
+        def share(count: int) -> float:
+            """That count as a percentage of the enabled checks."""
+            return round(count / enabled * 100, 1) if enabled else 0.0
+
+        unknown_count = enabled - data["up_count"] - data["down_count"]
+
         return {
             "total_checks": data["total_checks"],
-            "enabled_checks": data["enabled_checks"],
+            "enabled_checks": enabled,
             "up_count": data["up_count"],
             "down_count": data["down_count"],
-            "unknown_count": data["enabled_checks"]
-            - data["up_count"]
-            - data["down_count"],
+            "unknown_count": unknown_count,
+            # The card shows each count as a share of the enabled checks; the
+            # percentage is computed here so the template only renders it.
+            "up_pct": share(data["up_count"]),
+            "down_pct": share(data["down_count"]),
+            "unknown_pct": share(unknown_count),
             "active_agents": data["active_agents"],
             "overall_success_rate": round(overall_success_rate, 2),
         }
