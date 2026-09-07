@@ -890,11 +890,17 @@ class DashboardRender:
                     group_checks, sort_by, sort_direction
                 )
 
+                # The group header shows up/down counts; the card renders them
+                # rather than filtering the list itself.
+                group_up = sum(1 for c in group_checks if c.latest_success)
                 rendered_items.append(
                     {
                         "type": "group",
                         "name": group_name,
                         "checks": group_checks,
+                        "total": len(group_checks),
+                        "up": group_up,
+                        "down": len(group_checks) - group_up,
                         "sort_by": sort_by,
                         "sort_direction": sort_direction,
                     }

@@ -53,11 +53,7 @@
             </div>
             Security Settings
             <span class="px-1.5 py-0.5 text-xs rounded bg-dark-bg-tertiary text-dark-text-muted">
-                {%- if security_groups -%}
-                    {{ security_groups.values()|map('length')|sum }}
-                {%- else -%}
-                    0
-                {%- endif -%}
+                {{ security_count }}
             </span>
         </a>
         <a href="#general-settings"

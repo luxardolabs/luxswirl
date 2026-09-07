@@ -8,9 +8,7 @@
         </h2>
 
         <!-- Group Status Summary -->
-        {% set group_total = item.checks|length %}
-        {% set group_up = item.checks|selectattr('latest_success')|list|length %}
-        {% set group_down = group_total - group_up %}
+        {%- set group_total, group_up, group_down = item.total, item.up, item.down -%}
 
         <div class="flex items-center gap-3">
             {% if group_down == 0 %}

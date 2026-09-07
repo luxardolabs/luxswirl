@@ -33,7 +33,7 @@
                             Agent <span class="text-red-400">*</span>
                         </label>
                         {% call select(name="agent_id", id="agent_id", required=true, class="input w-full") %}
-                            {% if not prefill_job_type or not job_types[prefill_job_type].requires_agent %}
+                            {% if not selected_job_type or not selected_job_type.requires_agent %}
                             <option value="server" {% if not prefill_agent_id or prefill_agent_id == 'server' %}selected{% endif %}>Server (Run locally)</option>
                             {% endif %}
                             {% for agent in agents %}
@@ -43,7 +43,7 @@
                             {% endfor %}
                         {% endcall %}
                         <p class="text-xs text-dark-text-muted mt-1">
-                            {% if prefill_job_type and job_types[prefill_job_type].requires_agent %}
+                            {% if selected_job_type and selected_job_type.requires_agent %}
                             Agent required (cannot run on server)
                             {% else %}
                             Which agent should execute
@@ -69,8 +69,8 @@
                 </div>
 
                 <!-- Job Type Specific Fields (Dynamically Generated from Schema) -->
-                {% if prefill_job_type and prefill_job_type in job_types %}
-                {% set selected_job = job_types[prefill_job_type] %}
+                {% if selected_job_type %}
+                {% set selected_job = selected_job_type %}
                 <div class="space-y-5">
                     <!-- Job description card -->
                     <div class="bg-gradient-to-r from-blue-500/10 to-blue-600/10 border border-blue-500/30 rounded-lg p-4">

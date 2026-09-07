@@ -41,6 +41,38 @@ def _normalize_status_bar_minutes(minutes: int | None) -> int:
     return 30
 
 
+# The label each allowed range is shown as in the selector.
+TIME_RANGE_LABELS: dict[int, str] = {
+    30: "30m",
+    60: "1h",
+    120: "2h",
+    240: "4h",
+    480: "8h",
+    1440: "24h",
+}
+
+
+def _time_range_choices(base_url: str, *, selected: int) -> list[dict[str, object]]:
+    """The public page's time-range selector, ready to render.
+
+    Args:
+        base_url: The public status page path the options link to.
+        selected: The range currently in effect.
+
+    Returns:
+        One entry per allowed range with its label, href and current flag.
+    """
+    return [
+        {
+            "minutes": minutes,
+            "label": TIME_RANGE_LABELS[minutes],
+            "url": f"{base_url}?time_range={minutes}",
+            "is_current": minutes == selected,
+        }
+        for minutes in ALLOWED_TIME_RANGES
+    ]
+
+
 def _resolve_time_range(query_value: int | None, page_config: dict | None) -> int:
     """Pick time-range minutes: query > page config > default 30."""
     if query_value is not None and query_value in ALLOWED_TIME_RANGES:
@@ -642,14 +674,13 @@ class StatusPagesViewService:
                     "bucket_minutes",
                 )
             },
-            "time_range_options": ALLOWED_TIME_RANGES,
             "page_title": status_page.name,
-            # One finished href per time-range option, plus the polling partial's.
-            "time_range_urls": {
-                minutes: f"{request.url_for('view_public_status_page', slug=status_page.slug).path}"
-                f"?time_range={minutes}"
-                for minutes in ALLOWED_TIME_RANGES
-            },
+            # One finished choice per time-range option — label, href and whether
+            # it is the current one — so the selector only renders.
+            "time_range_choices": _time_range_choices(
+                request.url_for("view_public_status_page", slug=status_page.slug).path,
+                selected=time_range_minutes,
+            ),
             "partial_url_base": request.url_for(
                 "view_public_status_page_partial", slug=status_page.slug
             ).path,

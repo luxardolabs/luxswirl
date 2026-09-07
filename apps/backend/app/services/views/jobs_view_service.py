@@ -137,6 +137,9 @@ class JobRow:
         urls: JobUrls,
     ):
         self.job_id = job_id
+        # The table shows a truncated id; the slice is display shaping, not the
+        # template's job.
+        self.short_id = str(job_id)[:8]
         self.urls = urls
         self.job_type = job_type
         self.agent_id = agent_id
@@ -573,6 +576,9 @@ class JobsViewService:
             "current_user": current_user,
             "agents": agents,
             "job_types": job_types,
+            # The form branches on the selected type's metadata; resolving the
+            # lookup here keeps the dynamic dict access out of the template.
+            "selected_job_type": job_types.get(job_type) if job_type else None,
             "prefill_job_type": job_type,
             "prefill_agent_id": agent_filter,
             "prefill_priority": priority,

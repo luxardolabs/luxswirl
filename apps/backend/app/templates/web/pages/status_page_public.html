@@ -54,19 +54,18 @@
         <div class="flex items-center gap-6">
             <!-- Time Range Selector -->
             <div class="flex items-center gap-1 bg-dark-bg-primary/50 rounded-lg p-1 border border-dark-border">
-                {% for minutes in time_range_options %}
-                {% set labels = {30: '30m', 60: '1h', 120: '2h', 240: '4h', 480: '8h', 1440: '24h'} %}
-                <a href="{{ time_range_urls[minutes] }}"
-                   hx-get="{{ time_range_urls[minutes] }}"
+                {% for choice in time_range_choices %}
+                <a href="{{ choice.url }}"
+                   hx-get="{{ choice.url }}"
                    hx-push-url="true"
                    hx-target="body"
                    class="px-2.5 py-1 text-xs font-medium rounded-md transition-all duration-200 cursor-pointer
-                   {% if time_range_minutes == minutes %}
+                   {% if choice.is_current %}
                        bg-brand-700 text-white shadow-sm
                    {% else %}
                        text-dark-text-muted hover:text-dark-text-secondary hover:bg-dark-bg-tertiary
                    {% endif %}">
-                    {{ labels[minutes] }}
+                    {{ choice.label }}
                 </a>
                 {% endfor %}
             </div>

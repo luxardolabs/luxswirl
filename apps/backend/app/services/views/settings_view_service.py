@@ -446,6 +446,9 @@ class SettingsViewService:
             "system_settings": groups["system"],
             "job_settings": groups["job"],
             "security_groups": security_groups,
+            # The tab badge shows how many security settings there are across
+            # the subcategory groups.
+            "security_count": sum(len(rows) for rows in security_groups.values()),
             "general_settings": groups["general"],
             "database_settings": groups["database"],
             "page_title": "Settings - Defaults",
