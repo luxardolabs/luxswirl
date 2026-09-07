@@ -70,7 +70,6 @@
             <div class="space-y-3">
                 <!-- Multi-Step Performance -->
                 {% if synthetic.track_durations %}
-                {% set total_track_time = synthetic.track_durations.values()|sum %}
                 <div class="p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg">
                     <div class="flex items-center justify-between mb-3">
                         <p class="text-xs text-blue-400 uppercase tracking-wide font-semibold">Multi-Step Navigation Performance</p>
@@ -78,7 +77,7 @@
                     </div>
                     <div class="grid grid-cols-2 gap-3">
                         <div class="text-center p-2 bg-dark-bg-primary rounded border border-green-500/30">
-                            <p class="text-2xl font-bold text-green-400">{{ (total_track_time * 1000)|int }}</p>
+                            <p class="text-2xl font-bold text-green-400">{{ synthetic_total_ms }}</p>
                             <p class="text-xs text-dark-text-muted mt-1">Total Navigation (ms)</p>
                         </div>
                         <div class="text-center p-2 bg-dark-bg-primary rounded">
@@ -106,21 +105,13 @@
                             {'label': 'Full Load', 'align': 'right'},
                             {'label': 'Total Time', 'align': 'right'},
                         ]) %}
-                                {% for step_name, timing in synthetic.track_timings.items() %}
+                                {% for step in synthetic_steps %}
                                 <tr>
-                                    <td>{{ step_name }}</td>
-                                    <td class="text-right text-blue-400 font-mono">
-                                        {{ (timing.domLoading - timing.navigationStart)|int }}ms
-                                    </td>
-                                    <td class="text-right text-blue-400 font-mono">
-                                        {{ (timing.domComplete - timing.navigationStart)|int }}ms
-                                    </td>
-                                    <td class="text-right text-green-400 font-mono">
-                                        {{ (timing.loadEventEnd - timing.navigationStart)|int }}ms
-                                    </td>
-                                    <td class="text-right text-dark-text-primary font-mono font-semibold">
-                                        {{ (synthetic.track_durations[step_name] * 1000)|int }}ms
-                                    </td>
+                                    <td>{{ step.name }}</td>
+                                    <td class="text-right text-blue-400 font-mono">{{ step.dom_load_ms }}ms</td>
+                                    <td class="text-right text-blue-400 font-mono">{{ step.dom_complete_ms }}ms</td>
+                                    <td class="text-right text-green-400 font-mono">{{ step.full_load_ms }}ms</td>
+                                    <td class="text-right text-dark-text-primary font-mono font-semibold">{{ step.total_ms }}ms</td>
                                 </tr>
                                 {% endfor %}
                         {% endcall %}
@@ -189,18 +180,18 @@
                                 <span class="w-4 h-4 text-green-400 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/photo.svg" %}</span>
                                 <div>
                                     <span class="text-sm font-medium text-green-400">Screenshot</span>
-                                    <p class="text-xs text-dark-text-muted">{{ artifact.created_at[:19]|replace('T', ' ') }}</p>
+                                    <p class="text-xs text-dark-text-muted">{{ artifact.created_at_dt|format_datetime("%Y-%m-%d %H:%M:%S") }}</p>
                                 </div>
                                 {% elif artifact.artifact_type == 'trace' %}
                                 <span class="w-4 h-4 text-blue-400 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/document-text.svg" %}</span>
                                 <div>
                                     <span class="text-sm font-medium text-blue-400">Playwright Trace</span>
-                                    <p class="text-xs text-dark-text-muted">{{ artifact.created_at[:19]|replace('T', ' ') }}</p>
+                                    <p class="text-xs text-dark-text-muted">{{ artifact.created_at_dt|format_datetime("%Y-%m-%d %H:%M:%S") }}</p>
                                 </div>
                                 {% endif %}
                             </div>
                             <div class="flex items-center gap-2">
-                                <span class="text-xs text-dark-text-muted">{{ (artifact.size_bytes / 1024)|round(1) }} KB</span>
+                                <span class="text-xs text-dark-text-muted">{{ artifact.size_kb }} KB</span>
                                 <a
                                     href="{{ artifact.view_url }}"
                                     download="{{ artifact.filename }}"
@@ -215,11 +206,11 @@
                         {% if artifact.artifact_type == 'screenshot' %}
                         <div class="p-2 bg-dark-bg-primary">
                             <img
-                                src="/artifacts/{{ artifact.id }}/view"
-                                alt="Screenshot from {{ artifact.created_at[:19] }}"
+                                src="{{ artifact.view_url }}"
+                                alt="Screenshot from {{ artifact.created_at_dt|format_datetime("%Y-%m-%d %H:%M:%S") }}"
                                 class="w-full rounded border border-dark-border cursor-pointer hover:border-brand-500 transition-colors"
                                 data-image-modal
-                                data-image-src="/artifacts/{{ artifact.id }}/view"
+                                data-image-src="{{ artifact.view_url }}"
                                 data-image-filename="{{ artifact.filename }}"
                                 loading="lazy"
                             >
