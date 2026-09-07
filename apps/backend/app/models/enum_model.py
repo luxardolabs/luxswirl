@@ -155,6 +155,16 @@ class JobType(StrEnum):
     NETWORK_DISCOVER = "network_discover"
 
 
+SERVER_RUNNER = "server"
+"""UI/URL token for the server runner — a job with no assigned agent.
+
+A job runs on a runner: a specific agent, or the server itself. This is the
+token that names the second case in a filter query string or a URL, so it lives
+with the other closed-set tokens rather than on the ORM model — the web layer
+reads it without importing a model to do so.
+"""
+
+
 # ============================================================================
 # Maintenance jobs (backend-internal cascading mutations — distinct from `jobs`)
 # ============================================================================

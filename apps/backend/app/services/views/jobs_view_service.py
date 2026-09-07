@@ -21,15 +21,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.auth_deps import AuthedUser
 from app.core.exceptions import NotFoundException
 from app.core.scan_panel import build_scan_view
-from app.models.agent_model import Agent  # noqa: F401  # used in type comment line 129
-from app.models.enum_model import JobStatus, JobType
-from app.models.job_model import Job
-from app.schemas.job_schema import JobCreate
+from app.models.enum_model import SERVER_RUNNER, JobStatus, JobType
+from app.schemas.job_schema import JobCreate, JobInDB
 from app.schemas.pagination_schema import build_pagination
 from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.check_core_service import CheckCoreService
 from app.services.core.job_core_service import JobCoreService
-from app.services.core.network_scan_core_service import NetworkScanCoreService
 from app.services.core.settings_core_service import SettingsCoreService
 
 _JOB_REGISTRY: dict = {
@@ -88,7 +85,7 @@ def build_scan_action_urls(request: Request, job_id: UUID) -> ScanActionUrls:
     )
 
 
-def build_scan_form_urls(request: Request, job: Job) -> dict[str, str]:
+def build_scan_form_urls(request: Request, job: JobInDB) -> dict[str, str]:
     """Prefilled "scan this subnet" create-form hrefs, keyed by subnet.
 
     A network_discover result offers one scan per discovered subnet (the
@@ -143,7 +140,7 @@ class JobRow:
         self.urls = urls
         self.job_type = job_type
         self.agent_id = agent_id
-        self.agent_name = agent_name or Job.SERVER_RUNNER
+        self.agent_name = agent_name or SERVER_RUNNER
         self.status = status
         self.priority = priority
         self.created_at = created_at
@@ -221,24 +218,25 @@ class JobsViewService:
             offset=offset,
         )
 
-        # Convert to JobRow
+        # Convert to JobRow — the core already joined the agent name in and
+        # derived the flags; what is left here is display shaping.
         job_rows = []
-        for job, agent in rows:  # type: (Job, Agent | None)
+        for row in rows:
             job_row = JobRow(
-                job_id=job.id,
-                job_type=job.job_type,
-                agent_id=job.agent_id,
-                agent_name=agent.agent_name if agent else None,
-                status=job.status,
-                priority=job.priority,
-                created_at=job.created_at.isoformat() if job.created_at else "",
-                started_at=job.started_at.isoformat() if job.started_at else None,
-                completed_at=job.completed_at.isoformat() if job.completed_at else None,
-                duration_seconds=job.duration_seconds,
-                has_result=job.result is not None,
-                has_error=job.error is not None,
-                tags=job.tags,
-                urls=build_job_urls(request, job.id),
+                job_id=row.id,
+                job_type=row.job_type,
+                agent_id=row.agent_id,
+                agent_name=row.agent_name,
+                status=row.status,
+                priority=row.priority,
+                created_at=row.created_at.isoformat() if row.created_at else "",
+                started_at=row.started_at.isoformat() if row.started_at else None,
+                completed_at=row.completed_at.isoformat() if row.completed_at else None,
+                duration_seconds=row.duration_seconds,
+                has_result=row.has_result,
+                has_error=row.has_error,
+                tags=row.tags,
+                urls=build_job_urls(request, row.id),
             )
             job_rows.append(job_row)
 
@@ -250,7 +248,7 @@ class JobsViewService:
         return await AgentCoreService.list_agents(db, **kwargs)
 
     @staticmethod
-    async def cancel_job(db: AsyncSession, job_id: UUID) -> Job:
+    async def cancel_job(db: AsyncSession, job_id: UUID) -> JobInDB:
         """
         Cancel a pending/running job.
 
@@ -271,7 +269,7 @@ class JobsViewService:
             )
 
         logger.info("Cancelled job", extra={"job_id": str(job_id)})
-        return job
+        return JobInDB.model_validate(job)
 
     @staticmethod
     def transform_job_form_params(form_data: dict, job_type: str) -> dict[str, Any]:
@@ -497,7 +495,7 @@ class JobsViewService:
         Enriches network_scan results, attaches existing-check info, and
         bundles agents + form defaults for the create-checks side panel.
         """
-        job = await JobCoreService.get_job(db, job_id)
+        job = await JobCoreService.get_job_detail(db, job_id)
         if not job:
             raise HTTPException(
                 status_code=http_status.HTTP_404_NOT_FOUND,
@@ -507,9 +505,6 @@ class JobsViewService:
         agent = None
         if job.agent_id:
             agent = await AgentCoreService.get_agent_by_id(db, job.agent_id)
-
-        if job.job_type == "network_scan" and job.result:
-            job.result = NetworkScanCoreService.enrich_result(job.result)
 
         existing_checks: set[str] = set()
         if job.job_type == "network_scan" and job.result and job.agent_id:
