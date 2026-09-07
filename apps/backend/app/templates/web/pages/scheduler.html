@@ -22,7 +22,7 @@
     {{ stat_card('Enabled', enabled_count, icon=enabled_icon, color='green') }}
 
     {% set disabled_icon %}
-    <span class="w-6 h-6 text-gray-500 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/no-symbol.svg" %}</span>
+    <span class="w-6 h-6 text-dark-text-muted inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/no-symbol.svg" %}</span>
     {% endset %}
     {{ stat_card('Disabled', disabled_count, icon=disabled_icon, color='gray') }}
 </div>

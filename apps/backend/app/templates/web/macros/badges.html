@@ -16,7 +16,7 @@
 {# Generic badge - 5 semantic colors only #}
 {% macro badge(text, variant="neutral", extra_classes='') %}
 {% set variants = {
-    'neutral': 'bg-gray-600/20 text-gray-300 border-gray-600/50',
+    'neutral': 'bg-dark-surface-muted/20 text-dark-text-secondary border-dark-surface-muted/50',
     'brand': 'bg-brand-600/20 text-brand-300 border-brand-600/50',
     'success': 'bg-green-600/20 text-green-300 border-green-600/50',
     'warning': 'bg-yellow-600/20 text-yellow-300 border-yellow-600/50',
@@ -60,11 +60,11 @@
     'error': {'color': 'bg-red-500', 'label': 'Error'},
     'failed': {'color': 'bg-red-500', 'label': 'Failed'},
     'stale': {'color': 'bg-red-500', 'label': 'Stale'},
-    'disabled': {'color': 'bg-gray-500', 'label': 'Disabled'},
-    'inactive': {'color': 'bg-gray-500', 'label': 'Inactive'},
-    'unknown': {'color': 'bg-gray-600', 'label': 'Unknown'}
+    'disabled': {'color': 'bg-dark-surface-muted', 'label': 'Disabled'},
+    'inactive': {'color': 'bg-dark-surface-muted', 'label': 'Inactive'},
+    'unknown': {'color': 'bg-dark-surface-muted', 'label': 'Unknown'}
 } %}
-{% set config = status_config.get(status, {'color': 'bg-gray-600', 'label': status|title if status else 'Unknown'}) %}
+{% set config = status_config.get(status, {'color': 'bg-dark-surface-muted', 'label': status|title if status else 'Unknown'}) %}
 <span class="inline-flex items-center" title="{{ config.label }}"{% if not show_label %} role="img" aria-label="Status: {{ config.label }}"{% endif %}>
     <span class="h-2.5 w-2.5 rounded-full {{ config.color }}"{% if show_label %} aria-hidden="true"{% endif %}></span>
     {% if show_label %}<span class="ml-1.5 text-xs text-dark-text-muted">{{ config.label }}</span>{% endif %}
@@ -98,7 +98,7 @@
    Variants: info (blue, default), success (green), brand, neutral, purple #}
 {% macro tag(text, variant="info") %}
 {% set variants = {
-    'neutral': 'bg-gray-600/10 text-gray-300 border-gray-600/30',
+    'neutral': 'bg-dark-surface-muted/10 text-dark-text-secondary border-dark-surface-muted/30',
     'brand': 'bg-brand-600/10 text-brand-300 border-brand-600/30',
     'success': 'bg-green-600/10 text-green-300 border-green-600/30',
     'info': 'bg-blue-600/10 text-blue-300 border-blue-600/30',
@@ -117,7 +117,7 @@
     'up': {'color': 'bg-green-500', 'label': 'Up'},
     'down': {'color': 'bg-red-500', 'label': 'Down'}
 } %}
-{% set config = pip_config.get(status, {'color': 'bg-gray-500', 'label': 'Unknown'}) %}
+{% set config = pip_config.get(status, {'color': 'bg-dark-surface-muted', 'label': 'Unknown'}) %}
 <span class="w-2 h-2 rounded-full {{ config.color }} inline-block" role="img" aria-label="Status: {{ config.label }}" title="{{ config.label }}"></span>
 {% endmacro %}
 

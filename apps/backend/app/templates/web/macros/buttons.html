@@ -52,7 +52,7 @@
 } %}
 {% set c = 'muted' if disabled else color %}
 {%- if c == 'muted' -%}
-{% set palette = 'bg-gray-600/20 text-gray-500 border-gray-600/30 cursor-not-allowed opacity-50' %}
+{% set palette = 'bg-dark-surface-muted/20 text-dark-text-muted border-dark-surface-muted/30 cursor-not-allowed opacity-50' %}
 {%- else -%}
 {% set hue = fills.get(c, 'brand') %}
 {% set palette = 'bg-' ~ hue ~ '-600/' ~ ('30' if active else '20') ~ ' ' ~ rest.get(c, rest.brand) %}
@@ -367,8 +367,8 @@
                'armed':  'bg-green-500 text-white border-green-500 shadow-lg shadow-green-500/50 animate-pulse'},
     'amber':  {'normal': 'bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border-amber-600/30',
                'armed':  'bg-amber-500 text-white border-amber-500 shadow-lg shadow-amber-500/50 animate-pulse'},
-    'gray':   {'normal': 'bg-gray-600/20 hover:bg-gray-600/30 text-gray-300 border-gray-600/30',
-               'armed':  'bg-gray-500 text-white border-gray-500 shadow-lg shadow-gray-500/50 animate-pulse'},
+    'gray':   {'normal': 'bg-dark-surface-muted/20 hover:bg-dark-surface-muted/30 text-dark-text-secondary border-dark-surface-muted/30',
+               'armed':  'bg-dark-surface-muted text-white border-dark-surface-muted shadow-lg shadow-dark-surface-muted/50 animate-pulse'},
     'brand':  {'normal': 'bg-brand-600/20 hover:bg-brand-600/30 text-brand-300 border-brand-600/30',
                'armed':  'bg-brand-500 text-white border-brand-500 shadow-lg shadow-brand-500/50 animate-pulse'},
 } -%}
@@ -484,9 +484,10 @@
         {% if hx_target %}hx-target="{{ hx_target }}"{% endif %}
         {% if hx_swap %}hx-swap="{{ hx_swap }}"{% endif %}
         {% if hx_trigger %}hx-trigger="{{ hx_trigger }}"{% endif %}
-        class="relative inline-flex {{ s.track }} items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 cursor-pointer {% if enabled %}{{ on_classes }}{% else %}bg-gray-600{% endif %}"
+        class="relative inline-flex {{ s.track }} items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 cursor-pointer {% if enabled %}{{ on_classes }}{% else %}bg-dark-surface-muted{% endif %}"
         title="{{ title }}"
         {{ extra_attrs | safe }}>
+    {# color-mode: the switch knob is a fixed control colour, white on the track in both states #}
     <span class="{% if enabled %}{{ s.on }}{% else %}{{ s.off }}{% endif %} inline-block {{ s.thumb }} transform rounded-full bg-white shadow-sm transition-transform"></span>
 </button>
 {% endmacro %}
