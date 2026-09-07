@@ -554,24 +554,35 @@ class AuthCoreService:
         return True
 
     async def reset_password(
-        self, db: AsyncSession, user: User, new_password: str, force_change: bool = True
+        self,
+        db: AsyncSession,
+        user_id: UUID,
+        new_password: str,
+        force_change: bool = True,
     ) -> None:
         """
         Reset user password (admin function).
 
         Args:
             db: Database session
-            user: User object
+            user_id: The user whose password to reset. Taking the id rather than
+                the ORM row keeps the row below the seam — see
+                `luxarch --playbook view-seam`.
             new_password: New password
             force_change: Whether to force user to change password on next login
 
         Raises:
             ValueError: If new password doesn't meet complexity requirements
+            NotFoundException: If the user no longer exists
         """
         # Validate new password complexity
         valid, error_message = await self.validate_password_complexity(db, new_password)
         if not valid:
             raise ValueError(error_message)
+
+        user = await UserCRUD.get_by_id(db, user_id)
+        if user is None:
+            raise NotFoundException(f"User {user_id} not found")
 
         user.password_hash = self.hash_password(new_password)
         user.password_changed_at = utc_now()

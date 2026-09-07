@@ -305,7 +305,7 @@ async def reset_user_password(
         # Reset password
         await auth_service.reset_password(
             db,
-            user,
+            user.id,
             password_data.new_password,
             force_change=password_data.must_change_password,
         )

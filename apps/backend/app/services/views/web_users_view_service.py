@@ -16,9 +16,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.datetime_utils import utc_now
 from app.models.enum_model import UserRole, options_for
-from app.models.user_model import User
 from app.schemas.pagination_schema import build_pagination
-from app.schemas.user_schema import UserCreate, UserUpdate
+from app.schemas.user_schema import UserCreate, UserResponse, UserUpdate
 from app.services.core.auth_core_service import AuthCoreService
 from app.services.core.settings_core_service import SettingsCoreService
 from app.services.core.user_core_service import UserCoreService
@@ -57,7 +56,7 @@ class UserRow:
 
     def __init__(
         self,
-        user: User,
+        user: UserResponse,
         session_count: int = 0,
     ):
         self.id = user.id
@@ -139,7 +138,7 @@ class WebUsersViewService:
 
         return user_rows, total
 
-    async def get_user(self, db: AsyncSession, user_id: UUID) -> User | None:
+    async def get_user(self, db: AsyncSession, user_id: UUID) -> UserResponse | None:
         """
         Get user by ID.
 
@@ -150,7 +149,7 @@ class WebUsersViewService:
         Returns:
             User if found, None otherwise
         """
-        return cast(User | None, await self.user_service.get_user_by_id(db, user_id))
+        return await self.user_service.get_user(db, user_id)
 
     async def create_user(
         self,
@@ -163,7 +162,7 @@ class WebUsersViewService:
         is_active: bool,
         must_change_password: bool,
         created_by: str,
-    ) -> tuple[User | None, str | None]:
+    ) -> tuple[UserResponse | None, str | None]:
         """Build the UserCreate DTO from raw form inputs and create the user.
 
         Returns (User, None) on success or (None, error_message) — including the
@@ -196,7 +195,7 @@ class WebUsersViewService:
         full_name: str | None,
         is_active: bool,
         must_change_password: bool,
-    ) -> tuple[User | None, str | None]:
+    ) -> tuple[UserResponse | None, str | None]:
         """Build the UserUpdate DTO from raw form inputs and update the user."""
         update_data = UserUpdate(
             role=UserRole(role),
@@ -251,12 +250,14 @@ class WebUsersViewService:
         """
         try:
             # Get the user first
-            user = await self.user_service.get_user_by_id(db, user_id)
+            user = await self.user_service.get_user(db, user_id)
             if not user:
                 return False, "User not found"
 
             # Reset password via AuthCoreService
-            await self.auth_service.reset_password(db, user, new_password, must_change)
+            await self.auth_service.reset_password(
+                db, user.id, new_password, must_change
+            )
             return True, None
         except ValueError as e:
             return False, str(e)
@@ -280,7 +281,7 @@ class WebUsersViewService:
         except ValueError as e:
             return False, str(e)
 
-    async def ensure_default_admin(self, db: AsyncSession) -> User | None:
+    async def ensure_default_admin(self, db: AsyncSession) -> UserResponse | None:
         """
         Ensure default admin user exists (seeded from env config, if set).
 
@@ -290,7 +291,7 @@ class WebUsersViewService:
         Returns:
             Admin user, or None when first-run setup is deferred to the wizard.
         """
-        return cast("User | None", await self.user_service.ensure_default_admin(db))
+        return await self.user_service.ensure_default_admin(db)
 
     async def needs_setup(self, db: AsyncSession) -> bool:
         """
@@ -364,7 +365,7 @@ class WebUsersViewService:
 
     @staticmethod
     def build_user_edit_form_context(
-        *, request: Request, current_user, edit_user: User
+        *, request: Request, current_user, edit_user: UserResponse
     ) -> dict:
         """Build context for the user edit form panel."""
         return {
