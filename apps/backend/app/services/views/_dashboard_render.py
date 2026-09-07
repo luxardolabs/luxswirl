@@ -14,6 +14,7 @@ from app.models.status_page_model import StatusPage
 from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.check_core_service import CheckCoreService
 from app.services.core.check_result_core_service import CheckResultCoreService
+from app.services.views._sparkline import sparkline_path
 from app.services.views.status_view_service import StatusViewService
 
 logger = get_logger("luxswirl.web.services.dashboard")
@@ -860,7 +861,10 @@ class DashboardRender:
                 setattr(check, "uptime_30d", uptime_30d_data["uptime"])  # noqa: B010
                 setattr(check, "uptime_90d", uptime_90d_data["uptime"])  # noqa: B010
                 setattr(check, "last_failure_at", uptime_24h_data["last_failure_at"])  # noqa: B010
-                setattr(check, "minute_bars", bars_map.get(check_id_uuid, []))  # noqa: B010
+                bars = bars_map.get(check_id_uuid, [])
+                setattr(check, "minute_bars", bars)  # noqa: B010
+                # The card renders this path; it is not the template's to compute.
+                setattr(check, "sparkline_path", sparkline_path(bars))  # noqa: B010
 
         # PHASE 3: Build rendered items
         rendered_items = []

@@ -101,9 +101,7 @@ async def test_import_reports_its_result(db, authed_client):
         json={
             "agent_id": str(agent.id),
             "overwrite": False,
-            "checks": [
-                {"name": "probe", "check_type": "ping", "target": "127.0.0.1"}
-            ],
+            "checks": [{"name": "probe", "check_type": "ping", "target": "127.0.0.1"}],
         },
     )
     assert resp.status_code == 200, resp.text

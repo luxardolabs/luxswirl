@@ -20,7 +20,7 @@
             <div>
                 <p class="text-xs text-dark-text-muted uppercase tracking-wider mb-1">Up</p>
                 <p class="text-2xl font-bold text-green-400">{{ summary.up_count }}</p>
-                <p class="text-xs text-green-400 mt-1">{{ "%.1f"|format((summary.up_count / summary.enabled_checks * 100) if summary.enabled_checks > 0 else 0) }}%</p>
+                <p class="text-xs text-green-400 mt-1">{{ "%.1f"|format(summary.up_pct) }}%</p>
             </div>
             <div class="w-10 h-10 rounded-lg bg-green-500/10 flex items-center justify-center">
                 <span class="w-6 h-6 text-green-500 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/check-circle.svg" %}</span>
@@ -34,7 +34,7 @@
             <div>
                 <p class="text-xs text-dark-text-muted uppercase tracking-wider mb-1">Down</p>
                 <p class="text-2xl font-bold text-red-400">{{ summary.down_count }}</p>
-                <p class="text-xs text-red-400 mt-1">{{ "%.1f"|format((summary.down_count / summary.enabled_checks * 100) if summary.enabled_checks > 0 else 0) }}%</p>
+                <p class="text-xs text-red-400 mt-1">{{ "%.1f"|format(summary.down_pct) }}%</p>
             </div>
             <div class="w-10 h-10 rounded-lg bg-red-500/10 flex items-center justify-center">
                 <span class="w-6 h-6 text-red-500 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/exclamation-circle.svg" %}</span>

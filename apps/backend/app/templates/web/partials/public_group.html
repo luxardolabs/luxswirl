@@ -151,54 +151,10 @@
                         </linearGradient>
                     </defs>
 
-                    <!-- Build the path data (two-pass: find range, then build path) -->
-                    {% set ns = namespace(path='', max_latency=0, min_latency=999999, has_data=false) %}
-
-                    {# First pass: find max/min latency from bars that have data #}
-                    {% for bar in check.minute_bars|reverse %}
-                        {% if bar.success != None and bar.avg_latency > 0 %}
-                            {% set ns.has_data = true %}
-                            {% if bar.avg_latency > ns.max_latency %}
-                                {% set ns.max_latency = bar.avg_latency %}
-                            {% endif %}
-                            {% if bar.avg_latency < ns.min_latency %}
-                                {% set ns.min_latency = bar.avg_latency %}
-                            {% endif %}
-                        {% endif %}
-                    {% endfor %}
-
-                    {# Set default max if we only have failures with zero latency #}
-                    {% if not ns.has_data %}
-                        {% for bar in check.minute_bars|reverse %}
-                            {% if bar.success == False %}
-                                {% set ns.has_data = true %}
-                                {% set ns.max_latency = 100 %}
-                                {% set ns.min_latency = 100 %}
-                            {% endif %}
-                        {% endfor %}
-                    {% endif %}
-
-                    {% if ns.has_data %}
-                        {% set range = ns.max_latency - ns.min_latency %}
-                        {% set range = range if range > 0 else 1 %}
-
-                        {# Second pass: build path including failures with zero latency #}
-                        {% for bar in check.minute_bars|reverse %}
-                            {% set x = loop.index0 %}
-                            {% if bar.success != None %}
-                                {# Use max_latency for failed checks with zero latency (timeouts, etc) #}
-                                {% set latency = bar.avg_latency if bar.avg_latency > 0 else ns.max_latency %}
-                                {% set y = 20 - (((latency - ns.min_latency) / range) * 18) %}
-                                {% if loop.first %}
-                                    {% set ns.path = 'M ' ~ x ~ ' ' ~ y %}
-                                {% else %}
-                                    {% set ns.path = ns.path ~ ' L ' ~ x ~ ' ' ~ y %}
-                                {% endif %}
-                            {% endif %}
-                        {% endfor %}
-
-                        <!-- Base sparkline -->
-                        <path d="{{ ns.path }}"
+                    {# The path is computed in the view service (fw.no_template_logic). #}
+                    {% if check.sparkline_path %}
+                    <!-- Base sparkline -->
+                        <path d="{{ check.sparkline_path }}"
                               fill="none"
                               stroke="url(#sparkline-gradient-{{ check.id }})"
                               stroke-width="0.8"
@@ -209,7 +165,7 @@
                         </path>
 
                         <!-- Sizzle effect line -->
-                        <path d="{{ ns.path }}"
+                        <path d="{{ check.sparkline_path }}"
                               fill="none"
                               stroke="url(#sparkline-sizzle-{{ check.id }})"
                               stroke-width="1.5"
