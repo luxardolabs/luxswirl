@@ -41,68 +41,57 @@
         <!-- Provider-Specific Fields (dynamic based on type) -->
         {% if selected_type %}
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6" id="provider-config">
-            {% set provider_info = available_types | selectattr('type', 'equalto', selected_type) | first %}
-            {% if provider_info %}
-                {% for field_name, field_schema in provider_info.schema.items() %}
-                <div {% if field_schema.type == 'json' %}class="md:col-span-2"{% endif %}>
-                    <label class="label" for="config_{{ field_name }}">
-                        {{ field_schema.label }}
-                        {% if field_schema.required %}
+            {# Each field arrives resolved from the view service: its label,
+               current value, checked state and options are already decided. #}
+            {% for field in config_fields %}
+                <div {% if field.type == 'json' %}class="md:col-span-2"{% endif %}>
+                    <label class="label" for="{{ field.input_name }}">
+                        {{ field.label }}
+                        {% if field.required %}
                         <span class="text-red-400">*</span>
                         {% endif %}
                     </label>
 
-                    {% if field_schema.type == 'string' %}
-                        {{ input(name='config_' ~ field_name, class='input',
-                                 value=(provider.config[field_name] if provider and field_name in provider.config else field_schema.default | default('')),
-                                 required=field_schema.required,
-                                 placeholder=field_schema.placeholder | default('')) }}
+                    {% if field.type == 'integer' %}
+                        {{ input(name=field.input_name, type='number', class='input',
+                                 value=field.value, required=field.required) }}
 
-                    {% elif field_schema.type == 'integer' %}
-                        {{ input(name='config_' ~ field_name, type='number', class='input',
-                                 value=(provider.config[field_name] if provider and field_name in provider.config else field_schema.default | default('')),
-                                 required=field_schema.required) }}
-
-                    {% elif field_schema.type == 'boolean' %}
+                    {% elif field.type == 'boolean' %}
                         <label class="flex items-center gap-2 cursor-pointer">
-                            {{ checkbox(name=('config_' ~ (field_name)), value="true", checked=((provider and field_name in provider.config and provider.config[field_name]) or (not provider and field_schema.default)), class="w-4 h-4 text-brand-500 bg-dark-bg-tertiary border-dark-border rounded focus:ring-brand-500 focus:ring-2") }}
+                            {{ checkbox(name=field.input_name, value="true", checked=field.checked, class="w-4 h-4 text-brand-500 bg-dark-bg-tertiary border-dark-border rounded focus:ring-brand-500 focus:ring-2") }}
                             <span class="text-sm text-dark-text-muted">Enable</span>
                         </label>
 
-                    {% elif field_schema.type == 'select' %}
-                        {% call select(name='config_' ~ field_name, class='input',
-                                       required=field_schema.required) %}
-                            {% for option in field_schema.options %}
-                            {# undefined-guards: None on the create form; config keys are per-provider-type #}
-                            <option value="{{ option.value }}" {% if (provider and provider.config.get(field_name) == option.value) or (not provider and field_schema.default == option.value) %}selected{% endif %}>
+                    {% elif field.type == 'select' %}
+                        {% call select(name=field.input_name, class='input', required=field.required) %}
+                            {% for option in field.options %}
+                            <option value="{{ option.value }}" {% if option.selected %}selected{% endif %}>
                                 {{ option.label }}
                             </option>
                             {% endfor %}
                         {% endcall %}
 
-                    {% elif field_schema.type == 'json' %}
-                        {{ textarea(name='config_' ~ field_name, class='input font-mono text-sm', rows=4,
-                                    required=field_schema.required,
-                                    placeholder=field_schema.placeholder | default(''),
-                                    value=(provider.config[field_name] | tojson if provider and field_name in provider.config else '')) }}
+                    {% elif field.type == 'json' %}
+                        {{ textarea(name=field.input_name, class='input font-mono text-sm', rows=4,
+                                    required=field.required, placeholder=field.placeholder,
+                                    value=field.value) }}
 
-                    {% elif field_schema.type == 'password' %}
-                        {{ input(name='config_' ~ field_name, type='password', class='input',
-                                 value=(provider.config[field_name] if provider and field_name in provider.config else ''),
-                                 required=field_schema.required,
-                                 placeholder=field_schema.placeholder | default('')) }}
+                    {% elif field.type == 'password' %}
+                        {{ input(name=field.input_name, type='password', class='input',
+                                 value=field.value, required=field.required,
+                                 placeholder=field.placeholder) }}
 
                     {% else %}
-                        <!-- Fallback for unknown types -->
-                        {{ input(id=false, name=('config_' ~ (field_name)), value=provider.config[field_name] if provider and field_name in provider.config else field_schema.default | default(''), class="input") }}
+                        {# string, and a safe fallback for a type the form does not know #}
+                        {{ input(name=field.input_name, class='input', value=field.value,
+                                 required=field.required, placeholder=field.placeholder) }}
                     {% endif %}
 
-                    {% if field_schema.help_text %}
-                    <p class="text-xs text-dark-text-muted mt-1">{{ field_schema.help_text }}</p>
+                    {% if field.help_text %}
+                    <p class="text-xs text-dark-text-muted mt-1">{{ field.help_text }}</p>
                     {% endif %}
                 </div>
                 {% endfor %}
-            {% endif %}
         </div>
         {% endif %}
 

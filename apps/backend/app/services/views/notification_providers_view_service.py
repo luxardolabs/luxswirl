@@ -39,6 +39,81 @@ def _parse_config_json(raw: str | None) -> dict[str, Any]:
     return parsed
 
 
+def build_provider_config_fields(
+    available_types: list[dict[str, Any]],
+    selected_type: str | None,
+    provider: Any | None,
+) -> list[dict[str, Any]]:
+    """The selected provider type's config fields, ready to render.
+
+    The form used to find the type's schema with a selectattr filter and then
+    resolve each field's current value with a dynamic `provider.config[name]`
+    lookup, once per field type. Both belong here: the template should branch on
+    `field.type` and render `field.value`.
+
+    Args:
+        available_types: The registry's provider metadata.
+        selected_type: The type whose fields the form is showing, if any.
+        provider: The provider being edited, or None when creating.
+
+    Returns:
+        One descriptor per field, with its resolved value / checked state /
+        options. Empty when no type is selected or the type is unknown.
+    """
+    if not selected_type:
+        return []
+
+    info = next(
+        (t for t in available_types if t.get("type") == selected_type),
+        None,
+    )
+    if not info:
+        return []
+
+    config = (provider.config or {}) if provider else {}
+
+    fields = []
+    for name, schema in info.get("schema", {}).items():
+        stored = config.get(name)
+        has_stored = name in config
+        default = schema.get("default", "")
+        field_type = schema.get("type")
+
+        if field_type == "json":
+            value: Any = json.dumps(stored) if has_stored else ""
+        elif field_type == "password":
+            # A saved secret is re-rendered; a new one starts blank rather than
+            # showing the schema default.
+            value = stored if has_stored else ""
+        else:
+            value = stored if has_stored else (default if default is not None else "")
+
+        fields.append(
+            {
+                "name": name,
+                "input_name": f"config_{name}",
+                "type": field_type,
+                "label": schema.get("label", name),
+                "required": bool(schema.get("required")),
+                "placeholder": schema.get("placeholder") or "",
+                "help_text": schema.get("help_text"),
+                "value": value,
+                "checked": bool(stored) if has_stored else bool(default),
+                "options": [
+                    {
+                        "value": option["value"],
+                        "label": option["label"],
+                        "selected": (stored == option["value"])
+                        if has_stored
+                        else (default == option["value"]),
+                    }
+                    for option in schema.get("options", [])
+                ],
+            }
+        )
+    return fields
+
+
 class NotificationProvidersViewService:
     """View-layer wrapper for /notification-providers endpoints."""
 
@@ -47,12 +122,16 @@ class NotificationProvidersViewService:
         request: Request, current_user: AuthedUser, provider_type: str | None
     ) -> dict[str, Any]:
         """Form context for the 'new provider' modal (or type-selector)."""
+        available_types = NotificationCoreService.get_available_provider_types()
         return {
             "request": request,
             "current_user": current_user,
             "provider": None,
             "selected_type": provider_type,
-            "available_types": NotificationCoreService.get_available_provider_types(),
+            "available_types": available_types,
+            "config_fields": build_provider_config_fields(
+                available_types, provider_type, None
+            ),
             # .path, not str(): url_for returns an absolute url from the
             # request's scheme/host, which behind TLS-terminating nginx can emit
             # http:// into an https:// page.
@@ -65,12 +144,16 @@ class NotificationProvidersViewService:
     ) -> dict[str, Any]:
         """Form context for editing an existing provider."""
         provider = await NotificationCoreService.get_provider_by_id(db, provider_id)
+        available_types = NotificationCoreService.get_available_provider_types()
         return {
             "request": request,
             "current_user": current_user,
             "provider": provider,
             "selected_type": provider.provider_type,
-            "available_types": NotificationCoreService.get_available_provider_types(),
+            "available_types": available_types,
+            "config_fields": build_provider_config_fields(
+                available_types, provider.provider_type, provider
+            ),
             "form_action": request.url_for(
                 "web_update_provider", provider_id=provider_id
             ).path,
