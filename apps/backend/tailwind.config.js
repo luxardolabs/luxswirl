@@ -58,6 +58,12 @@ module.exports = {
             tertiary: '#334155',   // slate-700
           },
           border: '#334155',       // slate-700
+          // The "unknown / disabled" state hue. Used as a tint (/10, /20) for
+          // badge backgrounds and (/30) for their borders — one name for the
+          // neutral that means "no signal", so it can't drift into a bare gray.
+          surface: {
+            muted: '#475569',    // slate-600
+          },
           text: {
             primary: '#f1f5f9',    // slate-100
             secondary: '#cbd5e1',  // slate-300

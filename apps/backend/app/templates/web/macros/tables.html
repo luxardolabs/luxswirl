@@ -56,6 +56,7 @@ Usage:
         <div class="flex items-center gap-1">
             {%- for p in range(1, pagination.total_pages + 1) -%}
                 {%- if p == pagination.page -%}
+                {# color-mode: white on the fixed bg-brand-700 current-page pill #}
                 <span class="px-3 py-1.5 text-sm font-medium bg-brand-700 text-white rounded-md" aria-current="page">{{ p }}</span>
                 {%- elif p == 1 or p == pagination.total_pages or (p >= pagination.page - 2 and p <= pagination.page + 2) -%}
                 <a href="{{ paginated_url(base_url, pagination, p) }}"

@@ -9,7 +9,19 @@
             {% endif %}
         </div>
         {% if icon %}
-        <div class="p-3 bg-{{ color }}-500/10 rounded-lg">
+        {# An explicit palette, not "bg-" ~ color: Tailwind only emits classes it
+           can see as literals, so a composed name silently produces no CSS the
+           moment its last literal use elsewhere is renamed. #}
+        {%- set icon_backgrounds = {
+            'brand':  'bg-brand-500/10',
+            'green':  'bg-green-500/10',
+            'red':    'bg-red-500/10',
+            'yellow': 'bg-yellow-500/10',
+            'blue':   'bg-blue-500/10',
+            'purple': 'bg-purple-500/10',
+            'gray':   'bg-dark-surface-muted/10'
+        } -%}
+        <div class="p-3 {{ icon_backgrounds.get(color, icon_backgrounds.brand) }} rounded-lg">
             {{ icon|safe }}
         </div>
         {% endif %}
