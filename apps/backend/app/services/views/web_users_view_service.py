@@ -6,7 +6,7 @@ calling core user service and formatting responses for templates.
 """
 
 from dataclasses import dataclass
-from typing import cast
+from typing import Any, cast
 from uuid import UUID
 
 from fastapi import Request
@@ -14,6 +14,7 @@ from pydantic import ValidationError
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.auth_deps import AuthedUser
 from app.core.datetime_utils import utc_now
 from app.models.enum_model import UserRole, options_for
 from app.schemas.pagination_schema import build_pagination
@@ -138,19 +139,6 @@ class WebUsersViewService:
 
         return user_rows, total
 
-    async def get_user(self, db: AsyncSession, user_id: UUID) -> UserResponse | None:
-        """
-        Get user by ID.
-
-        Args:
-            db: Database session
-            user_id: User ID
-
-        Returns:
-            User if found, None otherwise
-        """
-        return await self.user_service.get_user(db, user_id)
-
     async def create_user(
         self,
         db: AsyncSession,
@@ -235,7 +223,7 @@ class WebUsersViewService:
         user_id: UUID,
         new_password: str,
         must_change: bool = True,
-    ) -> tuple[bool, str | None]:
+    ) -> tuple[UserResponse | None, str | None]:
         """
         Reset user password (admin action).
 
@@ -246,25 +234,25 @@ class WebUsersViewService:
             must_change: Whether user must change password on next login
 
         Returns:
-            Tuple of (success, error message if failed)
+            Tuple of (the user whose password was reset, error message if
+            failed). The caller names the user in its audit line and its
+            confirmation, so hand it back rather than making it re-read.
         """
         try:
-            # Get the user first
             user = await self.user_service.get_user(db, user_id)
             if not user:
-                return False, "User not found"
+                return None, "User not found"
 
-            # Reset password via AuthCoreService
             await self.auth_service.reset_password(
                 db, user.id, new_password, must_change
             )
-            return True, None
+            return user, None
         except ValueError as e:
-            return False, str(e)
+            return None, str(e)
 
     async def unlock_user(
         self, db: AsyncSession, user_id: UUID
-    ) -> tuple[bool, str | None]:
+    ) -> tuple[UserResponse | None, str | None]:
         """
         Unlock user account.
 
@@ -273,25 +261,14 @@ class WebUsersViewService:
             user_id: User ID
 
         Returns:
-            Tuple of (success, error message if failed)
+            Tuple of (the unlocked user, error message if failed). The caller
+            names the user in its confirmation, so hand it back rather than
+            making it re-read the row that was just written.
         """
         try:
-            await self.user_service.unlock_user(db, user_id)
-            return True, None
+            return await self.user_service.unlock_user(db, user_id), None
         except ValueError as e:
-            return False, str(e)
-
-    async def ensure_default_admin(self, db: AsyncSession) -> UserResponse | None:
-        """
-        Ensure default admin user exists (seeded from env config, if set).
-
-        Args:
-            db: Database session
-
-        Returns:
-            Admin user, or None when first-run setup is deferred to the wizard.
-        """
-        return await self.user_service.ensure_default_admin(db)
+            return None, str(e)
 
     async def needs_setup(self, db: AsyncSession) -> bool:
         """
@@ -374,6 +351,26 @@ class WebUsersViewService:
             "user": edit_user,
             "role_options": options_for(UserRole),
         }
+
+    async def build_user_edit_panel_context(
+        self,
+        db: AsyncSession,
+        *,
+        request: Request,
+        current_user: AuthedUser,
+        user_id: UUID,
+    ) -> dict[str, Any] | None:
+        """Read the user and assemble the edit panel, or None if it is gone.
+
+        Reading and assembling belong together: the router's job is to turn the
+        None into its 404, not to fetch the row itself.
+        """
+        edit_user = await self.user_service.get_user(db, user_id)
+        if not edit_user:
+            return None
+        return WebUsersViewService.build_user_edit_form_context(
+            request=request, current_user=current_user, edit_user=edit_user
+        )
 
     async def build_users_table_partial_context(
         self,
