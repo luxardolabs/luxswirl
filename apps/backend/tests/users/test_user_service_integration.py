@@ -17,6 +17,7 @@ if _tests_root not in sys.path:
     sys.path.insert(0, _tests_root)
 
 from app.core.config import settings  # noqa: E402
+from app.crud.user_crud import UserCRUD  # noqa: E402
 from app.schemas.user_schema import UserCreate, UserUpdate  # noqa: E402
 from app.services.core.user_core_service import UserCoreService  # noqa: E402
 from fixtures.factories import make_user  # noqa: E402
@@ -51,8 +52,16 @@ class TestCreateUser:
     async def test_creates_user_with_hashed_password(self, db: AsyncSession, svc):
         u = await svc.create_user(db, _create_data(username="alice"))
         assert u.username == "alice"
-        assert u.password_hash != "ComplexPass123!"  # hashed, not plaintext
         assert u.role == "viewer"
+
+        # The DTO that crosses the seam carries no password hash at all — a
+        # view or template cannot leak what it never receives.
+        assert not hasattr(u, "password_hash")
+
+        # The stored row is hashed, not the plaintext that was submitted.
+        stored = await UserCRUD.get_by_id(db, u.id)
+        assert stored is not None
+        assert stored.password_hash != "ComplexPass123!"
 
     async def test_duplicate_username_raises(self, db: AsyncSession, svc):
         await svc.create_user(db, _create_data(username="dup"))
@@ -154,7 +163,11 @@ class TestDeleteAndUnlock:
 
         unlocked = await svc.unlock_user(db, u.id)
         assert unlocked.locked_until is None
-        assert unlocked.is_locked is False
+
+        # is_locked is computed on the ORM row; confirm the row agrees with the
+        # DTO rather than asserting the same field twice.
+        await db.refresh(u)
+        assert u.is_locked is False
 
 
 # ---------------------------------------------------------------------------

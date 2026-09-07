@@ -12,7 +12,12 @@ from app.core.config import settings
 from app.crud.user_crud import UserCRUD
 from app.models.enum_model import UserRole
 from app.models.user_model import User
-from app.schemas.user_schema import UserCreate, UserStatsResponse, UserUpdate
+from app.schemas.user_schema import (
+    UserCreate,
+    UserResponse,
+    UserStatsResponse,
+    UserUpdate,
+)
 from app.services.core.auth_core_service import AuthCoreService
 
 logger = get_logger("luxswirl.services.user")
@@ -27,7 +32,7 @@ class UserCoreService:
 
     async def create_user(
         self, db: AsyncSession, user_data: UserCreate, created_by: str | None = None
-    ) -> User:
+    ) -> UserResponse:
         """
         Create a new user.
 
@@ -77,7 +82,7 @@ class UserCoreService:
                     "created_by": created_by or "system",
                 },
             )
-            return user
+            return UserResponse.model_validate(user)
         except IntegrityError as e:
             # No rollback here — the ValueError propagates to get_db(), which
             # owns the transaction and rolls back on any exception.
@@ -86,6 +91,15 @@ class UserCoreService:
                     f"Username '{user_data.username}' already exists"
                 ) from e
             raise ValueError(f"User creation failed: {e}") from e
+
+    async def get_user(self, db: AsyncSession, user_id: UUID) -> UserResponse | None:
+        """The user as the web seam holds it — a DTO, not the ORM row.
+
+        get_user_by_id stays ORM: update_user, delete_user and unlock_user all
+        mutate what it returns.
+        """
+        user = await self.get_user_by_id(db, user_id)
+        return UserResponse.model_validate(user) if user else None
 
     async def get_user_by_id(self, db: AsyncSession, user_id: UUID) -> User | None:
         """
@@ -108,7 +122,7 @@ class UserCoreService:
         role: str | None = None,
         is_active: bool | None = None,
         search: str | None = None,
-    ) -> tuple[list[User], int]:
+    ) -> tuple[list[UserResponse], int]:
         """
         List users with optional filtering and pagination.
 
@@ -131,11 +145,11 @@ class UserCoreService:
             is_active=is_active,
             search=search,
         )
-        return list(users), total
+        return [UserResponse.model_validate(u) for u in users], total
 
     async def update_user(
         self, db: AsyncSession, user_id: UUID, user_data: UserUpdate
-    ) -> User:
+    ) -> UserResponse:
         """
         Update user information.
 
@@ -188,7 +202,7 @@ class UserCoreService:
                 "Updated user",
                 extra={"username": user.username, "user_id": str(user_id)},
             )
-            return user
+            return UserResponse.model_validate(user)
         except IntegrityError as e:
             # get_db() owns the transaction and rolls back on the raised error.
             raise ValueError(f"User update failed: {e}") from e
@@ -253,7 +267,7 @@ class UserCoreService:
             locked_accounts=locked_accounts,
         )
 
-    async def unlock_user(self, db: AsyncSession, user_id: UUID) -> User:
+    async def unlock_user(self, db: AsyncSession, user_id: UUID) -> UserResponse:
         """
         Unlock a locked user account.
 
@@ -281,7 +295,7 @@ class UserCoreService:
             "Unlocked user",
             extra={"username": user.username, "user_id": str(user_id)},
         )
-        return user
+        return UserResponse.model_validate(user)
 
     async def needs_setup(self, db: AsyncSession) -> bool:
         """
@@ -302,7 +316,7 @@ class UserCoreService:
             return False
         return await UserCRUD.get_first_admin(db) is None
 
-    async def ensure_default_admin(self, db: AsyncSession) -> User | None:
+    async def ensure_default_admin(self, db: AsyncSession) -> UserResponse | None:
         """
         Seed the default admin from env config on startup, if configured.
 
@@ -326,7 +340,7 @@ class UserCoreService:
 
         if existing_admin:
             logger.debug("Admin user already exists")
-            return existing_admin
+            return UserResponse.model_validate(existing_admin)
 
         if not settings.security.initial_admin_password:
             logger.info(
@@ -355,7 +369,7 @@ class UserCoreService:
             },
         )
 
-        return admin_user
+        return UserResponse.model_validate(admin_user)
 
     @staticmethod
     async def get_active_user_count(db: AsyncSession) -> int:
