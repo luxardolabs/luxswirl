@@ -60,12 +60,12 @@
                                      value=item.filter.get('search', ''),
                                      extra_attrs=item_idx) }}
                         </div>
-                        <!-- Sort controls inline -->
-                        <div class="flex items-center gap-1 flex-shrink-0">
-                    {% else %}
-                    <!-- Sort Controls only (container groups) -->
-                    <div class="flex items-center gap-1 mb-2">
                     {% endif %}
+                    {# One sort row for both group kinds — a dynamic group sits it
+                       beside the filter inputs, a container group on its own line.
+                       Opening it once keeps the tags balanced per branch. #}
+                    {%- set sort_row_classes = 'flex items-center gap-1 flex-shrink-0' if 'filter' in item else 'flex items-center gap-1 mb-2' -%}
+                    <div class="{{ sort_row_classes }}">
                         <span class="text-xs font-medium text-dark-text-secondary uppercase tracking-wider">Sort:</span>
                         {% set current_sort = item.get('sort_by', 'manual') %}
                         {% set current_direction = item.get('sort_direction', 'asc') %}
