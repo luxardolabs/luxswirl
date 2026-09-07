@@ -307,10 +307,6 @@ class WebUsersViewService:
         """
         return cast(bool, await self.user_service.needs_setup(db))
 
-    @staticmethod
-    async def get_setting(db, key: str, default):
-        return await SettingsCoreService.get_setting(db, key, default)
-
     async def build_users_page_context(
         self,
         db: AsyncSession,
