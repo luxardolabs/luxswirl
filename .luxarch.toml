@@ -51,10 +51,50 @@ enum_freetext_columns = [
 hypertable_unbounded = [
   { file = "artifact_crud", func = "get_stats_for_check", evidence = "check_artifacts is retention-scoped + filtered by check_id (indexed); a time bound prunes nothing (LUXSWIRL-180)" },
 ]
+auth_public = [
+  { function = "agent_heartbeat", evidence = "authenticates in the body via _authenticate_heartbeat() — accepts the agent-specific key OR the registration token, so it cannot use a Depends that assumes one" },
+  { function = "create_first_admin", evidence = "first-run setup: re-checks needs_setup() and redirects to /login the moment any user exists, so it is only reachable on an empty install" },
+]
 js_network = [
   { file = "app.js", pattern = "window.location.reload(", evidence = "canonical refreshPage HX-Trigger handler" },
   { file = "database-health.js", pattern = "fetch(", evidence = "Chart.js data refresh — Section B carve-out" },
 ]
+
+# ── Security posture the guards can enforce (AUDIT section: turn it ON, don't
+# leave it inert). Each of these declares a fact about how luxswirl actually
+# authenticates, so the matching rule stops being a hollow N/A.
+
+[target.auth]
+# The dependencies that ESTABLISH identity. get_optional_user is deliberately
+# absent — it resolves to None for an anonymous visitor, so it authenticates
+# nothing.
+deps = [
+  "get_current_user",
+  "require_admin",
+  "get_current_user_web",
+  "require_admin_web",
+  "require_editor_web",
+  "verify_api_token",
+]
+
+[target.rbac]
+# Admin-tier surfaces: settings (including users), registration keys, and the
+# agent approval/lifecycle actions. require_admin/_web are the role gates.
+admin_url_patterns = ["/settings", "/registration-keys", "/users"]
+require_names = ["require_admin", "require_admin_web", "AdminUser", "AdminUserWeb"]
+
+[target.csrf]
+# luxswirl runs cookie auth on SameSite=Lax with no CSRF-token layer, so the
+# no-state-changing-GET invariant is the whole defense. See --playbook
+# state-changing-get.
+enabled = true
+session_cookies = ["luxswirl_session"]
+logout_get_allowed = true
+
+[target.session]
+# One session owner per request: get_db / get_db_context mint them, nothing else
+# opens a second inside a handler that already holds one.
+no_nesting = true
 
 [target.templates]
 # Evidence-backed template carve-outs (substring match on path). In luxarch <=0.2.0
