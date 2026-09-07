@@ -157,6 +157,33 @@ class AgentCRUD:
         return result.scalar_one_or_none()
 
     @staticmethod
+    async def get_latest_metrics(
+        db: AsyncSession, agent_ids: Sequence[UUID]
+    ) -> dict[UUID, AgentMetric]:
+        """Latest metric per agent, in one round-trip.
+
+        DISTINCT ON keeps the first row per agent under the same ordering the
+        single-agent read uses, so the Prometheus rebuild costs one query
+        instead of one per agent.
+
+        Args:
+            db: Database session.
+            agent_ids: The agents to fetch for.
+
+        Returns:
+            agent_id -> its most recent AgentMetric, omitting agents with none.
+        """
+        if not agent_ids:
+            return {}
+        result = await db.execute(
+            select(AgentMetric)
+            .where(AgentMetric.agent_id.in_(agent_ids))
+            .order_by(AgentMetric.agent_id, AgentMetric.timestamp.desc())
+            .distinct(AgentMetric.agent_id)
+        )
+        return {metric.agent_id: metric for metric in result.scalars()}
+
+    @staticmethod
     async def get_admitted_agents(db: AsyncSession) -> list[Agent]:
         """
         Get all admitted agents — those past registration triage.

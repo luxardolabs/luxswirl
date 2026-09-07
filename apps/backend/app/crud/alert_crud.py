@@ -113,6 +113,26 @@ class AlertCRUD:
         return result.rowcount or 0  # type: ignore[attr-defined]
 
     @staticmethod
+    async def list_mapped_alert_ids_for_check(
+        db: AsyncSession, check_id: UUID
+    ) -> set[UUID]:
+        """Alert ids already mapped to this check, in one round-trip.
+
+        Args:
+            db: Database session.
+            check_id: The check to look up.
+
+        Returns:
+            The set of alert ids that already have a mapping row.
+        """
+        result = await db.execute(
+            select(AlertCheckMapping.alert_id).where(
+                AlertCheckMapping.check_id == check_id
+            )
+        )
+        return set(result.scalars())
+
+    @staticmethod
     async def get_check_mapping(
         db: AsyncSession, alert_id: UUID, check_id: UUID
     ) -> AlertCheckMapping | None:

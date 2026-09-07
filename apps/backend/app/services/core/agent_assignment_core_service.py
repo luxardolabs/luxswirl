@@ -121,17 +121,36 @@ class AgentAssignmentCoreService:
         if not selector:
             return []
 
-        # Get all agents (unfiltered for selector matching)
         all_agents = await AgentCRUD.list_all(db)
+        return AgentAssignmentCoreService.filter_agents_by_selector(
+            all_agents, selector
+        )
 
-        # Filter by selector
-        matching_agents = [
+    @staticmethod
+    def filter_agents_by_selector(
+        agents: Sequence[Agent],
+        selector: dict | None,
+    ) -> Sequence[Agent]:
+        """Filter an already-loaded agent list by a selector.
+
+        The selector match is pure Python over the full agent list, so a caller
+        resolving many checks loads the agents once and filters per selector
+        rather than re-reading the table for each one.
+
+        Args:
+            agents: The full agent list.
+            selector: Selector dict, or None to match nothing.
+
+        Returns:
+            The agents matching the selector.
+        """
+        if not selector:
+            return []
+        return [
             agent
-            for agent in all_agents
+            for agent in agents
             if AgentAssignmentCoreService.agent_matches_selector(agent, selector)
         ]
-
-        return matching_agents
 
     @staticmethod
     async def get_checks_for_agent(
@@ -155,6 +174,11 @@ class AgentAssignmentCoreService:
         # Get all checks
         all_checks = await CheckCRUD.list_all(db)
 
+        # Distribute-mode checks each need the set of agents matching their
+        # selector. That set is the same table read every time — filtering is
+        # pure Python — so it is read once here rather than per check.
+        all_agents: Sequence[Agent] | None = None
+
         for check in all_checks:
             if check.assignment_mode == "manual":
                 # MANUAL: Check is assigned to specific agent
@@ -173,10 +197,11 @@ class AgentAssignmentCoreService:
                 if AgentAssignmentCoreService.agent_matches_selector(
                     agent, check.agent_selector
                 ):
-                    # Get all matching agents for this check
+                    if all_agents is None:
+                        all_agents = await AgentCRUD.list_all(db)
                     matching_agents = (
-                        await AgentAssignmentCoreService.get_matching_agents(
-                            db, check.agent_selector
+                        AgentAssignmentCoreService.filter_agents_by_selector(
+                            all_agents, check.agent_selector
                         )
                     )
 

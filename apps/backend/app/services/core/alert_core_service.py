@@ -353,15 +353,19 @@ class AlertCoreService:
         """
         global_alert_ids = await AlertCRUD.list_global_enabled_alert_ids(db)
 
+        # One read for the check's existing mappings rather than one per global
+        # alert — this runs on every check create.
+        already_mapped = await AlertCRUD.list_mapped_alert_ids_for_check(db, check_id)
+
         for alert_id in global_alert_ids:
-            existing = await AlertCRUD.get_check_mapping(db, alert_id, check_id)
-            if not existing:
-                mapping = AlertCheckMapping(
-                    alert_id=alert_id,
-                    check_id=check_id,
-                    is_enabled=True,
+            if alert_id not in already_mapped:
+                db.add(
+                    AlertCheckMapping(
+                        alert_id=alert_id,
+                        check_id=check_id,
+                        is_enabled=True,
+                    )
                 )
-                db.add(mapping)
 
         logger.info(
             "Assigned global alerts to check",
