@@ -1118,41 +1118,6 @@ class ChecksViewService:
         }
 
     @staticmethod
-    async def build_table_partial_context(
-        db: AsyncSession,
-        request: Request,
-        current_user: AuthedUser,
-        agent_id: UUID | None,
-        enabled: str,
-        page: int,
-        per_page: int | None,
-    ) -> dict[str, Any]:
-        """Checks-table partial context."""
-        if per_page is None:
-            per_page = await SettingsCoreService.get_setting(
-                db, "general.default_page_size", 50
-            )
-        offset = (page - 1) * per_page
-        enabled_only = enabled == "true"
-
-        assignments, total = await ChecksViewService.get_checks(
-            db=db,
-            agent_id=agent_id,
-            enabled_only=enabled_only if enabled != "all" else False,
-            limit=per_page,
-            offset=offset,
-        )
-        return {
-            "request": request,
-            "current_user": current_user,
-            "assignments": assignments,
-            "total": total,
-            "page": page,
-            "per_page": per_page,
-            "filters": {"agent_id": agent_id, "enabled": enabled},
-        }
-
-    @staticmethod
     def parse_tags(tags: str | None) -> list[str] | None:
         """
         Parse comma-separated tags string into list.
