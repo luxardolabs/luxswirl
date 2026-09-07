@@ -138,16 +138,6 @@ class TestSeenSince:
         assert recent.id in ids
         assert stale.id not in ids
 
-    async def test_count_seen_since(self, db: AsyncSession):
-        now = utc_now()
-        db.add(make_agent(last_seen=now))
-        db.add(make_agent(last_seen=now))
-        db.add(make_agent(last_seen=now - timedelta(hours=5)))
-        await db.flush()
-
-        count = await AgentCRUD.count_seen_since(db, now - timedelta(hours=1))
-        assert count == 2
-
 
 class TestStaleAgents:
     async def test_get_stale_agent_names(self, db: AsyncSession):

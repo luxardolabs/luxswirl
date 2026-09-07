@@ -23,7 +23,6 @@ from app.core.exceptions import (
     CheckNotFoundException,
 )
 from app.core.synthetic_security import SyntheticSecurityError
-from app.models.agent_model import Agent
 from app.models.check_model import Check
 from app.models.enum_model import CheckType, MaintenanceJobKind, options_for
 from app.models.maintenance_job_model import MaintenanceJob
@@ -140,19 +139,6 @@ class ChecksViewService:
         )
 
         return checks, total
-
-    @staticmethod
-    async def get_all_agent_ids(db: AsyncSession) -> list[Agent]:
-        """
-        Get all agents (excluding pending and rejected agents).
-
-        Returns:
-            List of Agent objects
-        """
-        agents, _ = await AgentCoreService.list_agents(
-            db, limit=10000, exclude_pending=True
-        )
-        return list(agents)
 
     @staticmethod
     async def get_form_defaults(db: AsyncSession) -> dict:
@@ -340,16 +326,6 @@ class ChecksViewService:
             "agents": agents,
             "alerts": alerts,
         }
-
-    @staticmethod
-    async def get_all_check_types(db: AsyncSession) -> list[str]:
-        """
-        Get all unique check types from checks.
-
-        Returns:
-            List of check types (ping, http, tcp, json)
-        """
-        return await CheckCoreService.get_distinct_check_types(db)
 
     @staticmethod
     async def delete_check(db: AsyncSession, check_id: UUID):
@@ -1005,32 +981,6 @@ class ChecksViewService:
             )
             return [check.id for check in checks]
         return list(check_ids)
-
-    @staticmethod
-    async def enqueue_bulk_delete(
-        db: AsyncSession,
-        select_all: str,
-        agent: UUID | None,
-        enabled: str,
-        tag: str,
-        check_ids: list[UUID],
-        owner_id: UUID | None = None,
-    ):
-        """Resolve the bulk selection then enqueue a bulk_check_delete job.
-
-        Returns (MaintenanceJob, resolved_count). See LUXSWIRL-105.
-        """
-        ids = await ChecksViewService._resolve_bulk_check_ids(
-            db, select_all, agent, enabled, tag, check_ids, list_limit=100000
-        )
-        job = await MaintenanceJobCoreService.enqueue(
-            db,
-            kind=MaintenanceJobKind.BULK_CHECK_DELETE,
-            target_id=None,
-            params={"check_ids": [str(c) for c in ids]},
-            owner_id=owner_id,
-        )
-        return job, len(ids)
 
     @staticmethod
     async def enqueue_bulk_check_action(

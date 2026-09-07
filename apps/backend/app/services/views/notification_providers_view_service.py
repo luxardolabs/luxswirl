@@ -242,14 +242,3 @@ class NotificationProvidersViewService:
         if success:
             return hx_empty_with_toast("Test notification sent successfully!")
         return hx_empty_with_toast(f"Test failed: {error_msg}", kind="error")
-
-    @staticmethod
-    def build_error_context(
-        request: Request, current_user: AuthedUser, error: str
-    ) -> dict[str, Any]:
-        """Common error-partial context."""
-        return {
-            "request": request,
-            "current_user": current_user,
-            "error": error,
-        }

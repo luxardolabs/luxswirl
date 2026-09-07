@@ -743,18 +743,3 @@ class StatusPagesViewService:
             "current_user": current_user,
             "error": error,
         }
-
-    @staticmethod
-    def build_error_page_context(
-        request: Request,
-        current_user: AuthedUser | None,
-        error: str,
-        page_title: str = "Error",
-    ) -> dict[str, Any]:
-        """Common error-page context (full page, not partial)."""
-        return {
-            "request": request,
-            "current_user": current_user,
-            "error": error,
-            "page_title": page_title,
-        }
