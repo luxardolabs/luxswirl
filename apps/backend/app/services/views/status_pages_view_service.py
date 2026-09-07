@@ -18,9 +18,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.auth_deps import AuthedUser
 from app.core.query_params import split_csv
 from app.models.enum_model import CheckHealthStatus, CheckType, MaintenanceJobKind
-from app.models.status_page_model import StatusPage
 from app.schemas.pagination_schema import build_pagination
-from app.schemas.status_page_schema import StatusPageCreate, StatusPageUpdate
+from app.schemas.status_page_schema import (
+    StatusPageCreate,
+    StatusPageInDB,
+    StatusPageUpdate,
+)
 from app.services.core.check_core_service import CheckCoreService
 from app.services.core.maintenance_job_core_service import MaintenanceJobCoreService
 from app.services.core.settings_core_service import SettingsCoreService
@@ -113,7 +116,7 @@ def build_status_page_urls(
     )
 
 
-def _remove_item_urls(request: Request, status_page: StatusPage) -> list[str]:
+def _remove_item_urls(request: Request, status_page: StatusPageInDB) -> list[str]:
     """One finished remove href per dashboard item, indexed as the template loops.
 
     The template renders `remove_item_urls[loop.index0]`, so the list order must

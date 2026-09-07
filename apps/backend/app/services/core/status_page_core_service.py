@@ -2,7 +2,6 @@
 StatusPage service - business logic for status page operations.
 """
 
-from collections.abc import Sequence
 from typing import Any
 from uuid import UUID
 
@@ -14,7 +13,11 @@ from app.core.datetime_utils import utc_now
 from app.core.exceptions import StatusPageNotFoundException
 from app.crud.status_page_crud import StatusPageCRUD
 from app.models.status_page_model import StatusPage
-from app.schemas.status_page_schema import StatusPageCreate, StatusPageUpdate
+from app.schemas.status_page_schema import (
+    StatusPageCreate,
+    StatusPageInDB,
+    StatusPageUpdate,
+)
 
 logger = get_logger("luxswirl.services.status_page")
 
@@ -45,6 +48,23 @@ class StatusPageCoreService:
         return status_page
 
     @staticmethod
+    async def get_status_page(db: AsyncSession, status_page_id: UUID) -> StatusPageInDB:
+        """The status page as the web seam holds it — a DTO, not the ORM row.
+
+        get_status_page_by_id stays ORM: eleven methods in this service read it
+        and then mutate the row's items.
+        """
+        return StatusPageInDB.model_validate(
+            await StatusPageCoreService.get_status_page_by_id(db, status_page_id)
+        )
+
+    @staticmethod
+    async def get_page_by_slug(db: AsyncSession, slug: str) -> StatusPageInDB | None:
+        """The slug lookup, as a DTO for the seam."""
+        page = await StatusPageCoreService.get_status_page_by_slug(db, slug)
+        return StatusPageInDB.model_validate(page) if page else None
+
+    @staticmethod
     async def get_status_page_by_slug(db: AsyncSession, slug: str) -> StatusPage | None:
         """
         Get status page by slug.
@@ -61,7 +81,7 @@ class StatusPageCoreService:
     @staticmethod
     async def create_status_page(
         db: AsyncSession, data: StatusPageCreate
-    ) -> StatusPage:
+    ) -> StatusPageInDB:
         """
         Create a new status page.
 
@@ -98,12 +118,12 @@ class StatusPageCoreService:
             "Created status page",
             extra={"slug": status_page.slug, "status_page_id": str(status_page.id)},
         )
-        return status_page
+        return StatusPageInDB.model_validate(status_page)
 
     @staticmethod
     async def update_status_page(
         db: AsyncSession, status_page_id: UUID, data: StatusPageUpdate
-    ) -> StatusPage:
+    ) -> StatusPageInDB:
         """
         Update a status page.
 
@@ -144,7 +164,7 @@ class StatusPageCoreService:
             "Updated status page",
             extra={"slug": status_page.slug, "status_page_id": str(status_page.id)},
         )
-        return status_page
+        return StatusPageInDB.model_validate(status_page)
 
     @staticmethod
     async def delete_status_page(db: AsyncSession, status_page_id: UUID) -> None:
@@ -176,7 +196,7 @@ class StatusPageCoreService:
         is_public: bool | None = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> tuple[Sequence[StatusPage], int]:
+    ) -> tuple[list[StatusPageInDB], int]:
         """
         List status pages with pagination and filtering.
 
@@ -189,14 +209,15 @@ class StatusPageCoreService:
         Returns:
             Tuple of (status pages list, total count)
         """
-        return await StatusPageCRUD.list_paginated(
+        pages, total = await StatusPageCRUD.list_paginated(
             db, is_public=is_public, skip=offset, limit=limit
         )
+        return [StatusPageInDB.model_validate(p) for p in pages], total
 
     @staticmethod
     async def add_check_to_page(
         db: AsyncSession, status_page_id: UUID, check_id: UUID, order: int | None = None
-    ) -> StatusPage:
+    ) -> StatusPageInDB:
         """
         Add a check to a status page.
 
@@ -229,7 +250,7 @@ class StatusPageCoreService:
                 "status_page_id": str(status_page.id),
             },
         )
-        return status_page
+        return StatusPageInDB.model_validate(status_page)
 
     @staticmethod
     async def add_group_to_page(
@@ -239,7 +260,7 @@ class StatusPageCoreService:
         filter: dict[str, Any] | None = None,
         order: int | None = None,
         collapsed: bool = False,
-    ) -> StatusPage:
+    ) -> StatusPageInDB:
         """
         Add a group to a status page.
 
@@ -274,12 +295,12 @@ class StatusPageCoreService:
                 "status_page_id": str(status_page.id),
             },
         )
-        return status_page
+        return StatusPageInDB.model_validate(status_page)
 
     @staticmethod
     async def remove_item_from_page(
         db: AsyncSession, status_page_id: UUID, index: int
-    ) -> StatusPage:
+    ) -> StatusPageInDB:
         """
         Remove an item from a status page by index.
 
@@ -311,12 +332,12 @@ class StatusPageCoreService:
                 "status_page_id": str(status_page.id),
             },
         )
-        return status_page
+        return StatusPageInDB.model_validate(status_page)
 
     @staticmethod
     async def reorder_item(
         db: AsyncSession, status_page_id: UUID, from_index: int, to_index: int
-    ) -> StatusPage:
+    ) -> StatusPageInDB:
         """
         Reorder an item in a status page.
 
@@ -350,7 +371,7 @@ class StatusPageCoreService:
                 "to_index": to_index,
             },
         )
-        return status_page
+        return StatusPageInDB.model_validate(status_page)
 
     @staticmethod
     async def get_public_count(db: AsyncSession) -> int:
@@ -381,7 +402,7 @@ class StatusPageCoreService:
     @staticmethod
     async def reorder_all_items(
         db: AsyncSession, status_page_id: UUID, client_items: list[dict]
-    ) -> StatusPage:
+    ) -> StatusPageInDB:
         """
         Reorder all items in a status page based on client state.
 
@@ -449,12 +470,12 @@ class StatusPageCoreService:
             "Reordered all items in status page",
             extra={"slug": status_page.slug, "status_page_id": str(status_page.id)},
         )
-        return status_page
+        return StatusPageInDB.model_validate(status_page)
 
     @staticmethod
     async def rename_group(
         db: AsyncSession, status_page_id: UUID, item_index: int, new_name: str
-    ) -> StatusPage:
+    ) -> StatusPageInDB:
         """
         Rename a group in a status page.
 
@@ -494,12 +515,12 @@ class StatusPageCoreService:
                     },
                 )
 
-        return status_page
+        return StatusPageInDB.model_validate(status_page)
 
     @staticmethod
     async def update_group_filters(
         db: AsyncSession, status_page_id: UUID, item_index: int, filter: dict
-    ) -> StatusPage:
+    ) -> StatusPageInDB:
         """
         Update filters for a dynamic filter group.
 
@@ -538,7 +559,7 @@ class StatusPageCoreService:
                     },
                 )
 
-        return status_page
+        return StatusPageInDB.model_validate(status_page)
 
     @staticmethod
     async def update_group_sort(
@@ -547,7 +568,7 @@ class StatusPageCoreService:
         item_index: int,
         sort_by: str,
         sort_direction: str,
-    ) -> StatusPage:
+    ) -> StatusPageInDB:
         """
         Update sort settings for a group.
 
@@ -583,4 +604,4 @@ class StatusPageCoreService:
             },
         )
 
-        return status_page
+        return StatusPageInDB.model_validate(status_page)
