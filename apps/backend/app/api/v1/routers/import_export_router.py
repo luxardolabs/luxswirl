@@ -11,6 +11,7 @@ from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import AgentNotFoundException
+from app.core.security import verify_api_token
 from app.db import get_db
 from app.schemas.import_export_schema import (
     AgentChecksExport,
@@ -32,6 +33,7 @@ router = APIRouter(prefix="/import-export", tags=["Import/Export"])
 async def export_checks(
     agent_id: UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[str, Depends(verify_api_token)],
 ) -> dict[str, Any]:
     """
     Export all checks for an agent.
@@ -97,6 +99,7 @@ async def export_checks(
 async def import_checks(
     request: Annotated[BulkImportRequest, Body()],
     db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[str, Depends(verify_api_token)],
 ) -> BulkImportResponse:
     """
     Bulk import checks for an agent.
@@ -119,8 +122,18 @@ async def import_checks(
         result = await CheckCoreService.bulk_import_checks(
             db, request.agent_id, request.checks, request.overwrite
         )
+        # Prefixed keys: `created` is a reserved LogRecord attribute, so
+        # splatting the result dict into `extra` raised and turned every
+        # successful import into a 500.
         logger.info(
-            "Import complete", extra=result | {"agent_id": str(request.agent_id)}
+            "Import complete",
+            extra={
+                "agent_id": str(request.agent_id),
+                "checks_created": result["created"],
+                "checks_updated": result["updated"],
+                "checks_skipped": result["skipped"],
+                "check_error_count": len(result["errors"]),
+            },
         )
         return BulkImportResponse(total=len(request.checks), **result)
     except Exception as e:
@@ -135,7 +148,9 @@ async def import_checks(
     "/export-agent-config",
     response_model=AgentChecksExport,
 )
-async def export_agent_config() -> dict[str, Any]:
+async def export_agent_config(
+    _: Annotated[str, Depends(verify_api_token)],
+) -> dict[str, Any]:
     """
     Export the default agent configuration with all checks.
 
