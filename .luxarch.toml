@@ -88,6 +88,38 @@ deps = [
 admin_url_patterns = ["/settings", "/registration-keys", "/users"]
 require_names = ["require_admin", "require_admin_web", "AdminUser", "AdminUserWeb"]
 
+# AUDIT confirmations — rules examined and found genuinely N/A, recorded so the
+# next reader knows they were adjudicated rather than overlooked:
+#
+#   fw.feature_flag_is_not_authz / fw.feature_keys_declared — luxswirl has no
+#     feature-flag mechanism. There is no require_feature dependency, no Feature
+#     registry, and no feature-key literal anywhere in app/; the two operator
+#     toggles (security.rate_limit_enabled, metrics.enabled) are settings read in
+#     a service, not route gates. Nothing to declare and nothing to check.
+#
+#   fw.fields_wired_into_pipeline — no UI/config field feeds a downstream
+#     pipeline whose reads could silently drop it; check configuration is read
+#     back by the agent through the same schema it was written with.
+#
+#   fw.restricted_imports / fw.restricted_calls — the boundaries luxswirl cares
+#     about (raw SQL confined to crud, layer direction, models out of views) are
+#     already enforced by dedicated rules plus the import-linter contracts, so a
+#     second hand-rolled pattern list would duplicate them.
+
+[target.color_tokens]
+# luxswirl is a single-mode dark product — <html class="dark"> is fixed and no
+# template carries a `dark:` sibling. The palette below is still declared so the
+# floor is armed: if a light/dark pair is ever hand-rolled, the guard catches it
+# instead of letting a second, un-tokened neutral scale in.
+fg = "dark-text-primary"
+"fg-muted" = "dark-text-secondary"
+"fg-subtle" = "dark-text-muted"
+surface = "dark-bg-primary"
+"surface-2" = "dark-bg-secondary"
+"surface-3" = "dark-bg-tertiary"
+border = "dark-border"
+"surface-muted" = "dark-surface-muted"
+
 [target.tenant]
 # luxswirl is single-organisation: agents, checks, results, alerts and status
 # pages are shared, gated by role rather than owned by a user. The one genuinely
