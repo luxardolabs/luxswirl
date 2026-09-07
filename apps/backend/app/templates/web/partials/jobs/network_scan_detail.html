@@ -13,8 +13,8 @@
     <div class="card p-4">
         <p class="text-xs text-dark-text-muted mb-1 uppercase tracking-wider">Responding</p>
         <p class="text-2xl font-bold text-green-400">{{ result.hosts_responding or 0 }}</p>
-        {% if result.hosts_scanned and result.hosts_scanned > 0 %}
-        <p class="text-xs text-dark-text-muted mt-1">{{ "%.1f"|format((result.hosts_responding / result.hosts_scanned) * 100) }}%</p>
+        {% if scan_response_pct is not none %}
+        <p class="text-xs text-dark-text-muted mt-1">{{ scan_response_pct }}%</p>
         {% endif %}
     </div>
     <div class="card p-4">
@@ -151,38 +151,7 @@
 <!-- Discovered Hosts (Compact View) -->
 {% if result.discovered_hosts and result.discovered_hosts|length > 0 %}
 <div class="card p-4" id="discovered-hosts-card">
-    {# Pre-compute host monitoring status #}
-    {% set sorted_hosts = result.discovered_hosts | sort(attribute='ip') %}
-    {% set ns = namespace(new_count=0, monitored_count=0) %}
-    {% for host in sorted_hosts %}
-        {% set h = namespace(all_exist=true) %}
-        {# Check ping #}
-        {% set check_name = ("ping_" ~ (host.hostname or host.ip)).replace(".", "_") %}
-        {% if check_name not in existing_checks %}{% set h.all_exist = false %}{% endif %}
-        {# Check service ports #}
-        {% if host.open_ports %}
-            {% for port in host.open_ports %}
-                {% if port in [80, 443, 8080, 8443, 8000, 3000, 5000] %}
-                    {% set check_name = ("http_" ~ (host.hostname or host.ip) ~ "_" ~ port|string).replace(".", "_") %}
-                    {% if check_name not in existing_checks %}{% set h.all_exist = false %}{% endif %}
-                {% endif %}
-                {% if port in [22, 2222] %}
-                    {% set check_name = ("ssh_" ~ (host.hostname or host.ip) ~ "_" ~ port|string).replace(".", "_") %}
-                    {% if check_name not in existing_checks %}{% set h.all_exist = false %}{% endif %}
-                {% endif %}
-                {% if port in [3306, 5432, 5433, 27017, 6379, 1433, 1521] %}
-                    {% set check_name = ("db_" ~ (host.hostname or host.ip) ~ "_" ~ port|string).replace(".", "_") %}
-                    {% if check_name not in existing_checks %}{% set h.all_exist = false %}{% endif %}
-                {% endif %}
-            {% endfor %}
-        {% endif %}
-        {% if h.all_exist %}
-            {% set ns.monitored_count = ns.monitored_count + 1 %}
-        {% else %}
-            {% set ns.new_count = ns.new_count + 1 %}
-        {% endif %}
-    {% endfor %}
-
+    {# Hosts, their monitored state and the pill counts come from the view service. #}
     {# Header with sort + filter controls #}
     <div class="flex items-center justify-between mb-3">
         <div class="flex items-center gap-3">
@@ -201,9 +170,9 @@
         <div class="flex items-center gap-1" id="host-filter-pills">
             {{ filter_pill('All', result.discovered_hosts|length, extra_classes='host-filter-pill',
                            extra_attrs='data-host-filter="all"') }}
-            {{ filter_pill('New', ns.new_count, color='green', extra_classes='host-filter-pill',
+            {{ filter_pill('New', scan_new_count, color='green', extra_classes='host-filter-pill',
                            extra_attrs='data-host-filter="new"') }}
-            {{ filter_pill('Monitored', ns.monitored_count, extra_classes='host-filter-pill',
+            {{ filter_pill('Monitored', scan_monitored_count, extra_classes='host-filter-pill',
                            extra_attrs='data-host-filter="monitored"') }}
         </div>
     </div>
@@ -214,29 +183,9 @@
     </div>
 
     <div class="space-y-2" id="discovered-hosts-list">
-        {% for host in sorted_hosts %}
-        {# Recompute all_exist for this host to set data attribute #}
-        {% set h = namespace(all_exist=true) %}
-        {% set check_name = ("ping_" ~ (host.hostname or host.ip)).replace(".", "_") %}
-        {% if check_name not in existing_checks %}{% set h.all_exist = false %}{% endif %}
-        {% if host.open_ports %}
-            {% for port in host.open_ports %}
-                {% if port in [80, 443, 8080, 8443, 8000, 3000, 5000] %}
-                    {% set check_name = ("http_" ~ (host.hostname or host.ip) ~ "_" ~ port|string).replace(".", "_") %}
-                    {% if check_name not in existing_checks %}{% set h.all_exist = false %}{% endif %}
-                {% endif %}
-                {% if port in [22, 2222] %}
-                    {% set check_name = ("ssh_" ~ (host.hostname or host.ip) ~ "_" ~ port|string).replace(".", "_") %}
-                    {% if check_name not in existing_checks %}{% set h.all_exist = false %}{% endif %}
-                {% endif %}
-                {% if port in [3306, 5432, 5433, 27017, 6379, 1433, 1521] %}
-                    {% set check_name = ("db_" ~ (host.hostname or host.ip) ~ "_" ~ port|string).replace(".", "_") %}
-                    {% if check_name not in existing_checks %}{% set h.all_exist = false %}{% endif %}
-                {% endif %}
-            {% endfor %}
-        {% endif %}
+        {% for host in scan_hosts %}
         <div class="flex items-center justify-between p-2 bg-dark-bg-tertiary rounded border border-dark-border hover:border-dark-border-hover transition-colors host-row"
-             data-host-status="{{ 'monitored' if h.all_exist else 'new' }}"
+             data-host-status="{{ 'monitored' if host.all_checks_exist else 'new' }}"
              data-ip="{{ host.ip }}"
              data-hostname="{{ host.hostname or '' }}"
         >
@@ -328,13 +277,12 @@
     <h3 class="text-sm font-semibold uppercase tracking-wide text-dark-text-secondary mb-4">Chunk Performance</h3>
 
     <!-- Split chunks into with/without findings -->
-    {% set chunks_with_findings = result.chunk_metrics | selectattr('hosts_found', 'gt', 0) | list %}
-    {% set chunks_without_findings = result.chunk_metrics | selectattr('hosts_found', 'equalto', 0) | list %}
+    {# The split and each chunk's found_pct come from the view service. #}
 
     <!-- Chunks with findings (always visible) -->
-    {% if chunks_with_findings %}
+    {% if scan_chunks_with_findings %}
     <div class="mb-4">
-        <p class="text-xs text-green-400 mb-2">✓ Subnets with hosts found ({{ chunks_with_findings|length }})</p>
+        <p class="text-xs text-green-400 mb-2">✓ Subnets with hosts found ({{ scan_chunks_with_findings|length }})</p>
         <div class="overflow-x-auto">
             {% call data_table([
                 {'label': 'Subnet'},
@@ -343,14 +291,14 @@
                 {'label': 'Found', 'align': 'right'},
                 {'label': '% Responding', 'align': 'right'},
             ]) %}
-                    {% for chunk in chunks_with_findings %}
+                    {% for chunk in scan_chunks_with_findings %}
                     <tr>
                         <td class="font-mono">{{ chunk.subnet }}</td>
                         <td class="text-right font-mono">{{ "%.2f"|format(chunk.duration_seconds) }}s</td>
                         <td class="text-right">{{ chunk.hosts_scanned }}</td>
                         <td class="text-right text-green-400 font-medium">{{ chunk.hosts_found }}</td>
                         <td class="text-right">
-                            {{ "%.1f"|format((chunk.hosts_found / chunk.hosts_scanned) * 100) }}%
+                            {{ chunk.found_pct }}%
                         </td>
                     </tr>
                     {% endfor %}
@@ -360,10 +308,10 @@
     {% endif %}
 
     <!-- Chunks without findings (collapsed) -->
-    {% if chunks_without_findings %}
+    {% if scan_chunks_without_findings %}
     <details class="opacity-50">
         <summary class="cursor-pointer text-xs text-dark-text-muted mb-2">
-            ⊘ Subnets with no hosts found ({{ chunks_without_findings|length }}) - click to expand
+            ⊘ Subnets with no hosts found ({{ scan_chunks_without_findings|length }}) - click to expand
         </summary>
         <div class="overflow-x-auto mt-2">
             {% call data_table([
@@ -373,7 +321,7 @@
                 {'label': 'Found', 'align': 'right'},
                 {'label': '% Responding', 'align': 'right'},
             ]) %}
-                    {% for chunk in chunks_without_findings %}
+                    {% for chunk in scan_chunks_without_findings %}
                     <tr>
                         <td class="font-mono">{{ chunk.subnet }}</td>
                         <td class="text-right font-mono">{{ "%.2f"|format(chunk.duration_seconds) }}s</td>

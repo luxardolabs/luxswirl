@@ -30,6 +30,7 @@ from app.services.core.check_core_service import CheckCoreService
 from app.services.core.job_core_service import JobCoreService
 from app.services.core.network_scan_core_service import NetworkScanCoreService
 from app.services.core.settings_core_service import SettingsCoreService
+from app.services.views._network_scan_view import build_scan_view
 
 _JOB_REGISTRY: dict = {
     "network_scan": NetworkScanJob,
@@ -521,6 +522,9 @@ class JobsViewService:
         alert_defaults = await SettingsCoreService.get_alert_defaults(db)
 
         return {
+            **build_scan_view(
+                job.result if job.job_type == "network_scan" else None, existing_checks
+            ),
             "job_urls": build_job_urls(request, job_id),
             "scan_action_urls": build_scan_action_urls(request, job_id),
             "scan_form_urls": build_scan_form_urls(request, job),
