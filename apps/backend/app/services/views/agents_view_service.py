@@ -166,6 +166,7 @@ class AgentsViewService:
         async def get_agent_data(agent: Agent) -> AgentData:
             # Get check counts
             checks = await CheckCoreService.list_checks_for_agent(db, agent.id)
+            # post-db-filter: filters the agent's own checks, already loaded for the card
             enabled_checks = sum(1 for c in checks if c.enabled)
 
             # Get sparkline data with smart bucketing (max 200 samples for performance)

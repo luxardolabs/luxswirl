@@ -128,7 +128,9 @@ class SchedulerViewService:
         return {
             "job_rows": job_rows,
             "total_jobs": len(jobs),
+            # post-db-filter: the scheduler's job list is the in-memory registry, not a table
             "enabled_count": sum(1 for j in jobs if j.enabled),
+            # post-db-filter: the scheduler's job list is the in-memory registry, not a table
             "disabled_count": sum(1 for j in jobs if not j.enabled),
             "now": now,
         }
@@ -166,6 +168,7 @@ class SchedulerViewService:
 
         # Reload job for updated stats
         jobs = await scheduler_service.get_all_jobs()
+        # post-db-filter: the scheduler's job list is the in-memory registry, not a table
         job = next((j for j in jobs if j.job_key == job_key), None)
         now = datetime.now(UTC)
 

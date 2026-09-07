@@ -52,6 +52,7 @@ class DashboardRender:
 
         if sort_by == "name":
             # Primary: name, Secondary: status (up first)
+            # post-db-filter: sorts by latency / uptime / status, which are computed from results rather than columns on checks
             return sorted(
                 checks,
                 key=lambda c: (
@@ -63,6 +64,7 @@ class DashboardRender:
 
         elif sort_by == "status":
             # Primary: status, Secondary: latency (fastest first)
+            # post-db-filter: sorts by latency / uptime / status, which are computed from results rather than columns on checks
             return sorted(
                 checks,
                 key=lambda c: (
@@ -78,6 +80,7 @@ class DashboardRender:
 
         elif sort_by == "latency":
             # Primary: latency, Secondary: status (up first)
+            # post-db-filter: sorts by latency / uptime / status, which are computed from results rather than columns on checks
             return sorted(
                 checks,
                 key=lambda c: (
@@ -93,6 +96,7 @@ class DashboardRender:
 
         elif sort_by == "uptime":
             # Primary: uptime %, Secondary: status (up first)
+            # post-db-filter: sorts by latency / uptime / status, which are computed from results rather than columns on checks
             return sorted(
                 checks,
                 key=lambda c: (
