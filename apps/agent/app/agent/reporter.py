@@ -200,6 +200,7 @@ class Reporter:
                 conn.commit()
                 f.unlink()
                 count += 1
+            # swallowed-exceptions: the reporter retries and spools to disk; raising would drop results already collected
             except Exception:
                 self.logger.warning(
                     "Failed to migrate file",
@@ -297,6 +298,7 @@ class Reporter:
                 except TimeoutError:
                     self.logger.warning("Timed out waiting for reporter tasks to stop")
 
+        # swallowed-exceptions: the reporter retries and spools to disk; raising would drop results already collected
         except Exception:
             self.logger.error("Error stopping reporter", exc_info=True)
 
@@ -350,6 +352,7 @@ class Reporter:
 
             except asyncio.CancelledError:
                 break
+            # swallowed-exceptions: the reporter retries and spools to disk; raising would drop results already collected
             except Exception:
                 self.logger.error("Error in batch processor", exc_info=True)
 

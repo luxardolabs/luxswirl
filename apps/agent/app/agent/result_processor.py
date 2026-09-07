@@ -129,6 +129,7 @@ class ResultProcessor:
                     if not self.running:
                         break
                     await asyncio.sleep(self.result_processor_retry_delay)
+        # swallowed-exceptions: one malformed result must not stop the processor draining the queue
         except Exception:
             self.logger.error("Unhandled exception in result processor", exc_info=True)
 
@@ -225,6 +226,7 @@ class ResultProcessor:
                             },
                         )
 
+                # swallowed-exceptions: one malformed result must not stop the processor draining the queue
                 except Exception:
                     # Log but continue with other artifacts
                     self.logger.error(
@@ -234,6 +236,7 @@ class ResultProcessor:
                         },
                         exc_info=True,
                     )
+        # swallowed-exceptions: one malformed result must not stop the processor draining the queue
         except Exception:
             # Log outer exception but ensure artifacts are still removed
             self.logger.error("Error in artifact upload process", exc_info=True)

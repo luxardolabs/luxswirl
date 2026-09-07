@@ -126,6 +126,7 @@ class SyntheticCheck(BaseCheck):
                         result_data["browser_timing"] = await page.evaluate(
                             "() => JSON.parse(JSON.stringify(window.performance.timing))"
                         )
+                    # swallowed-exceptions: the failure IS the check result, returned as a failed run with the traceback
                     except Exception as timing_error:
                         # Timing is a nice-to-have on top of the check result —
                         # a closed or crashed page loses it, which is not a
@@ -280,6 +281,7 @@ class SyntheticCheck(BaseCheck):
         # Execute the user script to define run_check function
         try:
             exec(script_code, script_globals)
+        # swallowed-exceptions: the failure IS the check result, returned as a failed run with the traceback
         except Exception as e:
             return {
                 "status": "failure",
@@ -315,6 +317,7 @@ class SyntheticCheck(BaseCheck):
 
             return result
 
+        # swallowed-exceptions: the failure IS the check result, returned as a failed run with the traceback
         except Exception as e:
             return {
                 "status": "failure",

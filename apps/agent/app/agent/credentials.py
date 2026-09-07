@@ -164,6 +164,7 @@ class AgentCredentials:
             )
             return True
 
+        # swallowed-exceptions: credential load/save degrades rather than aborting startup; the agent re-registers when it cannot read what it stored
         except Exception:
             logger.error(
                 "Failed to load credentials",
@@ -213,6 +214,7 @@ class AgentCredentials:
             # Set restrictive file permissions (owner read/write only)
             try:
                 self.credentials_file.chmod(0o600)
+            # swallowed-exceptions: credential load/save degrades rather than aborting startup; the agent re-registers when it cannot read what it stored
             except Exception:
                 logger.warning(
                     "Failed to set 0600 permissions on credentials file",
@@ -229,6 +231,7 @@ class AgentCredentials:
             )
             return True
 
+        # swallowed-exceptions: credential load/save degrades rather than aborting startup; the agent re-registers when it cannot read what it stored
         except Exception:
             logger.error(
                 "Failed to save credentials",
@@ -268,6 +271,7 @@ class AgentCredentials:
 
             return True
 
+        # swallowed-exceptions: credential load/save degrades rather than aborting startup; the agent re-registers when it cannot read what it stored
         except Exception:
             logger.error("Failed to clear credentials", exc_info=True)
             return False

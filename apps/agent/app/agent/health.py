@@ -97,6 +97,7 @@ class HealthMonitor:
                         # Force reporter flush
                         try:
                             await self.reporter.flush()
+                        # swallowed-exceptions: self-monitoring is reported alongside the checks — a failed sample must not stop the agent reporting
                         except Exception:
                             self.logger.error(
                                 "Error during forced flush", exc_info=True
@@ -186,9 +187,11 @@ class HealthMonitor:
                             "fd_usage_percent": metrics["fd_usage_percent"],
                         },
                     )
+            # swallowed-exceptions: self-monitoring is reported alongside the checks — a failed sample must not stop the agent reporting
             except Exception:
                 self.logger.debug("Could not get FD limits", exc_info=True)
 
+        # swallowed-exceptions: self-monitoring is reported alongside the checks — a failed sample must not stop the agent reporting
         except Exception:
             self.logger.debug("Could not get FD count", exc_info=True)
 
@@ -204,6 +207,7 @@ class HealthMonitor:
                     extra={"subprocess_count": metrics["subprocess_count"]},
                 )
 
+        # swallowed-exceptions: self-monitoring is reported alongside the checks — a failed sample must not stop the agent reporting
         except Exception:
             self.logger.debug("Could not get subprocess count", exc_info=True)
 

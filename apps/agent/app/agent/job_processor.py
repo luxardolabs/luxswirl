@@ -189,6 +189,7 @@ class JobProcessor:
 
             except asyncio.CancelledError:
                 break
+            # swallowed-exceptions: one failed job must not end the processor — the failure is reported back with the job
             except Exception:
                 self.logger.error("Error in job worker", exc_info=True)
 
@@ -335,6 +336,7 @@ class JobProcessor:
                     },
                 )
 
+        # swallowed-exceptions: one failed job must not end the processor — the failure is reported back with the job
         except Exception:
             self.logger.error(
                 "Error submitting results for job",

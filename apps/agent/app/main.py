@@ -170,6 +170,7 @@ async def main():
         if agent:
             try:
                 await agent.shutdown()
+            # swallowed-exceptions: already unwinding an unhandled exception — a failed shutdown must not replace it
             except Exception:
                 # Already unwinding an unhandled exception; a failed shutdown
                 # must not replace it, but it still gets recorded.
