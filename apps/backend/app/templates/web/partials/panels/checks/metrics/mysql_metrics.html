@@ -1,4 +1,5 @@
 <!-- MySQL Check Details -->
+{# undefined-guards: additional_data is always a dict; the per-check-type metric keys inside it are genuinely optional #}
 {% if check.check_type == 'mysql' and history and history|length > 0 and history[0].additional_data and history[0].additional_data.get('mysql') %}
 {% set mysql = history[0].additional_data.mysql %}
 <div class="card p-5 bg-gradient-to-br from-orange-500/10 to-yellow-500/5 border-orange-500/30">

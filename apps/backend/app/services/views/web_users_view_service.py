@@ -370,6 +370,7 @@ class WebUsersViewService:
                 {"value": r.value, "label": r.value.title()} for r in UserRole
             ],
             "filters": filters,
+            "page_title": "Settings - Users",
         }
 
     @staticmethod

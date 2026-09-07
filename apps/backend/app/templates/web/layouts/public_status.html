@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="{% block description %}Real-time system status and uptime monitoring{% endblock %}">
-    <title>{% block title %}{{ page_title|default('Status Dashboard') }}{% endblock %}</title>
+    <title>{% block title %}{{ page_title }}{% endblock %}</title>
 
     <!-- Tailwind CSS -->
     <link rel="stylesheet" href="/static/css/output.css?v={{ static_version }}">
@@ -30,6 +30,7 @@
 
     <!-- Custom styles for public page -->
     <style>
+        {# undefined-guards: config is a JSONB blob whose branding/custom_css keys are optional per page #}
         {% if status_page and status_page.config and status_page.config.get('custom_css') %}
         /* Custom CSS from status page config */
         {{ status_page.config.custom_css | safe }}
@@ -46,6 +47,7 @@
     <footer class="px-4 sm:px-6 lg:px-8 py-8 mt-12 border-t border-dark-border">
         <div class="flex items-center justify-between text-sm text-dark-text-muted">
             <div>
+                {# undefined-guards: config is a JSONB blob whose branding/custom_css keys are optional per page #}
                 {% if status_page and status_page.config and status_page.config.get('branding', {}).get('show_powered_by', True) %}
                 <p>Powered by <span class="font-semibold text-dark-text-secondary">LuxSwirl</span></p>
                 {% endif %}

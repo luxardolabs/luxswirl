@@ -219,6 +219,7 @@ async def change_password_page(
             "required": required,
             "error": None,
             "success": None,
+            "page_title": "Change Password",
         },
     )
 
@@ -250,6 +251,7 @@ async def change_password_submit(
                 "required": required,
                 "error": "New passwords do not match",
                 "success": None,
+                "page_title": "Change Password",
             },
             status_code=status.HTTP_400_BAD_REQUEST,
         )
@@ -292,6 +294,7 @@ async def change_password_submit(
                 "required": False,
                 "error": None,
                 "success": "Password changed successfully",
+                "page_title": "Change Password",
             },
         )
 
@@ -305,6 +308,7 @@ async def change_password_submit(
                 "required": required,
                 "error": str(e),
                 "success": None,
+                "page_title": "Change Password",
             },
             status_code=status.HTTP_400_BAD_REQUEST,
         )

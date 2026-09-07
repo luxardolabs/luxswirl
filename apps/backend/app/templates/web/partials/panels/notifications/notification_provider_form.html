@@ -73,6 +73,7 @@
                         {% call select(name='config_' ~ field_name, class='input',
                                        required=field_schema.required) %}
                             {% for option in field_schema.options %}
+                            {# undefined-guards: None on the create form; config keys are per-provider-type #}
                             <option value="{{ option.value }}" {% if (provider and provider.config.get(field_name) == option.value) or (not provider and field_schema.default == option.value) %}selected{% endif %}>
                                 {{ option.label }}
                             </option>

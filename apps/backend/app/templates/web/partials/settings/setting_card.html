@@ -85,9 +85,13 @@
                     <span class="text-xs text-dark-text-muted uppercase tracking-wide">Value:</span>
                     <div class="relative">
                         {%- set number_attrs %}aria-label="{{ setting.display_name }} value" step="{{ '0.01' if value_type == 'float' else '1' }}"{% endset -%}
+                        {# undefined-guards: setting.validation is a JSONB blob whose min/max are genuinely optional per setting #}
+                        {%- set min_value = setting.validation.min if setting.validation and setting.validation.min is defined else none -%}
+                        {# undefined-guards: same — max is optional per setting #}
+                        {%- set max_value = setting.validation.max if setting.validation and setting.validation.max is defined else none -%}
                         {{ input(id=false, name='value', type='number', value=current_value,
-                                 min=(setting.validation.min if setting.validation and setting.validation.min is defined else none),
-                                 max=(setting.validation.max if setting.validation and setting.validation.max is defined else none),
+                                 min=min_value,
+                                 max=max_value,
                                  class='px-3 py-1.5 pr-12 text-sm bg-dark-bg-tertiary border border-dark-border rounded-md focus:outline-none focus:ring-2 focus:ring-brand-500',
                                  extra_attrs=number_attrs) }}
                         <!-- Unit Label -->
@@ -124,6 +128,7 @@
             <div class="text-dark-text-muted">
                 <span class="uppercase tracking-wide">Default:</span>
                 <code class="ml-1 px-1.5 py-0.5 bg-dark-bg-tertiary rounded font-mono">{{ default_value }}</code>
+                {# undefined-guards: a range hint only renders for settings that declare one #}
                 {% if setting.validation and setting.validation.min is defined and setting.validation.max is defined %}
                 <span class="ml-2 text-dark-text-muted">
                     (range: {{ setting.validation.min }} - {{ setting.validation.max }})

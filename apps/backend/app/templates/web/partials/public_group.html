@@ -125,7 +125,7 @@
 
             <!-- Latency Sparkline -->
             <div class="mb-2">
-                <svg class="w-full h-7 block" preserveAspectRatio="none" viewBox="0 0 {{ num_bars | default(30) }} 20">
+                <svg class="w-full h-7 block" preserveAspectRatio="none" viewBox="0 0 {{ num_bars }} 20">
                     <!-- Define gradient for the line (vertical: light at bottom, dark at top) -->
                     <defs>
                         <linearGradient id="sparkline-gradient-{{ check.id }}" x1="0%" y1="100%" x2="0%" y2="0%">
@@ -229,7 +229,7 @@
 
             <!-- Time labels -->
             <div class="flex justify-between text-xs text-dark-text-muted">
-                <span class="transition-colors group-hover:text-dark-text-secondary">{{ time_range_label | default('30m') }} ago</span>
+                <span class="transition-colors group-hover:text-dark-text-secondary">{{ time_range_label }} ago</span>
                 <span class="transition-colors group-hover:text-dark-text-secondary">now</span>
             </div>
         </div>

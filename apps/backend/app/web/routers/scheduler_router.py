@@ -60,10 +60,10 @@ async def toggle_job(
         response = templates.TemplateResponse(
             request,
             "partials/scheduler_job_row.html",
-            {
-                "current_user": current_user,
-                **row,
-            },
+            # One shape for both callers: the page loops `for row in job_rows`
+            # and includes the partial, so an action re-render passes the same
+            # `row` rather than splatting it flat.
+            {"current_user": current_user, "row": row},
         )
 
         status = "enabled" if row["job"].enabled else "disabled"
@@ -93,10 +93,10 @@ async def run_job(
         response = templates.TemplateResponse(
             request,
             "partials/scheduler_job_row.html",
-            {
-                "current_user": current_user,
-                **row,
-            },
+            # One shape for both callers: the page loops `for row in job_rows`
+            # and includes the partial, so an action re-render passes the same
+            # `row` rather than splatting it flat.
+            {"current_user": current_user, "row": row},
         )
 
         duration = result.get("duration_seconds", 0)
@@ -125,10 +125,10 @@ async def reset_job(
         response = templates.TemplateResponse(
             request,
             "partials/scheduler_job_row.html",
-            {
-                "current_user": current_user,
-                **row,
-            },
+            # One shape for both callers: the page loops `for row in job_rows`
+            # and includes the partial, so an action re-render passes the same
+            # `row` rather than splatting it flat.
+            {"current_user": current_user, "row": row},
         )
 
         response.headers["HX-Trigger"] = hx_toast_trigger(

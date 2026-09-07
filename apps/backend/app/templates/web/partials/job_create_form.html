@@ -131,6 +131,7 @@
                                     <label for="subnet" class="block text-sm font-medium text-dark-text-primary mb-2">
                                         Subnet <span class="text-red-400">*</span>
                                     </label>
+                                    {# undefined-guards: always a dict from the view service; the individual prefill keys are optional #}
                                     {{ input(name="subnet", value=prefill_params.get('subnet'), placeholder="192.168.1.0/24", id="subnet", required=true, class="input w-full font-mono") }}
                                     <p class="text-xs text-dark-text-muted mt-1">Network in CIDR notation</p>
                                 </div>
@@ -138,6 +139,7 @@
                                     <label for="ports" class="block text-sm font-medium text-dark-text-primary mb-2">
                                         Ports
                                     </label>
+                                    {# undefined-guards: always a dict from the view service; the individual prefill keys are optional #}
                                     {{ input(name="ports", value=prefill_params.get('ports', [22, 80, 443, 3306, 5432, 8080, 8443])|join(','), placeholder="22,80,443", id="ports", class="input w-full font-mono", extra_attrs='data-type="array"') }}
                                     <p class="text-xs text-dark-text-muted mt-1">TCP ports to scan</p>
                                 </div>
@@ -149,6 +151,7 @@
                                     <label for="timeout" class="block text-sm font-medium text-dark-text-primary mb-2">
                                         Timeout <span class="text-red-400">*</span>
                                     </label>
+                                    {# undefined-guards: always a dict from the view service; the individual prefill keys are optional #}
                                     {{ input(name="timeout", type="number", value=prefill_params.get('timeout'), id="timeout", min="1", max="30", required=true, class="input w-full") }}
                                     <p class="text-xs text-dark-text-muted mt-1">Seconds per host (total)</p>
                                 </div>
@@ -156,6 +159,7 @@
                                     <label for="max_concurrent" class="block text-sm font-medium text-dark-text-primary mb-2">
                                         Max Concurrent
                                     </label>
+                                    {# undefined-guards: always a dict from the view service; the individual prefill keys are optional #}
                                     {{ input(name="max_concurrent", type="number", value=prefill_params.get('max_concurrent'), id="max_concurrent", min="10", max="500", class="input w-full") }}
                                     <p class="text-xs text-dark-text-muted mt-1">Parallel host scans</p>
                                 </div>
@@ -163,6 +167,7 @@
                         {% else %}
                             <!-- Default rendering for other job types -->
                             {% for field_name, field_schema in selected_job.properties.items() %}
+                                {# undefined-guards: always a dict from the view service; the individual prefill keys are optional #}
                                 {{ render_field_from_schema(field_name, field_schema, field_name in selected_job.required, prefill_params.get(field_name)) }}
                             {% endfor %}
                         {% endif %}

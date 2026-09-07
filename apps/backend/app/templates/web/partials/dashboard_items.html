@@ -119,6 +119,7 @@
                 <div class="{% if 'filter' in item %}p-2{% else %}p-2 space-y-1 min-h-[60px] group-checks-container{% endif %}" data-group-index="{{ loop.index0 }}">
                     {% if 'filter' in item %}
                         <!-- Filter-based group - show matching checks -->
+                        {# undefined-guards: a map keyed by group index — only filter groups appear #}
                         {% set matching_checks = filter_group_matches.get(loop.index0, []) %}
                         {% if matching_checks %}
                         <div class="space-y-1">
@@ -167,8 +168,10 @@
                         {% endif %}
                     {% elif 'checks' in item and item.checks %}
                         <!-- Container group with checks -->
+                        {# undefined-guards: a map keyed by group index — only sorted groups appear #}
                         {% set check_ids_to_display = container_group_sorted_checks.get(loop.index0, item.checks) %}
                         {% for check_id in check_ids_to_display %}
+                            {# undefined-guards: a map keyed by check id — a check can be missing from it #}
                             {% set check = check_details_map.get(check_id) %}
                             {% if check %}
                             <div class="flex items-center gap-2 p-2 bg-dark-bg-tertiary rounded hover:bg-dark-bg-primary transition-colors group-check dashboard-item" data-item-type="check" data-check-id="{{ check_id }}">
@@ -218,6 +221,7 @@
             </div>
         {% elif item.type == 'check' %}
             <!-- Check -->
+            {# undefined-guards: a map keyed by check id — a check can be missing from it #}
             {% set check = check_details_map.get(item.check_id) %}
             <div id="dashboard-item-{{ loop.index0 }}" class="flex items-center gap-2 p-2.5 bg-dark-bg-tertiary rounded-lg hover:bg-dark-bg-secondary transition-colors group dashboard-item" data-item-index="{{ loop.index0 }}" data-item-type="check" data-check-id="{{ item.check_id }}">
                 <span class="w-4 h-4 text-dark-text-muted cursor-move drag-handle flex-shrink-0 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/bars-2.svg" %}</span>

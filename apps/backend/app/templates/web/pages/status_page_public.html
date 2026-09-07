@@ -3,6 +3,7 @@
 {% block content %}
 <!-- Header / Branding -->
 <div class="mb-8">
+    {# undefined-guards: config is a JSONB blob whose branding/custom_css keys are optional per page #}
     {% if status_page.config and status_page.config.get('branding', {}).get('logo_url') %}
     <div class="mb-4">
         <img src="{{ status_page.config.branding.logo_url }}" alt="{{ status_page.name }}" class="h-12">
@@ -53,14 +54,14 @@
         <div class="flex items-center gap-6">
             <!-- Time Range Selector -->
             <div class="flex items-center gap-1 bg-dark-bg-primary/50 rounded-lg p-1 border border-dark-border">
-                {% for minutes in time_range_options | default([30, 60, 120, 240, 480, 1440]) %}
+                {% for minutes in time_range_options %}
                 {% set labels = {30: '30m', 60: '1h', 120: '2h', 240: '4h', 480: '8h', 1440: '24h'} %}
                 <a href="{{ time_range_urls[minutes] }}"
                    hx-get="{{ time_range_urls[minutes] }}"
                    hx-push-url="true"
                    hx-target="body"
                    class="px-2.5 py-1 text-xs font-medium rounded-md transition-all duration-200 cursor-pointer
-                   {% if (time_range_minutes | default(30)) == minutes %}
+                   {% if time_range_minutes == minutes %}
                        bg-brand-700 text-white shadow-sm
                    {% else %}
                        text-dark-text-muted hover:text-dark-text-secondary hover:bg-dark-bg-tertiary
@@ -79,7 +80,7 @@
 
 <!-- Status Content (auto-refreshes via HTMX) -->
 <div id="status-content"
-     hx-get="{{ partial_url_base }}?time_range={{ time_range_minutes | default(30) }}"
+     hx-get="{{ partial_url_base }}?time_range={{ time_range_minutes }}"
      hx-trigger="every 20s"
      hx-ext="morph"
      hx-swap="morph:innerHTML">
