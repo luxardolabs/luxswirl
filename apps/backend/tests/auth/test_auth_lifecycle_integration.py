@@ -142,7 +142,7 @@ class TestSessionLifecycle:
         await db.flush()
 
         session, token = await auth.create_session(
-            db, user, ip_address="10.0.0.1", user_agent="test-agent"
+            db, user.id, ip_address="10.0.0.1", user_agent="test-agent"
         )
         # Token is the hex-encoded random value the client gets
         assert len(token) == 64
@@ -157,7 +157,7 @@ class TestSessionLifecycle:
         user = make_user()
         db.add(user)
         await db.flush()
-        _, token = await auth.create_session(db, user)
+        _, token = await auth.create_session(db, user.id)
 
         loaded = await auth.verify_session(db, token)
         assert loaded is not None
@@ -172,7 +172,7 @@ class TestSessionLifecycle:
         user = make_user()
         db.add(user)
         await db.flush()
-        session, token = await auth.create_session(db, user)
+        session, token = await auth.create_session(db, user.id)
 
         # Backdate the session past expiry
         session.expires_at = utc_now() - timedelta(minutes=1)
@@ -184,7 +184,7 @@ class TestSessionLifecycle:
         user = make_user()
         db.add(user)
         await db.flush()
-        _, token = await auth.create_session(db, user)
+        _, token = await auth.create_session(db, user.id)
 
         ok = await auth.logout(db, token)
         assert ok is True
@@ -206,7 +206,7 @@ class TestMultiSessionHelpers:
         db.add(user)
         await db.flush()
         for _ in range(3):
-            await auth.create_session(db, user)
+            await auth.create_session(db, user.id)
 
         sessions = await auth.get_user_sessions(db, user.id)
         assert len(sessions) == 3
@@ -216,7 +216,7 @@ class TestMultiSessionHelpers:
         db.add(user)
         await db.flush()
         for _ in range(3):
-            await auth.create_session(db, user)
+            await auth.create_session(db, user.id)
 
         deleted = await auth.logout_all_sessions(db, user.id)
         assert deleted == 3
@@ -227,8 +227,8 @@ class TestMultiSessionHelpers:
         user = make_user()
         db.add(user)
         await db.flush()
-        s_keep, _ = await auth.create_session(db, user)
-        s_drop, _ = await auth.create_session(db, user)
+        s_keep, _ = await auth.create_session(db, user.id)
+        s_drop, _ = await auth.create_session(db, user.id)
 
         ok = await auth.logout_session_by_id(db, user.id, s_drop.id)
         assert ok is True
@@ -243,7 +243,7 @@ class TestMultiSessionHelpers:
         db.add(owner)
         db.add(attacker)
         await db.flush()
-        session, _ = await auth.create_session(db, owner)
+        session, _ = await auth.create_session(db, owner.id)
 
         # Attacker should not be able to invalidate owner's session even by id
         ok = await auth.logout_session_by_id(db, attacker.id, session.id)
@@ -263,9 +263,9 @@ class TestCleanupExpiredSessions:
         db.add(user)
         await db.flush()
         # 2 expired, 1 fresh
-        fresh, _ = await auth.create_session(db, user)
-        expired_a, _ = await auth.create_session(db, user)
-        expired_b, _ = await auth.create_session(db, user)
+        fresh, _ = await auth.create_session(db, user.id)
+        expired_a, _ = await auth.create_session(db, user.id)
+        expired_b, _ = await auth.create_session(db, user.id)
         expired_a.expires_at = utc_now() - timedelta(hours=1)
         expired_b.expires_at = utc_now() - timedelta(hours=2)
         await db.flush()
@@ -315,7 +315,7 @@ class TestChangePassword:
         db.add(user)
         await db.flush()
         for _ in range(3):
-            await auth.create_session(db, user)
+            await auth.create_session(db, user.id)
         assert len(await auth.get_user_sessions(db, user.id)) == 3
 
         await auth.change_password(db, user.id, "TestPass123!", "NewPassword456!")

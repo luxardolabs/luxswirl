@@ -6,14 +6,13 @@ calling core auth service and formatting responses for templates.
 """
 
 from typing import Any, cast
+from uuid import UUID
 
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth_deps import AuthedUser
-from app.models.session_model import Session
-from app.models.user_model import User
-from app.schemas.auth_schema import ChangePasswordRequest
+from app.schemas.auth_schema import ChangePasswordRequest, CurrentUserDTO
 from app.services.core.auth_core_service import AuthCoreService
 from app.services.core.settings_core_service import SettingsCoreService
 
@@ -33,7 +32,7 @@ class WebAuthViewService:
         password: str,
         client_ip: str | None = None,
         user_agent: str | None = None,
-    ) -> User | None:
+    ) -> CurrentUserDTO | None:
         """
         Authenticate user for web login.
 
@@ -45,53 +44,39 @@ class WebAuthViewService:
             user_agent: User-Agent header for audit logging
 
         Returns:
-            User if authenticated, None otherwise
+            The authenticated principal as the web seam holds it, or None.
         """
-        return cast(
-            User | None,
-            await self.auth_service.authenticate_user(
-                db, username, password, client_ip=client_ip, user_agent=user_agent
-            ),
+        user = await self.auth_service.authenticate_user(
+            db, username, password, client_ip=client_ip, user_agent=user_agent
         )
+        return CurrentUserDTO.model_validate(user) if user else None
 
     async def create_session(
         self,
         db: AsyncSession,
-        user: User,
+        user_id: UUID,
         ip_address: str | None = None,
         user_agent: str | None = None,
-    ) -> tuple[Session, str]:
+    ) -> str:
         """
-        Create session for web user.
+        Create session for web user and return the cookie token.
+
+        The Session row itself stays below the seam — the caller sets a cookie,
+        which needs the token and nothing else.
 
         Args:
             db: Database session
-            user: User to create session for
+            user_id: The authenticated user's id
             ip_address: Client IP address
             user_agent: Client user agent
 
         Returns:
-            Tuple of (Session, token)
+            The plain session token to set as the cookie value.
         """
-        return cast(
-            tuple[Session, str],
-            await self.auth_service.create_session(
-                db, user, ip_address=ip_address, user_agent=user_agent
-            ),
+        _, token = await self.auth_service.create_session(
+            db, user_id, ip_address=ip_address, user_agent=user_agent
         )
-
-    async def verify_session(self, db: AsyncSession, token: str) -> Session | None:
-        """
-        Verify session token for web request.
-
-        Args:
-            db: Database session
-            token: Session token
-
-        Returns:
-            Session if valid, None otherwise
-        """
-        return cast(Session | None, await self.auth_service.verify_session(db, token))
+        return token
 
     async def logout(self, db: AsyncSession, token: str) -> bool:
         """
@@ -132,14 +117,18 @@ class WebAuthViewService:
             return False, str(e)
 
     async def get_user_sessions(
-        self, db: AsyncSession, user: User
+        self, db: AsyncSession, user: AuthedUser
     ) -> list[dict[str, Any]]:
         """
         Get user's active sessions formatted for web UI.
 
+        No web surface renders these yet — the shaping lives here unwired,
+        waiting on a sessions page (the is_current flag below is what is
+        missing). The API's own listing is separate and does its own shaping.
+
         Args:
             db: Database session
-            user: User to get sessions for
+            user: The authenticated principal whose sessions to list
 
         Returns:
             List of session dicts for display

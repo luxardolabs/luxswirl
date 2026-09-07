@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.common_passwords import is_common_password
 from app.core.datetime_utils import utc_now
+from app.core.exceptions import NotFoundException
 from app.crud.session_crud import SessionCRUD
 from app.crud.user_crud import UserCRUD
 from app.models.session_model import Session
@@ -275,7 +276,7 @@ class AuthCoreService:
     async def create_session(
         self,
         db: AsyncSession,
-        user: User,
+        user_id: UUID,
         ip_address: str | None = None,
         user_agent: str | None = None,
     ) -> tuple[Session, str]:
@@ -284,13 +285,20 @@ class AuthCoreService:
 
         Args:
             db: Database session
-            user: User object
+            user_id: The authenticated user's id. Taking the id rather than the
+                ORM row is what lets the web seam hold a DTO — see
+                `luxarch --playbook view-seam`.
             ip_address: IP address of client
             user_agent: User agent string
 
         Returns:
             Tuple of (Session object, plain session token)
         """
+        # Re-read the user for the audit line below; the caller hands us an id.
+        user = await UserCRUD.get_by_id(db, user_id)
+        if user is None:
+            raise NotFoundException(f"User {user_id} not found")
+
         # Get security settings from database
         security_settings = await SettingsCoreService.get_security_settings(db)
         session_lifetime_days = security_settings["session_lifetime_days"]
@@ -301,7 +309,7 @@ class AuthCoreService:
 
         # Create session with configured lifetime
         session = Session(
-            user_id=user.id,
+            user_id=user_id,
             token_hash=token_hash,
             expires_at=utc_now() + timedelta(days=session_lifetime_days),
             ip_address=ip_address,

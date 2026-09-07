@@ -106,8 +106,8 @@ async def login_submit(
         )
 
     # Create session
-    session, token = await web_auth.create_session(
-        db, user, ip_address=client_ip, user_agent=user_agent
+    token = await web_auth.create_session(
+        db, user.id, ip_address=client_ip, user_agent=user_agent
     )
 
     logger.info(
