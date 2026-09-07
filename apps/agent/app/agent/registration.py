@@ -114,6 +114,7 @@ class AgentRegistration:
                 },
             )
             return False
+        # swallowed-exceptions: registration returns failure so the caller retries with backoff
         except Exception:
             self.logger.error("Registration failed", exc_info=True)
             return False
@@ -193,6 +194,7 @@ class AgentRegistration:
                 },
             )
             return False
+        # swallowed-exceptions: registration returns failure so the caller retries with backoff
         except Exception:
             self.logger.error("Key recovery failed", exc_info=True)
             return False

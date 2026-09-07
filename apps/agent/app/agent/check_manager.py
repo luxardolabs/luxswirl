@@ -149,6 +149,7 @@ class CheckManager:
             # Set restrictive permissions
             try:
                 self.cache_file.chmod(0o600)
+            # swallowed-exceptions: the check loop must outlive one bad check — a raise here stops every other check on this agent
             except Exception:
                 self.logger.warning(
                     "Failed to set 0600 permissions on cache file",
@@ -163,6 +164,7 @@ class CheckManager:
                     "version": version,
                 },
             )
+        # swallowed-exceptions: the check loop must outlive one bad check — a raise here stops every other check on this agent
         except Exception:
             self.logger.warning("Failed to save checks cache", exc_info=True)
 
@@ -223,6 +225,7 @@ class CheckManager:
             )
             return checks, version
 
+        # swallowed-exceptions: the check loop must outlive one bad check — a raise here stops every other check on this agent
         except Exception:
             self.logger.warning("Failed to load checks cache", exc_info=True)
             return [], None
@@ -399,6 +402,7 @@ class CheckManager:
                     "failures": 0,
                     "total_latency": 0,
                 }
+            # swallowed-exceptions: the check loop must outlive one bad check — a raise here stops every other check on this agent
             except Exception:
                 self.logger.error(
                     "Failed to load check",

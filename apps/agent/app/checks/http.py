@@ -13,10 +13,13 @@ import httpx
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
 from cryptography.utils import CryptographyDeprecationWarning
+from shared.logger import get_logger
 
 from app.agent.http_client import check_client
 from app.checks._ssrf_http import ssrf_guarded_send
 from app.checks.base import BaseCheck
+
+logger = get_logger("luxswirl.agent.checks.http")
 
 
 class HTTPCheck(BaseCheck):
@@ -297,7 +300,10 @@ class HTTPCheck(BaseCheck):
                         "subject": subject_cn,
                     }
 
+        # swallowed-exceptions: certificate details are enrichment — the HTTP result stands without them
         except Exception:
-            # Don't fail the check if cert extraction fails
-            # Just log and return None
+            # Certificate details are enrichment on top of the HTTP result — a
+            # check that reached the endpoint still passed. The comment here
+            # used to promise a log line that was never written.
+            logger.debug("Could not extract SSL certificate details", exc_info=True)
             return None

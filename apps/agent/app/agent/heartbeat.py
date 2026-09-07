@@ -193,6 +193,7 @@ class HeartbeatSender:
                                 ),
                                 "subprocess_count": len(children),
                             }
+                        # swallowed-exceptions: the heartbeat loop must outlive a transient server or network error, or the agent goes silent permanently
                         except Exception:
                             self.logger.debug(
                                 "Could not get resource metrics", exc_info=True
@@ -319,6 +320,7 @@ class HeartbeatSender:
                                     "job_count": len(jobs),
                                 },
                             )
+                        # swallowed-exceptions: the heartbeat loop must outlive a transient server or network error, or the agent goes silent permanently
                         except Exception:
                             self.logger.warning(
                                 "Failed to parse heartbeat response",
@@ -335,6 +337,7 @@ class HeartbeatSender:
 
                 except httpx.RequestError:
                     self.logger.warning("Failed to send heartbeat", exc_info=True)
+                # swallowed-exceptions: the heartbeat loop must outlive a transient server or network error, or the agent goes silent permanently
                 except Exception:
                     self.logger.error("Error sending heartbeat", exc_info=True)
 
@@ -350,6 +353,7 @@ class HeartbeatSender:
 
         except asyncio.CancelledError:
             pass
+        # swallowed-exceptions: the heartbeat loop must outlive a transient server or network error, or the agent goes silent permanently
         except Exception:
             self.logger.error("Unhandled exception in heartbeat sender", exc_info=True)
         finally:
@@ -710,6 +714,7 @@ class HeartbeatSender:
                 )
         except httpx.RequestError:
             self.logger.warning("Failed to send shutdown heartbeat", exc_info=True)
+        # swallowed-exceptions: the heartbeat loop must outlive a transient server or network error, or the agent goes silent permanently
         except Exception:
             self.logger.error("Error sending shutdown heartbeat", exc_info=True)
         finally:

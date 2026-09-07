@@ -135,6 +135,7 @@ class LifecycleManager:
                         )
                         for result in results:
                             await self.reporter.add_result(result)
+                # swallowed-exceptions: shutdown drain — a failure here must still let the remaining stop steps run
                 except Exception:
                     self.logger.error("Error processing final results", exc_info=True)
                     break
@@ -148,6 +149,7 @@ class LifecycleManager:
             # Close the process-lifetime HTTP clients (server + check-target pools)
             await aclose_all()
 
+        # swallowed-exceptions: shutdown drain — a failure here must still let the remaining stop steps run
         except Exception:
             self.logger.error("Error during shutdown", exc_info=True)
 

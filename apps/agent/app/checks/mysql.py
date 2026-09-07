@@ -240,6 +240,7 @@ class MySQLCheck(BaseCheck):
                 if conn:
                     try:
                         conn.close()
+                    # swallowed-exceptions: best-effort close after the result is already decided
                     except Exception as close_error:
                         # Best-effort close: a failure here must not mask the
                         # check result, but a connection we cannot close is a

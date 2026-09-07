@@ -147,6 +147,7 @@ class JSONCheck(BaseCheck):
         # Try to parse response as JSON
         try:
             parsed_json = http_response.json()
+        # swallowed-exceptions: the failure IS the check result, returned as success=False with the reason
         except Exception as e:
             return self.create_result(
                 success=False,
