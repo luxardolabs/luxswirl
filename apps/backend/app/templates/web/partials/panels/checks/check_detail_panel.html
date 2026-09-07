@@ -206,6 +206,7 @@
         </div>
 
         <!-- SSL Certificate Info (for HTTPS checks) -->
+        {# undefined-guards: additional_data is always a dict; the per-check-type metric keys inside it are genuinely optional #}
         {% if history and history|length > 0 and history[0].additional_data and history[0].additional_data.get('response') and history[0].additional_data.response.get('ssl_certificate') %}
         {% set ssl_cert = history[0].additional_data.response.ssl_certificate %}
         <div class="card p-4 {% if ssl_cert.expired %}bg-red-500/10 border-red-500/30{% elif ssl_cert.expires_critical %}bg-orange-500/10 border-orange-500/30{% elif ssl_cert.expires_soon %}bg-yellow-500/10 border-yellow-500/30{% else %}bg-green-500/5 border-green-500/20{% endif %}">

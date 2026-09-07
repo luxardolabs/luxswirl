@@ -1,6 +1,7 @@
         {% from 'macros/buttons.html' import btn_external, collapse_toggle, link_btn %}
         {% from 'macros/tables.html' import data_table %}
         <!-- Synthetic Check Details -->
+        {# undefined-guards: additional_data is always a dict; the per-check-type metric keys inside it are genuinely optional #}
         {% if check.check_type == 'synthetic' and history and history|length > 0 and history[0].additional_data and history[0].additional_data.get('synthetic') %}
         {% set synthetic = history[0].additional_data.synthetic %}
         <div class="card p-5 bg-gradient-to-br from-purple-500/10 to-blue-500/5 border-purple-500/30">

@@ -35,6 +35,7 @@
                 <div class="flex-1 min-w-0">
                     <div class="text-xs text-dark-text-muted uppercase tracking-wide">check_artifacts</div>
                     <div class="text-xl font-bold text-dark-text-primary">
+                        {# undefined-guards: row_counts only carries the tables that exist #}
                         {% set artifacts_size = health.row_counts.get('check_artifacts', {}) %}
                         {% if artifacts_size %}
                         {{ artifacts_size.get('size_pretty', '0 kB') }}

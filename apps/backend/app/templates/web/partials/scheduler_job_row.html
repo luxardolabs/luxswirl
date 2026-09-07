@@ -1,14 +1,16 @@
 {# Single job row - used in scheduler table and returned by HTMX actions #}
 {% from 'macros/buttons.html' import icon_run, icon_reset, icon_toggle_on, icon_toggle_off, icon_history %}
 {% from 'macros/badges.html' import badge, category_badge %}
-{% set job = row.job if row is defined else job %}
-{% set urls = row.urls if row is defined else urls %}
-{% set schedule_display = row.schedule_display if row is defined else schedule_display %}
-{% set category_color = row.category_color if row is defined else category_color %}
-{% set status_color = row.status_color if row is defined else status_color %}
-{% set is_running = row.is_running if row is defined else is_running %}
-{% set avg_duration = row.avg_duration if row is defined else avg_duration %}
-{% set now = row.now if row is defined else now %}
+{# Both callers pass `row`: the scheduler page loops over job_rows and includes
+   this, and the run/reset/toggle routes re-render one row with the same shape. #}
+{% set job = row.job %}
+{% set urls = row.urls %}
+{% set schedule_display = row.schedule_display %}
+{% set category_color = row.category_color %}
+{% set status_color = row.status_color %}
+{% set is_running = row.is_running %}
+{% set avg_duration = row.avg_duration %}
+{% set now = row.now %}
 
 <tr id="job-row-{{ job.job_key }}" class="hover:bg-dark-bg-secondary/50 transition-colors duration-150">
     <!-- Job Name -->
