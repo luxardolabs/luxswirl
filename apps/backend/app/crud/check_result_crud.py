@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import Integer, Row, and_, cast, delete, desc, func, or_, select, text
+from sqlalchemy import Integer, Row, and_, cast, desc, func, or_, select, text
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -193,14 +193,6 @@ class CheckResultCRUD:
         return result.scalar_one()
 
     @staticmethod
-    async def delete_older_than(db: AsyncSession, cutoff) -> int:
-        """Bulk delete check results with timestamp < cutoff. Returns rowcount."""
-        result = await db.execute(
-            delete(CheckResult).where(CheckResult.timestamp < cutoff)
-        )
-        return result.rowcount or 0  # type: ignore[attr-defined]
-
-    @staticmethod
     async def get_stats_for_agent(db: AsyncSession, agent_id: UUID, since) -> Any:
         """Aggregate check-result stats for an agent since a timestamp.
         Returns row with total_checks, successful_checks, avg_latency_ms, last_check_time."""
@@ -217,33 +209,6 @@ class CheckResultCRUD:
             )
         )
         return result.one()
-
-    @staticmethod
-    async def count_since(db: AsyncSession, cutoff) -> int:
-        """Count check results with timestamp >= cutoff."""
-        result = await db.execute(
-            select(func.count(CheckResult.id)).where(CheckResult.timestamp >= cutoff)
-        )
-        return result.scalar_one()
-
-    @staticmethod
-    async def get_success_stats_for_check(
-        db: AsyncSession, check_id: UUID, since
-    ) -> tuple[int, int]:
-        """Return (total_count, successful_count) for a check since a timestamp."""
-        result = await db.execute(
-            select(
-                func.count(CheckResult.id).label("total"),
-                func.sum(func.cast(CheckResult.success, Integer)).label("successful"),
-            ).where(
-                and_(
-                    CheckResult.check_id == check_id,
-                    CheckResult.timestamp >= since,
-                )
-            )
-        )
-        row = result.one()
-        return int(row.total or 0), int(row.successful or 0)
 
     @staticmethod
     async def get_latest_results_for_agent_with_check(

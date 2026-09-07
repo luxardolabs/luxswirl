@@ -142,28 +142,6 @@ class TestCategoryQueries:
         keys = {s.key for s in rows}
         assert keys == {"cat_a.one", "cat_a.two"}
 
-    async def test_get_all_settings(self, db: AsyncSession):
-        await SettingsCoreService.create_setting(
-            db,
-            key="all.a",
-            category="system",
-            value=1,
-            display_name="A",
-        )
-        await SettingsCoreService.create_setting(
-            db,
-            key="all.b",
-            category="system",
-            value=2,
-            display_name="B",
-        )
-        rows = await SettingsCoreService.get_all_settings(db)
-        # Other tests in the session may have seeded settings — we only
-        # require that ours show up.
-        keys = {s.key for s in rows}
-        assert "all.a" in keys
-        assert "all.b" in keys
-
 
 # ---------------------------------------------------------------------------
 # Security settings facade
@@ -193,12 +171,13 @@ class TestSecuritySettings:
         assert isinstance(sec, dict)
         assert "max_failed_attempts" in sec
 
-    async def test_update_security_settings(self, db: AsyncSession):
+    async def test_per_key_update_is_reflected_in_the_facade(self, db: AsyncSession):
+        """The security page writes key-by-key through update_setting; the
+        facade must read those writes back."""
         await SettingsCoreService.ensure_default_settings(db)
-        await SettingsCoreService.update_security_settings(
-            db,
-            max_failed_attempts=10,
-            session_lifetime_days=30,
+        await SettingsCoreService.update_setting(db, "security.max_failed_attempts", 10)
+        await SettingsCoreService.update_setting(
+            db, "security.session_lifetime_days", 30
         )
         sec = await SettingsCoreService.get_security_settings(db)
         assert sec["max_failed_attempts"] == 10

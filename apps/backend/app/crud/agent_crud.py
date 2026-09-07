@@ -209,14 +209,6 @@ class AgentCRUD:
         return list(result.scalars().all())
 
     @staticmethod
-    async def count_seen_since(db: AsyncSession, cutoff: datetime) -> int:
-        """Count agents whose last_seen is >= cutoff."""
-        result = await db.execute(
-            select(func.count(Agent.id)).where(Agent.last_seen >= cutoff)
-        )
-        return result.scalar_one()
-
-    @staticmethod
     async def get_active_agent_count(db: AsyncSession, minutes: int = 10) -> int:
         """
         Get count of agents seen within the given time window.

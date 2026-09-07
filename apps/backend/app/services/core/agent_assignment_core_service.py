@@ -104,29 +104,6 @@ class AgentAssignmentCoreService:
         return max(available_agents, key=_score)
 
     @staticmethod
-    async def get_matching_agents(
-        db: AsyncSession,
-        selector: dict | None,
-    ) -> Sequence[Agent]:
-        """
-        Get all agents that match the given selector.
-
-        Args:
-            db: Database session
-            selector: Selector dict
-
-        Returns:
-            List of matching agents
-        """
-        if not selector:
-            return []
-
-        all_agents = await AgentCRUD.list_all(db)
-        return AgentAssignmentCoreService.filter_agents_by_selector(
-            all_agents, selector
-        )
-
-    @staticmethod
     def filter_agents_by_selector(
         agents: Sequence[Agent],
         selector: dict | None,

@@ -19,7 +19,6 @@ from app.crud.check_result_crud import CheckResultCRUD
 from app.models.check_result_model import CheckResult
 from app.schemas.check_result_schema import (
     AgentReportRequest,
-    CheckResultCreate,
     CheckSummary,
 )
 from app.services.core.agent_core_service import AgentCoreService
@@ -63,71 +62,6 @@ class CheckResultCoreService:
                 critical_days=critical_days,
             ),
         }
-
-    @staticmethod
-    async def create_check_result(
-        db: AsyncSession,
-        agent_id: UUID,
-        check_id: UUID,
-        data: CheckResultCreate,
-    ) -> CheckResult:
-        """
-        Create a new check result.
-
-        Args:
-            db: Database session
-            agent_id: Agent UUID
-            check_id: Check UUID
-            data: Check result data
-
-        Returns:
-            Created check result
-        """
-        # Process SSL cert info if present in metrics
-        metrics_dict = data.metrics or {}
-        if "response" in metrics_dict and "ssl_certificate" in metrics_dict["response"]:
-            raw_cert = metrics_dict["response"]["ssl_certificate"]
-            computed_cert = await CheckResultCoreService.compute_ssl_cert_info(
-                db, raw_cert
-            )
-            metrics_dict["response"]["ssl_certificate"] = computed_cert
-
-        # Extract metrics if present
-        metrics_json = None
-        if metrics_dict:
-            metrics_json = json.dumps(metrics_dict)
-
-        result = CheckResult(
-            agent_id=agent_id,
-            check_id=check_id,
-            timestamp=data.timestamp,
-            success=data.success,
-            latency_ms=data.latency_ms,
-            error=data.error,
-            error_type=data.error_type,
-            http_status_code=data.http_status_code,
-            http_response_time_ms=data.http_response_time_ms,
-            metrics=metrics_json,
-            response_data=data.response_data,
-        )
-
-        db.add(result)
-        await db.flush()
-        await db.refresh(result)
-
-        # Evaluate alerts for this check result
-        try:
-            await AlertCoreService.evaluate_check_result(db, result)
-        # swallowed-exceptions: the result is already stored — losing the
-        # measurement because alerting failed would be the worse outcome.
-        except Exception:
-            logger.error(
-                "Error evaluating alerts for check result",
-                extra={"result_id": str(result.id)},
-                exc_info=True,
-            )
-
-        return result
 
     @staticmethod
     async def get_latest_results_for_agent(
@@ -513,29 +447,6 @@ class CheckResultCoreService:
             "active_checks": active_checks,
             "time_window_hours": hours,
         }
-
-    @staticmethod
-    async def cleanup_old_results(
-        db: AsyncSession,
-        days: int = 90,
-    ) -> int:
-        """
-        Clean up old check results beyond retention period.
-
-        Args:
-            db: Database session
-            days: Delete results older than this many days
-
-        Returns:
-            Number of records deleted
-        """
-        cutoff_time = utc_now() - timedelta(days=days)
-        deleted_count = await CheckResultCRUD.delete_older_than(db, cutoff_time)
-        logger.info(
-            "Cleaned up old check results",
-            extra={"deleted_count": deleted_count, "older_than_days": days},
-        )
-        return deleted_count
 
     # ------------------------------------------------------------------
     # CRUD delegation methods (used by view services)

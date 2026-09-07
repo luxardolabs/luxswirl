@@ -100,21 +100,6 @@ class UserCoreService:
         """
         return await UserCRUD.get_by_id(db, user_id)
 
-    async def get_user_by_username(
-        self, db: AsyncSession, username: str
-    ) -> User | None:
-        """
-        Get user by username.
-
-        Args:
-            db: Database session
-            username: Username
-
-        Returns:
-            User object or None
-        """
-        return await UserCRUD.get_by_username(db, username)
-
     async def list_users(
         self,
         db: AsyncSession,

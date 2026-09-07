@@ -104,19 +104,6 @@ class SettingsCoreService:
         return list(await SettingCRUD.list_by_category(db, category))
 
     @staticmethod
-    async def get_all_settings(db: AsyncSession) -> list[Setting]:
-        """
-        Get all settings.
-
-        Args:
-            db: Database session
-
-        Returns:
-            List of all Setting objects
-        """
-        return list(await SettingCRUD.list_all(db))
-
-    @staticmethod
     async def update_setting(
         db: AsyncSession,
         key: str,
@@ -426,72 +413,6 @@ class SettingsCoreService:
                 db, "security.registration_rate_limit", "5/hour"
             ),
         }
-
-    @staticmethod
-    async def update_security_settings(
-        db: AsyncSession,
-        session_lifetime_days: int | None = None,
-        max_failed_attempts: int | None = None,
-        account_lock_duration_minutes: int | None = None,
-        rate_limit_enabled: bool | None = None,
-        login_rate_limit: str | None = None,
-        api_rate_limit: str | None = None,
-        registration_rate_limit: str | None = None,
-    ) -> dict[str, Any]:
-        """
-        Update security settings.
-
-        Args:
-            db: Database session
-            session_lifetime_days: Optional new session lifetime
-            max_failed_attempts: Optional new failed attempts limit
-            account_lock_duration_minutes: Optional new lock duration
-            rate_limit_enabled: Optional rate limiting toggle
-            login_rate_limit: Optional login rate limit string
-            api_rate_limit: Optional API rate limit string
-            registration_rate_limit: Optional registration rate limit string
-
-        Returns:
-            Updated security settings dict
-        """
-        if session_lifetime_days is not None:
-            await SettingsCoreService.update_setting(
-                db, "security.session_lifetime_days", session_lifetime_days
-            )
-
-        if max_failed_attempts is not None:
-            await SettingsCoreService.update_setting(
-                db, "security.max_failed_attempts", max_failed_attempts
-            )
-
-        if account_lock_duration_minutes is not None:
-            await SettingsCoreService.update_setting(
-                db,
-                "security.account_lock_duration_minutes",
-                account_lock_duration_minutes,
-            )
-
-        if rate_limit_enabled is not None:
-            await SettingsCoreService.update_setting(
-                db, "security.rate_limit_enabled", rate_limit_enabled
-            )
-
-        if login_rate_limit is not None:
-            await SettingsCoreService.update_setting(
-                db, "security.login_rate_limit", login_rate_limit
-            )
-
-        if api_rate_limit is not None:
-            await SettingsCoreService.update_setting(
-                db, "security.api_rate_limit", api_rate_limit
-            )
-
-        if registration_rate_limit is not None:
-            await SettingsCoreService.update_setting(
-                db, "security.registration_rate_limit", registration_rate_limit
-            )
-
-        return await SettingsCoreService.get_security_settings(db)
 
     @staticmethod
     async def reset_security_settings(db: AsyncSession) -> dict[str, Any]:

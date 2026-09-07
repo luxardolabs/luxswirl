@@ -91,13 +91,6 @@ class TestGetters:
     async def test_get_by_id_missing(self, db: AsyncSession, svc):
         assert await svc.get_user_by_id(db, uuid4()) is None
 
-    async def test_get_by_username(self, db: AsyncSession, svc):
-        u = make_user(username="findable")
-        db.add(u)
-        await db.flush()
-        loaded = await svc.get_user_by_username(db, "findable")
-        assert loaded.id == u.id
-
 
 # ---------------------------------------------------------------------------
 # update_user

@@ -80,14 +80,3 @@ class RegistrationKeysViewService:
             "Deleted registration key",
             extra={"key_id": str(key_id)},
         )
-
-    @staticmethod
-    def build_error_context(
-        request: Request, current_user: AuthedUser, error: str
-    ) -> dict[str, Any]:
-        """Common error-partial context (used by all four endpoints)."""
-        return {
-            "request": request,
-            "current_user": current_user,
-            "error": error,
-        }

@@ -82,24 +82,6 @@ class UserRow:
 
         return self.locked_until > utc_now()
 
-    @property
-    def status_badge_class(self) -> str:
-        """Get CSS class for status badge."""
-        if self.is_locked:
-            return "bg-red-600/20 text-red-400 border-red-600/30"
-        if not self.is_active:
-            return "bg-gray-600/20 text-gray-400 border-gray-600/30"
-        return "bg-green-600/20 text-green-400 border-green-600/30"
-
-    @property
-    def role_badge_class(self) -> str:
-        """Get CSS class for role badge."""
-        if self.role == "admin":
-            return "bg-purple-600/20 text-purple-400 border-purple-600/30"
-        if self.role == "editor":
-            return "bg-blue-600/20 text-blue-400 border-blue-600/30"
-        return "bg-gray-600/20 text-gray-400 border-gray-600/30"
-
 
 class WebUsersViewService:
     """Service for web UI user management."""

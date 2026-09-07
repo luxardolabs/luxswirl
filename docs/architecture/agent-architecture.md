@@ -55,7 +55,7 @@ If home-agent-1 dies:
 - No gaps in monitoring once the offline agent is excluded from the pool.
 ```
 
-**Note on failover:** `get_matching_agents()` currently matches by selector against *all* agents (`AgentCRUD.list_all`); it does not filter on online status. Rebalancing therefore depends on offline agents being removed from the pool by whatever populates the agent list, not on liveness within this function.
+**Note on failover:** `filter_agents_by_selector()` matches by selector against *all* agents (the caller loads them with `AgentCRUD.list_all`); it does not filter on online status. Rebalancing therefore depends on offline agents being removed from the pool by whatever populates the agent list, not on liveness within this function.
 
 **Benefits:**
 - Distribute load across multiple agents
@@ -130,7 +130,7 @@ def get_assigned_agent_for_check(check, available_agents):
 - **Keyed on the immutable `check.id`, not `display_name`.** `display_name` is editable and not unique, so hashing it meant a rename silently reassigned the check and same-named checks always co-located. The UUID is the stable identity.
 - **Minimal reshuffle on pool change.** With HRW, when an agent joins or leaves the matching pool, only the checks owned by that agent move; everyone else stays put. Plain `hash % n` reshuffles *every* check whenever the pool size changes.
 
-> **Failover caveat.** This function only assigns among the agents it is *given*. `get_matching_agents()` does not yet filter on liveness, so a dead-but-still-listed agent stays in the pool and its checks are not reassigned to survivors. Health-based failover is tracked separately in **LUXSWIRL-184**.
+> **Failover caveat.** This function only assigns among the agents it is *given*. `filter_agents_by_selector()` does not filter on liveness, so a dead-but-still-listed agent stays in the pool and its checks are not reassigned to survivors. Health-based failover is tracked separately in **LUXSWIRL-184**.
 
 ### Agent Check Fetch Logic (shipped)
 
@@ -152,7 +152,7 @@ async def get_checks_for_agent(db, agent):
 
         elif check.assignment_mode == "distribute":
             if agent_matches_selector(agent, check.agent_selector):
-                matching_agents = await get_matching_agents(db, check.agent_selector)
+                matching_agents = filter_agents_by_selector(all_agents, check.agent_selector)
                 assigned = get_assigned_agent_for_check(check, matching_agents)
                 if assigned and assigned.id == agent.id:
                     checks_to_run.append(check)
@@ -314,7 +314,7 @@ for node in range(1, 1001):  # 1000 nodes
 ## Questions & Decisions
 
 ### Q: What happens when an agent with DISTRIBUTE checks goes offline?
-**A:** Its checks rehash onto the remaining agents the next time agents refetch, *provided the offline agent is removed from the matching pool*. See the failover note under Use Case 2 — `get_matching_agents()` itself does not filter on liveness.
+**A:** Its checks rehash onto the remaining agents the next time agents refetch, *provided the offline agent is removed from the matching pool*. See the failover note under Use Case 2 — `filter_agents_by_selector()` itself does not filter on liveness.
 
 ### Q: Can a check be both REPLICATE and DISTRIBUTE?
 **A:** No. `assignment_mode` is a single value per check; the modes are mutually exclusive.
@@ -329,9 +329,9 @@ http_google (replicate)
 ```
 
 ### Q: What if no agents match the selector?
-**A:** The check is assigned to no agent (`get_matching_agents` returns empty, `get_assigned_agent_for_check` returns `None`). The check stays in the database and is picked up automatically once a matching agent appears.
+**A:** The check is assigned to no agent (`filter_agents_by_selector` returns empty, `get_assigned_agent_for_check` returns `None`). The check stays in the database and is picked up automatically once a matching agent appears.
 
 ## Known Limitations
 
 - **DISTRIBUTE hashing is not stable across processes.** It uses builtin `hash()`, which is per-process randomized for strings. See the hash stability note above. Switch to a deterministic digest for stable cross-process / multi-worker assignment.
-- **Pool membership ignores liveness.** `get_matching_agents()` matches against all agents regardless of online status; failover relies on offline agents being excluded upstream.
+- **Pool membership ignores liveness.** `filter_agents_by_selector()` matches against all agents regardless of online status; failover relies on offline agents being excluded upstream.
