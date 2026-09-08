@@ -6,7 +6,6 @@ while providing web-specific functionality and data aggregation.
 """
 
 import asyncio
-from dataclasses import dataclass
 from datetime import timedelta
 from typing import Any
 from uuid import UUID
@@ -22,7 +21,7 @@ from app.core.datetime_utils import utc_now
 from app.core.exceptions import AgentNotFoundException
 from app.models.agent_model import Agent
 from app.models.enum_model import MaintenanceJobKind
-from app.schemas.agent_schema import AgentUpdate
+from app.schemas.agent_schema import AgentUpdate, AgentUrls
 from app.schemas.pagination_schema import build_pagination
 from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.check_core_service import CheckCoreService
@@ -32,33 +31,6 @@ from app.web.hx_responses import hx_empty_with_toast
 from app.web.templates_config import templates
 
 logger = get_logger("luxswirl.web.services.agents")
-
-
-@dataclass(frozen=True)
-class AgentUrls:
-    """Finished hrefs for one agent's row actions.
-
-    Built here with `request.url_for`, so route knowledge lives in the router and
-    the template just renders a string. A path spelled into a template can't be
-    grepped when the route moves (fw.url_assembly_in_view).
-    """
-
-    force_reload: str
-    edit_form: str
-    import_export_form: str
-    view_checks: str
-    key_management_panel: str
-    generate_key: str
-    approve: str
-    reject: str
-    pause: str
-    resume: str
-    disable: str
-    enable: str
-    delete: str
-    update: str
-    regenerate_key: str
-    revoke_key: str
 
 
 def build_agent_urls(request: Request, agent_id: UUID) -> AgentUrls:

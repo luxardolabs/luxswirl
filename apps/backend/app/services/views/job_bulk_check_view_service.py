@@ -7,9 +7,9 @@ from uuid import UUID
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.schemas.check_schema import BulkCheckCreateSummary
 from app.services.core.job_to_check_core_service import (
     BulkCheckParams,
-    BulkCheckResult,
     JobToCheckCoreService,
     QuickCheckParams,
 )
@@ -77,7 +77,7 @@ class JobBulkCheckViewService:
     @staticmethod
     async def create_ping_checks_from_job(
         db: AsyncSession, job_id: UUID, form_data: dict
-    ) -> tuple[BulkCheckResult | None, str | None]:
+    ) -> tuple[BulkCheckCreateSummary | None, str | None]:
         """Parse form, then delegate to core."""
         params, error = await JobBulkCheckViewService._parse_bulk_form_data(
             db, form_data
@@ -92,7 +92,7 @@ class JobBulkCheckViewService:
     @staticmethod
     async def create_web_checks_from_job(
         db: AsyncSession, job_id: UUID, form_data: dict
-    ) -> tuple[BulkCheckResult | None, str | None]:
+    ) -> tuple[BulkCheckCreateSummary | None, str | None]:
         """Parse form, then delegate to core."""
         params, error = await JobBulkCheckViewService._parse_bulk_form_data(
             db, form_data
@@ -107,7 +107,7 @@ class JobBulkCheckViewService:
     @staticmethod
     async def create_ssh_checks_from_job(
         db: AsyncSession, job_id: UUID, form_data: dict
-    ) -> tuple[BulkCheckResult | None, str | None]:
+    ) -> tuple[BulkCheckCreateSummary | None, str | None]:
         """Parse form, then delegate to core."""
         params, error = await JobBulkCheckViewService._parse_bulk_form_data(
             db, form_data
@@ -122,7 +122,7 @@ class JobBulkCheckViewService:
     @staticmethod
     async def create_database_checks_from_job(
         db: AsyncSession, job_id: UUID, form_data: dict
-    ) -> tuple[BulkCheckResult | None, str | None]:
+    ) -> tuple[BulkCheckCreateSummary | None, str | None]:
         """Parse form, then delegate to core."""
         params, error = await JobBulkCheckViewService._parse_bulk_form_data(
             db, form_data

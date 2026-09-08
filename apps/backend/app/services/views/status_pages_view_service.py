@@ -7,7 +7,6 @@ the dashboard rendering view-model assembly via DashboardRender.
 """
 
 import json
-from dataclasses import dataclass
 from typing import Any
 from uuid import UUID
 
@@ -23,6 +22,7 @@ from app.schemas.status_page_schema import (
     StatusPageCreate,
     StatusPageInDB,
     StatusPageUpdate,
+    StatusPageUrls,
 )
 from app.services.core.check_core_service import CheckCoreService
 from app.services.core.maintenance_job_core_service import MaintenanceJobCoreService
@@ -83,19 +83,6 @@ def _resolve_time_range(query_value: int | None, page_config: dict | None) -> in
     config = page_config or {}
     cfg_minutes = config.get("status_bar_minutes", 30)
     return cfg_minutes if cfg_minutes in ALLOWED_TIME_RANGES else 30
-
-
-@dataclass(frozen=True)
-class StatusPageUrls:
-    """Finished hrefs for one status page. Built by route NAME so a router path
-    change propagates on its own (fw.url_assembly_in_view)."""
-
-    edit_form: str
-    manage: str
-    delete: str
-    update: str
-    available_checks: str
-    public: str
 
 
 def build_status_page_urls(

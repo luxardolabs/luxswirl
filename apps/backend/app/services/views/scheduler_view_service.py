@@ -5,13 +5,13 @@ Builds display-ready data structures for templates.
 Does NOT touch the database directly - delegates to scheduler_service.
 """
 
-from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import cast
 
 from fastapi import Request
 from shared.logger import get_logger
 
+from app.schemas.scheduler_schema import SchedulerJobUrls
 from app.services.core.scheduler_core_service import scheduler_service
 
 logger = get_logger("luxswirl.web.services.scheduler_view")
@@ -70,16 +70,6 @@ def _is_running(job) -> bool:
     if not job.lease_token or not job.lease_expires_at:
         return False
     return cast(bool, job.lease_expires_at > datetime.now(UTC))
-
-
-@dataclass(frozen=True)
-class SchedulerJobUrls:
-    """Finished hrefs for one scheduler job row (fw.url_assembly_in_view)."""
-
-    history: str
-    run: str
-    reset: str
-    toggle: str
 
 
 def build_scheduler_job_urls(request: Request, job_key: str) -> SchedulerJobUrls:

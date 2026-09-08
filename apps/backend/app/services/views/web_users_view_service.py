@@ -5,7 +5,6 @@ This service provides user management functionality specifically for web UI,
 calling core user service and formatting responses for templates.
 """
 
-from dataclasses import dataclass
 from typing import Any, cast
 from uuid import UUID
 
@@ -18,23 +17,12 @@ from app.core.auth_deps import AuthedUser
 from app.core.datetime_utils import utc_now
 from app.models.enum_model import UserRole, options_for
 from app.schemas.pagination_schema import build_pagination
-from app.schemas.user_schema import UserCreate, UserResponse, UserUpdate
+from app.schemas.user_schema import UserCreate, UserResponse, UserUpdate, UserUrls
 from app.services.core.auth_core_service import AuthCoreService
 from app.services.core.settings_core_service import SettingsCoreService
 from app.services.core.user_core_service import UserCoreService
 
 logger = get_logger("luxswirl.web.services.web_users")
-
-
-@dataclass(frozen=True)
-class UserUrls:
-    """Finished hrefs for one user row (fw.url_assembly_in_view)."""
-
-    edit_form: str
-    update: str
-    unlock: str
-    delete: str
-    reset_password: str
 
 
 def build_user_urls(request: Request, user_id: UUID) -> UserUrls:

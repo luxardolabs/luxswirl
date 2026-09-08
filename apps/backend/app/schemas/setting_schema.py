@@ -2,6 +2,7 @@
 Setting schemas - Pydantic models for settings validation and serialization.
 """
 
+from dataclasses import dataclass
 from typing import Any
 from uuid import UUID
 
@@ -189,3 +190,16 @@ class DatabaseGrowthResponse(BaseModel):
     """Response for the database-growth chart endpoint."""
 
     data: list[DatabaseGrowthPoint]
+
+
+@dataclass(frozen=True)
+class SettingUrls:
+    """Finished update/reset hrefs for one setting.
+
+    A dataclass, not a dict: Jinja resolves `x.update` to dict.update — the bound
+    METHOD — before it ever tries the key, so a dict silently renders
+    "<built-in method update of dict object …>" into the form's hx-post.
+    """
+
+    update: str
+    reset: str

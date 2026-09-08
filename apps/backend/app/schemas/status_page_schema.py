@@ -2,6 +2,7 @@
 Pydantic schemas for StatusPage domain.
 """
 
+from dataclasses import dataclass
 from typing import Any, Literal
 from uuid import UUID
 
@@ -264,3 +265,16 @@ class StatusPageReorderRequest(BaseSchema):
     to_index: int = Field(..., ge=0, description="New position for item")
 
     model_config = {"json_schema_extra": {"example": {"from_index": 0, "to_index": 2}}}
+
+
+@dataclass(frozen=True)
+class StatusPageUrls:
+    """Finished hrefs for one status page. Built by route NAME so a router path
+    change propagates on its own (fw.url_assembly_in_view)."""
+
+    edit_form: str
+    manage: str
+    delete: str
+    update: str
+    available_checks: str
+    public: str

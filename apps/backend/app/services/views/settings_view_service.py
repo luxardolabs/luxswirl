@@ -5,7 +5,6 @@ Provides web-specific functionality like value parsing and template cache update
 """
 
 from collections import defaultdict
-from dataclasses import dataclass
 from typing import Any
 
 from fastapi import Request, Response
@@ -14,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth_deps import AuthedUser
 from app.schemas.pagination_schema import build_pagination
-from app.schemas.setting_schema import SettingResponse
+from app.schemas.setting_schema import SettingResponse, SettingUrls
 from app.services.core.alert_core_service import AlertCoreService
 from app.services.core.notification_core_service import NotificationCoreService
 from app.services.core.registration_key_core_service import RegistrationKeyCoreService
@@ -25,19 +24,6 @@ from app.web.template_filters import update_settings_cache
 from app.web.templates_config import templates
 
 logger = get_logger("luxswirl.web.services.settings")
-
-
-@dataclass(frozen=True)
-class SettingUrls:
-    """Finished update/reset hrefs for one setting.
-
-    A dataclass, not a dict: Jinja resolves `x.update` to dict.update — the bound
-    METHOD — before it ever tries the key, so a dict silently renders
-    "<built-in method update of dict object …>" into the form's hx-post.
-    """
-
-    update: str
-    reset: str
 
 
 def build_setting_urls(request: Request, key: str) -> SettingUrls:

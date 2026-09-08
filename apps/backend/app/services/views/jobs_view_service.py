@@ -6,7 +6,6 @@ This web service acts as an aggregation layer, delegating to core services.
 """
 
 import json
-from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlencode
 from uuid import UUID
@@ -22,7 +21,7 @@ from app.core.auth_deps import AuthedUser
 from app.core.exceptions import NotFoundException
 from app.core.scan_panel import build_scan_view
 from app.models.enum_model import SERVER_RUNNER, JobStatus, JobType
-from app.schemas.job_schema import JobCreate, JobInDB
+from app.schemas.job_schema import JobCreate, JobInDB, JobUrls, ScanActionUrls
 from app.schemas.pagination_schema import build_pagination
 from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.check_core_service import CheckCoreService
@@ -37,15 +36,6 @@ _JOB_REGISTRY: dict = {
 logger = get_logger("luxswirl.web.services.jobs")
 
 
-@dataclass(frozen=True)
-class JobUrls:
-    """Finished hrefs for one job row (fw.url_assembly_in_view)."""
-
-    detail: str
-    cancel: str
-    delete: str
-
-
 def build_job_urls(request: Request, job_id: UUID) -> JobUrls:
     # .path: url_for returns an absolute url from the request's scheme/host, which
     # behind TLS-terminating nginx can emit http:// into an https:// page.
@@ -57,17 +47,6 @@ def build_job_urls(request: Request, job_id: UUID) -> JobUrls:
         cancel=u("cancel_job_web"),
         delete=u("delete_job_web"),
     )
-
-
-@dataclass(frozen=True)
-class ScanActionUrls:
-    """Finished hrefs for the network-scan quick-action buttons."""
-
-    bulk_ping: str
-    bulk_web: str
-    bulk_ssh: str
-    bulk_database: str
-    quick_create: str
 
 
 def build_scan_action_urls(request: Request, job_id: UUID) -> ScanActionUrls:
