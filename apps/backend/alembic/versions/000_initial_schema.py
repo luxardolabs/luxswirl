@@ -29,8 +29,8 @@ def upgrade() -> None:
     op.create_table('agents',
     sa.Column('agent_name', sa.String(length=255), nullable=True, comment='Friendly name for the agent (editable, set during approval)'),
     sa.Column('agent_run_id', sa.String(length=255), nullable=True, comment='Current run ID (UUID), changes on agent restart'),
-    sa.Column('first_seen', sa.DateTime(timezone=True), server_default='NOW()', nullable=False, comment='Timestamp when agent was first seen'),
-    sa.Column('last_seen', sa.DateTime(timezone=True), server_default='NOW()', nullable=False, comment='Timestamp when agent last reported'),
+    sa.Column('first_seen', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False, comment='Timestamp when agent was first seen'),
+    sa.Column('last_seen', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False, comment='Timestamp when agent last reported'),
     sa.Column('hostname', sa.String(length=255), nullable=True, comment='Agent hostname'),
     sa.Column('ip_address', sa.String(length=45), nullable=True, comment='Agent IP address'),
     sa.Column('version', sa.String(length=50), nullable=True, comment='Agent version'),
@@ -248,7 +248,6 @@ def upgrade() -> None:
     sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False, comment='Timestamp when record was created'),
     sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False, comment='Timestamp when record was last updated'),
     sa.PrimaryKeyConstraint('id'),
-    sa.UniqueConstraint('key'),
     sa.UniqueConstraint('key', name='uq_settings_key')
     )
     op.create_index('idx_settings_category', 'settings', ['category'], unique=False)
@@ -265,7 +264,6 @@ def upgrade() -> None:
     sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False, comment='Timestamp when record was created'),
     sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False, comment='Timestamp when record was last updated'),
     sa.PrimaryKeyConstraint('id'),
-    sa.UniqueConstraint('slug'),
     sa.UniqueConstraint('slug', name='uq_status_page_slug')
     )
     op.create_index('idx_status_pages_is_public', 'status_pages', ['is_public'], unique=False)

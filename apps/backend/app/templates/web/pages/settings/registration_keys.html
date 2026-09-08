@@ -77,7 +77,7 @@
                 <!-- Created -->
                 <div class="flex items-center justify-between">
                     <span class="text-dark-text-muted">Created:</span>
-                    <span class="text-sm text-dark-text-primary">{{ key.created_at.strftime('%Y-%m-%d') if key.created_at else 'N/A' }}</span>
+                    <span class="text-sm text-dark-text-primary">{{ key.created_at | format_datetime(date_only=True) if key.created_at else 'N/A' }}</span>
                 </div>
 
                 <!-- Last Used -->
@@ -85,7 +85,7 @@
                     <span class="text-dark-text-muted">Last Used:</span>
                     <span class="text-sm text-dark-text-primary">
                         {% if key.last_used_at %}
-                            {{ key.last_used_at.strftime('%Y-%m-%d %H:%M') }}
+                            {{ key.last_used_at | format_datetime(include_date=True) }}
                         {% else %}
                             Never
                         {% endif %}
@@ -102,7 +102,7 @@
                 <!-- Revocation Info -->
                 <div class="pt-2 border-t border-dark-border">
                     <p class="text-xs text-red-400">
-                        Revoked: {{ key.revoked_at.strftime('%Y-%m-%d') }}
+                        Revoked: {{ key.revoked_at | format_datetime(date_only=True) }}
                     </p>
                     {% if key.revoked_reason %}
                     <p class="text-xs text-dark-text-muted mt-1">{{ key.revoked_reason }}</p>

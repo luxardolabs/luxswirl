@@ -10,7 +10,7 @@ from enum import Enum as PyEnum
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import DateTime, Enum, Integer, Uuid, inspect
+from sqlalchemy import DateTime, Enum, Integer, MetaData, Uuid, inspect
 from sqlalchemy.orm import DeclarativeBase, Mapped, declared_attr, mapped_column
 from sqlalchemy.sql import func
 
@@ -36,8 +36,27 @@ def str_enum[EnumT: PyEnum](enum_cls: type[EnumT], length: int) -> Enum:
     )
 
 
+# Canonical fleet convention (luxarch --emit naming-convention). Constraint and
+# index names live in the database, so every repo names them the same way or
+# autogenerate churns and the names cannot be cleanly ALTER'd.
+#
+# column_0_N_name names ALL columns, not just the first: two multi-column
+# constraints sharing a leading column would otherwise generate the same name
+# and collide the moment DDL runs. Do not substitute the SQLAlchemy-docs
+# column_0_name/column_0_label form.
+NAMING_CONVENTION = {
+    "ix": "ix_%(table_name)s_%(column_0_N_name)s",
+    "uq": "uq_%(table_name)s_%(column_0_N_name)s",
+    "ck": "ck_%(table_name)s_%(constraint_name)s",
+    "fk": "fk_%(table_name)s_%(column_0_N_name)s_%(referred_table_name)s",
+    "pk": "pk_%(table_name)s",
+}
+
+
 class Base(DeclarativeBase):
     """Base class for all SQLAlchemy models."""
+
+    metadata = MetaData(naming_convention=NAMING_CONVENTION)
 
     # Common type annotation mapping
     type_annotation_map = {

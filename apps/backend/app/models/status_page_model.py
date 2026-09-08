@@ -40,7 +40,8 @@ class StatusPage(UUIDBaseModel):
     slug: Mapped[str] = mapped_column(
         String(255),
         nullable=False,
-        unique=True,
+        # Uniqueness is declared once, as the named UniqueConstraint in
+        # __table_args__ — see the note on Setting.key.
         comment="URL-friendly slug for public access (e.g., /status/production)",
     )
 

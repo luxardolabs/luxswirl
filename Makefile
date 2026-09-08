@@ -26,7 +26,7 @@ AGENT_IMAGE     := $(REGISTRY)/$(AGENT_NAME)
 # Makefile.local (gitignored): copy Makefile.local.example -> Makefile.local and set it.
 # Contributors don't need it — lint/test and the import-linter contracts run without it.
 LUXARCH_REGISTRY ?=
-LUXARCH_VERSION := 0.141.0
+LUXARCH_VERSION := 0.153.0
 LUXARCH_IMAGE    ?= $(LUXARCH_REGISTRY)/luxardolabs/luxarch:$(LUXARCH_VERSION)
 # Dependency-CVE guard (luxaudit) — same private registry as luxarch, mount-only.
 # Scans the pinned poetry.locks against the live advisory feed (see .luxaudit.toml).
@@ -36,7 +36,7 @@ LUXAUDIT_IMAGE   ?= $(LUXARCH_REGISTRY)/luxardolabs/luxaudit:$(LUXAUDIT_VERSION)
 # ruff/mypy config byte-identical (see .luxlint.toml); ruff runs mount-only, mypy
 # runs as an in-repo tail (needs a current mypy for PEP 758 excepts — the baked
 # lint image freezes an older one, so the tail installs a fresh mypy).
-LUXLINT_VERSION := 0.44.2
+LUXLINT_VERSION := 0.45.1
 LUXLINT_IMAGE    ?= $(LUXARCH_REGISTRY)/luxardolabs/luxlint:$(LUXLINT_VERSION)
 -include Makefile.local
 
@@ -166,7 +166,21 @@ build-dev: ## Build both images locally tagged :dev (for the dev stack)
 
 push: build-backend build-agent ## Build + push both images (:$(VERSION) + :latest)
 
-release: css push ## Promote a release: build CSS, build + push both images (:$(VERSION) + :latest)
+github-release: ## Publish the GitHub Release for $(VERSION) from its release notes
+	@notes=apps/backend/app/release_notes/$(VERSION).md; \
+	if [ ! -f $$notes ]; then \
+		echo "release notes missing: $$notes — write them before releasing (see luxarch --doc FLEET-RELEASE-PROCESS)"; exit 1; \
+	fi; \
+	if ! command -v gh >/dev/null 2>&1; then \
+		echo "gh not installed — the GitHub Release carries this version's notes and is not optional"; exit 1; \
+	fi; \
+	if gh release view v$(VERSION) >/dev/null 2>&1; then \
+		echo ">> GitHub Release v$(VERSION) already exists — leaving it alone"; \
+	else \
+		gh release create v$(VERSION) --title "$(VERSION)" --notes-file $$notes; \
+	fi
+
+release: css push github-release ## Promote a release: CSS, push both images, publish the GitHub Release
 	@printf "$(GREEN)Released $(VERSION) → $(REGISTRY)$(NC)\n"
 
 # =============================================================================
