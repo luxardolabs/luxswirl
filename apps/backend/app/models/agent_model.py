@@ -5,7 +5,7 @@ Agent model - represents monitoring agents.
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import ARRAY, Float, Index, Integer, String
+from sqlalchemy import ARRAY, Float, Index, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.datetime_utils import utc_now
@@ -53,14 +53,14 @@ class Agent(UUIDBaseModel):
     # When agent was first seen
     first_seen: Mapped[datetime] = mapped_column(
         nullable=False,
-        server_default="NOW()",
+        server_default=func.now(),
         comment="Timestamp when agent was first seen",
     )
 
     # When agent was last seen (updated on every report)
     last_seen: Mapped[datetime] = mapped_column(
         nullable=False,
-        server_default="NOW()",
+        server_default=func.now(),
         comment="Timestamp when agent last reported",
     )
 

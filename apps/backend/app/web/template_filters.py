@@ -54,6 +54,7 @@ def format_datetime(
     format_str: str | None = None,
     timezone: str | None = None,
     include_date: bool = False,
+    date_only: bool = False,
 ) -> str:
     """
     Format a datetime with timezone conversion using user preferences.
@@ -66,6 +67,9 @@ def format_datetime(
         format_str: Optional explicit strftime format (overrides settings)
         timezone: Target timezone name (default: uses cached setting from database)
         include_date: If True, includes date + time; if False, time only
+        date_only: If True, the date alone — for a field where a time would be
+            noise (when a key was created, when it was revoked). Wins over
+            include_date.
 
     Returns:
         Formatted datetime string
@@ -74,6 +78,7 @@ def format_datetime(
         {{ check.last_failure_at | format_datetime }}  # Uses settings (time only)
         {{ check.last_failure_at | format_datetime(include_date=True) }}  # Date + time
         {{ check.last_failure_at | format_datetime("%Y-%m-%d %I:%M%p") }}  # Custom format
+        {{ key.created_at | format_datetime(date_only=True) }}  # Date, no time
     """
     if dt is None:
         return "-"
@@ -103,7 +108,7 @@ def format_datetime(
         else:  # 12h
             time_fmt = "%I:%M%p"
 
-        if include_date:
+        if include_date or date_only:
             # Date format based on setting
             if _cached_date_format == "iso":
                 date_fmt = "%Y-%m-%d"
@@ -112,7 +117,7 @@ def format_datetime(
             else:  # long
                 date_fmt = "%B %-d, %Y"  # November 8, 2025
 
-            format_str = f"{date_fmt} {time_fmt}"
+            format_str = date_fmt if date_only else f"{date_fmt} {time_fmt}"
         else:
             format_str = time_fmt
 

@@ -40,7 +40,10 @@ class Setting(
     key: Mapped[str] = mapped_column(
         String(100),
         nullable=False,
-        unique=True,
+        # Uniqueness is declared once, as the named UniqueConstraint in
+        # __table_args__. Saying it here as well emits a SECOND, anonymous
+        # constraint on the same column, which the naming convention then names
+        # identically to the explicit one.
         comment="Unique setting key (e.g., 'check.default_interval')",
     )
 
