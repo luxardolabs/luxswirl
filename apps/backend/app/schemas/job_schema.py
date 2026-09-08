@@ -5,6 +5,7 @@ Jobs are tasks dispatched to agents (or executed on server) for discovery,
 diagnostics, and maintenance operations.
 """
 
+from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
@@ -278,3 +279,23 @@ class MaintenanceJobEnqueuedResponse(BaseSchema):
     job_id: UUID = Field(..., description="Id of the queued maintenance job")
     status: MaintenanceJobStatus = Field(..., description="Queued job's status")
     kind: MaintenanceJobKind = Field(..., description="What the job will do")
+
+
+@dataclass(frozen=True)
+class JobUrls:
+    """Finished hrefs for one job row (fw.url_assembly_in_view)."""
+
+    detail: str
+    cancel: str
+    delete: str
+
+
+@dataclass(frozen=True)
+class ScanActionUrls:
+    """Finished hrefs for the network-scan quick-action buttons."""
+
+    bulk_ping: str
+    bulk_web: str
+    bulk_ssh: str
+    bulk_database: str
+    quick_create: str

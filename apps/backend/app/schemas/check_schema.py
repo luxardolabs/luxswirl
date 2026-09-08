@@ -2,6 +2,7 @@
 Pydantic schemas for Check domain.
 """
 
+from dataclasses import dataclass
 from uuid import UUID
 
 from pydantic import Field
@@ -342,3 +343,30 @@ class BulkCheckCreateResponse(BaseSchema):
             }
         }
     }
+
+
+@dataclass(frozen=True)
+class CheckFormUrls:
+    """Finished hrefs for the check form / dependents panels.
+
+    A dataclass, not a dict: Jinja resolves `x.update` to dict.update — the bound
+    METHOD — before it ever tries the key, so a dict silently renders
+    "<built-in method update of dict object …>" into the form's hx-post.
+    """
+
+    clone: str
+    update: str
+    dependents: str
+    update_dependents: str
+
+
+@dataclass
+class BulkCheckCreateSummary:
+    """How many checks a bulk-create made and how many it passed over.
+
+    Distinct from BulkCheckResult above, which is ONE row of a bulk create —
+    a single URL and what became of it. This is the tally for the whole run.
+    """
+
+    created_count: int
+    skipped_count: int

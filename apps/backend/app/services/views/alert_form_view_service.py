@@ -5,21 +5,13 @@ This service handles the parsing of web form data for alert creation/updates,
 including checkbox collection and threshold extraction.
 """
 
-from dataclasses import dataclass
 from uuid import UUID
 
 from shared.logger import get_logger
 
+from app.schemas.alert_schema import AlertFormData
+
 logger = get_logger("luxswirl.web.services.alert_form")
-
-
-@dataclass
-class AlertFormData:
-    """Parsed alert form data."""
-
-    provider_ids: list[UUID]
-    check_ids: list[UUID]
-    days_thresholds: list[int] | None = None
 
 
 class AlertFormViewService:

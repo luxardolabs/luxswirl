@@ -86,6 +86,12 @@ node_modules/
 # (.claude/settings.json, .claude/hooks/) but keep personal/machine-local
 # settings out of the repo.
 .claude/settings.local.json
+# Hook runtime state, not config: the heartbeat proving the hooks actually ran,
+# the commit ledger the stop guard reads, and a recorded reason for holding a
+# push back. All per-machine and per-session.
+.claude/.hooks-heartbeat
+.claude/.luxpm-ledger.json
+.claude/.push-hold
 NOTES.md
 TODO.md
 

@@ -2,6 +2,7 @@
 User schemas - Pydantic models for user management.
 """
 
+from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
@@ -148,3 +149,14 @@ class UserStatsResponse(BaseModel):
     editor_count: int
     viewer_count: int
     locked_accounts: int
+
+
+@dataclass(frozen=True)
+class UserUrls:
+    """Finished hrefs for one user row (fw.url_assembly_in_view)."""
+
+    edit_form: str
+    update: str
+    unlock: str
+    delete: str
+    reset_password: str

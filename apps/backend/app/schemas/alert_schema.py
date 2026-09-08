@@ -2,6 +2,7 @@
 Pydantic schemas for Alert domain.
 """
 
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 from uuid import UUID
@@ -242,3 +243,12 @@ class AlertStatsResponse(BaseSchema):
             }
         }
     }
+
+
+@dataclass
+class AlertFormData:
+    """Parsed alert form data."""
+
+    provider_ids: list[UUID]
+    check_ids: list[UUID]
+    days_thresholds: list[int] | None = None

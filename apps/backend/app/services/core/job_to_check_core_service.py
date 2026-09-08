@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.scan_check_names import PORT_CATEGORIES
 from app.models.enum_model import CheckType
-from app.schemas.check_schema import CheckCreate
+from app.schemas.check_schema import BulkCheckCreateSummary, CheckCreate
 from app.services.core.check_core_service import CheckCoreService
 from app.services.core.job_core_service import JobCoreService
 from app.services.core.network_scan_core_service import NetworkScanCoreService
@@ -37,14 +37,6 @@ class BulkCheckParams:
     tags: list[str]
     expected_status: int | None = None
     verify_ssl: bool = True
-
-
-@dataclass
-class BulkCheckResult:
-    """Outcome of a bulk-create operation."""
-
-    created_count: int
-    skipped_count: int
 
 
 @dataclass
@@ -69,7 +61,7 @@ class JobToCheckCoreService:
     @staticmethod
     async def create_ping_checks_from_job(
         db: AsyncSession, job_id: UUID, params: BulkCheckParams
-    ) -> tuple[BulkCheckResult | None, str | None]:
+    ) -> tuple[BulkCheckCreateSummary | None, str | None]:
         """Create one ping check per discovered host."""
         job = await JobCoreService.get_job(db, job_id)
         if not job or not job.result or "discovered_hosts" not in job.result:
@@ -120,12 +112,12 @@ class JobToCheckCoreService:
                 "job_id": str(job_id),
             },
         )
-        return BulkCheckResult(created_count, skipped_count), None
+        return BulkCheckCreateSummary(created_count, skipped_count), None
 
     @staticmethod
     async def create_web_checks_from_job(
         db: AsyncSession, job_id: UUID, params: BulkCheckParams
-    ) -> tuple[BulkCheckResult | None, str | None]:
+    ) -> tuple[BulkCheckCreateSummary | None, str | None]:
         """Create one HTTP check per (web-host, web-port) pair from a network scan."""
         job = await JobCoreService.get_job(db, job_id)
         if not job or not job.result:
@@ -185,12 +177,12 @@ class JobToCheckCoreService:
                 "job_id": str(job_id),
             },
         )
-        return BulkCheckResult(created_count, skipped_count), None
+        return BulkCheckCreateSummary(created_count, skipped_count), None
 
     @staticmethod
     async def create_ssh_checks_from_job(
         db: AsyncSession, job_id: UUID, params: BulkCheckParams
-    ) -> tuple[BulkCheckResult | None, str | None]:
+    ) -> tuple[BulkCheckCreateSummary | None, str | None]:
         """Create one TCP check per (ssh-host, ssh-port) pair from a network scan."""
         job = await JobCoreService.get_job(db, job_id)
         if not job or not job.result:
@@ -246,7 +238,7 @@ class JobToCheckCoreService:
                 "job_id": str(job_id),
             },
         )
-        return BulkCheckResult(created_count, skipped_count), None
+        return BulkCheckCreateSummary(created_count, skipped_count), None
 
     @staticmethod
     async def create_single_check(
@@ -292,7 +284,7 @@ class JobToCheckCoreService:
     @staticmethod
     async def create_database_checks_from_job(
         db: AsyncSession, job_id: UUID, params: BulkCheckParams
-    ) -> tuple[BulkCheckResult | None, str | None]:
+    ) -> tuple[BulkCheckCreateSummary | None, str | None]:
         """Create one TCP check per (db-host, db-port) pair from a network scan."""
         job = await JobCoreService.get_job(db, job_id)
         if not job or not job.result:
@@ -348,4 +340,4 @@ class JobToCheckCoreService:
                 "job_id": str(job_id),
             },
         )
-        return BulkCheckResult(created_count, skipped_count), None
+        return BulkCheckCreateSummary(created_count, skipped_count), None

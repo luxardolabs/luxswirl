@@ -2,6 +2,7 @@
 Pydantic schemas for Agent domain.
 """
 
+from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
@@ -385,3 +386,30 @@ class AgentHeartbeatResponse(BaseSchema):
     log_level: str | None = Field(
         None, description="Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)"
     )
+
+
+@dataclass(frozen=True)
+class AgentUrls:
+    """Finished hrefs for one agent's row actions.
+
+    Built here with `request.url_for`, so route knowledge lives in the router and
+    the template just renders a string. A path spelled into a template can't be
+    grepped when the route moves (fw.url_assembly_in_view).
+    """
+
+    force_reload: str
+    edit_form: str
+    import_export_form: str
+    view_checks: str
+    key_management_panel: str
+    generate_key: str
+    approve: str
+    reject: str
+    pause: str
+    resume: str
+    disable: str
+    enable: str
+    delete: str
+    update: str
+    regenerate_key: str
+    revoke_key: str

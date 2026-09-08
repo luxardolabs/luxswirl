@@ -7,7 +7,6 @@ while providing web-specific functionality and data aggregation.
 
 import json
 from collections.abc import Sequence
-from dataclasses import dataclass
 from typing import Any, cast
 from uuid import UUID
 
@@ -25,7 +24,12 @@ from app.core.exceptions import (
 from app.core.synthetic_security import SyntheticSecurityError
 from app.models.check_model import Check
 from app.models.enum_model import CheckType, MaintenanceJobKind, options_for
-from app.schemas.check_schema import BulkCheckCreateRequest, CheckCreate, CheckUpdate
+from app.schemas.check_schema import (
+    BulkCheckCreateRequest,
+    CheckCreate,
+    CheckFormUrls,
+    CheckUpdate,
+)
 from app.schemas.maintenance_job_schema import MaintenanceJobResponse
 from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.alert_core_service import AlertCoreService
@@ -63,21 +67,6 @@ class CheckRow:
         self.interval = check.interval_seconds
         self.created_at = check.created_at
         self.updated_at = check.updated_at
-
-
-@dataclass(frozen=True)
-class CheckFormUrls:
-    """Finished hrefs for the check form / dependents panels.
-
-    A dataclass, not a dict: Jinja resolves `x.update` to dict.update — the bound
-    METHOD — before it ever tries the key, so a dict silently renders
-    "<built-in method update of dict object …>" into the form's hx-post.
-    """
-
-    clone: str
-    update: str
-    dependents: str
-    update_dependents: str
 
 
 def build_check_form_urls(request: Request, check_id: UUID) -> CheckFormUrls:
