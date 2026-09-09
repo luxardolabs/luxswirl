@@ -98,12 +98,19 @@ TODO.md
 # Internal (non-OSS) marketing value-prop docs
 marketing/
 
-# Operator runtime configs — real values (TLS cert paths, domains) live here and
-# are NOT committed. The committed *.example files are the OSS templates; copy them:
-#   cp compose.dev.yaml.example compose.dev.yaml
+# Operator runtime configs — real values (TLS cert paths, domains, secrets) live
+# here and are NOT committed. The committed templates are the OSS starting point:
+#   cp .env.example .env.dev                   # then set ENV=dev,  TAG=dev
+#   cp .env.example .env.prod                  # then set ENV=prod, TAG=<version>
 #   cp nginx/conf.d/luxswirl.conf.example nginx/conf.d/luxswirl.conf
 #   cp Makefile.local.example Makefile.local   # sets LUXARCH_REGISTRY for `make arch`
-compose.dev.yaml
+#
+# There is ONE compose.yaml — environments differ by their .env.<env>, never by
+# an overlay file (repo.compose_conventions).
+.env
+.env.dev
+.env.prod
+.env.sandbox
 compose.sandbox.yaml
 compose.chronosphere.yaml
 nginx/conf.d/luxswirl.conf

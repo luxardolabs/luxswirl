@@ -134,7 +134,7 @@ docker compose up -d
 docker compose logs -f
 ```
 
-> In the upstream repo, the same stack is also driven by the Makefile: `make prod-up` runs `docker compose -f compose.yaml -f compose.prod.yaml up -d`.
+> In the upstream repo, the same stack is also driven by the Makefile: `make prod-up` runs `docker compose --env-file .env.prod up -d`.
 
 ### 3. Access Web UI
 
@@ -145,16 +145,16 @@ Navigate to: `http://localhost:9000`
 There are **no default credentials**. On first launch the app redirects you to a setup page to create the admin account:
 
 1. Open the URL above — you'll be redirected to **`/setup`**.
-2. Choose an admin **username** and **password**, submit, then sign in. (Accounts are username + password only — no email.)
+1. Choose an admin **username** and **password**, submit, then sign in. (Accounts are username + password only — no email.)
 
 **Unattended / automation (optional):** set `SECURITY__INITIAL_ADMIN_PASSWORD` (and optionally `SECURITY__INITIAL_ADMIN_USERNAME`, default `admin`) in your `.env` before first boot. The admin is created automatically and you log in with it; a password change is forced on first login.
 
 ### 4. Create Registration Key
 
 1. Login to web UI
-2. Navigate to **Settings → Registration Keys**
-3. Click **Create Key**
-4. Copy key for agent deployment
+1. Navigate to **Settings → Registration Keys**
+1. Click **Create Key**
+1. Copy key for agent deployment
 
 ### 5. Configure First Agent
 
@@ -168,54 +168,56 @@ See [Agent Docker Deployment](agent.md) for details.
 
 The database is configured with a **single** connection URL — there are no separate host/port/name/user/password variables. `POSTGRES_PASSWORD` is consumed by the TimescaleDB container and is typically interpolated into `DATABASE__URL`.
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `DATABASE__URL` | **Yes** | local default | SQLAlchemy/asyncpg DSN, e.g. `postgresql+asyncpg://luxswirl:PW@timescaledb:5432/luxswirl` |
-| `DATABASE__ECHO` | No | `false` | Log SQL queries (debug) |
-| `DATABASE__POOL_SIZE` | No | `20` | Connection pool size |
-| `DATABASE__MAX_OVERFLOW` | No | `10` | Max overflow connections |
-| `POSTGRES_PASSWORD` | **Yes** | - | Password for the TimescaleDB container (sync with `DATABASE__URL`) |
+| Variable                 | Required | Default       | Description                                                                               |
+| ------------------------ | -------- | ------------- | ----------------------------------------------------------------------------------------- |
+| `DATABASE__URL`          | **Yes**  | local default | SQLAlchemy/asyncpg DSN, e.g. `postgresql+asyncpg://luxswirl:PW@timescaledb:5432/luxswirl` |
+| `DATABASE__ECHO`         | No       | `false`       | Log SQL queries (debug)                                                                   |
+| `DATABASE__POOL_SIZE`    | No       | `20`          | Connection pool size                                                                      |
+| `DATABASE__MAX_OVERFLOW` | No       | `10`          | Max overflow connections                                                                  |
+| `POSTGRES_PASSWORD`      | **Yes**  | -             | Password for the TimescaleDB container (sync with `DATABASE__URL`)                        |
 
 ### Server Settings
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `SERVER__HOST` | No | `0.0.0.0` | Listen address |
-| `SERVER__PORT` | No | `9000` | Listen port |
-| `SERVER__ENVIRONMENT` | No | `development` | Environment (`development`, `staging`, `production`) |
+| Variable              | Required | Default       | Description                                          |
+| --------------------- | -------- | ------------- | ---------------------------------------------------- |
+| `SERVER__HOST`        | No       | `0.0.0.0`     | Listen address                                       |
+| `SERVER__PORT`        | No       | `9000`        | Listen port                                          |
+| `SERVER__ENVIRONMENT` | No       | `development` | Environment (`development`, `staging`, `production`) |
 
 ### CORS Configuration
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `SERVER__CORS_ORIGINS` | **Yes*** | `[]` | Allowed origins JSON array |
-| `SERVER__CORS_CREDENTIALS` | No | `true` | Allow credentials |
+| Variable                   | Required  | Default | Description                |
+| -------------------------- | --------- | ------- | -------------------------- |
+| `SERVER__CORS_ORIGINS`     | **Yes**\* | `[]`    | Allowed origins JSON array |
+| `SERVER__CORS_CREDENTIALS` | No        | `true`  | Allow credentials          |
 
 \* Required in production mode
 
 **Example:**
+
 ```yaml
 SERVER__CORS_ORIGINS: '["https://server.example.com:9000", "https://monitoring.example.com"]'
 ```
 
 ### Security Settings
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `SECURITY__SECRET_KEY` | No | Auto-generated | JWT signing key. Auto-generated + persisted to `/app/data` on first boot; set only to inject from a secrets manager |
-| `SECURITY__FIELD_ENCRYPTION_KEY` | No | Auto-generated | Fernet key for encrypting sensitive DB fields. Auto-generated + persisted on first boot |
-| `SECURITY__RATE_LIMIT_ENABLED` | No | `true` | Enable rate limiting |
-| `SECURITY__INITIAL_ADMIN_USERNAME` | No | `admin` | First-run admin username (unattended setup) |
-| `SECURITY__INITIAL_ADMIN_PASSWORD` | No | (empty) | First-run admin password (unattended setup; empty → /setup wizard) |
+| Variable                           | Required | Default        | Description                                                                                                         |
+| ---------------------------------- | -------- | -------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `SECURITY__SECRET_KEY`             | No       | Auto-generated | JWT signing key. Auto-generated + persisted to `/app/data` on first boot; set only to inject from a secrets manager |
+| `SECURITY__FIELD_ENCRYPTION_KEY`   | No       | Auto-generated | Fernet key for encrypting sensitive DB fields. Auto-generated + persisted on first boot                             |
+| `SECURITY__RATE_LIMIT_ENABLED`     | No       | `true`         | Enable rate limiting                                                                                                |
+| `SECURITY__INITIAL_ADMIN_USERNAME` | No       | `admin`        | First-run admin username (unattended setup)                                                                         |
+| `SECURITY__INITIAL_ADMIN_PASSWORD` | No       | (empty)        | First-run admin password (unattended setup; empty → /setup wizard)                                                  |
 
 ### Logging Configuration
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `LOG__LEVEL` | No | `INFO` | Log level (`DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`) |
-| `LOG__MODULE_LEVELS` | No | (defaults) | Per-module log levels (JSON) |
+| Variable             | Required | Default    | Description                                                 |
+| -------------------- | -------- | ---------- | ----------------------------------------------------------- |
+| `LOG__LEVEL`         | No       | `INFO`     | Log level (`DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`) |
+| `LOG__MODULE_LEVELS` | No       | (defaults) | Per-module log levels (JSON)                                |
 
 **Example:**
+
 ```yaml
 LOG__MODULE_LEVELS: '{"luxswirl.services.check": "WARNING", "sqlalchemy": "WARNING"}'
 ```
@@ -224,7 +226,7 @@ LOG__MODULE_LEVELS: '{"luxswirl.services.check": "WARNING", "sqlalchemy": "WARNI
 
 ### Complete compose.yaml for Production
 
-(Compose v2 — no `version:` key. The upstream repo ships this as `compose.yaml` + `compose.prod.yaml`; run it with `make prod-up`.)
+(Compose v2 — no `version:` key. The upstream repo ships one `compose.yaml`; the environment is `.env.prod`. Run it with `make prod-up`.)
 
 ```yaml
 services:
@@ -383,6 +385,7 @@ POSTGRES_PASSWORD=your_secure_db_password_here
 ### SSL/TLS Setup with Nginx
 
 **nginx.conf:**
+
 ```nginx
 events {
     worker_connections 1024;
@@ -446,6 +449,7 @@ http {
 When the LuxSwirl server runs behind a reverse proxy, set `SECURITY__TRUSTED_PROXY_NETWORKS` to the CIDR of your proxy. Without it, every external client shares one rate-limit bucket (the proxy's IP), and audit logs record the proxy's address for every event.
 
 The default covers Docker bridge networks and RFC 1918 ranges, which works for most compose-based deployments without changes:
+
 ```yaml
 # compose.yaml — luxswirl_server service environment:
 environment:
@@ -456,6 +460,7 @@ environment:
 For a fixed-IP proxy (e.g., AWS ALB on a known subnet), tighten to just that range. If LuxSwirl is exposed directly with no proxy in front, set to `[]` — X-Forwarded-For will be ignored entirely. See `docs/reference/settings-reference.md` for full details.
 
 **Directory structure:**
+
 ```
 .
 ├── compose.yaml
@@ -477,6 +482,7 @@ The admin account is created through the `/setup` wizard on first launch (or aut
 ### Database Backup
 
 **Automated backup script:**
+
 ```bash
 #!/bin/bash
 # backup-server-db.sh
@@ -500,6 +506,7 @@ echo "Backup completed: ${BACKUP_FILE}.gz"
 ```
 
 **Schedule with cron:**
+
 ```bash
 # Run daily at 2 AM
 0 2 * * * /path/to/backup-server-db.sh
@@ -522,6 +529,7 @@ docker compose start luxswirl_server
 ### Database Maintenance
 
 **Check database size:**
+
 ```bash
 docker exec luxswirl_timescaledb psql -U luxswirl luxswirl -c "
   SELECT pg_size_pretty(pg_database_size('luxswirl')) AS size;
@@ -529,6 +537,7 @@ docker exec luxswirl_timescaledb psql -U luxswirl luxswirl -c "
 ```
 
 **Check TimescaleDB hypertables:**
+
 ```bash
 docker exec luxswirl_timescaledb psql -U luxswirl luxswirl -c "
   SELECT * FROM timescaledb_information.hypertables;
@@ -536,6 +545,7 @@ docker exec luxswirl_timescaledb psql -U luxswirl luxswirl -c "
 ```
 
 **Check retention policies:**
+
 ```bash
 docker exec luxswirl_timescaledb psql -U luxswirl luxswirl -c "
   SELECT * FROM timescaledb_information.jobs WHERE proc_name = 'policy_retention';
@@ -543,6 +553,7 @@ docker exec luxswirl_timescaledb psql -U luxswirl luxswirl -c "
 ```
 
 **Manually compress chunks (optional):**
+
 ```bash
 docker exec luxswirl_timescaledb psql -U luxswirl luxswirl -c "
   SELECT compress_chunk(c) FROM show_chunks('check_results') c;
@@ -554,12 +565,14 @@ docker exec luxswirl_timescaledb psql -U luxswirl luxswirl -c "
 ### Change Your Password
 
 **Via Web UI:**
+
 1. Log in, then open **Profile** (top right)
-2. Click **Change Password**
-3. Enter your current password and a new one (min 8 characters: at least one uppercase, one lowercase, and one digit)
-4. Save
+1. Click **Change Password**
+1. Enter your current password and a new one (min 8 characters: at least one uppercase, one lowercase, and one digit)
+1. Save
 
 **Via API:**
+
 ```bash
 curl -X POST https://server.example.com:9000/api/v1/auth/change-password \
   -H "Authorization: Bearer YOUR_API_TOKEN" \
@@ -573,14 +586,16 @@ curl -X POST https://server.example.com:9000/api/v1/auth/change-password \
 ### Create Additional Users
 
 **Via Web UI:**
+
 1. Login as admin
-2. Navigate to **Settings → Users**
-3. Click **Create User**
-4. Fill in details (username, role)
-5. Set a temporary password
-6. Send credentials to user (they must change on first login)
+1. Navigate to **Settings → Users**
+1. Click **Create User**
+1. Fill in details (username, role)
+1. Set a temporary password
+1. Send credentials to user (they must change on first login)
 
 **Roles:**
+
 - `admin` - Full system access
 - `editor` - Manage checks and agents
 - `viewer` - Read-only access
@@ -608,12 +623,14 @@ print(pwd_context.hash('new_password_here'))
 ### Health Endpoints
 
 **Server health:**
+
 ```bash
 curl http://localhost:9000/health
 # Response: {"status":"healthy","version":"1.0.0","environment":"production"}
 ```
 
 **Database connectivity:**
+
 ```bash
 # Via web UI: Settings → Database Health
 # Shows connection status, table counts, disk usage
@@ -622,11 +639,13 @@ curl http://localhost:9000/health
 ### Prometheus Metrics
 
 **Metrics endpoint:**
+
 ```
 http://localhost:9000/metrics
 ```
 
 **Available metrics:**
+
 - `luxswirl_check_success` - Check success/failure (0/1)
 - `luxswirl_check_up` - Check still reporting (0/1)
 - `luxswirl_check_latency_seconds` - Check latency
@@ -634,6 +653,7 @@ http://localhost:9000/metrics
 - `luxswirl_agent_up` - Agent online status (0/1)
 
 **Prometheus configuration:**
+
 ```yaml
 # prometheus.yml
 scrape_configs:
@@ -649,6 +669,7 @@ scrape_configs:
 Import dashboard JSON (coming soon) or create custom:
 
 **Example queries:**
+
 ```promql
 # Check success ratio (luxswirl_check_success is a 1/0 gauge per check)
 avg(luxswirl_check_success)
@@ -681,12 +702,14 @@ docker compose logs --since 2024-01-01T00:00:00 server
 ### Log Levels
 
 **Change log level (restart required):**
+
 ```yaml
 environment:
   LOG__LEVEL: DEBUG
 ```
 
 **Per-module logging:**
+
 ```yaml
 environment:
   LOG__MODULE_LEVELS: '{
@@ -700,6 +723,7 @@ environment:
 ### External Log Aggregation
 
 **Syslog driver:**
+
 ```yaml
 services:
   luxswirl_server:
@@ -711,6 +735,7 @@ services:
 ```
 
 **Fluentd/Loki:**
+
 ```yaml
 services:
   luxswirl_server:
@@ -742,11 +767,13 @@ curl http://localhost:9000/health | jq '.version'
 ### Database Migration
 
 **Automatic migrations:**
+
 - Server runs Alembic migrations on startup
 - No manual intervention required
 - Check logs for migration status
 
 **Manual migration (if needed):**
+
 ```bash
 docker exec luxswirl_server alembic upgrade head
 ```
@@ -754,6 +781,7 @@ docker exec luxswirl_server alembic upgrade head
 ### Rollback
 
 **Server rollback:**
+
 ```bash
 # Pin a specific version tag in your compose file, then:
 docker compose down
@@ -762,6 +790,7 @@ docker compose up -d
 ```
 
 **Database rollback:**
+
 ```bash
 # Restore from backup
 docker compose stop luxswirl_server
@@ -774,6 +803,7 @@ docker compose start luxswirl_server
 ### Server Won't Start
 
 **Check logs:**
+
 ```bash
 docker compose logs luxswirl_server
 ```
@@ -781,34 +811,42 @@ docker compose logs luxswirl_server
 **Common issues:**
 
 1. **Database connection failed:**
+
    ```
    ERROR: could not connect to server
    ```
+
    - Verify `DATABASE__URL` (host, port, credentials, db name)
    - Check database is running: `docker compose ps timescaledb`
    - Check database health: `docker compose exec timescaledb pg_isready`
 
-2. **CORS configuration error:**
+1. **CORS configuration error:**
+
    ```
    ValueError: CORS origins not configured for production
    ```
+
    - Set `SERVER__CORS_ORIGINS` in production mode
    - Use JSON array format: `'["https://domain.com"]'`
 
-3. **Port already in use:**
+1. **Port already in use:**
+
    ```
    Error starting userland proxy: listen tcp 0.0.0.0:9000: bind: address already in use
    ```
+
    - Check what's using port: `lsof -i :9000`
    - Change port: `SERVER__PORT: 9001`
 
 ### Agents Not Connecting
 
 **Symptoms:**
+
 - Agents show "Registration failed"
 - 401/403 errors in agent logs
 
 **Diagnosis:**
+
 ```bash
 # Test from agent host
 curl -v https://server.example.com:9000/health
@@ -821,6 +859,7 @@ docker compose logs luxswirl_server | grep "POST /api/v1/reports"
 ```
 
 **Solutions:**
+
 - Check firewall rules (allow inbound 9000)
 - Verify SSL certificate (self-signed certs need agent config)
 - Check CORS settings
@@ -829,17 +868,20 @@ docker compose logs luxswirl_server | grep "POST /api/v1/reports"
 ### High CPU/Memory Usage
 
 **Check resource usage:**
+
 ```bash
 docker stats luxswirl_server luxswirl_timescaledb
 ```
 
 **Common causes:**
+
 - Too many agents (>100)
 - High check frequency (thousands of checks/min)
 - Large database (>100GB)
 - Inefficient queries (check slow query log)
 
 **Solutions:**
+
 - Enable compression: See database maintenance
 - Adjust retention: Default 90 days
 - Add more CPU/RAM: Update your compose file
@@ -848,6 +890,7 @@ docker stats luxswirl_server luxswirl_timescaledb
 ### Database Performance Issues
 
 **Check database size:**
+
 ```bash
 docker exec luxswirl_timescaledb psql -U luxswirl luxswirl -c "
   SELECT pg_size_pretty(pg_database_size('luxswirl'));
@@ -855,6 +898,7 @@ docker exec luxswirl_timescaledb psql -U luxswirl luxswirl -c "
 ```
 
 **Check slow queries:**
+
 ```bash
 docker exec luxswirl_timescaledb psql -U luxswirl luxswirl -c "
   SELECT pid, query, query_start, state
@@ -865,6 +909,7 @@ docker exec luxswirl_timescaledb psql -U luxswirl luxswirl -c "
 ```
 
 **Enable compression (recommended):**
+
 ```bash
 docker exec luxswirl_timescaledb psql -U luxswirl luxswirl -c "
   ALTER TABLE check_results SET (
@@ -880,11 +925,13 @@ docker exec luxswirl_timescaledb psql -U luxswirl luxswirl -c "
 ### Web UI Not Loading
 
 **Symptoms:**
+
 - Blank page
 - CSS/JS not loading
 - 404 errors
 
 **Check:**
+
 ```bash
 # Verify static files mounted correctly
 docker exec luxswirl_server ls /app/web/static/
@@ -897,6 +944,7 @@ docker exec luxswirl_nginx nginx -t
 ```
 
 **Solutions:**
+
 - Clear browser cache (Ctrl+Shift+R)
 - Check CORS settings
 - Verify reverse proxy configuration
@@ -988,11 +1036,13 @@ logging:
 ### Vertical Scaling (Single Instance)
 
 **Server:**
+
 - 2 CPU cores → ~50 agents, ~500 checks
 - 4 CPU cores → ~150 agents, ~1500 checks
 - 8 CPU cores → ~300 agents, ~3000 checks
 
 **Database:**
+
 - 2GB RAM → ~100K results/day
 - 4GB RAM → ~500K results/day
 - 8GB RAM → ~1M+ results/day
@@ -1000,6 +1050,7 @@ logging:
 ### Horizontal Scaling (Future)
 
 Not currently supported:
+
 - Multiple server instances
 - Load balancer
 - Database read replicas
@@ -1018,11 +1069,11 @@ Not currently supported:
 For server deployment issues:
 
 1. Check logs: `docker compose logs luxswirl_server`
-2. Review troubleshooting section
-3. Check database connectivity and health
-4. Search existing issues: https://github.com/luxardolabs/luxswirl/issues
-5. Open new issue with logs and configuration (redact secrets)
+1. Review troubleshooting section
+1. Check database connectivity and health
+1. Search existing issues: https://github.com/luxardolabs/luxswirl/issues
+1. Open new issue with logs and configuration (redact secrets)
 
----
+______________________________________________________________________
 
 **Maintainer:** Luxardo Labs

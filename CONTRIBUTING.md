@@ -4,7 +4,7 @@ LuxSwirl is released as an open-source give-back. Contributions are welcome but 
 
 If you do send a patch: fork, branch, open a PR. A good PR is small, focused, has a clear description of what changed and why, keeps the existing layering (below), and passes `make check`. That's it — no templates to fill out.
 
----
+______________________________________________________________________
 
 ## Development Setup
 
@@ -44,7 +44,7 @@ Dev runs **baked images** (no source mounts), so re-run `make dev-up` after code
 
 ```bash
 # Start the database only
-docker compose -f compose.yaml -f compose.dev.yaml up -d timescaledb
+docker compose --env-file .env.dev up -d timescaledb
 
 # Server (from apps/backend)
 cd apps/backend && poetry install
@@ -70,20 +70,20 @@ Schema is managed by Alembic. Migrations live in `apps/backend/alembic/versions/
 **Adding a schema change:**
 
 1. Edit the relevant model in `apps/backend/app/models/*_model.py`.
-2. Generate a migration:
+1. Generate a migration:
    ```bash
    docker exec -w /app luxswirl_server alembic revision --autogenerate -m "describe_change"
    ```
-3. Open the generated file under `apps/backend/alembic/versions/` and review it. Autogenerate handles vanilla DDL (CREATE/ALTER/DROP table, columns, indexes, FKs) but does NOT detect:
+1. Open the generated file under `apps/backend/alembic/versions/` and review it. Autogenerate handles vanilla DDL (CREATE/ALTER/DROP table, columns, indexes, FKs) but does NOT detect:
    - CHECK constraints
    - Comment changes
    - Server-default expression changes
    - ENUM modifications
    - TimescaleDB-specific operations (hypertables, compression, retention, continuous aggregates — those live in `db/database.py`)
    - Custom SQLAlchemy `TypeDecorator` types (e.g. `EncryptedString`) — autogen references them by name and forgets to import. Replace with the underlying DB-level type (`sa.String`, `sa.Text`, etc.) since the DB doesn't see the decorator.
-4. Rename the file with a numeric prefix matching the next sequence: `001_<slug>.py`, `002_<slug>.py`. The internal `revision = '<hash>'` stays as autogen produced it.
-5. Restart the server. The container CMD chain runs `alembic upgrade head` before uvicorn, so the migration applies automatically. Failure exits the container loudly.
-6. Test downgrade: `alembic downgrade -1` then `alembic upgrade head` should round-trip cleanly.
+1. Rename the file with a numeric prefix matching the next sequence: `001_<slug>.py`, `002_<slug>.py`. The internal `revision = '<hash>'` stays as autogen produced it.
+1. Restart the server. The container CMD chain runs `alembic upgrade head` before uvicorn, so the migration applies automatically. Failure exits the container loudly.
+1. Test downgrade: `alembic downgrade -1` then `alembic upgrade head` should round-trip cleanly.
 
 **Local CLI access (without docker exec):** runs from `apps/backend/` (where `alembic.ini` lives; `PYTHONPATH=.:..` so alembic's `env.py` can import `app.models` + `shared`):
 
@@ -106,7 +106,7 @@ make check    # the full pre-commit suite: lint + types + tests
 
 Run one test file with `make test TEST=tests/test_checks.py`.
 
----
+______________________________________________________________________
 
 ## Coding Standards
 
@@ -137,15 +137,15 @@ Pydantic **schemas** (`app/schemas/`) handle API request/response validation and
 
 The architecture guards also enforce one-suffix-per-layer naming (again, zero exemptions):
 
-| Layer | Location | File suffix |
-| --- | --- | --- |
-| Models | `app/models/` | `{x}_model.py` (except `base.py`, `enums.py`) |
-| Schemas | `app/schemas/` | `{x}_schema.py` |
-| CRUD | `app/crud/` | `{x}_crud.py` |
-| Core services | `app/services/core/` | `{x}_core_service.py` |
-| View services | `app/services/views/` | `{x}_view_service.py` |
-| JSON API routers | `app/api/v1/routers/` | `{x}_router.py` |
-| Web routers | `app/web/routers/` | `{x}_router.py` |
+| Layer            | Location              | File suffix                                   |
+| ---------------- | --------------------- | --------------------------------------------- |
+| Models           | `app/models/`         | `{x}_model.py` (except `base.py`, `enums.py`) |
+| Schemas          | `app/schemas/`        | `{x}_schema.py`                               |
+| CRUD             | `app/crud/`           | `{x}_crud.py`                                 |
+| Core services    | `app/services/core/`  | `{x}_core_service.py`                         |
+| View services    | `app/services/views/` | `{x}_view_service.py`                         |
+| JSON API routers | `app/api/v1/routers/` | `{x}_router.py`                               |
+| Web routers      | `app/web/routers/`    | `{x}_router.py`                               |
 
 A bare `{x}_service.py` (no `core`/`view` qualifier) is a naming violation and will fail `make arch`.
 
@@ -155,7 +155,7 @@ A bare `{x}_service.py` (no `core`/`view` qualifier) is a naming violation and w
 - **Structured logging** via `shared.logger.get_logger(__name__)`; pass fields through `extra=` rather than interpolating them into the message string.
 - **Security**: validate API inputs with Pydantic schemas; rely on the ORM's parameterized queries (never string-concatenate SQL); never log credentials (the `CredentialFilter` masks them); use list-form `subprocess.run([...])`, never `shell=True` with user input.
 
----
+______________________________________________________________________
 
 ## Contributing and Licensing
 
