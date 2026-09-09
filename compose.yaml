@@ -1,3 +1,14 @@
+####
+# The one compose file. Environments differ by .env.<env>, never by an overlay:
+#
+#   docker compose --env-file .env.dev  up -d
+#   docker compose --env-file .env.prod up -d
+#
+# Nothing is built here. `make build-dev` / `make release` build the images
+# outside compose; compose only runs a tag. Copy .env.example to .env.<env> and
+# fill it in — every value this file interpolates is documented there.
+####
+
 name: luxswirl
 
 services:
@@ -7,16 +18,19 @@ services:
     environment:
       - POSTGRES_DB=luxswirl
       - POSTGRES_USER=luxswirl
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.${ENV}}
     # PostgreSQL uses /dev/shm for parallel query workers, large sorts, and hash
     # joins. The Docker default of 64MB is enough for trivial workloads but any
     # multi-status notification_logs scan or TimescaleDB chunk aggregation will
     # hit `could not resize shared memory segment: No space left on device` and
     # poison the surrounding transaction. 1GB is a conservative production floor.
     shm_size: '1gb'
-    # Internal port only - exposed in compose.dev.yaml for development
     expose:
       - "5432"
+    # Host binding for direct psql access. Dev binds 0.0.0.0; prod binds
+    # 127.0.0.1 so the port is reachable only from the node itself.
+    ports:
+      - "${DB_BIND:-127.0.0.1}:5432:5432"
     volumes:
       - luxswirl_db_data:/var/lib/postgresql/data
     restart: unless-stopped
@@ -29,7 +43,7 @@ services:
       retries: 5
 
   luxswirl_server:
-    image: ghcr.io/luxardolabs/luxswirl-backend:latest
+    image: ghcr.io/luxardolabs/luxswirl-backend:${TAG:?set TAG in .env.${ENV}}
     container_name: luxswirl_server
     command: ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 9000"]
     # Internal port only - exposed via nginx
@@ -37,14 +51,13 @@ services:
       - "9000"
     volumes:
       - ./data/server:/app/data  # Persists generated SECRET_KEY + api_token
-      # - ./config/server.yaml:/app/config.yaml  # Optional: custom config
-    environment:
-      - LOG__LEVEL=INFO
-      - DATABASE_URL=postgresql+asyncpg://luxswirl:${POSTGRES_PASSWORD}@timescaledb:5432/luxswirl
-      - DATABASE_ECHO=false
-      - SERVER_ENVIRONMENT=production
-      # SECURITY__FIELD_ENCRYPTION_KEY - Set in .env file or compose.dev.yaml/compose.prod.yaml
-      # CORS: Override this in compose.prod.yaml or compose.dev.yaml for your deployment
+    # Every app setting — log level, CORS, database URL, secrets, retention —
+    # comes from the environment file. Nothing is set inline here, so this file
+    # never silently overrides what the operator wrote (a compose `environment:`
+    # entry wins over env_file, which is how a dev LOG__LEVEL used to be
+    # ignored).
+    env_file:
+      - .env.${ENV:?set ENV in .env.<env> — it names the file to load}
     restart: unless-stopped
     networks:
       - luxswirl-network
@@ -59,19 +72,23 @@ services:
       start_period: 40s
 
   luxswirl_agent:
-    image: ghcr.io/luxardolabs/luxswirl-agent:latest
+    image: ghcr.io/luxardolabs/luxswirl-agent:${TAG:?set TAG in .env.${ENV}}
     container_name: luxswirl_agent
     hostname: luxswirl_agent  # IMPORTANT: Keep hostname consistent for encryption key derivation
+    # No --debug flag: it only raised the log level, which LOG__LEVEL in the
+    # environment file already does, and a conditional flag cannot live in a
+    # command list without passing an empty argument.
     command: ["python", "-m", "app.main"]
     volumes:
-      - ./data/agent:/app/data  # Local directory for easy dev access
-    #   - ./config/agent.yaml:/app/config.yaml  # Optional: custom config
+      - ./data/agent:/app/data
     environment:
-      - LUXSWIRL_AGENT_ID=docker-agent
+      - LUXSWIRL_AGENT_ID=${LUXSWIRL_AGENT_ID:-docker-agent}
       # Required: generate via Settings → Registration Keys in the server UI
-      # after first login, then set this value (e.g., in a .env file).
+      # after first login, then set this value in .env.<env>.
       - LUXSWIRL_AUTH_KEY=${LUXSWIRL_AUTH_KEY:?must be set — generate via server UI after first admin login}
       - LUXSWIRL_SERVER_URL=http://luxswirl_server:9000/api/v1/reports
+    env_file:
+      - .env.${ENV:?set ENV in .env.<env> — it names the file to load}
     restart: unless-stopped
     networks:
       - luxswirl-network
@@ -85,8 +102,8 @@ services:
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/conf.d:/etc/nginx/conf.d:ro
-      # SSL certificates from host
-      - /etc/ssl/certs/your-domain:/etc/nginx/ssl:ro
+      # Host directory holding fullchain.pem + privkey.pem for this environment.
+      - ${NGINX_SSL_DIR:?set NGINX_SSL_DIR in .env.${ENV}}:/etc/nginx/ssl:ro
     ports:
       - "9000:9000"
     networks:

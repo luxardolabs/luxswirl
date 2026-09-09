@@ -81,10 +81,11 @@ define mypy_leg
 docker run --rm -v $(PWD):/w -w /w python:3.14-slim sh -c 'pip install -q -U mypy pydantic && MYPYPATH=/w/apps/$(1):/w/apps mypy --config-file /w/.luxlint.mypy.ini apps/$(1)/app'
 endef
 
-# Compose invocations (base + environment overlay).
+# Compose invocations. ONE compose.yaml; the environment is the --env-file, not
+# an overlay (repo.compose_conventions / FLEET-BUILD-DEPLOY-STANDARD).
 DC      := docker compose -f compose.yaml
-DC_DEV  := docker compose -f compose.yaml -f compose.dev.yaml
-DC_PROD := docker compose -f compose.yaml -f compose.prod.yaml
+DC_DEV  := docker compose -f compose.yaml --env-file .env.dev
+DC_PROD := docker compose -f compose.yaml --env-file .env.prod
 DC_TEST := docker compose -f compose.test.yaml
 # Sandbox: own project name (isolates network/containers) + own env-file (isolates
 # interpolation: POSTGRES_PASSWORD, LUXSWIRL_AUTH_KEY, secrets) + the sandbox overlay.
@@ -187,7 +188,7 @@ release: css push github-release ## Promote a release: CSS, push both images, pu
 # Dev / Prod stacks
 # =============================================================================
 
-##@ Dev stack (compose.yaml + compose.dev.yaml — baked images, no source mounts)
+##@ Dev stack (compose.yaml + .env.dev — baked images, no source mounts)
 
 dev: dev-up ## Alias for dev-up
 dev-up: ## Start the dev stack (does NOT build — run `make build-dev` first to pick up code changes)
@@ -201,7 +202,7 @@ dev-restart: ## Restart the dev stack
 	$(DC_DEV) restart
 
 dev-rebuild: ## Rebuild dev images from scratch and restart
-	$(DC_DEV) build --no-cache
+	$(MAKE) build-dev NO_CACHE_FLAG=--no-cache
 	$(DC_DEV) up -d
 
 dev-logs: ## Follow dev logs
@@ -213,7 +214,7 @@ dev-shell: ## Bash into the dev server container
 dev-agent-shell: ## Bash into the dev agent container
 	$(DC_DEV) exec luxswirl_agent /bin/bash
 
-##@ Prod stack (compose.yaml + compose.prod.yaml — pulls baked images)
+##@ Prod stack (compose.yaml + .env.prod — pulls baked images)
 
 prod: prod-up ## Alias for prod-up
 prod-up: ## Pull + start the production stack

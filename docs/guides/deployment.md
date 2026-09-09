@@ -4,11 +4,10 @@ This document explains how to deploy LuxSwirl using Docker Compose with environm
 
 ## Docker Compose Files
 
-LuxSwirl uses a layered Docker Compose configuration:
+LuxSwirl ships one compose file. Environments differ by the environment file they are given, not by an overlay:
 
-- **`compose.yaml`** - Base configuration (shared across all environments)
-- **`compose.dev.yaml`** - Development overlay (local testing with hot reload)
-- **`compose.prod.yaml`** - Production overlay (your specific deployment)
+- **`compose.yaml`** - The stack. Builds nothing; runs the tag `TAG` names.
+- **`.env.dev` / `.env.prod`** - What differs per environment: the image tag, the database host binding, the TLS certificate directory, CORS, log level and secrets. Copy `.env.example` and fill it in; neither is committed.
 - **`compose.agent.yaml`** - Standalone agent (runs separately, connects to server)
 
 ## Deployment Patterns
@@ -16,22 +15,19 @@ LuxSwirl uses a layered Docker Compose configuration:
 ### Development
 
 ```bash
-# Start with development overrides
-docker compose -f compose.yaml -f compose.dev.yaml up
+docker compose --env-file .env.dev up -d     # or: make dev-up
 
-# Features:
-# - Hot reload enabled (code changes apply immediately)
-# - CORS: Set to your dev domain in compose.dev.yaml
-# - PostgreSQL exposed on port 5432 for direct access
-# - Debug logging enabled
-# - Runs baked :dev images (built by `make dev-up`)
+# What .env.dev sets:
+# - TAG=dev — runs the baked :dev images (build them first: make build-dev)
+# - DB_BIND=0.0.0.0 — PostgreSQL reachable on port 5432 for direct access
+# - LOG__LEVEL=DEBUG
+# - CORS and the TLS certificate directory for your dev domain
 ```
 
 ### Production (Your Deployment)
 
 ```bash
-# Start with production overrides
-docker compose -f compose.yaml -f compose.prod.yaml up -d
+docker compose --env-file .env.prod up -d    # or: make prod-up
 
 # Features:
 # - CORS: https://dev.example.com:9000 (your public-facing URL)
@@ -59,32 +55,33 @@ docker compose -f compose.agent.yaml up -d
 
 All deployments use external domains (nginx SSL termination).
 
-| Deployment Type | CORS Setting | Example |
-|----------------|--------------|---------|
-| **With custom port** | Your public domain + port | `https://luxswirl.example.com:9000` |
-| **Standard HTTPS** | Domain on port 443 | `https://luxswirl.example.com` |
-| **Multiple domains** | Array of domains | `["https://luxswirl.com","https://api.luxswirl.com"]` |
+| Deployment Type      | CORS Setting              | Example                                               |
+| -------------------- | ------------------------- | ----------------------------------------------------- |
+| **With custom port** | Your public domain + port | `https://luxswirl.example.com:9000`                   |
+| **Standard HTTPS**   | Domain on port 443        | `https://luxswirl.example.com`                        |
+| **Multiple domains** | Array of domains          | `["https://luxswirl.com","https://api.luxswirl.com"]` |
 
 ### Where to Set CORS
 
 **For This Deployment:**
-- **Development** (`compose.dev.yaml`): `https://dev.example.com:9000`
-- **Production** (`compose.prod.yaml`): `https://luxswirl.example.com:9000`
+
+- **Development** (`.env.dev`): `https://dev.example.com:9000`
+- **Production** (`.env.prod`): `https://luxswirl.example.com:9000`
 
 **For Other Deployments:**
 
-1. **Use existing overlays**: Edit the CORS URL in compose.dev.yaml or compose.prod.yaml
+Set `SERVER__CORS_ORIGINS` in the environment file for that deployment. A new environment is a new `.env.<name>`, never a new compose file:
 
-2. **Create custom overlay**: Create your own overlay file
-   ```bash
-   cp compose.prod.yaml compose.mycompany.yaml
-   # Edit CORS setting to match your domain
-   docker compose -f compose.yaml -f compose.mycompany.yaml up -d
-   ```
+```bash
+cp .env.example .env.mycompany
+# set ENV=mycompany, TAG=<version>, and SERVER__CORS_ORIGINS for your domain
+docker compose --env-file .env.mycompany up -d
+```
 
 ### Verifying CORS Configuration
 
 Check the server logs on startup:
+
 ```bash
 docker logs luxswirl_server | grep "CORS Origins"
 # DEV should output: CORS Origins: ['https://dev.example.com:9000']
@@ -112,6 +109,7 @@ timescaledb:5432 (internal Docker network)
 **Important:** If you run multiple applications on the same subdomain with different ports, they will share the same cookie namespace.
 
 **Example Collision:**
+
 ```
 dev.example.com:9000  (LuxSwirl)      → Uses "luxswirl_session" cookie
 dev.example.com:8000  (Grafana)    → Uses "grafana_session" cookie
@@ -124,10 +122,9 @@ dev.example.com:3000  (Other app)  → Uses "app3_session" cookie
 
 Each application MUST use a unique session cookie name:
 
-```yaml
-# compose.prod.yaml
-environment:
-  - SECURITY__SESSION_COOKIE_NAME=luxswirl_session  # Unique per app
+```bash
+# .env.prod
+SECURITY__SESSION_COOKIE_NAME=luxswirl_session  # Unique per app
 ```
 
 **Default:** LuxSwirl uses `luxswirl_session` by default (safe for most deployments)
@@ -182,51 +179,58 @@ See `nginx/conf.d/luxswirl.conf` for the full nginx configuration.
 **Cause:** CORS origins don't match the URL in the browser
 
 **Fix:**
+
 1. Check what URL you're accessing in browser (e.g., `https://dev.example.com:9000`)
-2. Set CORS to EXACTLY that URL in your compose override file
-3. Restart: `docker compose -f compose.yaml -f compose.prod.yaml restart luxswirl_server`
-4. Verify: `docker logs luxswirl_server | grep "CORS Origins"`
+1. Set CORS to EXACTLY that URL in your compose override file
+1. Restart: `docker compose --env-file .env.prod restart luxswirl_server`
+1. Verify: `docker logs luxswirl_server | grep "CORS Origins"`
 
 ### Web UI Not Loading
 
 **Symptom:** Blank page or connection refused
 
 **Check:**
+
 1. Nginx is running and accessible
-2. Server is healthy: `docker exec luxswirl_server curl -f http://localhost:9000/health`
-3. Logs: `docker logs luxswirl_server`
+1. Server is healthy: `docker exec luxswirl_server curl -f http://localhost:9000/health`
+1. Logs: `docker logs luxswirl_server`
 
 ### Agent Not Connecting
 
 **Symptom:** Agent logs show connection errors
 
 **Check:**
+
 1. Agent has correct server URL: `https://dev.example.com:9000/api/v1/reports`
-2. Registration key is valid
-3. Agent can reach server: `docker exec luxswirl_agent curl -f https://dev.example.com:9000/health`
+1. Registration key is valid
+1. Agent can reach server: `docker exec luxswirl_agent curl -f https://dev.example.com:9000/health`
 
 ## Creating Your Own Deployment
 
 For a new deployment (not dev.example.com):
 
-1. **Copy production overlay:**
+1. **Copy the environment template:**
+
    ```bash
-   cp compose.prod.yaml compose.mycompany.yaml
+   cp .env.example .env.mycompany   # set ENV=mycompany and TAG=<version>
    ```
 
-2. **Edit CORS to match your domain:**
-   ```yaml
-   - SERVER__CORS_ORIGINS=["https://luxswirl.mycompany.com"]
+1. **Edit CORS to match your domain:**
+
+   ```bash
+   SERVER__CORS_ORIGINS=["https://luxswirl.mycompany.com"]
    ```
 
-3. **Update nginx config** (`nginx/conf.d/luxswirl.conf`):
+1. **Update nginx config** (`nginx/conf.d/luxswirl.conf`):
+
    ```nginx
    server_name luxswirl.mycompany.com;
    ```
 
-4. **Deploy:**
+1. **Deploy:**
+
    ```bash
-   docker compose -f compose.yaml -f compose.mycompany.yaml up -d
+   docker compose --env-file .env.mycompany up -d
    ```
 
 ## See Also
