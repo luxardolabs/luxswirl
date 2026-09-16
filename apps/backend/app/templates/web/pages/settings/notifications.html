@@ -81,7 +81,9 @@
                             extra_classes='flex-1 relative',
                             extra_attrs='hx-post="' ~ provider_urls[provider.id].test ~ '" hx-swap="none" hx-indicator="#test-spinner-' ~ provider.id ~ '" title="Send test notification"') }}
                 {{ btn_edit_text(extra_classes='flex-1', hx_get=provider_urls[provider.id].edit_form, hx_target='#panel-container', hx_swap='innerHTML') }}
+                {% if current_user.role == 'admin' %}
                 {{ delete_icon_button(delete_url=provider_urls[provider.id].delete, target_id='provider-' ~ provider.id) }}
+                {% endif %}
             </div>
         </div>
         {% endfor %}

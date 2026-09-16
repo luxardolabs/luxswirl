@@ -87,7 +87,14 @@ deps = [
 # Admin-tier surfaces: settings (including users), registration keys, and the
 # agent approval/lifecycle actions. require_admin/_web are the role gates.
 admin_url_patterns = ["/settings", "/registration-keys", "/users"]
-require_names = ["require_admin", "require_admin_web", "AdminUser", "AdminUserWeb"]
+require_names = [
+  "require_admin", "require_admin_web", "AdminUser", "AdminUserWeb",
+  # The TEMPLATE idiom. fw.destructive_macro_gated reads this same list to
+  # decide whether an {% if %} around a delete control is a permission check
+  # or just a truthiness test about the row, and Jinja cannot name a FastAPI
+  # dependency — it checks the role on the principal it was handed.
+  "current_user.role",
+]
 
 # AUDIT confirmations — rules examined and found genuinely N/A, recorded so the
 # next reader knows they were adjudicated rather than overlooked:
@@ -106,6 +113,98 @@ require_names = ["require_admin", "require_admin_web", "AdminUser", "AdminUserWe
 #     about (raw SQL confined to crud, layer direction, models out of views) are
 #     already enforced by dedicated rules plus the import-linter contracts, so a
 #     second hand-rolled pattern list would duplicate them.
+
+[target.restricted]
+# Boundaries no other rule covers. Each is clean today — these are floors, not
+# burn-downs.
+imports = [
+  # The backend is async end to end and uses httpx. `requests` is a dependency
+  # only because the Docker HEALTHCHECK shells out to it; a sync blocking call
+  # inside a handler stalls the event loop for every other request.
+  { package = "requests", allowed_files = [] },
+]
+calls = [
+  # NOT declared yet: the naive-now patterns (`datetime.now()` / `utcnow(`).
+  # Both are real bug classes here — every datetime in this system is tz-aware,
+  # and a naive one compares wrong against a TIMESTAMPTZ column instead of
+  # failing loudly — but fw.restricted_calls scans RAW lines, so it matched
+  # prose rather than code in the only two places it fired:
+  #   core/datetime_utils.py:15                  docstring, "This replaces datetime.utcnow() which..."
+  #   services/views/import_export_view_service.py:258  comment, "`datetime.now()` here was naive..."
+  # The code at both sites is correct and already calls utc_now(). Arming them
+  # would mean either allow_listing the two files (blinding the rule exactly
+  # where the vocabulary is discussed) or rewording comments to dodge a scanner.
+  # Escalated to the guard maintainer: the restricted-CALLS scanner needs the
+  # same `_masked_lines()` treatment the restricted-IMPORT rules already got.
+  # Arm these the moment it masks.
+  # Configuration is read through Pydantic Settings so it is typed, validated and
+  # documented in one place. The two exceptions are a standalone migration script
+  # and the documented insecure-HTTP test override.
+  { pattern = "os\\.getenv\\s*\\(", allowed_files = ["core/config.py", "scripts/migrate_encrypt_checks.py"] },
+]
+
+[target.components]
+# The macro catalogue. Declared explicitly rather than relying on the fleet
+# default so the showcase is unambiguously identified as documentation.
+index = "partials/settings/components"
+
+# Macros that DESTROY — a name cannot tell you this, so the repo says it. Paired
+# with [target.rbac].require_names above, this enforces that a destructive
+# control is rendered inside a permission conditional. Hiding the button is not
+# the authorization (the endpoint still checks); it stops the UI offering a
+# read-only viewer an action the server will refuse.
+destructive = [
+  "icon_delete",
+  "delete_icon_button",
+  "btn_delete_text",
+  "btn_revoke",
+  "btn_regenerate",
+  "icon_reset",
+]
+
+# Which dependency each SURFACE demands. fw.admin_endpoints_rbac asks whether ANY
+# gate is present; this asks whether it is the RIGHT one — a bare CurrentUserWeb
+# on /settings is authenticated and not authorized. Only the admin surfaces have
+# a crisp single contract; /agents, /checks and /jobs deliberately mix viewer
+# reads with editor writes, so declaring one dep for them would be a fiction.
+[[target.authz.signature]]
+prefix = "/settings"
+require_dep = ["AdminUser", "AdminUserWeb", "require_admin", "require_admin_web"]
+
+[[target.authz.signature]]
+prefix = "/registration-keys"
+require_dep = ["AdminUser", "AdminUserWeb", "require_admin", "require_admin_web"]
+
+[[target.authz.signature]]
+prefix = "/scheduler"
+require_dep = ["AdminUser", "AdminUserWeb", "require_admin", "require_admin_web"]
+
+[[target.authz.signature]]
+prefix = "/database-health"
+require_dep = ["AdminUser", "AdminUserWeb", "require_admin", "require_admin_web"]
+
+[[target.authz.signature]]
+prefix = "/users"
+require_dep = ["AdminUser", "AdminUserWeb", "require_admin", "require_admin_web"]
+
+# A check's configuration is a promise to the operator: every field the form
+# offers has to reach the agent that runs the check, or the setting is inert.
+# This repo has shipped that bug twice (a field named max_retries while handlers
+# read retry_attempts; SSL thresholds configurable but recomputed from
+# hard-coded values), which is exactly what this rule catches.
+[[target.field_wiring]]
+class_name = "Check"
+source_files = [
+  "services/core/check_core_service.py",
+  "api/v1/routers/check_router.py",
+]
+fields = [
+  "check_type", "target", "enabled",
+  "interval_seconds", "timeout_seconds",
+  "retry_attempts", "retry_interval_seconds",
+  "script_code", "check_config", "tags",
+]
+accessors = ["check.{field}", "Check.{field}"]
 
 [target.observability]
 # luxswirl exports Prometheus metrics (the /metrics endpoint and

@@ -91,6 +91,11 @@
                             <span id="selection-count" class="text-sm font-medium text-dark-text-primary"></span>
                         </div>
                         <div class="flex items-center gap-2">
+                        {# Every bulk action here is an EditorUserWeb endpoint, but the
+                           dashboard is CurrentUserWeb. Gate the whole group, not just
+                           Delete — leaving enable/disable/modify visible to a viewer
+                           while hiding delete offers three actions the server refuses. #}
+                        {% if current_user.role in ('admin', 'editor') %}
                         <!-- Enable -->
                         {%- set enable_svg -%}<span class="w-3.5 h-3.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/check-circle.svg" %}</span>{%- endset -%}
                         {{ icon_btn(enable_svg, color='green', title='Enable selected checks', extra_attrs='data-bulk-action="enable"') }}
@@ -101,6 +106,7 @@
                         {{ icon_edit(title='Modify selected checks', extra_attrs='data-toggle-modify') }}
                         <!-- Delete -->
                         {{ icon_delete(title='Delete selected checks', extra_attrs='id="bulk-delete-btn" data-bulk-action="delete"') }}
+                        {% endif %}
                         <!-- Clear Selection (cancel/close = orange per /settings/components) -->
                         {% set clear_x_svg %}<span class="w-3.5 h-3.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/x-mark.svg" %}</span>{% endset %}
                         {{ icon_btn(clear_x_svg, color='orange', title='Clear selection', extra_attrs='data-clear-selection') }}

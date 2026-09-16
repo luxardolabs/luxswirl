@@ -83,7 +83,11 @@
         <div class="flex items-center justify-end gap-1">
             {{ icon_history(hx_get=urls.history) }}
             {{ icon_run(hx_post=urls.run, hx_target='#job-row-' ~ job.job_key) }}
+            {# Resetting a scheduler job discards its retry state. The whole
+               scheduler surface is AdminUserWeb; gate the control to match. #}
+            {% if current_user.role == 'admin' %}
             {{ icon_reset(title='Reset retries and re-enable', hx_post=urls.reset, hx_target='#job-row-' ~ job.job_key) }}
+            {% endif %}
             {% if job.enabled %}
             {{ icon_toggle_off(hx_post=urls.toggle, hx_target='#job-row-' ~ job.job_key) }}
             {% else %}

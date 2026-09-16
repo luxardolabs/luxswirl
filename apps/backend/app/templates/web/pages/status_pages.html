@@ -93,7 +93,11 @@
 
                             <!-- Edit -->
                             {{ icon_edit(hx_get=page_urls[page.id].edit_form, hx_target='#panel-container') }}
+                            {# Deleting a status page is an EditorUserWeb endpoint on a
+                               CurrentUserWeb page — hide it from a viewer. #}
+                            {% if current_user.role in ('admin', 'editor') %}
                             {{ delete_icon_button(delete_url=page_urls[page.id].delete, target_id='status-page-' ~ page.id) }}
+                            {% endif %}
                         </div>
                     </td>
                 </tr>

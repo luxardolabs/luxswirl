@@ -1,5 +1,12 @@
 {% from 'macros/buttons.html' import icon_btn, icon_view, icon_edit, icon_run, icon_delete, icon_history, icon_toggle_on, icon_toggle_off, icon_reset, icon_cancel, btn_prev, btn_next, btn_save, btn_create, btn_delete_text, btn_cancel_text, btn_approve, btn_reject, btn_pause, btn_resume, btn_disable, btn_enable, btn_copy, btn_download, btn_upload, btn_clone, btn_external, btn_password, btn_regenerate, btn_revoke, btn_back, btn_refresh, btn_filter, btn_signin, btn_view_text, btn_edit_text, text_btn, tag_pill_button, collapse_toggle, toggle_switch, link_btn %}
 
+{# The macro CATALOGUE. Every control below is a swatch with no action
+   wired — `icon_delete(title='Delete')` posts nowhere. It is documentation,
+   not an offer, but fw.destructive_macro_gated cannot tell the difference,
+   and /settings/components is AdminUserWeb, so the gate is simply true.
+   Escalated: the rule should skip the declared [components].index the way
+   it already skips {% raw %} and comment spans. #}
+{% if current_user.role == 'admin' %}
 {# ═══════════════════════════════════════════════════════════════════════
    ICON ACTION BUTTONS — macros/buttons.html
    ═══════════════════════════════════════════════════════════════════════ #}
@@ -362,3 +369,4 @@
         </div>
     </div>
 </section>
+{% endif %}
