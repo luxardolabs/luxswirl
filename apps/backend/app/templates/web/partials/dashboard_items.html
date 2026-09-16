@@ -26,7 +26,11 @@
                         </div>
                         <div class="flex items-center gap-2">
                             {{ icon_edit(extra_classes='opacity-0 group-hover:opacity-100 rename-group-btn', extra_attrs='data-item-index="' ~ loop.index0 ~ '"') }}
+                            {# Removing a dashboard item is an EditorUserWeb endpoint;
+                               this partial renders on a CurrentUserWeb page. #}
+                            {% if current_user.role in ('admin', 'editor') %}
                             {{ delete_icon_button(delete_url=remove_item_urls[loop.index0], target_id='dashboard-item-' ~ loop.index0, hx_target='#dashboard-items', hx_swap='innerHTML', extra_classes='opacity-0 group-hover:opacity-100') }}
+                            {% endif %}
                         </div>
                     </div>
 
@@ -263,7 +267,9 @@
                     {{ status_pip(check.latest_status) }}
                 </div>
                 {% endif %}
+                {% if current_user.role in ('admin', 'editor') %}
                 {{ delete_icon_button(delete_url=remove_item_urls[loop.index0], target_id='dashboard-item-' ~ loop.index0, hx_target='#dashboard-items', hx_swap='innerHTML', extra_classes='opacity-0 group-hover:opacity-100 flex-shrink-0') }}
+                {% endif %}
             </div>
         {% endif %}
     {% endfor %}

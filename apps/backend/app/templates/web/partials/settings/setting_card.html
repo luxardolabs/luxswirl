@@ -52,7 +52,11 @@
         </div>
 
         <!-- Reset Button (if modified) -->
-        {% if current_value != default_value %}
+        {# Two conditions, not one: `current_value != default_value` is a fact
+           about the ROW, not about the viewer. Resetting a setting discards the
+           operator's configured value and every /settings route is AdminUserWeb,
+           so the control needs the role check too. #}
+        {% if current_value != default_value and current_user.role == 'admin' %}
         {{ icon_reset(title='Reset to default',
                       hx_post=setting_urls[setting.key].reset,
                       hx_target='#setting-' ~ setting.key|replace('.', '-'),

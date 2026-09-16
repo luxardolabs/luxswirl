@@ -46,7 +46,11 @@
                     {{ icon_edit(hx_get=check_urls.edit_form, hx_target='#panel-container') }}
 
                     <!-- Delete -->
+                    {# Deleting a check is an EditorUserWeb endpoint; this panel
+                       opens from the CurrentUserWeb dashboard. #}
+                    {% if current_user.role in ('admin', 'editor') %}
                     {{ delete_icon_button(delete_url=check_urls.delete, target_id='check-' ~ check.id) }}
+                    {% endif %}
                 </div>
             </div>
             <!-- Type and interval chips on second row -->

@@ -106,7 +106,9 @@
                     {{ btn_enable(extra_classes='flex-1', extra_attrs='hx-post="' ~ alert_urls[alert.id].toggle ~ '" hx-swap="none" title="Enable"') }}
                 {% endif %}
                 {{ btn_edit_text(extra_classes='flex-1', hx_get=alert_urls[alert.id].edit_form, hx_target='#panel-container', hx_swap='innerHTML') }}
+                {% if current_user.role == 'admin' %}
                 {{ delete_icon_button(delete_url=alert_urls[alert.id].delete, target_id='alert-' ~ alert.id) }}
+                {% endif %}
             </div>
         </div>
         {% endfor %}

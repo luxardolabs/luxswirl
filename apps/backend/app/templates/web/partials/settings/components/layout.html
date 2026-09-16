@@ -6,6 +6,13 @@
 {% from 'macros/page.html' import page_header %}
 {% from 'macros/tables.html' import data_table %}
 
+{# The macro CATALOGUE. Every control below is a swatch with no action
+   wired — `icon_delete(title='Delete')` posts nowhere. It is documentation,
+   not an offer, but fw.destructive_macro_gated cannot tell the difference,
+   and /settings/components is AdminUserWeb, so the gate is simply true.
+   Escalated: the rule should skip the declared [components].index the way
+   it already skips {% raw %} and comment spans. #}
+{% if current_user.role == 'admin' %}
 {# ═══════════════════════════════════════════════════════════════════════
    CARDS — macros/cards.html + CSS classes
    ═══════════════════════════════════════════════════════════════════════ #}
@@ -115,21 +122,21 @@
                 <td>{{ check_type_badge("http") }}</td>
                 <td>{{ check_status_badge("success") }}</td>
                 <td>{{ role_badge("admin") }}</td>
-                <td><div class="flex items-center justify-end gap-1">{{ icon_view() }}{{ icon_edit() }}{{ icon_delete() }}</div></td>
+                <td><div class="flex items-center justify-end gap-1">{{ icon_view() }}{{ icon_edit() }}{% if current_user.role == 'admin' %}{{ icon_delete() }}{% endif %}</div></td>
             </tr>
             <tr>
                 <td>Database Health</td>
                 <td>{{ check_type_badge("postgres") }}</td>
                 <td>{{ check_status_badge("error") }}</td>
                 <td>{{ role_badge("editor") }}</td>
-                <td><div class="flex items-center justify-end gap-1">{{ icon_view() }}{{ icon_edit() }}{{ icon_delete() }}</div></td>
+                <td><div class="flex items-center justify-end gap-1">{{ icon_view() }}{{ icon_edit() }}{% if current_user.role == 'admin' %}{{ icon_delete() }}{% endif %}</div></td>
             </tr>
             <tr>
                 <td>DNS Resolver</td>
                 <td>{{ check_type_badge("dns") }}</td>
                 <td>{{ check_status_badge("unknown") }}</td>
                 <td>{{ role_badge("viewer") }}</td>
-                <td><div class="flex items-center justify-end gap-1">{{ icon_view() }}{{ icon_edit(disabled=true) }}{{ icon_delete(disabled=true) }}</div></td>
+                <td><div class="flex items-center justify-end gap-1">{{ icon_view() }}{{ icon_edit(disabled=true) }}{% if current_user.role == 'admin' %}{{ icon_delete(disabled=true) }}{% endif %}</div></td>
             </tr>
         {% endcall %}
     </div>
@@ -153,3 +160,4 @@
         </div>
     </div>
 </section>
+{% endif %}
