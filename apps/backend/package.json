@@ -10,7 +10,7 @@
   },
   "keywords": ["monitoring", "observability", "htmx", "tailwind"],
   "author": "Luxardo Labs",
-  "license": "MIT",
+  "license": "AGPL-3.0-or-later",
   "devDependencies": {
     "@tailwindcss/forms": "^0.5.7",
     "@tailwindcss/typography": "^0.5.10",

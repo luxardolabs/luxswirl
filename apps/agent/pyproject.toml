@@ -1,5 +1,6 @@
 [project]
 name = "luxswirl-agent"
+license = "AGPL-3.0-or-later"
 # version: single source is the repo-root VERSION file (repo.version_single_source), read by
 # hatchling (repo.hatchling_build_backend). dependencies + requires-python stay Poetry-sourced
 # from [tool.poetry] below (declared dynamic so Poetry, not [project], owns them). No static

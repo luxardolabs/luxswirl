@@ -1,0 +1,13 @@
+LuxSwirl
+Copyright (C) 2024-2025 Luxardo Labs
+
+Licensed under the GNU Affero General Public License, version 3 or later.
+The full licence text is in LICENSE; nothing is added to it, and no
+additional terms apply.
+
+Contact: licensing@luxardolabs.com
+
+This file exists because LICENSE must contain the canonical AGPL-3.0 text
+and nothing else. Anything extra — a copyright line, a contact address,
+additional terms — stops licence scanners (GitHub's included) matching it,
+and the repository then reports as "Other / NOASSERTION" rather than AGPL-3.0.
