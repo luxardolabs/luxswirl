@@ -19,10 +19,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.auth_deps import AuthedUser
 from app.core.datetime_utils import utc_now
 from app.core.exceptions import AgentNotFoundException
-from app.models.agent_model import Agent
-from app.models.check_model import Check
 from app.models.enum_model import CheckType, MaintenanceJobKind
-from app.schemas.check_schema import CheckCreate, CheckUpdate
+from app.schemas.agent_schema import AgentResponse
+from app.schemas.check_schema import CheckCreate, CheckInDB, CheckUpdate
 from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.check_core_service import CheckCoreService
 from app.services.core.maintenance_job_core_service import MaintenanceJobCoreService
@@ -56,13 +55,15 @@ class ImportExportViewService:
     """Service for check import/export operations."""
 
     @staticmethod
-    def export_checks_to_dict(checks: Sequence[Check], agent: Agent) -> dict:
+    def export_checks_to_dict(
+        checks: Sequence[CheckInDB], agent: AgentResponse
+    ) -> dict:
         """
         Transform checks to export format.
 
         Args:
-            checks: List of Check models
-            agent: Agent model
+            checks: The agent's checks, as schemas
+            agent: The agent, as a schema
 
         Returns:
             Dict with export data (agent info + checks array)
@@ -117,7 +118,7 @@ class ImportExportViewService:
         result = ImportResult()
 
         # Get existing checks
-        existing_checks = await CheckCoreService.list_checks_for_agent(db, agent_id)
+        existing_checks = await CheckCoreService.list_agent_checks(db, agent_id)
         existing_map = {c.display_name: c for c in existing_checks}
 
         # Process each check
@@ -224,10 +225,10 @@ class ImportExportViewService:
 
         Raises AgentNotFoundException if the agent is gone.
         """
-        agent = await AgentCoreService.get_agent_by_id(db, agent_id)
+        agent = await AgentCoreService.get_agent(db, agent_id)
         if not agent:
             raise AgentNotFoundException(str(agent_id))
-        checks = await CheckCoreService.list_checks_for_agent(db, agent_id)
+        checks = await CheckCoreService.list_agent_checks(db, agent_id)
         return {
             "current_user": current_user,
             "agent": agent,
@@ -248,10 +249,10 @@ class ImportExportViewService:
 
         Raises AgentNotFoundException if the agent is gone.
         """
-        agent = await AgentCoreService.get_agent_by_id(db, agent_id)
+        agent = await AgentCoreService.get_agent(db, agent_id)
         if not agent:
             raise AgentNotFoundException(str(agent_id))
-        checks = await CheckCoreService.list_checks_for_agent(db, agent_id)
+        checks = await CheckCoreService.list_agent_checks(db, agent_id)
         export_data = ImportExportViewService.export_checks_to_dict(checks, agent)
         json_bytes = BytesIO(json.dumps(export_data, indent=2).encode())
         # Filename stamp: machine output, so it stays here — but UTC and sortable.
@@ -293,7 +294,7 @@ class ImportExportViewService:
         before the response is sent, so the job is visible when the client polls.
         """
         try:
-            agent = await AgentCoreService.get_agent_by_id(db, agent_id)
+            agent = await AgentCoreService.get_agent(db, agent_id)
             if not agent:
                 raise AgentNotFoundException(str(agent_id))
 

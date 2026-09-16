@@ -31,6 +31,7 @@ from app.schemas.check_schema import (
     BulkCheckCreateRequest,
     BulkCheckCreateResponse,
     CheckCreate,
+    CheckInDB,
     CheckListResponse,
     CheckResponse,
     CheckUpdate,
@@ -783,6 +784,18 @@ class CheckCoreService:
             db, enabled_only=True, limit=10000
         )
         return checks
+
+    @staticmethod
+    async def list_agent_checks(db: AsyncSession, agent_id: UUID) -> list[CheckInDB]:
+        """An agent's checks as the web seam holds them — schemas, not ORM rows.
+
+        list_checks_for_agent stays ORM: the job-to-check, check-result and
+        bulk-create paths below read it and go on to mutate what they get.
+        """
+        return [
+            CheckInDB.model_validate(c)
+            for c in await CheckCoreService.list_checks_for_agent(db, agent_id)
+        ]
 
     @staticmethod
     async def list_checks_for_agent(
