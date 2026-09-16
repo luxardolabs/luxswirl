@@ -19,9 +19,8 @@ from app.core.auth_deps import AuthedUser
 from app.core.config import settings
 from app.core.datetime_utils import utc_now
 from app.core.exceptions import AgentNotFoundException
-from app.models.agent_model import Agent
 from app.models.enum_model import MaintenanceJobKind
-from app.schemas.agent_schema import AgentUpdate, AgentUrls
+from app.schemas.agent_schema import AgentResponse, AgentUpdate, AgentUrls
 from app.schemas.pagination_schema import build_pagination
 from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.check_core_service import CheckCoreService
@@ -68,7 +67,7 @@ class AgentData:
 
     def __init__(
         self,
-        agent: Agent,
+        agent: AgentResponse,
         total_checks: int,
         enabled_checks: int,
         cpu_sparkline: list[float | None],
@@ -135,7 +134,7 @@ class AgentsViewService:
         )
 
         # Get check counts and sparklines for each agent in parallel
-        async def get_agent_data(agent: Agent) -> AgentData:
+        async def get_agent_data(agent: AgentResponse) -> AgentData:
             # Get check counts
             checks = await CheckCoreService.list_checks_for_agent(db, agent.id)
             # post-db-filter: filters the agent's own checks, already loaded for the card
@@ -269,7 +268,7 @@ class AgentsViewService:
     ):
         """Enqueue an agent_delete maintenance job; returns the job row."""
         # 404 cleanly if the agent doesn't exist instead of queuing a doomed job.
-        await AgentCoreService.get_agent_by_id(db, agent_id)
+        await AgentCoreService.get_agent(db, agent_id)
         return await MaintenanceJobCoreService.enqueue(
             db,
             kind=MaintenanceJobKind.AGENT_DELETE,
@@ -284,7 +283,7 @@ class AgentsViewService:
     # UI never read (fw.web_routers_single_surface).
 
     @staticmethod
-    def _display_name(agent: Agent) -> str:
+    def _display_name(agent: AgentResponse) -> str:
         """How an agent is named to the user, in one place."""
         return agent.agent_name or agent.hostname or str(agent.id)
 
@@ -375,7 +374,10 @@ class AgentsViewService:
 
     @staticmethod
     def _render_key_panel(
-        request: Request, current_user: AuthedUser, agent: Agent, plaintext_key: str
+        request: Request,
+        current_user: AuthedUser,
+        agent: AgentResponse,
+        plaintext_key: str,
     ) -> Response:
         """Render the 'key generated — copy it once' panel."""
         return templates.TemplateResponse(
@@ -461,11 +463,11 @@ class AgentsViewService:
         db: AsyncSession, request: Request, current_user: AuthedUser, agent_id: UUID
     ) -> dict[str, Any] | None:
         """Edit-form panel context. Returns None if agent not found."""
-        agent = await AgentCoreService.get_agent_by_id(db, agent_id)
+        agent = await AgentCoreService.get_agent(db, agent_id)
         if not agent:
             return None
         available_agent_tags = await AgentCoreService.get_all_tags(db)
-        check_count = len(agent.checks) if agent.checks else 0
+        check_count = agent.check_count
         return {
             "request": request,
             "current_user": current_user,
@@ -482,7 +484,7 @@ class AgentsViewService:
         db: AsyncSession, request: Request, current_user: AuthedUser, agent_id: UUID
     ) -> dict[str, Any] | None:
         """Key-management-panel context. Returns None if agent not found."""
-        agent = await AgentCoreService.get_agent_by_id(db, agent_id)
+        agent = await AgentCoreService.get_agent(db, agent_id)
         if not agent:
             return None
         return {
@@ -494,7 +496,10 @@ class AgentsViewService:
 
     @staticmethod
     def build_key_generated_panel_context(
-        request: Request, current_user: AuthedUser, agent: Agent, plaintext_key: str
+        request: Request,
+        current_user: AuthedUser,
+        agent: AgentResponse,
+        plaintext_key: str,
     ) -> dict[str, Any]:
         """'Key generated — copy this once' panel context."""
         return {

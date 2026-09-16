@@ -94,6 +94,24 @@ class AgentCoreService:
         return await AgentCRUD.get_hostnames_by_ids(db, agent_ids)
 
     @staticmethod
+    async def get_agent(db: AsyncSession, agent_id: UUID) -> AgentResponse:
+        """The agent as the web seam holds it — a DTO, not the ORM row.
+
+        Returns AgentResponse rather than AgentInDB because the seam needs the
+        computed fields too: check_count, is_online and uptime_seconds. They are
+        derived HERE, from the eagerly-loaded row, because `agent.checks` is a
+        relationship — a schema that merely declared it would lazy-load outside
+        the session and raise MissingGreenlet.
+
+        get_agent_by_id stays ORM; the approve/reject/pause lifecycle methods
+        read it and mutate the row they get back. Raises the same
+        AgentNotFoundException, so callers keep their error path.
+        """
+        return AgentCoreService.to_response(
+            await AgentCoreService.get_agent_by_id(db, agent_id)
+        )
+
+    @staticmethod
     async def get_agent_by_id(db: AsyncSession, agent_id: UUID) -> Agent:
         """
         Get agent by UUID.
