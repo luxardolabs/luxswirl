@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.auth_deps import AuthedUser
 from app.core.datetime_utils import utc_now
 from app.core.query_params import split_csv
+from app.schemas.check_schema import DashboardCheck, DashboardCheckAgent
 from app.schemas.pagination_schema import build_pagination
 from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.check_core_service import CheckCoreService
@@ -32,6 +33,7 @@ class StatusRow:
     def __init__(
         self,
         check_id: UUID,
+        agent_id: UUID,
         check_name: str,
         check_type: str,
         target: str,
@@ -49,6 +51,9 @@ class StatusRow:
         dependent_count: int = 0,
     ):
         self.check_id = check_id
+        # Carried so the dashboard can name the agent without a second
+        # round-trip to the ORM for a row this one already describes.
+        self.agent_id = agent_id
         self.check_name = check_name
         self.check_type = check_type
         self.target = target
@@ -115,6 +120,34 @@ class StatusRow:
     def uptime_display(self) -> str:
         """Format uptime percentage for display."""
         return f"{self.uptime_24h:.1f}%"
+
+    def to_dashboard_check(self) -> DashboardCheck:
+        """This row as a dashboard/status-page card.
+
+        Lives here rather than in the renderer because every field already
+        belongs to this row — the projection is a rename, not a second query.
+        The dashboard used to re-fetch the ORM Check and setattr the status
+        onto it, which put an ORM model through the view seam and left the
+        status missing whenever the re-fetch found a check the status query had
+        not returned.
+        """
+        return DashboardCheck(
+            id=self.check_id,
+            display_name=self.check_name,
+            check_type=self.check_type,
+            target=self.target,
+            tags=self.check_tags,
+            enabled=self.enabled,
+            agent=DashboardCheckAgent(
+                id=self.agent_id,
+                agent_name=self.agent_name,
+                tags=self.agent_tags,
+            ),
+            latest_status=self.status_text.lower(),
+            latest_success=self.success,
+            latency_ms=self.latency_ms,
+            uptime_24h=self.uptime_24h,
+        )
 
 
 class StatusViewService:
@@ -272,6 +305,7 @@ class StatusViewService:
             # Create status row
             status_row = StatusRow(
                 check_id=check.id,
+                agent_id=agent.id,
                 check_name=check.display_name,
                 check_type=check.check_type,
                 target=check.target,

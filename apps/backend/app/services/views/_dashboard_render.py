@@ -2,7 +2,8 @@
 Dashboard rendering — view-model assembly for status-page dashboards.
 """
 
-from typing import Any
+from dataclasses import replace
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from shared.logger import get_logger
@@ -10,12 +11,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.datetime_utils import utc_now
 from app.core.sparkline import sparkline_path
-from app.models.check_model import Check
+from app.schemas.check_schema import DashboardCheck
 from app.schemas.status_page_schema import StatusPageInDB
 from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.check_core_service import CheckCoreService
 from app.services.core.check_result_core_service import CheckResultCoreService
 from app.services.views.status_view_service import StatusViewService
+
+if TYPE_CHECKING:
+    pass
 
 logger = get_logger("luxswirl.web.services.dashboard")
 
@@ -25,10 +29,10 @@ class DashboardRender:
 
     @staticmethod
     def sort_checks(
-        checks: list[Check],
+        checks: list[DashboardCheck],
         sort_by: str = "manual",
         sort_direction: str = "asc",
-    ) -> list[Check]:
+    ) -> list[DashboardCheck]:
         """
         Sort checks based on criteria with intelligent secondary sorts.
 
@@ -39,7 +43,7 @@ class DashboardRender:
         - Uptime: secondary sort by status (up first for same uptime)
 
         Args:
-            checks: List of Check objects with status info attached
+            checks: Dashboard rows, status included
             sort_by: Sort criteria (manual, name, status, latency, uptime)
             sort_direction: Sort direction (asc, desc)
 
@@ -112,7 +116,7 @@ class DashboardRender:
     @staticmethod
     async def get_check_details_map(
         db: AsyncSession, check_ids: list[UUID]
-    ) -> dict[UUID, Check]:
+    ) -> dict[UUID, DashboardCheck]:
         """
         Get check details with status information for a list of check IDs.
 
@@ -121,7 +125,7 @@ class DashboardRender:
             check_ids: List of check IDs to fetch
 
         Returns:
-            Dictionary mapping check_id to Check object with status info
+            check_id -> its dashboard row
         """
         if not check_ids:
             return {}
@@ -131,24 +135,8 @@ class DashboardRender:
             db, check_ids=check_ids, limit=len(check_ids)
         )
 
-        # Build status map for quick lookup
-        status_map = {row.check_id: row for row in status_rows}
-
-        # Get check objects via core service
-        checks = await CheckCoreService.get_checks_by_ids(db, check_ids)
-
-        # Build result map with status info
-        check_details_map = {}
-        for check in checks:
-            if check.id in status_map:
-                row = status_map[check.id]
-                setattr(check, "latest_status", row.status_text.lower())  # noqa: B010
-                setattr(check, "latest_success", row.success)  # noqa: B010
-                setattr(check, "latency_ms", row.latency_ms)  # noqa: B010
-
-            check_details_map[check.id] = check
-
-        return check_details_map
+        # No second round-trip — see StatusRow.to_dashboard_check.
+        return {row.check_id: row.to_dashboard_check() for row in status_rows}
 
     @staticmethod
     async def get_filtered_checks_with_status(
@@ -159,7 +147,7 @@ class DashboardRender:
         tags: list[str] | None = None,
         search: str | None = None,
         limit: int = 1000,
-    ) -> list[Check]:
+    ) -> list[DashboardCheck]:
         """
         Get filtered checks with status information.
 
@@ -173,7 +161,7 @@ class DashboardRender:
             limit: Max results
 
         Returns:
-            List of Check objects with status info attached
+            Dashboard rows, status included
         """
         # Use StatusViewService to get checks with status
         status_rows, _ = await StatusViewService.get_all_checks_status(
@@ -187,30 +175,13 @@ class DashboardRender:
         )
 
         # Get check IDs from status rows
-        check_ids = [row.check_id for row in status_rows]
-
-        if not check_ids:
-            return []
-
-        # Get check objects via core service
-        checks = await CheckCoreService.get_checks_by_ids(db, check_ids)
-
-        # Attach status info to checks and maintain order
-        checks_dict = {check.id: check for check in checks}
-        ordered_checks = []
-
-        for row in status_rows:
-            check = checks_dict.get(row.check_id)
-            if check:
-                setattr(check, "latest_status", row.status_text.lower())  # noqa: B010
-                setattr(check, "latest_success", row.success)  # noqa: B010
-                setattr(check, "latency_ms", row.latency_ms)  # noqa: B010
-                ordered_checks.append(check)
-
-        return ordered_checks
+        # No second round-trip — see StatusRow.to_dashboard_check.
+        return [row.to_dashboard_check() for row in status_rows]
 
     @staticmethod
-    async def get_check_with_status(db: AsyncSession, check_id: UUID) -> Check | None:
+    async def get_check_with_status(
+        db: AsyncSession, check_id: UUID
+    ) -> DashboardCheck | None:
         """
         Get a single check with status information.
 
@@ -219,7 +190,7 @@ class DashboardRender:
             check_id: Check UUID
 
         Returns:
-            Check object with status info or None
+            The check's dashboard row, or None
         """
         check_map = await DashboardRender.get_check_details_map(db, [check_id])
         return check_map.get(check_id)
@@ -276,7 +247,7 @@ class DashboardRender:
     @staticmethod
     async def get_checks_matching_filter(
         db: AsyncSession, filter: dict[str, Any]
-    ) -> list[Check]:
+    ) -> list[DashboardCheck]:
         """
         Get checks matching a dynamic filter configuration.
 
@@ -285,7 +256,7 @@ class DashboardRender:
             filter: Filter configuration dict with agent_id, check_type, tags, search
 
         Returns:
-            List of Check objects with status info
+            Dashboard rows, status included
         """
         agent_id = filter.get("agent_id")
         check_type = filter.get("check_type")
@@ -842,7 +813,7 @@ class DashboardRender:
 
             # Attach stats to check objects
             # check_map has string keys, but bulk methods return UUID keys - convert for lookup
-            for check_id_str, check in check_map.items():
+            for check_id_str, check in list(check_map.items()):
                 check_id_uuid = (
                     UUID(check_id_str)
                     if isinstance(check_id_str, str)
@@ -862,15 +833,20 @@ class DashboardRender:
                     check_id_uuid, {"uptime": 100.0, "last_failure_at": None}
                 )
 
-                setattr(check, "uptime_24h", uptime_24h_data["uptime"])  # noqa: B010
-                setattr(check, "uptime_7d", uptime_7d_data["uptime"])  # noqa: B010
-                setattr(check, "uptime_30d", uptime_30d_data["uptime"])  # noqa: B010
-                setattr(check, "uptime_90d", uptime_90d_data["uptime"])  # noqa: B010
-                setattr(check, "last_failure_at", uptime_24h_data["last_failure_at"])  # noqa: B010
                 bars = bars_map.get(check_id_uuid, [])
-                setattr(check, "minute_bars", bars)  # noqa: B010
-                # The card renders this path; it is not the template's to compute.
-                setattr(check, "sparkline_path", sparkline_path(bars))  # noqa: B010
+                # replace(), not setattr: DashboardCheck is frozen, so the stats
+                # produce a NEW row rather than being written onto the old one.
+                check_map[check_id_str] = replace(
+                    check,
+                    uptime_24h=uptime_24h_data["uptime"],
+                    uptime_7d=uptime_7d_data["uptime"],
+                    uptime_30d=uptime_30d_data["uptime"],
+                    uptime_90d=uptime_90d_data["uptime"],
+                    last_failure_at=uptime_24h_data["last_failure_at"],
+                    minute_bars=bars,
+                    # The card renders this path; it is not the template's to compute.
+                    sparkline_path=sparkline_path(bars),
+                )
 
         # PHASE 3: Build rendered items
         rendered_items = []
