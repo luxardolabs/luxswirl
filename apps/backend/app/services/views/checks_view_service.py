@@ -80,6 +80,8 @@ def build_check_form_urls(request: Request, check_id: UUID) -> CheckFormUrls:
         update=u("web_update_check"),
         dependents=u("dependents_panel"),
         update_dependents=u("update_dependents"),
+        # No check_id on this one — it is the alerts page, not a check action.
+        alerts_page=str(request.url_for("settings_alerts").path),
     )
 
 
