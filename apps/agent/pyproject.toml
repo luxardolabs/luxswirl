@@ -8,6 +8,10 @@ dynamic = ["version", "dependencies", "requires-python"]
 
 [tool.hatch.version]
 path = "../../VERSION"
+# VERSION is a bare version string. Hatchling's default regex looks for
+# `__version__ = "..."`, matches nothing here, and the wheel build dies with
+# "unable to parse the version from the file" (repo.hatch_version_source_buildable).
+pattern = "(?P<version>.+)"
 
 [tool.poetry]
 # App: deployed via `poetry install --no-root`, never packaged → non-package mode. Poetry manages
@@ -27,10 +31,10 @@ httpx = "^0.28.1"
 cryptography = "^50.0.0"  # CVE-2026-69247/69248/69249 + GHSA-537c-gmf6-5ccf floor
 
 # Config / schema models
-pydantic = "^2.5.3"
+pydantic = "^2.13.5"
 
 # Logging (shared/logger.py)
-python-json-logger = "^2.0.7"
+python-json-logger = "^4.2.0"
 
 # Config files (shared/config.py)
 pyyaml = "^6.0"
@@ -42,17 +46,17 @@ psutil = "^7.1.2"
 uuid7 = "^0.1.0"
 
 # Check-type drivers (imported lazily inside each check's run()):
-playwright = "^1.48.0"      # synthetic checks
-jsonata-python = "^0.6.0"   # JSON API checks (Uptime Kuma compatible)
+playwright = "^1.63.0"      # synthetic checks
+jsonata-python = "^0.7.0"   # JSON API checks (Uptime Kuma compatible)
 aiomysql = "^0.3.2"         # MySQL checks
 asyncpg = "^0.31.0"         # PostgreSQL checks
 dnspython = "^2.7.0"        # DNS checks
 
 [tool.poetry.group.dev.dependencies]
-pytest = "^9.0.0"
+pytest = "^9.1.1"
 pytest-asyncio = "^1.3.0"
-ruff = "^0.15.0"
-mypy = "^2.0.0"
+ruff = "^0.16.7"
+mypy = "^2.3.1"
 
 [build-system]
 # Fleet's one build backend is hatchling (repo.hatchling_build_backend). Poetry stays the

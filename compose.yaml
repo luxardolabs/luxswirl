@@ -1,12 +1,19 @@
 ####
-# The one compose file. Environments differ by .env.<env>, never by an overlay:
+# The one compose file. Nothing is built here — `make build-dev` / `make release`
+# build the images outside compose; compose only runs a tag.
 #
-#   docker compose --env-file .env.dev  up -d
-#   docker compose --env-file .env.prod up -d
+# Environments differ by .env.<env>, never by an overlay file:
+#   docker compose --env-file .env.dev     up -d          # or: make dev-up
+#   docker compose --env-file .env.prod    up -d          # or: make prod-up
+#   docker compose -p luxswirl-sbx --env-file .env.sandbox up -d   # make sandbox-up
 #
-# Nothing is built here. `make build-dev` / `make release` build the images
-# outside compose; compose only runs a tag. Copy .env.example to .env.<env> and
-# fill it in — every value this file interpolates is documented there.
+# Variant STACKS are profiles, not files. A service carrying `profiles:` is
+# inert for a normal `up` and starts only when its profile is named:
+#   docker compose --profile test up -d timescaledb-test  # make test
+#   docker compose --profile standalone-agent up -d       # an agent-only node
+#
+# Copy .env.example to .env.<env> and fill it in — every interpolated value is
+# documented there.
 ####
 
 name: luxswirl
@@ -14,7 +21,7 @@ name: luxswirl
 services:
   timescaledb:
     image: timescale/timescaledb:latest-pg16
-    container_name: luxswirl_timescaledb
+    container_name: luxswirl_timescaledb${STACK_SUFFIX:-}
     environment:
       - POSTGRES_DB=luxswirl
       - POSTGRES_USER=luxswirl
@@ -30,7 +37,7 @@ services:
     # Host binding for direct psql access. Dev binds 0.0.0.0; prod binds
     # 127.0.0.1 so the port is reachable only from the node itself.
     ports:
-      - "${DB_BIND:-127.0.0.1}:5432:5432"
+      - "${DB_BIND:-127.0.0.1}:${DB_PORT:-5432}:5432"
     volumes:
       - luxswirl_db_data:/var/lib/postgresql/data
     restart: unless-stopped
@@ -43,14 +50,16 @@ services:
       retries: 5
 
   luxswirl_server:
-    image: ghcr.io/luxardolabs/luxswirl-backend:${TAG:?set TAG in .env.${ENV}}
-    container_name: luxswirl_server
+    image: ${SERVER_IMAGE:-ghcr.io/luxardolabs/luxswirl-backend}:${TAG:?set TAG in .env.${ENV}}
+    container_name: luxswirl_server${STACK_SUFFIX:-}
     command: ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 9000"]
     # Internal port only - exposed via nginx
     expose:
       - "9000"
     volumes:
-      - ./data/server:/app/data  # Persists generated SECRET_KEY + api_token
+      # Persists the generated SECRET_KEY + api_token. ${DATA_DIR} keeps a
+      # sandbox's secrets out of dev's directory.
+      - ./data/${DATA_DIR:-.}/server:/app/data
     # Every app setting — log level, CORS, database URL, secrets, retention —
     # comes from the environment file. Nothing is set inline here, so this file
     # never silently overrides what the operator wrote (a compose `environment:`
@@ -72,21 +81,23 @@ services:
       start_period: 40s
 
   luxswirl_agent:
-    image: ghcr.io/luxardolabs/luxswirl-agent:${TAG:?set TAG in .env.${ENV}}
-    container_name: luxswirl_agent
-    hostname: luxswirl_agent  # IMPORTANT: Keep hostname consistent for encryption key derivation
+    image: ${AGENT_IMAGE:-ghcr.io/luxardolabs/luxswirl-agent}:${TAG:?set TAG in .env.${ENV}}
+    container_name: luxswirl_agent${STACK_SUFFIX:-}
+    # IMPORTANT: the credential encryption key is derived from the hostname, so
+    # changing this invalidates stored credentials and forces a re-registration.
+    hostname: luxswirl_agent${STACK_SUFFIX:-}
     # No --debug flag: it only raised the log level, which LOG__LEVEL in the
     # environment file already does, and a conditional flag cannot live in a
     # command list without passing an empty argument.
     command: ["python", "-m", "app.main"]
     volumes:
-      - ./data/agent:/app/data
+      - ./data/${DATA_DIR:-.}/agent:/app/data
     environment:
       - LUXSWIRL_AGENT_ID=${LUXSWIRL_AGENT_ID:-docker-agent}
       # Required: generate via Settings → Registration Keys in the server UI
       # after first login, then set this value in .env.<env>.
       - LUXSWIRL_AUTH_KEY=${LUXSWIRL_AUTH_KEY:?must be set — generate via server UI after first admin login}
-      - LUXSWIRL_SERVER_URL=http://luxswirl_server:9000/api/v1/reports
+      - LUXSWIRL_SERVER_URL=http://luxswirl_server${STACK_SUFFIX:-}:9000/api/v1/reports
     env_file:
       - .env.${ENV:?set ENV in .env.<env> — it names the file to load}
     restart: unless-stopped
@@ -98,14 +109,14 @@ services:
 
   nginx:
     image: nginx:alpine
-    container_name: luxswirl_nginx
+    container_name: luxswirl_nginx${STACK_SUFFIX:-}
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/conf.d:/etc/nginx/conf.d:ro
       # Host directory holding fullchain.pem + privkey.pem for this environment.
       - ${NGINX_SSL_DIR:?set NGINX_SSL_DIR in .env.${ENV}}:/etc/nginx/ssl:ro
     ports:
-      - "9000:9000"
+      - "${HTTP_PORT:-9000}:9000"
     networks:
       - luxswirl-network
     depends_on:
@@ -113,9 +124,123 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  # ── profile: standalone-agent ────────────────────────────────────────────
+  # An agent-only node: no server, no database, reporting to a remote LuxSwirl.
+  # `docker compose --profile standalone-agent up -d`
+  #
+  # Host networking so the agent can ping and reach services on its own LAN.
+  # It reuses the luxswirl_agent container/host name deliberately — this runs on
+  # a node where the full stack does not, and the name feeds the credential
+  # encryption key.
+  luxswirl_agent_standalone:
+    profiles: ["standalone-agent"]
+    image: ${AGENT_IMAGE:-ghcr.io/luxardolabs/luxswirl-agent}:${TAG:?set TAG in .env.${ENV}}
+    container_name: luxswirl_agent
+    hostname: luxswirl_agent
+    command: ["python", "-m", "app.main"]
+    volumes:
+      - ./data/agent:/app/data:rw
+    env_file:
+      - .env.${ENV:?set ENV in .env.<env> — it names the file to load}
+    environment:
+      - LUXSWIRL_AUTH_KEY=${LUXSWIRL_AUTH_KEY:?must be set — generate via server UI}
+      # A standalone node MUST override this in its .env.<env>. It cannot be
+      # a required `:?` variable: compose interpolates every service in the
+      # file, so a required value here would break `up` for the dev, prod and
+      # test invocations that never start this profile.
+      - LUXSWIRL_SERVER_URL=${LUXSWIRL_SERVER_URL:-https://luxswirl.example.com:9000/api/v1/reports}
+    network_mode: host
+    restart: always
+
+  # ── profile: chronosphere ────────────────────────────────────────────────
+  # Optional: ship LuxSwirl's Prometheus metrics to a Chronosphere account.
+  # NOT required to operate — the app exposes /metrics natively; this is a
+  # sidecar for organisations using Chronosphere SaaS.
+  # `docker compose --profile chronosphere up -d`
+  chronocollector:
+    profiles: ["chronosphere"]
+    image: gcr.io/chronosphereio/chronocollector:v0.112.0
+    container_name: luxswirl_chronocollector${STACK_SUFFIX:-}
+    expose:
+      - "3029"
+      - "3030"
+    volumes:
+      - ./deploy/chronocollector/config.yaml:/etc/chronocollector/config.yml:ro
+    environment:
+      # Cannot be a required `:?` variable — compose interpolates every service
+      # in the file, so it would break `up` for everyone not running this
+      # profile. The collector fails its own auth if this is left unset.
+      - API_TOKEN=${CHRONOSPHERE_API_TOKEN:-}
+      - GATEWAY_ADDRESS=${CHRONOSPHERE_GATEWAY:-demo-sandbox.chronosphere.io:443}
+      - ENVIRONMENT=${CHRONOSPHERE_ENVIRONMENT:-prod}
+      - PLATFORM=luxswirl
+    restart: unless-stopped
+    networks:
+      - luxswirl-network
+    depends_on:
+      # Was `luxswirl_collector`, which has never existed in this repo — the
+      # overlay could not start at all. The metrics come from the server.
+      luxswirl_server:
+        condition: service_healthy
+
+  # ── profile: test ────────────────────────────────────────────────────────
+  # The throwaway suite topology. Driven by `make test` / `make migration-check`,
+  # which name these services explicitly so the app stack above stays down:
+  #   docker compose -p luxswirl-test --profile test up -d --wait timescaledb-test
+  #   docker compose -p luxswirl-test --profile test run --rm tests pytest
+  timescaledb-test:
+    profiles: ["test"]
+    image: timescale/timescaledb:latest-pg16
+    container_name: luxswirl_timescaledb_test
+    # RAM-backed: schema setup is ~200ms per session and the data is meant to die.
+    tmpfs:
+      - /var/lib/postgresql/data
+    shm_size: '1gb'
+    environment:
+      POSTGRES_DB: luxswirl_test
+      POSTGRES_USER: luxswirl_test
+      POSTGRES_PASSWORD: luxswirl_test
+    # 15432 is taken by luxwx's test DB on shared dev boxes; pick a port that
+    # doesn't collide. The internal port is always 5432.
+    ports:
+      - "25432:5432"
+    # Readiness = an AUTHENTICATED TCP query, never a bare `pg_isready`. With no -h,
+    # pg_isready connects over the unix SOCKET — which the postgres entrypoint's temporary
+    # initdb server also listens on, BEFORE the role/password exist. A socket probe therefore
+    # goes green mid-bootstrap and the suite fails with InvalidPasswordError. `-h 127.0.0.1`
+    # forces TCP (the initdb server is socket-only) and the auth'd `select 1` needs the role
+    # to exist. The window is ~5x wider on TimescaleDB (extension preload + tune + bounce).
+    healthcheck:
+      test: ["CMD-SHELL", "PGPASSWORD=luxswirl_test psql -h 127.0.0.1 -U luxswirl_test -d luxswirl_test -tAc 'select 1' >/dev/null"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+    restart: "no"
+
+  tests:
+    profiles: ["test"]
+    # Compose never builds: the Makefile bakes `luxswirl:test` fresh from on-disk
+    # source on every `make test` (test-build → Dockerfile.test, self-contained —
+    # no :dev base, no registry dependency).
+    image: luxswirl:test
+    container_name: luxswirl_tests
+    depends_on:
+      timescaledb-test:
+        condition: service_healthy
+    environment:
+      DATABASE__URL: postgresql+asyncpg://luxswirl_test:luxswirl_test@timescaledb-test:5432/luxswirl_test
+      LUXSWIRL_INTEGRATION: "1"
+    # No source bind-mounts — app/shared/tests are baked in by `make test-build`.
+    # `run --rm tests` overrides this; the default keeps the container alive so
+    # it does not exit when brought up via `up`.
+    command: ["tail", "-f", "/dev/null"]
+    restart: "no"
+
 volumes:
   luxswirl_db_data:
-    name: luxswirl_db_data
+    # ${VOLUME_PREFIX} gives the sandbox its own database; `down -v` there
+    # removes only that volume and leaves dev's untouched.
+    name: luxswirl_${VOLUME_PREFIX:-}db_data
 
 networks:
   luxswirl-network:

@@ -111,7 +111,12 @@ marketing/
 .env.dev
 .env.prod
 .env.sandbox
+# .env.test is the exception — it is the committed test topology, carries no
+# secrets, and every clone needs it for `make test`.
+!.env.test
 compose.sandbox.yaml
-compose.chronosphere.yaml
 nginx/conf.d/luxswirl.conf
 Makefile.local
+
+# Claude Code hook session state (luxarch --emit hooks)
+.claude/settings.json.bak

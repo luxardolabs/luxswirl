@@ -26,17 +26,17 @@ AGENT_IMAGE     := $(REGISTRY)/$(AGENT_NAME)
 # Makefile.local (gitignored): copy Makefile.local.example -> Makefile.local and set it.
 # Contributors don't need it — lint/test and the import-linter contracts run without it.
 LUXARCH_REGISTRY ?=
-LUXARCH_VERSION := 0.155.2
+LUXARCH_VERSION := 0.186.3
 LUXARCH_IMAGE    ?= $(LUXARCH_REGISTRY)/luxardolabs/luxarch:$(LUXARCH_VERSION)
 # Dependency-CVE guard (luxaudit) — same private registry as luxarch, mount-only.
 # Scans the pinned poetry.locks against the live advisory feed (see .luxaudit.toml).
-LUXAUDIT_VERSION := 0.4.0
+LUXAUDIT_VERSION := 0.9.0
 LUXAUDIT_IMAGE   ?= $(LUXARCH_REGISTRY)/luxardolabs/luxaudit:$(LUXAUDIT_VERSION)
 # Lint/type/test-standard guard (luxlint) — same private registry. Owns the fleet
 # ruff/mypy config byte-identical (see .luxlint.toml); ruff runs mount-only, mypy
 # runs as an in-repo tail (needs a current mypy for PEP 758 excepts — the baked
 # lint image freezes an older one, so the tail installs a fresh mypy).
-LUXLINT_VERSION := 0.45.1
+LUXLINT_VERSION := 0.55.0
 LUXLINT_IMAGE    ?= $(LUXARCH_REGISTRY)/luxardolabs/luxlint:$(LUXLINT_VERSION)
 -include Makefile.local
 
@@ -86,10 +86,15 @@ endef
 DC      := docker compose -f compose.yaml
 DC_DEV  := docker compose -f compose.yaml --env-file .env.dev
 DC_PROD := docker compose -f compose.yaml --env-file .env.prod
-DC_TEST := docker compose -f compose.test.yaml
+# The test topology is a PROFILE in the one compose.yaml, not a second file.
+# .env.test is committed (it holds no secrets) because compose interpolates
+# every service in the file, active profile or not.
+DC_TEST := docker compose -p luxswirl-test --env-file .env.test --profile test
 # Sandbox: own project name (isolates network/containers) + own env-file (isolates
 # interpolation: POSTGRES_PASSWORD, LUXSWIRL_AUTH_KEY, secrets) + the sandbox overlay.
-DC_SBX  := docker compose -p luxswirl-sbx --env-file .env.sandbox -f compose.yaml -f compose.sandbox.yaml
+# The sandbox is an ENVIRONMENT, not an overlay: .env.sandbox supplies the
+# container suffix, data dir, volume prefix, ports and image tags.
+DC_SBX  := docker compose -p luxswirl-sbx --env-file .env.sandbox
 
 # ANSI colors for `make help`.
 BLUE := \033[0;34m

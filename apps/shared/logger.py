@@ -12,7 +12,7 @@ import re
 import sys
 from typing import Any
 
-from pythonjsonlogger import jsonlogger
+from pythonjsonlogger.json import JsonFormatter
 
 _ROOT_NAMESPACE = "luxswirl"
 _INITIALIZED = False
@@ -113,7 +113,7 @@ class CredentialFilter(logging.Filter):
         return out
 
 
-class _LuxswirlJsonFormatter(jsonlogger.JsonFormatter):
+class _LuxswirlJsonFormatter(JsonFormatter):
     """JSON formatter with explicit standard fields."""
 
     def add_fields(

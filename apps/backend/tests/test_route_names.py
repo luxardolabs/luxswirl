@@ -16,14 +16,14 @@ import pathlib
 import re
 from collections import defaultdict
 
+from _route_table import iter_routes
 from app.main import app
 
 
 def test_route_names_are_unique() -> None:
     by_name: defaultdict[str, set[str]] = defaultdict(set)
-    for route in app.routes:
+    for route, path in iter_routes(app.routes):
         name = getattr(route, "name", None)
-        path = getattr(route, "path", None)
         if name and path:
             by_name[name].add(path)
 
@@ -42,7 +42,9 @@ def test_every_referenced_route_name_exists() -> None:
     Several of these live on partials that a test suite never opens, so catch a
     rename here instead of in production.
     """
-    known = {name for r in app.routes if (name := getattr(r, "name", None))}
+    known = {
+        name for r, _ in iter_routes(app.routes) if (name := getattr(r, "name", None))
+    }
     app_dir = pathlib.Path(__file__).resolve().parents[1] / "app"
     pattern = re.compile(r'(?:url_for|\bu)\(\s*"([a-z_]+)"')
 
