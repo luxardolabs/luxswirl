@@ -2,7 +2,9 @@
 Pydantic schemas for Check domain.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import datetime
+from typing import Any
 from uuid import UUID
 
 from pydantic import Field
@@ -343,6 +345,55 @@ class BulkCheckCreateResponse(BaseSchema):
             }
         }
     }
+
+
+@dataclass(frozen=True)
+class DashboardCheckAgent:
+    """The agent as a dashboard row names it.
+
+    Flat values, not the ORM relationship: reading `check.agent.tags` off a
+    detached Check lazy-loads outside the session and raises MissingGreenlet.
+    """
+
+    id: UUID
+    agent_name: str | None
+    tags: list[str]
+
+
+@dataclass(frozen=True)
+class DashboardCheck:
+    """One check on a dashboard or public status page, status included.
+
+    Field names match what the templates already read, because this replaces
+    ORM Check objects that had `latest_status`, `latest_success` and
+    `latency_ms` setattr'd onto them — display data written onto a database
+    row. The status was always available on the StatusRow beside it, so this is
+    projected from that and the checks are no longer re-fetched at all.
+    """
+
+    id: UUID
+    display_name: str
+    check_type: str
+    target: str
+    tags: list[str]
+    enabled: bool
+    agent: DashboardCheckAgent
+    # Status, computed from results rather than columns on the check.
+    latest_status: str
+    latest_success: bool | None
+    latency_ms: float | None
+    uptime_24h: float
+
+    # Filled in by a later pass over the same rows (the bulk uptime/bars
+    # queries), via dataclasses.replace rather than mutation — the whole point
+    # of the frozen dataclass is that a display value cannot be written onto
+    # something that looks like a database row.
+    uptime_7d: float = 100.0
+    uptime_30d: float = 100.0
+    uptime_90d: float = 100.0
+    last_failure_at: datetime | None = None
+    minute_bars: list[dict[str, Any]] = field(default_factory=list)
+    sparkline_path: str = ""
 
 
 @dataclass(frozen=True)
