@@ -109,6 +109,14 @@ require_names = [
 #     pipeline whose reads could silently drop it; check configuration is read
 #     back by the agent through the same schema it was written with.
 #
+#   --sweep dead-models — reports UUIDBaseModel (models/base_model.py:230) as an
+#     unreachable model. It is `__abstract__ = True`: the shared base for Agent,
+#     Check, Session, RegistrationKey, StatusPage, JobConfiguration and User. It
+#     maps to no table, so the sweep's own framing ("a model is a TABLE") does
+#     not apply, and an abstract base is BY DEFINITION only referenced inside
+#     models/ — which is exactly what the sweep excludes. False positive;
+#     escalated, and the sweep offers no in-repo disposition marker.
+#
 #   fw.restricted_imports / fw.restricted_calls — the boundaries luxswirl cares
 #     about (raw SQL confined to crud, layer direction, models out of views) are
 #     already enforced by dedicated rules plus the import-linter contracts, so a
