@@ -15,6 +15,7 @@ from __future__ import annotations
 import re
 
 import pytest
+from _route_table import iter_routes
 
 pytestmark = [pytest.mark.route_smoke, pytest.mark.integration]
 
@@ -60,8 +61,7 @@ def _routes():
     from app.main import app
 
     seen = []
-    for route in app.routes:
-        path = getattr(route, "path", None)
+    for route, path in iter_routes(app.routes):
         methods = getattr(route, "methods", None)
         if not path or not methods or path in SKIP_PATHS:
             continue

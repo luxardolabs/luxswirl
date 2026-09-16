@@ -9,8 +9,8 @@ from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
 import bcrypt
+import jwt
 from fastapi import Cookie, Depends, Header, HTTPException, Request, status
-from jose import JWTError, jwt  # type: ignore[import-untyped]
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -365,7 +365,7 @@ def verify_token(token: str) -> dict[str, Any]:
             algorithms=[settings.security.algorithm],
         )
         return payload
-    except JWTError as e:
+    except jwt.PyJWTError as e:
         logger.warning("Token verification failed", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

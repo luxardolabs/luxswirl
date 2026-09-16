@@ -227,7 +227,7 @@ class SettingsViewService:
     async def update_metrics_timeout(
         db: AsyncSession,
         timeout: str,
-    ) -> tuple[Any, str | None]:
+    ) -> tuple[dict[str, Any] | None, str | None]:
         """
         Validate and update the metrics agent timeout setting.
 
@@ -236,7 +236,9 @@ class SettingsViewService:
             timeout: Timeout value as string from form
 
         Returns:
-            Tuple of (metrics_settings, error_message)
+            Tuple of (the metrics settings dict, error message). The settings
+            side is None whenever there is an error — a genuine multi-key
+            settings mapping, not an entity crossing the seam.
         """
         if not timeout:
             return None, "Timeout value required"
