@@ -786,6 +786,57 @@ class CheckCoreService:
         return checks
 
     @staticmethod
+    async def list_check_rows(
+        db: AsyncSession,
+        agent_id: UUID | None = None,
+        check_type: str | None = None,
+        enabled_only: bool = False,
+        tag: str | None = None,
+        search: str | None = None,
+        exclude_internal: bool = False,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> tuple[list[CheckInDB], int]:
+        """The paginated check list as the web seam holds it — schemas, not rows.
+
+        The signature mirrors list_checks rather than forwarding **kwargs: an
+        untyped passthrough would need a type: ignore, which is the checker
+        being silenced at the boundary it exists to hold.
+        """
+        checks, total = await CheckCoreService.list_checks(
+            db,
+            agent_id=agent_id,
+            check_type=check_type,
+            enabled_only=enabled_only,
+            tag=tag,
+            search=search,
+            exclude_internal=exclude_internal,
+            limit=limit,
+            offset=offset,
+        )
+        return [CheckInDB.model_validate(c) for c in checks], total
+
+    @staticmethod
+    async def list_eligible_parent_rows(
+        db: AsyncSession, exclude_check_id: UUID | None = None
+    ) -> dict[str, list[CheckInDB]]:
+        """Eligible parent checks, grouped by agent name.
+
+        Grouped HERE because the agent name comes from `check.agent`, a
+        relationship: the rows are eager-loaded inside this session, and a
+        schema that carried the relationship would lazy-load it outside one.
+        """
+        grouped: dict[str, list[CheckInDB]] = {}
+        for c in await CheckCoreService.list_eligible_parents(
+            db, exclude_check_id=exclude_check_id
+        ):
+            agent_name = (
+                c.agent.agent_name if c.agent and c.agent.agent_name else "unknown"
+            )
+            grouped.setdefault(agent_name, []).append(CheckInDB.model_validate(c))
+        return grouped
+
+    @staticmethod
     async def list_agent_checks(db: AsyncSession, agent_id: UUID) -> list[CheckInDB]:
         """An agent's checks as the web seam holds them — schemas, not ORM rows.
 

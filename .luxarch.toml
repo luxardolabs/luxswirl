@@ -313,9 +313,6 @@ paths = ["apps/shared"]
 # Genuine larger refactors, recorded (XFAIL) not silenced. Each drains its child ticket.
 # ~140 db.add/flush/refresh/delete sites in alert/agent core services → move into crud.
 "fw.no_session_mutation_outside_crud" = "Session-mutation ops in alert/agent core services (~140 sites); crud-confinement is a multi-day refactor of two oversize services — LUXSWIRL-195"
-# 8 view services pass/return ORM objects (Check/Agent/Job/User/Session/StatusPage/NotificationProvider);
-# the 7 user-only files were already cleared via the AuthedUser alias. Remaining = ORM→schema boundary.
-"fw.views_dont_import_models" = "8 view services return/consume ORM models (ORM-through-view); the schema-boundary refactor is tracked — 7 user-only files already cleared via the AuthedUser alias — LUXSWIRL-196"
 # 33 enum-ish DTO fields; mostly the free-text/response-envelope ones LUXSWIRL-177 deliberately left
 # as str (typing them to the lookalike enum breaks serialization on existing data). Per-field triage.
 "fw.enum_dto_fields_enum_typed" = "33 enum-ish DTO fields need per-field triage (Enum/Literal/enum_dto_freetext); mostly carries forward LUXSWIRL-177/186 decisions — footguns must NOT be blind-typed — LUXSWIRL-197"
