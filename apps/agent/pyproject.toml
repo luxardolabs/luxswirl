@@ -28,6 +28,14 @@ python = "^3.14"
 # HTTP client (checks + reporting to server)
 httpx = "^0.28.1"
 
+# Transitive-dependency CVE floor — the parent's own range still admits the
+# vulnerable version, so a re-lock alone cannot raise it.
+typing-extensions = ">=4.16.0"  # anyio 4.14.2 imports typing_extensions.sentinel
+                                # (added in 4.16) WITHOUT declaring the floor, so a
+                                # resolve picks 4.15 and every import of fastapi dies
+anyio = ">=4.14.2"     # CVE-2026-63374 (IDNA TLS hostname) + CVE-2026-64847
+                       # (undrained worker stderr pipe); via starlette/httpx
+
 # Credentials encryption (Fernet)
 cryptography = "^50.0.0"  # CVE-2026-69247/69248/69249 + GHSA-537c-gmf6-5ccf floor
 

@@ -89,7 +89,7 @@ async def main():
             "   This will cause credential encryption to BREAK on container restart!"
         )
         logger.warning("")
-        logger.warning("   FIX: Add 'hostname: luxswirl_agent' to your compose.yaml:")
+        logger.warning("   FIX: Add 'hostname: luxswirl_agent' to your compose.yml:")
         logger.warning("   services:")
         logger.warning("     luxswirl_agent:")
         logger.warning("       hostname: luxswirl_agent  # <-- Add this line")

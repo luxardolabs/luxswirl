@@ -105,7 +105,7 @@ marketing/
 #   cp nginx/conf.d/luxswirl.conf.example nginx/conf.d/luxswirl.conf
 #   cp Makefile.local.example Makefile.local   # sets LUXARCH_REGISTRY for `make arch`
 #
-# There is ONE compose.yaml — environments differ by their .env.<env>, never by
+# There is ONE compose.yml — environments differ by their .env.<env>, never by
 # an overlay file (repo.compose_conventions).
 .env
 .env.dev

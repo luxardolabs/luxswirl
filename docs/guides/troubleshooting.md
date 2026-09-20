@@ -54,7 +54,7 @@ docker compose up -d server
 # Check agent's configured URL
 docker exec luxswirl_agent env | grep LUXSWIRL_SERVER_URL
 
-# Fix in compose.yaml or .env
+# Fix in compose.yml or .env
 LUXSWIRL_SERVER_URL=http://server:9000  # For Docker network
 # OR
 LUXSWIRL_SERVER_URL=https://server.example.com  # For external
@@ -86,7 +86,7 @@ docker compose restart agent
 
 # Temporary workaround (testing only):
 docker compose down
-# Edit compose.yaml, add:
+# Edit compose.yml, add:
 # environment:
 #   LUXSWIRL_VERIFY_SSL: "false"
 docker compose up -d
@@ -106,7 +106,7 @@ LUXSWIRL_SERVER_URL=https://server.example.com
 ```bash
 # Enable debug logging
 docker compose down
-# Edit compose.yaml, add:
+# Edit compose.yml, add:
 # environment:
 #   LOG_LEVEL: DEBUG
 docker compose up -d
@@ -186,7 +186,7 @@ curl -H "Authorization: Bearer YOUR_TOKEN" \
 
 **2. Increase container memory limit**:
 ```yaml
-# compose.yaml
+# compose.yml
 services:
   agent:
     deploy:
@@ -197,7 +197,7 @@ services:
 
 **3. Reduce concurrent checks**:
 ```yaml
-# compose.yaml
+# compose.yml
 services:
   agent:
     environment:
@@ -244,7 +244,7 @@ docker compose ps timescaledb
 
 # Check .env file credentials match
 cat .env | grep DATABASE
-# DATABASE__PASSWORD should match compose.yaml POSTGRES_PASSWORD
+# DATABASE__PASSWORD should match compose.yml POSTGRES_PASSWORD
 ```
 
 #### 3. Port 9000 already in use
@@ -257,7 +257,7 @@ sudo netstat -tlnp | grep :9000
 sudo lsof -i :9000
 
 # Kill process or change LuxSwirl port
-# Edit compose.yaml:
+# Edit compose.yml:
 # ports:
 #   - "9001:9000"  # Use external port 9001 instead
 ```
@@ -305,7 +305,7 @@ docker stats luxswirl_server --no-stream
 
 **1. Out of memory**:
 ```yaml
-# compose.yaml - Increase memory
+# compose.yml - Increase memory
 services:
   server:
     deploy:
@@ -368,7 +368,7 @@ curl -H "Authorization: Bearer TOKEN" \
 
 # If >500: Deploy additional agent, distribute checks
 # OR reduce concurrency:
-# compose.yaml
+# compose.yml
 environment:
   MAX_CONCURRENT_CHECKS: 100  # Reduce from 200
 ```
@@ -379,7 +379,7 @@ environment:
 docker exec luxswirl_agent dig api.example.com
 
 # If slow, specify DNS servers:
-# compose.yaml
+# compose.yml
 dns:
   - 8.8.8.8
   - 8.8.4.4
@@ -597,7 +597,7 @@ Web UI → Settings → Database Health → Enable compression
 
 #### 2. Increase database RAM
 ```yaml
-# compose.yaml
+# compose.yml
 services:
   timescaledb:
     environment:
@@ -844,7 +844,7 @@ sudo certbot --nginx -d luxswirl.example.com
 
 #### 2. Disable SSL verification (testing only)
 ```yaml
-# compose.yaml (agent)
+# compose.yml (agent)
 environment:
   LUXSWIRL_VERIFY_SSL: "false"
 ```
@@ -1174,7 +1174,7 @@ docker system prune -a
 
 1. **Enable debug logging**:
 ```yaml
-# compose.yaml
+# compose.yml
 environment:
   LOG_LEVEL: DEBUG
 ```

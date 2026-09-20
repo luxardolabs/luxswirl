@@ -6,7 +6,7 @@ This document explains how to deploy LuxSwirl using Docker Compose with environm
 
 LuxSwirl ships one compose file. Environments differ by the environment file they are given, not by an overlay:
 
-- **`compose.yaml`** - The stack. Builds nothing; runs the tag `TAG` names.
+- **`compose.yml`** - The stack. Builds nothing; runs the tag `TAG` names.
 - **`.env.dev` / `.env.prod`** - What differs per environment: the image tag, the database host binding, the TLS certificate directory, CORS, log level and secrets. Copy `.env.example` and fill it in; neither is committed.
 - **`compose.agent.yaml`** - Standalone agent (runs separately, connects to server)
 

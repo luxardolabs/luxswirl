@@ -26,7 +26,7 @@ AGENT_IMAGE     := $(REGISTRY)/$(AGENT_NAME)
 # Makefile.local (gitignored): copy Makefile.local.example -> Makefile.local and set it.
 # Contributors don't need it — lint/test and the import-linter contracts run without it.
 LUXARCH_REGISTRY ?=
-LUXARCH_VERSION := 0.186.3
+LUXARCH_VERSION := 0.193.0
 LUXARCH_IMAGE    ?= $(LUXARCH_REGISTRY)/luxardolabs/luxarch:$(LUXARCH_VERSION)
 # Dependency-CVE guard (luxaudit) — same private registry as luxarch, mount-only.
 # Scans the pinned poetry.locks against the live advisory feed (see .luxaudit.toml).
@@ -81,12 +81,12 @@ define mypy_leg
 docker run --rm -v $(PWD):/w -w /w python:3.14-slim sh -c 'pip install -q -U mypy pydantic && MYPYPATH=/w/apps/$(1):/w/apps mypy --config-file /w/.luxlint.mypy.ini apps/$(1)/app'
 endef
 
-# Compose invocations. ONE compose.yaml; the environment is the --env-file, not
+# Compose invocations. ONE compose.yml; the environment is the --env-file, not
 # an overlay (repo.compose_conventions / FLEET-BUILD-DEPLOY-STANDARD).
-DC      := docker compose -f compose.yaml
-DC_DEV  := docker compose -f compose.yaml --env-file .env.dev
-DC_PROD := docker compose -f compose.yaml --env-file .env.prod
-# The test topology is a PROFILE in the one compose.yaml, not a second file.
+DC      := docker compose -f compose.yml
+DC_DEV  := docker compose -f compose.yml --env-file .env.dev
+DC_PROD := docker compose -f compose.yml --env-file .env.prod
+# The test topology is a PROFILE in the one compose.yml, not a second file.
 # .env.test is committed (it holds no secrets) because compose interpolates
 # every service in the file, active profile or not.
 DC_TEST := docker compose -p luxswirl-test --env-file .env.test --profile test
@@ -152,11 +152,21 @@ agent-image: ## Build agent image as :$(VERSION) (no push)
 
 build: backend-image agent-image ## Build both images as :$(VERSION) (no push)
 
-buildx-setup: ## Ensure the ONE shared multi-arch buildx builder exists (GC-capped so its cache self-prunes)
+buildx-setup: ## Ensure the ONE shared multi-arch buildx builder exists, and REFUSE strays
 	@mkdir -p $(HOME)/.docker
 	@[ -f $(HOME)/.docker/buildkitd.toml ] || printf '[worker.oci]\n  gc = true\n  [[worker.oci.gcpolicy]]\n    keepBytes = "20GB"\n    all = true\n' > $(HOME)/.docker/buildkitd.toml
 	@docker buildx inspect $(BUILDX_BUILDER) >/dev/null 2>&1 || docker buildx create --name $(BUILDX_BUILDER) --driver docker-container --buildkitd-config $(HOME)/.docker/buildkitd.toml --bootstrap --use
 	@docker buildx use $(BUILDX_BUILDER)
+	@strays=$$(docker buildx ls 2>/dev/null | awk '$$2=="docker-container"{print $$1}' \
+	  | grep -v '^\\_' | sed 's/\*$$//' | grep -vxF "$(BUILDX_BUILDER)" | tr '\n' ' '); \
+	if [ -n "$$strays" ] && [ -z "$(ALLOW_STRAY_BUILDERS)" ]; then \
+	  echo "REFUSING: stray per-project buildx builders are running: $$strays"; \
+	  echo "Each keeps its OWN cache with no GC policy. Four orphans reached 100GB"; \
+	  echo "on the fleet build host and killed a production Postgres."; \
+	  echo "Remove them:  docker buildx rm $$strays"; \
+	  exit 1; \
+	fi
+
 
 build-backend: buildx-setup ## Build + push backend :$(VERSION) AND :latest (multi-arch: $(PLATFORMS))
 	docker buildx build $(NO_CACHE_FLAG) --platform $(PLATFORMS) -f apps/backend/Dockerfile $(BUILD_ARGS) \
@@ -193,7 +203,7 @@ release: css push github-release ## Promote a release: CSS, push both images, pu
 # Dev / Prod stacks
 # =============================================================================
 
-##@ Dev stack (compose.yaml + .env.dev — baked images, no source mounts)
+##@ Dev stack (compose.yml + .env.dev — baked images, no source mounts)
 
 dev: dev-up ## Alias for dev-up
 dev-up: ## Start the dev stack (does NOT build — run `make build-dev` first to pick up code changes)
@@ -219,7 +229,7 @@ dev-shell: ## Bash into the dev server container
 dev-agent-shell: ## Bash into the dev agent container
 	$(DC_DEV) exec luxswirl_agent /bin/bash
 
-##@ Prod stack (compose.yaml + .env.prod — pulls baked images)
+##@ Prod stack (compose.yml + .env.prod — pulls baked images)
 
 prod: prod-up ## Alias for prod-up
 prod-up: ## Pull + start the production stack
@@ -371,17 +381,27 @@ guard-version-check: ## FATAL: fail if any guard pin is behind the published lat
 	    printf "\342\234\227 %s pinned %s, latest %s \342\200\224 behind. Preview: --new-rules --since %s; then make guard-upgrade\n" "$$g" "$$pin" "$$latest" "$$pin"; rc=1; \
 	  fi; done; exit $$rc
 
-guard-upgrade: ## Bump every guard pin to the published latest (prints what newly bites)
+guard-upgrade:  ## Bump every guard pin to the published latest (prints what newly bites)
 	@if [ -z "$(LUXARCH_REGISTRY)" ]; then \
 		echo ">> guard-upgrade skipped: LUXARCH_REGISTRY unset (see Makefile.local.example)"; exit 0; \
 	fi
 	@for g in luxarch luxlint luxaudit; do \
 	  docker pull -q $(LUXARCH_REGISTRY)/luxardolabs/$$g:latest >/dev/null 2>&1 || true; \
 	  latest=$$(docker run --rm $(LUXARCH_REGISTRY)/luxardolabs/$$g:latest --version 2>/dev/null | awk '{print $$2}'); \
-	  var=$$(echo $$g | tr a-z A-Z)_VERSION; old=$$(sed -n "s/^$$var := //p" Makefile); \
-	  [ -n "$$latest" ] && sed -i "s/^$$var := .*/$$var := $$latest/" Makefile; \
-	  [ "$$g" = luxarch ] && [ -n "$$old" ] && docker run --rm -v $(PWD):/repo $(LUXARCH_REGISTRY)/luxardolabs/luxarch:$$latest --new-rules --since $$old || true; \
-	done; echo "pins bumped - re-run make check"
+	  var=$$(echo $$g | tr a-z A-Z)_VERSION; \
+	  old=$$(sed -n -E "s/^$$var[[:space:]]*:=[[:space:]]*//p" Makefile); \
+	  if [ -z "$$old" ]; then echo "!! no $$var pin found in Makefile — NOT bumped"; continue; fi; \
+	  if [ -z "$$latest" ]; then echo "!! could not read $$g:latest — $$var left at $$old"; continue; fi; \
+	  checked=1; \
+	  sed -i -E "s|^($$var[[:space:]]*:=[[:space:]]*).*|\\1$$latest|" Makefile; \
+	  new=$$(sed -n -E "s/^$$var[[:space:]]*:=[[:space:]]*//p" Makefile); \
+	  if [ "$$new" != "$$latest" ]; then echo "!! $$var did NOT change (still $$new)"; exit 1; fi; \
+	  if [ "$$old" != "$$latest" ]; then echo "$$var $$old -> $$latest"; bumped=1; fi; \
+	  [ "$$g" = luxarch ] && [ "$$old" != "$$latest" ] && docker run --rm -v $(PWD):/repo $(LUXARCH_REGISTRY)/luxardolabs/luxarch:$$latest --new-rules --since $$old || true; \
+	done; \
+	if [ -n "$$bumped" ]; then echo "pins bumped — re-run make check"; \
+	elif [ -n "$$checked" ]; then echo "all pins already at latest"; \
+	else echo "!! could not reach the registry — NO pin was checked; currency NOT established"; exit 1; fi
 
 honest: ## HONESTY gate — a green `make check` must mean nothing was silently unchecked
 	@if [ -z "$(LUXARCH_REGISTRY)" ]; then \

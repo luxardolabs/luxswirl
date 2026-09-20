@@ -87,14 +87,7 @@ deps = [
 # Admin-tier surfaces: settings (including users), registration keys, and the
 # agent approval/lifecycle actions. require_admin/_web are the role gates.
 admin_url_patterns = ["/settings", "/registration-keys", "/users"]
-require_names = [
-  "require_admin", "require_admin_web", "AdminUser", "AdminUserWeb",
-  # The TEMPLATE idiom. fw.destructive_macro_gated reads this same list to
-  # decide whether an {% if %} around a delete control is a permission check
-  # or just a truthiness test about the row, and Jinja cannot name a FastAPI
-  # dependency — it checks the role on the principal it was handed.
-  "current_user.role",
-]
+require_names = ["require_admin", "require_admin_web", "AdminUser", "AdminUserWeb"]
 
 # AUDIT confirmations — rules examined and found genuinely N/A, recorded so the
 # next reader knows they were adjudicated rather than overlooked:
@@ -108,14 +101,6 @@ require_names = [
 #   fw.fields_wired_into_pipeline — no UI/config field feeds a downstream
 #     pipeline whose reads could silently drop it; check configuration is read
 #     back by the agent through the same schema it was written with.
-#
-#   --sweep dead-models — reports UUIDBaseModel (models/base_model.py:230) as an
-#     unreachable model. It is `__abstract__ = True`: the shared base for Agent,
-#     Check, Session, RegistrationKey, StatusPage, JobConfiguration and User. It
-#     maps to no table, so the sweep's own framing ("a model is a TABLE") does
-#     not apply, and an abstract base is BY DEFINITION only referenced inside
-#     models/ — which is exactly what the sweep excludes. False positive;
-#     escalated, and the sweep offers no in-repo disposition marker.
 #
 #   fw.restricted_imports / fw.restricted_calls — the boundaries luxswirl cares
 #     about (raw SQL confined to crud, layer direction, models out of views) are
@@ -132,19 +117,14 @@ imports = [
   { package = "requests", allowed_files = [] },
 ]
 calls = [
-  # NOT declared yet: the naive-now patterns (`datetime.now()` / `utcnow(`).
-  # Both are real bug classes here — every datetime in this system is tz-aware,
-  # and a naive one compares wrong against a TIMESTAMPTZ column instead of
-  # failing loudly — but fw.restricted_calls scans RAW lines, so it matched
-  # prose rather than code in the only two places it fired:
-  #   core/datetime_utils.py:15                  docstring, "This replaces datetime.utcnow() which..."
-  #   services/views/import_export_view_service.py:258  comment, "`datetime.now()` here was naive..."
-  # The code at both sites is correct and already calls utc_now(). Arming them
-  # would mean either allow_listing the two files (blinding the rule exactly
-  # where the vocabulary is discussed) or rewording comments to dodge a scanner.
-  # Escalated to the guard maintainer: the restricted-CALLS scanner needs the
-  # same `_masked_lines()` treatment the restricted-IMPORT rules already got.
-  # Arm these the moment it masks.
+  # A NAIVE now() is the bug: every datetime here is tz-aware, and a naive one
+  # compares wrong against a TIMESTAMPTZ column instead of failing loudly.
+  # `datetime.now(UTC)` is fine and widely used; the canonical helper is
+  # core/datetime_utils.utc_now(). Held back until 0.190.0, which taught this
+  # rule the masking doctrine — before that it matched a docstring and a
+  # comment DISCUSSING these calls, at two sites that already used utc_now().
+  { pattern = "datetime\\.now\\(\\s*\\)", allowed_files = [] },
+  { pattern = "\\butcnow\\s*\\(", allowed_files = [] },
   # Configuration is read through Pydantic Settings so it is typed, validated and
   # documented in one place. The two exceptions are a standalone migration script
   # and the documented insecure-HTTP test override.
@@ -152,15 +132,31 @@ calls = [
 ]
 
 [target.components]
-# The macro catalogue. Declared explicitly rather than relying on the fleet
-# default so the showcase is unambiguously identified as documentation.
-index = "partials/settings/components"
+# The macro catalogue. Both forms are listed on purpose: fw.component_registry
+# resolves the DIRECTORY, while fw.destructive_macro_gated's "a catalogue is
+# documentation, not an offer" exemption matches FILES — a swatch under the
+# directory alone is still reported. Escalated; until the two rules read the
+# key the same way, a new catalogue file must be added to this list or its
+# destructive swatches will red.
+index = [
+  "partials/settings/components",
+  "partials/settings/components/buttons.html",
+  "partials/settings/components/layout.html",
+  "partials/settings/components/badges.html",
+  "partials/settings/components/colors.html",
+  "partials/settings/components/macro_index.html",
+]
 
 # Macros that DESTROY — a name cannot tell you this, so the repo says it. Paired
 # with [target.rbac].require_names above, this enforces that a destructive
 # control is rendered inside a permission conditional. Hiding the button is not
 # the authorization (the endpoint still checks); it stops the UI offering a
 # read-only viewer an action the server will refuse.
+# How a TEMPLATE says it gates. Added in 0.190.0 precisely because
+# [rbac].require_names holds FastAPI dependency names and Jinja can never
+# mention its route's dependency; it is unioned with require_names.
+gate_names = ["current_user.role"]
+
 destructive = [
   "icon_delete",
   "delete_icon_button",
@@ -191,8 +187,10 @@ require_dep = ["AdminUser", "AdminUserWeb", "require_admin", "require_admin_web"
 prefix = "/database-health"
 require_dep = ["AdminUser", "AdminUserWeb", "require_admin", "require_admin_web"]
 
+# The WEB user routes register under /settings/users, so the /settings row above
+# already covers them. This row is the JSON API's own user surface.
 [[target.authz.signature]]
-prefix = "/users"
+prefix = "/api/v1/users"
 require_dep = ["AdminUser", "AdminUserWeb", "require_admin", "require_admin_web"]
 
 # A check's configuration is a promise to the operator: every field the form

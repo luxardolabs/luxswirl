@@ -38,7 +38,7 @@ The LuxSwirl server is a FastAPI-based REST API server that receives check resul
 
 ## Quick Start
 
-### 1. Create compose.yaml
+### 1. Create compose.yml
 
 The published server image is `ghcr.io/luxardolabs/luxswirl-backend` (tagged `:latest` / `:<version>`). To build it from source instead, run `make build` at the repo root. Compose v2 does not use a `version:` key.
 
@@ -224,9 +224,9 @@ LOG__MODULE_LEVELS: '{"luxswirl.services.check": "WARNING", "sqlalchemy": "WARNI
 
 ## Production Deployment
 
-### Complete compose.yaml for Production
+### Complete compose.yml for Production
 
-(Compose v2 — no `version:` key. The upstream repo ships one `compose.yaml`; the environment is `.env.prod`. Run it with `make prod-up`.)
+(Compose v2 — no `version:` key. The upstream repo ships one `compose.yml`; the environment is `.env.prod`. Run it with `make prod-up`.)
 
 ```yaml
 services:
@@ -451,7 +451,7 @@ When the LuxSwirl server runs behind a reverse proxy, set `SECURITY__TRUSTED_PRO
 The default covers Docker bridge networks and RFC 1918 ranges, which works for most compose-based deployments without changes:
 
 ```yaml
-# compose.yaml — luxswirl_server service environment:
+# compose.yml — luxswirl_server service environment:
 environment:
   # Defaults shown; override only if your proxy is on a non-standard network.
   SECURITY__TRUSTED_PROXY_NETWORKS: '["127.0.0.0/8","::1/128","10.0.0.0/8","172.16.0.0/12","192.168.0.0/16"]'
@@ -463,7 +463,7 @@ For a fixed-IP proxy (e.g., AWS ALB on a known subnet), tighten to just that ran
 
 ```
 .
-├── compose.yaml
+├── compose.yml
 ├── .env
 ├── nginx.conf
 └── ssl/

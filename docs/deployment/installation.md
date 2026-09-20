@@ -266,14 +266,14 @@ python3 -c "import secrets; print(secrets.token_urlsafe(64))"
 
 ### Step 4: Review the Compose Files (Optional)
 
-The repo ships ONE `compose.yaml`; each environment is a `.env.<env>` file (`--env-file .env.prod`), not an overlay. The base file already defines `timescaledb`, `luxswirl_server`, `luxswirl_agent`, and an `nginx` reverse proxy. The published images are:
+The repo ships ONE `compose.yml`; each environment is a `.env.<env>` file (`--env-file .env.prod`), not an overlay. The base file already defines `timescaledb`, `luxswirl_server`, `luxswirl_agent`, and an `nginx` reverse proxy. The published images are:
 
 - `ghcr.io/luxardolabs/luxswirl-backend` — server (`uvicorn app.main:app`)
 - `ghcr.io/luxardolabs/luxswirl-agent` — agent (`python -m app.main`)
 
 Both are tagged `:latest` and `:<version>`. If you prefer not to pull, build both locally with the Makefile: `make build`.
 
-A trimmed view of the base `compose.yaml` (no obsolete `version:` key — Compose v2 doesn't use one):
+A trimmed view of the base `compose.yml` (no obsolete `version:` key — Compose v2 doesn't use one):
 
 ```yaml
 services:
@@ -1072,7 +1072,7 @@ ______________________________________________________________________
 **What to backup**:
 
 1. **Database**: PostgreSQL full backup (pg_dump)
-1. **Configuration**: `.env` file, compose files (`compose.yaml` + overlays)
+1. **Configuration**: `.env` file, compose files (`compose.yml` + overlays)
 1. **Agent credentials**: `/app/data/agent_credentials.json`
 1. **SSL certificates**: `/etc/letsencrypt` (if using Let's Encrypt)
 
