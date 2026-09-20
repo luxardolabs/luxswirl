@@ -63,7 +63,7 @@ Point these at your own TLS certificate and key (e.g. from Let's Encrypt or your
 **Host port mapping** — map the host's standard HTTPS port to the nginx container so users reach it at `https://your-domain` with no port suffix:
 - `443:9000` — standard HTTPS (recommended for a dedicated host)
 
-> The bundled `compose.yaml` maps `9000:9000` by default so it doesn't collide with other services already using 443 on a busy host. For a standard public deployment, change the host side to 443 (`443:9000`); access then drops the `:9000`.
+> The bundled `compose.yml` maps `9000:9000` by default so it doesn't collide with other services already using 443 on a busy host. For a standard public deployment, change the host side to 443 (`443:9000`); access then drops the `:9000`.
 
 ## Endpoints
 
@@ -169,7 +169,7 @@ docker exec luxswirl_server curl http://localhost:9000/health
 ```
 
 ### Port Conflicts
-If port 9000 is in use, update compose.yaml:
+If port 9000 is in use, update compose.yml:
 ```yaml
 ports:
   - "9001:9000"  # Use different host port

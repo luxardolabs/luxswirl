@@ -13,7 +13,7 @@ The LuxSwirl agent is a lightweight monitoring agent that executes health checks
 
 ## Quick Start
 
-### 1. Create compose.yaml
+### 1. Create compose.yml
 
 The published agent image is `ghcr.io/luxardolabs/luxswirl-agent` (tagged `:latest` / `:<version>`). To build it from source, run `make build` at the repo root. Compose v2 does not use a `version:` key.
 

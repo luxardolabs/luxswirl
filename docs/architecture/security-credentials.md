@@ -53,7 +53,7 @@ File permissions: 0600 (owner read/write only)
 ### Host Networking (Recommended for Stability)
 
 ```yaml
-# compose.yaml
+# compose.yml
 services:
   agent:
     image: luxswirl-agent:latest
@@ -75,7 +75,7 @@ services:
 ### Bridge Networking (Default Docker)
 
 ```yaml
-# compose.yaml
+# compose.yml
 services:
   agent:
     image: luxswirl-agent:latest
@@ -270,6 +270,6 @@ Possible future work:
 
 For issues with credential encryption:
 1. Check logs: `docker logs luxswirl_agent`
-2. Verify networking mode and container_name in compose.yaml
+2. Verify networking mode and container_name in compose.yml
 3. Test with encryption disabled (temporarily)
 4. Report issues: https://github.com/luxardolabs/luxswirl/issues

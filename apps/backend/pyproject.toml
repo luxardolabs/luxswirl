@@ -76,6 +76,11 @@ slowapi = "^0.1.10"
 # Transitive-dependency CVE floors. These are pulled in by fastapi, whose own
 # ranges still admit the vulnerable versions — so a re-lock alone cannot raise them; the floor
 # has to be declared here (luxaudit ONBOARDING: "a CVE fix needs a version floor").
+typing-extensions = ">=4.16.0"  # anyio 4.14.2 imports typing_extensions.sentinel
+                                # (added in 4.16) WITHOUT declaring the floor, so a
+                                # resolve picks 4.15 and every import of fastapi dies
+anyio = ">=4.14.2"     # CVE-2026-63374 (IDNA TLS hostname) + CVE-2026-64847
+                       # (undrained worker stderr pipe); via starlette/httpx
 starlette = ">=1.6.0"   # CVE-2026-54282/54283 (via fastapi). fastapi itself only asks
                         # for >=0.46.0, which still admits the vulnerable line, so this
                         # floor is load-bearing — and it tracks the version the suite
