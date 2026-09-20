@@ -6,7 +6,6 @@ while providing web-specific functionality and data aggregation.
 """
 
 import json
-from collections.abc import Sequence
 from typing import Any, cast
 from uuid import UUID
 
@@ -22,12 +21,12 @@ from app.core.exceptions import (
     CheckNotFoundException,
 )
 from app.core.synthetic_security import SyntheticSecurityError
-from app.models.check_model import Check
 from app.models.enum_model import CheckType, MaintenanceJobKind, options_for
 from app.schemas.check_schema import (
     BulkCheckCreateRequest,
     CheckCreate,
     CheckFormUrls,
+    CheckInDB,
     CheckUpdate,
 )
 from app.schemas.maintenance_job_schema import MaintenanceJobResponse
@@ -55,11 +54,19 @@ _SYNTHETIC_ADMIN_DENIED_UPDATE_SCRIPT = (
 
 
 class CheckRow:
-    """Data structure for check display."""
+    """Data structure for check display.
 
-    def __init__(self, check: Check):
+    NOTE: nothing constructs this today — the checks list is rendered from
+    StatusRow/DashboardCheck. Kept rather than deleted because removal is the
+    owner's call; raised for that decision alongside the dead-code sweep.
+    """
+
+    def __init__(self, check: CheckInDB):
         self.id = check.id
-        self.agent_name = check.agent.agent_name if check.agent else "unknown"
+        # The agent NAME is not on CheckInDB — it lives on the agent row, and
+        # carrying the relationship would lazy-load outside the session. A
+        # caller that needs the name joins it in, as the dashboard row does.
+        self.agent_id = check.agent_id
         self.display_name = check.display_name
         self.check_type = check.check_type
         self.target = check.target
@@ -98,7 +105,7 @@ class ChecksViewService:
         search: str | None = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> tuple[Sequence[Check], int]:
+    ) -> tuple[list[CheckInDB], int]:
         """
         Get checks with pagination and filtering.
         Excludes internal system checks (agent self-monitoring).
@@ -117,7 +124,7 @@ class ChecksViewService:
             Tuple of (checks, total count)
         """
         # Get checks, excluding internal system checks
-        checks, total = await CheckCoreService.list_checks(
+        checks, total = await CheckCoreService.list_check_rows(
             db=db,
             agent_id=agent_id,
             check_type=check_type,
@@ -242,23 +249,6 @@ class ChecksViewService:
     ) -> tuple[int, int]:
         ids = [UUID(i) for i in dependent_ids if i]
         return await CheckCoreService.set_dependents(db, parent_check_id, ids)
-
-    @staticmethod
-    async def get_eligible_parent_checks(
-        db: AsyncSession, exclude_check_id: UUID | None = None
-    ) -> dict[str, list[Check]]:
-        checks = await CheckCoreService.list_eligible_parents(
-            db, exclude_check_id=exclude_check_id
-        )
-        grouped: dict[str, list[Check]] = {}
-        for c in checks:
-            agent_name = (
-                c.agent.agent_name if c.agent and c.agent.agent_name else "unknown"
-            )
-            grouped.setdefault(agent_name, []).append(c)
-        for cs in grouped.values():
-            cs.sort(key=lambda c: c.display_name.lower())
-        return dict(sorted(grouped.items(), key=lambda kv: kv[0].lower()))
 
     @staticmethod
     async def get_check_create_form_data(db: AsyncSession) -> dict:
@@ -410,7 +400,7 @@ class ChecksViewService:
             "alerts": form_data["alerts"],
             "available_check_tags": await CheckCoreService.get_all_check_tags(db),
             "available_tags": await ChecksViewService.get_available_agent_tags(db),
-            "eligible_parent_checks": await ChecksViewService.get_eligible_parent_checks(
+            "eligible_parent_checks": await CheckCoreService.list_eligible_parent_rows(
                 db
             ),
             "check_type_options": options_for(CheckType),
@@ -438,7 +428,7 @@ class ChecksViewService:
             "assigned_alert_ids": form_data["assigned_alert_ids"],
             "available_check_tags": await CheckCoreService.get_all_check_tags(db),
             "available_tags": await ChecksViewService.get_available_agent_tags(db),
-            "eligible_parent_checks": await ChecksViewService.get_eligible_parent_checks(
+            "eligible_parent_checks": await CheckCoreService.list_eligible_parent_rows(
                 db, exclude_check_id=check.id
             ),
             "mode_title": mode_title,
@@ -466,7 +456,7 @@ class ChecksViewService:
             ),
             "available_check_tags": await CheckCoreService.get_all_check_tags(db),
             "available_tags": await ChecksViewService.get_available_agent_tags(db),
-            "eligible_parent_checks": await ChecksViewService.get_eligible_parent_checks(
+            "eligible_parent_checks": await CheckCoreService.list_eligible_parent_rows(
                 db, exclude_check_id=check.id
             ),
             "mode": "clone",
@@ -555,7 +545,7 @@ class ChecksViewService:
     @staticmethod
     def assert_synthetic_admin_update(
         new_check_type: str,
-        existing_check: Check,
+        existing_check_type: str,
         script_code: str | None,
         current_user: AuthedUser,
     ) -> str | None:
@@ -570,7 +560,7 @@ class ChecksViewService:
             )
             return _SYNTHETIC_ADMIN_DENIED
         if (
-            existing_check.check_type == "synthetic"
+            existing_check_type == "synthetic"
             and script_code
             and current_user.role != "admin"
         ):
@@ -734,7 +724,7 @@ class ChecksViewService:
             check = await CheckCoreService.get_check_by_id(db, check_id)
             denial = ChecksViewService.assert_synthetic_admin_update(
                 form_kwargs["check_type"],
-                check,
+                check.check_type,
                 form_kwargs.get("script_code"),
                 current_user,
             )
@@ -786,7 +776,7 @@ class ChecksViewService:
             logger.info(
                 "Updated check with alert assignments",
                 extra={
-                    "agent_id": str(check.agent.id),
+                    "agent_id": str(check.agent_id),
                     "display_name": check.display_name,
                     "alert_count": len(form_kwargs.get("alert_ids", [])),
                 },
@@ -900,7 +890,7 @@ class ChecksViewService:
         logger.info(
             "Toggled check",
             extra={
-                "agent_id": str(check.agent.id),
+                "agent_id": str(check.agent_id),
                 "display_name": check.display_name,
                 "enabled": updated_check.enabled,
             },
