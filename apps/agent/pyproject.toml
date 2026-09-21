@@ -64,7 +64,7 @@ dnspython = "^2.7.0"        # DNS checks
 [tool.poetry.group.dev.dependencies]
 pytest = "^9.1.1"
 pytest-asyncio = "^1.3.0"
-ruff = "^0.16.7"
+ruff = "^0.16.8"
 mypy = "^2.3.1"
 
 [build-system]
