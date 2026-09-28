@@ -197,6 +197,15 @@ class SecuritySettings(BaseSettings):
         default="5/hour",
         description="Rate limit for agent registration per IP",
     )
+    password_reset_rate_limit: str = Field(
+        default="20/hour",
+        description=(
+            "Rate limit for admin password resets per IP. Looser than "
+            "login_rate_limit because the caller is already an authenticated "
+            "admin and may legitimately reset several accounts in a row — but "
+            "not unlimited, because the route still carries a credential."
+        ),
+    )
 
     # Trusted proxy CIDR ranges for X-Forwarded-For handling.
     # When the direct TCP peer is in one of these networks, the leftmost-untrusted
