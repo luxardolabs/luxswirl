@@ -186,6 +186,42 @@ async def _truncate_seeded(session_maker) -> None:
 
 
 @pytest_asyncio.fixture
+async def empty_install(worker_db, monkeypatch):
+    """The app on a FIRST-RUN install: no users, no session, no API token set.
+
+    /setup exists only for this state — with any user present it redirects to
+    /login, which is what the seeded sweep saw, so setup.html was never
+    rendered by anything. This fixture is the only place that state exists.
+    """
+    from app.core.config import settings
+    from app.db.database import get_db as _get_db
+    from app.main import app
+
+    monkeypatch.setattr(settings.security, "rate_limit_enabled", False)
+    monkeypatch.setattr(settings.security, "initial_admin_password", None)
+    await _truncate_seeded(worker_db)
+
+    async def _override_get_db():
+        async with worker_db() as session:
+            try:
+                yield session
+                await session.commit()
+            except Exception:
+                await session.rollback()
+                raise
+
+    app.dependency_overrides[_get_db] = _override_get_db
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://route-smoke",
+        follow_redirects=False,
+    ) as client:
+        yield client
+    app.dependency_overrides.clear()
+    await _truncate_seeded(worker_db)
+
+
+@pytest_asyncio.fixture
 async def smoke_world(worker_db, monkeypatch):
     """The app with a seeded DB, an admin session cookie and the API token set."""
     from app.core.config import settings

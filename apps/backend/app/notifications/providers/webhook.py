@@ -68,9 +68,10 @@ class WebhookNotificationProvider(BaseNotificationProvider):
             )
 
         # Validate additional headers if provided
-        if "additional_headers" in config:
-            if not isinstance(config["additional_headers"], dict):
-                raise ValueError("additional_headers must be a dictionary")
+        if "additional_headers" in config and not isinstance(
+            config["additional_headers"], dict
+        ):
+            raise ValueError("additional_headers must be a dictionary")
 
     async def send(self, context: NotificationContext) -> bool:
         """
@@ -120,7 +121,7 @@ class WebhookNotificationProvider(BaseNotificationProvider):
             return True
 
         except Exception:
-            logger.error("Failed to send webhook notification", exc_info=True)
+            logger.exception("Failed to send webhook notification")
             raise
 
     def _build_payload(self, context: NotificationContext) -> dict[str, Any]:

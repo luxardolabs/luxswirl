@@ -632,7 +632,7 @@ class AgentCoreService:
         # swallowed-exceptions: metrics are downstream of ingestion — a
         # Prometheus update must not reject the agent's heartbeat.
         except Exception:
-            logger.error("Error updating Prometheus metrics", exc_info=True)
+            logger.exception("Error updating Prometheus metrics")
 
         logger.info(
             "Updated agent from heartbeat",

@@ -331,7 +331,7 @@ class NotificationCoreService:
 
         except Exception as e:
             error_msg = str(e)
-            logger.error(
+            logger.exception(
                 "Test notification error",
                 extra={"provider_id": str(provider_id), "error_message": error_msg},
             )
@@ -478,7 +478,7 @@ class NotificationCoreService:
                 resend_count=resend_count,
                 sent_at=utc_now(),
             )
-            logger.error(
+            logger.exception(
                 "Notification send failed",
                 extra={"provider_id": str(provider_id), "error_message": error_msg},
             )

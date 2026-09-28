@@ -6,19 +6,19 @@ The Database Health page provides monitoring and metrics for TimescaleDB perform
 
 The page has four parts: a **Storage Breakdown** grid (a card per hypertable/table with size, chunk count, and compression status — `check_results`, `check_results_hourly`/`_daily`, `agent_metrics`, `check_artifacts`, and a Total Database summary), an **Active Retention Policies** section, a **Data Growth Over Time** chart, and a **Refresh** button (top-right) to re-pull all metrics after maintenance.
 
----
+______________________________________________________________________
 
 ## Storage concepts
 
 ### Hypertables vs regular tables
 
-| | Hypertable (TimescaleDB) | Regular table (PostgreSQL) |
-|---|--------------------------|----------------------------|
-| Data | Time-series, partitioned by time | Standard relational |
-| Partitioning | Automatic, into time **chunks** | None |
-| Compression / retention | Supported (per-chunk) | Manual |
-| Optimized for | Time-range queries | General queries |
-| Examples | `check_results`, `agent_metrics` | `checks`, `agents`, `check_artifacts` |
+|                         | Hypertable (TimescaleDB)         | Regular table (PostgreSQL)            |
+| ----------------------- | -------------------------------- | ------------------------------------- |
+| Data                    | Time-series, partitioned by time | Standard relational                   |
+| Partitioning            | Automatic, into time **chunks**  | None                                  |
+| Compression / retention | Supported (per-chunk)            | Manual                                |
+| Optimized for           | Time-range queries               | General queries                       |
+| Examples                | `check_results`, `agent_metrics` | `checks`, `agents`, `check_artifacts` |
 
 ### Chunks
 
@@ -46,7 +46,7 @@ Effect: data older than 90 days is automatically deleted
 
 > ⚠️ Retention is permanent — deleted data cannot be recovered. Keep backups if you need the history.
 
----
+______________________________________________________________________
 
 ## Storage breakdown details
 
@@ -88,7 +88,7 @@ Pre-computed rollups for faster dashboard queries.
 - **Storage:** much smaller than raw data — e.g. 1 GB raw → ~10 MB hourly → ~1 MB daily.
 - **Refresh:** maintained automatically by TimescaleDB refresh policies.
 
----
+______________________________________________________________________
 
 ## Data growth chart
 
@@ -96,12 +96,12 @@ Visualizes how storage increases over time. **Time ranges:** Last 24 Hours (hour
 
 ### Interpreting the chart
 
-| Pattern | Meaning |
-|---------|---------|
-| **Steady linear growth** | Normal — consistent check execution, predictable storage needs |
-| **Sudden spikes** | New checks added, increased frequency, large artifacts stored, or retention not running |
+| Pattern                  | Meaning                                                                                         |
+| ------------------------ | ----------------------------------------------------------------------------------------------- |
+| **Steady linear growth** | Normal — consistent check execution, predictable storage needs                                  |
+| **Sudden spikes**        | New checks added, increased frequency, large artifacts stored, or retention not running         |
 | **Flattening (plateau)** | Retention is working — old data dropped as fast as new data is added (the desired steady state) |
-| **Decreasing** | Compression activating and reclaiming storage |
+| **Decreasing**           | Compression activating and reclaiming storage                                                   |
 
 ```
 Steady:   Day 1: 100 MB → Day 2: 125 MB → Day 3: 150 MB   (~25 MB/day)
@@ -122,7 +122,7 @@ Project:
 
 If growth is too fast, reduce the retention period (Settings → Defaults → Database Settings → Check Results Retention Days) or lengthen check intervals.
 
----
+______________________________________________________________________
 
 ## Compression statistics
 
@@ -135,10 +135,10 @@ Total chunks: 100   Compressed: 85   Uncompressed: 15   Ratio: 85%
 **How compression runs:** a policy compresses chunks older than a threshold (default 7 days), automatically on schedule:
 
 1. A chunk ages past the threshold (e.g. 7 days old).
-2. The compression policy job triggers.
-3. The chunk is compressed atomically using columnar format.
-4. The original uncompressed data is deleted.
-5. The compressed chunk remains queryable (read-only).
+1. The compression policy job triggers.
+1. The chunk is compressed atomically using columnar format.
+1. The original uncompressed data is deleted.
+1. The compressed chunk remains queryable (read-only).
 
 **Performance:** compressed chunks are read-only (slower writes) but read similarly or faster (columnar). Recent uncompressed data is unaffected.
 
@@ -151,7 +151,7 @@ Compress After Days: 14  → more storage, chunks stay writable longer
 
 **Best practice:** compress after your typical data-update window. If you never update old data, compress aggressively (3–7 days).
 
----
+______________________________________________________________________
 
 ## Retention policies
 
@@ -160,9 +160,9 @@ The **Active Retention Policies** section shows each hypertable and its retentio
 **How retention runs** (on schedule, typically daily ~3 AM):
 
 1. The policy job runs.
-2. It identifies chunks older than the retention period.
-3. It drops entire chunks atomically.
-4. Storage is reclaimed immediately.
+1. It identifies chunks older than the retention period.
+1. It drops entire chunks atomically.
+1. Storage is reclaimed immediately.
 
 ```
 Retention: 90 days   Today: 2025-11-11
@@ -188,7 +188,7 @@ Day 7–90:  compressed, read-only         Day 8:  100 MB compressed (90% saved)
 Day 90+:   deleted by retention          Day 90: 100 MB → Day 91: 0 MB (deleted)
 ```
 
----
+______________________________________________________________________
 
 ## Table row counts and sizes
 
@@ -201,7 +201,7 @@ check_results:
   Size: 459 MB
 ```
 
----
+______________________________________________________________________
 
 ## Troubleshooting
 
@@ -210,10 +210,10 @@ check_results:
 Storage is increasing rapidly. Likely causes: too many checks (100+ at 60s), short intervals (10–30s generate massive data), large synthetic artifacts, retention not running, or compression disabled.
 
 1. **Review check count and intervals** — Checks page, sort by interval; raise intervals for non-critical checks (60s → 300s ≈ 80% less data).
-2. **Enable and verify compression** — the breakdown should show "Compressed" for older hypertables; if "Uncompressed", enabling the policy requires a database migration.
-3. **Reduce retention** — Settings → Database Settings; lower Check Results Retention Days from 90 to 30/60 (less history, less storage).
-4. **Tame synthetic artifacts** — reduce synthetic frequency or stop capturing screenshots you don't need; delete old artifacts.
-5. **Monitor the rate** — Data Growth Chart (7 days), compute MB/day, project ahead.
+1. **Enable and verify compression** — the breakdown should show "Compressed" for older hypertables; if "Uncompressed", enabling the policy requires a database migration.
+1. **Reduce retention** — Settings → Database Settings; lower Check Results Retention Days from 90 to 30/60 (less history, less storage).
+1. **Tame synthetic artifacts** — reduce synthetic frequency or stop capturing screenshots you don't need; delete old artifacts.
+1. **Monitor the rate** — Data Growth Chart (7 days), compute MB/day, project ahead.
 
 ### Compression not working
 
@@ -257,24 +257,24 @@ Also confirm the Active Retention Policies section shows a configured duration; 
 `check_artifacts` is very large (>1 GB) and growing — synthetic checks storing many large screenshots (10 checks × 60s × 200 KB ≈ 2.8 GB/day).
 
 1. **Review synthetic check count** — Checks page, filter Type = Synthetic.
-2. **Reduce frequency** — increase intervals (60s → 300s/600s) to cut artifact generation 80–90%.
-3. **Disable screenshots** if not needed — edit the synthetic script to stop capturing them.
-4. **Manual cleanup:**
+1. **Reduce frequency** — increase intervals (60s → 300s/600s) to cut artifact generation 80–90%.
+1. **Disable screenshots** if not needed — edit the synthetic script to stop capturing them.
+1. **Manual cleanup:**
    ```sql
    DELETE FROM check_artifacts WHERE created_at < NOW() - INTERVAL '7 days';
    ```
-5. **Configure artifact retention** — Settings → Database Settings (if available).
+1. **Configure artifact retention** — Settings → Database Settings (if available).
 
 ### Chart not loading
 
 Spinner forever or an error. Causes: no data (fresh install), the range too large for the data present, a query timeout, or a JS error.
 
 1. Check the browser console (F12 → Console) for JS errors or failed requests.
-2. Try a shorter range (24 Hours / 7 Days).
-3. Verify data exists — the breakdown should show non-zero `check_results` size.
-4. Check the network tab for the `/database-health/chart-data` request and its response.
+1. Try a shorter range (24 Hours / 7 Days).
+1. Verify data exists — the breakdown should show non-zero `check_results` size.
+1. Check the network tab for the `/database-health/chart-data` request and its response.
 
----
+______________________________________________________________________
 
 ## API
 
@@ -314,27 +314,30 @@ Spinner forever or an error. Causes: no data (fresh install), the range too larg
 }
 ```
 
----
+______________________________________________________________________
 
 ## Best practices
 
 **Storage management:**
+
 - Review the Database Health page weekly; track the growth rate via the chart; catch anomalies early.
 - Enable compression on all hypertables, with a 7-day threshold (balance writable period vs storage); keep the ratio above 80%.
 - Set retention by business need and capacity — start at 90 days, shorter for `agent_metrics` (30) than `check_results` (90).
 - Calculate the daily growth rate monthly and project storage 6–12 months ahead; upgrade storage before hitting capacity.
 
 **Performance:**
+
 - Lean on continuous aggregates (hourly/daily) for dashboards — they cut query load on raw data and are maintained automatically.
 - Keep proper indexes on hypertables and regularly VACUUM/ANALYZE.
 - Size the connection pool sensibly (Settings; default 20) — balance concurrency and resource use.
 
 **Backup and recovery:**
+
 - Automate daily backups, test restore procedures, and store backups off-site.
 - Data dropped by retention can't be recovered from backups older than the retention window — back up before reducing retention.
 - Document your compression and retention policies in your disaster-recovery plan and test a full restore.
 
----
+______________________________________________________________________
 
 ## Related
 

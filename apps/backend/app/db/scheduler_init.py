@@ -6,6 +6,9 @@ from shared.logger import get_logger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.db.defaults.scheduler_templates import DEFAULT_JOB_CONFIGURATIONS
+from app.models.scheduler_model import JobConfiguration
+
 logger = get_logger("luxswirl.db.scheduler_init")
 
 
@@ -18,9 +21,6 @@ async def init_scheduler_defaults(db: AsyncSession) -> None:
     Note: This function does NOT commit - the caller must commit the transaction.
     """
     try:
-        from app.db.defaults.scheduler_templates import DEFAULT_JOB_CONFIGURATIONS
-        from app.models.scheduler_model import JobConfiguration
-
         # Create job configurations
         configs_created = 0
         for config_data in DEFAULT_JOB_CONFIGURATIONS:
@@ -44,5 +44,7 @@ async def init_scheduler_defaults(db: AsyncSession) -> None:
             extra={"configs_created": configs_created},
         )
     except Exception as e:
-        logger.error("Failed to initialize scheduler defaults", extra={"error": str(e)})
+        logger.exception(
+            "Failed to initialize scheduler defaults", extra={"error": str(e)}
+        )
         raise

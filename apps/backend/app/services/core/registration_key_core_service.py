@@ -71,7 +71,7 @@ class RegistrationKeyCoreService:
         # swallowed-exceptions: fail closed — any bcrypt error is a failed
         # verification, never an accepted key.
         except Exception:
-            logger.error("Error verifying registration key", exc_info=True)
+            logger.exception("Error verifying registration key")
             return False
 
     @staticmethod

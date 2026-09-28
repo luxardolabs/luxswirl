@@ -6,6 +6,7 @@ and handles job execution with proper error handling.
 """
 
 import asyncio
+import contextlib
 import time
 from typing import Any
 
@@ -118,19 +119,15 @@ class JobProcessor:
         # Cancel worker task
         if self.worker_task and not self.worker_task.done():
             self.worker_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self.worker_task
-            except asyncio.CancelledError:
-                pass
 
         # Cancel active jobs
         for _job_id, task in list(self.active_jobs.items()):
             if not task.done():
                 task.cancel()
-                try:
+                with contextlib.suppress(asyncio.CancelledError):
                     await task
-                except asyncio.CancelledError:
-                    pass
 
         # Close HTTP client
         if self.client:
@@ -191,7 +188,7 @@ class JobProcessor:
                 break
             # swallowed-exceptions: one failed job must not end the processor — the failure is reported back with the job
             except Exception:
-                self.logger.error("Error in job worker", exc_info=True)
+                self.logger.exception("Error in job worker")
 
         self.logger.info("Job worker stopped")
 
@@ -235,7 +232,7 @@ class JobProcessor:
         try:
             job = job_class(job_id=job_id, params=params)
         except Exception as e:
-            self.logger.error("Failed to create job handler", exc_info=True)
+            self.logger.exception("Failed to create job handler")
             await self._submit_result(
                 job_id,
                 {
@@ -264,7 +261,7 @@ class JobProcessor:
             await self._submit_result(job_id, result_data)
 
         except TimeoutError:
-            self.logger.error(
+            self.logger.exception(
                 "Job timed out",
                 extra={"job_id": str(job_id), "timeout_seconds": timeout},
             )
@@ -280,10 +277,9 @@ class JobProcessor:
             self.stats["total_failed"] += 1
 
         except Exception as e:
-            self.logger.error(
+            self.logger.exception(
                 "Job execution error",
                 extra={"job_id": str(job_id)},
-                exc_info=True,
             )
             await self._submit_result(
                 job_id,
@@ -338,10 +334,9 @@ class JobProcessor:
 
         # swallowed-exceptions: one failed job must not end the processor — the failure is reported back with the job
         except Exception:
-            self.logger.error(
+            self.logger.exception(
                 "Error submitting results for job",
                 extra={"job_id": str(job_id)},
-                exc_info=True,
             )
 
     def get_stats(self) -> dict[str, Any]:

@@ -11,12 +11,14 @@ Handles periodic heartbeat communication with the server, including:
 import asyncio
 import logging
 import os
+import resource as sys_resource
 import time
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import httpx
+import psutil
 from shared.logger import get_logger
 
 if TYPE_CHECKING:
@@ -175,10 +177,6 @@ class HeartbeatSender:
                     resource_metrics = {}
                     if self.config.get("resource_monitoring_enabled", True):
                         try:
-                            import resource as sys_resource
-
-                            import psutil
-
                             proc = psutil.Process()
                             fd_count = proc.num_fds()
                             fd_soft_limit, _ = sys_resource.getrlimit(
@@ -202,7 +200,7 @@ class HeartbeatSender:
                     # Build heartbeat payload
                     heartbeat = {
                         "agent_id": str(agent_id),
-                        "timestamp": datetime.utcnow().isoformat() + "Z",
+                        "timestamp": datetime.now(UTC).isoformat(),
                         "hostname": self.hostname,
                         "ip_address": self.ip_address,
                         "version": os.getenv("APP_VERSION", "dev"),
@@ -339,7 +337,7 @@ class HeartbeatSender:
                     self.logger.warning("Failed to send heartbeat", exc_info=True)
                 # swallowed-exceptions: the heartbeat loop must outlive a transient server or network error, or the agent goes silent permanently
                 except Exception:
-                    self.logger.error("Error sending heartbeat", exc_info=True)
+                    self.logger.exception("Error sending heartbeat")
 
                 # Check if we should continue
                 if not self.running:
@@ -355,7 +353,7 @@ class HeartbeatSender:
             pass
         # swallowed-exceptions: the heartbeat loop must outlive a transient server or network error, or the agent goes silent permanently
         except Exception:
-            self.logger.error("Unhandled exception in heartbeat sender", exc_info=True)
+            self.logger.exception("Unhandled exception in heartbeat sender")
         finally:
             if self.heartbeat_client:
                 await self.heartbeat_client.aclose()
@@ -646,7 +644,7 @@ class HeartbeatSender:
             # Build shutdown heartbeat payload
             heartbeat = {
                 "agent_id": str(agent_id),
-                "timestamp": datetime.utcnow().isoformat() + "Z",
+                "timestamp": datetime.now(UTC).isoformat(),
                 "hostname": self.hostname,
                 "ip_address": self.ip_address,
                 "version": os.getenv("APP_VERSION", "dev"),
@@ -716,6 +714,6 @@ class HeartbeatSender:
             self.logger.warning("Failed to send shutdown heartbeat", exc_info=True)
         # swallowed-exceptions: the heartbeat loop must outlive a transient server or network error, or the agent goes silent permanently
         except Exception:
-            self.logger.error("Error sending shutdown heartbeat", exc_info=True)
+            self.logger.exception("Error sending shutdown heartbeat")
         finally:
             await client.aclose()

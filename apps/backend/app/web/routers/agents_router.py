@@ -162,7 +162,7 @@ async def delete_agent_web(
             detail=f"Agent not found: {agent_id}",
         ) from None
     except Exception as e:
-        logger.error("Error enqueuing agent delete", exc_info=True)
+        logger.exception("Error enqueuing agent delete")
         raise HTTPException(
             status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to enqueue agent delete: {e}",

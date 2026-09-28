@@ -137,7 +137,7 @@ class LifecycleManager:
                             await self.reporter.add_result(result)
                 # swallowed-exceptions: shutdown drain — a failure here must still let the remaining stop steps run
                 except Exception:
-                    self.logger.error("Error processing final results", exc_info=True)
+                    self.logger.exception("Error processing final results")
                     break
 
             # Stop the reporter (after processing final results)
@@ -151,7 +151,7 @@ class LifecycleManager:
 
         # swallowed-exceptions: shutdown drain — a failure here must still let the remaining stop steps run
         except Exception:
-            self.logger.error("Error during shutdown", exc_info=True)
+            self.logger.exception("Error during shutdown")
 
         self.logger.info("Shutdown complete")
 

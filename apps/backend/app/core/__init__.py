@@ -12,14 +12,20 @@ from app.core.exceptions import (
     NotFoundException,
     ValidationException,
 )
-from app.core.security import create_access_token, verify_api_token, verify_token
+
+# `app.core.security` is deliberately NOT re-exported here. Importing ANY
+# `app.core.X` module runs this file first, so a re-export from security put
+# security on the import path of `app.models.base_model` — and security needs
+# the user model and the auth service, which need the models package. That cycle
+# is what forced six "import here to avoid circular dependency" bodies inside
+# security.py, database_maintenance.py and scheduler_init.py, plus the whole of
+# core/auth_deps.py's existence. Nothing imported the three re-exported names
+# from `app.core` (every call site imports `app.core.security` directly), so the
+# façade cost a cycle and bought nothing.
 
 __all__ = [
     "settings",
     "get_settings",
-    "verify_api_token",
-    "create_access_token",
-    "verify_token",
     "LuxSwirlException",
     "NotFoundException",
     "AgentNotFoundException",

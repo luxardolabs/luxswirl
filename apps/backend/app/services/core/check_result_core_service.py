@@ -336,7 +336,7 @@ class CheckResultCoreService:
                 check_display_names.append(display_name)
 
             except Exception:
-                logger.error("Error processing check result", exc_info=True)
+                logger.exception("Error processing check result")
                 results_failed += 1
 
         # Bulk insert. ON CONFLICT DO NOTHING on the (check_id, timestamp) unique
@@ -372,7 +372,7 @@ class CheckResultCoreService:
             # swallowed-exceptions: per-result metrics update — the batch is
             # already committed, so one failed gauge must not drop the rest.
             except Exception:
-                logger.error("Error updating Prometheus metrics", exc_info=True)
+                logger.exception("Error updating Prometheus metrics")
 
         # Evaluate alerts for each check result (after commit)
         # This happens asynchronously - errors are logged but don't fail the report processing
@@ -384,10 +384,9 @@ class CheckResultCoreService:
             # swallowed-exceptions: per-result alert evaluation runs after the
             # batch commits — one bad alert must not stop the others firing.
             except Exception:
-                logger.error(
+                logger.exception(
                     "Error evaluating alerts for check result",
                     extra={"check_result_id": str(check_result.id)},
-                    exc_info=True,
                 )
 
         if alerts_evaluated > 0:

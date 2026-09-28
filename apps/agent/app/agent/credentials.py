@@ -136,7 +136,7 @@ class AgentCredentials:
             except json.JSONDecodeError, UnicodeDecodeError:
                 # Not JSON - must be encrypted format
                 if not self._encryption_enabled:
-                    logger.error(
+                    logger.exception(
                         "Encrypted credentials found but encryption is disabled"
                     )
                     return False
@@ -148,7 +148,7 @@ class AgentCredentials:
                     data = json.loads(decrypted.decode())
                     logger.debug("Loaded encrypted credentials")
                 except InvalidToken:
-                    logger.error(
+                    logger.exception(
                         "Failed to decrypt credentials - encryption key may have changed "
                         "(hostname or machine-id changed). Delete credentials file to re-register."
                     )
@@ -166,10 +166,9 @@ class AgentCredentials:
 
         # swallowed-exceptions: credential load/save degrades rather than aborting startup; the agent re-registers when it cannot read what it stored
         except Exception:
-            logger.error(
+            logger.exception(
                 "Failed to load credentials",
                 extra={"credentials_file": str(self.credentials_file)},
-                exc_info=True,
             )
             return False
 
@@ -233,10 +232,9 @@ class AgentCredentials:
 
         # swallowed-exceptions: credential load/save degrades rather than aborting startup; the agent re-registers when it cannot read what it stored
         except Exception:
-            logger.error(
+            logger.exception(
                 "Failed to save credentials",
                 extra={"credentials_file": str(self.credentials_file)},
-                exc_info=True,
             )
             return False
 
@@ -273,5 +271,5 @@ class AgentCredentials:
 
         # swallowed-exceptions: credential load/save degrades rather than aborting startup; the agent re-registers when it cannot read what it stored
         except Exception:
-            logger.error("Failed to clear credentials", exc_info=True)
+            logger.exception("Failed to clear credentials")
             return False

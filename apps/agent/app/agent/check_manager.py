@@ -15,7 +15,7 @@ import base64
 import hashlib
 import json
 import socket
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -133,7 +133,7 @@ class CheckManager:
             cache_data = {
                 "checks": checks,
                 "config_version": version or self.config_version,
-                "cached_at": datetime.utcnow().isoformat(),
+                "cached_at": datetime.now(UTC).isoformat(),
                 "agent_id": str(agent_id) if agent_id != "unknown" else "unknown",
                 "check_count": len(checks),
             }
@@ -205,7 +205,7 @@ class CheckManager:
                     cache_data = json.loads(decrypted.decode())
                     self.logger.debug("Loaded encrypted checks cache")
                 except InvalidToken:
-                    self.logger.error(
+                    self.logger.exception(
                         "Failed to decrypt checks cache - encryption key may have changed "
                         "(hostname or machine-id changed). Cache will be refreshed from server."
                     )
@@ -284,7 +284,7 @@ class CheckManager:
 
                 # Clear invalid credentials
                 if not self.credentials.clear():
-                    self.logger.error("Failed to clear invalid credentials")
+                    self.logger.exception("Failed to clear invalid credentials")
                     raise Exception("Cannot recover from orphaned state") from e
 
                 # Call callback for re-registration
@@ -297,18 +297,18 @@ class CheckManager:
                         # Retry fetching checks with new credentials
                         return await self.fetch_checks_from_server()
                     else:
-                        self.logger.error("Re-registration failed - cannot recover")
+                        self.logger.exception("Re-registration failed - cannot recover")
                         raise Exception("Cannot recover from orphaned state") from e
                 else:
                     raise Exception("Cannot recover from orphaned state") from e
             else:
-                self.logger.error(
+                self.logger.exception(
                     "Failed to fetch checks from server",
                     extra={"status_code": e.response.status_code},
                 )
                 raise
         except Exception:
-            self.logger.error("Failed to fetch checks from server", exc_info=True)
+            self.logger.exception("Failed to fetch checks from server")
             raise
 
     async def load_checks(self) -> list[BaseCheck]:
@@ -404,10 +404,9 @@ class CheckManager:
                 }
             # swallowed-exceptions: the check loop must outlive one bad check — a raise here stops every other check on this agent
             except Exception:
-                self.logger.error(
+                self.logger.exception(
                     "Failed to load check",
                     extra={"check_name": check_name},
-                    exc_info=True,
                 )
 
         return checks

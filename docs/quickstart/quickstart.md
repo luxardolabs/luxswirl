@@ -2,20 +2,23 @@
 
 This guide walks you through deploying LuxSwirl with Docker Compose and creating your first health check.
 
----
+______________________________________________________________________
 
 ## Prerequisites
 
 **Required**:
+
 - Docker 20.10+ and Docker Compose 2.0+
 - 2 GB RAM minimum
 - 10 GB disk space
 
 **Optional**:
+
 - Domain name (for production deployment)
 - SMTP server (for email notifications)
 
 **Check your Docker version**:
+
 ```bash
 docker --version
 # Expected: Docker version 20.10.0 or higher
@@ -24,7 +27,7 @@ docker compose version
 # Expected: Docker Compose version 2.0.0 or higher
 ```
 
----
+______________________________________________________________________
 
 ## Step 1: Clone the Repository
 
@@ -37,11 +40,12 @@ cd luxswirl
 Cloning into 'luxswirl'...
 ```
 
----
+______________________________________________________________________
 
 ## Step 2: Start the Server with Docker Compose
 
 The published images are pulled from GitHub Container Registry:
+
 - `ghcr.io/luxardolabs/luxswirl-backend` (the server)
 - `ghcr.io/luxardolabs/luxswirl-agent` (the agent)
 
@@ -54,11 +58,13 @@ docker compose up -d timescaledb luxswirl_server
 > The agent service requires a `LUXSWIRL_AUTH_KEY` and will refuse to start without one — you generate that key from the server UI in Step 4. A plain `docker compose up -d` would fail on the agent until then.
 
 **Build from source instead** (no published image): the repo ships a Makefile that builds both images locally.
+
 ```bash
 make build      # builds ghcr.io/luxardolabs/luxswirl-backend + -agent locally
 ```
 
 **Expected output**:
+
 ```
 [+] Running 3/3
  ✔ Network luxswirl-network        Created
@@ -67,17 +73,20 @@ make build      # builds ghcr.io/luxardolabs/luxswirl-backend + -agent locally
 ```
 
 **What this does**:
+
 - Starts TimescaleDB (PostgreSQL/TimescaleDB) — internal only
 - Starts LuxSwirl Server (API + web UI), exposed via nginx on port 9000
 - The server auto-runs `alembic upgrade head` on boot, then launches `uvicorn app.main:app`
 - Creates a persistent volume for database storage
 
 **Verify services are running**:
+
 ```bash
 docker compose ps
 ```
 
 **Expected output**:
+
 ```
 NAME                   STATUS
 luxswirl_timescaledb   running (healthy)
@@ -85,6 +94,7 @@ luxswirl_server        running (healthy)
 ```
 
 **Check logs** (if something went wrong):
+
 ```bash
 # Server logs
 docker compose logs luxswirl_server
@@ -93,7 +103,7 @@ docker compose logs luxswirl_server
 docker compose logs timescaledb
 ```
 
----
+______________________________________________________________________
 
 ## Step 3: Access the Web UI
 
@@ -108,26 +118,26 @@ http://localhost:9000
 There are **no default credentials**. On first launch (no admin exists yet) the app sends you to a setup page to create your administrator account:
 
 1. Open the URL above — you'll be redirected to **`/setup`**.
-2. Choose an admin **username** and **password**, then submit.
-3. You're taken to the login page — sign in with the credentials you just set.
+1. Choose an admin **username** and **password**, then submit.
+1. You're taken to the login page — sign in with the credentials you just set.
 
 Accounts are username + password only (no email).
 
 **Unattended / automation (optional)**: to skip the wizard for scripted deploys, set `SECURITY__INITIAL_ADMIN_PASSWORD` (and optionally `SECURITY__INITIAL_ADMIN_USERNAME`, default `admin`) in `.env` before first boot. The admin is then created automatically on boot and you log in with it — a password change is forced on first login.
 
----
+______________________________________________________________________
 
 ## Step 4: Create a Registration Key and Start the Agent
 
 The agent authenticates to the server with a **registration key**. You create that key in the UI after logging in, then hand it to the agent via the `LUXSWIRL_AUTH_KEY` environment variable. (The agent does not auto-connect on a plain `compose up` — the compose file hard-fails the agent service if this value is unset.)
 
 1. In the web UI, go to **Settings → Registration Keys**.
-2. Click **Create Key** and copy the generated key.
-3. Provide it to the agent service (e.g. in a `.env` file at the repo root):
+1. Click **Create Key** and copy the generated key.
+1. Provide it to the agent service (e.g. in a `.env` file at the repo root):
    ```bash
    echo 'LUXSWIRL_AUTH_KEY=<paste-your-key-here>' >> .env
    ```
-4. Start the agent:
+1. Start the agent:
    ```bash
    docker compose up -d luxswirl_agent
    ```
@@ -137,17 +147,19 @@ The bundled agent reaches the server over the internal Docker network at `http:/
 **Verify the agent connected**: navigate to the **Agents** page (sidebar).
 
 **Expected state**:
+
 - **Agent**: `docker-agent` (the bundled agent's `LUXSWIRL_AGENT_ID`)
 - **Status**: 🟢 Online (green indicator)
-- **Last Seen**: <10 seconds ago
+- **Last Seen**: \<10 seconds ago
 - **Checks**: 0 (no checks created yet)
 
 **If agent shows as offline**:
-1. Check agent logs: `docker compose logs luxswirl_agent`
-2. Look for connection errors or authentication failures (a bad/expired `LUXSWIRL_AUTH_KEY` is the most common cause)
-3. Verify server is accessible: `curl http://localhost:9000/health`
 
----
+1. Check agent logs: `docker compose logs luxswirl_agent`
+1. Look for connection errors or authentication failures (a bad/expired `LUXSWIRL_AUTH_KEY` is the most common cause)
+1. Verify server is accessible: `curl http://localhost:9000/health`
+
+______________________________________________________________________
 
 ## Step 5: Create Your First Check
 
@@ -156,27 +168,31 @@ Let's create a simple HTTP check to monitor a public API.
 ### Option A: Via Web UI (Recommended)
 
 1. **Navigate to Checks** (sidebar → Checks)
-2. Click **"Create Check"** button
-3. Fill in the form:
+1. Click **"Create Check"** button
+1. Fill in the form:
 
 **Basic Settings**:
+
 - **Agent**: Select `docker-agent` (or your agent's name)
 - **Display Name**: `GitHub API Health`
 - **Check Type**: `HTTP`
 
 **HTTP Settings**:
+
 - **Target URL**: `https://api.github.com/zen`
 - **Expected Status Code**: `200`
 - **Timeout**: `30` seconds
 - **Interval**: `60` seconds
 
 **Advanced** (optional, leave defaults):
+
 - **HTTP Method**: GET
 - **Verify SSL**: Yes
 
 4. Click **"Save"**
 
 **Expected result**:
+
 - Check created successfully
 - Redirected to check detail page
 - First result appears within 60 seconds
@@ -204,7 +220,7 @@ curl -X POST http://localhost:9000/api/v1/agents/<agent-uuid>/checks \
   }'
 ```
 
----
+______________________________________________________________________
 
 ## Step 6: View Check Results
 
@@ -213,7 +229,7 @@ After creating the check, wait 60 seconds for the first result.
 ### Dashboard View
 
 1. Navigate to **Dashboard** (sidebar → Dashboard)
-2. You should see:
+1. You should see:
    - **Summary stats**: 1 total check, 1 healthy, 0 down
    - **Check row**: GitHub API Health with 🟢 green status indicator
    - **Latest result**: "200 OK" with latency (e.g., 145ms)
@@ -221,7 +237,7 @@ After creating the check, wait 60 seconds for the first result.
 ### Check Detail Panel
 
 1. Click on the **GitHub API Health** check row
-2. Side panel opens with:
+1. Side panel opens with:
    - **Current status**: Success, 200ms latency
    - **30-minute status bar**: Visual timeline showing recent health
    - **Statistics**: Current response time, average, uptime %
@@ -229,12 +245,13 @@ After creating the check, wait 60 seconds for the first result.
    - **Recent events**: Log of status changes
 
 **What to look for**:
+
 - 🟢 Green status indicator = check passing
 - 🔴 Red status indicator = check failing
 - Latency chart shows response times trending over time
 - Uptime % should be near 100% (GitHub API is very reliable)
 
----
+______________________________________________________________________
 
 ## Step 7: Create More Checks (Examples)
 
@@ -249,7 +266,7 @@ Interval: 60 seconds
 Timeout: 10 seconds
 ```
 
-**Expected result**: <50ms latency for most locations
+**Expected result**: \<50ms latency for most locations
 
 ### Example 2: JSON API Check
 
@@ -292,7 +309,7 @@ Interval: 300 seconds
 
 **What this does**: Queries DNS for A record, validates IP address matches expected value
 
----
+______________________________________________________________________
 
 ## Step 8: Set Up Notifications (Optional)
 
@@ -301,9 +318,9 @@ Get alerted when checks fail.
 ### Email Notifications
 
 1. Navigate to **Settings → Notifications**
-2. Click **"Add Notification Provider"**
-3. Select **"Email (SMTP)"**
-4. Configure SMTP settings:
+1. Click **"Add Notification Provider"**
+1. Select **"Email (SMTP)"**
+1. Configure SMTP settings:
 
 ```
 Provider Name: Gmail SMTP
@@ -317,7 +334,7 @@ Use TLS: Yes
 ```
 
 5. Click **"Test Connection"** (sends test email)
-6. Click **"Save"**
+1. Click **"Save"**
 
 **Google/Gmail users**: Use App Passwords (https://myaccount.google.com/apppasswords), not your regular password.
 
@@ -333,15 +350,15 @@ Headers: Content-Type: application/json
 Body Template: (use default JSON payload)
 ```
 
----
+______________________________________________________________________
 
 ## Step 9: Create a Public Status Page (Optional)
 
 Share service health with customers.
 
 1. Navigate to **Status Pages**
-2. Click **"Create Status Page"**
-3. Configure:
+1. Click **"Create Status Page"**
+1. Configure:
 
 ```
 Page Name: Public Services Status
@@ -350,16 +367,19 @@ Description: Real-time status of our production services
 ```
 
 4. **Add checks to display**:
+
    - Select "GitHub API Health" check
    - (Add more checks as you create them)
 
-5. **Customize branding** (optional):
+1. **Customize branding** (optional):
+
    - Upload logo
    - Set brand color (hex code)
 
-6. Click **"Save"**
+1. Click **"Save"**
 
 **Access status page**:
+
 ```
 http://localhost:9000/status/public
 ```
@@ -368,7 +388,7 @@ http://localhost:9000/status/public
 
 **Production tip**: Use reverse proxy (nginx, Cloudflare) to serve status page at custom domain (e.g., `status.example.com`)
 
----
+______________________________________________________________________
 
 ## Step 10: Add More Agents (Optional)
 
@@ -383,10 +403,11 @@ Deploy agents in different regions or networks.
 ### Deploy Additional Agent
 
 1. **Create a registration key**:
+
    - Navigate to **Settings → Registration Keys**
    - Click **Create Key** and copy it (used as `LUXSWIRL_AUTH_KEY`)
 
-2. **Deploy agent on another server**:
+1. **Deploy agent on another server**:
 
 ```bash
 # On remote server. Note: LUXSWIRL_SERVER_URL is the FULL reports endpoint,
@@ -402,14 +423,16 @@ docker run -d \
 ```
 
 3. **Verify connection**:
+
    - Web UI → Agents
    - `us-east-agent` (its `LUXSWIRL_AGENT_ID`) should show as 🟢 Online
 
-4. **Assign checks**:
+1. **Assign checks**:
+
    - Create checks and select `us-east-agent` from agent dropdown
    - Or move existing checks via edit form
 
----
+______________________________________________________________________
 
 ## Common Next Steps
 
@@ -456,7 +479,7 @@ Jobs are one-time tasks dispatched to an agent that return structured results �
 
 Run them from the **Jobs** page in the sidebar. See the [Jobs guide](../user-guide/jobs.md) for parameters, the status lifecycle, and result formats.
 
----
+______________________________________________________________________
 
 ## Troubleshooting
 
@@ -465,11 +488,13 @@ Run them from the **Jobs** page in the sidebar. See the [Jobs guide](../user-gui
 **Symptom**: Agent shows as offline in web UI
 
 **Check**:
+
 1. Verify server is running: `curl http://localhost:9000/health`
-2. Check agent logs: `docker compose logs luxswirl_agent`
-3. Look for authentication errors (usually a missing or invalid `LUXSWIRL_AUTH_KEY`) or network issues
+1. Check agent logs: `docker compose logs luxswirl_agent`
+1. Look for authentication errors (usually a missing or invalid `LUXSWIRL_AUTH_KEY`) or network issues
 
 **Fix**:
+
 ```bash
 # Most failures are a bad/expired registration key. Create a fresh one in
 # Settings → Registration Keys, update LUXSWIRL_AUTH_KEY (e.g. in .env), then:
@@ -481,12 +506,14 @@ docker compose up -d luxswirl_agent
 **Symptom**: Check shows 🔴 red status, error message
 
 **Common causes**:
+
 1. **Timeout too short**: Increase timeout (30s → 60s)
-2. **Target unreachable**: Verify target URL/IP is correct
-3. **SSL certificate issues**: Disable SSL verification (testing only)
-4. **Firewall blocking**: Ensure agent can reach target
+1. **Target unreachable**: Verify target URL/IP is correct
+1. **SSL certificate issues**: Disable SSL verification (testing only)
+1. **Firewall blocking**: Ensure agent can reach target
 
 **Debug**:
+
 ```bash
 # Test from agent container
 docker exec luxswirl_agent curl -v https://api.github.com/zen
@@ -500,9 +527,10 @@ docker compose logs luxswirl_agent | grep "GitHub API"
 **Symptom**: Disk space alerts, database >100 GB
 
 **Fix**:
+
 1. Enable compression: Settings → Database Health → Compress after 7 days
-2. Set retention: Settings → Database Health → Retention period 90 days
-3. Reduce check frequency: Edit checks, increase interval (60s → 120s)
+1. Set retention: Settings → Database Health → Retention period 90 days
+1. Reduce check frequency: Edit checks, increase interval (60s → 120s)
 
 See [FAQ.md](../user-guide/faq.md#database-is-growing-too-fast-how-do-i-reduce-storage) for detailed troubleshooting
 
@@ -511,13 +539,14 @@ See [FAQ.md](../user-guide/faq.md#database-is-growing-too-fast-how-do-i-reduce-s
 **Symptom**: Dashboard takes >5 seconds to load
 
 **Fix**:
+
 1. Enable database compression (faster queries)
-2. Reduce time range (4h instead of 7d)
-3. Increase database RAM (better caching)
+1. Reduce time range (4h instead of 7d)
+1. Increase database RAM (better caching)
 
 See [Database Health guide](../user-guide/database-health.md) for optimization tips
 
----
+______________________________________________________________________
 
 ## Production Deployment
 
@@ -528,33 +557,38 @@ This quick start uses Docker Compose on a single machine. For production deploym
 - **[SECURITY.md](../../SECURITY.md)** - Security hardening checklist
 
 **Key differences** (quick start vs production):
+
 - **HTTPS**: Use reverse proxy (nginx, Traefik) with Let's Encrypt SSL
 - **Authentication**: Strong passwords, API key rotation, 2FA (not currently supported)
 - **Database**: Separate database server with backups
 - **Monitoring**: Monitor LuxSwirl itself (Prometheus metrics)
 - **High availability**: Load balancer + multiple servers
 
----
+______________________________________________________________________
 
 ## Next Steps
 
 **Documentation**:
+
 - [User Guide](../user-guide/) - Complete feature documentation
 - [FAQ](../user-guide/faq.md) - Frequently asked questions
 - API documentation is auto-generated and available at `/docs` on a running server (Swagger UI)
 
 **Community**:
+
 - GitHub Issues: https://github.com/luxardolabs/luxswirl/issues
 - GitHub Discussions: https://github.com/luxardolabs/luxswirl/discussions
 
 **Contributing**:
+
 - [CONTRIBUTING.md](../../CONTRIBUTING.md) - How to contribute
 
----
+______________________________________________________________________
 
 ## Summary
 
 **What you accomplished**:
+
 - ✅ Deployed LuxSwirl with Docker Compose
 - ✅ Created first HTTP check (GitHub API)
 - ✅ Viewed results in dashboard
@@ -563,8 +597,6 @@ This quick start uses Docker Compose on a single machine. For production deploym
 - ✅ (Optional) Created public status page
 - ✅ (Optional) Deployed additional agent
 
-
 **You now have** a working deployment: the server and dashboard, an agent reporting results, and your first check running. From here, add more checks, set up notifications and alerts, and deploy additional agents where you need them.
 
----
-
+______________________________________________________________________

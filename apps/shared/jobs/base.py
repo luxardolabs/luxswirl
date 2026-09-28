@@ -103,13 +103,12 @@ class BaseJob(ABC):
             self.end_time = time.time()
             duration = self.end_time - self.start_time if self.start_time else 0
 
-            self.logger.error(
+            self.logger.exception(
                 "Job failed",
                 extra={
                     "job_id": str(self.job_id),
                     "duration_seconds": round(duration, 2),
                 },
-                exc_info=True,
             )
 
             return {

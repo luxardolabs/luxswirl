@@ -5,6 +5,7 @@ Periodically removes expired sessions from the database to prevent table bloat.
 """
 
 import asyncio
+import contextlib
 
 from shared.logger import get_logger
 
@@ -51,7 +52,7 @@ async def _session_cleanup_loop():
         # swallowed-exceptions: daemon loop — one transient DB error must not
         # kill the cleanup task for the life of the process.
         except Exception:
-            logger.error("Error in session cleanup task", exc_info=True)
+            logger.exception("Error in session cleanup task")
             # Continue running despite errors
 
 
@@ -84,10 +85,8 @@ async def stop_session_cleanup_task():
     logger.info("Stopping session cleanup task")
     _cleanup_task.cancel()
 
-    try:
+    with contextlib.suppress(asyncio.CancelledError):
         await _cleanup_task
-    except asyncio.CancelledError:
-        pass
 
     _cleanup_task = None
     logger.info("Session cleanup task stopped")

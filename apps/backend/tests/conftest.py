@@ -33,6 +33,25 @@ for candidate in (_APPS_ROOT, _COMPONENT_ROOT, _TESTS_DIR):
         sys.path.insert(0, str(candidate))
 
 
+# WHICH DATABASE THIS SUITE TALKS TO — stated here, in the file you open to
+# learn how the harness is wired, and checked before a single test is collected.
+#
+# It is TEST_DATABASE_URL, a dedicated variable, NOT the application's own
+# DATABASE__URL. The suite DROPs and recreates the public schema on first use,
+# so anyone with DATABASE__URL exported — the ordinary state on a machine that
+# also runs the dev stack — used to run the whole suite against the dev database.
+# The guard below is the belt: a URL whose database name does not say "test" is
+# refused outright rather than dropped.
+from fixtures._db_url import TEST_DATABASE_URL  # noqa: E402
+
+_TEST_DB_NAME = TEST_DATABASE_URL.rsplit("/", 1)[-1]
+if "test" not in _TEST_DB_NAME:
+    raise RuntimeError(
+        f"TEST_DATABASE_URL does not name a throwaway database ({_TEST_DB_NAME!r}). "
+        "This harness DROPs and recreates the public schema on first use — "
+        "refusing to run."
+    )
+
 # Register shared fixtures as a plugin so every test gets them by name. Without
 # this, each test file does `from fixtures.db import db`, which the test method's
 # own `db` parameter then shadows — tripping ruff F811 ~147× across the suite.
@@ -62,7 +81,7 @@ def pytest_configure(config):
 # fails the session on any registered route nothing reached.
 # ═══════════════════════════════════════════════════════════════════════════
 
-# luxarch:route-smoke asserter v16 — DO NOT edit the marker line above (fw.route_smoke_wired finds it).
+# luxarch:route-smoke asserter v17 — DO NOT edit the marker line above (fw.route_smoke_wired finds it).
 #
 # WHY THIS FILE EXISTS
 # A dependency deprecates an API; your code keeps working (warning only); a later pin makes it RAISE;
@@ -127,8 +146,12 @@ EXPECT_5XX: frozenset[str] = frozenset(
 # considered exception; forty-six is a confession.
 EXPECT_3XX: frozenset[str] = frozenset(
     {
-        # "/logout",       # redirects to login by design; the POST path asserts the cookie is cleared
-        # "/",             # permanent redirect to /dashboard
+        # Reviewed, not inherited. Both redirect UNCONDITIONALLY — there is no
+        # state in which either renders a template, so there is nothing for the
+        # sweep to exercise inside them.
+        "/",  # the root has no page of its own; it always sends you to /dashboard
+        "/logout",  # its whole job is to clear the cookie and send you to /login;
+        # test_logout_ends_the_session asserts that on its own session
     }
 )
 
@@ -412,14 +435,38 @@ def _session_is_narrowed(session) -> bool:  # type: ignore[no-untyped-def]
     here = os.path.normpath(os.getcwd())
     if len(args) == 1 and os.path.normpath(args[0]).rstrip("/") in {root, here}:
         return False
-    # And when the ini file lives OUTSIDE the rootdir, `testpaths` was never resolvable, so comparing
-    # against it carries no information either way. The -k / -m / deselected / node-id legs above are
-    # unaffected — those were the point of LUXTASTE-307 and they are correct.
-    ini = os.path.normpath(str(getattr(session.config, "inipath", "") or ""))
-    if ini and root and not ini.startswith(root.rstrip("/") + os.sep) and ini != root:
-        return False
-    norm = {os.path.normpath(a).rstrip("/") for a in args}
-    return norm != {os.path.normpath(t).rstrip("/") for t in testpaths}
+    # v16 also had an "ini file outside the rootdir -> not narrowed" leg here. It is GONE, because it
+    # was redundant AND harmful (LUXPM-233). Redundant: the rootdir/cwd check above already handles
+    # every case LUXSTATS-111 reported — verified against their probe. Harmful: it returned
+    # not-narrowed OUTRIGHT, discarding the args, so `pytest -c /cfg/pytest.ini --rootdir=/app
+    # tests/test_tool_gate.py` read as the full suite, recorded zero route hits and the zero-hits net
+    # REFUSED. That is LUXTASTE-307's failure — the everyday focused run goes red — coming back
+    # through a new leg. The comment beside it said it should only skip the testpaths COMPARISON; the
+    # code switched off the whole determination. Correct intent, broader implementation.
+    #
+    # Deleted rather than reordered: with the rootdir/cwd check present it has no remaining job, and a
+    # leg that does nothing is one someone later has to work out the purpose of.
+    #
+    # Args are compared BOTH as written and relative to the cwd/rootdir, so `pytest /app/tests` with
+    # `testpaths = tests` is recognised as the full suite rather than standing the asserter down —
+    # a stand-down is a hollow green, and the absolute spelling of a configured testpath is not a
+    # deliberate subset.
+    want = {os.path.normpath(t).rstrip("/") for t in testpaths}
+    got: set[str] = set()
+    for a in args:
+        n = os.path.normpath(a).rstrip("/")
+        got.add(n)
+        for base in (here, root):
+            if base and n.startswith(base.rstrip("/") + os.sep):
+                got.add(n[len(base.rstrip("/")) + 1 :])
+    if not want:
+        # No testpaths to compare against: an explicit FILE is the only thing that still reads as a
+        # deliberate subset. A directory arg with no configured testpaths could be the whole suite.
+        return any(a.endswith(".py") for a in args)
+    # COVERAGE, not intersection. `pytest tests` under `testpaths = ["tests", "integration"]` runs half
+    # the suite, and an intersection test would call that the full one — a stand-down, which is a
+    # hollow green. Every configured testpath must be named for this to be the whole suite.
+    return not want <= got
 
 
 def pytest_sessionfinish(session, exitstatus) -> None:  # type: ignore[no-untyped-def]

@@ -9,31 +9,31 @@ When an alert fires, notifications are sent through all of its attached provider
 
 **Access:** providers under **Settings → Notifications**; logs via **Notifications** in the sidebar (`/notification-logs`).
 
-| Provider | Sends | Typical use |
-|----------|-------|-------------|
-| **Email (SMTP)** | Email (HTML with a plain-text fallback) | Engineering teams, on-call, stakeholders |
-| **Webhook (HTTP POST)** | JSON or form POST to any URL | Slack, Discord, PagerDuty, custom systems |
-| **Home Assistant** | Webhook shaped for HA automations | HA dashboards, mobile push, smart-home actions |
+| Provider                | Sends                                   | Typical use                                    |
+| ----------------------- | --------------------------------------- | ---------------------------------------------- |
+| **Email (SMTP)**        | Email (HTML with a plain-text fallback) | Engineering teams, on-call, stakeholders       |
+| **Webhook (HTTP POST)** | JSON or form POST to any URL            | Slack, Discord, PagerDuty, custom systems      |
+| **Home Assistant**      | Webhook shaped for HA automations       | HA dashboards, mobile push, smart-home actions |
 
----
+______________________________________________________________________
 
 ## Email (SMTP)
 
 Sends notifications via an SMTP server.
 
-| Field | Required | Default | Notes |
-|-------|----------|---------|-------|
-| **Hostname** | Yes | — | SMTP server, e.g. `smtp.gmail.com`, `smtp.office365.com`, or `localhost` |
-| **Port** | Yes | 587 | 25 (none), 587 (STARTTLS), 465 (SSL/TLS) |
-| **Security** | Yes | STARTTLS | `None` (no encryption — not for external SMTP), `STARTTLS` (upgrade to TLS), `SSL/TLS` (TLS from the start) |
-| **From Email** | Yes | — | Sender address |
-| **To Email** | Yes | — | Recipient address |
-| **Username** | No | — | SMTP auth user (usually the email). Leave blank if the server needs no auth |
-| **Password** | No | — | SMTP auth password. For Gmail use an **app password**, not your account password |
-| **CC** / **BCC** | No | — | Additional / hidden recipients |
-| **Ignore TLS Error** | No | false | Skips TLS cert validation — testing with self-signed certs only |
-| **Custom Subject** | No | — | Overrides the default subject template |
-| **Timeout (seconds)** | No | 30 | Range 1–300 |
+| Field                 | Required | Default  | Notes                                                                                                       |
+| --------------------- | -------- | -------- | ----------------------------------------------------------------------------------------------------------- |
+| **Hostname**          | Yes      | —        | SMTP server, e.g. `smtp.gmail.com`, `smtp.office365.com`, or `localhost`                                    |
+| **Port**              | Yes      | 587      | 25 (none), 587 (STARTTLS), 465 (SSL/TLS)                                                                    |
+| **Security**          | Yes      | STARTTLS | `None` (no encryption — not for external SMTP), `STARTTLS` (upgrade to TLS), `SSL/TLS` (TLS from the start) |
+| **From Email**        | Yes      | —        | Sender address                                                                                              |
+| **To Email**          | Yes      | —        | Recipient address                                                                                           |
+| **Username**          | No       | —        | SMTP auth user (usually the email). Leave blank if the server needs no auth                                 |
+| **Password**          | No       | —        | SMTP auth password. For Gmail use an **app password**, not your account password                            |
+| **CC** / **BCC**      | No       | —        | Additional / hidden recipients                                                                              |
+| **Ignore TLS Error**  | No       | false    | Skips TLS cert validation — testing with self-signed certs only                                             |
+| **Custom Subject**    | No       | —        | Overrides the default subject template                                                                      |
+| **Timeout (seconds)** | No       | 30       | Range 1–300                                                                                                 |
 
 Emails are sent as **HTML with a plain-text fallback**. The HTML version has a status-colored header (green for UP, red for DOWN), an organized field layout, monospace technical details, and a mobile-responsive design.
 
@@ -74,19 +74,19 @@ Security: STARTTLS            From Email: your-email@company.com
                               To Email:   team@company.com
 ```
 
----
+______________________________________________________________________
 
 ## Webhook (HTTP POST)
 
 Sends an HTTP POST with the full check/alert context — the bridge to Slack, Discord, PagerDuty, or any custom endpoint.
 
-| Field | Required | Default | Notes |
-|-------|----------|---------|-------|
-| **Post URL** | Yes | — | Must start with `http://` or `https://` |
-| **Request Body Preset** | No | `json` | `json` (`application/json`) or `form` (`application/x-www-form-urlencoded`) |
-| **Additional Headers** | No | — | JSON object of header key/values, e.g. `{"Authorization": "Bearer token123"}` |
-| **Timeout (seconds)** | No | 10 | Range 1–60 |
-| **Verify SSL** | No | true | Set false only for testing with self-signed certs |
+| Field                   | Required | Default | Notes                                                                         |
+| ----------------------- | -------- | ------- | ----------------------------------------------------------------------------- |
+| **Post URL**            | Yes      | —       | Must start with `http://` or `https://`                                       |
+| **Request Body Preset** | No       | `json`  | `json` (`application/json`) or `form` (`application/x-www-form-urlencoded`)   |
+| **Additional Headers**  | No       | —       | JSON object of header key/values, e.g. `{"Authorization": "Bearer token123"}` |
+| **Timeout (seconds)**   | No       | 10      | Range 1–60                                                                    |
+| **Verify SSL**          | No       | true    | Set false only for testing with self-signed certs                             |
 
 **Payload (JSON preset):**
 
@@ -123,7 +123,7 @@ Discord:   Post URL: https://discord.com/api/webhooks/123456789/abcdefg
            Request Body Preset: json
 ```
 
----
+______________________________________________________________________
 
 ## Home Assistant
 
@@ -170,7 +170,7 @@ Sends a webhook to Home Assistant for use in automations, dashboards, and the co
           Error: {{ trigger.json.data.error.message }}
 ```
 
----
+______________________________________________________________________
 
 ## Managing providers
 
@@ -188,19 +188,19 @@ Then **Create Provider** and **Test** it to verify the configuration.
 
 **Enable/disable:** the toggle on each provider card suppresses or resumes sending without losing configuration — handy during maintenance or while testing.
 
----
+______________________________________________________________________
 
 ## Templates and variables
 
 Subjects and messages support `{{VARIABLE}}` substitution:
 
-| Variable | Value | | Variable | Value |
-|----------|-------|---|----------|-------|
-| `{{NAME}}` | Check display name | | `{{AGENT}}` | Agent name/ID |
-| `{{HOSTNAME_OR_URL}}` | Check target | | `{{TIMESTAMP}}` | Execution time |
-| `{{STATUS}}` | "UP" / "DOWN" | | `{{TYPE}}` | Check type |
-| `{{LATENCY}}` | Response time | | `{{ALERT}}` | Alert name |
-| `{{ERROR_MESSAGE}}` | Error details | | `{{HTTP_STATUS}}` | HTTP status code |
+| Variable              | Value              |     | Variable          | Value            |
+| --------------------- | ------------------ | --- | ----------------- | ---------------- |
+| `{{NAME}}`            | Check display name |     | `{{AGENT}}`       | Agent name/ID    |
+| `{{HOSTNAME_OR_URL}}` | Check target       |     | `{{TIMESTAMP}}`   | Execution time   |
+| `{{STATUS}}`          | "UP" / "DOWN"      |     | `{{TYPE}}`        | Check type       |
+| `{{LATENCY}}`         | Response time      |     | `{{ALERT}}`       | Alert name       |
+| `{{ERROR_MESSAGE}}`   | Error details      |     | `{{HTTP_STATUS}}` | HTTP status code |
 
 **Substitution rules:** variables are **case-sensitive** (`{{NAME}}`, not `{{name}}`); a null/missing value renders as `N/A` / `No error` / `Unknown` as appropriate; everything is coerced to string; values are **not** HTML-escaped.
 
@@ -248,19 +248,19 @@ Error: {{ERROR_MESSAGE}}
 Runbook: https://wiki.example.com/runbooks/{{NAME}}
 ```
 
----
+______________________________________________________________________
 
 ## Notification logs
 
 The logs page summarizes **Total / Sent Successfully / Failed** and lists every notification attempt. Each row shows timestamp, alert, provider, check type, check name, target, check result (Up/Down), latency, notification status, any error, and actions (view check, snooze/un-snooze). Filter by **Status**, **Alert**, **Provider**, and **Per Page**; filters persist in the URL for sharing.
 
-| Status | Meaning |
-|--------|---------|
-| **Sent** | Delivered — provider returned success (2xx / SMTP OK) |
-| **Failed** | Delivery failed (4xx/5xx or SMTP error); the Error column has the message. Common causes: bad config, network, auth failure, timeout, invalid recipient |
-| **Rate Limited** | Suppressed by the provider's rate limit (see below) |
-| **Deduplicated** | Suppressed by alert de-duplication (same status within the resend window) |
-| **Suppressed** | Not delivered for an audited reason in the Error column — either **"Notification provider is disabled"** (re-enable it), or **"Suppressed: parent check '\<name\>' is down"** (cascade suppression — resumes automatically when the parent recovers; see [Checks → Depends On](checks.md)) |
+| Status           | Meaning                                                                                                                                                                                                                                                                                   |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Sent**         | Delivered — provider returned success (2xx / SMTP OK)                                                                                                                                                                                                                                     |
+| **Failed**       | Delivery failed (4xx/5xx or SMTP error); the Error column has the message. Common causes: bad config, network, auth failure, timeout, invalid recipient                                                                                                                                   |
+| **Rate Limited** | Suppressed by the provider's rate limit (see below)                                                                                                                                                                                                                                       |
+| **Deduplicated** | Suppressed by alert de-duplication (same status within the resend window)                                                                                                                                                                                                                 |
+| **Suppressed**   | Not delivered for an audited reason in the Error column — either **"Notification provider is disabled"** (re-enable it), or **"Suppressed: parent check '\<name>' is down"** (cascade suppression — resumes automatically when the parent recovers; see [Checks → Depends On](checks.md)) |
 
 **Snooze** pauses notifications for one **alert–check relationship**. From a log row, click **Snooze** (adds 15 minutes; click again to extend; the button shows remaining time like `1h 30m`); **un-snooze** to resume immediately. Snooze is scoped to that pair only — the same alert on other checks, and other alerts on the same check, keep notifying. Monitoring and data collection continue while snoozed.
 
@@ -273,16 +273,16 @@ Alert "API Down" on check "Production API", snoozed 15m:
 
 The **view check** action opens that check's detail panel (30-minute status bar, latency chart, stats) without leaving the page.
 
----
+______________________________________________________________________
 
 ## Rate limiting
 
 Each provider can cap its own volume to prevent spam:
 
-| Field | Default | Notes |
-|-------|---------|-------|
-| **Rate Limit Count** | null | Max notifications per window. `null` = unlimited |
-| **Rate Limit Window (minutes)** | 60 | The counting window |
+| Field                           | Default | Notes                                            |
+| ------------------------------- | ------- | ------------------------------------------------ |
+| **Rate Limit Count**            | null    | Max notifications per window. `null` = unlimited |
+| **Rate Limit Window (minutes)** | 60      | The counting window                              |
 
 When a notification is about to send, LuxSwirl counts how many were sent via that provider within the window; if the count has reached the limit, it suppresses the send and logs it as `rate_limited` until the window rolls forward:
 
@@ -295,7 +295,7 @@ else:                                   send
 
 Rate limiting is **per provider**, so different destinations can have different limits. Rough starting points: email 10–20/hour (respect Gmail/Office 365 limits); Slack ~1/second; Home Assistant usually needs none. If important notifications get suppressed, raise the count or window, or split critical alerts onto a separate higher-limit provider.
 
----
+______________________________________________________________________
 
 ## Common workflows
 
@@ -315,20 +315,20 @@ SSL Expiring         → Email only,                  [30,14,7]d,  resend 1440m
 
 Critical production issues escalate to multiple channels immediately; lower-priority alerts stay on email.
 
----
+______________________________________________________________________
 
 ## Troubleshooting
 
-| Symptom | Causes and fixes |
-|---------|------------------|
-| **Alert fires, no notification** | Provider disabled (re-enable); provider not attached to the alert (edit alert); alert disabled; relationship snoozed (un-snooze); deduplicated (adjust resend interval); rate-limited (raise limit). Check the log status to tell which |
+| Symptom                               | Causes and fixes                                                                                                                                                                                                                        |
+| ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Alert fires, no notification**      | Provider disabled (re-enable); provider not attached to the alert (edit alert); alert disabled; relationship snoozed (un-snooze); deduplicated (adjust resend interval); rate-limited (raise limit). Check the log status to tell which |
 | **Email "Failed" / connection error** | Wrong username/password (Gmail needs an app password); wrong host/port; try a different Security option; firewall blocking SMTP from the server; TLS cert error → temporarily enable **Ignore TLS Error** to confirm, then fix the cert |
-| **Webhook 4xx/5xx** | `400` wrong body preset (try json vs form); `401` missing/incorrect auth header (`{"Authorization": "Bearer …"}`); `404` wrong URL (test with `curl`); `500` destination error (check its logs); timeout → raise the timeout |
-| **Snooze not stopping notifications** | A different alert on the same check is still active (snooze each); the 15-minute snooze expired (extend); a different check with a similar name is firing (verify the check ID in the log) |
-| **Rate limit too aggressive** | Raise `rate_limit_count` or the window; or create a separate high-limit provider for critical alerts only; or set the count to `null` (unlimited) |
-| **HTML email shows tags** | The client doesn't render HTML — the plain-text fallback is also sent; use a modern client or whitelist the sender |
+| **Webhook 4xx/5xx**                   | `400` wrong body preset (try json vs form); `401` missing/incorrect auth header (`{"Authorization": "Bearer …"}`); `404` wrong URL (test with `curl`); `500` destination error (check its logs); timeout → raise the timeout            |
+| **Snooze not stopping notifications** | A different alert on the same check is still active (snooze each); the 15-minute snooze expired (extend); a different check with a similar name is firing (verify the check ID in the log)                                              |
+| **Rate limit too aggressive**         | Raise `rate_limit_count` or the window; or create a separate high-limit provider for critical alerts only; or set the count to `null` (unlimited)                                                                                       |
+| **HTML email shows tags**             | The client doesn't render HTML — the plain-text fallback is also sent; use a modern client or whitelist the sender                                                                                                                      |
 
----
+______________________________________________________________________
 
 ## API
 
@@ -389,7 +389,7 @@ All endpoints require `Authorization: Bearer {token}`; full schemas are at `/doc
 }
 ```
 
----
+______________________________________________________________________
 
 ## Security
 
@@ -401,7 +401,7 @@ All endpoints require `Authorization: Bearer {token}`; full schemas are at `/doc
 
 **Notification content.** Notifications include the check target and error text, so avoid leaking internal hostnames to external channels — use generic check names for public destinations and sanitize error messages that could contain sensitive data.
 
----
+______________________________________________________________________
 
 ## Related
 

@@ -7,8 +7,8 @@ This guide describes how to wipe the LuxSwirl database and bring it back from a 
 You never run `CREATE EXTENSION`, `Base.metadata.create_all`, or a seed script by hand. The server container does it for you every time it starts:
 
 1. The container `command` (see `compose.yml`) runs `alembic upgrade head`, which applies the migrations in `apps/backend/alembic/versions/` (baseline `000_v1_0_baseline.py` and onward) to create every table, index, and constraint.
-2. The app's `init_db()` (`apps/backend/app/db/database.py`) then runs at startup. It enables the TimescaleDB extension, converts the time-series tables into hypertables, and configures compression, retention, and the continuous aggregates — all idempotently.
-3. `init_db()` also seeds the default `settings` rows if that table is empty.
+1. The app's `init_db()` (`apps/backend/app/db/database.py`) then runs at startup. It enables the TimescaleDB extension, converts the time-series tables into hypertables, and configures compression, retention, and the continuous aggregates — all idempotently.
+1. `init_db()` also seeds the default `settings` rows if that table is empty.
 
 Because all of this is idempotent and runs on every boot, **resetting the database is simply: drop the data volume, then start the stack again.**
 

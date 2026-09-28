@@ -96,7 +96,7 @@ async def edit_form(
             request, "partials/status_page_form.html", context
         )
     except StatusPageNotFoundException as e:
-        logger.error("Status page not found", exc_info=True)
+        logger.exception("Status page not found")
         return error_partial(request, current_user, str(e), 404)
 
 
@@ -196,7 +196,7 @@ async def manage_status_page(
             request, "pages/status_page_manage.html", context
         )
     except StatusPageNotFoundException as e:
-        logger.error("Status page not found", exc_info=True)
+        logger.exception("Status page not found")
         return error_page(request, current_user, str(e), 404)
 
 

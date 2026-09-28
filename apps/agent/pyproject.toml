@@ -73,17 +73,7 @@ mypy = "^2.3.1"
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
-# ruff / mypy config is fleet-owned by luxlint (byte-identical, emitted from the
-# pinned image) — this repo intentionally carries none. See .luxlint.toml and
-# `make lint` (luxlint ruff mount-only + the mypy tail).
-#
-# pytest config is NOT yet migrated to the canonical luxlint tail (see the backend
-# pyproject note): test.no_local_pytest_config stays RED (tracked burn-down); the
-# local config below keeps `make test` working meanwhile.
-[tool.pytest.ini_options]
-asyncio_mode = "auto"
-testpaths = ["tests"]
-python_files = "test_*.py"
-python_functions = "test_*"
-# "." = apps/agent (resolves `import app.*`); ".." = apps/ (resolves `import shared.*`).
-pythonpath = [".", ".."]
+# ruff / mypy / pytest config is fleet-owned by luxlint (byte-identical, emitted
+# from the pinned image) — this repo intentionally carries none. See .luxlint.toml,
+# `make lint` (luxlint ruff mount-only + the mypy tail) and `make test`
+# (`pytest -c "$(luxlint --emit-config pytest)"`).

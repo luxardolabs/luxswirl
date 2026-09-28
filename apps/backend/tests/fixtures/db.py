@@ -30,19 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 # already, producing an empty schema.
 import app.models  # noqa: F401
 from app.models.base_model import Base
-
-# ---------------------------------------------------------------------------
-# Test database URL — must match compose.test.yaml
-# ---------------------------------------------------------------------------
-# Inside the `tests` service container, the test DB is reachable at
-# `timescaledb-test:5432` via the compose-managed default network. From the
-# host, it's exposed on `localhost:25432`. The DATABASE__URL env var (set
-# by compose.test.yaml on the tests service) takes precedence; this fallback
-# covers running pytest on the host against the host-exposed port.
-TEST_DATABASE_URL = os.environ.get(
-    "DATABASE__URL",
-    "postgresql+asyncpg://luxswirl_test:luxswirl_test@localhost:25432/luxswirl_test",
-)
+from fixtures._db_url import TEST_DATABASE_URL
 
 # Module-level flag so we only create the schema once per pytest session.
 _schema_created = False
@@ -52,47 +40,67 @@ _schema_created = False
 # (table, time_column, chunk_interval). Kept in sync manually because the
 # init_db helper does many other things (continuous aggregates, retention
 # policies, compression) we don't need for tests.
+# `notification_logs` is NOT here, and must not be: app/db/database.py says in so
+# many words that it is "a plain table (audit log, not metrics)" and never
+# converts it. This list had drifted to include it, and because the conversion
+# was wrapped in a blanket suppress the drift was invisible — TimescaleDB
+# refuses it ("cannot create a unique index without the column sent_at"), and
+# that swallowed refusal is what taught the fixture to swallow ALL of them.
 _HYPERTABLES: tuple[tuple[str, str, str], ...] = (
     ("check_results", "timestamp", "1 day"),
     ("agent_metrics", "timestamp", "1 day"),
-    ("notification_logs", "sent_at", "1 day"),
     ("check_artifacts", "created_at", "1 day"),
 )
 
 
 async def _create_schema(engine):
     """First-call schema setup: drop+recreate public, install timescaledb,
-    create all model tables, convert hypertables."""
+    create all model tables, convert hypertables.
+
+    The engine is disposed between the drop and the CREATE EXTENSION on purpose.
+    `DROP SCHEMA public CASCADE` takes the timescaledb extension with it, and
+    TimescaleDB then refuses to be recreated on the same backend:
+
+        extension "timescaledb" has already been loaded with another version
+        HINT: Start a new session and execute CREATE EXTENSION as the first command.
+
+    Disposing closes every pooled connection, so the next `begin()` gets a fresh
+    backend and CREATE EXTENSION really is its first command. Without this the
+    extension was never installed, `create_hypertable` did not exist as a
+    function, and the schema came up with zero hypertables.
+    """
     async with engine.begin() as conn:
         await conn.execute(text("DROP SCHEMA IF EXISTS public CASCADE"))
     async with engine.begin() as conn:
         await conn.execute(text("CREATE SCHEMA public"))
 
-    # TimescaleDB ships in the image. CREATE EXTENSION must run before tables
-    # so hypertable conversion later sees the extension functions. The
-    # extension may already be loaded in this session — suppress that error.
+    await engine.dispose()
+
     async with engine.begin() as conn:
-        with contextlib.suppress(Exception):
-            await conn.execute(text("CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE"))
+        await conn.execute(text("CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE"))
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
+    # NOT suppressed. A blanket `contextlib.suppress(Exception)` here meant every
+    # conversion could fail and the schema came up with zero hypertables, which
+    # only surfaced as three /database-health routes returning 500 with no
+    # explanation anywhere. A conversion that fails is a broken fixture, not a
+    # detail — so it fails here, where the reason is still in scope.
     for table, column, interval in _HYPERTABLES:
         async with engine.begin() as conn:
-            with contextlib.suppress(Exception):
-                await conn.execute(
-                    text(
-                        f"""
-                        SELECT create_hypertable(
-                            '{table}', '{column}',
-                            if_not_exists => TRUE,
-                            chunk_time_interval => INTERVAL '{interval}',
-                            migrate_data => TRUE
-                        )
-                        """
+            await conn.execute(
+                text(
+                    f"""
+                    SELECT create_hypertable(
+                        '{table}', '{column}',
+                        if_not_exists => TRUE,
+                        chunk_time_interval => INTERVAL '{interval}',
+                        migrate_data => TRUE
                     )
+                    """
                 )
+            )
 
     # Continuous aggregates (check_results_5min, _hourly, _daily) are
     # production-only — they're brittle to recreate in tests (the CAGG

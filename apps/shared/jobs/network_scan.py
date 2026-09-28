@@ -508,10 +508,9 @@ class NetworkScanJob(BaseJob):
             )
             return None
         except Exception:
-            self.logger.error(
+            self.logger.exception(
                 "DNS unexpected error",
                 extra={"ip": ip},
-                exc_info=True,
             )
             return None
 

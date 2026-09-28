@@ -138,10 +138,9 @@ class CheckExecutor:
             await self.result_queue.put(result)
 
         except Exception as e:
-            self.logger.error(
+            self.logger.exception(
                 "Check failed with exception",
                 extra={"check_name": check.name},
-                exc_info=True,
             )
             self.metrics["checks_executed"] += 1
             self.metrics["checks_failed"] += 1

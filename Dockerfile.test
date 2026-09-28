@@ -40,4 +40,15 @@ COPY apps/backend/alembic.ini /app/alembic.ini
 # The emitted migration-chain verifier (`make db-verify` → repo.migrations_build_schema):
 # proves `alembic upgrade head` from EMPTY builds exactly what the models describe.
 COPY apps/backend/scripts /app/scripts
-ENV PYTHONPATH=/app
+# /app resolves `app.*` and `shared.*`; /app/tests resolves `fixtures.*`. The
+# canonical pytest config carries no `pythonpath` (it is byte-identical
+# fleet-wide), so the path is the image's job, not the config's.
+ENV PYTHONPATH=/app:/app/tests
+
+# Self-wired default: the canonical config, never a bare `pytest`. A bare pytest
+# runs with NO config — asyncio_mode/filterwarnings/markers all silently off, and
+# async tests are collected-but-never-awaited, so they "pass". The config is
+# emitted per run by `make test` (`luxlint --emit-config pytest`) and mounted
+# here; if it is absent pytest exits rather than running unconfigured, which is
+# the point.
+CMD ["pytest", "-c", "/app/.luxlint.pytest.ini"]

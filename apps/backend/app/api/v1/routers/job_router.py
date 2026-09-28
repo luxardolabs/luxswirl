@@ -23,6 +23,7 @@ from app.schemas.job_schema import (
     JobResultSubmit,
 )
 from app.services.core.agent_core_service import AgentCoreService
+from app.services.core.auth_core_service import AuthCoreService
 from app.services.core.job_core_service import JobCoreService
 
 router = APIRouter(prefix="/jobs", tags=["Jobs"])
@@ -45,8 +46,14 @@ async def create_job(
 ):
     """Create a new job."""
     try:
-        # Extract user from token if needed (for now, use token as identifier)
-        created_by = token if token != "changeme" else None
+        # A FINGERPRINT, never the token. This used to store the raw bearer
+        # token in `created_by` — a column described as "User who created the
+        # job" and returned verbatim in JobResponse, so a valid API credential
+        # was persisted in plaintext and served back to every reader of the job.
+        # The JSON API has no user model, so a non-reversible label is the most
+        # identity there is to record, and it still distinguishes one configured
+        # token from another in an audit trail.
+        created_by = f"api:{AuthCoreService.hash_token(token)[:12]}"
 
         job = await JobCoreService.create_job(db, data, created_by=created_by)
 

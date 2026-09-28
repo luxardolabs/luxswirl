@@ -169,29 +169,28 @@ class AgentAssignmentCoreService:
                 ):
                     checks_to_run.append(check)
 
-            elif check.assignment_mode == "distribute":
-                # DISTRIBUTE: Check assigned to ONE agent via hash
-                if AgentAssignmentCoreService.agent_matches_selector(
+            # DISTRIBUTE: Check assigned to ONE agent via hash
+            elif check.assignment_mode == "distribute" and (
+                AgentAssignmentCoreService.agent_matches_selector(
                     agent, check.agent_selector
-                ):
-                    if all_agents is None:
-                        all_agents = await AgentCRUD.list_all(db)
-                    matching_agents = (
-                        AgentAssignmentCoreService.filter_agents_by_selector(
-                            all_agents, check.agent_selector
-                        )
-                    )
+                )
+            ):
+                if all_agents is None:
+                    all_agents = await AgentCRUD.list_all(db)
+                matching_agents = AgentAssignmentCoreService.filter_agents_by_selector(
+                    all_agents, check.agent_selector
+                )
 
-                    # Determine assigned agent via hash
-                    assigned_agent = (
-                        AgentAssignmentCoreService.get_assigned_agent_for_check(
-                            check, matching_agents
-                        )
+                # Determine assigned agent via hash
+                assigned_agent = (
+                    AgentAssignmentCoreService.get_assigned_agent_for_check(
+                        check, matching_agents
                     )
+                )
 
-                    # Add check if this agent was assigned
-                    if assigned_agent and assigned_agent.id == agent.id:
-                        checks_to_run.append(check)
+                # Add check if this agent was assigned
+                if assigned_agent and assigned_agent.id == agent.id:
+                    checks_to_run.append(check)
 
         logger.debug(
             "Agent assigned checks (manual + replicate + distribute)",

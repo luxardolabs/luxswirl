@@ -11,6 +11,7 @@ doesn't sit queued forever.
 """
 
 import asyncio
+import contextlib
 from collections.abc import Awaitable, Callable
 from datetime import timedelta
 
@@ -168,9 +169,7 @@ async def stop_maintenance_worker() -> None:
     if _worker_task is None:
         return
     _worker_task.cancel()
-    try:
+    with contextlib.suppress(asyncio.CancelledError):
         await _worker_task
-    except asyncio.CancelledError:
-        pass
     _worker_task = None
     logger.info("Maintenance worker stopped")

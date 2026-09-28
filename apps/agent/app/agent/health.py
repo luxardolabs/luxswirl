@@ -99,9 +99,7 @@ class HealthMonitor:
                             await self.reporter.flush()
                         # swallowed-exceptions: self-monitoring is reported alongside the checks — a failed sample must not stop the agent reporting
                         except Exception:
-                            self.logger.error(
-                                "Error during forced flush", exc_info=True
-                            )
+                            self.logger.exception("Error during forced flush")
                         stall_count = 0
                 else:
                     stall_count = 0
@@ -146,7 +144,7 @@ class HealthMonitor:
                 await asyncio.sleep(self.watchdog_interval)
 
             except Exception:
-                self.logger.error("Error in watchdog monitor", exc_info=True)
+                self.logger.exception("Error in watchdog monitor")
                 await asyncio.sleep(self.watchdog_interval)
 
         self.logger.info("Watchdog monitor stopped")

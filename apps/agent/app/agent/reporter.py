@@ -300,7 +300,7 @@ class Reporter:
 
         # swallowed-exceptions: the reporter retries and spools to disk; raising would drop results already collected
         except Exception:
-            self.logger.error("Error stopping reporter", exc_info=True)
+            self.logger.exception("Error stopping reporter")
 
         self.logger.info("Reporter stopped")
 
@@ -354,7 +354,7 @@ class Reporter:
                 break
             # swallowed-exceptions: the reporter retries and spools to disk; raising would drop results already collected
             except Exception:
-                self.logger.error("Error in batch processor", exc_info=True)
+                self.logger.exception("Error in batch processor")
 
             # Short sleep to prevent CPU spinning
             await asyncio.sleep(0.1)
@@ -531,9 +531,7 @@ class Reporter:
                 await asyncio.sleep(self.retry_delay)
 
             except Exception:
-                self.logger.error(
-                    "Unexpected error while sending results", exc_info=True
-                )
+                self.logger.exception("Unexpected error while sending results")
                 retry_count += 1
                 self.metrics["send_failures"] += 1
 
@@ -609,10 +607,7 @@ class Reporter:
         try:
             await asyncio.to_thread(self._store_batch_to_db_sync, batch)
         except Exception:
-            self.logger.error("Failed to store results to SQLite", exc_info=True)
-            import traceback
-
-            self.logger.error(traceback.format_exc())
+            self.logger.exception("Failed to store results to SQLite")
 
     def _process_stored_reports_sync(self) -> list[tuple[int, list[dict[str, Any]]]]:
         """Fetch pending batches from SQLite for replay (runs in thread).
@@ -744,7 +739,7 @@ class Reporter:
                     await asyncio.sleep(1)
 
             except Exception:
-                self.logger.error("Error in stored reports processor", exc_info=True)
+                self.logger.exception("Error in stored reports processor")
 
                 # Check if we should continue running
                 if not self.running:

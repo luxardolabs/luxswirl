@@ -11,7 +11,7 @@ Handles processing check results from the queue including:
 import asyncio
 import base64
 import time
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from shared.logger import get_logger
@@ -125,13 +125,13 @@ class ResultProcessor:
                 except asyncio.CancelledError:
                     break
                 except Exception:
-                    self.logger.error("Error processing result", exc_info=True)
+                    self.logger.exception("Error processing result")
                     if not self.running:
                         break
                     await asyncio.sleep(self.result_processor_retry_delay)
         # swallowed-exceptions: one malformed result must not stop the processor draining the queue
         except Exception:
-            self.logger.error("Unhandled exception in result processor", exc_info=True)
+            self.logger.exception("Unhandled exception in result processor")
 
         self.logger.info("Result processor stopped")
 
@@ -180,7 +180,7 @@ class ResultProcessor:
                 "result_id"
             )  # UUID generated before check execution
             timestamp: float = result.get("timestamp", time.time())
-            check_result_timestamp = datetime.fromtimestamp(timestamp).isoformat()
+            check_result_timestamp = datetime.fromtimestamp(timestamp, UTC).isoformat()
 
             # Upload each artifact
             for artifact in artifacts:
@@ -229,17 +229,16 @@ class ResultProcessor:
                 # swallowed-exceptions: one malformed result must not stop the processor draining the queue
                 except Exception:
                     # Log but continue with other artifacts
-                    self.logger.error(
+                    self.logger.exception(
                         "Exception uploading artifact",
                         extra={
                             "artifact_filename": artifact.get("filename", "unknown"),
                         },
-                        exc_info=True,
                     )
         # swallowed-exceptions: one malformed result must not stop the processor draining the queue
         except Exception:
             # Log outer exception but ensure artifacts are still removed
-            self.logger.error("Error in artifact upload process", exc_info=True)
+            self.logger.exception("Error in artifact upload process")
 
         finally:
             # ALWAYS remove artifacts from result to avoid sending them in the batch report

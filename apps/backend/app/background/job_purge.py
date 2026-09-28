@@ -5,6 +5,7 @@ Periodically removes expired jobs from the database based on retention policy.
 """
 
 import asyncio
+import contextlib
 
 from shared.logger import get_logger
 
@@ -50,7 +51,7 @@ async def _job_purge_loop():
         # swallowed-exceptions: daemon loop — one transient DB error must not
         # kill the purge task for the life of the process.
         except Exception:
-            logger.error("Error in job purge task", exc_info=True)
+            logger.exception("Error in job purge task")
             # Continue running despite errors
 
 
@@ -83,10 +84,8 @@ async def stop_job_purge_task():
     logger.info("Stopping job purge task")
     _purge_task.cancel()
 
-    try:
+    with contextlib.suppress(asyncio.CancelledError):
         await _purge_task
-    except asyncio.CancelledError:
-        pass
 
     _purge_task = None
     logger.info("Job purge task stopped")

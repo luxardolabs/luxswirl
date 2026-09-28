@@ -3,10 +3,12 @@
 Documentation for the LuxSwirl monitoring platform, organized by who's reading it.
 
 ## I just want to get it running
+
 - **[Quickstart](quickstart/quickstart.md)** — Docker Compose to first check
 - **[Installation](deployment/installation.md)** — Production install with options for compose, manual, reverse proxy, TLS
 
 ## I'm using LuxSwirl day-to-day
+
 The user guide covers every UI feature, one document per area:
 
 - [Dashboard](user-guide/dashboard.md)
@@ -22,6 +24,7 @@ The user guide covers every UI feature, one document per area:
 - [FAQ](user-guide/faq.md)
 
 ## I'm operating it in production
+
 - **[Agent Docker deployment](deployment/agent.md)** — running agents in different networks
 - **[Server Docker deployment](deployment/server.md)** — server container patterns
 - **[Compose layering (dev/prod/agent)](guides/deployment.md)** — overlay strategy
@@ -31,6 +34,7 @@ The user guide covers every UI feature, one document per area:
 - **[Synthetic checks guide](guides/synthetic-checks-guide.md)** + **[FAQ](guides/synthetic-checks-faq.md)** — Playwright checks (admin only)
 
 ## I'm reading the code or contributing
+
 - **[Backend layering rules](architecture/backend.md)** — the canonical layering chain (router → service → CRUD → models)
 - **[Architecture overview](architecture/overview.md)** — system-level view
 - **[Agent architecture](architecture/agent-architecture.md)** — how agents are assigned to checks
@@ -42,12 +46,14 @@ The user guide covers every UI feature, one document per area:
 - **[Credential encryption](architecture/security-credentials.md)** — Fernet at-rest encryption details
 
 ## Reference
+
 - **[Examples](reference/examples.md)** — copy-paste configurations
 - **[Settings reference](reference/settings-reference.md)** — config keys, types, defaults
 - **[Limitations](reference/limitations.md)** — what the platform does and doesn't do today
 - **[Licensing](reference/licensing.md)** — AGPLv3 explained
 
 ## Repo-root files
+
 - [README.md](../README.md) — project overview
 - [CHANGELOG.md](../CHANGELOG.md) — release history
 - [CONTRIBUTING.md](../CONTRIBUTING.md) — how to contribute

@@ -127,7 +127,7 @@ async def run_subprocess_safely(
                         await asyncio.wait_for(proc.wait(), timeout=kill_timeout)
                         logger.debug("Subprocess killed", extra={"pid": proc.pid})
                     except TimeoutError:
-                        logger.error(
+                        logger.exception(
                             "Failed to kill subprocess even with SIGKILL - "
                             "this may indicate a kernel/system issue",
                             extra={"pid": proc.pid},
@@ -150,10 +150,9 @@ async def run_subprocess_safely(
                 proc.kill()
                 await asyncio.wait_for(proc.wait(), timeout=kill_timeout)
             except Exception:
-                logger.error(
+                logger.exception(
                     "Failed to cleanup subprocess",
                     extra={"pid": proc.pid},
-                    exc_info=True,
                 )
         raise
 

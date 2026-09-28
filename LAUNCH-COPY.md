@@ -1,12 +1,10 @@
 # LuxSwirl — Launch & Marketing Copy
 
-Draft copy for the v1.0.21 public launch: social posts, the feature→benefit→value
-scaffold, and full website page copy. Written in the LuxSwirl docs voice — third
-person, value-first, no cost-comparisons or competitor scoreboards.
+Draft copy for the v1.0.21 public launch: social posts, the feature→benefit→value scaffold, and full website page copy. Written in the LuxSwirl docs voice — third person, value-first, no cost-comparisons or competitor scoreboards.
 
 Repo: https://github.com/luxardolabs/luxswirl · Site: https://www.luxardolabs.com/
 
----
+______________________________________________________________________
 
 ## 1. Social posts
 
@@ -16,8 +14,7 @@ Repo: https://github.com/luxardolabs/luxswirl · Site: https://www.luxardolabs.c
 >
 > Instead of checking your services from one server, LuxSwirl runs little agents wherever you want them — different regions, clouds, even private networks — all feeding one live dashboard. It watches basically everything (websites, APIs, databases, even full browser click-throughs), keeps the history, sends alerts, and gives you clean public status pages. Free, open source, and it runs on anything from a Raspberry Pi to a cloud box — and your data stays *yours*.
 >
-> Pretty proud of this one 👇
-> github.com/luxardolabs/luxswirl
+> Pretty proud of this one 👇 github.com/luxardolabs/luxswirl
 
 ### LinkedIn (professional, "why I built it")
 
@@ -25,32 +22,28 @@ Repo: https://github.com/luxardolabs/luxswirl · Site: https://www.luxardolabs.c
 >
 > **Why:** most monitoring watches your stack from a single vantage point. Real systems don't live in one place — they span regions, clouds, and private networks. LuxSwirl flips that around: you deploy lightweight agents wherever you need visibility, and they all report to one real-time server.
 >
-> **What it does:**
-> • One agent, every check type — ping, HTTP, TCP, DNS, JSON APIs, MySQL/Postgres, and scripted browser flows. Servers, databases, and real user journeys in one tool.
-> • TimescaleDB-backed history, alerting, public status pages, and native Prometheus export.
-> • Self-hosted and open — your data stays on your hardware, from a Raspberry Pi to a cloud VM (multi-arch images).
+> **What it does:** • One agent, every check type — ping, HTTP, TCP, DNS, JSON APIs, MySQL/Postgres, and scripted browser flows. Servers, databases, and real user journeys in one tool. • TimescaleDB-backed history, alerting, public status pages, and native Prometheus export. • Self-hosted and open — your data stays on your hardware, from a Raspberry Pi to a cloud VM (multi-arch images).
 >
 > It also ships the parts that usually get skipped: role-based access, encrypted credentials, SSRF/CSRF protection, rate limiting, and a documented security model.
 >
-> If you run infrastructure and want monitoring you actually own, I'd love your feedback.
-> 👉 github.com/luxardolabs/luxswirl
+> If you run infrastructure and want monitoring you actually own, I'd love your feedback. 👉 github.com/luxardolabs/luxswirl
 >
 > #opensource #monitoring #observability #selfhosted #devops #sre #infrastructure
 
----
+______________________________________________________________________
 
 ## 2. Feature → Benefit → Value scaffold
 
 Reuse these rows as sections or feature cards.
 
-| Feature (what it is) | Benefit (what it does) | Value (why it matters) |
-|---|---|---|
-| Distributed agents across regions / clouds / private LANs | Check from where users are; reach networks one host can't see | Real per-location truth, no blind spots |
-| One agent, every check type (ping → DBs → browser flows) | Uptime, infra, databases, and user journeys in one tool | Consolidate — fewer things to run and learn |
-| Self-hosted, open source, multi-arch (Pi → cloud) | Your data on your hardware, runs anywhere | Ownership and control, no lock-in |
-| TimescaleDB history + status pages + Prometheus export | Fast queries, public status, fits your stack | Polished *and* plugs into what you already use |
+| Feature (what it is)                                      | Benefit (what it does)                                        | Value (why it matters)                         |
+| --------------------------------------------------------- | ------------------------------------------------------------- | ---------------------------------------------- |
+| Distributed agents across regions / clouds / private LANs | Check from where users are; reach networks one host can't see | Real per-location truth, no blind spots        |
+| One agent, every check type (ping → DBs → browser flows)  | Uptime, infra, databases, and user journeys in one tool       | Consolidate — fewer things to run and learn    |
+| Self-hosted, open source, multi-arch (Pi → cloud)         | Your data on your hardware, runs anywhere                     | Ownership and control, no lock-in              |
+| TimescaleDB history + status pages + Prometheus export    | Fast queries, public status, fits your stack                  | Polished *and* plugs into what you already use |
 
----
+______________________________________________________________________
 
 ## 3. Website page copy
 
@@ -60,11 +53,11 @@ Reuse these rows as sections or feature cards.
 
 LuxSwirl is a self-hosted, multi-agent platform for uptime and infrastructure monitoring. Deploy lightweight agents across your regions, clouds, and private networks, and watch everything from one real-time dashboard. Open source, AGPLv3.
 
-`[ Quick start ]`  `[ View on GitHub ]`  `[ Read the docs ]`
+`[ Quick start ]` `[ View on GitHub ]` `[ Read the docs ]`
 
 *Runs anywhere from a Raspberry Pi to a cloud VM. Your data never leaves your hardware.*
 
----
+______________________________________________________________________
 
 ### Section 1 — See your stack from everywhere
 
@@ -76,7 +69,7 @@ Your services don't live in one place — they span regions, cloud accounts, and
 - **Reach private networks** a central monitor can't see.
 - **Resilient coverage** — lose an agent, keep monitoring everything else.
 
----
+______________________________________________________________________
 
 ### Section 2 — Check everything, in one tool
 
@@ -89,7 +82,7 @@ Every LuxSwirl agent speaks the full range of checks, so you don't need a differ
 - **Databases:** MySQL and PostgreSQL query checks.
 - **Real user journeys:** scripted browser flows with Playwright (admin-only).
 
----
+______________________________________________________________________
 
 ### Section 3 — Own your data
 
@@ -101,7 +94,7 @@ LuxSwirl runs on your hardware, not someone else's cloud. Every result, every cr
 - **Open source (AGPLv3):** inspect it, extend it, trust it.
 - **Multi-arch (amd64 + arm64):** the same image, edge to cloud.
 
----
+______________________________________________________________________
 
 ### Section 4 — Built in, not bolted on
 
@@ -114,19 +107,19 @@ LuxSwirl ships the parts that usually take months to add. Results stream into Ti
 - **Prometheus export:** one endpoint into your existing observability.
 - **Secure by default:** role-based access, encrypted credentials, SSRF/CSRF protection, and rate limiting — with a documented security model.
 
----
+______________________________________________________________________
 
 ### How it works
 
 ## Three moving parts. One clear picture.
 
 1. **Agents run your checks.** Deploy them anywhere; each runs on its own schedule and buffers results locally if the server is unreachable.
-2. **The server aggregates.** Results land in TimescaleDB, ready for queries, alerts, and rollups.
-3. **You see and act.** A real-time dashboard, multi-channel alerts, and status pages keep everyone informed.
+1. **The server aggregates.** Results land in TimescaleDB, ready for queries, alerts, and rollups.
+1. **You see and act.** A real-time dashboard, multi-channel alerts, and status pages keep everyone informed.
 
 *(Place the agent → server → dashboard diagram here — adapt the ASCII one from the README.)*
 
----
+______________________________________________________________________
 
 ### Where LuxSwirl fits
 
@@ -134,7 +127,7 @@ LuxSwirl ships the parts that usually take months to add. Results stream into Ti
 
 LuxSwirl is built for teams who want to own their monitoring. The server is a single point of failure — there's no automatic failover, so if it's down, real-time alerting pauses. Agents buffer their results and replay them when it recovers, so your history stays complete. For mission-critical paging, run LuxSwirl alongside a dedicated alerting service and monitor the server itself with an external check. We'd rather say so up front.
 
----
+______________________________________________________________________
 
 ### Footer CTA
 
@@ -142,7 +135,7 @@ LuxSwirl is built for teams who want to own their monitoring. The server is a si
 
 Clone the repo, start the stack, point an agent at your services.
 
-`[ Quick start ]`  `[ GitHub ]`  `[ Docs ]`
+`[ Quick start ]` `[ GitHub ]` `[ Docs ]`
 
 ```
 docker pull ghcr.io/luxardolabs/luxswirl-backend:1.0.21

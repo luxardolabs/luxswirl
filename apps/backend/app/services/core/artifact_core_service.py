@@ -70,7 +70,7 @@ class ArtifactCoreService:
             return artifact
 
         except Exception:
-            logger.error("Failed to create artifact", exc_info=True)
+            logger.exception("Failed to create artifact")
             # Re-raise so caller can handle
             raise
 

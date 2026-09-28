@@ -64,13 +64,17 @@ def validate_server_url(url: str) -> None:
 
         # External HTTP - check for explicit override
         if os.getenv("LUXSWIRL_ALLOW_INSECURE_HTTP") == "true":
+            rule = "=" * 70
             logger.warning(
-                "\n" + "=" * 70 + "\n"
+                "\n%s\n"
                 "⚠️  SECURITY WARNING: INSECURE HTTP ENABLED ⚠️\n"
-                f"Connecting to external server via HTTP: {url}\n"
+                "Connecting to external server via HTTP: %s\n"
                 "Credentials will be transmitted in CLEARTEXT!\n"
                 "This is UNSAFE for production. Use HTTPS.\n"
-                "=" * 70 + "\n"
+                "%s\n",
+                rule,
+                url,
+                rule,
             )
             return
 
@@ -117,10 +121,7 @@ def _is_internal_destination(hostname: str) -> bool:
         return True
 
     # Check if it's a private IP address
-    if _is_private_ip(hostname):
-        return True
-
-    return False
+    return _is_private_ip(hostname)
 
 
 def _is_private_ip(hostname: str) -> bool:
@@ -161,10 +162,7 @@ def _is_private_ip(hostname: str) -> bool:
             return True
 
         # 192.168.0.0/16
-        if octets[0] == 192 and octets[1] == 168:
-            return True
-
-        return False
+        return octets[0] == 192 and octets[1] == 168
 
     except ValueError, IndexError:
         # Not a valid IP address

@@ -99,7 +99,7 @@ async def edit_form(
             request, "partials/panels/checks/check_form_panel.html", context
         )
     except CheckNotFoundException as e:
-        logger.error("Check not found", exc_info=True)
+        logger.exception("Check not found")
         return error_partial(request, current_user, str(e), 404)
 
 
@@ -123,7 +123,7 @@ async def clone_form(
             request, "partials/panels/checks/check_form_panel.html", context
         )
     except CheckNotFoundException as e:
-        logger.error("Check not found", exc_info=True)
+        logger.exception("Check not found")
         return error_partial(request, current_user, str(e), 404)
 
 

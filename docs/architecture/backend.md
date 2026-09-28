@@ -21,15 +21,15 @@ Web UI:    web/routers/*_router.py     →  services/views/*_view_service.py →
 
 ## File naming (enforced)
 
-| Layer            | Path pattern                                    |
-|------------------|-------------------------------------------------|
-| ORM model        | `app/models/{name}_model.py`                    |
-| Pydantic schema  | `app/schemas/{name}_schema.py`                  |
-| CRUD             | `app/crud/{name}_crud.py`                       |
-| Core service     | `app/services/core/{name}_core_service.py`     |
-| View service     | `app/services/views/{name}_view_service.py`    |
-| JSON API router  | `app/api/v1/routers/{name}_router.py`           |
-| Web/HTMX router  | `app/web/routers/{name}_router.py`              |
+| Layer           | Path pattern                                |
+| --------------- | ------------------------------------------- |
+| ORM model       | `app/models/{name}_model.py`                |
+| Pydantic schema | `app/schemas/{name}_schema.py`              |
+| CRUD            | `app/crud/{name}_crud.py`                   |
+| Core service    | `app/services/core/{name}_core_service.py`  |
+| View service    | `app/services/views/{name}_view_service.py` |
+| JSON API router | `app/api/v1/routers/{name}_router.py`       |
+| Web/HTMX router | `app/web/routers/{name}_router.py`          |
 
 Files starting with `_` (e.g. `_dashboard_render.py`) are **shared helpers** and are exempt from the naming rule. Use them only when the helper is genuinely consumed by multiple services. Single-consumer "helpers" should be inlined into their consumer.
 
@@ -39,18 +39,18 @@ Files starting with `_` (e.g. `_dashboard_render.py`) are **shared helpers** and
 
 ## Where business logic vs. HTTP plumbing lives
 
-| Concern                                              | Layer            |
-|------------------------------------------------------|------------------|
-| Token verification, dependency injection             | Router (HTTP)    |
-| Form/query parameter unpacking                       | Router (HTTP)    |
-| Pagination math (`total_pages`, `has_prev`)          | View service     |
-| Default page-size fallback from settings             | View service     |
-| Template context dict assembly                       | View service     |
-| Aggregating multiple core service calls for a page   | View service     |
-| Permission/state-machine business rules              | Core service     |
-| Multi-table writes / transactions / commits          | Core service     |
-| Raw SQL, `select()`, `update()`, `delete()`, `text()` | CRUD             |
-| Hypertable DDL (`add_retention_policy`, etc.)        | CRUD             |
+| Concern                                               | Layer         |
+| ----------------------------------------------------- | ------------- |
+| Token verification, dependency injection              | Router (HTTP) |
+| Form/query parameter unpacking                        | Router (HTTP) |
+| Pagination math (`total_pages`, `has_prev`)           | View service  |
+| Default page-size fallback from settings              | View service  |
+| Template context dict assembly                        | View service  |
+| Aggregating multiple core service calls for a page    | View service  |
+| Permission/state-machine business rules               | Core service  |
+| Multi-table writes / transactions / commits           | Core service  |
+| Raw SQL, `select()`, `update()`, `delete()`, `text()` | CRUD          |
+| Hypertable DDL (`add_retention_policy`, etc.)         | CRUD          |
 
 ## Running the architecture checks
 
@@ -68,11 +68,11 @@ Run `make arch` (or `make check`, which is lint + test) after every multi-file r
 ## Adding a new feature: where does it go?
 
 1. New table → `models/{X}_model.py` (single class, ORM only)
-2. Wire data access → `crud/{X}_crud.py` (static methods, all `db.execute` lives here)
-3. Business logic / transactions → `services/core/{X}_core_service.py`
-4. JSON endpoint → `api/v1/routers/{X}_router.py` calling the core service
-5. UI page → view service `services/views/{X}_view_service.py` building a context dict, plus `web/routers/{X}_router.py` rendering a Jinja template with that context
-6. Pydantic schemas for request/response → `schemas/{X}_schema.py`
+1. Wire data access → `crud/{X}_crud.py` (static methods, all `db.execute` lives here)
+1. Business logic / transactions → `services/core/{X}_core_service.py`
+1. JSON endpoint → `api/v1/routers/{X}_router.py` calling the core service
+1. UI page → view service `services/views/{X}_view_service.py` building a context dict, plus `web/routers/{X}_router.py` rendering a Jinja template with that context
+1. Pydantic schemas for request/response → `schemas/{X}_schema.py`
 
 If steps 4 and 5 both exist, the **router can never reach below the immediately-next layer**. Web router calls view service; view service calls core service; core service calls CRUD. Skipping a layer is a contract violation and import-linter will fail the build.
 

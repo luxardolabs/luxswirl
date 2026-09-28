@@ -235,70 +235,68 @@ class HTTPCheck(BaseCheck):
             context.verify_mode = ssl.CERT_NONE  # Don't verify for info gathering
 
             # Connect and get certificate
-            with socket.create_connection((hostname, port), timeout=timeout) as sock:
-                with context.wrap_socket(sock, server_hostname=hostname) as ssock:
-                    # Get cert in binary form (works even with CERT_NONE)
-                    der_cert = ssock.getpeercert(binary_form=True)
+            with (
+                socket.create_connection((hostname, port), timeout=timeout) as sock,
+                context.wrap_socket(sock, server_hostname=hostname) as ssock,
+            ):
+                # Get cert in binary form (works even with CERT_NONE)
+                der_cert = ssock.getpeercert(binary_form=True)
 
-                    if not der_cert:
-                        return None
+                if not der_cert:
+                    return None
 
-                    # Parse the DER certificate using cryptography library
-                    # Suppress warning about NULL parameters in signature (common with IPMI/BMC certs)
-                    with warnings.catch_warnings():
-                        warnings.filterwarnings(
-                            "ignore", category=CryptographyDeprecationWarning
-                        )
-                        cert = x509.load_der_x509_certificate(
-                            der_cert, default_backend()
-                        )
+                # Parse the DER certificate using cryptography library
+                # Suppress warning about NULL parameters in signature (common with IPMI/BMC certs)
+                with warnings.catch_warnings():
+                    warnings.filterwarnings(
+                        "ignore", category=CryptographyDeprecationWarning
+                    )
+                    cert = x509.load_der_x509_certificate(der_cert, default_backend())
 
-                    # Extract expiration dates (use UTC versions)
-                    not_after = cert.not_valid_after_utc
-                    not_before = cert.not_valid_before_utc
+                # Extract expiration dates (use UTC versions)
+                not_after = cert.not_valid_after_utc
+                not_before = cert.not_valid_before_utc
 
-                    # Format dates to match expected format (e.g., "Nov 10 22:56:57 2025 GMT")
-                    expiration_date = not_after.strftime("%b %d %H:%M:%S %Y GMT")
-                    valid_from = not_before.strftime("%b %d %H:%M:%S %Y GMT")
+                # Format dates to match expected format (e.g., "Nov 10 22:56:57 2025 GMT")
+                expiration_date = not_after.strftime("%b %d %H:%M:%S %Y GMT")
+                valid_from = not_before.strftime("%b %d %H:%M:%S %Y GMT")
 
-                    # Extract subject Common Name
-                    subject_cn = hostname
+                # Extract subject Common Name
+                subject_cn = hostname
+                try:
+                    cn_value = cert.subject.get_attributes_for_oid(
+                        x509.NameOID.COMMON_NAME
+                    )[0].value
+                    subject_cn = str(cn_value) if cn_value is not None else hostname
+                except IndexError, AttributeError:
+                    pass
+
+                # Extract issuer Organization or Common Name
+                issuer_name = "Unknown"
+                try:
+                    # Try Organization first
+                    org_value = cert.issuer.get_attributes_for_oid(
+                        x509.NameOID.ORGANIZATION_NAME
+                    )[0].value
+                    issuer_name = str(org_value) if org_value is not None else "Unknown"
+                except IndexError, AttributeError:
                     try:
-                        cn_value = cert.subject.get_attributes_for_oid(
+                        # Fall back to Common Name
+                        cn_value = cert.issuer.get_attributes_for_oid(
                             x509.NameOID.COMMON_NAME
                         )[0].value
-                        subject_cn = str(cn_value) if cn_value is not None else hostname
+                        issuer_name = (
+                            str(cn_value) if cn_value is not None else "Unknown"
+                        )
                     except IndexError, AttributeError:
                         pass
 
-                    # Extract issuer Organization or Common Name
-                    issuer_name = "Unknown"
-                    try:
-                        # Try Organization first
-                        org_value = cert.issuer.get_attributes_for_oid(
-                            x509.NameOID.ORGANIZATION_NAME
-                        )[0].value
-                        issuer_name = (
-                            str(org_value) if org_value is not None else "Unknown"
-                        )
-                    except IndexError, AttributeError:
-                        try:
-                            # Fall back to Common Name
-                            cn_value = cert.issuer.get_attributes_for_oid(
-                                x509.NameOID.COMMON_NAME
-                            )[0].value
-                            issuer_name = (
-                                str(cn_value) if cn_value is not None else "Unknown"
-                            )
-                        except IndexError, AttributeError:
-                            pass
-
-                    return {
-                        "expiration_date": expiration_date,
-                        "valid_from": valid_from,
-                        "issuer": issuer_name,
-                        "subject": subject_cn,
-                    }
+                return {
+                    "expiration_date": expiration_date,
+                    "valid_from": valid_from,
+                    "issuer": issuer_name,
+                    "subject": subject_cn,
+                }
 
         # swallowed-exceptions: certificate details are enrichment — the HTTP result stands without them
         except Exception:
