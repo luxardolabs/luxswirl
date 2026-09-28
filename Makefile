@@ -12,14 +12,35 @@ VERSION   := $(shell cat VERSION 2>/dev/null || git -c safe.directory=$(CURDIR) 
 TIMESTAMP := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 COMMIT    := $(shell git -c safe.directory=$(CURDIR) rev-parse --short HEAD 2>/dev/null || echo 'local')
 
-# Registry / images. Public images live at ghcr.io/luxardolabs/luxswirl-{backend,agent}
-# (the org is part of *_NAME below). Override REGISTRY (env var or
-# `make <target> REGISTRY=...`) to push to a different registry.
+# ── Images: the NAME declares what the image IS ──────────────────────────────
+# Two axes, both readable from the name alone (repo.image_name_declares_provenance;
+# see `luxarch --doc FLEET-BUILD-DEPLOY-STANDARD`):
+#
+#   Registry-qualified  ->  DEPLOY artifact  ->  built AND pushed
+#   Bare (no registry)  ->  LOCAL artifact   ->  built from source, NEVER pushed
+#
+#   Immutable tag (:$(VERSION), :sha-…)  ->  a stack MAY pin it
+#   Moving tag (:dev, :latest)           ->  a human alias; nothing pins it
+#
+# This repo publishes to a PUBLIC registry, so a local build must not wear a
+# registry name: `$(REGISTRY)/…:dev` promised a ghcr artifact that was never
+# pushed, and a `docker image prune` would have taken the dev stack down with
+# nothing to re-pull. Local builds are bare, and they carry the commit sha so a
+# stack pins something that cannot change under it.
 REGISTRY        ?= ghcr.io
 BACKEND_NAME    := luxardolabs/luxswirl-backend
 AGENT_NAME      := luxardolabs/luxswirl-agent
+# DEPLOY names — only build-backend/build-agent produce these, and both --push.
 BACKEND_IMAGE   := $(REGISTRY)/$(BACKEND_NAME)
 AGENT_IMAGE     := $(REGISTRY)/$(AGENT_NAME)
+# LOCAL names — bare, so they cannot be pushed by accident or mistaken for a
+# deployable. `$(notdir …)` strips the org: luxswirl-backend / luxswirl-agent.
+BACKEND_LOCAL   := $(notdir $(BACKEND_NAME))
+AGENT_LOCAL     := $(notdir $(AGENT_NAME))
+# The immutable tag every local build wears. The sha is already computed above
+# for BUILD_COMMIT, so this costs nothing and buys a deployment record: you can
+# always say which bits a stack is running, and roll back to them.
+SHA_TAG         := sha-$(COMMIT)
 
 # Architecture guard (luxarch) — internal tooling on a private registry (not on ghcr,
 # not part of this repo's public surface). Supply the registry host out-of-tree via
@@ -141,15 +162,15 @@ version: ## Show version / build info
 
 ##@ Docker — Build & Registry
 
-backend-image: ## Build backend image as :$(VERSION) (no push)
+backend-image: ## Build the backend LOCALLY as $(BACKEND_LOCAL):$(VERSION) (bare name — never pushed)
 	docker build $(NO_CACHE_FLAG) -f apps/backend/Dockerfile $(BUILD_ARGS) \
-		-t $(BACKEND_IMAGE):$(VERSION) .
+		-t $(BACKEND_LOCAL):$(VERSION) .
 
-agent-image: ## Build agent image as :$(VERSION) (no push)
+agent-image: ## Build the agent LOCALLY as $(AGENT_LOCAL):$(VERSION) (bare name — never pushed)
 	docker build $(NO_CACHE_FLAG) -f apps/agent/Dockerfile $(BUILD_ARGS) \
-		-t $(AGENT_IMAGE):$(VERSION) .
+		-t $(AGENT_LOCAL):$(VERSION) .
 
-build: backend-image agent-image ## Build both images as :$(VERSION) (no push)
+build: backend-image agent-image ## Build both LOCALLY as :$(VERSION) (bare names, no push)
 
 # luxarch:buildx-setup asset v1 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit buildx-setup`.
 BUILDX_BUILDER ?= luxardo-builder
@@ -175,9 +196,61 @@ build-agent: buildx-setup ## Build + push agent :$(VERSION) AND :latest (multi-a
 	docker buildx build $(NO_CACHE_FLAG) --platform $(PLATFORMS) -f apps/agent/Dockerfile $(BUILD_ARGS) \
 		-t $(AGENT_IMAGE):$(VERSION) -t $(AGENT_IMAGE):latest --push .
 
-build-dev: ## Build both images locally tagged :dev (for the dev stack)
-	docker build $(NO_CACHE_FLAG) -f apps/backend/Dockerfile $(BUILD_ARGS) -t $(BACKEND_IMAGE):dev .
-	docker build $(NO_CACHE_FLAG) -f apps/agent/Dockerfile $(BUILD_ARGS) -t $(AGENT_IMAGE):dev .
+build-dev: ## Build both LOCALLY as :$(SHA_TAG) and pin .env.dev to it (bare names, no push)
+	docker build $(NO_CACHE_FLAG) -f apps/backend/Dockerfile $(BUILD_ARGS) -t $(BACKEND_LOCAL):$(SHA_TAG) .
+	docker build $(NO_CACHE_FLAG) -f apps/agent/Dockerfile $(BUILD_ARGS) -t $(AGENT_LOCAL):$(SHA_TAG) .
+	@$(MAKE) --no-print-directory dev-pin TAG=$(SHA_TAG)
+
+# An immutable tag moves a burden: a NEW tag per build has to actually REACH the
+# stack. Without this, `build-dev` would leave the operator to hand-edit a
+# gitignored file — advice beside a working button, and how a node ends up
+# serving last week's build while everyone believes otherwise.
+#
+# Exactly ONE line of .env.<env> is rewritten in place; nothing else is read,
+# printed or reordered, because the file holds secrets. The tag is PERSISTED
+# rather than passed in the deploying shell, because the stack has to come back
+# after a reboot — compose reads ${TAG:?}, so a tag that lived only in one shell
+# leaves a plain `docker compose up` on that node unable to start at all.
+# Generalised from the canonical `pin_env_tag` to take a KEY, because which
+# images a LOCAL stack runs is a build-system fact, not an operator preference:
+# dev and sandbox run the bare names this Makefile builds, and leaving that to a
+# hand-edit is how a stack ends up silently pulling ghcr instead.
+define pin_env_kv
+	f='$(1)'; k='$(2)'; v='$(3)'; \
+	[ -f "$$f" ] || { echo "$$f is missing — copy .env.example and fill it in first"; exit 1; }; \
+	tmp=$$(mktemp); trap 'rm -f "$$tmp"' EXIT; \
+	if grep -qE "^[[:space:]]*$$k=" "$$f"; then \
+	  awk -v k="$$k" -v v="$$v" '$$0 ~ "^[[:space:]]*"k"=" && !d {print k "=" v; d=1; next} {print}' "$$f" > "$$tmp"; \
+	else \
+	  cp "$$f" "$$tmp" && printf '%s=%s\n' "$$k" "$$v" >> "$$tmp"; \
+	fi; \
+	[ -s "$$tmp" ] || { echo "refusing to write an empty $$f"; exit 1; }; \
+	o=$$(wc -l < "$$f"); n=$$(wc -l < "$$tmp"); \
+	[ "$$n" -ge "$$o" ] || { echo "refusing: rewriting $$f lost lines ($$o -> $$n)"; exit 1; }; \
+	cat "$$tmp" > "$$f"; \
+	echo "$$f: $$k=$$v"
+endef
+
+# Point one local stack's env file at a built image set. Exactly three lines are
+# rewritten in place; nothing else in the file is read, printed or reordered,
+# because it holds secrets.
+define pin_local_stack
+	$(call pin_env_kv,$(1),SERVER_IMAGE,$(BACKEND_LOCAL)); \
+	$(call pin_env_kv,$(1),AGENT_IMAGE,$(AGENT_LOCAL)); \
+	$(call pin_env_kv,$(1),TAG,$(2))
+endef
+
+TAG ?= $(SHA_TAG)
+
+dev-pin: ## Point .env.dev at an ALREADY-BUILT local tag (TAG=sha-… ; the rollback path)
+	@docker image inspect $(BACKEND_LOCAL):$(TAG) >/dev/null 2>&1 || \
+	  { echo "$(BACKEND_LOCAL):$(TAG) is not on this host — build it before pinning a stack to it"; exit 1; }
+	@docker image inspect $(AGENT_LOCAL):$(TAG) >/dev/null 2>&1 || \
+	  { echo "$(AGENT_LOCAL):$(TAG) is not on this host — build it before pinning a stack to it"; exit 1; }
+	@$(call pin_local_stack,.env.dev,$(TAG))
+
+sandbox-pin: ## Point .env.sandbox at an ALREADY-BUILT local tag (TAG=sha-…)
+	@$(call pin_local_stack,.env.sandbox,$(TAG))
 
 push: build-backend build-agent ## Build + push both images (:$(VERSION) + :latest)
 
@@ -245,7 +318,8 @@ prod-logs: ## Follow production logs
 ##@ Sandbox stack (disposable, fully isolated — for testing a new version; leaves dev alone)
 
 sandbox: sandbox-up ## Alias for sandbox-up
-sandbox-up: build-dev ## Build :dev images from current source, then start the isolated sandbox
+sandbox-up: build-dev ## Build the local images from current source, then start the isolated sandbox
+	@$(MAKE) --no-print-directory sandbox-pin TAG=$(SHA_TAG)
 	@mkdir -p data/sandbox/server data/sandbox/agent
 	$(DC_SBX) up -d
 	@echo "LuxSwirl $(VERSION) [sandbox] — login at https://localhost:9001 (dev untouched, db on :5433)"
@@ -493,9 +567,9 @@ gitleaks-staged: ## secret scan of the STAGED diff only — what hooks/pre-commi
 
 check: guard-version-check honest lint mypy test db-verify arch audit gitleaks ## THE fleet gate — run before every commit
 
-docker-clean: ## Remove locally built image tags (backend/agent :dev/:$(VERSION) + lint)
-	-docker rmi $(BACKEND_IMAGE):dev $(AGENT_IMAGE):dev \
-		$(BACKEND_IMAGE):$(VERSION) $(AGENT_IMAGE):$(VERSION) \
+docker-clean: ## Remove the locally built image tags (bare backend/agent + lint)
+	-docker rmi $(BACKEND_LOCAL):$(SHA_TAG) $(AGENT_LOCAL):$(SHA_TAG) \
+		$(BACKEND_LOCAL):$(VERSION) $(AGENT_LOCAL):$(VERSION) \
 		$(BACKEND_LINT) $(AGENT_LINT) 2>/dev/null || true
 
 # =============================================================================

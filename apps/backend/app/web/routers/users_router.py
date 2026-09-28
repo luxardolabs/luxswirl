@@ -13,7 +13,9 @@ from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth_deps import AdminUser
+from app.core.config import settings
 from app.core.query_params import ActiveFilter, PerPageFilter
+from app.core.rate_limit import limiter
 from app.db import get_db
 from app.services.views.web_users_view_service import WebUsersViewService
 from app.web.hx_responses import hx_empty_with_toast, hx_toast_without_swap
@@ -272,6 +274,7 @@ async def delete_user(
     include_in_schema=False,
     name="web_reset_user_password",
 )
+@limiter.limit(settings.security.password_reset_rate_limit)
 async def reset_user_password(
     request: Request,
     user_id: UUID,

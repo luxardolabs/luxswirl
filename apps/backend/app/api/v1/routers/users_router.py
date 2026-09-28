@@ -5,12 +5,14 @@ Users Router - API endpoints for user management (admin only).
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth_deps import AdminUser
+from app.core.config import settings
 from app.core.query_params import ActiveFilter
+from app.core.rate_limit import limiter
 from app.db import get_db
 from app.schemas.base_schema import MessageResponse
 from app.schemas.user_schema import (
@@ -270,7 +272,12 @@ async def delete_user(
     status_code=status.HTTP_200_OK,
     response_model=MessageResponse,
 )
+@limiter.limit(settings.security.password_reset_rate_limit)
 async def reset_user_password(
+    # `request` is here for the limiter: slowapi's key function reads the
+    # trusted-proxy-aware client IP off it, and the decorator requires the
+    # parameter by name.
+    request: Request,
     user_id: UUID,
     password_data: UserPasswordReset,
     admin: AdminUser,

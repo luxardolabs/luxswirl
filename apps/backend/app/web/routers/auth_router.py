@@ -230,6 +230,10 @@ async def change_password_page(
 
 
 @router.post("/change-password", response_class=HTMLResponse, include_in_schema=False)
+# Same limit as /login, because it does the same thing: it verifies
+# `current_password`. Unlimited attempts here is unlimited guessing of a
+# logged-in user's password, from one address.
+@limiter.limit(settings.security.login_rate_limit)
 async def change_password_submit(
     request: Request,
     current_password: Annotated[str, Form()],
