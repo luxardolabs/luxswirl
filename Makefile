@@ -26,7 +26,7 @@ AGENT_IMAGE     := $(REGISTRY)/$(AGENT_NAME)
 # Makefile.local (gitignored): copy Makefile.local.example -> Makefile.local and set it.
 # Contributors don't need it — lint/test and the import-linter contracts run without it.
 LUXARCH_REGISTRY ?=
-LUXARCH_VERSION := 0.193.0
+LUXARCH_VERSION := 0.214.0
 LUXARCH_IMAGE    ?= $(LUXARCH_REGISTRY)/luxardolabs/luxarch:$(LUXARCH_VERSION)
 # Dependency-CVE guard (luxaudit) — same private registry as luxarch, mount-only.
 # Scans the pinned poetry.locks against the live advisory feed (see .luxaudit.toml).
@@ -46,7 +46,6 @@ PLATFORMS       ?= linux/amd64,linux/arm64
 # ONE shared fleet builder — never a per-project `<repo>-builder`. Ten per-project builders = ten
 # un-shared caches (no base-layer/pip/npm dedup) = tens of GB idle; the shared builder dedups and
 # cross-project cache-hits speed builds. Enforced by repo.shared_buildx_builder; see FLEET-BUILD-DEPLOY-STANDARD.
-BUILDX_BUILDER  ?= luxardo-builder
 
 # Build args baked into both images (exposed as ENV + LABEL at runtime).
 BUILD_ARGS := --build-arg BUILD_VERSION=$(VERSION) \
@@ -152,17 +151,17 @@ agent-image: ## Build agent image as :$(VERSION) (no push)
 
 build: backend-image agent-image ## Build both images as :$(VERSION) (no push)
 
-buildx-setup: ## Ensure the ONE shared multi-arch buildx builder exists, and REFUSE strays
-	@mkdir -p $(HOME)/.docker
-	@[ -f $(HOME)/.docker/buildkitd.toml ] || printf '[worker.oci]\n  gc = true\n  [[worker.oci.gcpolicy]]\n    keepBytes = "20GB"\n    all = true\n' > $(HOME)/.docker/buildkitd.toml
-	@docker buildx inspect $(BUILDX_BUILDER) >/dev/null 2>&1 || docker buildx create --name $(BUILDX_BUILDER) --driver docker-container --buildkitd-config $(HOME)/.docker/buildkitd.toml --bootstrap --use
+# luxarch:buildx-setup asset v1 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit buildx-setup`.
+BUILDX_BUILDER ?= luxardo-builder
+buildx-setup:
+	@docker buildx inspect $(BUILDX_BUILDER) >/dev/null 2>&1 || \
+	  docker buildx create --name $(BUILDX_BUILDER) --driver docker-container \
+	    --buildkitd-config $(HOME)/.docker/buildkitd.toml --use
 	@docker buildx use $(BUILDX_BUILDER)
 	@strays=$$(docker buildx ls 2>/dev/null | awk '$$2=="docker-container"{print $$1}' \
 	  | grep -v '^\\_' | sed 's/\*$$//' | grep -vxF "$(BUILDX_BUILDER)" | tr '\n' ' '); \
 	if [ -n "$$strays" ] && [ -z "$(ALLOW_STRAY_BUILDERS)" ]; then \
 	  echo "REFUSING: stray per-project buildx builders are running: $$strays"; \
-	  echo "Each keeps its OWN cache with no GC policy. Four orphans reached 100GB"; \
-	  echo "on the fleet build host and killed a production Postgres."; \
 	  echo "Remove them:  docker buildx rm $$strays"; \
 	  exit 1; \
 	fi

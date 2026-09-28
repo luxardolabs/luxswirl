@@ -1,3 +1,5 @@
+<!-- luxarch:release-notes-guide asset v1 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit release-notes-guide`. -->
+
 # Release Notes Writing Guide
 
 Canonical fleet guide — emitted by `luxarch --emit release-notes-guide`. Drop it in at `<app>/release_notes/writing-guide.md`. This is the **user-facing** release notes — the people who actually use the app. NOT the dev team. For the internal, technical change log see `<app>/change_logs/` (`luxarch --emit changelog-guide`).
@@ -75,6 +77,15 @@ Every line gets a badge after the bold title naming the **surface** it ships on.
 1. `app/templates/web/pages/releases/index.html` → a `.badge-<name>` CSS rule (colour + the `::before/::after { content: "" }` reset that strips the code-span backticks).
 
 To add a surface, update BOTH places — not just this note.
+
+### Headless repos (a collector/poller with NO web UI)
+
+A headless repo has no `templates.py` and no releases page, so there is **no badge registry to register against** — and that is fine. The two-place wiring above is a **web-app** requirement (it exists because a web app *renders* these notes and needs the badge styled). A headless repo's `release_notes/{version}.md` is a plain Markdown file nobody renders through that transform, so:
+
+- Use plain-text **operator-surface** labels for the surfaces an operator actually experiences — e.g. `` `Collector` ``, `` `Dashboards` `` — and say in the file that these are the repo's surfaces. There is **no** code registration to do; do not invent a `templates.py`/CSS entry a headless repo doesn't have.
+- **Do not back-tick a non-surface token.** A backticked word (`` `GRAFANA_PORT` ``, a config var, a metric name) reads as a badge to the web transform — on a repo that later grows a UI, or to a human skimming, it becomes a bogus badge. Leave config values, ports, and identifiers un-backticked (or in prose), and reserve backticks for the surface labels.
+
+(A collector still writes both documents per FLEET-RELEASE-PROCESS — the change log and these notes; the badge machinery is the only web-only part, and this is how it degrades for headless.)
 
 ## Per-repo parameters
 

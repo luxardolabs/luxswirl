@@ -1,4 +1,5 @@
-# luxarch:migration-chain verifier v2 — DO NOT edit the marker line above (repo.migrations_build_schema finds it).
+# luxarch:migration-chain asset v1 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit migration-chain`.
+# luxarch:migration-chain verifier v3 — DO NOT edit the marker line above (repo.migrations_build_schema finds it).
 #
 # WHY THIS FILE EXISTS
 # The other emitted asserter, `--emit schema-drift`, compares your models to a LIVE database and fails
@@ -44,7 +45,7 @@ from typing import Any
 # reads as a false "remove_table" — the exact trap that nearly shipped a baseline missing three tables.
 METADATA_IMPORT = "app.models:Base"
 # The env var that holds the throwaway (freshly migrated) DB URL. Sync and async drivers both work.
-DB_URL_ENV = "DATABASE__URL"
+DB_URL_ENV = "DATABASE_URL"
 # -----------------------------------------------------------------------------------------------------
 
 
@@ -59,7 +60,9 @@ def _load(path: str) -> object:
 
 
 def _metadata(obj: object) -> object:
-    return getattr(obj, "metadata", obj)  # a declarative Base has .metadata; a MetaData is itself
+    return getattr(
+        obj, "metadata", obj
+    )  # a declarative Base has .metadata; a MetaData is itself
 
 
 def _op_name(diff: object) -> str:
@@ -90,7 +93,8 @@ def _diff(url: str, metadata: object) -> list[Any]:
             engine = create_async_engine(url)
             try:
                 async with engine.connect() as conn:
-                    return await conn.run_sync(lambda c: _compare_sync(c, metadata))
+                    diffs = await conn.run_sync(lambda c: _compare_sync(c, metadata))
+                    return list(diffs)
             finally:
                 await engine.dispose()
 
@@ -109,10 +113,14 @@ def _diff(url: str, metadata: object) -> list[Any]:
 def main() -> int:
     metadata = _metadata(_load(METADATA_IMPORT))
     url = os.environ[DB_URL_ENV]
-    diffs = [d for d in _diff(url, metadata) if not _op_name(d).startswith("modify_comment")]
+    diffs = [
+        d for d in _diff(url, metadata) if not _op_name(d).startswith("modify_comment")
+    ]
     tables = len(getattr(metadata, "tables", {}))
     print(f"tables in metadata: {tables}")
-    print(f"structural diff after `alembic upgrade head` from empty: {len(diffs)} op(s)")
+    print(
+        f"structural diff after `alembic upgrade head` from empty: {len(diffs)} op(s)"
+    )
     if diffs:
         print("\nThe migrated schema does NOT match the models:")
         for d in diffs:
@@ -123,7 +131,9 @@ def main() -> int:
             "NOT 'fix' this by editing the models to match a schema the chain cannot produce."
         )
         return 1
-    print(f"✓ migrations build exactly what the models describe ({tables} tables, 0 drift)")
+    print(
+        f"✓ migrations build exactly what the models describe ({tables} tables, 0 drift)"
+    )
     return 0
 
 

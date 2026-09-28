@@ -62,7 +62,7 @@ def pytest_configure(config):
 # fails the session on any registered route nothing reached.
 # ═══════════════════════════════════════════════════════════════════════════
 
-# luxarch:route-smoke asserter v12 — DO NOT edit the marker line above (fw.route_smoke_wired finds it).
+# luxarch:route-smoke asserter v16 — DO NOT edit the marker line above (fw.route_smoke_wired finds it).
 #
 # WHY THIS FILE EXISTS
 # A dependency deprecates an API; your code keeps working (warning only); a later pin makes it RAISE;
@@ -111,11 +111,44 @@ EXPECT_5XX: frozenset[str] = frozenset(
     }
 )
 
+# --- EDIT THIS: GET routes that ALWAYS redirect by design, and that the suite therefore only ever
+# sees as a 3xx. Each needs a why. Ships EMPTY. LUXMOMENTU-76: a suite logged its session-scoped
+# client out in one test file, and because `test_route_smoke.py` sorts after it, ALL 46 authenticated
+# routes were requested logged out. Each returned 307 to the login page, each satisfied
+# `status_code < 500`, and the suite proved the login redirect worked and nothing else. A genuine 500
+# — a template reading a context key the handler never set — passed 417 tests.
+#
+# The bar was "the route RAN", and an auth bounce means the HANDLER never ran: only the middleware
+# did. So a GET route the suite never saw produce a non-3xx has not been covered, whatever `_HIT`
+# says. Scoped to GET because a POST/PUT/DELETE that always redirects is post-redirect-get and
+# correct — excluding those by STRUCTURE rather than by allowlist is what keeps this list short.
+#
+# Note the shape of the escape: the LUXMOMENTU case would have needed 46 entries here. One line is a
+# considered exception; forty-six is a confession.
+EXPECT_3XX: frozenset[str] = frozenset(
+    {
+        # "/logout",       # redirects to login by design; the POST path asserts the cookie is cleared
+        # "/",             # permanent redirect to /dashboard
+    }
+)
+
 # --- EDIT THIS: routes with no meaningful test surface. Keep it short; each needs a why. ---
+# Ships EMPTY, with the common cases commented — like EXPECT_5XX above. It used to ship `/health`
+# and `/metrics` LIVE as "examples", and that is what caused LUXMOMENTU-61: a repo inherited an
+# exemption for `/metrics`, the route was never registered (`get_metrics()` had no caller, so the
+# Prometheus registry could never be scraped), and the pre-written comment — "prometheus scrape — no
+# behaviour to assert" — made an absence that nobody had reviewed read as a decision somebody had.
+# An exemption you did not write is the most expensive kind: it survives onboarding and a full
+# burn-down because it looks considered. Uncomment only what this app actually serves.
 EXEMPT: frozenset[str] = frozenset(
     {
-        "/health",  # liveness probe — no behaviour to assert
-        "/metrics",  # prometheus scrape — no behaviour to assert
+        # Both verified SERVED, not inherited: curled through real uvicorn on the
+        # built image — /health returns the status/version/environment JSON and
+        # /metrics returns 200 with the Prometheus exposition. v16 ships these
+        # commented because a repo once inherited a /metrics exemption for a
+        # route that was never registered at all.
+        "/health",  # liveness probe — the container healthcheck exercises it
+        "/metrics",  # prometheus scrape — tests/api asserts the exposition itself
         # UNREACHABLE, not untestable: /agents/{agent_name}/regenerate-key is
         # registered first and matches any single segment, so this handler has
         # never received a request. Which of the two is the contract is a
@@ -135,6 +168,13 @@ _OUTCOMES = {"passed": 0, "failed": 0, "skipped": 0}
 # 500s shipped while this asserter reported PASS. Recording status is NOT a response-SHAPE
 # assertion — a bare-HTML fragment still passes; only a 5xx fails.
 _SERVER_ERRORS: dict[int, set[int]] = {}
+# route id -> the (status, location-path) pairs the suite saw, and the set of routes that produced at
+# least one NON-redirect response. Together these answer "did the handler ever actually run?", which
+# `_HIT` cannot: a 307 from auth middleware records a hit for a handler that never executed
+# (LUXMOMENTU-76). A 4xx counts as rendered — an explicit refusal is the route answering, where a
+# silent bounce to a login page is not.
+_REDIRECTS: dict[int, set[tuple[int, str]]] = {}
+_RENDERED: set[int] = set()
 
 
 def pytest_runtest_logreport(report) -> None:  # type: ignore[no-untyped-def]
@@ -190,6 +230,19 @@ def _patch_route_class(cls, match_full) -> None:  # type: ignore[no-untyped-def]
                     status = int(message.get("status", 0))
                     if status >= 500:
                         _SERVER_ERRORS.setdefault(id(self), set()).add(status)
+                    if 300 <= status < 400:
+                        loc = ""
+                        for k, v in message.get("headers") or ():
+                            if k.lower() == b"location":
+                                loc = v.decode("latin-1", "replace")
+                                break
+                        # Query string dropped: `?next=/admin/users` differs per route and would
+                        # hide that a dozen routes all bounce to the SAME page.
+                        _REDIRECTS.setdefault(id(self), set()).add(
+                            (status, loc.split("?")[0])
+                        )
+                    else:
+                        _RENDERED.add(id(self))
             except Exception:
                 pass
             return await send(message)
@@ -247,10 +300,23 @@ def _registered_route_entries() -> list[tuple[str, str, str, int]]:
                 continue
             sub = getattr(route, "routes", None)
             kind = type(route).__name__
-            if (
-                sub is not None and kind == "Mount"
-            ):  # a Mount (sub-app) carries its prefix on `.path`
-                _walk(sub, prefix + (getattr(route, "path", "") or ""), host)
+            if kind == "Mount":  # a Mount (sub-app) carries its prefix on `.path`
+                mpath = prefix + (getattr(route, "path", "") or "")
+                # Record the mount's OWN path with a sentinel method. A Mount has no `.methods` and a
+                # bare ASGI sub-app (`app.mount("/metrics", make_asgi_app())`) has no `.routes`
+                # either, so it used to vanish from the walk entirely — invisible to BOTH halves:
+                # never reportable as uncovered, and, once v13 added the inverse check, never
+                # exemptable either, because the exemption read as stale. The one surface this
+                # asserter cannot check was also the one it refused to let you document, and the
+                # message said "describing a route that does not exist" about a route that was
+                # serving 200s (LUXTASTE-334).
+                #
+                # The sentinel keeps it out of the COVERAGE requirement — a third-party ASGI app's
+                # internals are not this asserter's business — while making it visible to the stale
+                # check.
+                entries.append((host, "MOUNT", mpath, id(route)))
+                if sub:
+                    _walk(sub, mpath, host)
                 continue
             if (
                 sub is not None and kind == "Host"
@@ -327,6 +393,31 @@ def _session_is_narrowed(session) -> bool:  # type: ignore[no-untyped-def]
         return True
     import os.path
 
+    # LUXSTATS-111: the string comparison below reported EVERY run as narrowed under the fleet's own
+    # canonical config, so route-smoke certified nothing on any repo using it — while
+    # fw.route_smoke_wired stayed green and the stand-down message read like normal operation ("run
+    # the full suite to certify", when the full suite is what ran). The reporter's probe on a real
+    # `make test`:
+    #
+    #     rootdir /   inifile /pytest.ini   testpaths ['tests']   args ['/w']   deselected 0
+    #
+    # `luxlint --emit-config pytest` ships `testpaths = tests`, and the fleet pattern mounts that
+    # file read-only and runs `pytest -c /pytest.ini` with the repo at the work dir. rootdir becomes
+    # `/`, so `testpaths` cannot resolve against it and pytest falls back to collecting from the cwd,
+    # setting args to the work dir. Collection is complete; only the comparison breaks. Two guards
+    # disagreeing about the same prescribed setup, with the asserter the one that lost.
+    #
+    # So: pytest's own fallback is not a deliberate subset.
+    root = os.path.normpath(str(getattr(session.config, "rootpath", "") or ""))
+    here = os.path.normpath(os.getcwd())
+    if len(args) == 1 and os.path.normpath(args[0]).rstrip("/") in {root, here}:
+        return False
+    # And when the ini file lives OUTSIDE the rootdir, `testpaths` was never resolvable, so comparing
+    # against it carries no information either way. The -k / -m / deselected / node-id legs above are
+    # unaffected — those were the point of LUXTASTE-307 and they are correct.
+    ini = os.path.normpath(str(getattr(session.config, "inipath", "") or ""))
+    if ini and root and not ini.startswith(root.rstrip("/") + os.sep) and ini != root:
+        return False
     norm = {os.path.normpath(a).rstrip("/") for a in args}
     return norm != {os.path.normpath(t).rstrip("/") for t in testpaths}
 
@@ -445,13 +536,107 @@ def pytest_sessionfinish(session, exitstatus) -> None:  # type: ignore[no-untype
                 "a test drives it to an error deliberately, add the path to EXPECT_5XX with a reason:"
                 "\n  " + "\n  ".join(bad) + "\nSee luxarch --playbook route-smoke."
             )
+    # Loud-fail net #5: every response a GET route gave the suite was a REDIRECT (LUXMOMENTU-76).
+    # `_HIT` records that the route MATCHED, which an auth bounce satisfies — the middleware ran and
+    # the handler did not. A reporting repo logged its session-scoped client out in one test file, and
+    # because the smoke file sorts alphabetically after it, all 46 authenticated routes were requested
+    # logged out: 46 x 307-to-login, every assertion satisfied, a real 500 sailing through 417 tests.
+    #
+    # Scoped to GET by STRUCTURE: a POST/PUT/DELETE that always redirects is post-redirect-get and
+    # correct, so excluding it needs no allowlist entry and cannot rot.
+    methods_by_rid: dict[int, set[str]] = {}
+    for _h, m, _p, rid in entries:
+        methods_by_rid.setdefault(rid, set()).add(m)
+    bounced = {
+        rid: (p_, sorted(_REDIRECTS[rid]))
+        for (_h, _m, p_, rid) in entries
+        if rid in _REDIRECTS
+        and rid not in _RENDERED
+        and "GET" in methods_by_rid.get(rid, set())
+        and p_ not in EXPECT_3XX
+        and p_ not in EXEMPT
+    }
+    if bounced:
+        # Group by target. One route redirecting is business logic; a dozen routes redirecting to the
+        # SAME page is a gate, and naming that page turns a list of failures into one diagnosis.
+        targets: dict[str, int] = {}
+        for _p, obs in bounced.values():
+            for _st, loc in obs:
+                targets[loc] = targets.get(loc, 0) + 1
+        lines = sorted(
+            f"GET  {p_}  -> "
+            + ", ".join(f"{st} -> {loc or '(no Location)'}" for st, loc in obs)
+            for p_, obs in bounced.values()
+        )
+        shared = max(targets.items(), key=lambda kv: kv[1]) if targets else ("", 0)
+        hint = ""
+        if shared[1] >= 3:
+            hint = (
+                f"\n{shared[1]} of them redirect to the SAME target ({shared[0]}). That is the shape "
+                "of an AUTHENTICATION bounce, not of business logic — the usual cause is a shared, "
+                "session-scoped client that some earlier test logged out and never signed back in. "
+                "Check whether a logout test leaves the fixture authenticated for the files that sort "
+                "after it."
+            )
+        session.exitstatus = 1
+        raise SystemExit(
+            f"luxarch route-smoke: {len(bounced)} GET route(s) NEVER returned a non-redirect to the "
+            "suite. The request was recorded, so coverage looks satisfied — but a 3xx means the "
+            "HANDLER did not run, so nothing in it was exercised and a deprecation or a broken "
+            "template inside it ships latent. Request them in a state that renders, or list a route "
+            "that redirects BY DESIGN in EXPECT_3XX with a reason:\n  "
+            + "\n  ".join(lines)
+            + hint
+            + "\nSee luxarch --playbook route-smoke."
+        )
     # Covered iff THAT route object was exercised (id match) — the two sides agree by construction. One
     # route object reached under N hostnames is ONE route to cover, so collapse on route identity (rid)
     # — else a Host()-composed app reports the same uncovered route once per host (BOUTIQUE-410 v8).
+    # The INVERSE check, and it is the more dangerous direction. Subtracting EXEMPT from the
+    # registered routes trusted the list without ever asking whether the exempted route EXISTS. A
+    # repo carried `/metrics` in EXEMPT from onboarding, commented "prometheus scrape — no behaviour
+    # to assert", and the route was never registered: `get_metrics()` had no caller and the registry
+    # could never be scraped. That survived onboarding, a full guard burn-down, and
+    # `fw.route_smoke_wired` reporting PASS throughout, and was found only by reading /metrics by
+    # hand. The exemption did not merely fail to catch the gap — it is WHY nothing looked wrong: a
+    # missing route with no exemption reads as untested or absent, while a missing route WITH one
+    # reads as a deliberate, reviewed decision (LUXMOMENTU-61).
+    #
+    # Deliberately NOT skipped on a narrowed run: a subset selection still REGISTERS every route, so
+    # unlike `missing` this count is meaningful even from one test.
+    # Mounts included on purpose: a mount IS a registered surface, so exempting one is legitimate.
+    registered_paths = {p for (_h, _m, p, _rid) in entries}
+    # `app.mount("/metrics", ...)` serves at `/metrics/`; a redirect from `/metrics` is the normal
+    # shape, so accept either spelling in EXEMPT rather than making the trailing slash load-bearing.
+    registered_paths |= {p.rstrip("/") for p in registered_paths}
+    registered_paths |= {p + "/" for p in registered_paths if not p.endswith("/")}
+    # Every path list gets this, not just EXEMPT. LUXMOMENTU-61 was about EXEMPT, but EXPECT_5XX has
+    # carried the identical hazard since it was added and nothing checked it: a path naming no
+    # registered route reads as a reviewed decision while actually hiding the route's absence. Fixing
+    # one instance of a class and leaving its siblings is how the same bug gets reported twice.
+    stale = sorted(
+        f"{name}: {path}"
+        for name, paths in (
+            ("EXEMPT", EXEMPT),
+            ("EXPECT_5XX", EXPECT_5XX),
+            ("EXPECT_3XX", EXPECT_3XX),
+        )
+        for path in paths - registered_paths
+    )
+    if stale:
+        session.exitstatus = 1
+        raise SystemExit(
+            "luxarch route-smoke: "
+            f"{len(stale)} exemption path(s) match no registered route — the entry is describing a "
+            "route that does not exist, which HIDES its absence rather than documenting a decision. "
+            "Remove the entry, or register the route:\n  "
+            + "\n  ".join(stale)
+            + "\nSee luxarch --playbook route-smoke."
+        )
     missing_by_rid = {
         rid: f"{m:4} {p}"
         for (h, m, p, rid) in entries
-        if rid not in _HIT and p not in EXEMPT
+        if rid not in _HIT and p not in EXEMPT and m != "MOUNT"
     }
     missing = sorted(missing_by_rid.values())
     if missing and _session_is_narrowed(session):

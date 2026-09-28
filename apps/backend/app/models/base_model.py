@@ -36,14 +36,12 @@ def str_enum[EnumT: PyEnum](enum_cls: type[EnumT], length: int) -> Enum:
     )
 
 
-# Canonical fleet convention (luxarch --emit naming-convention). Constraint and
-# index names live in the database, so every repo names them the same way or
-# autogenerate churns and the names cannot be cleanly ALTER'd.
-#
-# column_0_N_name names ALL columns, not just the first: two multi-column
-# constraints sharing a leading column would otherwise generate the same name
-# and collide the moment DDL runs. Do not substitute the SQLAlchemy-docs
-# column_0_name/column_0_label form.
+# luxarch:naming-convention asset v1 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit naming-convention`.
+# Hand-written notes moved out of the way: this block is an emitted asset and the
+# marker above is what makes its currency checkable. The reasoning (column_0_N_name
+# names ALL columns, so two multi-column constraints sharing a leading column cannot
+# collide at DDL time) lives in the asset's own docstring — `luxarch --emit
+# naming-convention` — and in the alembic playbook.
 NAMING_CONVENTION = {
     "ix": "ix_%(table_name)s_%(column_0_N_name)s",
     "uq": "uq_%(table_name)s_%(column_0_N_name)s",

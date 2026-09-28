@@ -103,7 +103,10 @@ async def _seed(session_maker) -> dict[str, Any]:
             job_key="route_smoke_job",
             function_name="noop",
             display_name="Route Smoke Job",
-            category="maintenance",
+            # MUST be a SchedulerJobCategory member — the column is a StrEnum and
+            # reading an unknown value back raises LookupError, which is how the
+            # scheduler pages 500'd as soon as the sweep reached them.
+            category="cleanup",
             enabled=True,
             trigger_type="interval",
             interval_seconds=3600,
@@ -199,8 +202,19 @@ async def smoke_world(worker_db, monkeypatch):
     ids = await _seed(worker_db)
 
     async def _override_get_db():
+        # MUST mirror the real get_db, which commits on a clean return. Without
+        # the commit this session only ever closed, so every write a route made
+        # was rolled back — including the session row that /login inserts. The
+        # sweep then ran UNAUTHENTICATED: 47 web GETs bounced 307 to /login,
+        # which is < 500, so the old asserter counted them as covered while no
+        # handler had run. v16's EXPECT_3XX net is what surfaced it.
         async with worker_db() as session:
-            yield session
+            try:
+                yield session
+                await session.commit()
+            except Exception:
+                await session.rollback()
+                raise
 
     app.dependency_overrides[_get_db] = _override_get_db
     transport = ASGITransport(app=app)

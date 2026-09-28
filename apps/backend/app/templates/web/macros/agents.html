@@ -110,7 +110,7 @@
 
         <!-- API Key - Double Width, Two Columns -->
         <div class="bg-dark-bg-tertiary/50 rounded-lg p-2 border border-dark-border flex flex-col justify-center">
-            {% if item.agent.api_key_hash %}
+            {% if item.agent.has_api_key %}
                 <div class="grid grid-cols-2 gap-x-4 gap-y-1">
                     <div class="flex items-center gap-1.5">
                         <span class="w-3.5 h-3.5 text-brand-400 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/key.svg" %}</span>

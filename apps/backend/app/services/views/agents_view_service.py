@@ -124,7 +124,7 @@ class AgentsViewService:
             Tuple of (agent data list, total count)
         """
         # Get agents
-        agents, total = await AgentCoreService.list_agents(
+        orm_agents, total = await AgentCoreService.list_agents(
             db=db,
             active_only=active_only,
             search=search,
@@ -132,6 +132,11 @@ class AgentsViewService:
             offset=offset,
             exclude_pending=exclude_pending,
         )
+        # Convert at the seam. get_agent_data is annotated AgentResponse and was
+        # being handed ORM rows, so the agents list rendered a model straight into
+        # the macro — which broke the moment the macro asked for has_api_key, a
+        # field that exists on the DTO by design and on the row not at all.
+        agents = [AgentCoreService.to_response(a) for a in orm_agents]
 
         # Get check counts and sparklines for each agent in parallel
         async def get_agent_data(agent: AgentResponse) -> AgentData:
