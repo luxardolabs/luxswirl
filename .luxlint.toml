@@ -9,6 +9,38 @@ paths = [
   "apps/backend/app",
   "apps/agent/app",
   "apps/shared",
+  # Hand-written, not generated: one squashed migration + its env.py, and the
+  # chain verifier `make db-verify` runs. They ship in the backend image and run
+  # on every deploy, so they are held to the same set as the app.
+  "apps/backend/alembic",
+  "apps/backend/scripts",
+]
+
+[js]
+# Per-repo FACTS about this app's first-party browser JS, not rules. The layout is
+# the canonical one (app/static/js), so `paths` is left at its default. Without
+# this block `lint.eslint` is INERT and reports a green having scanned nothing —
+# 31 first-party files were in that state.
+#
+# Classic <script src> tags, no bundler and no import/export anywhere in
+# app/static/js, so the fleet default `source_type = "script"` is correct.
+globals = [
+  # Loaded from static/js/vendor before any app script (see base.html).
+  "htmx",
+  "Chart",
+  "Alpine",
+  # Assigned onto `window` by one app script and called from another or from an
+  # inline template handler — writable, because the file that defines it also
+  # declares it here.
+  "showToast:writable",
+  "closePanel:writable",
+  "initBulkTagPicker:writable",
+  "toggleCheckTagBrowser:writable",
+  "toggleBulkTagBrowser:writable",
+  "addTag:writable",
+  "addTagFromBrowser:writable",
+  "addBulkTag:writable",
+  "addBulkTagFromBrowser:writable",
 ]
 
 [python]
@@ -25,6 +57,45 @@ target = "py314"   # per-repo fact: both components pin python ^3.14 (PEP 758 ex
 # flooding phantom call-arg/attr-defined. Measured on the backend leg, mypy 2.3.0:
 # without the plugin 1187 errors → with the plugin 998 (−189 phantom pydantic errors).
 pydantic = "tail installs pydantic + emits with plugin; backend 1187→998 (−189 phantom call-arg/attr), mypy 2.3.0"
+
+[gitleaks]
+# Path regexes appended to the canonical allowlist at emit time. Each is a file
+# whose flagged strings were READ and are placeholders, not credentials. The
+# scan runs over FULL HISTORY, so a path listed here covers old commits too.
+#
+# Deliberately NOT here: scripts/test_job_api.sh and the files carrying the
+# internal infra hostname. Those findings are real and are being scrubbed — see
+# the tracker. Allowlisting them would turn a live disclosure into a green tick.
+allow = [
+  # `Authorization: Bearer YOUR_API_TOKEN` / `YOUR_ADMIN_TOKEN` / `YOUR_TOKEN`
+  # in copy-paste curl examples. Verified in a92ee85: every one is a literal
+  # placeholder word, no value.
+  "^docs/deployment/agent\\.md$",
+  "^docs/deployment/server\\.md$",
+  "^docs/guides/synthetic-checks-guide\\.md$",
+  "^docs/guides/troubleshooting\\.md$",
+  # OpenAPI `json_schema_extra` examples, e.g.
+  # `luxswirl_rk_abcdef1234567890abcdef1234567890` — the shape of a key, not one.
+  "^apps/backend/app/schemas/registration_key_schema\\.py$",
+]
+
+# Warnings the canonical pytest config (filterwarnings = error) must let through.
+# Tracked debt, never blanket: each needs a reason, and it goes away when upstream
+# does.
+[[pytest.filterwarnings_ignore]]
+warning = "ignore:'asyncio.iscoroutinefunction' is deprecated:DeprecationWarning:slowapi.extension"
+reason  = "slowapi calls asyncio.iscoroutinefunction, removed in 3.16; not ours to fix — drop when slowapi ships the inspect.* form"
+
+[allowlist]
+# Per-site carve-outs: code + file + match, so ONLY that literal is exempt, and
+# every row is re-checked on each run. Never a bare noqa, never a local ruff
+# config. Each row states why the flagged construct is what this code is FOR.
+ruff = [
+  { code = "S102", file = "apps/agent/app/checks/synthetic.py", match = "exec(script_code, script_globals)", evidence = "the exec IS the synthetic check type — running an operator's Playwright script is the feature. Admin-only (enforced in CheckCoreService.create_check/update_check/clone_check, not just the web layer), AST-validated by core/synthetic_security.py, audit-logged, and documented as trusted-environments-only in SECURITY.md" },
+  { code = "S105", file = "apps/backend/app/services/core/auth_core_service.py", match = "_FAKE_PASSWORD_HASH", evidence = "a FIXED bcrypt hash of a throwaway string, compared against when the username does not exist so a failed login costs the same time as a real one. It is the timing-oracle defence; there is no account it opens" },
+  { code = "T201", file = "apps/agent/app/main.py", match = "Luxardo Labs LuxSwirl Agent v", evidence = "`--version` on a CLI writes to stdout and exits. A logger would send it to the log sink the operator is not reading, which is the one thing this flag must not do" },
+  { code = "ASYNC240", file = "apps/agent/app/main.py", match = "config_path.exists()", evidence = "one stat() at process startup, before a single check is registered — there is no concurrent work on the loop for it to stall, and the process cannot proceed without the answer" },
+]
 
 [rules.deferred]
 # Owner's dial only — evidence-backed. Empty at onboarding: reds stay RED and are

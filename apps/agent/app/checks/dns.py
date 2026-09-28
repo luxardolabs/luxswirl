@@ -137,18 +137,18 @@ class DNSCheck(BaseCheck):
                     additional_data["canonical_name"] = str(answers.canonical_name)
 
                 # Validate expected value if specified
-                if expect_value:
-                    if not self._validate_expect_value(records, expect_value):
-                        error = f"DNS record does not contain expected value: {expect_value}"
-                        continue
+                if expect_value and not self._validate_expect_value(
+                    records, expect_value
+                ):
+                    error = (
+                        f"DNS record does not contain expected value: {expect_value}"
+                    )
+                    continue
 
                 # Validate expected count if specified
-                if expect_count is not None:
-                    if len(records) != expect_count:
-                        error = (
-                            f"Expected {expect_count} records but got {len(records)}"
-                        )
-                        continue
+                if expect_count is not None and len(records) != expect_count:
+                    error = f"Expected {expect_count} records but got {len(records)}"
+                    continue
 
                 # If we get here, the check succeeded
                 success = True
@@ -240,8 +240,4 @@ class DNSCheck(BaseCheck):
         """
         expect_value_lower = expect_value.lower()
 
-        for record in records:
-            if expect_value_lower in record.lower():
-                return True
-
-        return False
+        return any(expect_value_lower in record.lower() for record in records)

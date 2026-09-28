@@ -2,7 +2,7 @@
 
 This document outlines LuxSwirl's security model, known vulnerabilities, and responsible disclosure policy.
 
----
+______________________________________________________________________
 
 ## Reporting a Vulnerability
 
@@ -13,52 +13,56 @@ This document outlines LuxSwirl's security model, known vulnerabilities, and res
 **Contact**: reach the maintainers privately through [www.luxardolabs.com](https://www.luxardolabs.com).
 
 **Include in your report**:
+
 1. **Vulnerability description**: What is the security issue?
-2. **Impact assessment**: What can an attacker do?
-3. **Steps to reproduce**: Detailed reproduction steps
-4. **Proof of concept**: Code, screenshots, or video
-5. **Suggested fix**: If you have a proposed solution (optional)
+1. **Impact assessment**: What can an attacker do?
+1. **Steps to reproduce**: Detailed reproduction steps
+1. **Proof of concept**: Code, screenshots, or video
+1. **Suggested fix**: If you have a proposed solution (optional)
 
 ### Response
 
 LuxSwirl is open source and maintained on a best-effort basis — there's no guaranteed response SLA. Reports are acknowledged and triaged as soon as the maintainers can, and a fix is released and disclosed once one is available.
 
----
+______________________________________________________________________
 
 ## Supported Versions
 
-| Version | Supported          |
-|---------|--------------------|
-| 1.0.x   | ✅ Yes (current)   |
+| Version | Supported              |
+| ------- | ---------------------- |
+| 1.0.x   | ✅ Yes (current)       |
 | 0.9.x   | ⚠️ Security fixes only |
-| < 0.9   | ❌ No              |
+| < 0.9   | ❌ No                  |
 
----
+______________________________________________________________________
 
 ## Security Model
 
 ### Designed For
+
 - ✅ Self-hosted deployments (single organization)
 - ✅ Trusted environments (internal networks)
 - ✅ Known users (vetted team members)
 
 ### NOT Designed For
+
 - ❌ Multi-tenant SaaS
 - ❌ Public-facing deployments
 - ❌ Untrusted users
 
----
+______________________________________________________________________
 
 ## Known Security Considerations
 
 ### 1. Synthetic Checks (Arbitrary Code Execution)
 
-**Risk**: HIGH  
+**Risk**: HIGH\
 **Status**: ⚠️ BY DESIGN
 
 Synthetic checks execute arbitrary Python code. Administrators can run any code on agent hosts.
 
 **Mitigations**:
+
 - Admin role required — enforced in the core service (`CheckCoreService.create_check`/`update_check`/`clone_check`), so it cannot be bypassed by entry layer (web UI *or* JSON API).
 - AST validation (blocks obvious attacks) — hardening, **not** the access control.
 - Audit logging
@@ -67,13 +71,14 @@ Synthetic checks execute arbitrary Python code. Administrators can run any code 
 **Authorization model — important**: The web UI enforces this via the user's RBAC role (`viewer`/`editor`/`admin`). **The JSON API has no role model: any valid `/api/v1/*` Bearer token is admin-equivalent** and may therefore create synthetic checks. This is by design for the self-hosted, single-organization threat model — treat every API token as a full administrator and scope/issue them accordingly. (Multi-tenant or least-privilege API access is out of scope for v1.0.)
 
 **Recommendations**:
+
 - Only use in trusted, self-hosted environments
 - Vet admin accounts carefully; treat API tokens as admin credentials
 - Review synthetic check code before deployment
 
 ### 2. Status Page Custom CSS
 
-**Risk**: MEDIUM  
+**Risk**: MEDIUM\
 **Status**: ⚠️ BY DESIGN
 
 Public status pages support administrator-supplied custom CSS for branding (`status_page.config.custom_css`). This CSS is rendered into a `<style>` block on the public status page without server-side sanitization. A malicious or compromised admin could inject markup that breaks out of the style block and executes script in visitors' browsers.
@@ -81,21 +86,25 @@ Public status pages support administrator-supplied custom CSS for branding (`sta
 **Trust model**: same as synthetic checks. Anyone with the admin role can already run arbitrary code via synthetic checks; custom CSS is no different in scope. The audience is self-hosted single-organization deployments where the admin and operator are the same trust principal.
 
 **Mitigations**:
+
 - Admin role required to modify status page config
 - Status pages must be explicitly published before being publicly visible
 - All admin actions logged
 
 **Recommendations**:
+
 - Vet admin accounts carefully (same advice as synthetic checks)
 - Treat custom CSS like custom JavaScript — review before deployment
 
 ### 3. Data Protection
 
 **At Rest**:
+
 - ✅ Password hashing (bcrypt)
 - ✅ Credential encryption (Fernet AES-128)
 
 **In Transit**:
+
 - ✅ HTTPS required for external agents
 - ⚠️ Internal Docker network unencrypted (localhost only)
 
@@ -132,7 +141,7 @@ Health checks and webhook notifications make outbound requests to operator-suppl
 
 **Residual**: the agent validates the resolved IP immediately before connecting, closing the create→fetch window. A sub-millisecond TTL-0 rebind between that check and the socket's own resolution is not closed (it would require pinning the validated IP through TLS/SNI) and is tracked as future hardening. See `docs/reference/settings-reference.md` → Network Protection (SSRF).
 
----
+______________________________________________________________________
 
 ## Security Best Practices
 
@@ -152,7 +161,7 @@ Health checks and webhook notifications make outbound requests to operator-suppl
 - ✅ Regular backups
 - ✅ Keep LuxSwirl updated
 
----
+______________________________________________________________________
 
 ## Database Migrations
 
@@ -164,7 +173,7 @@ Schema is managed by Alembic. The server container runs `alembic upgrade head` b
 
 **Backups before upgrades:** any LuxSwirl release that ships a new migration should be tested against a copy of your database before applying to production.
 
----
+______________________________________________________________________
 
 ## Contact
 

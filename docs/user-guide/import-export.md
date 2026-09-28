@@ -8,7 +8,7 @@ Import/Export backs up, restores, migrates, and templates check configurations u
 
 **Not exported:** historical check results and metrics, alert configurations, agent metadata (hostname, API keys, approval status), and notification providers.
 
----
+______________________________________________________________________
 
 ## Exporting
 
@@ -43,21 +43,21 @@ Open the panel and click **Download JSON** — a one-click operation that includ
 
 ### Check fields
 
-| Field | Type | Required for import | Default | Notes |
-|-------|------|---------------------|---------|-------|
-| `name` | string | **Yes** | — | Unique within the agent |
-| `check_type` | string | **Yes** | — | `http`, `ping`, `tcp`, `json`, `dns`, `mysql`, `postgres`, `synthetic` |
-| `target` | string | **Yes** | — | URL / host / connection string, per type (below) |
-| `interval` | int | No | 60 | Seconds between runs |
-| `timeout` | int | No | 5 | Seconds per run |
-| `retry_attempts` | int | No | 2 | Retries before marking down |
-| `enabled` | bool | No | true | — |
-| `description` | string | No | — | — |
-| `http_method` | string | No (HTTP only) | — | GET, POST, … |
-| `expected_status` | int | No (HTTP only) | — | Expected HTTP status |
-| `json_path` | string | No (JSON only) | — | JSONata query |
-| `expected_value` | string | No (JSON only) | — | Expected value for comparison |
-| `tags` | string | No | — | Comma-separated |
+| Field             | Type   | Required for import | Default | Notes                                                                  |
+| ----------------- | ------ | ------------------- | ------- | ---------------------------------------------------------------------- |
+| `name`            | string | **Yes**             | —       | Unique within the agent                                                |
+| `check_type`      | string | **Yes**             | —       | `http`, `ping`, `tcp`, `json`, `dns`, `mysql`, `postgres`, `synthetic` |
+| `target`          | string | **Yes**             | —       | URL / host / connection string, per type (below)                       |
+| `interval`        | int    | No                  | 60      | Seconds between runs                                                   |
+| `timeout`         | int    | No                  | 5       | Seconds per run                                                        |
+| `retry_attempts`  | int    | No                  | 2       | Retries before marking down                                            |
+| `enabled`         | bool   | No                  | true    | —                                                                      |
+| `description`     | string | No                  | —       | —                                                                      |
+| `http_method`     | string | No (HTTP only)      | —       | GET, POST, …                                                           |
+| `expected_status` | int    | No (HTTP only)      | —       | Expected HTTP status                                                   |
+| `json_path`       | string | No (JSON only)      | —       | JSONata query                                                          |
+| `expected_value`  | string | No (JSON only)      | —       | Expected value for comparison                                          |
+| `tags`            | string | No                  | —       | Comma-separated                                                        |
 
 The minimal valid check is `name` + `check_type` + `target`; everything else takes the defaults:
 
@@ -67,15 +67,15 @@ The minimal valid check is `name` + `check_type` + `target`; everything else tak
 
 ### Target format by type
 
-| Type | Target | Per-type JSON |
-|------|--------|---------------|
-| `http` | `https://example.com` | adds `http_method`, `expected_status` |
-| `json` | `https://api.example.com/data` | adds `json_path`, `expected_value` |
-| `ping` | `192.168.1.100` | — |
-| `tcp` | `redis.example.com:6379` (`host:port`) | — |
-| `dns` | `example.com` | — |
-| `mysql` | `mysql://user:pass@host:3306/database` | — |
-| `postgres` | `postgresql://user:pass@host:5432/database` | — |
+| Type       | Target                                      | Per-type JSON                         |
+| ---------- | ------------------------------------------- | ------------------------------------- |
+| `http`     | `https://example.com`                       | adds `http_method`, `expected_status` |
+| `json`     | `https://api.example.com/data`              | adds `json_path`, `expected_value`    |
+| `ping`     | `192.168.1.100`                             | —                                     |
+| `tcp`      | `redis.example.com:6379` (`host:port`)      | —                                     |
+| `dns`      | `example.com`                               | —                                     |
+| `mysql`    | `mysql://user:pass@host:3306/database`      | —                                     |
+| `postgres` | `postgresql://user:pass@host:5432/database` | —                                     |
 
 ```json
 // HTTP — method + expected status
@@ -98,16 +98,16 @@ The minimal valid check is `name` + `check_type` + `target`; everything else tak
 
 > ⚠️ Synthetic checks run arbitrary Python and are admin-only — importing them is discouraged for security. See [SECURITY.md](../../SECURITY.md).
 
----
+______________________________________________________________________
 
 ## Importing
 
 Pick a mode, **drag and drop** a `.json` file onto the drop zone (or click it to browse — the file browser filters to `.json`), then click **Import Checks**. The result shows counts for **created**, **updated**, **skipped**, and any **errors** (with per-check error messages). If the whole import fails (invalid JSON, no checks, agent not found), an error card explains why.
 
-| Mode | New checks | Existing checks (matched by `name`) |
-|------|-----------|-------------------------------------|
-| **Merge** (default) | Created | **Skipped**, left unchanged |
-| **Replace** | Created | **Updated** to the file's values |
+| Mode                | New checks | Existing checks (matched by `name`) |
+| ------------------- | ---------- | ----------------------------------- |
+| **Merge** (default) | Created    | **Skipped**, left unchanged         |
+| **Replace**         | Created    | **Updated** to the file's values    |
 
 ```
 Existing: api_health, database_ping        Import file: api_health, web_homepage, dns_check
@@ -123,14 +123,14 @@ Matching is by **exact, case-sensitive** `name` — `api_health` and `API_Health
 
 Import validates JSON syntax, the required fields (`name`, `check_type`, `target`), the check type, and field types. It does **not** test target reachability, credential validity, or whether intervals/timeouts make sense — so test imported checks (ideally on a staging agent) before relying on them.
 
-| Error | Cause | Fix |
-|-------|-------|-----|
+| Error                                 | Cause                                         | Fix                                                                       |
+| ------------------------------------- | --------------------------------------------- | ------------------------------------------------------------------------- |
 | `Invalid JSON file: Unexpected token` | Not valid JSON (syntax, encoding, corruption) | Validate with `jq .`; ensure UTF-8; remove anything before/after the JSON |
-| `No checks found in file` | Missing top-level `checks` array | Add a `checks` array with ≥1 object |
-| `Missing check name` | A check object has no `name` | Add a unique `name` to every check |
-| `Invalid check_type` | Unsupported type | Use one of the eight valid types (case-sensitive) |
-| `Missing target` | A check object has no `target` | Add a `target` matching the type |
-| `Agent not found` | Target agent doesn't exist / was deleted | Verify the agent on the Agents page (must be active) |
+| `No checks found in file`             | Missing top-level `checks` array              | Add a `checks` array with ≥1 object                                       |
+| `Missing check name`                  | A check object has no `name`                  | Add a unique `name` to every check                                        |
+| `Invalid check_type`                  | Unsupported type                              | Use one of the eight valid types (case-sensitive)                         |
+| `Missing target`                      | A check object has no `target`                | Add a `target` matching the type                                          |
+| `Agent not found`                     | Target agent doesn't exist / was deleted      | Verify the agent on the Agents page (must be active)                      |
 
 The two most common JSON mistakes — comments and trailing commas, neither of which is valid JSON:
 
@@ -141,7 +141,7 @@ The two most common JSON mistakes — comments and trailing commas, neither of w
 { "checks": [ { "name": "c1", "check_type": "http", "target": "https://x" } ] }
 ```
 
----
+______________________________________________________________________
 
 ## Security
 
@@ -158,7 +158,7 @@ Targets can contain secrets — database connection strings carry passwords, and
 
 The web form is CSRF-protected and session-authenticated, so you **can't** automate it with `curl`/`wget` — use the REST API (`POST /api/v1/agents/{agent_id}/checks`) for automation.
 
----
+______________________________________________________________________
 
 ## Automation (REST API + jq)
 
@@ -187,14 +187,14 @@ jq . export.json                                                        # valida
 sed -i 's/password:[^@]*/password:****/g' export.json                   # scrub credentials
 ```
 
----
+______________________________________________________________________
 
 ## Common workflows
 
 ### Back up an agent's configuration
 
 1. Agents → **Import / Export** on the target agent → **Download JSON**.
-2. Save it somewhere safe (e.g. `~/luxswirl-backups/prod-web-01-backup-20250111.json`) and commit to git:
+1. Save it somewhere safe (e.g. `~/luxswirl-backups/prod-web-01-backup-20250111.json`) and commit to git:
    ```bash
    cd ~/luxswirl-backups
    git add prod-web-01-backup-20250111.json
@@ -206,34 +206,34 @@ Always back up before any bulk operation (Replace import, bulk delete); include 
 ### Migrate checks between agents
 
 1. Export the **source** agent (e.g. staging) → `staging-checks.json`.
-2. Edit targets for the destination — replace staging URLs with production (`https://staging-api.example.com` → `https://api.example.com`).
-3. On the **destination** agent (production), select **Merge** mode (to preserve existing checks) and upload the file.
-4. Review created/skipped counts and confirm on the Dashboard that the checks are running.
+1. Edit targets for the destination — replace staging URLs with production (`https://staging-api.example.com` → `https://api.example.com`).
+1. On the **destination** agent (production), select **Merge** mode (to preserve existing checks) and upload the file.
+1. Review created/skipped counts and confirm on the Dashboard that the checks are running.
 
 ### Create reusable templates
 
 1. Configure one agent perfectly (HTTP, database, DNS, …) and test the checks.
-2. Export it to a templates directory:
+1. Export it to a templates directory:
    ```
    templates/
    ├── web-app-standard.json      # HTTP, DNS, TCP
    ├── database-monitoring.json   # MySQL, Postgres
    └── api-gateway.json           # JSON, latency
    ```
-3. For each new agent, **Merge**-import the template, then customize targets/intervals per agent.
+1. For each new agent, **Merge**-import the template, then customize targets/intervals per agent.
 
 ### Bulk-update configuration
 
 1. Export the agent's checks → `before.json`.
-2. Modify with `jq` (or find/replace): `jq '.checks[].interval = 120' before.json > after.json`; `diff before.json after.json` to review.
-3. Import `after.json` in **Replace** mode so existing checks pick up the new values.
-4. Verify on the Dashboard.
+1. Modify with `jq` (or find/replace): `jq '.checks[].interval = 120' before.json > after.json`; `diff before.json after.json` to review.
+1. Import `after.json` in **Replace** mode so existing checks pick up the new values.
+1. Verify on the Dashboard.
 
 ### Promote across environments (dev → staging → prod)
 
 1. Develop and test checks on a dev agent; export when stable.
-2. Adjust targets for staging, **Merge**-import to the staging agent, and test for ~24 hours.
-3. Adjust targets for production, **Merge**-import to the production agent, and monitor alerts.
+1. Adjust targets for staging, **Merge**-import to the staging agent, and test for ~24 hours.
+1. Adjust targets for production, **Merge**-import to the production agent, and monitor alerts.
 
 ```json
 // dev      → "target": "http://localhost:8000/health"
@@ -241,7 +241,7 @@ Always back up before any bulk operation (Replace import, bulk delete); include 
 // prod     → "target": "https://api.example.com/health"
 ```
 
----
+______________________________________________________________________
 
 ## Quick reference
 
@@ -262,7 +262,7 @@ jq '.checks[].interval = 120' export.json                           # modify int
 sed -i 's/password:[^@]*/password:****/g' export.json               # scrub credentials
 ```
 
----
+______________________________________________________________________
 
 ## Related
 

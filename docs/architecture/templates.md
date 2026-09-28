@@ -1,6 +1,5 @@
 # LuxSwirl Template Organization Style Guide
 
-
 ## Overview
 
 This document defines the official organization structure for all Jinja2 templates in the LuxSwirl web UI. Following this guide ensures consistency, maintainability, and clarity across the codebase.
@@ -12,6 +11,7 @@ This document defines the official organization structure for all Jinja2 templat
 **Definition:** Full HTML documents that extend `base.html` and represent complete views accessed by URL routes.
 
 **Characteristics:**
+
 - Always extend `base.html`
 - Define the `{% block content %}` section
 - Correspond to a URL route (e.g., `/agents` → `pages/agents.html`)
@@ -21,6 +21,7 @@ This document defines the official organization structure for all Jinja2 templat
 **Naming Convention:** `{feature}.html` or `{feature}/{subpage}.html`
 
 **Examples:**
+
 ```
 pages/
 ├── status.html              # Main dashboard at /
@@ -33,19 +34,21 @@ pages/
 ```
 
 **Best Practices:**
+
 - Keep pages under 200 lines when possible
 - Use partials for complex sections
 - Use panels for side panel content
 - Use macros for reusable components
 - Each page should have a single, clear purpose
 
----
+______________________________________________________________________
 
 ### 2. Partials (`web/templates/partials/`)
 
 **Definition:** Reusable template fragments for specific sections of a page, loaded via HTMX or included directly.
 
 **Characteristics:**
+
 - Do NOT extend `base.html`
 - Self-contained HTML fragments
 - Often used as HTMX swap targets
@@ -55,6 +58,7 @@ pages/
 **Naming Convention:** `{feature}_{component}.html`
 
 **Organized by Feature:**
+
 ```
 partials/
 ├── status_table.html         # Status dashboard table
@@ -71,6 +75,7 @@ partials/
 ```
 
 **Best Practices:**
+
 - Partials should be independently renderable
 - Include only minimal context requirements
 - Document required template variables in comments at top
@@ -78,6 +83,7 @@ partials/
 - Ideal size: 50-200 lines
 
 **Example Header Comment:**
+
 ```html
 <!-- Partial: Agent Card
 Required variables:
@@ -88,13 +94,14 @@ Optional variables:
 -->
 ```
 
----
+______________________________________________________________________
 
 ### 3. Panels (`web/templates/panels/`)
 
 **Definition:** Side panel content for detail views, forms, and focused interactions.
 
 **Characteristics:**
+
 - Do NOT extend `base.html`
 - Full-height side panel layouts
 - Include header with close button
@@ -104,6 +111,7 @@ Optional variables:
 **Naming Convention:** `{feature}_{action}_panel.html`
 
 **Organized by Feature:**
+
 ```
 panels/
 ├── agents/
@@ -129,6 +137,7 @@ panels/
 ```
 
 **Standard Panel Structure:**
+
 ```html
 <div class="h-full w-full max-w-2xl bg-dark-bg-secondary border-l border-dark-border overflow-y-auto scrollbar-thin flex flex-col">
     <!-- Header -->
@@ -149,19 +158,21 @@ panels/
 ```
 
 **Best Practices:**
+
 - Always include close button in header
 - Use `closeSidePanel()` JavaScript function
 - Keep panels focused on single task
 - Max width typically `max-w-2xl` or `max-w-3xl`
 - Use sticky header for scrollable content
 
----
+______________________________________________________________________
 
 ### 4. Forms (`web/templates/forms/`)
 
 **Definition:** Reusable form components that can be embedded in pages or panels.
 
 **Characteristics:**
+
 - Do NOT extend `base.html`
 - Just the `<form>` element and its contents
 - Can be used in pages, panels, or modals
@@ -171,6 +182,7 @@ panels/
 **Naming Convention:** `{feature}_form.html`
 
 **Organized by Feature:**
+
 ```
 forms/
 ├── agents/
@@ -187,6 +199,7 @@ forms/
 ```
 
 **Best Practices:**
+
 - Forms should be reusable in different contexts (create vs edit)
 - Use parameters to control behavior (e.g., `is_edit`, `submit_url`)
 - Include inline validation hints
@@ -194,6 +207,7 @@ forms/
 - Document required parameters
 
 **Example Usage:**
+
 ```html
 <!-- In a panel -->
 <div class="flex-1 p-6">
@@ -201,13 +215,14 @@ forms/
 </div>
 ```
 
----
+______________________________________________________________________
 
 ### 5. Macros (`web/templates/macros/`)
 
 **Definition:** Reusable template functions for common UI patterns and components.
 
 **Characteristics:**
+
 - Do NOT extend `base.html`
 - Define reusable functions with `{% macro %}`
 - Imported where needed with `{% import %}`
@@ -217,6 +232,7 @@ forms/
 **Naming Convention:** `{feature}_macros.html`
 
 **Organization:**
+
 ```
 macros/
 ├── agents.html              # Agent-specific components
@@ -237,6 +253,7 @@ macros/
 > Note: there is no `macros/icons.html`. SVG icons live under `web/templates/icons/` (`icons/hero/` and `icons/weather/`), not in the macros directory.
 
 **Example Macro File:**
+
 ```html
 {# macros/settings.html #}
 
@@ -271,6 +288,7 @@ macros/
 ```
 
 **Usage in Page:**
+
 ```html
 {% from 'macros/settings.html' import settings_nav, section_header %}
 
@@ -282,6 +300,7 @@ macros/
 ```
 
 **Best Practices:**
+
 - Keep macros small and focused
 - Document parameters in comments
 - Avoid side effects (database calls, etc.)
@@ -289,7 +308,7 @@ macros/
 - Group related macros in same file
 - Export commonly used macros to avoid repetition
 
----
+______________________________________________________________________
 
 ## Directory Structure
 
@@ -399,99 +418,104 @@ web/templates/
     └── public_status.html      # Public status page layout
 ```
 
----
+______________________________________________________________________
 
 ## Naming Conventions
 
 ### Files
 
-| Type | Convention | Example |
-|------|-----------|---------|
-| Pages | `{feature}.html` | `agents.html` |
-| Pages (nested) | `{feature}/{subpage}.html` | `settings/notifications.html` |
-| Partials | `{feature}_{component}.html` | `agent_card.html` |
-| Panels | `{feature}_{action}_panel.html` | `agent_create_panel.html` |
-| Forms | `{feature}_form.html` | `agent_form.html` |
-| Macros | `{feature}_macros.html` or `{feature}.html` | `settings.html` |
+| Type           | Convention                                  | Example                       |
+| -------------- | ------------------------------------------- | ----------------------------- |
+| Pages          | `{feature}.html`                            | `agents.html`                 |
+| Pages (nested) | `{feature}/{subpage}.html`                  | `settings/notifications.html` |
+| Partials       | `{feature}_{component}.html`                | `agent_card.html`             |
+| Panels         | `{feature}_{action}_panel.html`             | `agent_create_panel.html`     |
+| Forms          | `{feature}_form.html`                       | `agent_form.html`             |
+| Macros         | `{feature}_macros.html` or `{feature}.html` | `settings.html`               |
 
 ### Macros
 
-| Convention | Example |
-|-----------|---------|
-| Nouns for components | `status_badge()`, `agent_card()` |
-| Verbs for actions | `render_table()`, `format_timestamp()` |
-| Use underscores | `section_header()` not `sectionHeader()` |
+| Convention           | Example                                  |
+| -------------------- | ---------------------------------------- |
+| Nouns for components | `status_badge()`, `agent_card()`         |
+| Verbs for actions    | `render_table()`, `format_timestamp()`   |
+| Use underscores      | `section_header()` not `sectionHeader()` |
 
----
+______________________________________________________________________
 
 ## When to Use Each Type
 
 ### Use a **Page** when:
+
 - ✅ Content represents a distinct URL route
 - ✅ User navigates to it via main navigation
 - ✅ Needs full page layout with header/footer
 - ✅ Has unique page title and breadcrumbs
 
 ### Use a **Partial** when:
+
 - ✅ Content updates dynamically via HTMX
 - ✅ Reused in multiple pages
 - ✅ Represents a section/component of a page
 - ✅ Doesn't need full page structure
 
 ### Use a **Panel** when:
+
 - ✅ Content appears in side panel overlay
 - ✅ Used for create/edit/detail workflows
 - ✅ Needs header with close button
 - ✅ Temporary focused view over main content
 
 ### Use a **Form** when:
+
 - ✅ Form fields reused in multiple contexts
 - ✅ Same form for create and edit operations
 - ✅ Form embedded in pages or panels
 - ✅ Complex field groups need isolation
 
 ### Use a **Macro** when:
+
 - ✅ Small UI pattern used everywhere
 - ✅ Needs parameters for customization
 - ✅ Pure presentation logic (no data fetching)
 - ✅ Reduces code duplication
 
----
+______________________________________________________________________
 
 ## Best Practices
 
 ### General Principles
 
 1. **Single Responsibility**: Each template should have one clear purpose
-2. **DRY (Don't Repeat Yourself)**: Use macros and partials to avoid duplication
-3. **Clear Dependencies**: Document required variables at the top of templates
-4. **Consistent Styling**: Use Tailwind utility classes consistently
-5. **Accessibility**: Include ARIA labels and semantic HTML
-6. **Performance**: Keep templates lightweight, delegate complexity to Python services
+1. **DRY (Don't Repeat Yourself)**: Use macros and partials to avoid duplication
+1. **Clear Dependencies**: Document required variables at the top of templates
+1. **Consistent Styling**: Use Tailwind utility classes consistently
+1. **Accessibility**: Include ARIA labels and semantic HTML
+1. **Performance**: Keep templates lightweight, delegate complexity to Python services
 
 ### File Organization
 
 1. **Group by Feature**: Use subdirectories for related templates (e.g., `agents/`, `checks/`)
-2. **Limit Nesting**: Maximum 2 levels deep (e.g., `panels/agents/agent_create_panel.html`)
-3. **Alphabetical Order**: Keep files alphabetically sorted within directories
-4. **Avoid Orphans**: Every template should be referenced somewhere
+1. **Limit Nesting**: Maximum 2 levels deep (e.g., `panels/agents/agent_create_panel.html`)
+1. **Alphabetical Order**: Keep files alphabetically sorted within directories
+1. **Avoid Orphans**: Every template should be referenced somewhere
 
 ### Code Style
 
 1. **Indentation**: 4 spaces for HTML, 2 spaces for Jinja tags
-2. **Comments**: Use `{# Comment #}` for Jinja comments, `<!-- Comment -->` for HTML
-3. **Template Variables**: Document required variables at top of file
-4. **Whitespace**: Blank line between major sections
-5. **Line Length**: Aim for 120 characters or less
+1. **Comments**: Use `{# Comment #}` for Jinja comments, `<!-- Comment -->` for HTML
+1. **Template Variables**: Document required variables at top of file
+1. **Whitespace**: Blank line between major sections
+1. **Line Length**: Aim for 120 characters or less
 
 ### HTMX Patterns
 
 1. **Partials for Updates**: Use partials as HTMX swap targets
-2. **Panels for Forms**: Use panels for side panel HTMX loads
-3. **Consistent Targets**: Use standard IDs (`#side-panel`, `#main-content`, `#status-table`)
-4. **Swap Strategy**: Use `innerHTML` for content replacement, `outerHTML` for row updates
+1. **Panels for Forms**: Use panels for side panel HTMX loads
+1. **Consistent Targets**: Use standard IDs (`#side-panel`, `#main-content`, `#status-table`)
+1. **Swap Strategy**: Use `innerHTML` for content replacement, `outerHTML` for row updates
 
----
+______________________________________________________________________
 
 ## Migration Guide
 
@@ -500,14 +524,15 @@ web/templates/
 When refactoring existing templates to follow this guide:
 
 1. **Identify Type**: Determine if it's a page, partial, panel, form, or should be a macro
-2. **Create New Location**: Place in appropriate directory with correct naming
-3. **Update References**: Update all imports, includes, and HTMX targets
-4. **Test Thoroughly**: Verify all routes and HTMX interactions work
-5. **Delete Old File**: Remove after confirming new structure works
+1. **Create New Location**: Place in appropriate directory with correct naming
+1. **Update References**: Update all imports, includes, and HTMX targets
+1. **Test Thoroughly**: Verify all routes and HTMX interactions work
+1. **Delete Old File**: Remove after confirming new structure works
 
 ### Example Migration
 
 **Before:**
+
 ```
 templates/
 └── partials/
@@ -515,6 +540,7 @@ templates/
 ```
 
 **After:**
+
 ```
 templates/
 └── forms/
@@ -522,7 +548,7 @@ templates/
         └── provider_form.html           # Form in correct location
 ```
 
----
+______________________________________________________________________
 
 ## Examples
 
@@ -562,13 +588,13 @@ templates/
 When adding a new feature (e.g., "incidents"):
 
 1. **Create page:** `pages/incidents.html`
-2. **Create partials:** `partials/incidents/incident_card.html`, `incident_list.html`
-3. **Create panels:** `panels/incidents/incident_create_panel.html`, `incident_detail_panel.html`
-4. **Create form:** `forms/incidents/incident_form.html`
-5. **Add macros:** Add to `macros/incidents.html` if needed
-6. **Update router:** Add routes in `web/routers/incidents_router.py`
+1. **Create partials:** `partials/incidents/incident_card.html`, `incident_list.html`
+1. **Create panels:** `panels/incidents/incident_create_panel.html`, `incident_detail_panel.html`
+1. **Create form:** `forms/incidents/incident_form.html`
+1. **Add macros:** Add to `macros/incidents.html` if needed
+1. **Update router:** Add routes in `web/routers/incidents_router.py`
 
----
+______________________________________________________________________
 
 ## Enforcement
 
@@ -585,12 +611,13 @@ When adding a new feature (e.g., "incidents"):
 ### Linting (Future)
 
 Consider adding automated checks:
+
 - Template file placement validation
 - Naming convention enforcement
 - Unused template detection
 - Required variable documentation check
 
----
+______________________________________________________________________
 
 ## Related Documentation
 
@@ -598,7 +625,7 @@ Consider adding automated checks:
 - [Backend Layering](backend.md) - Router/service/CRUD chain
 - [Database Schema](database.md) - Database schema and patterns
 
----
+______________________________________________________________________
 
 ## Questions or Suggestions?
 

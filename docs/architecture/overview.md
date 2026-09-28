@@ -2,23 +2,22 @@
 
 **Technical architecture overview for contributors and advanced users.**
 
-
----
+______________________________________________________________________
 
 ## Table of Contents
 
 1. [System Overview](#system-overview)
-2. [Component Architecture](#component-architecture)
-3. [Data Flow](#data-flow)
-4. [Database Schema](#database-schema)
-5. [API Architecture](#api-architecture)
-6. [Check Execution Lifecycle](#check-execution-lifecycle)
-7. [Authentication & Security](#authentication--security)
-8. [Technology Stack](#technology-stack)
-9. [Scalability Design](#scalability-design)
-10. [Design Decisions](#design-decisions)
+1. [Component Architecture](#component-architecture)
+1. [Data Flow](#data-flow)
+1. [Database Schema](#database-schema)
+1. [API Architecture](#api-architecture)
+1. [Check Execution Lifecycle](#check-execution-lifecycle)
+1. [Authentication & Security](#authentication--security)
+1. [Technology Stack](#technology-stack)
+1. [Scalability Design](#scalability-design)
+1. [Design Decisions](#design-decisions)
 
----
+______________________________________________________________________
 
 ## System Overview
 
@@ -77,14 +76,14 @@
 
 ### Component Responsibilities
 
-| Component | Responsibility | Technology |
-|-----------|---------------|------------|
-| **Agent** | Execute checks, report results | Python 3.14+, asyncio |
-| **Server** | Receive results, serve UI/API | FastAPI, asyncpg |
-| **TimescaleDB** | Time-series storage | PostgreSQL 14 + TimescaleDB 2.11 |
-| **Reverse Proxy** | SSL termination, routing | nginx or Traefik |
+| Component         | Responsibility                 | Technology                       |
+| ----------------- | ------------------------------ | -------------------------------- |
+| **Agent**         | Execute checks, report results | Python 3.14+, asyncio            |
+| **Server**        | Receive results, serve UI/API  | FastAPI, asyncpg                 |
+| **TimescaleDB**   | Time-series storage            | PostgreSQL 14 + TimescaleDB 2.11 |
+| **Reverse Proxy** | SSL termination, routing       | nginx or Traefik                 |
 
----
+______________________________________________________________________
 
 ## Component Architecture
 
@@ -144,6 +143,7 @@
 ```
 
 **Key features**:
+
 - **Async execution**: All I/O operations are async (httpx, asyncpg, asyncio)
 - **Concurrency control**: Semaphore limits concurrent checks (default 200)
 - **Batching**: Results batched before sending (reduces HTTP overhead)
@@ -153,7 +153,7 @@
 
 **Agent entry point**: `apps/agent/app/main.py` **Core logic**: `apps/agent/app/agent/core.py` (LuxSwirlAgent class)
 
----
+______________________________________________________________________
 
 ### Server Architecture
 
@@ -218,12 +218,13 @@
 ```
 
 **Layered architecture** (enforced by import-linter + `tests/test_architecture.py`):
+
 1. **Routers** (API/Web): HTTP plumbing only — parsing, validation; zero business logic, zero raw SQL
-2. **View services** (`services/views/`): assemble template context for web pages
-3. **Core services** (`services/core/`): business logic and transactions; never touch raw SQL
-4. **CRUD** (`crud/`): the only layer that runs SQL (`select()`, `update()`, `text()`, …)
-5. **Models**: SQLAlchemy ORM models (database schema)
-6. **Schemas**: Pydantic validation models (API contracts)
+1. **View services** (`services/views/`): assemble template context for web pages
+1. **Core services** (`services/core/`): business logic and transactions; never touch raw SQL
+1. **CRUD** (`crud/`): the only layer that runs SQL (`select()`, `update()`, `text()`, …)
+1. **Models**: SQLAlchemy ORM models (database schema)
+1. **Schemas**: Pydantic validation models (API contracts)
 
 Chain — JSON API: router → core service → crud → models. Web UI: router → view service → core service → crud → models.
 
@@ -231,7 +232,7 @@ Chain — JSON API: router → core service → crud → models. Web UI: router 
 
 **Server entry point**: `apps/backend/app/main.py`
 
----
+______________________________________________________________________
 
 ## Data Flow
 
@@ -287,12 +288,13 @@ Chain — JSON API: router → core service → crud → models. Web UI: router 
 ```
 
 **Error handling**:
+
 - **Network failure**: Store results locally (`reports/` directory)
 - **429 Rate Limit**: Exponential backoff (10s → 20s → 40s → ...)
 - **500 Server Error**: Retry with backoff
 - **401 Unauthorized**: Log error, stop agent (credential issue)
 
----
+______________________________________________________________________
 
 ### Dashboard Load Flow
 
@@ -353,12 +355,13 @@ Chain — JSON API: router → core service → crud → models. Web UI: router 
 ```
 
 **Performance optimizations**:
+
 - **Batch queries**: Single query for all checks (not N+1)
 - **Window functions**: Latest result per check (efficient)
 - **Partial updates**: HTMX refreshes only table (not whole page)
 - **Pagination**: Configurable page size (10, 25, 50, 100, 200)
 
----
+______________________________________________________________________
 
 ## Database Schema
 
@@ -434,16 +437,18 @@ Chain — JSON API: router → core service → crud → models. Web UI: router 
 ```
 
 **Key design decisions**:
+
 - **UUID primary keys**: Better for distributed systems. (The schema does not enforce a specific UUID version — agent-generated result IDs are stored as free-form strings, so do not assume strict UUIDv7 time-ordering.)
 - **JSONB config**: Flexible check configuration without schema changes
 - **Hypertable partitioning**: TimescaleDB partitions `check_results` by timestamp (1-day chunks)
 - **Composite FK**: `(check_result_id, check_result_timestamp)` for hypertable compatibility
 
----
+______________________________________________________________________
 
 ### TimescaleDB Optimizations
 
 **Hypertable configuration**:
+
 ```sql
 -- Create hypertable (partitioned by timestamp)
 SELECT create_hypertable(
@@ -454,6 +459,7 @@ SELECT create_hypertable(
 ```
 
 **Compression policy** (80-90% reduction):
+
 ```sql
 -- Compress chunks older than 7 days
 SELECT add_compression_policy(
@@ -463,6 +469,7 @@ SELECT add_compression_policy(
 ```
 
 **Retention policy** (auto-delete):
+
 ```sql
 -- Delete chunks older than 90 days
 SELECT add_retention_policy(
@@ -472,6 +479,7 @@ SELECT add_retention_policy(
 ```
 
 **Continuous aggregates** (5-minute rollups):
+
 ```sql
 CREATE MATERIALIZED VIEW check_results_5min
 WITH (timescaledb.continuous) AS
@@ -486,11 +494,12 @@ GROUP BY bucket, check_id;
 ```
 
 **Benefits**:
+
 - **Fast queries**: 5-minute aggregates reduce rows scanned
 - **Auto-refresh**: Continuous aggregates update automatically
 - **Dashboard performance**: 30-50× faster than raw table queries
 
----
+______________________________________________________________________
 
 ## API Architecture
 
@@ -539,6 +548,7 @@ GROUP BY bucket, check_id;
 > **Note on the check fetch path**: the agent fetches its assigned checks via `GET /api/v1/checks?agent_id={id}` (agent UUID passed as a *query parameter*). The `/agents/{agent_id}/checks` paths are the separate **management** endpoints used by the UI/admin, not by the agent runtime.
 
 **HTTP Status Codes**:
+
 - `200 OK`: Successful GET/PATCH
 - `201 Created`: Successful POST
 - `204 No Content`: Successful DELETE
@@ -550,7 +560,7 @@ GROUP BY bucket, check_id;
 - `422 Unprocessable Entity`: Validation error
 - `500 Internal Server Error`: Server error
 
----
+______________________________________________________________________
 
 ## Check Execution Lifecycle
 
@@ -617,6 +627,7 @@ GROUP BY bucket, check_id;
 ### Check Execution Details
 
 **1. Configuration Fetch** (Agent startup + periodic reload):
+
 ```python
 # Agent fetches its check configs from the server (agent_id as query param)
 GET /api/v1/checks?agent_id={agent_id}
@@ -625,6 +636,7 @@ Authorization: Bearer {agent_token}
 ```
 
 **2. Scheduling**:
+
 ```python
 # Agent schedules each check based on interval
 # Example: check with interval=60 → runs every 60 seconds
@@ -632,6 +644,7 @@ Authorization: Bearer {agent_token}
 ```
 
 **3. Execution** (Async, concurrent):
+
 ```python
 async def execute_check(check):
     # Acquire semaphore (limit concurrent checks to 200)
@@ -663,6 +676,7 @@ async def execute_check(check):
 ```
 
 **4. Batching**:
+
 ```python
 # Results accumulated in memory
 # Batch sent when:
@@ -671,6 +685,7 @@ async def execute_check(check):
 ```
 
 **5. Reporting**:
+
 ```python
 POST /api/v1/reports
 Authorization: Bearer {agent_token}
@@ -690,6 +705,7 @@ Content-Type: application/json
 ```
 
 **6. Storage** (Server):
+
 ```python
 # For each result in batch:
 #   1. Upsert check (if config changed)
@@ -699,13 +715,14 @@ Content-Type: application/json
 # All in single transaction for consistency
 ```
 
----
+______________________________________________________________________
 
 ## Authentication & Security
 
 ### Authentication Flow
 
 **Web UI** (Session-based):
+
 ```
 1. User → POST /login (username + password)
 2. Server → Verify password (bcrypt)
@@ -716,6 +733,7 @@ Content-Type: application/json
 ```
 
 **Agent API** (Bearer token):
+
 ```
 1. Agent → POST /api/v1/agents/register (with LUXSWIRL_AUTH_KEY)
 2. Server → Generate unique API key for agent
@@ -728,92 +746,99 @@ Content-Type: application/json
 ### Security Layers
 
 **Layer 1: Network** (Reverse proxy)
+
 - SSL/TLS termination
 - Rate limiting (nginx/Traefik)
 - DDoS protection (Cloudflare)
 
 **Layer 2: Application** (FastAPI middleware)
+
 - CORS headers (`SERVER__CORS_ORIGINS`)
 - CSRF protection (SameSite cookies)
 - Security headers (X-Frame-Options, CSP)
 
 **Layer 3: Authentication**
+
 - Session validation (Web UI)
 - Bearer token validation (API)
 - Role-based access control (Admin/Editor/Viewer)
 
 **Layer 4: Authorization**
+
 - User role check (admin vs user)
 - Agent approval status (active only)
 - Resource ownership (users can only see their data)
 
 **Layer 5: Input Validation**
+
 - Pydantic schemas (all API inputs)
 - SQL injection prevention (SQLAlchemy ORM)
 - Command injection prevention (parameterized subprocess)
 - XSS prevention (Jinja2 auto-escaping)
 
 **Layer 6: Data Protection**
+
 - Password hashing (bcrypt, 12 rounds)
 - Credential encryption (Fernet AES-128)
 - Log scrubbing (automatic credential masking)
 
----
+______________________________________________________________________
 
 ## Technology Stack
 
 ### Backend
 
-| Component | Technology | Version | Purpose |
-|-----------|-----------|---------|---------|
-| **Language** | Python | 3.14+ | Async/await, type hints |
-| **Web Framework** | FastAPI | 0.104+ | REST API, async |
-| **ORM** | SQLAlchemy | 2.0+ | Database abstraction |
-| **Database Driver** | asyncpg | 0.29+ | Async PostgreSQL |
-| **Database** | TimescaleDB | 2.11+ | Time-series storage |
-| **Validation** | Pydantic | 2.5+ | Schema validation |
-| **HTTP Client** | httpx | 0.25+ | Async HTTP requests |
-| **Template Engine** | Jinja2 | 3.1+ | HTML rendering |
-| **Session Management** | itsdangerous | 2.1+ | Secure cookies |
-| **Password Hashing** | bcrypt | 4.1+ | Secure hashing |
-| **Encryption** | cryptography | 41.0+ | Fernet encryption |
+| Component              | Technology   | Version | Purpose                 |
+| ---------------------- | ------------ | ------- | ----------------------- |
+| **Language**           | Python       | 3.14+   | Async/await, type hints |
+| **Web Framework**      | FastAPI      | 0.104+  | REST API, async         |
+| **ORM**                | SQLAlchemy   | 2.0+    | Database abstraction    |
+| **Database Driver**    | asyncpg      | 0.29+   | Async PostgreSQL        |
+| **Database**           | TimescaleDB  | 2.11+   | Time-series storage     |
+| **Validation**         | Pydantic     | 2.5+    | Schema validation       |
+| **HTTP Client**        | httpx        | 0.25+   | Async HTTP requests     |
+| **Template Engine**    | Jinja2       | 3.1+    | HTML rendering          |
+| **Session Management** | itsdangerous | 2.1+    | Secure cookies          |
+| **Password Hashing**   | bcrypt       | 4.1+    | Secure hashing          |
+| **Encryption**         | cryptography | 41.0+   | Fernet encryption       |
 
 ### Frontend
 
-| Component | Technology | Version | Purpose |
-|-----------|-----------|---------|---------|
-| **HTML** | HTML5 | - | Markup |
-| **CSS** | Tailwind CSS | 3.4+ | Styling |
-| **JavaScript** | Vanilla JS + HTMX | 1.9+ | Interactivity |
-| **Charts** | Chart.js | 4.4+ | Visualizations |
+| Component      | Technology        | Version | Purpose        |
+| -------------- | ----------------- | ------- | -------------- |
+| **HTML**       | HTML5             | -       | Markup         |
+| **CSS**        | Tailwind CSS      | 3.4+    | Styling        |
+| **JavaScript** | Vanilla JS + HTMX | 1.9+    | Interactivity  |
+| **Charts**     | Chart.js          | 4.4+    | Visualizations |
 
 ### Infrastructure
 
-| Component | Technology | Purpose |
-|-----------|-----------|---------|
-| **Containerization** | Docker | 20.10+ | Isolation |
-| **Orchestration** | Docker Compose | 2.0+ | Multi-container |
-| **Reverse Proxy** | nginx / Traefik | - | SSL, routing |
-| **Database** | PostgreSQL | 14+ | Relational data |
-| **Time-Series Extension** | TimescaleDB | 2.11+ | Time-series optimization |
+| Component                 | Technology      | Purpose |
+| ------------------------- | --------------- | ------- |
+| **Containerization**      | Docker          | 20.10+  |
+| **Orchestration**         | Docker Compose  | 2.0+    |
+| **Reverse Proxy**         | nginx / Traefik | -       |
+| **Database**              | PostgreSQL      | 14+     |
+| **Time-Series Extension** | TimescaleDB     | 2.11+   |
 
 ### Development Tools
 
-| Tool | Purpose |
-|------|---------|
-| **pytest** | Unit/integration testing |
-| **black** | Code formatting |
-| **ruff** | Linting |
-| **mypy** | Type checking |
-| **pre-commit** | Git hooks |
+| Tool           | Purpose                  |
+| -------------- | ------------------------ |
+| **pytest**     | Unit/integration testing |
+| **black**      | Code formatting          |
+| **ruff**       | Linting                  |
+| **mypy**       | Type checking            |
+| **pre-commit** | Git hooks                |
 
----
+______________________________________________________________________
 
 ## Scalability Design
 
 ### Horizontal Scaling
 
 **Agents** (✅ Supported):
+
 ```
 Deploy N agents → All report to same server
 No limit on agent count (tested: 1,000+)
@@ -821,6 +846,7 @@ Each agent operates independently
 ```
 
 **Servers** (⚠️ not currently supported):
+
 ```
 Deploy N servers → Load balancer in front
 Session store shared (Redis or DB)
@@ -828,6 +854,7 @@ Database connection pool per server
 ```
 
 **Database** (⚠️ not currently supported):
+
 ```
 Primary + read replicas
 Write to primary, read from replicas
@@ -839,21 +866,23 @@ Connection pooling per server
 A single server handles many agents on modest hardware (e.g. 4 CPU, 8 GB RAM is a reasonable starting point), but absolute limits depend heavily on check frequency, result-payload size, retention period, and Postgres tuning. LuxSwirl has not yet been published with formal benchmark numbers — operators should size by running a representative subset and watching CPU, write throughput, and disk usage.
 
 **Bottlenecks** (in roughly the order you'll hit them):
+
 1. **Database writes** — TimescaleDB compression and continuous aggregates help significantly
-2. **Dashboard queries** — continuous aggregates back the most-viewed pages
-3. **Result ingestion** — agent-side batching keeps HTTP overhead low
+1. **Dashboard queries** — continuous aggregates back the most-viewed pages
+1. **Result ingestion** — agent-side batching keeps HTTP overhead low
 
 ### Performance Characteristics
 
 The agent-side `max_concurrent_checks` (default 200) and the server-side `report_batch_size` (default 5000) are the main throughput knobs. Per-request latency on the server is dominated by Postgres write throughput; dashboard latency is dominated by whether the query hits a continuous aggregate vs. the raw hypertable.
 
----
+______________________________________________________________________
 
 ## Design Decisions
 
 ### Why FastAPI?
 
 **Pros**:
+
 - ✅ Native async/await support
 - ✅ Automatic OpenAPI docs (Swagger)
 - ✅ Pydantic validation built-in
@@ -861,12 +890,14 @@ The agent-side `max_concurrent_checks` (default 200) and the server-side `report
 - ✅ High performance (Starlette + uvloop)
 
 **Cons**:
+
 - ⚠️ Newer framework (less mature than Django)
 - ⚠️ Fewer batteries included (need to add auth, sessions)
 
 ### Why TimescaleDB?
 
 **Pros**:
+
 - ✅ PostgreSQL-based (familiar, mature)
 - ✅ Automatic partitioning (1-day chunks)
 - ✅ Compression (80-90% reduction)
@@ -875,10 +906,12 @@ The agent-side `max_concurrent_checks` (default 200) and the server-side `report
 - ✅ SQL compatibility (no new query language)
 
 **Cons**:
+
 - ⚠️ Extension (not core PostgreSQL)
-- ⚠️ More complex than SQLite (overkill for <100 checks)
+- ⚠️ More complex than SQLite (overkill for \<100 checks)
 
 **Alternatives considered**:
+
 - InfluxDB: Custom query language (Flux), less mature
 - Prometheus: Pull-based (doesn't fit agent-push model)
 - SQLite: Doesn't scale beyond 10 GB
@@ -886,16 +919,19 @@ The agent-side `max_concurrent_checks` (default 200) and the server-side `report
 ### Why HTMX?
 
 **Pros**:
+
 - ✅ Minimal JavaScript (server-rendered HTML)
 - ✅ Progressive enhancement (works without JS)
 - ✅ Simple mental model (HTML attributes)
 - ✅ Fast development (no complex frontend build)
 
 **Cons**:
+
 - ⚠️ Limited interactivity (not SPA)
 - ⚠️ Polling-based (not WebSocket real-time)
 
 **Alternatives considered**:
+
 - React: Overkill for mostly server-rendered app
 - Vue: More complexity than needed
 - Alpine.js: Considered, but HTMX simpler
@@ -903,12 +939,14 @@ The agent-side `max_concurrent_checks` (default 200) and the server-side `report
 ### Why SQLAlchemy 2.0?
 
 **Pros**:
+
 - ✅ Async support (asyncpg)
 - ✅ Type hints (Mapped, mapped_column)
 - ✅ Mature, battle-tested
 - ✅ Migration support (Alembic)
 
 **Cons**:
+
 - ⚠️ Learning curve (ORM complexity)
 - ⚠️ Performance overhead vs raw SQL
 
@@ -917,28 +955,29 @@ The agent-side `max_concurrent_checks` (default 200) and the server-side `report
 **Design**: Agents push results to server (not server pulls from agents)
 
 **Rationale**:
+
 - ✅ Agents can be behind NAT/firewall (no inbound required)
 - ✅ Agents control when to report (batching, retry logic)
 - ✅ Server doesn't need to know agent addresses
 - ✅ Scales better (server doesn't poll thousands of agents)
 
 **Trade-off**:
+
 - ⚠️ Server must be publicly accessible (or VPN)
 - ⚠️ Agents need to know server URL (configured)
 
----
+______________________________________________________________________
 
 ## Contributing to Architecture
 
 **Want to propose architectural changes?**
 
 1. Open GitHub Discussion (for major changes)
-2. Provide rationale (problem + proposed solution)
-3. Consider backward compatibility
-4. Performance implications
-5. Security implications
+1. Provide rationale (problem + proposed solution)
+1. Consider backward compatibility
+1. Performance implications
+1. Security implications
 
 **Architecture documentation**: Keep this document updated with major changes.
 
----
-
+______________________________________________________________________

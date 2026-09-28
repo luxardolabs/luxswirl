@@ -101,7 +101,7 @@ async def create_user_submit(
     request: Request,
     username: Annotated[str, Form()],
     password: Annotated[str, Form()],
-    user: AdminUser,
+    admin: AdminUser,
     db: Annotated[AsyncSession, Depends(get_db)],
     role: Annotated[str, Form()] = "viewer",
     full_name: Annotated[str | None, Form()] = None,
@@ -121,7 +121,7 @@ async def create_user_submit(
         full_name=full_name,
         is_active=is_active,
         must_change_password=must_change_password,
-        created_by=user.username,
+        created_by=admin.username,
     )
 
     if error:
@@ -131,7 +131,7 @@ async def create_user_submit(
     logger.info(
         "Admin created user via web UI",
         extra={
-            "actor_username": user.username,
+            "actor_username": admin.username,
             "target_username": new_user.username,
             "target_user_id": str(new_user.id),
         },

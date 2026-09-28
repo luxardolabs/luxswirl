@@ -120,7 +120,7 @@ class EmailNotificationProvider(BaseNotificationProvider):
             return True
 
         except Exception:
-            self.logger.error("Failed to send email notification", exc_info=True)
+            self.logger.exception("Failed to send email notification")
             raise
 
     def _build_message(self, context: NotificationContext) -> MIMEMultipart:
@@ -349,7 +349,7 @@ class EmailNotificationProvider(BaseNotificationProvider):
             )
             self.logger.debug("SMTP send completed successfully")
         except Exception:
-            self.logger.error("SMTP send failed", exc_info=True)
+            self.logger.exception("SMTP send failed")
             raise
 
     @classmethod

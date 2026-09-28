@@ -88,10 +88,9 @@ class TimescaleCoreService:
             )
         except Exception:
             # get_db() owns the transaction and rolls back on the re-raised error.
-            logger.error(
+            logger.exception(
                 "Failed to update retention policy",
                 extra={"hypertable_name": hypertable_name},
-                exc_info=True,
             )
             raise
 
@@ -119,10 +118,9 @@ class TimescaleCoreService:
             )
         except Exception:
             # get_db() owns the transaction and rolls back on the re-raised error.
-            logger.error(
+            logger.exception(
                 "Failed to update compression policy",
                 extra={"hypertable_name": hypertable_name},
-                exc_info=True,
             )
             raise
 

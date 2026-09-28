@@ -55,7 +55,12 @@ def ssl_expiry_fields(
         return unknown
 
     try:
-        expires_at = datetime.strptime(expiration_date, _AGENT_DATE_FORMAT)
+        # OpenSSL's notAfter is always GMT, but %Z carries no offset into the
+        # result, so the zone is attached HERE — the value is aware from birth
+        # rather than fixed up at the subtraction below.
+        expires_at = datetime.strptime(expiration_date, _AGENT_DATE_FORMAT).replace(
+            tzinfo=UTC
+        )
     except ValueError:
         # A certificate whose expiry we cannot read is exactly the one an
         # operator needs to hear about, so this is a line in the log rather
@@ -66,7 +71,7 @@ def ssl_expiry_fields(
         )
         return unknown
 
-    days_remaining = (expires_at.replace(tzinfo=UTC) - datetime.now(UTC)).days
+    days_remaining = (expires_at - datetime.now(UTC)).days
     return {
         "expiration_date": expiration_date,
         "days_until_expiration": days_remaining,

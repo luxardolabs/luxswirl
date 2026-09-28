@@ -284,10 +284,10 @@ async def update_alert(
             "operator": threshold_operator,
             "value": int(str(threshold_value)),
         }
-    elif any(key.startswith("trigger_days_threshold_") for key in form.keys()):
+    elif any(key.startswith("trigger_days_threshold_") for key in form):
         # Collect all selected threshold checkboxes
         days_thresholds = []
-        for key in form.keys():
+        for key in form:
             if key.startswith("trigger_days_threshold_"):
                 days_thresholds.append(int(str(form[key])))
 

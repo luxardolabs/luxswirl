@@ -105,34 +105,10 @@ types-pyyaml = "^6.0.12.20260906"
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
-# ruff / mypy config is fleet-owned by luxlint (byte-identical, emitted from the
-# pinned image) — this repo intentionally carries none. See .luxlint.toml and
-# `make lint` (luxlint ruff mount-only + the mypy tail).
-#
-# pytest config is NOT yet migrated to the canonical luxlint tail: the suite runs
-# through the compose.test.yaml harness. luxlint's test.no_local_pytest_config
-# stays RED (tracked burn-down) until the pytest/conftest tail migration; the
-# local config below keeps `make test` working meanwhile. It now matches the
-# canonical config on filterwarnings=error; --strict-markers is the remaining gap.
-[tool.pytest.ini_options]
-asyncio_mode = "auto"
-testpaths = ["tests"]
-python_files = "test_*.py"
-python_functions = "test_*"
-# "." = apps/backend (resolves `import app.*`); ".." = apps/ (resolves
-# `import shared.*` from apps/shared); "tests" (resolves `from fixtures.db`).
-pythonpath = [".", "..", "tests"]
-addopts = "-v --cov=app --cov-report=term-missing --cov-report=html"
-# A deprecation is a failing test one release BEFORE the pin makes it fatal —
-# but only on a line some test executes, which is why this pairs with the
-# route-smoke asserter in tests/_route_smoke.py (every route gets requested).
-filterwarnings = [
-  "error",
-  # Third-party, not ours to fix: slowapi calls asyncio.iscoroutinefunction,
-  # removed in 3.16. Drop this once slowapi ships the inspect.* form.
-  "ignore:'asyncio.iscoroutinefunction' is deprecated:DeprecationWarning:slowapi.extension",
-]
-
+# ruff / mypy / pytest config is fleet-owned by luxlint (byte-identical, emitted
+# from the pinned image) — this repo intentionally carries none. See .luxlint.toml,
+# `make lint` (luxlint ruff mount-only + the mypy tail) and `make test`
+# (`pytest -c "$(luxlint --emit-config pytest)"`).
 [tool.importlinter]
 root_packages = ["app"]
 include_external_packages = true

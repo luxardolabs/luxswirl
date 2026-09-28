@@ -47,7 +47,7 @@ class AgentRegistration:
         try:
             validate_server_url(push_url)
         except ValueError:
-            self.logger.error("URL validation failed", exc_info=True)
+            self.logger.exception("URL validation failed")
             return False
 
         auth_key = self.config.get("auth_key")
@@ -106,7 +106,7 @@ class AgentRegistration:
                 return False
 
         except httpx.HTTPStatusError as e:
-            self.logger.error(
+            self.logger.exception(
                 "Registration failed",
                 extra={
                     "status_code": e.response.status_code,
@@ -116,7 +116,7 @@ class AgentRegistration:
             return False
         # swallowed-exceptions: registration returns failure so the caller retries with backoff
         except Exception:
-            self.logger.error("Registration failed", exc_info=True)
+            self.logger.exception("Registration failed")
             return False
 
     async def recover_agent_key(self) -> bool:
@@ -186,7 +186,7 @@ class AgentRegistration:
                 return False
 
         except httpx.HTTPStatusError as e:
-            self.logger.error(
+            self.logger.exception(
                 "Key recovery failed",
                 extra={
                     "status_code": e.response.status_code,
@@ -196,5 +196,5 @@ class AgentRegistration:
             return False
         # swallowed-exceptions: registration returns failure so the caller retries with backoff
         except Exception:
-            self.logger.error("Key recovery failed", exc_info=True)
+            self.logger.exception("Key recovery failed")
             return False

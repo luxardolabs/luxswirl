@@ -10,15 +10,15 @@ A Luxardo Labs project, released as an open-source give-back under AGPLv3.
 
 Eight functional check types:
 
-| Type | What it does |
-|------|--------------|
-| **ping** | ICMP reachability |
-| **http** | HTTP/HTTPS status, latency, optional content checks |
-| **tcp** | TCP port connectivity |
-| **json** | Validate a JSON response with a JSONata query |
-| **dns** | DNS record lookups (A, AAAA, MX, TXT, etc.) |
-| **mysql** | Run a query against MySQL/MariaDB |
-| **postgres** | Run a query against PostgreSQL |
+| Type          | What it does                                                    |
+| ------------- | --------------------------------------------------------------- |
+| **ping**      | ICMP reachability                                               |
+| **http**      | HTTP/HTTPS status, latency, optional content checks             |
+| **tcp**       | TCP port connectivity                                           |
+| **json**      | Validate a JSON response with a JSONata query                   |
+| **dns**       | DNS record lookups (A, AAAA, MX, TXT, etc.)                     |
+| **mysql**     | Run a query against MySQL/MariaDB                               |
+| **postgres**  | Run a query against PostgreSQL                                  |
 | **synthetic** | Playwright browser automation (admin-only — see security below) |
 
 See the [Checks guide](checks.md) for details.
@@ -73,6 +73,6 @@ For production, put the server behind HTTPS (reverse proxy) and keep the databas
 
 AGPLv3, free and open source. Use it anywhere — home, company, commercial — and self-host and modify it freely. The only real restriction is AGPL's network-copyleft: you can't take it closed-source and resell it as a hosted/SaaS product. See [Licensing](../reference/licensing.md).
 
----
+______________________________________________________________________
 
 **Still have questions?** Open a GitHub Discussion: https://github.com/luxardolabs/luxswirl/discussions

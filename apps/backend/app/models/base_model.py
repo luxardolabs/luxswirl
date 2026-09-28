@@ -243,7 +243,7 @@ class UUIDBaseModel(
     def __repr__(self) -> str:
         """Generate a helpful repr string."""
         attrs = []
-        for key in self.__mapper__.columns.keys():
+        for key in self.__mapper__.columns:
             if key != "id":
                 value = getattr(self, key, None)
                 if value is not None:

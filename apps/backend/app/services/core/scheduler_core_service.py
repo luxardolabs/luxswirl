@@ -6,6 +6,7 @@ database session patterns.
 """
 
 import asyncio
+import contextlib
 import random
 from collections.abc import Callable, Coroutine
 from datetime import UTC, datetime, timedelta
@@ -43,6 +44,11 @@ class SchedulerCoreService:
     def __init__(self) -> None:
         self._running = False
         self._task: asyncio.Task[None] | None = None
+        # Strong references to the dispatched job tasks. asyncio holds only a
+        # WEAK reference to a running task, so a bare `create_task(...)` can be
+        # garbage-collected mid-await: the lease stays held until it expires and
+        # the job looks dispatched while nothing ran it.
+        self._dispatched: set[asyncio.Task[None]] = set()
         self.job_functions: dict[str, Callable[..., Coroutine[Any, Any, Any]]] = {}
         self._register_job_functions()
 
@@ -74,10 +80,8 @@ class SchedulerCoreService:
         self._running = False
         if self._task:
             self._task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._task
-            except asyncio.CancelledError:
-                pass
         logger.info("Async scheduler stopped")
 
     async def _scheduler_loop(self) -> None:
@@ -87,7 +91,7 @@ class SchedulerCoreService:
                 await self._process_due_jobs()
                 await asyncio.sleep(10)  # Poll every 10 seconds
             except Exception as e:
-                logger.error("Scheduler loop error", extra={"error": str(e)})
+                logger.exception("Scheduler loop error", extra={"error": str(e)})
                 await asyncio.sleep(30)  # Backoff on error
 
     async def _process_due_jobs(self) -> None:
@@ -115,7 +119,9 @@ class SchedulerCoreService:
         # only after that — _execute_job opens its own session and re-verifies
         # each lease.
         for job_key, lease_token in dispatch:
-            asyncio.create_task(self._execute_job(job_key, lease_token))
+            task = asyncio.create_task(self._execute_job(job_key, lease_token))
+            self._dispatched.add(task)
+            task.add_done_callback(self._dispatched.discard)
 
     async def _execute_job(self, job_key: str, lease_token: UUID) -> None:
         """Execute a single job."""
@@ -187,8 +193,9 @@ class SchedulerCoreService:
                 job.total_runs += 1
 
                 logger.info(
-                    "Job completed"
-                    + (" with errors" if has_errors else " successfully"),
+                    "Job completed with errors"
+                    if has_errors
+                    else "Job completed successfully",
                     extra={"job_key": job_key, "duration": execution.duration_seconds},
                 )
 
@@ -199,17 +206,16 @@ class SchedulerCoreService:
                 )
                 execution.completed_at = datetime.now(UTC)
                 await self._handle_job_failure(db, job, execution.error_message)
-                logger.error("Job timed out", extra={"job_key": job_key})
+                logger.exception("Job timed out", extra={"job_key": job_key})
 
             except Exception as e:
                 execution.status = SchedulerExecutionStatus.FAILED
                 execution.error_message = str(e)
                 execution.completed_at = datetime.now(UTC)
                 await self._handle_job_failure(db, job, str(e))
-                logger.error(
+                logger.exception(
                     "Job failed",
                     extra={"job_key": job_key, "error": str(e)},
-                    exc_info=True,
                 )
 
             finally:

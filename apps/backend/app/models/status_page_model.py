@@ -145,8 +145,6 @@ class StatusPage(UUIDBaseModel):
             self.items.pop(index)
             self._reorder_items()
             # Mark the column as modified for SQLAlchemy to track the change
-            from sqlalchemy.orm import attributes
-
             attributes.flag_modified(self, "items")
 
     def reorder_item(self, from_index: int, to_index: int) -> None:
@@ -156,8 +154,6 @@ class StatusPage(UUIDBaseModel):
             self.items.insert(to_index, item)
             self._reorder_items()
             # Mark the column as modified for SQLAlchemy to track the change
-            from sqlalchemy.orm import attributes
-
             attributes.flag_modified(self, "items")
 
     def update_group_sort(self, index: int, sort_by: str, sort_direction: str) -> None:
@@ -174,8 +170,6 @@ class StatusPage(UUIDBaseModel):
                 item["sort_by"] = sort_by
                 item["sort_direction"] = sort_direction
                 # Mark the column as modified for SQLAlchemy to track the change
-                from sqlalchemy.orm import attributes
-
                 attributes.flag_modified(self, "items")
 
     def _reorder_items(self) -> None:

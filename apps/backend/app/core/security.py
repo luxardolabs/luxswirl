@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import hmac
 from datetime import timedelta
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Annotated, Any
 
 import bcrypt
 import jwt
@@ -16,8 +16,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.datetime_utils import utc_now
+from app.crud.user_crud import UserCRUD
 from app.db import get_db
 from app.schemas.auth_schema import CurrentUserDTO
+from app.services.core.auth_core_service import AuthCoreService
+from app.services.core.registration_key_core_service import (
+    RegistrationKeyCoreService,
+)
 
 if TYPE_CHECKING:
     from app.models.agent_model import Agent
@@ -31,10 +36,10 @@ logger = get_logger("luxswirl.security")
 
 
 async def get_current_user(
-    session_token: str | None = Cookie(
-        None, alias=settings.security.session_cookie_name
-    ),
-    db: AsyncSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
+    session_token: Annotated[
+        str | None, Cookie(alias=settings.security.session_cookie_name)
+    ] = None,
 ):
     """
     Get current authenticated user from session cookie.
@@ -62,9 +67,6 @@ async def get_current_user(
             detail="Not authenticated - no session cookie",
         )
 
-    # Import here to avoid circular dependency
-    from app.services.core.auth_core_service import AuthCoreService
-
     auth_service = AuthCoreService()
     session = await auth_service.verify_session(db, session_token)
 
@@ -79,7 +81,7 @@ async def get_current_user(
 
 
 async def get_current_active_user(
-    current_user: CurrentUserDTO = Depends(get_current_user),
+    current_user: Annotated[CurrentUserDTO, Depends(get_current_user)],
 ) -> CurrentUserDTO:
     """
     Get current active user (must not be inactive or locked).
@@ -95,7 +97,9 @@ async def get_current_active_user(
 
     Usage:
         @router.get("/api/v1/agents")
-        async def list_agents(user: CurrentUserDTO = Depends(get_current_active_user)):
+        async def list_agents(
+            user: Annotated[CurrentUserDTO, Depends(get_current_active_user)],
+        ):
             return agents
     """
     if not current_user.is_active:
@@ -130,12 +134,16 @@ def require_role(*allowed_roles: str):
 
         # Or to get the user:
         @router.get("/api/v1/settings")
-        async def get_settings(user: CurrentUserDTO = Depends(require_role("admin", "editor"))):
+        async def get_settings(
+            user: Annotated[
+                CurrentUserDTO, Depends(require_role("admin", "editor"))
+            ],
+        ):
             ...
     """
 
     async def role_checker(
-        user: CurrentUserDTO = Depends(get_current_active_user),
+        user: Annotated[CurrentUserDTO, Depends(get_current_active_user)],
     ) -> CurrentUserDTO:
         """Check if user has required role."""
         if user.role not in allowed_roles:
@@ -150,7 +158,7 @@ def require_role(*allowed_roles: str):
 
 # Convenience dependencies for common role requirements
 async def require_admin(
-    user: CurrentUserDTO = Depends(get_current_active_user),
+    user: Annotated[CurrentUserDTO, Depends(get_current_active_user)],
 ) -> CurrentUserDTO:
     """Require admin role."""
     if user.role != "admin":
@@ -162,7 +170,7 @@ async def require_admin(
 
 
 async def require_editor(
-    user: CurrentUserDTO = Depends(get_current_active_user),
+    user: Annotated[CurrentUserDTO, Depends(get_current_active_user)],
 ) -> CurrentUserDTO:
     """Require editor role or higher (admin, editor)."""
     if user.role not in ("admin", "editor"):
@@ -174,10 +182,10 @@ async def require_editor(
 
 
 async def get_optional_user(
-    session_token: str | None = Cookie(
-        None, alias=settings.security.session_cookie_name
-    ),
-    db: AsyncSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
+    session_token: Annotated[
+        str | None, Cookie(alias=settings.security.session_cookie_name)
+    ] = None,
 ):
     """
     Get current user if authenticated, None otherwise.
@@ -195,7 +203,11 @@ async def get_optional_user(
         return None
 
     try:
-        return await get_current_user(session_token, db)
+        # By keyword: these signatures are dependency signatures, so their
+        # parameter ORDER is not part of their contract (FastAPI resolves by
+        # name). A positional call here broke four public pages the moment the
+        # order changed.
+        return await get_current_user(db=db, session_token=session_token)
     except HTTPException:
         return None
 
@@ -214,13 +226,6 @@ async def _unauthenticated_web_redirect(
     since no credentials exist yet. Otherwise -> /login, preserving the originally
     requested path. Mirrors UserCoreService.needs_setup.
     """
-    # Lazy import: app.core.__init__ eagerly imports this module while
-    # app.models.base_model is still initializing, so a top-level user_crud (-> models)
-    # import here would create a circular import.
-    from app.crud.user_crud import (
-        UserCRUD,  # noqa: inline-import (breaks core<->models import cycle)
-    )
-
     if (
         not settings.security.initial_admin_password
         and await UserCRUD.get_first_admin(db) is None
@@ -237,10 +242,10 @@ async def _unauthenticated_web_redirect(
 
 async def get_current_user_web(
     request: Request,
-    session_token: str | None = Cookie(
-        None, alias=settings.security.session_cookie_name
-    ),
-    db: AsyncSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
+    session_token: Annotated[
+        str | None, Cookie(alias=settings.security.session_cookie_name)
+    ] = None,
 ):
     """
     Get current authenticated user for web routes.
@@ -262,9 +267,6 @@ async def get_current_user_web(
         # No session: first-run -> /setup wizard, otherwise /login.
         raise await _unauthenticated_web_redirect(request, db)
 
-    # Import here to avoid circular dependency
-    from app.services.core.auth_core_service import AuthCoreService
-
     auth_service = AuthCoreService()
     session = await auth_service.verify_session(db, session_token)
 
@@ -277,7 +279,7 @@ async def get_current_user_web(
 
 async def require_admin_web(
     request: Request,
-    current_user: CurrentUserDTO = Depends(get_current_user_web),
+    current_user: Annotated[CurrentUserDTO, Depends(get_current_user_web)],
 ) -> CurrentUserDTO:
     """Require admin role for web routes (redirects non-admins to home)."""
     if current_user.role != "admin":
@@ -291,7 +293,7 @@ async def require_admin_web(
 
 async def require_editor_web(
     request: Request,
-    current_user: CurrentUserDTO = Depends(get_current_user_web),
+    current_user: Annotated[CurrentUserDTO, Depends(get_current_user_web)],
 ) -> CurrentUserDTO:
     """Require editor role or higher for web routes (redirects viewers to home)."""
     if current_user.role not in ("admin", "editor"):
@@ -374,7 +376,9 @@ def verify_token(token: str) -> dict[str, Any]:
         ) from e
 
 
-async def verify_api_token(authorization: str | None = Header(None)) -> str:
+async def verify_api_token(
+    authorization: Annotated[str | None, Header()] = None,
+) -> str:
     """
     Verify API token from Authorization header.
 
@@ -389,7 +393,7 @@ async def verify_api_token(authorization: str | None = Header(None)) -> str:
 
     Example:
         @router.get("/agents")
-        async def list_agents(token: str = Depends(verify_api_token)):
+        async def list_agents(token: Annotated[str, Depends(verify_api_token)]):
             ...
     """
     if not settings.security.auth_enabled:
@@ -428,7 +432,9 @@ async def verify_api_token(authorization: str | None = Header(None)) -> str:
     return token
 
 
-async def get_optional_token(authorization: str | None = Header(None)) -> str | None:
+async def get_optional_token(
+    authorization: Annotated[str | None, Header()] = None,
+) -> str | None:
     """
     Get API token if provided, but don't require it.
 
@@ -451,7 +457,7 @@ async def get_optional_token(authorization: str | None = Header(None)) -> str | 
 
 
 async def verify_registration_token(
-    authorization: str | None = Header(None),
+    authorization: Annotated[str | None, Header()] = None,
     db: AsyncSession | None = None,
 ) -> str:
     """
@@ -491,11 +497,6 @@ async def verify_registration_token(
 
     token = parts[1]
 
-    # Import here to avoid circular dependency
-    from app.services.core.registration_key_core_service import (
-        RegistrationKeyCoreService,
-    )
-
     # Validate against registration keys in database
     if db is not None:
         reg_key = await RegistrationKeyCoreService.verify_key_and_update_usage(
@@ -522,7 +523,7 @@ async def verify_registration_token(
 
 async def verify_agent_token(
     agent: Agent,
-    authorization: str | None = Header(None),
+    authorization: Annotated[str | None, Header()] = None,
 ) -> str:
     """
     Verify agent-specific API token and check approval status.
@@ -576,10 +577,9 @@ async def verify_agent_token(
                 token.encode("utf-8"), agent.api_key_hash.encode("utf-8")
             )
         except Exception:
-            logger.error(
+            logger.exception(
                 "Error verifying agent key",
                 extra={"agent_id": str(agent.id)},
-                exc_info=True,
             )
             is_valid = False
 

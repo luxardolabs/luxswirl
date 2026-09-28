@@ -4,7 +4,7 @@ Agents are the distributed workers that execute health checks across your infras
 
 **Access:** **Agents** in the sidebar, or `/agents`.
 
----
+______________________________________________________________________
 
 ## Agent lifecycle
 
@@ -13,12 +13,12 @@ Agents are the distributed workers that execute health checks across your infras
 When an agent first starts, it attempts to register with the server using a **registration key** (set via the `LUXSWIRL_AUTH_KEY` environment variable):
 
 1. The agent starts and sends a registration request to the server.
-2. The server creates an agent record with `pending` approval status.
-3. The agent appears in the **Pending Approval** section.
-4. An administrator approves or rejects the agent.
-5. On approval, the server generates a unique API key for the agent.
-6. The agent receives the API key and stores it encrypted locally.
-7. The agent begins executing checks and sending results.
+1. The server creates an agent record with `pending` approval status.
+1. The agent appears in the **Pending Approval** section.
+1. An administrator approves or rejects the agent.
+1. On approval, the server generates a unique API key for the agent.
+1. The agent receives the API key and stores it encrypted locally.
+1. The agent begins executing checks and sending results.
 
 Two distinct keys are involved:
 
@@ -27,13 +27,13 @@ Two distinct keys are involved:
 
 ### Approval states
 
-| State | Description | Behavior |
-|-------|-------------|----------|
-| **Pending** | Waiting for admin approval | Cannot execute checks; shown in the pending section at the top |
-| **Active** | Approved and operational | Executes checks and reports results normally |
-| **Paused** | Temporarily suspended | Continues running but does not execute checks |
-| **Disabled** | Permanently disabled | Inactive; does not appear in most views |
-| **Rejected** | Denied access | Cannot communicate with the server |
+| State        | Description                | Behavior                                                       |
+| ------------ | -------------------------- | -------------------------------------------------------------- |
+| **Pending**  | Waiting for admin approval | Cannot execute checks; shown in the pending section at the top |
+| **Active**   | Approved and operational   | Executes checks and reports results normally                   |
+| **Paused**   | Temporarily suspended      | Continues running but does not execute checks                  |
+| **Disabled** | Permanently disabled       | Inactive; does not appear in most views                        |
+| **Rejected** | Denied access              | Cannot communicate with the server                             |
 
 ### Online / offline status
 
@@ -46,7 +46,7 @@ An agent is considered **online** if it has sent a heartbeat within the configur
 
 **Heartbeat vs check sync** — the *heartbeat* is how often the agent sends a health/metadata update; the *check sync* is how often the agent polls the server for check-configuration changes.
 
----
+______________________________________________________________________
 
 ## Pending Approval section
 
@@ -65,7 +65,7 @@ This section appears at the top of the Agents page whenever one or more agents a
 
 **Why manual approval?** It prevents unauthorized agents from joining your monitoring infrastructure, lets you review the agent's source (hostname, IP) before trusting it, and protects against rogue agents flooding the server with fake data.
 
----
+______________________________________________________________________
 
 ## Active agents list
 
@@ -84,23 +84,23 @@ Shows all approved agents, paginated, with rich performance metrics. Two control
 
 ### Action buttons
 
-| Button | Action |
-|--------|--------|
-| **Reload** | Forces the agent to immediately pull the latest check configurations instead of waiting for the next sync — use after adding/modifying checks |
-| **Edit** | Opens a panel to edit the agent name, tags, heartbeat interval, check-sync interval, and custom metadata (JSON); no restart required |
+| Button              | Action                                                                                                                                                                                  |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Reload**          | Forces the agent to immediately pull the latest check configurations instead of waiting for the next sync — use after adding/modifying checks                                           |
+| **Edit**            | Opens a panel to edit the agent name, tags, heartbeat interval, check-sync interval, and custom metadata (JSON); no restart required                                                    |
 | **Import / Export** | Bulk check management — export all of this agent's checks as JSON, or import JSON to bulk-create checks (handy for cloning config across agents). See [Import/Export](import-export.md) |
-| **View Checks** | Navigates to the Dashboard filtered to this agent |
+| **View Checks**     | Navigates to the Dashboard filtered to this agent                                                                                                                                       |
 
 ### Statistics grid
 
-| Stat | Meaning | Healthy / warning |
-|------|---------|-------------------|
-| **Success Rate** | Overall success rate for recent checks (from agent metadata, updated each heartbeat) | Green ≥99%, yellow 95–99%, red <95% |
-| **Checks** | `enabled/total` (e.g. `47/52` = 47 enabled of 52 total) | — |
-| **Uptime** | Agent **process** uptime (since registration or last restart), humanized (`5h`, `3d`) — not check uptime | — |
-| **Queue Depth** | Check results waiting to be sent to the server | 0 = healthy (sent immediately); >100 = heavy load or network issues |
+| Stat                 | Meaning                                                                                                                                 | Healthy / warning                                                         |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| **Success Rate**     | Overall success rate for recent checks (from agent metadata, updated each heartbeat)                                                    | Green ≥99%, yellow 95–99%, red \<95%                                      |
+| **Checks**           | `enabled/total` (e.g. `47/52` = 47 enabled of 52 total)                                                                                 | —                                                                         |
+| **Uptime**           | Agent **process** uptime (since registration or last restart), humanized (`5h`, `3d`) — not check uptime                                | —                                                                         |
+| **Queue Depth**      | Check results waiting to be sent to the server                                                                                          | 0 = healthy (sent immediately); >100 = heavy load or network issues       |
 | **Reporter Backlog** | Count of report files stored on disk because the server was unreachable, with the age of the oldest; replayed when connectivity resumes | 0 = healthy; >0 = the server was unreachable at some point (yellow alert) |
-| **API Key Status** | Status (green dot + "Active"), created date, and last-used time ("Never Used" in orange if the agent hasn't authenticated yet) | — |
+| **API Key Status**   | Status (green dot + "Active"), created date, and last-used time ("Never Used" in orange if the agent hasn't authenticated yet)          | —                                                                         |
 
 The API Key card also has **View Key** (shows a truncated key hash for verification), **Regenerate** (creates a new key and invalidates the old one), and **Revoke** (disables the key so the agent can no longer authenticate). The full API key is never displayed — only the agent holds the complete key, stored encrypted on disk; the UI shows a hash for verification only.
 
@@ -112,7 +112,7 @@ Three mini-charts over the selected Metrics range give a quick health read witho
 
 A metadata grid at the bottom of the card: IP address, version, platform (OS), Python version, hostname (FQDN), uptime, heartbeat/sync intervals, tags, and created date.
 
----
+______________________________________________________________________
 
 ## Agent detail page
 
@@ -120,27 +120,27 @@ Open it by clicking an agent's name. A breadcrumb, the agent name, hostname, and
 
 ### Statistics cards
 
-| Card | Detail |
-|------|--------|
-| **Total Checks** | Check executions in the last 24h (e.g. `1,440` for one check per minute) |
-| **Success Rate** | Success % over 24h, with `passed/total` (e.g. `1,425/1,440 passed`); green ≥99%, yellow ≥95%, red <95% |
-| **Average Latency** | Mean response time across all checks (e.g. `87ms`) |
-| **Uptime** | Humanized (`5h`, `12d`), with the registration date |
-| **File Descriptors** | Open FDs and "X% of limit"; **yellow at ≥80%** of the OS limit — catches FD leaks or misconfiguration |
-| **Subprocesses** | Child processes spawned; normal 0–10, elevated 10–50 (synthetic checks spawn browser processes via Playwright), concerning >50 (possible process leak) |
+| Card                 | Detail                                                                                                                                                 |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Total Checks**     | Check executions in the last 24h (e.g. `1,440` for one check per minute)                                                                               |
+| **Success Rate**     | Success % over 24h, with `passed/total` (e.g. `1,425/1,440 passed`); green ≥99%, yellow ≥95%, red \<95%                                                |
+| **Average Latency**  | Mean response time across all checks (e.g. `87ms`)                                                                                                     |
+| **Uptime**           | Humanized (`5h`, `12d`), with the registration date                                                                                                    |
+| **File Descriptors** | Open FDs and "X% of limit"; **yellow at ≥80%** of the OS limit — catches FD leaks or misconfiguration                                                  |
+| **Subprocesses**     | Child processes spawned; normal 0–10, elevated 10–50 (synthetic checks spawn browser processes via Playwright), concerning >50 (possible process leak) |
 
 ### Performance charts
 
 Six Chart.js time-series charts (one data point per minute; hover for exact values; X-axis is time):
 
-| Chart | Reads |
-|-------|-------|
-| **CPU Usage** (0–100%) | Sustained high usage indicates check-load issues |
-| **Memory Usage** (0–100%) | Typically 10–30%; steady growth indicates a memory leak |
-| **Queue Depth** | Should stay at/near 0; sustained elevation = network issues or server overload |
-| **Checks Executed / Succeeded** | Two lines (executed vs succeeded); the gap between them is failures |
-| **File Descriptors** | Stable or slow growth is healthy; rapid growth indicates a leak |
-| **Subprocesses** | Should correlate with synthetic checks executing |
+| Chart                           | Reads                                                                          |
+| ------------------------------- | ------------------------------------------------------------------------------ |
+| **CPU Usage** (0–100%)          | Sustained high usage indicates check-load issues                               |
+| **Memory Usage** (0–100%)       | Typically 10–30%; steady growth indicates a memory leak                        |
+| **Queue Depth**                 | Should stay at/near 0; sustained elevation = network issues or server overload |
+| **Checks Executed / Succeeded** | Two lines (executed vs succeeded); the gap between them is failures            |
+| **File Descriptors**            | Stable or slow growth is healthy; rapid growth indicates a leak                |
+| **Subprocesses**                | Should correlate with synthetic checks executing                               |
 
 (Charts don't support zoom — change the time-range selector instead; right-click to save a chart as an image.)
 
@@ -150,62 +150,62 @@ A detailed metadata grid lists IP address, version (semver), platform (e.g. `Lin
 
 The **Assigned Checks** table lists every check on the agent — Check Name (links to detail), Type, Target, Interval, Enabled (inline toggle), and Last Check (relative time).
 
----
+______________________________________________________________________
 
 ## Common workflows
 
 ### Approving a new agent
 
 1. The new agent appears in **Pending Approval** at the top of the page.
-2. Review its information: hostname, IP, version.
-3. Verify it's an expected agent (not rogue/unauthorized).
-4. Click the green **Approve** button.
-5. The agent immediately begins executing assigned checks and moves to the active list.
+1. Review its information: hostname, IP, version.
+1. Verify it's an expected agent (not rogue/unauthorized).
+1. Click the green **Approve** button.
+1. The agent immediately begins executing assigned checks and moves to the active list.
 
 ### Monitoring agent health
 
 1. On the **Agents** page, scan cards for red (offline) indicators.
-2. Check **Reporter Backlog** — yellow warning if >0.
-3. Check **Success Rate** — red if <95%.
-4. Click an agent name to open the detail page and review the charts for anomalies: CPU/memory spikes (check-load issues), queue-depth elevation (network/server issues), file-descriptor growth (resource leak).
+1. Check **Reporter Backlog** — yellow warning if >0.
+1. Check **Success Rate** — red if \<95%.
+1. Click an agent name to open the detail page and review the charts for anomalies: CPU/memory spikes (check-load issues), queue-depth elevation (network/server issues), file-descriptor growth (resource leak).
 
 ### Forcing a check-configuration reload
 
 1. After creating/modifying checks on an agent, click **Reload** on the agent card.
-2. Wait 5–10 seconds for the reload to complete.
-3. Click **View Checks** to verify the new checks appear and are executing (latency values populate).
+1. Wait 5–10 seconds for the reload to complete.
+1. Click **View Checks** to verify the new checks appear and are executing (latency values populate).
 
 ### Troubleshooting an offline agent
 
 1. Check the **last seen** timestamp — how long has it been offline?
-2. Review **reporter backlog** — did it go offline and come back? (backlog processing)
-3. SSH to the agent host and check the process and logs:
+1. Review **reporter backlog** — did it go offline and come back? (backlog processing)
+1. SSH to the agent host and check the process and logs:
    ```bash
    docker ps | grep luxswirl_agent
    docker logs luxswirl_agent --tail 50
    ```
-4. Check network connectivity to the server:
+1. Check network connectivity to the server:
    ```bash
    docker exec luxswirl_agent curl -I https://server.example.com:9000/health
    ```
-5. Verify the API key — if stale/revoked, **Regenerate** it in the agent card's API Key section; the agent reconnects automatically with the new key.
+1. Verify the API key — if stale/revoked, **Regenerate** it in the agent card's API Key section; the agent reconnects automatically with the new key.
 
 ### Cloning checks across multiple agents
 
 1. Open the agent with the existing checks.
-2. Click **Import/Export** → **Export Checks** → select checks (or Select All) → **Download JSON**.
-3. Open the target agent → **Import/Export** → **Import Checks** → upload the JSON.
-4. Review the imported checks and click **Import X Checks** — they're created and begin executing immediately.
+1. Click **Import/Export** → **Export Checks** → select checks (or Select All) → **Download JSON**.
+1. Open the target agent → **Import/Export** → **Import Checks** → upload the JSON.
+1. Review the imported checks and click **Import X Checks** — they're created and begin executing immediately.
 
 ### Investigating performance issues
 
 1. Open the agent detail page and set the range to **24 Hours** or **3 Days**.
-2. **CPU Usage** — look for sustained high usage.
-3. **Memory Usage** — look for a memory leak (steady growth).
-4. **Queue Depth** — spikes indicate throughput issues.
-5. **Checks Executed/Succeeded** — a large gap indicates failures.
-6. **File Descriptors** — growth indicates a leak.
-7. **Subprocesses** — spikes from synthetic checks.
+1. **CPU Usage** — look for sustained high usage.
+1. **Memory Usage** — look for a memory leak (steady growth).
+1. **Queue Depth** — spikes indicate throughput issues.
+1. **Checks Executed/Succeeded** — a large gap indicates failures.
+1. **File Descriptors** — growth indicates a leak.
+1. **Subprocesses** — spikes from synthetic checks.
 
 ### Managing agent API keys
 
@@ -213,17 +213,19 @@ The **Assigned Checks** table lists every check on the agent — Check Name (lin
 - **Regenerate:** **Regenerate** → confirm. A new key is generated and sent to the agent, which updates its encrypted copy automatically; the old key is immediately invalidated. No manual intervention needed.
 - **Revoke:** **Revoke** → confirm. The key is invalidated, the agent can no longer authenticate, and it appears offline within ~5 minutes. To restore, regenerate the key or re-approve the agent.
 
----
+______________________________________________________________________
 
 ## Performance considerations
 
 **High agent count (100+):**
+
 - Use the **Active Only** filter to focus on online agents.
 - Increase the per-page setting to reduce pagination.
 - Consider a longer heartbeat interval to reduce database writes (default 60s).
 - Use tags to organize agents by environment/datacenter.
 
 **High check count per agent (500+):**
+
 - Watch **Queue Depth** — sustained elevation indicates agent overload.
 - Increase `max_concurrent_checks` in the agent configuration (default 200).
 - Consider splitting checks across multiple agents.
@@ -231,19 +233,19 @@ The **Assigned Checks** table lists every check on the agent — Check Name (lin
 
 **Resource-monitoring alert thresholds worth setting:** CPU sustained >80%, memory sustained >80%, queue depth sustained >50, reporter backlog >0 for more than 15 minutes, file descriptors >80% of limit, subprocesses >50.
 
----
+______________________________________________________________________
 
 ## Troubleshooting
 
-| Symptom | Cause | Solution |
-|---------|-------|----------|
-| Agent stuck in **Pending** | Registration-key mismatch or network issue | Verify `LUXSWIRL_AUTH_KEY` matches the registration key in Settings; check `docker logs luxswirl_agent`; ensure the agent can reach `https://server.example.com:9000/health` |
-| API key shows **"Never Used"** | Approved but not yet authenticated | Wait ~60s for the next heartbeat; check logs for auth errors and a "Saved credentials" message |
-| **Reporter backlog** not clearing | Server unreachable or slow to process stored reports | Verify the server is online/healthy; check server logs and DB insert performance. Backlog drains sequentially at ~100 reports/minute |
-| Performance charts show **no data** | Agent too old or range too narrow | Agent metrics need version **≥1.0.15**; expand the range (try 24h); wait for the next heartbeat (~60s) |
-| Agent offline **after key regeneration** | Agent hasn't received the new key yet | Wait ~60s for the next check-in; if still offline after 2 minutes, check the agent logs |
+| Symptom                                  | Cause                                                | Solution                                                                                                                                                                     |
+| ---------------------------------------- | ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Agent stuck in **Pending**               | Registration-key mismatch or network issue           | Verify `LUXSWIRL_AUTH_KEY` matches the registration key in Settings; check `docker logs luxswirl_agent`; ensure the agent can reach `https://server.example.com:9000/health` |
+| API key shows **"Never Used"**           | Approved but not yet authenticated                   | Wait ~60s for the next heartbeat; check logs for auth errors and a "Saved credentials" message                                                                               |
+| **Reporter backlog** not clearing        | Server unreachable or slow to process stored reports | Verify the server is online/healthy; check server logs and DB insert performance. Backlog drains sequentially at ~100 reports/minute                                         |
+| Performance charts show **no data**      | Agent too old or range too narrow                    | Agent metrics need version **≥1.0.15**; expand the range (try 24h); wait for the next heartbeat (~60s)                                                                       |
+| Agent offline **after key regeneration** | Agent hasn't received the new key yet                | Wait ~60s for the next check-in; if still offline after 2 minutes, check the agent logs                                                                                      |
 
----
+______________________________________________________________________
 
 ## Related
 

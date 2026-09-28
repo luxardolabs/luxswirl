@@ -546,14 +546,12 @@ class AlertCoreService:
             return True  # No filters = matches all
 
         # Check agent_ids filter
-        if "agent_ids" in filters:
-            if check.agent_id not in filters["agent_ids"]:
-                return False
+        if "agent_ids" in filters and check.agent_id not in filters["agent_ids"]:
+            return False
 
         # Check check_types filter
-        if "check_types" in filters:
-            if check.check_type not in filters["check_types"]:
-                return False
+        if "check_types" in filters and check.check_type not in filters["check_types"]:
+            return False
 
         # Check check_names filter (with wildcard support)
         if "check_names" in filters:

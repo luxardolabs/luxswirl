@@ -115,3 +115,23 @@ async def test_logout_ends_the_session(smoke_world):
 
     assert (await client.get("/logout", headers=headers)).status_code < 500
     assert (await client.post("/logout", headers=headers)).status_code < 500
+
+
+async def test_login_page_renders_for_an_anonymous_visitor(smoke_world):
+    """The sweep rides an admin cookie, so /login only ever answered 302 to /.
+
+    A 3xx means the handler never ran and login.html was never rendered — the
+    one page every unauthenticated visitor sees. Requested here with no session
+    header, which is the state it is written for.
+    """
+    response = await smoke_world["client"].get("/login")
+    assert response.status_code == 200, response.status_code
+    assert b"password" in response.content.lower()
+
+
+async def test_setup_wizard_renders_on_an_empty_install(empty_install):
+    """/setup redirects the moment any user exists, which is every other test's
+    world — so its template had no test that ever rendered it."""
+    response = await empty_install.get("/setup")
+    assert response.status_code == 200, response.status_code
+    assert b"password" in response.content.lower()

@@ -2,26 +2,25 @@
 
 **Copy-paste ready configurations for common monitoring scenarios.**
 
-
----
+______________________________________________________________________
 
 ## Table of Contents
 
 1. [Schema Overview](#schema-overview)
-2. [HTTP Checks](#http-checks)
-3. [JSON API Checks](#json-api-checks)
-4. [TCP & Ping Checks](#tcp--ping-checks)
-5. [Database Checks](#database-checks)
-6. [DNS Checks](#dns-checks)
-7. [Synthetic Checks](#synthetic-checks)
-8. [Alert Configurations](#alert-configurations)
-9. [Notification Providers](#notification-providers)
-10. [Import/Export Patterns](#importexport-patterns)
-11. [Status Page Examples](#status-page-examples)
-12. [Complete Monitoring Stacks](#complete-monitoring-stacks)
-13. [Tips and Best Practices](#tips-and-best-practices)
+1. [HTTP Checks](#http-checks)
+1. [JSON API Checks](#json-api-checks)
+1. [TCP & Ping Checks](#tcp--ping-checks)
+1. [Database Checks](#database-checks)
+1. [DNS Checks](#dns-checks)
+1. [Synthetic Checks](#synthetic-checks)
+1. [Alert Configurations](#alert-configurations)
+1. [Notification Providers](#notification-providers)
+1. [Import/Export Patterns](#importexport-patterns)
+1. [Status Page Examples](#status-page-examples)
+1. [Complete Monitoring Stacks](#complete-monitoring-stacks)
+1. [Tips and Best Practices](#tips-and-best-practices)
 
----
+______________________________________________________________________
 
 ## Schema Overview
 
@@ -31,35 +30,35 @@ There are two surfaces with slightly different key names:
 
 **REST API (`POST /api/v1/agents/{agent_id}/checks`)** — uses `display_name`, `interval_seconds`, `timeout_seconds`:
 
-| Field | Type | Applies to | Notes |
-|-------|------|------------|-------|
-| `display_name` | string | all | Required |
-| `check_type` | string | all | `ping`, `http`, `tcp`, `json`, `dns`, `mysql`, `postgres`, `synthetic` |
-| `target` | string | all | Required |
-| `description` | string | all | Optional |
-| `interval_seconds` | int | all | 1–86400 |
-| `timeout_seconds` | int | all | 1–300, default 10 |
-| `enabled` | bool | all | Default true |
-| `retry_attempts` | int | all | 0–10 |
-| `tags` | string[] | all | Optional |
-| `http_method` | string | http, json | e.g. `GET`, `POST` |
-| `verify_ssl` | bool | http, json | |
-| `expected_status` | int | http, json | 100–599 |
-| `json_path` | string | json | JSONata expression |
-| `expected_value` | string | json | Compared against `json_path` result |
-| `record_type` | string | dns | `A`, `AAAA`, `CNAME`, `MX`, `TXT`, `NS`, `PTR`, `SOA`, `SRV`, `CAA` |
-| `nameserver` | string | dns | Default `1.1.1.1` |
-| `port` | int | dns, tcp | DNS default 53; required for TCP |
-| `expect_value` | string | dns | DNS expected record value (note: `expect_value`, not `expected_value`) |
-| `connection_string` | string | mysql, postgres | Optional; falls back to `target` |
-| `query` | string | mysql, postgres | Default `SELECT 1` |
-| `script_code` | string | synthetic | Python/Playwright script |
+| Field               | Type     | Applies to      | Notes                                                                  |
+| ------------------- | -------- | --------------- | ---------------------------------------------------------------------- |
+| `display_name`      | string   | all             | Required                                                               |
+| `check_type`        | string   | all             | `ping`, `http`, `tcp`, `json`, `dns`, `mysql`, `postgres`, `synthetic` |
+| `target`            | string   | all             | Required                                                               |
+| `description`       | string   | all             | Optional                                                               |
+| `interval_seconds`  | int      | all             | 1–86400                                                                |
+| `timeout_seconds`   | int      | all             | 1–300, default 10                                                      |
+| `enabled`           | bool     | all             | Default true                                                           |
+| `retry_attempts`    | int      | all             | 0–10                                                                   |
+| `tags`              | string[] | all             | Optional                                                               |
+| `http_method`       | string   | http, json      | e.g. `GET`, `POST`                                                     |
+| `verify_ssl`        | bool     | http, json      |                                                                        |
+| `expected_status`   | int      | http, json      | 100–599                                                                |
+| `json_path`         | string   | json            | JSONata expression                                                     |
+| `expected_value`    | string   | json            | Compared against `json_path` result                                    |
+| `record_type`       | string   | dns             | `A`, `AAAA`, `CNAME`, `MX`, `TXT`, `NS`, `PTR`, `SOA`, `SRV`, `CAA`    |
+| `nameserver`        | string   | dns             | Default `1.1.1.1`                                                      |
+| `port`              | int      | dns, tcp        | DNS default 53; required for TCP                                       |
+| `expect_value`      | string   | dns             | DNS expected record value (note: `expect_value`, not `expected_value`) |
+| `connection_string` | string   | mysql, postgres | Optional; falls back to `target`                                       |
+| `query`             | string   | mysql, postgres | Default `SELECT 1`                                                     |
+| `script_code`       | string   | synthetic       | Python/Playwright script                                               |
 
 **Import/Export JSON** — uses `name` plus `interval`/`timeout` (instead of `display_name`/`interval_seconds`/`timeout_seconds`). Supported keys: `name`, `check_type`, `target`, `interval`, `timeout`, `retry_attempts`, `enabled`, `description`, `http_method`, `expected_status`, `json_path`, `expected_value`, `tags`.
 
 > **Note on JSON comparisons:** the agent supports a `comparison_type` (`equals`, `contains`, `regex`, `greater_than`/`gt`, `less_than`/`lt`, `not_equals`/`ne`) that defaults to `equals`. It is applied agent-side; the create/import schema does not persist a custom comparison, so JSON checks created through the API/import use `equals`.
 
----
+______________________________________________________________________
 
 ## HTTP Checks
 
@@ -80,7 +79,7 @@ There are two surfaces with slightly different key names:
 }
 ```
 
----
+______________________________________________________________________
 
 ### API Health Check
 
@@ -100,7 +99,7 @@ There are two surfaces with slightly different key names:
 }
 ```
 
----
+______________________________________________________________________
 
 ### POST Endpoint
 
@@ -119,7 +118,7 @@ There are two surfaces with slightly different key names:
 }
 ```
 
----
+______________________________________________________________________
 
 ### Self-Signed / Internal HTTPS
 
@@ -140,7 +139,7 @@ There are two surfaces with slightly different key names:
 
 > SSL certificate metadata (issuer, subject, expiry) is collected automatically for any HTTPS target and surfaced on the check detail view — no separate certificate check or extra fields are required.
 
----
+______________________________________________________________________
 
 ## JSON API Checks
 
@@ -149,6 +148,7 @@ JSON checks fetch a URL, parse the response as JSON, and evaluate a **JSONata** 
 ### Simple Field Validation
 
 **API Response**:
+
 ```json
 {
   "status": "healthy",
@@ -158,6 +158,7 @@ JSON checks fetch a URL, parse the response as JSON, and evaluate a **JSONata** 
 ```
 
 **Check Configuration**:
+
 ```json
 {
   "display_name": "API Status Check",
@@ -172,11 +173,12 @@ JSON checks fetch a URL, parse the response as JSON, and evaluate a **JSONata** 
 }
 ```
 
----
+______________________________________________________________________
 
 ### Nested Field Extraction
 
 **API Response**:
+
 ```json
 {
   "status": "ok",
@@ -188,6 +190,7 @@ JSON checks fetch a URL, parse the response as JSON, and evaluate a **JSONata** 
 ```
 
 **Check Configuration**:
+
 ```json
 {
   "display_name": "Database Connection Check",
@@ -200,13 +203,14 @@ JSON checks fetch a URL, parse the response as JSON, and evaluate a **JSONata** 
 }
 ```
 
----
+______________________________________________________________________
 
 ### JSONata Functions and Filters
 
 **Use case**: Count running services
 
 **API Response**:
+
 ```json
 {
   "services": [
@@ -218,6 +222,7 @@ JSON checks fetch a URL, parse the response as JSON, and evaluate a **JSONata** 
 ```
 
 **Check Configuration**:
+
 ```json
 {
   "display_name": "Active Services Count",
@@ -232,7 +237,7 @@ JSON checks fetch a URL, parse the response as JSON, and evaluate a **JSONata** 
 
 > `json_path` accepts the full JSONata query language (https://jsonata.org): dotted paths, array indexing (`users[0].name`), quoted keys (`printers."a.b".status`), wildcards (`servers.*.status`), filters (`printers[status='online']`), and functions (`$count`, `$sum`). `expected_value` is supplied as a string; the agent coerces it to match the type of the resolved value (e.g. `"true"` for booleans, `"3"` for numbers).
 
----
+______________________________________________________________________
 
 ## TCP & Ping Checks
 
@@ -251,7 +256,7 @@ JSON checks fetch a URL, parse the response as JSON, and evaluate a **JSONata** 
 }
 ```
 
----
+______________________________________________________________________
 
 ### Ping (ICMP) Check
 
@@ -267,7 +272,7 @@ JSON checks fetch a URL, parse the response as JSON, and evaluate a **JSONata** 
 }
 ```
 
----
+______________________________________________________________________
 
 ## Database Checks
 
@@ -287,6 +292,7 @@ Database checks connect using a DSN (provided as `target`, or optionally `connec
 ```
 
 **Note**: Create a read-only monitoring user:
+
 ```sql
 CREATE USER 'monitor'@'%' IDENTIFIED BY 'secure_password';
 GRANT REPLICATION CLIENT ON *.* TO 'monitor'@'%';
@@ -295,7 +301,7 @@ FLUSH PRIVILEGES;
 
 MySQL/MariaDB DSNs must use the `mysql://` or `mariadb://` scheme.
 
----
+______________________________________________________________________
 
 ### MySQL Table Row Count
 
@@ -312,7 +318,7 @@ MySQL/MariaDB DSNs must use the `mysql://` or `mariadb://` scheme.
 
 > The check passes if the query executes successfully. Row count and latency are recorded as metrics; thresholds on those values are applied via Alerts (see below), not in the check body.
 
----
+______________________________________________________________________
 
 ### PostgreSQL Connection Count
 
@@ -329,7 +335,7 @@ MySQL/MariaDB DSNs must use the `mysql://` or `mariadb://` scheme.
 
 PostgreSQL DSNs must use the `postgres://` or `postgresql://` scheme.
 
----
+______________________________________________________________________
 
 ### PostgreSQL Replication Lag
 
@@ -344,7 +350,7 @@ PostgreSQL DSNs must use the `postgres://` or `postgresql://` scheme.
 }
 ```
 
----
+______________________________________________________________________
 
 ## DNS Checks
 
@@ -365,7 +371,7 @@ DNS checks require `record_type`. The expected record value uses the field **`ex
 }
 ```
 
----
+______________________________________________________________________
 
 ### MX Record Validation
 
@@ -382,7 +388,7 @@ DNS checks require `record_type`. The expected record value uses the field **`ex
 }
 ```
 
----
+______________________________________________________________________
 
 ### TXT Record (SPF) Validation
 
@@ -401,7 +407,7 @@ DNS checks require `record_type`. The expected record value uses the field **`ex
 }
 ```
 
----
+______________________________________________________________________
 
 ## Synthetic Checks
 
@@ -438,7 +444,7 @@ async def run_check(page):
     return {'status': 'success', 'steps': steps}
 ```
 
----
+______________________________________________________________________
 
 ### Multi-Step Checkout
 
@@ -475,7 +481,7 @@ async def run_check(page):
 
 > Synthetic scripts execute server-side and are gated by AST validation. Use them only in trusted, self-hosted deployments. The script body is sent as the `script_code` string when creating the check.
 
----
+______________________________________________________________________
 
 ## Alert Configurations
 
@@ -502,7 +508,7 @@ Alerts are separate from checks. An alert has a `trigger_type` (`status_change`,
 }
 ```
 
----
+______________________________________________________________________
 
 ### Global Alert with Check Filters
 
@@ -533,7 +539,7 @@ Alerts are separate from checks. An alert has a `trigger_type` (`status_change`,
 
 > Both `check_ids` (the checks to watch) and `notification_provider_ids` (the providers to fire) are **UUIDs**. `custom_subject` and `custom_message` may be supplied to override the notification templates. The simplest way to attach checks to an alert is through the UI (**Alerts → Edit → Checks**).
 
----
+______________________________________________________________________
 
 ## Notification Providers
 
@@ -562,7 +568,7 @@ Notification providers are created with a `provider_type`, a `friendly_name`, an
 }
 ```
 
----
+______________________________________________________________________
 
 ### Webhook
 
@@ -589,7 +595,7 @@ The webhook sends a **fixed JSON payload** describing the event — the body is 
 
 > To integrate with Slack, Discord, or other services that expect a specific message shape, point `post_url` at a small relay/middleware that reformats the fixed payload above into that service's schema. LuxSwirl does not template per-provider message bodies.
 
----
+______________________________________________________________________
 
 ## Import/Export Patterns
 
@@ -598,6 +604,7 @@ Exported files use the import/export key names: `name`, `interval`, `timeout` (n
 ### Templating Pattern (Single Check -> Many)
 
 **Step 1**: Create a template (`template.json`):
+
 ```json
 {
   "checks": [
@@ -615,6 +622,7 @@ Exported files use the import/export key names: `name`, `interval`, `timeout` (n
 ```
 
 **Step 2**: Generate multiple checks:
+
 ```python
 import json
 
@@ -643,7 +651,7 @@ print(f"Generated {len(checks)} checks")
 
 **Step 3**: Import `generated-checks.json` via the UI.
 
----
+______________________________________________________________________
 
 ### Environment Promotion (Dev -> Staging -> Prod)
 
@@ -659,7 +667,7 @@ jq '.checks[].target |= gsub("staging.example.com"; "example.com")' \
 
 Import each file into the corresponding environment.
 
----
+______________________________________________________________________
 
 ### Bulk Configuration Update
 
@@ -670,7 +678,7 @@ jq '.checks[].interval = 120' checks.json > updated-checks.json
 # Import updated-checks.json with `overwrite: true` to update existing checks by name
 ```
 
----
+______________________________________________________________________
 
 ## Status Page Examples
 
@@ -708,7 +716,7 @@ A status page has a `name`, a URL-safe `slug`, an `is_public` flag, an optional 
 
 **Result**: `https://luxswirl.example.com/status/status`
 
----
+______________________________________________________________________
 
 ### Internal Operations Page (private)
 
@@ -743,7 +751,7 @@ A status page has a `name`, a URL-safe `slug`, an `is_public` flag, an optional 
 
 **Access**: `https://luxswirl.example.com/status/ops`
 
----
+______________________________________________________________________
 
 ## Complete Monitoring Stacks
 
@@ -792,7 +800,7 @@ These stacks use the **import/export** format (`name`, `interval`, `timeout`).
 
 > DNS `record_type`/`expect_value` and database `query` are not part of the import/export key set, so they fall back to defaults on import (DNS resolves the record; databases run `SELECT 1`). Set those fields afterward via the UI or the REST API if you need specific values.
 
----
+______________________________________________________________________
 
 ### Microservices API Stack
 
@@ -850,37 +858,39 @@ These stacks use the **import/export** format (`name`, `interval`, `timeout`).
 
 > For a Redis port check, add a `tcp` check via the REST API or UI (target `redis.example.com`, `port` `6379`) — `port` is not part of the import/export key set.
 
----
+______________________________________________________________________
 
 ## Tips and Best Practices
 
 ### Naming Conventions
 
 **Good**:
+
 - `prod-api-health` (environment-service-type)
 - `Payment Gateway` (descriptive)
 - `eu-west-1-db-replica` (region-component-type)
 
 **Bad**:
+
 - `check-1` (non-descriptive)
 - `test` (ambiguous)
 - `my-check` (whose check?)
 
----
+______________________________________________________________________
 
 ### Interval Selection
 
-| Check Type | Recommended Interval | Rationale |
-|------------|---------------------|-----------|
-| Critical API | 30-60 seconds | Fast detection |
-| Website uptime | 60 seconds | Balance speed and load |
-| Database health | 60-120 seconds | Avoid query overhead |
-| DNS records | 3600 seconds (hourly) | Changes infrequently |
-| Synthetic checks | 300-600 seconds | Resource-heavy operations |
+| Check Type       | Recommended Interval  | Rationale                 |
+| ---------------- | --------------------- | ------------------------- |
+| Critical API     | 30-60 seconds         | Fast detection            |
+| Website uptime   | 60 seconds            | Balance speed and load    |
+| Database health  | 60-120 seconds        | Avoid query overhead      |
+| DNS records      | 3600 seconds (hourly) | Changes infrequently      |
+| Synthetic checks | 300-600 seconds       | Resource-heavy operations |
 
 `interval_seconds` (API) / `interval` (import) accepts 1–86400 seconds.
 
----
+______________________________________________________________________
 
 ### Timeout Guidelines
 
@@ -893,16 +903,17 @@ These stacks use the **import/export** format (`name`, `interval`, `timeout`).
 
 **Rule of thumb**: Timeout should be ~2x expected response time.
 
----
+______________________________________________________________________
 
 ## Need More Examples?
 
 **Request examples via**:
+
 - GitHub Discussions: https://github.com/luxardolabs/luxswirl/discussions
 
 **Contribute your examples**:
+
 - Submit a PR to this file
 - Share in GitHub Discussions (we'll add the best ones)
 
----
-
+______________________________________________________________________

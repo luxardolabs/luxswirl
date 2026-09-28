@@ -10,7 +10,7 @@
 
 </div>
 
----
+______________________________________________________________________
 
 ## What is LuxSwirl?
 
@@ -22,7 +22,7 @@ A Luxardo Labs project, released as an open-source give-back under AGPLv3.
 
 The server is a single point of failure: there's no high availability or automatic failover, so if the server is down, no alerts fire. Agents buffer their results locally and replay them when the server recovers, so historical data stays complete — but real-time alerting during a server outage isn't guaranteed. For mission-critical alerting, run LuxSwirl alongside a tool built for that, and/or monitor the server itself with an external service. The [Limitations](docs/reference/limitations.md) doc has the full, honest rundown.
 
----
+______________________________________________________________________
 
 ## Features
 
@@ -54,16 +54,16 @@ Run checks from agents deployed across networks, regions, and private LANs, all 
 
 One platform covers web endpoints, APIs, network reachability, ports, DNS, databases, and full browser flows — so most of what you run is monitored in one place instead of stitched across tools.
 
-| Type | What it does |
-|------|--------------|
-| **HTTP/HTTPS** | Status code, latency, optional content checks |
-| **JSON** | Validate a JSON response with a JSONata query |
-| **Ping (ICMP)** | Network reachability |
-| **TCP** | Port connectivity |
-| **DNS** | Record lookups (A, AAAA, MX, TXT, etc.) |
-| **MySQL** | Run a query against MySQL/MariaDB |
-| **PostgreSQL** | Run a query against PostgreSQL |
-| **Synthetic (Playwright)** | Browser automation (admin-only — see below) |
+| Type                       | What it does                                  |
+| -------------------------- | --------------------------------------------- |
+| **HTTP/HTTPS**             | Status code, latency, optional content checks |
+| **JSON**                   | Validate a JSON response with a JSONata query |
+| **Ping (ICMP)**            | Network reachability                          |
+| **TCP**                    | Port connectivity                             |
+| **DNS**                    | Record lookups (A, AAAA, MX, TXT, etc.)       |
+| **MySQL**                  | Run a query against MySQL/MariaDB             |
+| **PostgreSQL**             | Run a query against PostgreSQL                |
+| **Synthetic (Playwright)** | Browser automation (admin-only — see below)   |
 
 > ⚠️ **Synthetic checks execute arbitrary Python on agent hosts.** They are admin-role-only by design and intended for trusted, self-hosted deployments. Treat them like cron jobs — anyone who can create one can run code as the agent user. AST validation blocks obvious attacks but is not a sandbox. Vet admin accounts carefully and review synthetic check code before deploying it. See [SECURITY.md](SECURITY.md) for the full trust model.
 
@@ -107,7 +107,7 @@ Import and export checks as JSON: version-control your monitoring config, back i
 
 Prometheus metrics at `/metrics`, an OpenAPI-documented REST API (`/docs`, `/redoc`), role-based access (admin/editor/viewer), agent registration keys, and agent credentials encrypted at rest (Fernet).
 
----
+______________________________________________________________________
 
 ## Quick start
 
@@ -135,7 +135,7 @@ Approve the agent on the **Agents** page, then create your first check. The full
 
 > Prefer to build from source instead of pulling published images? `make build` builds the backend and agent images locally.
 
----
+______________________________________________________________________
 
 ## Documentation
 
@@ -146,7 +146,7 @@ Approve the agent on the **Agents** page, then create your first check. The full
 - **[FAQ](docs/user-guide/faq.md)** and **[Limitations](docs/reference/limitations.md)** — honest answers about what it does and doesn't do.
 - **API reference** — auto-generated Swagger UI at `/docs` and ReDoc at `/redoc` on a running server.
 
----
+______________________________________________________________________
 
 ## Contributing
 
@@ -154,13 +154,13 @@ LuxSwirl is released as an open-source give-back, so there's no roadmap commitme
 
 Questions and ideas are welcome in [GitHub Discussions](https://github.com/luxardolabs/luxswirl/discussions); bugs go in [GitHub Issues](https://github.com/luxardolabs/luxswirl/issues).
 
----
+______________________________________________________________________
 
 ## License
 
 LuxSwirl is licensed under the **GNU Affero General Public License v3.0 (AGPLv3)** — see [LICENSE](LICENSE). Use it, self-host it, modify it, and fork it freely. AGPL's network-copyleft is the one catch: if you run a *modified* version as a service for others, you have to make that source available too, and you can't take LuxSwirl closed-source and resell it as a hosted product. It's an open-source give-back — more in [Licensing](docs/reference/licensing.md).
 
----
+______________________________________________________________________
 
 ## Built with
 

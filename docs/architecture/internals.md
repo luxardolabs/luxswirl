@@ -4,7 +4,7 @@
 
 This document explains implementation details, architectural decisions, and technical nuances that developers need to understand but users don't need to know about.
 
----
+______________________________________________________________________
 
 ## Timeout Architecture
 
@@ -13,21 +13,25 @@ This document explains implementation details, architectural decisions, and tech
 **A:** LuxSwirl has three separate timeout systems serving different purposes:
 
 #### 1. Check Timeouts (Health Checks)
+
 - **Purpose:** Control how long to wait for a check operation to complete
 - **Configured:** Per-check in check configuration
 - **Example:** `http_timeout: 30` means wait 30 seconds for HTTP response
 - **Scope:** Individual check operations (ping, HTTP request, TCP connection, etc.)
 
 #### 2. Job Timeouts (Background Jobs)
+
 Jobs have **three layers** of timeouts:
 
 **Layer 1: Job-Level Timeout** (`default_timeout_seconds`)
+
 - **Purpose:** Kill ENTIRE job if it runs too long
 - **Configured:** Class attribute on job class (e.g., `NetworkScanJob.default_timeout_seconds = 600`)
 - **Example:** Network scan must complete in 10 minutes or get killed
 - **Scope:** Entire job execution from start to finish
 
 **Layer 2: Per-Operation Timeout** (job params)
+
 - **Purpose:** Control timeout for each individual operation within the job
 - **Configured:** Job parameter loaded from database settings (e.g., `job.network_scan_timeout`)
 - **Example:** `timeout: 10` means wait 10 seconds per host in network scan
@@ -35,6 +39,7 @@ Jobs have **three layers** of timeouts:
 - **User-configurable:** Yes, via job creation form
 
 **Layer 3: Subprocess Cleanup Margins** (hardcoded)
+
 - **Purpose:** Safety margins for process cleanup to prevent resource leaks
 - **Configured:** Hardcoded in `get_subprocess_config()` defaults
 - **Values:**
@@ -44,6 +49,7 @@ Jobs have **three layers** of timeouts:
 - **User-configurable:** No, these are implementation details
 
 **Example Timeline for Network Scan:**
+
 ```
 Network scan job: timeout=10 per host, 254 hosts, job timeout=600s
 
@@ -60,18 +66,21 @@ Total job:
 ### Q: Why did `self.config` not exist on jobs?
 
 **A:** Jobs (`BaseJob` subclasses) are instantiated with only `job_id` and `params`:
+
 ```python
 job = NetworkScanJob(job_id="abc-123", params={"timeout": 10, "subnet": "10.0.0.0/24"})
 ```
 
 When subprocess management was added (to fix process leaks), the code called:
+
 ```python
 subprocess_config = get_subprocess_config(self.config)
 ```
 
 But `BaseJob.__init__()` never set `self.config`. This was a latent bug that only manifested when:
+
 1. Network scan UI was first used (new feature)
-2. Jobs tried to execute subprocesses with the new safe wrapper
+1. Jobs tried to execute subprocesses with the new safe wrapper
 
 **Fix:** Changed to `get_subprocess_config({})` which uses hardcoded defaults (2s grace, 5s kill). The per-operation timeout comes from `self.params.get("timeout")` which is separate.
 
@@ -80,31 +89,36 @@ But `BaseJob.__init__()` never set `self.config`. This was a latent bug that onl
 **A:** Job creation flow:
 
 1. **Form loads:** Router queries database settings:
+
    ```python
    timeout = await JobsService.get_setting(db, "job.network_scan_timeout", 10)
    max_concurrent = await JobsService.get_setting(db, "job.network_scan_max_concurrent", 100)
    ```
 
-2. **Settings merged into prefill_params:**
+1. **Settings merged into prefill_params:**
+
    ```python
    final_defaults = {**schema_defaults, **db_settings, **prefill_data}
    ```
 
-3. **Form renders:** Template uses values from `prefill_params`
+1. **Form renders:** Template uses values from `prefill_params`
+
    ```html
    <input name="timeout" value="{{ prefill_params.get('timeout') }}">
    ```
 
-4. **User submits:** Form data sent to `/jobs/create`
+1. **User submits:** Form data sent to `/jobs/create`
 
-5. **Transform applied:** `JobsService.transform_job_form_params()` (in `app/services/views/jobs_view_service.py`) converts form strings to types AND applies schema defaults for missing fields
+1. **Transform applied:** `JobsService.transform_job_form_params()` (in `app/services/views/jobs_view_service.py`) converts form strings to types AND applies schema defaults for missing fields
 
-6. **Job created:** Params stored in database
+1. **Job created:** Params stored in database
+
    ```sql
    INSERT INTO jobs (job_type, params, ...) VALUES ('network_scan', '{"timeout": 10, ...}', ...)
    ```
 
-7. **Agent executes:** Job reads timeout from `self.params`:
+1. **Agent executes:** Job reads timeout from `self.params`:
+
    ```python
    timeout = self.params.get("timeout", 10)
    await run_subprocess_safely(*cmd, timeout=float(timeout), ...)
@@ -112,7 +126,7 @@ But `BaseJob.__init__()` never set `self.config`. This was a latent bug that onl
 
 **Key Point:** Database settings are for UI defaults. Once a job is created, params are stored with the job record. The job execution uses `self.params`, not database settings.
 
----
+______________________________________________________________________
 
 ## Subprocess Management
 
@@ -121,12 +135,14 @@ But `BaseJob.__init__()` never set `self.config`. This was a latent bug that onl
 **A:** Python's asyncio subprocess handling can leak resources:
 
 **Problem:**
+
 - Subprocess times out but process keeps running
 - File descriptors leak (stdout/stderr pipes not closed)
 - Zombie processes accumulate if not reaped
 - Container hits file descriptor limits (default: 1024)
 
 **Solution:**
+
 ```python
 async def run_subprocess_safely(*args, timeout, grace_seconds, kill_timeout):
     # 1. Start subprocess
@@ -148,10 +164,11 @@ async def run_subprocess_safely(*args, timeout, grace_seconds, kill_timeout):
 ```
 
 **Margins:**
+
 - `grace_seconds`: Prevents race conditions where process exits just as we kill it
 - `kill_timeout`: Prevents hanging on unkillable processes (rare but possible)
 
----
+______________________________________________________________________
 
 ## Job Parameter Schema Defaults
 
@@ -160,6 +177,7 @@ async def run_subprocess_safely(*args, timeout, grace_seconds, kill_timeout):
 **A:** Schema defaults are applied in **two places**:
 
 **Place 1: Form Rendering** (router)
+
 ```python
 # app/web/routers/jobs_router.py
 schema_defaults = {}
@@ -169,6 +187,7 @@ for field_name, field_info in properties.items():
 ```
 
 **Place 2: Form Submission** (service)
+
 ```python
 # app/services/views/jobs_view_service.py - JobsService.transform_job_form_params()
 if field_name not in form_data:
@@ -177,10 +196,12 @@ if field_name not in form_data:
 ```
 
 **Why two places?**
+
 - Place 1: Pre-fills form with defaults (visual feedback to user)
 - Place 2: Ensures defaults applied even if field missing from form_data
 
 **Example:**
+
 ```python
 # Schema definition
 class NetworkScanParams(BaseModel):
@@ -206,9 +227,9 @@ params = {
 **A:** From lowest to highest priority:
 
 1. **Schema defaults** (Pydantic model field defaults)
-2. **Database settings** (`job.network_scan_timeout`, etc.)
-3. **Prefill data** (from URL query params, e.g., clicking "Scan" button)
-4. **Form input** (user manually types value)
+1. **Database settings** (`job.network_scan_timeout`, etc.)
+1. **Prefill data** (from URL query params, e.g., clicking "Scan" button)
+1. **Form input** (user manually types value)
 
 ```python
 # Merge logic in router:
@@ -219,7 +240,7 @@ if field_name in form_data:
     params[field_name] = form_data[field_name]
 ```
 
----
+______________________________________________________________________
 
 ## Network Discovery Enrichment
 
@@ -228,6 +249,7 @@ if field_name in form_data:
 **A:** The agent returns RAW network data (interfaces, gateways, ARP neighbors) but doesn't know what to DO with it. The server enriches this data with actionable suggestions.
 
 **Agent returns (raw data):**
+
 ```json
 {
   "default_gateway": "172.18.0.1",
@@ -239,6 +261,7 @@ if field_name in form_data:
 ```
 
 **Server enriches (adds intelligence):**
+
 ```json
 {
   "default_gateway": "172.18.0.1",
@@ -252,10 +275,12 @@ if field_name in form_data:
 ```
 
 **Why two suggested_scan fields?**
+
 - `interfaces[0].suggested_scan`: Per-interface suggestion (from agent)
 - `inferred_network`: Top-level suggestion (from server enrichment)
 
 **UI uses inferred_network:**
+
 ```html
 <!-- Top-level "Suggested Scan Target" card -->
 {% if result.inferred_network %}
@@ -273,20 +298,22 @@ if field_name in form_data:
 ```
 
 **Enrichment strategies:**
+
 1. **Strategy 1:** Container mode with real gateway (TTL tracing found host gateway)
    - Set `inferred_network` from gateway IP
-2. **Strategy 2:** Host mode with interfaces
+1. **Strategy 2:** Host mode with interfaces
    - Copy first interface's `suggested_scan` to top-level `inferred_network`
-3. **Strategy 3:** Container mode without gateway
+1. **Strategy 3:** Container mode without gateway
    - Add warning, no scan suggestion
 
----
+______________________________________________________________________
 
 ## Common Pitfalls
 
 ### Double-Init Bug (Fixed 2025-11-12)
 
 **Problem:** JavaScript init functions called twice:
+
 ```html
 <!-- base.html -->
 <script>
@@ -316,6 +343,7 @@ if field_name in form_data:
 ### Template Hardcoded Fallbacks
 
 **Anti-pattern:**
+
 ```html
 <input name="timeout" value="{{ prefill_params.get('timeout', 10) }}">
 ```
@@ -323,13 +351,14 @@ if field_name in form_data:
 The `10` is a hardcoded fallback that bypasses database settings!
 
 **Correct:**
+
 ```html
 <input name="timeout" value="{{ prefill_params.get('timeout') }}">
 ```
 
 Router loads database settings into `prefill_params` so fallback is unnecessary.
 
----
+______________________________________________________________________
 
 ## Debugging Tips
 
@@ -367,6 +396,7 @@ docker logs -f luxswirl_server | grep -E "Enriched results|network_discover"
 ### Check if form defaults are loaded:
 
 Open browser DevTools → Network tab → Click "New Job" button → Look at response:
+
 ```json
 {
   "prefill_params": {
@@ -376,13 +406,13 @@ Open browser DevTools → Network tab → Click "New Job" button → Look at res
 }
 ```
 
----
+______________________________________________________________________
 
 **Maintainer Notes:**
 
 This document should be updated whenever:
+
 - New timeout types are added
 - Job parameter handling changes
 - Subprocess management is modified
 - Bugs related to these systems are discovered and fixed
-

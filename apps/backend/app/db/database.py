@@ -508,5 +508,5 @@ async def check_db_health() -> bool:
     # swallowed-exceptions: returning False IS the contract — a health check
     # reports unhealthy rather than raising at its caller.
     except Exception:
-        logger.error("Database health check failed", exc_info=True)
+        logger.exception("Database health check failed")
         return False

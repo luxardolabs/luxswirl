@@ -74,12 +74,14 @@ The agent connects to the server using `LUXSWIRL_AUTH_KEY`, then fetches its ass
 ### 5. Add Checks
 
 Via server UI:
+
 1. Navigate to agent detail page
-2. Click **Add Check**
-3. Configure check type (HTTP, TCP, Ping, etc.)
-4. Save
+1. Click **Add Check**
+1. Configure check type (HTTP, TCP, Ping, etc.)
+1. Save
 
 Via API (optional):
+
 ```bash
 curl -X POST https://server.example.com:9000/api/v1/agents/{agent_id}/checks \
   -H "Authorization: Bearer YOUR_API_TOKEN" \
@@ -116,12 +118,14 @@ services:
 ```
 
 **Advantages:**
+
 - ✅ Credentials persist across container rebuilds
 - ✅ Can monitor services on host network (`localhost:80`)
 - ✅ No port mapping needed
 - ✅ Best credential encryption stability
 
 **Disadvantages:**
+
 - ⚠️ Agent uses host's network namespace
 - ⚠️ Potential port conflicts with host services
 
@@ -147,11 +151,13 @@ services:
 ```
 
 **Advantages:**
+
 - ✅ Network isolation from host
 - ✅ No conflicts with host services
 - ✅ Can use custom Docker networks
 
 **Disadvantages:**
+
 - ⚠️ Cannot monitor `localhost` services on host
 - ⚠️ Credentials may break if `container_name` not specified
 - ⚠️ Must use `container_name` for stability
@@ -181,6 +187,7 @@ services:
 ```
 
 **Check Configuration (in server UI):**
+
 - Check Type: `http`
 - Target: `http://container_name:8080/health` (if on same Docker network)
 - Or use service discovery for dynamic containers
@@ -228,31 +235,33 @@ volumes:
 
 ### Environment Variables
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `LUXSWIRL_SERVER_URL` | **Yes** | `http://luxswirl_server:9000/api/v1/reports` | Full reports endpoint, ending in `/api/v1/reports` (HTTPS for external servers) |
-| `LUXSWIRL_AUTH_KEY` | **Yes** | - | Registration key from server (agent will not start without it) |
-| `LUXSWIRL_AGENT_ID` | No | `<hostname>-agent` | Agent id / display name |
-| `LOG_LEVEL` | No | `DEBUG` | Logging level (`DEBUG`, `INFO`, `WARNING`, `ERROR`) |
-| `LUXSWIRL_DISABLE_CREDENTIAL_ENCRYPTION` | No | `false` | Disable credential encryption (testing only) |
-| `LUXSWIRL_ALLOW_INSECURE_HTTP` | No | `false` | Allow HTTP for external servers (testing only) |
+| Variable                                 | Required | Default                                      | Description                                                                     |
+| ---------------------------------------- | -------- | -------------------------------------------- | ------------------------------------------------------------------------------- |
+| `LUXSWIRL_SERVER_URL`                    | **Yes**  | `http://luxswirl_server:9000/api/v1/reports` | Full reports endpoint, ending in `/api/v1/reports` (HTTPS for external servers) |
+| `LUXSWIRL_AUTH_KEY`                      | **Yes**  | -                                            | Registration key from server (agent will not start without it)                  |
+| `LUXSWIRL_AGENT_ID`                      | No       | `<hostname>-agent`                           | Agent id / display name                                                         |
+| `LOG_LEVEL`                              | No       | `DEBUG`                                      | Logging level (`DEBUG`, `INFO`, `WARNING`, `ERROR`)                             |
+| `LUXSWIRL_DISABLE_CREDENTIAL_ENCRYPTION` | No       | `false`                                      | Disable credential encryption (testing only)                                    |
+| `LUXSWIRL_ALLOW_INSECURE_HTTP`           | No       | `false`                                      | Allow HTTP for external servers (testing only)                                  |
 
 ### Volume Mounts
 
-| Path | Purpose | Required |
-|------|---------|----------|
-| `/app/data` | Persistent credential storage | **Yes** |
-| `/var/run/docker.sock` | Docker container monitoring | Optional |
-| Custom config files | Future use | Optional |
+| Path                   | Purpose                       | Required |
+| ---------------------- | ----------------------------- | -------- |
+| `/app/data`            | Persistent credential storage | **Yes**  |
+| `/var/run/docker.sock` | Docker container monitoring   | Optional |
+| Custom config files    | Future use                    | Optional |
 
 ### Networking Requirements
 
 **Outbound (Agent → Server):**
+
 - Port: Server port (default 9000)
 - Protocol: HTTPS (or HTTP for internal networks)
 - Firewall: Allow outbound to server IP/hostname
 
 **Inbound:**
+
 - None required (agent initiates all connections)
 
 ## Health Checks
@@ -370,6 +379,7 @@ docker compose logs luxswirl_agent | head -20
 ### Backup and Restore
 
 **Backup credentials:**
+
 ```bash
 # Not necessary - agent can re-register automatically
 # But if desired:
@@ -378,6 +388,7 @@ docker run --rm -v luxswirl_agent_data:/data -v $(pwd):/backup \
 ```
 
 **Restore credentials:**
+
 ```bash
 docker run --rm -v luxswirl_agent_data:/data -v $(pwd):/backup \
   alpine tar xzf /backup/agent-credentials-backup.tar.gz -C /data
@@ -405,17 +416,20 @@ docker compose up -d luxswirl_agent
 ### Agent Not Starting
 
 **Check logs:**
+
 ```bash
 docker compose logs luxswirl_agent
 ```
 
 **Common issues:**
+
 - ❌ Invalid `LUXSWIRL_SERVER_URL` (typo, wrong port)
 - ❌ Invalid `LUXSWIRL_AUTH_KEY` (expired, typo)
 - ❌ Network connectivity (firewall, DNS)
 - ❌ Certificate errors (self-signed certs)
 
 **Solutions:**
+
 ```bash
 # Test connectivity
 docker exec luxswirl_agent curl -v https://server.example.com:9000/health
@@ -432,10 +446,12 @@ docker compose up -d
 ### Agent Not Reporting
 
 **Symptoms:**
+
 - Agent shows "Offline" in server UI
 - No check results appearing
 
 **Diagnosis:**
+
 ```bash
 # Check agent logs for errors
 docker logs luxswirl_agent --tail 50
@@ -448,6 +464,7 @@ docker ps | grep luxswirl_agent
 ```
 
 **Common causes:**
+
 - Network issues (firewall, routing)
 - Server down or unreachable
 - API key revoked/invalid
@@ -456,16 +473,19 @@ docker ps | grep luxswirl_agent
 ### Credentials Failed to Decrypt
 
 **Error message:**
+
 ```
 Failed to decrypt credentials - encryption key may have changed
 ```
 
 **Cause:**
+
 - Container hostname changed
 - Host machine-id changed
 - Moved container to different machine
 
 **Solution:**
+
 ```bash
 # Delete credentials and re-register
 docker exec luxswirl_agent rm /app/data/agent_credentials.json
@@ -479,17 +499,20 @@ See [Agent Credential Encryption](../architecture/security-credentials.md) for d
 ### High CPU/Memory Usage
 
 **Check resource usage:**
+
 ```bash
 docker stats luxswirl_agent
 ```
 
 **Common causes:**
+
 - Too many checks configured (>100)
-- High check frequency (interval <10s)
+- High check frequency (interval \<10s)
 - Large response bodies (JSON checks)
 - Memory leak (report bug)
 
 **Solutions:**
+
 - Reduce check count per agent
 - Increase check intervals
 - Deploy multiple agents
@@ -498,11 +521,13 @@ docker stats luxswirl_agent
 ### Port Conflicts (Host Mode)
 
 **Error:**
+
 ```
 Error starting userland proxy: listen tcp 0.0.0.0:9000: bind: address already in use
 ```
 
 **Solution:** Switch to bridge mode if host network causes conflicts:
+
 ```yaml
 services:
   luxswirl_agent:
@@ -517,6 +542,7 @@ services:
 ```yaml
 network_mode: host
 ```
+
 - Best credential stability
 - Survives container rebuilds
 - Can monitor localhost services
@@ -526,6 +552,7 @@ network_mode: host
 ```yaml
 restart: unless-stopped
 ```
+
 - Agent auto-restarts on failure
 - Survives host reboots
 - Manual stops respected
@@ -539,6 +566,7 @@ logging:
     max-size: "10m"
     max-file: "3"
 ```
+
 - Prevents disk fill
 - Keeps recent logs
 - Integrates with log aggregation
@@ -549,6 +577,7 @@ logging:
 volumes:
   - agent_data:/app/data
 ```
+
 - Credentials survive container removal
 - Named volumes easier to manage
 - Backup-friendly
@@ -566,6 +595,7 @@ volumes:
 volumes:
   - /var/run/docker.sock:/var/run/docker.sock:ro  # Read-only
 ```
+
 - Always mount read-only
 - Consider rootless Docker
 - Audit container access
@@ -644,6 +674,7 @@ services:
 Not currently supported. Agents connect to single server URL.
 
 **Workaround:** Use load balancer in front of servers:
+
 ```yaml
 environment:
   LUXSWIRL_SERVER_URL: "https://server-lb.example.com:9000/api/v1/reports"
@@ -685,10 +716,10 @@ See separate Kubernetes deployment guide (coming soon).
 LuxSwirl is compatible with Uptime Kuma check configurations:
 
 1. **Export checks** from Uptime Kuma
-2. **Import** via LuxSwirl server API or UI
-3. **Deploy agent** with Docker Compose
-4. **Approve agent** in server
-5. **Verify checks** running
+1. **Import** via LuxSwirl server API or UI
+1. **Deploy agent** with Docker Compose
+1. **Approve agent** in server
+1. **Verify checks** running
 
 ## Related Documentation
 
@@ -703,11 +734,11 @@ LuxSwirl is compatible with Uptime Kuma check configurations:
 For deployment issues:
 
 1. Check logs: `docker logs luxswirl_agent`
-2. Review this guide and troubleshooting section
-3. Check server connectivity: `curl https://server.example.com:9000/health`
-4. Search existing issues: https://github.com/luxardolabs/luxswirl/issues
-5. Open new issue with logs and your compose file (redact secrets)
+1. Review this guide and troubleshooting section
+1. Check server connectivity: `curl https://server.example.com:9000/health`
+1. Search existing issues: https://github.com/luxardolabs/luxswirl/issues
+1. Open new issue with logs and your compose file (redact secrets)
 
----
+______________________________________________________________________
 
 **Maintainer:** Luxardo Labs

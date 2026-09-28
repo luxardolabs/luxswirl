@@ -8,6 +8,7 @@ for browser automation. It captures screenshots, traces, and browser metrics.
 import asyncio
 import time
 import traceback
+from pathlib import Path
 from typing import Any
 
 from playwright.async_api import async_playwright
@@ -163,9 +164,14 @@ class SyntheticCheck(BaseCheck):
                         )
                         await context.tracing.stop(path=trace_path)
 
-                        # Read the trace file
-                        with open(trace_path, "rb") as f:
-                            trace_bytes = f.read()
+                        # to_thread, not a bare read: a Playwright trace zip is
+                        # routinely several MB, and this agent runs up to
+                        # max_concurrent_checks checks on one event loop — a
+                        # synchronous read here stalls every other check for the
+                        # length of the read.
+                        trace_bytes = await asyncio.to_thread(
+                            Path(trace_path).read_bytes
+                        )
 
                         result_data["artifacts"].append(
                             {
@@ -177,10 +183,9 @@ class SyntheticCheck(BaseCheck):
                             }
                         )
 
-                        # Clean up trace file
-                        import os
-
-                        os.remove(trace_path)
+                        # Off-thread like the read above: same event loop, same
+                        # reason.
+                        await asyncio.to_thread(Path(trace_path).unlink)
                     except Exception as e:
                         result_data["errors"].append(
                             f"Failed to capture trace: {str(e)}"

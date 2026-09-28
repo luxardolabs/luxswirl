@@ -160,10 +160,9 @@ async def update_setting(
         )
         return response
     except ValueError as e:
-        logger.error(
+        logger.exception(
             "Validation error updating setting",
             extra={"setting_key": key},
-            exc_info=True,
         )
         return hx_empty_with_toast(
             f"Validation error: {e}", kind="error", status_code=400

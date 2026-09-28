@@ -26,7 +26,7 @@ AGENT_IMAGE     := $(REGISTRY)/$(AGENT_NAME)
 # Makefile.local (gitignored): copy Makefile.local.example -> Makefile.local and set it.
 # Contributors don't need it — lint/test and the import-linter contracts run without it.
 LUXARCH_REGISTRY ?=
-LUXARCH_VERSION := 0.214.0
+LUXARCH_VERSION := 0.216.0
 LUXARCH_IMAGE    ?= $(LUXARCH_REGISTRY)/luxardolabs/luxarch:$(LUXARCH_VERSION)
 # Dependency-CVE guard (luxaudit) — same private registry as luxarch, mount-only.
 # Scans the pinned poetry.locks against the live advisory feed (see .luxaudit.toml).
@@ -36,7 +36,7 @@ LUXAUDIT_IMAGE   ?= $(LUXARCH_REGISTRY)/luxardolabs/luxaudit:$(LUXAUDIT_VERSION)
 # ruff/mypy config byte-identical (see .luxlint.toml); ruff runs mount-only, mypy
 # runs as an in-repo tail (needs a current mypy for PEP 758 excepts — the baked
 # lint image freezes an older one, so the tail installs a fresh mypy).
-LUXLINT_VERSION := 0.55.0
+LUXLINT_VERSION := 0.56.0
 LUXLINT_IMAGE    ?= $(LUXARCH_REGISTRY)/luxardolabs/luxlint:$(LUXLINT_VERSION)
 -include Makefile.local
 
@@ -438,13 +438,58 @@ onboard-check: ## Prove all three guards are wired + HONEST (not green) — the 
 	docker run --rm -v $(PWD):/repo $(LUXAUDIT_IMAGE) 2>&1 | grep -q "scan could not run" && { echo "luxaudit can't scan — supply-chain blind"; fail=1; }; \
 	[ $$fail -eq 0 ] && echo "onboard-check: all three guards on + honest ✓" || { echo "onboard-check FAILED"; exit 1; }
 
-hooks: ## Activate the repo git hooks (.githooks/) for this clone — run once after cloning
-	git config core.hooksPath .githooks
-	@echo "git hooks active (.githooks/): commit-msg blocks internal refs, pre-commit blocks infra hosts."
+hooks: ## Activate the committed git hooks (hooks/) for this clone — run once after cloning
+	git config core.hooksPath hooks
+	@echo "git hooks active (hooks/): pre-commit = identity + gitleaks(staged), pre-push = gitleaks(full history + identity), commit-msg = no internal refs."
 
-gitleaks: ## Scan the tree for committed secrets (run before the first git commit)
-	docker run --rm -v $(PWD):/repo -w /repo ghcr.io/gitleaks/gitleaks:latest \
-	  dir /repo/apps -c /repo/.gitleaks.toml --no-banner --redact -v
+# luxarch:gitleaks asset v1 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit gitleaks`.
+# ── The privacy gate: BOTH surfaces ─────────────────────────────────────────────────────────────
+# Emitted by `luxarch --emit gitleaks`. Drop in verbatim.
+#
+# `gitleaks` scans DIFF CONTENT. A commit's author/committer address lives in the commit object
+# HEADER and never appears in a patch, so no content rule can ever match it — it is a surface the
+# scanner does not read. A repo reported `no leaks found` over 963 commits while 29 of them carried a
+# personal address in both the author and committer fields, and it would have reported exactly the
+# same thing after the scrub: identical output, opposite truth. Measured across the fleet, EIGHT
+# repos carry a personal address in history and two of them are PUBLIC (LUXTASTE-339).
+#
+# FLEET-ONBOARDING-STANDARD §2 uses one of those very addresses as its worked example of a leak the
+# full-history scan exists to catch. The standard named the leak and the gate could not see it.
+
+# Commit identities this repo accepts. The fleet account's `users.noreply.github.com` address, plus
+# GitHub's own web-UI committer. Widen ONLY for a real outside contributor, with a comment saying who.
+# Anchored on the CLOSING BRACKET, because the compared line is `Name <email>` — not a bare
+# address. The first cut allowed `^noreply@github.com$$`, which can NEVER match a
+# `Name <email>` line, so the GitHub web-UI identity was silently DENIED and the canonical
+# recipe would have refused on any repo carrying a web-UI commit. Measured across the fleet: it
+# denied 4 of 6 distinct identity lines instead of the 3 real offenders (LUXTRMNL-21).
+# It was missed because the only repo it was tested on has no web-UI commits, so the broken
+# branch never ran. The bracket also closes a substring hole: unanchored,
+# `<x@users.noreply.github.com.attacker.test>` would have been allowed.
+GIT_IDENTITY_OK ?= <[^>]*users\.noreply\.github\.com>$$|<noreply@github\.com>$$
+
+gitleaks: ## secret scan over FULL HISTORY + the commit-identity pass (the hooks cover commit/push)
+	@docker run --rm -v $(PWD):/repo $(LUXLINT_IMAGE) --emit-config gitleaks > /tmp/gl.toml
+	@docker run --rm -v $(PWD):/repo -v /tmp/gl.toml:/gl.toml:ro \
+	  ghcr.io/gitleaks/gitleaks:latest git /repo -c /gl.toml --redact -v
+	@# The identity pass — the half gitleaks structurally cannot do. Cheap: one `git log`.
+	@bad=$$(git log --all --pretty='%an <%ae>%n%cn <%ce>' 2>/dev/null | sort -u \
+	  | grep -vE '$(GIT_IDENTITY_OK)' || true); \
+	if [ -n "$$bad" ]; then \
+	  echo "REFUSING: a non-fleet identity appears in commit METADATA (author/committer):"; \
+	  echo "$$bad" | sed 's/^/    /'; \
+	  echo "gitleaks cannot see this — it scans diffs, not commit headers, so it reported no leaks."; \
+	  echo "An address here is attached to every affected commit forever, not to one line of one file."; \
+	  echo "Scrub per FLEET-ONBOARDING-STANDARD §2: mirror backup -> git filter-repo -> re-verify with"; \
+	  echo "  git log --all --pretty='%an <%ae>%n%cn <%ce>' | sort -u"; \
+	  echo "-> then the OWNER force-pushes. Never force-push this yourself."; \
+	  exit 1; \
+	fi
+
+gitleaks-staged: ## secret scan of the STAGED diff only — what hooks/pre-commit runs
+	@docker run --rm -v $(PWD):/repo $(LUXLINT_IMAGE) --emit-config gitleaks > /tmp/gl.toml
+	@docker run --rm -v $(PWD):/repo -v /tmp/gl.toml:/gl.toml:ro \
+	  ghcr.io/gitleaks/gitleaks:latest protect --staged --source /repo -c /gl.toml --redact
 
 check: guard-version-check honest lint mypy test db-verify arch audit gitleaks ## THE fleet gate — run before every commit
 
@@ -463,7 +508,22 @@ test-build: ## Build the test image from current source (self-contained — no :
 	DOCKER_BUILDKIT=1 docker build $(NO_CACHE_FLAG) -f Dockerfile.test -t $(TEST_IMAGE) .
 
 test: test-build test-db-up ## Run the FULL backend suite (incl. durability) against the throwaway test DB (TEST=path/to/test for one file). Image is ALWAYS baked fresh from on-disk source (no :dev dependency).
-	$(DC_TEST) run --rm tests pytest $(TEST) ; status=$$? ; $(MAKE) test-db-down ; exit $$status
+	@# The canonical pytest config is emitted per run and mounted in — never
+	@# committed (that is luxlint's test.no_local_pytest_config). It carries
+	@# --strict-markers/--strict-config, asyncio_mode=auto, the fleet markers and
+	@# filterwarnings=error; coverage flags stay here because they are per-repo.
+	@if [ -z "$(LUXARCH_REGISTRY)" ]; then \
+		echo "test needs the canonical pytest config: set LUXARCH_REGISTRY (see Makefile.local.example)"; exit 1; \
+	fi
+	@docker run --rm -v $(PWD):/repo $(LUXLINT_IMAGE) --emit-config pytest > $(PWD)/.luxlint.pytest.ini
+	@# COVERAGE_CORE=sysmon: on 3.13 the C tracer under-records async bodies; on
+	@# 3.14 the two cores agree, so this is safe and keeps the number honest.
+	$(DC_TEST) run --rm \
+	  -v $(PWD)/.luxlint.pytest.ini:/app/.luxlint.pytest.ini:ro \
+	  -e COVERAGE_CORE=sysmon \
+	  tests pytest -c /app/.luxlint.pytest.ini \
+	    --cov=app --cov-report=term-missing --cov-report=html $(TEST) ; \
+	status=$$? ; rm -f $(PWD)/.luxlint.pytest.ini ; $(MAKE) test-db-down ; exit $$status
 
 test-db-up: ## Start the disposable test Postgres (throwaway — never the dev DB)
 	$(DC_TEST) up -d --wait timescaledb-test

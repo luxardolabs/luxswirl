@@ -713,7 +713,7 @@ class ChecksViewService:
             return ChecksViewService.close_panel_response()
 
         except SyntheticSecurityError as e:
-            logger.error("Synthetic check security validation failed", exc_info=True)
+            logger.exception("Synthetic check security validation failed")
             return ChecksViewService.error_response(
                 request, current_user, f"Security Validation Failed\n\n{e}", 400
             )
@@ -798,10 +798,10 @@ class ChecksViewService:
             return ChecksViewService.close_panel_response()
 
         except CheckNotFoundException as e:
-            logger.error("Check not found", exc_info=True)
+            logger.exception("Check not found")
             return ChecksViewService.error_response(request, current_user, str(e), 404)
         except SyntheticSecurityError as e:
-            logger.error("Synthetic check security validation failed", exc_info=True)
+            logger.exception("Synthetic check security validation failed")
             return ChecksViewService.error_response(
                 request, current_user, f"Security Validation Failed\n\n{e}", 400
             )
@@ -889,7 +889,7 @@ class ChecksViewService:
             return ChecksViewService.close_panel_response()
 
         except CheckNotFoundException as e:
-            logger.error("Check not found", exc_info=True)
+            logger.exception("Check not found")
             return ChecksViewService.error_response(request, current_user, str(e), 404)
 
     @staticmethod
@@ -942,7 +942,7 @@ class ChecksViewService:
                 extra_events={"closeSidePanel": {}, "refreshPage": {}},
             )
         except CheckNotFoundException as e:
-            logger.error("Check not found", exc_info=True)
+            logger.exception("Check not found")
             return ChecksViewService.error_response(request, current_user, str(e), 404)
 
     # ------------------------------------------------------------------

@@ -7,12 +7,14 @@ configuration from files.
 
 import json
 import os
+import re
 import socket
 from pathlib import Path
 from typing import Any, cast
 
 import yaml
 
+from shared.logger import get_logger
 from shared.url_security import validate_server_url
 
 # Default agent configuration
@@ -177,8 +179,6 @@ def _expand_env_vars(config_item: Any) -> Any:
     """
     if isinstance(config_item, str):
         # Replace ${VAR} or $VAR with environment variable
-        import re
-
         # First, handle ${VAR} format
         pattern = r"\${([a-zA-Z0-9_]+)}"
         matches = re.findall(pattern, config_item)
@@ -223,10 +223,8 @@ def validate_config(config: dict[str, Any], component: str = "agent") -> bool:
 
         return True
     except ValueError:
-        from shared.logger import get_logger
-
         logger = get_logger("luxswirl.config")
-        logger.error("Configuration validation error", exc_info=True)
+        logger.exception("Configuration validation error")
         return False
 
 

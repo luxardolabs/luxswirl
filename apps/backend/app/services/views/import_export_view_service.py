@@ -198,10 +198,9 @@ class ImportExportViewService:
                 result.errors.append(
                     {"check": check_data.get("name", "unknown"), "error": str(e)}
                 )
-                logger.error(
+                logger.exception(
                     "Error importing check",
                     extra={"check_name": check_data.get("name")},
-                    exc_info=True,
                 )
 
         logger.info(
@@ -343,7 +342,7 @@ class ImportExportViewService:
         # swallowed-exceptions: the import surface renders the failure back to
         # the operator with the reason, which is the handling.
         except Exception as e:
-            logger.error("Error during import", exc_info=True)
+            logger.exception("Error during import")
             return ImportExportViewService._import_result_response(
                 request, current_user, str(e), 500
             )

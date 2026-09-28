@@ -5,11 +5,13 @@ Returns information about the agent's network interfaces, making it easy
 for users to choose which networks to scan.
 """
 
+import asyncio
 import ipaddress
 import os
 import socket
 import struct
 import time
+from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel
@@ -279,19 +281,21 @@ class NetworkDiscoverJob(BaseJob):
     async def _get_default_gateway_from_proc(self) -> str | None:
         """Get default gateway by parsing /proc/net/route."""
         try:
-            with open("/proc/net/route") as f:
-                for line in f:
-                    fields = line.strip().split()
-                    if len(fields) < 3:
-                        continue
-                    # Check if destination is 00000000 (default route)
-                    if fields[1] == "00000000":
-                        # Gateway is in hex, little-endian format
-                        gateway_hex = fields[2]
-                        # Convert hex to IP (reverse byte order)
-                        gateway_int = int(gateway_hex, 16)
-                        gateway_ip = socket.inet_ntoa(struct.pack("<L", gateway_int))
-                        return gateway_ip
+            # procfs is memory-backed, but this runs inside a scheduled async
+            # job alongside the rest of the loop — read it off-thread so the
+            # discovery sweep cannot stall anything else.
+            route_table = await asyncio.to_thread(Path("/proc/net/route").read_text)
+            for line in route_table.splitlines():
+                fields = line.strip().split()
+                if len(fields) < 3:
+                    continue
+                # Check if destination is 00000000 (default route)
+                if fields[1] == "00000000":
+                    # Gateway is in hex, little-endian format
+                    gateway_hex = fields[2]
+                    # Convert hex to IP (reverse byte order)
+                    gateway_int = int(gateway_hex, 16)
+                    return socket.inet_ntoa(struct.pack("<L", gateway_int))
         except Exception:
             self.logger.debug("Could not parse /proc/net/route", exc_info=True)
         return None
@@ -349,16 +353,17 @@ class NetworkDiscoverJob(BaseJob):
         """Get list of IPs from ARP table (active network neighbors)."""
         ips = []
         try:
-            with open("/proc/net/arp") as f:
-                for line in f:
-                    if line.startswith("IP"):  # Skip header
-                        continue
-                    fields = line.strip().split()
-                    if len(fields) > 0:
-                        ip = fields[0]
-                        # Basic IP validation
-                        if "." in ip and not ip.startswith("0."):
-                            ips.append(ip)
+            arp_table = await asyncio.to_thread(Path("/proc/net/arp").read_text)
+            for line in arp_table.splitlines():
+                if line.startswith("IP"):  # Skip header
+                    continue
+                fields = line.strip().split()
+                if not fields:
+                    continue
+                ip = fields[0]
+                # Basic IP validation
+                if "." in ip and not ip.startswith("0."):
+                    ips.append(ip)
         except Exception:
             self.logger.debug("Could not read ARP table", exc_info=True)
         return ips

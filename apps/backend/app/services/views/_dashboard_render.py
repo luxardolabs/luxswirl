@@ -403,10 +403,7 @@ class DashboardRender:
         for row in rows:
             total = row.total or 0
             successful = int(row.successful or 0)
-            if total == 0:
-                uptime_pct = 100.0
-            else:
-                uptime_pct = round((successful / total) * 100, 2)
+            uptime_pct = 100.0 if total == 0 else round((successful / total) * 100, 2)
 
             uptime_map[row.check_id] = {
                 "uptime": uptime_pct,

@@ -10,6 +10,7 @@ Periodically performs database maintenance operations:
 """
 
 import asyncio
+import contextlib
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -20,6 +21,7 @@ from app.core.config import settings
 from app.core.datetime_utils import utc_now
 from app.db import get_session_maker
 from app.db.database import get_engine
+from app.services.core.settings_core_service import SettingsCoreService
 
 logger = get_logger("luxswirl.background.db_maintenance")
 
@@ -182,10 +184,9 @@ async def _vacuum_table(db, table_name: str, full: bool = False) -> dict:
     # swallowed-exceptions: per-table result — the failure is returned as
     # success=False + error so the run reports it and the remaining tables still run.
     except Exception as e:
-        logger.error(
+        logger.exception(
             "Error vacuuming table",
             extra={"table_name": table_name},
-            exc_info=True,
         )
         return {
             "table": table_name,
@@ -260,10 +261,9 @@ async def _get_table_bloat(db, table_name: str) -> dict:
     # swallowed-exceptions: per-table result — the failure is returned in the
     # dict so the report shows it and the remaining tables are still measured.
     except Exception as e:
-        logger.error(
+        logger.exception(
             "Error calculating bloat",
             extra={"table_name": table_name},
-            exc_info=True,
         )
         return {
             "table": table_name,
@@ -376,9 +376,6 @@ async def _run_maintenance_cycle(db):
     # Step 3: Data retention policy enforcement
     logger.info("Enforcing data retention policies...")
 
-    # Import here to avoid circular dependency
-    from app.services.core.settings_core_service import SettingsCoreService
-
     retention_stats = {"artifacts_deleted": 0, "notifications_deleted": 0}
 
     # Delete old check artifacts
@@ -404,7 +401,7 @@ async def _run_maintenance_cycle(db):
                 },
             )
     except Exception:
-        logger.error("Error deleting old artifacts", exc_info=True)
+        logger.exception("Error deleting old artifacts")
         await db.rollback()
 
     # Delete old notification logs
@@ -436,7 +433,7 @@ async def _run_maintenance_cycle(db):
                     },
                 )
     except Exception:
-        logger.error("Error deleting old notification logs", exc_info=True)
+        logger.exception("Error deleting old notification logs")
         await db.rollback()
 
     maintenance_report["retention_stats"] = retention_stats
@@ -523,7 +520,7 @@ async def _database_maintenance_loop():
         # swallowed-exceptions: daemon loop — one transient DB error must not
         # kill the maintenance task for the life of the process.
         except Exception:
-            logger.error("Error in database maintenance task", exc_info=True)
+            logger.exception("Error in database maintenance task")
             # Continue running despite errors
 
 
@@ -556,10 +553,8 @@ async def stop_database_maintenance_task():
     logger.info("Stopping database maintenance task")
     _maintenance_task.cancel()
 
-    try:
+    with contextlib.suppress(asyncio.CancelledError):
         await _maintenance_task
-    except asyncio.CancelledError:
-        pass
 
     _maintenance_task = None
     logger.info("Database maintenance task stopped")

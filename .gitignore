@@ -41,6 +41,7 @@ ENV/
 # luxlint emits the canonical ruff/mypy config to these transient files during
 # `make lint`/`make format`/`make mypy` (the fleet config is never committed).
 .luxlint.mypy.ini
+.luxlint.pytest.ini
 .luxlint.ruff.toml
 .ruff.local.toml
 .coverage

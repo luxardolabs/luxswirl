@@ -5,6 +5,7 @@
 The Settings section provides centralized configuration for LuxSwirl. From the Settings landing page you reach every configuration area through a grid of cards.
 
 **Key Features:**
+
 - **Notifications** - Configure notification providers (email, webhook, Home Assistant)
 - **Alerts** - Manage alert rules and triggers
 - **API Keys & Metrics** - Control agent registration keys and the Prometheus metrics endpoint
@@ -18,7 +19,7 @@ The Settings section provides centralized configuration for LuxSwirl. From the S
 
 > **Two kinds of settings.** Everything described here is a *runtime* setting stored in the database and editable live in the UI — changes take effect immediately. Deployment-level configuration (database URL, CORS origins, secret keys, heartbeat/sync intervals, the initial admin bootstrap) is set via environment variables at deploy time and requires a restart. Those are documented in the [Settings Reference](../reference/settings-reference.md#b-deployment-settings-environment-variables-set-at-deploy-time).
 
----
+______________________________________________________________________
 
 ## Settings Navigation
 
@@ -29,6 +30,7 @@ The Settings landing page (`/settings`) shows a grid of cards. Each card links t
 **Path:** `/settings`
 
 **Cards:**
+
 - **Notifications** → `/settings/notifications`
 - **Alerts** → `/settings/alerts`
 - **API Keys & Metrics** → `/settings/registration-keys`
@@ -47,6 +49,7 @@ If statistics are available, an overview row shows counts for Notification Provi
 **Documented in:** [Notifications - User Guide](notifications.md)
 
 **Summary:**
+
 - Create, edit, delete notification providers
 - Configure provider-specific settings (SMTP, webhook URLs)
 - Enable/disable providers and test configurations
@@ -60,6 +63,7 @@ If statistics are available, an overview row shows counts for Notification Provi
 **Documented in:** [Alerts - User Guide](alerts.md)
 
 **Summary:**
+
 - Create, edit, delete alert rules
 - Configure trigger conditions (status change, latency threshold, SSL expiry)
 - Assign alerts to checks (global or specific) and attach notification providers
@@ -90,6 +94,7 @@ The list supports filtering by enabled and global status, with pagination.
 **Purpose:** Manage user accounts, roles, and permissions.
 
 **Summary:**
+
 - Create, edit, delete user accounts
 - Assign roles (Admin, Editor, Viewer)
 - Reset passwords (with optional "must change on next login")
@@ -103,7 +108,7 @@ The list supports filtering by role, active status, and search, with pagination.
 
 **Purpose:** Brand colors, macros, badges, buttons, and design-token reference. No configuration is stored here.
 
----
+______________________________________________________________________
 
 ## Registration Keys
 
@@ -114,22 +119,25 @@ Registration keys control agent authentication and approval.
 ### Key Concepts
 
 **Registration Key:**
+
 - Shared secret used during agent first-time registration
 - Agents provide the key via the `LUXSWIRL_AUTH_KEY` environment variable
 - After registration, the agent receives a unique API key for ongoing authentication
 
 **Workflow:**
+
 1. Admin creates a registration key in the LuxSwirl UI
-2. Admin deploys the agent with `LUXSWIRL_AUTH_KEY=<registration_key>`
-3. Agent registers with the server using the registration key
-4. Agent appears in "Pending Approval"
-5. Admin approves the agent
-6. Server generates a unique API key for the agent
-7. Agent stores the encrypted API key locally and uses it for all subsequent requests
+1. Admin deploys the agent with `LUXSWIRL_AUTH_KEY=<registration_key>`
+1. Agent registers with the server using the registration key
+1. Agent appears in "Pending Approval"
+1. Admin approves the agent
+1. Server generates a unique API key for the agent
+1. Agent stores the encrypted API key locally and uses it for all subsequent requests
 
 ### Registration Keys List
 
 **Table Columns:**
+
 - **Key Name** - Friendly name for identification
 - **Key Value** - Actual registration key (partially masked)
 - **Usage Count** - Number of agents registered with this key
@@ -140,19 +148,19 @@ Registration keys control agent authentication and approval.
 ### Creating a Registration Key
 
 1. Navigate to **Settings → API Keys & Metrics**
-2. Click **Create Registration Key**
-3. **Key Name** (required) — friendly identifier, e.g. "Production Agents"
-4. **Key Value** (optional) — leave blank to auto-generate a secure random key; must be unique
-5. Click **Create Key**
-6. **Copy the key immediately** — it is shown once, then partially masked
+1. Click **Create Registration Key**
+1. **Key Name** (required) — friendly identifier, e.g. "Production Agents"
+1. **Key Value** (optional) — leave blank to auto-generate a secure random key; must be unique
+1. Click **Create Key**
+1. **Copy the key immediately** — it is shown once, then partially masked
 
 **Security Note:** Store registration keys securely. Anyone with the key can register agents.
 
 ### Viewing a Registration Key
 
 1. Find the key in the list
-2. Click **View** (eye icon) to display the full key in a modal
-3. Use the **Copy** button
+1. Click **View** (eye icon) to display the full key in a modal
+1. Use the **Copy** button
 
 ### Revoking a Registration Key
 
@@ -161,8 +169,8 @@ Registration keys control agent authentication and approval.
 **Does NOT affect:** agents already registered or already holding API keys.
 
 1. Find the key in the list
-2. Click **Revoke**
-3. Status changes to "Revoked"
+1. Click **Revoke**
+1. Status changes to "Revoked"
 
 Un-revoking is not supported — create a new key instead.
 
@@ -171,11 +179,11 @@ Un-revoking is not supported — create a new key instead.
 **Warning:** Deletion is permanent.
 
 1. Find the key in the list
-2. Click **Delete** and confirm
+1. Click **Delete** and confirm
 
 Agents already registered with the key keep their API keys.
 
----
+______________________________________________________________________
 
 ## Prometheus Metrics Configuration
 
@@ -186,6 +194,7 @@ Configure the `/metrics` endpoint for Prometheus scraping.
 ### Metrics Configuration Card
 
 **Settings:**
+
 - **Metrics Endpoint** — enable/disable `/metrics` (`metrics.enabled`, default **enabled**)
 - **Require Authentication** — require a Bearer token (`metrics.auth_required`, default **off / public**)
 - **Agent Timeout** — seconds before an agent is marked down in metrics (`metrics.agent_timeout_seconds`, default **300**, range 30–3600)
@@ -205,8 +214,8 @@ Configure the `/metrics` endpoint for Prometheus scraping.
 ### Generating a Bearer Token
 
 1. Click **Generate New Token**
-2. Copy the token from the modal (shown once)
-3. Configure your Prometheus scrape config
+1. Copy the token from the modal (shown once)
+1. Configure your Prometheus scrape config
 
 Generating a new token invalidates the previous one — update all scrapers.
 
@@ -215,13 +224,14 @@ Generating a new token invalidates the previous one — update all scrapers.
 **Default:** 300 seconds. **Range:** 30–3600 seconds.
 
 1. Enter the new timeout (seconds)
-2. Click **Update**
+1. Click **Update**
 
 This drives the `luxswirl_agent_up` metric (0 if no report within the timeout, 1 otherwise).
 
 ### Prometheus Scrape Configuration
 
 **Without authentication:**
+
 ```yaml
 scrape_configs:
   - job_name: 'luxswirl'
@@ -231,6 +241,7 @@ scrape_configs:
 ```
 
 **With authentication:**
+
 ```yaml
 scrape_configs:
   - job_name: 'luxswirl'
@@ -248,7 +259,7 @@ scrape_configs:
 - `luxswirl_check_latency_seconds` - Check response time
 - `luxswirl_agent_up` - Agent online status (1/0)
 
----
+______________________________________________________________________
 
 ## System Defaults
 
@@ -259,6 +270,7 @@ Configure database-backed default values. These are stored in the `settings` tab
 ### Defaults Page Layout
 
 Settings are grouped by category:
+
 - **Check** defaults
 - **Alert** defaults
 - **System** behavior
@@ -280,9 +292,9 @@ Each setting row shows the display name, description, an input control (text/num
 ### Updating a Setting
 
 1. Find the setting in its category section
-2. Change the value
-3. Click **Save** (checkmark)
-4. The value is validated and applied immediately
+1. Change the value
+1. Click **Save** (checkmark)
+1. The value is validated and applied immediately
 
 Invalid values are rejected with an inline error.
 
@@ -348,11 +360,13 @@ New checks inherit these; existing checks are unchanged and users can override p
 **Category:** `security` — grouped by subcategory in the UI.
 
 #### Session & Authentication
+
 - **Session Lifetime (days)** (`security.session_lifetime_days`, int) — Default **7**, range 1–90.
 - **Maximum Failed Login Attempts** (`security.max_failed_attempts`, int) — Default **5**, range 3–10.
 - **Account Lock Duration (minutes)** (`security.account_lock_duration_minutes`, int) — Default **30**, range 5–1440.
 
 #### Rate Limiting
+
 - **Enable Rate Limiting** (`security.rate_limit_enabled`, bool) — Default **true**.
 - **Login Rate Limit** (`security.login_rate_limit`, **string**) — `count/period` format. Default **`10/15minutes`**.
 - **API Rate Limit** (`security.api_rate_limit`, **string**) — `count/period` format. Default **`100/minute`**.
@@ -361,6 +375,7 @@ New checks inherit these; existing checks are unchanged and users can override p
 > Rate limits are strings such as `10/15minutes` or `100/minute`, not numbers.
 
 #### Password Complexity
+
 - **Minimum Password Length** (`security.min_password_length`, int) — Default **8**, range 6–32.
 - **Require Uppercase Letter** (`security.require_uppercase`, bool) — Default **true**.
 - **Require Lowercase Letter** (`security.require_lowercase`, bool) — Default **true**.
@@ -369,6 +384,7 @@ New checks inherit these; existing checks are unchanged and users can override p
 - **Check Against Common Passwords** (`security.check_common_passwords`, bool) — Default **true**.
 
 #### Network Protection (SSRF)
+
 - **Block Cloud Metadata Endpoints** (`security.block_cloud_metadata`, bool) — Default **true**. Blocks checks targeting cloud metadata / link-local addresses (169.254.x.x).
 - **Block Private Network Targets** (`security.block_private_networks`, bool) — Default **false**. Blocks RFC 1918 private ranges (10.x, 172.16-31.x, 192.168.x); disabled by default so self-hosted users can monitor internal services.
 
@@ -395,7 +411,7 @@ New checks inherit these; existing checks are unchanged and users can override p
 - **Bearer Token** (`metrics.bearer_token`, string) — empty by default.
 - **Agent Timeout (seconds)** (`metrics.agent_timeout_seconds`, int) — Default **300**, range 30–3600.
 
----
+______________________________________________________________________
 
 ## Setting Value Types and Validation
 
@@ -408,18 +424,20 @@ New checks inherit these; existing checks are unchanged and users can override p
 ### Validation Rules
 
 **Min/Max (numeric):**
+
 ```json
 {"min": 1, "max": 3600}
 ```
 
 **Enum (string or int):**
+
 ```json
 {"enum": ["GET", "POST", "PUT"]}
 ```
 
 Invalid values are rejected inline; the change is not saved until valid.
 
----
+______________________________________________________________________
 
 ## User Management
 
@@ -432,10 +450,10 @@ The table supports filtering by **role** and **active status**, a **search** box
 ### Creating a User
 
 1. On the User Management page, click **Create User**
-2. Fill in **Username** and **Password** (required)
-3. Choose a **Role** (Viewer, Editor, or Admin) — defaults to Viewer
-4. Optionally set **Full Name**, **Active**, and **Must Change Password** (defaults to on)
-5. Submit
+1. Fill in **Username** and **Password** (required)
+1. Choose a **Role** (Viewer, Editor, or Admin) — defaults to Viewer
+1. Optionally set **Full Name**, **Active**, and **Must Change Password** (defaults to on)
+1. Submit
 
 ### Editing a User
 
@@ -453,7 +471,7 @@ After too many failed login attempts (see `security.max_failed_attempts`), an ac
 
 Use the delete action and confirm. You cannot delete your own account.
 
----
+______________________________________________________________________
 
 ## Common Workflows
 
@@ -462,39 +480,39 @@ Use the delete action and confirm. You cannot delete your own account.
 **Goal:** New checks should run every 5 minutes instead of 1 minute.
 
 1. Go to **Settings → System Defaults**
-2. In the **Check** section, find **Default Interval**
-3. Change `60` → `300`
-4. Click **Save**
+1. In the **Check** section, find **Default Interval**
+1. Change `60` → `300`
+1. Click **Save**
 
 Only new checks are affected; existing checks are unchanged.
 
 ### Configuring Prometheus Metrics with Authentication
 
 1. Go to **Settings → API Keys & Metrics**
-2. Toggle **Require Authentication** on
-3. Click **Generate New Token** and copy it
-4. Add the token to your Prometheus scrape config (Bearer credentials)
-5. Reload Prometheus and verify: `curl -H "Authorization: Bearer <token>" http://server:9000/metrics`
+1. Toggle **Require Authentication** on
+1. Click **Generate New Token** and copy it
+1. Add the token to your Prometheus scrape config (Bearer credentials)
+1. Reload Prometheus and verify: `curl -H "Authorization: Bearer <token>" http://server:9000/metrics`
 
 ### Strengthening Password Policy
 
 1. Go to **Settings → System Defaults → Security → Password Complexity**
-2. Raise **Minimum Password Length** (e.g. `8` → `16`)
-3. Ensure the complexity toggles you want are on (uppercase, lowercase, number; special character is off by default)
-4. Keep **Check Against Common Passwords** on
-5. Save each setting
+1. Raise **Minimum Password Length** (e.g. `8` → `16`)
+1. Ensure the complexity toggles you want are on (uppercase, lowercase, number; special character is off by default)
+1. Keep **Check Against Common Passwords** on
+1. Save each setting
 
 New passwords enforce the rules; existing passwords are grandfathered until changed.
 
 ### Adjusting Data Retention
 
 1. Go to **Settings → System Defaults → Database**
-2. Change **Check Results Retention (days)** (e.g. `90` → `30`)
-3. Save
+1. Change **Check Results Retention (days)** (e.g. `90` → `30`)
+1. Save
 
 A background job removes data older than the retention period.
 
----
+______________________________________________________________________
 
 ## Troubleshooting
 
@@ -512,9 +530,9 @@ A background job removes data older than the retention period.
 ### Metrics Endpoint Not Working (401 / 404)
 
 1. Confirm the endpoint is enabled (Settings → API Keys & Metrics).
-2. If authentication is required, verify the Bearer token in your Prometheus config; test with `curl -H "Authorization: Bearer <token>" http://server:9000/metrics`.
-3. Generate a fresh token if unsure and update scrapers.
-4. Verify network connectivity / firewall on port 9000.
+1. If authentication is required, verify the Bearer token in your Prometheus config; test with `curl -H "Authorization: Bearer <token>" http://server:9000/metrics`.
+1. Generate a fresh token if unsure and update scrapers.
+1. Verify network connectivity / firewall on port 9000.
 
 ### Registration Key Not Working
 
@@ -525,7 +543,7 @@ A background job removes data older than the retention period.
 
 After repeated failed logins, the account locks for `security.account_lock_duration_minutes`. An admin can unlock it immediately from **Settings → User Management** using the unlock action.
 
----
+______________________________________________________________________
 
 ## Security Considerations
 
@@ -553,7 +571,7 @@ Rate limits are expressed as `count/period` strings (e.g. login `10/15minutes`, 
 
 Cloud-metadata blocking is on by default; private-network blocking is off by default so self-hosted users can monitor internal services. Enable **Block Private Networks** in cloud/enterprise environments to keep checks from reaching internal services. Changes apply to new check creation/updates immediately.
 
----
+______________________________________________________________________
 
 ## Related Documentation
 
@@ -564,15 +582,15 @@ Cloud-metadata blocking is on by default; private-network blocking is off by def
 - [Checks - User Guide](checks.md) - Check configuration defaults
 - [Database Health - User Guide](database-health.md) - Database performance and retention
 
----
+______________________________________________________________________
 
 ## What's Next?
 
 After configuring settings:
 
 1. **Review Defaults** — audit System Defaults for your use case
-2. **Set Up Metrics** — configure Prometheus scraping
-3. **Create Registration Keys** — prepare for agent deployments
-4. **Configure Security** — set password complexity and rate limits
-5. **Add Users** — create accounts and assign roles
-6. **Test Changes** — create a test check/alert to verify defaults
+1. **Set Up Metrics** — configure Prometheus scraping
+1. **Create Registration Keys** — prepare for agent deployments
+1. **Configure Security** — set password complexity and rate limits
+1. **Add Users** — create accounts and assign roles
+1. **Test Changes** — create a test check/alert to verify defaults

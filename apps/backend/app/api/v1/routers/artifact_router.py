@@ -77,7 +77,7 @@ async def create_artifact(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Failed to create artifact", exc_info=True)
+        logger.exception("Failed to create artifact")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to create artifact: {str(e)}",

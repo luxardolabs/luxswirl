@@ -5,14 +5,15 @@
 LuxSwirl supports three check assignment modes to handle different monitoring scenarios. The mode is stored per-check on the `Check` model via the `assignment_mode` column and selected agents are matched via the `agent_selector` JSON column. All three modes are implemented and shipped.
 
 1. **MANUAL** (default) - Check runs on one specific agent (`Check.agent_id` FK).
-2. **REPLICATE** - Same check runs from every agent matching the selector (multi-region monitoring, redundancy).
-3. **DISTRIBUTE** - Checks are split across the agents matching the selector (load sharing, HA).
+1. **REPLICATE** - Same check runs from every agent matching the selector (multi-region monitoring, redundancy).
+1. **DISTRIBUTE** - Checks are split across the agents matching the selector (load sharing, HA).
 
 The assignment logic lives in `apps/backend/app/services/core/agent_assignment_core_service.py` (`AgentAssignmentService`). Agents fetch their work via `GET /api/v1/checks?agent_id={agent_id}` (`apps/backend/app/api/v1/routers/check_router.py`), which calls `AgentAssignmentService.get_checks_for_agent(db, agent)`. (The `/api/v1/agents/{agent_id}/checks` paths are the separate check-management CRUD endpoints, not the agent sync endpoint.)
 
 ## Use Cases
 
 ### Use Case 1: Multi-Region External Monitoring (REPLICATE)
+
 **Scenario:** Monitor external services from multiple geographic locations
 
 ```
@@ -30,11 +31,13 @@ You see: "Google is reachable from London (50ms), Tokyo (120ms), NYC (30ms)"
 ```
 
 **Benefits:**
+
 - Geographic latency monitoring
 - Detect regional outages
 - Verify global availability
 
 ### Use Case 2: Load Distribution & High Availability (DISTRIBUTE)
+
 **Scenario:** Split monitoring work among multiple agents for capacity and redundancy
 
 ```
@@ -58,11 +61,13 @@ If home-agent-1 dies:
 **Note on failover:** `filter_agents_by_selector()` matches by selector against *all* agents (the caller loads them with `AgentCRUD.list_all`); it does not filter on online status. Rebalancing therefore depends on offline agents being removed from the pool by whatever populates the agent list, not on liveness within this function.
 
 **Benefits:**
+
 - Distribute load across multiple agents
 - Scale by adding more agents
 - Works at any scale (2 agents / 50 checks OR 4 agents / 1000 checks)
 
 ### Use Case 3: Capacity Scaling (DISTRIBUTE)
+
 **Scenario:** Monitor large infrastructure (Puppet nodes, Kubernetes clusters, etc.)
 
 ```
@@ -78,6 +83,7 @@ Add a 5th matching agent → checks rehash toward ~200 each.
 ```
 
 **Benefits:**
+
 - Scale horizontally by adding agents
 - Hash-based rebalancing as the pool changes
 - No manual per-check assignment
@@ -102,6 +108,7 @@ class Check(UUIDBaseModel):
 ```
 
 **Modes:**
+
 - `manual` (default) - check runs on the agent referenced by `Check.agent_id`.
 - `replicate` - check runs on ALL agents matching `agent_selector`.
 - `distribute` - check runs on ONE agent from the matching pool, chosen by hash.
@@ -191,6 +198,7 @@ def agent_matches_selector(agent, selector):
 ```
 
 Selector keys:
+
 - `agent_ids` - list of `Agent.agent_name` values (the friendly name, not the UUID).
 - `tags` - list of `key:value` tags; `match_mode` is `"all"` (default, AND) or `"any"` (OR).
 
@@ -236,7 +244,7 @@ Two distinct mechanisms exist and are both shipped:
    SECURITY__AUTH_TOKENS=["<your-admin-api-token>"]
    ```
 
-2. **Per-agent API keys** — each agent has its own key, stored as a bcrypt hash in `Agent.api_key_hash` (with `api_key_created_at` / `api_key_last_used`). Agent-facing endpoints (e.g. `GET /api/v1/checks?agent_id={agent_id}`) authenticate the agent via `verify_agent_token`, which also enforces the agent's `approval_status`. This enables per-agent revocation and isolation.
+1. **Per-agent API keys** — each agent has its own key, stored as a bcrypt hash in `Agent.api_key_hash` (with `api_key_created_at` / `api_key_last_used`). Agent-facing endpoints (e.g. `GET /api/v1/checks?agent_id={agent_id}`) authenticate the agent via `verify_agent_token`, which also enforces the agent's `approval_status`. This enables per-agent revocation and isolation.
 
 Agents bootstrap onto the platform using **shared registration keys** (`app/api/v1/routers/registration_key_router.py`, `RegistrationKeyService`): the plaintext key is shown once at creation and stored only as a hash. Used for initial registration and recovery.
 
@@ -267,6 +275,7 @@ Assignment Mode: [ Manual | Replicate | Distribute ]
 ## Examples
 
 ### Example 1: External Monitoring (REPLICATE)
+
 ```python
 london = Agent(agent_name="london-agent", tags="role:external-monitor,region:london")
 tokyo  = Agent(agent_name="tokyo-agent",  tags="role:external-monitor,region:tokyo")
@@ -282,6 +291,7 @@ http_google = Check(
 ```
 
 ### Example 2: Home Network HA (DISTRIBUTE)
+
 ```python
 home1 = Agent(agent_name="home-agent-1", tags="location:home")
 home2 = Agent(agent_name="home-agent-2", tags="location:home")
@@ -297,6 +307,7 @@ for device in ["printer", "switch", "camera1", "camera2", ...]:  # 50 devices
 ```
 
 ### Example 3: Puppet Monitoring at Scale (DISTRIBUTE)
+
 ```python
 for i in range(1, 5):
     Agent(agent_name=f"puppet-monitor-{i}", tags="role:puppet-monitor,pool:puppet-pool")
@@ -314,13 +325,17 @@ for node in range(1, 1001):  # 1000 nodes
 ## Questions & Decisions
 
 ### Q: What happens when an agent with DISTRIBUTE checks goes offline?
+
 **A:** Its checks rehash onto the remaining agents the next time agents refetch, *provided the offline agent is removed from the matching pool*. See the failover note under Use Case 2 — `filter_agents_by_selector()` itself does not filter on liveness.
 
 ### Q: Can a check be both REPLICATE and DISTRIBUTE?
+
 **A:** No. `assignment_mode` is a single value per check; the modes are mutually exclusive.
 
 ### Q: How do you view results for REPLICATE checks?
+
 **A:** Each agent reports independently; results are grouped by check with a per-agent breakdown:
+
 ```
 http_google (replicate)
   ✓ london-agent - 50ms - OK
@@ -329,6 +344,7 @@ http_google (replicate)
 ```
 
 ### Q: What if no agents match the selector?
+
 **A:** The check is assigned to no agent (`filter_agents_by_selector` returns empty, `get_assigned_agent_for_check` returns `None`). The check stays in the database and is picked up automatically once a matching agent appears.
 
 ## Known Limitations

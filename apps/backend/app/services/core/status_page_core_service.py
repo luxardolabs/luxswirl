@@ -447,10 +447,13 @@ class StatusPageCoreService:
                     if "checks" in group_item:
                         group_item["checks"] = item_data.get("checks", [])
                     new_items.append(group_item)
-            elif item_type == "check":
-                # Retrieve original check item
-                if old_index is not None and 0 <= old_index < len(status_page.items):
-                    new_items.append(status_page.items[old_index])
+            # Retrieve original check item
+            elif (
+                item_type == "check"
+                and old_index is not None
+                and 0 <= old_index < len(status_page.items)
+            ):
+                new_items.append(status_page.items[old_index])
 
         logger.info(
             "Reorder request - new items computed",

@@ -74,6 +74,14 @@ class LuxSwirlAgent:
         # Flag to control the main loop
         self.running = False
 
+        # Strong references to the in-flight check tasks. asyncio keeps only a
+        # WEAK reference to a running task, so a bare `create_task(...)` whose
+        # result nobody holds can be garbage-collected mid-await — the check
+        # then silently never finishes and never reports, with no error
+        # anywhere. The done-callback discards each task so the set does not
+        # grow for the life of the agent.
+        self._check_tasks: set[asyncio.Task[None]] = set()
+
         # Cache file for offline capability
         storage_path = Path(config.get("report_storage_path", "reports"))
         storage_path.mkdir(parents=True, exist_ok=True)
@@ -429,7 +437,9 @@ class LuxSwirlAgent:
                         last_run[check.name] = 0.0
                     if now - last_run[check.name] >= interval:
                         last_run[check.name] = now
-                        asyncio.create_task(self.run_check(check))
+                        task = asyncio.create_task(self.run_check(check))
+                        self._check_tasks.add(task)
+                        task.add_done_callback(self._check_tasks.discard)
 
                 # Sleep a short time to avoid high CPU usage and allow for clean shutdown
                 for _ in range(int(0.5 / self.main_loop_sleep)):  # ~0.5 seconds total
@@ -441,7 +451,7 @@ class LuxSwirlAgent:
             self.logger.info("Agent task cancelled")
             await self.shutdown()
         except Exception:
-            self.logger.error("Error in main loop", exc_info=True)
+            self.logger.exception("Error in main loop")
             await self.shutdown()
             raise
         finally:

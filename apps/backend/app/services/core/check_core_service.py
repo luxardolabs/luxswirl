@@ -3,6 +3,7 @@ Check service - business logic for check operations.
 """
 
 import asyncio
+import ssl
 from collections.abc import Sequence
 from typing import Any
 from urllib.parse import urlparse
@@ -155,7 +156,7 @@ class CheckCoreService:
                 )
             except SyntheticSecurityError:
                 # SECURITY AUDIT: Log failed validation
-                logger.error(
+                logger.exception(
                     "SECURITY AUDIT: Synthetic check script validation FAILED",
                     extra={
                         "event": "synthetic_check_blocked",
@@ -163,7 +164,6 @@ class CheckCoreService:
                         "agent_id": str(agent_id),
                         "action": "CREATE",
                     },
-                    exc_info=True,
                 )
                 raise
 
@@ -700,9 +700,8 @@ class CheckCoreService:
                 )
             except SyntheticSecurityError:
                 # SECURITY AUDIT: Log failed validation
-                logger.error(
+                logger.exception(
                     "SECURITY AUDIT: Synthetic check script validation FAILED",
-                    exc_info=True,
                     extra={
                         "event": "synthetic_check_blocked",
                         "check_id": str(check_id),
@@ -932,10 +931,9 @@ class CheckCoreService:
                     created += 1
             except Exception as e:
                 errors.append({"check": check_data.name, "error": str(e)})
-                logger.error(
+                logger.exception(
                     "Error importing check",
                     extra={"check_name": check_data.name},
-                    exc_info=True,
                 )
 
         return {
@@ -1034,10 +1032,9 @@ class CheckCoreService:
                 failure_count = len(check_ids)
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "Failed to bulk action checks",
                 extra={"action": action},
-                exc_info=True,
             )
             errors.append(str(e))
             failure_count = len(check_ids)
@@ -1346,10 +1343,15 @@ class CheckCoreService:
                 status_code = None
 
                 if check_type == "http":
+                    # Certificates ARE verified here, because the agent's http
+                    # check defaults to verify_ssl=True. The preview used to pass
+                    # verify=False, so a self-signed target previewed as
+                    # "success" and then failed on its first real run — the
+                    # preview was answering a different question from the check
+                    # it previews. A cert problem is reported as its own warning
+                    # so the operator can set verify_ssl=False deliberately.
                     try:
-                        async with httpx.AsyncClient(
-                            timeout=5.0, verify=False
-                        ) as client:
+                        async with httpx.AsyncClient(timeout=5.0) as client:
                             response = await client.get(full_url)
                             status_code = response.status_code
                             if 200 <= status_code < 400:
@@ -1361,9 +1363,18 @@ class CheckCoreService:
                     except httpx.TimeoutException:
                         validation_status = "error"
                         validation_message = "Timeout (5s)"
-                    except httpx.ConnectError:
-                        validation_status = "error"
-                        validation_message = "Connection refused"
+                    except httpx.ConnectError as e:
+                        # httpx wraps a TLS handshake failure in ConnectError, so
+                        # this has to be distinguished by the cause, not the type.
+                        if isinstance(e.__cause__, ssl.SSLError):
+                            validation_status = "warning"
+                            validation_message = (
+                                "TLS certificate not trusted — set verify_ssl=False "
+                                "on the check to monitor it anyway"
+                            )
+                        else:
+                            validation_status = "error"
+                            validation_message = "Connection refused"
                     except Exception as e:
                         validation_status = "error"
                         validation_message = str(e)[:100]

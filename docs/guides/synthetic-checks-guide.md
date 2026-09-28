@@ -4,21 +4,21 @@
 
 LuxSwirl's synthetic monitoring uses Playwright to execute real browser automation scripts that simulate user interactions. Unlike simple ping or HTTP checks, synthetic checks can navigate through multi-page workflows, fill forms, click buttons, and verify complex user journeys.
 
----
+______________________________________________________________________
 
 ## Table of Contents
 
 1. [Architecture](#architecture)
-2. [Creating Synthetic Checks](#creating-synthetic-checks)
-3. [Script Structure](#script-structure)
-4. [Playwright API Reference](#playwright-api-reference)
-5. [Performance Metrics](#performance-metrics)
-6. [Artifacts](#artifacts)
-7. [Examples](#examples)
-8. [Best Practices](#best-practices)
-9. [Troubleshooting](#troubleshooting)
+1. [Creating Synthetic Checks](#creating-synthetic-checks)
+1. [Script Structure](#script-structure)
+1. [Playwright API Reference](#playwright-api-reference)
+1. [Performance Metrics](#performance-metrics)
+1. [Artifacts](#artifacts)
+1. [Examples](#examples)
+1. [Best Practices](#best-practices)
+1. [Troubleshooting](#troubleshooting)
 
----
+______________________________________________________________________
 
 ## Architecture
 
@@ -59,11 +59,11 @@ LuxSwirl's synthetic monitoring uses Playwright to execute real browser automati
 ### Key Components
 
 1. **Check Script** - Python async function stored in database
-2. **Playwright Page** - Browser automation context
-3. **Result Data** - Status, steps, errors, metrics
-4. **Artifacts** - Screenshots, traces, custom data
+1. **Playwright Page** - Browser automation context
+1. **Result Data** - Status, steps, errors, metrics
+1. **Artifacts** - Screenshots, traces, custom data
 
----
+______________________________________________________________________
 
 ## Creating Synthetic Checks
 
@@ -84,13 +84,14 @@ curl -X POST https://server.example.com:9000/api/v1/agents/{agent_id}/checks \
 ```
 
 **Fields:**
+
 - `display_name` — unique name (kebab-case)
 - `target` — the start URL
 - `interval_seconds` — how often to run (60 = every minute)
 - `timeout_seconds` — script execution timeout (per-check default 30s)
 - `script_code` — your Playwright script (must define `async def run_check(page)`)
 
----
+______________________________________________________________________
 
 ## Script Structure
 
@@ -180,13 +181,14 @@ async def run_check(page):
 }
 ```
 
----
+______________________________________________________________________
 
 ## Playwright API Reference
 
 ### Common Page Methods
 
 #### Navigation
+
 ```python
 # Go to URL
 await page.goto('https://example.com')
@@ -201,6 +203,7 @@ await page.reload()
 ```
 
 #### Waiting
+
 ```python
 # Wait for page load states
 await page.wait_for_load_state('load')        # Wait for 'load' event
@@ -216,6 +219,7 @@ await page.wait_for_timeout(1000)  # Wait 1 second
 ```
 
 #### Finding Elements
+
 ```python
 # By role (recommended - most reliable)
 await page.get_by_role('button', name='Submit')
@@ -242,6 +246,7 @@ await page.locator('xpath=//button[@type="submit"]')
 ```
 
 #### Interactions
+
 ```python
 # Click
 await page.get_by_role('button', name='Submit').click()
@@ -273,6 +278,7 @@ await page.locator('#source').drag_to(page.locator('#target'))
 ```
 
 #### Data Extraction
+
 ```python
 # Get text content
 title = await page.title()
@@ -292,6 +298,7 @@ count = await page.locator('li').count()
 ```
 
 #### JavaScript Execution
+
 ```python
 # Evaluate JavaScript
 result = await page.evaluate('() => window.innerWidth')
@@ -309,6 +316,7 @@ timing = await page.evaluate("""() => {
 ```
 
 #### Screenshots
+
 ```python
 # Full page screenshot
 screenshot_bytes = await page.screenshot(full_page=True)
@@ -324,7 +332,7 @@ screenshot_bytes = await page.screenshot(
 )
 ```
 
----
+______________________________________________________________________
 
 ## Performance Metrics
 
@@ -402,15 +410,16 @@ async def run_check(page):
     }
 ```
 
----
+______________________________________________________________________
 
 ## Artifacts
 
 ### Automatic Artifacts
 
 The agent automatically captures:
+
 1. **Final screenshot** - Screenshot of last page state
-2. **Playwright trace** - Complete execution trace with network, console, etc.
+1. **Playwright trace** - Complete execution trace with network, console, etc.
 
 ### Custom Artifacts
 
@@ -453,7 +462,7 @@ async def run_check(page):
 - `screenshot` - PNG images
 - `trace` - Playwright trace files (ZIP)
 
----
+______________________________________________________________________
 
 ## Examples
 
@@ -688,13 +697,14 @@ async def run_check(page):
         }
 ```
 
----
+______________________________________________________________________
 
 ## Best Practices
 
 ### 1. Use Semantic Selectors
 
 **Good:**
+
 ```python
 await page.get_by_role('button', name='Submit')
 await page.get_by_label('Email')
@@ -702,6 +712,7 @@ await page.get_by_text('Welcome back')
 ```
 
 **Avoid:**
+
 ```python
 await page.locator('button.btn-primary.btn-lg')  # Fragile CSS
 await page.locator('xpath=//div[3]/button[1]')   # Fragile XPath
@@ -710,6 +721,7 @@ await page.locator('xpath=//div[3]/button[1]')   # Fragile XPath
 ### 2. Wait for Content
 
 **Always wait for dynamic content:**
+
 ```python
 await page.wait_for_load_state('networkidle')
 await page.wait_for_selector('text=Loaded')
@@ -729,6 +741,7 @@ except:
 ### 4. Provide Descriptive Steps
 
 **Good:**
+
 ```python
 steps.append('✅ Login form submitted successfully')
 steps.append('✅ Dashboard loaded in 1.23s')
@@ -736,6 +749,7 @@ steps.append('❌ Product search returned 0 results')
 ```
 
 **Avoid:**
+
 ```python
 steps.append('Step 1 complete')
 steps.append('Done')
@@ -789,21 +803,23 @@ timeout_seconds: 120
 - Split complex workflows into multiple checks
 - Avoid excessive conditionals
 
----
+______________________________________________________________________
 
 ## Troubleshooting
 
 ### Script Doesn't Run
 
 **Check:**
+
 1. Script syntax is valid Python
-2. Function name is exactly `run_check`
-3. Function is async: `async def run_check(page):`
-4. Returns a dictionary with `status` and `steps`
+1. Function name is exactly `run_check`
+1. Function is async: `async def run_check(page):`
+1. Returns a dictionary with `status` and `steps`
 
 ### Elements Not Found
 
 **Solutions:**
+
 ```python
 # Wait for element to appear
 await page.wait_for_selector('button.submit', timeout=5000)
@@ -819,6 +835,7 @@ if await page.locator('button.optional').is_visible():
 ### Timeouts
 
 **Increase timeout:**
+
 ```sql
 UPDATE checks
 SET timeout_seconds = 90
@@ -826,6 +843,7 @@ WHERE display_name = 'my-slow-check';
 ```
 
 **Add explicit waits:**
+
 ```python
 # Wait for specific condition
 await page.wait_for_function('document.readyState === "complete"')
@@ -835,6 +853,7 @@ await page.wait_for_selector('text=Content loaded')
 ### Artifacts Not Uploading
 
 **Ensure proper format:**
+
 ```python
 artifacts.append({
     'type': 'screenshot',           # Required
@@ -848,6 +867,7 @@ artifacts.append({
 ### Performance Issues
 
 **Optimize:**
+
 ```python
 # Use networkidle only when necessary
 await page.wait_for_load_state('domcontentloaded')  # Faster than networkidle
@@ -859,7 +879,7 @@ await page.screenshot()  # Just viewport
 # Only capture screenshots at key steps, not every page
 ```
 
----
+______________________________________________________________________
 
 ## Additional Resources
 
@@ -867,15 +887,15 @@ await page.screenshot()  # Just viewport
 - [Playwright Selectors](https://playwright.dev/python/docs/selectors)
 - [Playwright API Reference](https://playwright.dev/python/docs/api/class-page)
 
----
+______________________________________________________________________
 
 ## Support
 
 For questions or issues:
+
 - Check agent logs: `docker logs luxswirl_agent`
 - Check server logs: `docker logs luxswirl_server`
 - Verify check configuration: `SELECT * FROM checks WHERE display_name = 'your-check'`
 - Test Playwright script standalone before adding to LuxSwirl
 
----
-
+______________________________________________________________________

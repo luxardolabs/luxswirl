@@ -110,14 +110,16 @@ class DangerousOperationVisitor(ast.NodeVisitor):
             )
 
         # Check attribute calls that might be dangerous
-        if isinstance(node.func, ast.Attribute):
-            # Block page.__class__.__something__ patterns (sandbox escape)
-            if isinstance(node.func.value, ast.Attribute):
-                if node.func.value.attr in ["__class__", "__init__", "__globals__"]:
-                    self.errors.append(
-                        f"Blocked attribute access: {node.func.value.attr} at line {node.lineno}. "
-                        f"This pattern can be used to escape Python sandbox."
-                    )
+        # Block page.__class__.__something__ patterns (sandbox escape)
+        if (
+            isinstance(node.func, ast.Attribute)
+            and isinstance(node.func.value, ast.Attribute)
+            and node.func.value.attr in ["__class__", "__init__", "__globals__"]
+        ):
+            self.errors.append(
+                f"Blocked attribute access: {node.func.value.attr} at line "
+                f"{node.lineno}. This pattern can be used to escape Python sandbox."
+            )
 
         self.generic_visit(node)
 
@@ -216,20 +218,22 @@ def validate_synthetic_script(script_code: str) -> tuple[bool, list[str], list[s
     # Check if script defines run_check function
     has_run_check = False
     for node in ast.walk(tree):
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            if node.name == "run_check":
-                has_run_check = True
-                # Check if it's async
-                if not isinstance(node, ast.AsyncFunctionDef):
-                    visitor.errors.append(
-                        "run_check() must be defined as an async function (async def run_check(page):)"
-                    )
-                # Check if it accepts page parameter
-                if len(node.args.args) != 1 or node.args.args[0].arg != "page":
-                    visitor.errors.append(
-                        "run_check() must accept exactly one parameter named 'page'"
-                    )
-                break
+        if (
+            isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+            and node.name == "run_check"
+        ):
+            has_run_check = True
+            # Check if it's async
+            if not isinstance(node, ast.AsyncFunctionDef):
+                visitor.errors.append(
+                    "run_check() must be defined as an async function (async def run_check(page):)"
+                )
+            # Check if it accepts page parameter
+            if len(node.args.args) != 1 or node.args.args[0].arg != "page":
+                visitor.errors.append(
+                    "run_check() must accept exactly one parameter named 'page'"
+                )
+            break
 
     if not has_run_check:
         visitor.errors.append(

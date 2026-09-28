@@ -23,7 +23,7 @@ target_metadata = Base.metadata
 logger = logging.getLogger(__name__)
 
 
-def include_object(object, name, type_, reflected, compare_to):  # noqa: A002
+def include_object(object, name, type_, reflected, compare_to):
     """Exclude TimescaleDB-managed objects from autogenerate / `alembic check`.
 
     `create_hypertable()` (run at app boot, not in migrations) auto-creates a
@@ -33,16 +33,15 @@ def include_object(object, name, type_, reflected, compare_to):  # noqa: A002
     index TimescaleDB owns. Model-declared indexes use idx_/ix_/uq_ prefixes, so
     a reflected `*_idx` index without one of those is TimescaleDB's.
     """
-    if (
+    timescale_owned = (
         type_ == "index"
         and reflected
         and compare_to is None
-        and name
+        and bool(name)
         and name.endswith("_idx")
         and not name.startswith(("idx_", "ix_", "uq_"))
-    ):
-        return False
-    return True
+    )
+    return not timescale_owned
 
 
 def get_url() -> str:

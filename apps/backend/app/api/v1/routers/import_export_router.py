@@ -89,7 +89,7 @@ async def export_checks(
             detail=f"Agent '{agent_id}' not found",
         ) from None
     except Exception as e:
-        logger.error("Error exporting checks", exc_info=True)
+        logger.exception("Error exporting checks")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e),
@@ -138,7 +138,7 @@ async def import_checks(
         )
         return BulkImportResponse(total=len(request.checks), **result)
     except Exception as e:
-        logger.error("Error during bulk import", exc_info=True)
+        logger.exception("Error during bulk import")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e),

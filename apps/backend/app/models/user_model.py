@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 from sqlalchemy import Boolean, Index, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from app.core.datetime_utils import utc_now
 from app.models.base_model import UUIDBaseModel, str_enum
 from app.models.enum_model import UserRole
 
@@ -121,8 +122,6 @@ class User(UUIDBaseModel):
         """Check if account is currently locked."""
         if not self.locked_until:
             return False
-        from app.core.datetime_utils import utc_now
-
         return utc_now() < self.locked_until
 
     @property

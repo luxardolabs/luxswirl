@@ -84,7 +84,7 @@ class EncryptedString(TypeDecorator):
             return cast(str, encrypted.decode())  # Store as base64 string
         except Exception:
             # Log error but don't crash - store plaintext as fallback
-            logger.error("Failed to encrypt field", exc_info=True)
+            logger.exception("Failed to encrypt field")
             return value
 
     def process_result_value(self, value: str | None, dialect) -> str | None:
@@ -118,7 +118,7 @@ class EncryptedString(TypeDecorator):
         # failing the read would take out every page that touches the table,
         # and the error is recorded.
         except Exception:
-            logger.error("Failed to decrypt field", exc_info=True)
+            logger.exception("Failed to decrypt field")
             return value
 
 
@@ -183,7 +183,7 @@ class EncryptedJSON(TypeDecorator):
             encrypted = fernet.encrypt(json_str.encode())
             return cast(str, encrypted.decode())
         except Exception:
-            logger.error("Failed to encrypt JSON field", exc_info=True)
+            logger.exception("Failed to encrypt JSON field")
             return json.dumps(value)
 
     def process_result_value(self, value: str | None, dialect) -> dict | list | None:
@@ -222,5 +222,5 @@ class EncryptedJSON(TypeDecorator):
         # failing the read would take out every page that touches the table,
         # and the error is recorded.
         except Exception:
-            logger.error("Failed to decrypt JSON field", exc_info=True)
+            logger.exception("Failed to decrypt JSON field")
             return None

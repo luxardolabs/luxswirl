@@ -102,7 +102,7 @@ class HomeAssistantNotificationProvider(BaseNotificationProvider):
             return True
 
         except Exception:
-            logger.error("Failed to send Home Assistant notification", exc_info=True)
+            logger.exception("Failed to send Home Assistant notification")
             raise
 
     def _build_ha_payload(self, context: NotificationContext) -> dict[str, Any]:

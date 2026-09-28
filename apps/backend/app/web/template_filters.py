@@ -103,10 +103,8 @@ def format_datetime(
     # Build format string from settings if not explicitly provided
     if format_str is None:
         # Time format based on setting
-        if _cached_time_format == "24h":
-            time_fmt = "%H:%M"
-        else:  # 12h
-            time_fmt = "%I:%M%p"
+        # 24h or 12h
+        time_fmt = "%H:%M" if _cached_time_format == "24h" else "%I:%M%p"
 
         if include_date or date_only:
             # Date format based on setting
@@ -277,7 +275,13 @@ def _compute_static_version() -> str:
         )
     except OSError:
         newest_mtime = 0.0
-    return hashlib.md5(str(newest_mtime).encode()).hexdigest()[:8]
+    # usedforsecurity=False: this is a cache-busting token, not a digest anyone
+    # relies on. The flag is what makes that explicit to ruff's S324 — and it is
+    # what keeps this from raising on a FIPS-enabled host, where an md5() without
+    # it is refused outright.
+    return hashlib.md5(str(newest_mtime).encode(), usedforsecurity=False).hexdigest()[
+        :8
+    ]
 
 
 def register_filters(jinja_env):

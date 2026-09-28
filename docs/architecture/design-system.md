@@ -7,6 +7,7 @@ This document defines the visual design standards for ALL UI components in LuxSw
 **Standard Pattern:** Transparent background with colored border, medium rounded corners, NO ICONS
 
 **Base Classes:**
+
 ```html
 <span class="px-2 py-1 text-xs font-medium rounded-md bg-{color}-600/20 text-{color}-400 border border-{color}-600/30">
     Status Text
@@ -14,11 +15,13 @@ This document defines the visual design standards for ALL UI components in LuxSw
 ```
 
 **Current Implementation:**
+
 - **Up/Success**: `bg-green-600/20 text-green-400 border border-green-600/30`
 - **Down/Error**: `bg-red-600/20 text-red-400 border border-red-600/30`
 - **Unknown**: `bg-gray-600/20 text-gray-400 border border-gray-600/30`
 
 **Key Features:**
+
 - Transparent background (20% opacity)
 - Colored text (400 shade)
 - Border with 30% opacity
@@ -29,13 +32,14 @@ This document defines the visual design standards for ALL UI components in LuxSw
 
 **Reference Implementation:** `apps/backend/app/web/templates/macros/status.html` (`status_badge` macro). The base `badge` macro it builds on lives in `apps/backend/app/web/templates/macros/badges.html`.
 
----
+______________________________________________________________________
 
 ## 2. TAGS (Agent tags, Check tags, etc)
 
 **Standard Pattern:** Monospace font, transparent background (10% opacity), colored border, small rounded corners
 
 **Base Classes:**
+
 ```html
 <span class="px-2 py-0.5 text-xs font-mono rounded bg-{color}-600/10 text-{color}-300 border border-{color}-600/30">
     tag_name
@@ -43,10 +47,12 @@ This document defines the visual design standards for ALL UI components in LuxSw
 ```
 
 **Current Implementation (Color-coded by type):**
+
 - **Agent Tags**: `bg-blue-600/10 text-blue-300 border border-blue-600/30`
 - **Check Tags**: `bg-green-600/10 text-green-300 border border-green-600/30`
 
 **Key Features:**
+
 - More transparent background than status badges (10% vs 20% opacity)
 - Monospace font (`font-mono`) for technical/code-like appearance
 - Colored text (300 shade - lighter than status badges)
@@ -57,6 +63,7 @@ This document defines the visual design standards for ALL UI components in LuxSw
 - Different colors by type (Agent=blue, Check=green)
 
 **Hover States (for clickable tags):**
+
 ```html
 <!-- Example from tag browser buttons -->
 <button class="px-2 py-0.5 text-xs font-mono bg-blue-600/10 hover:bg-blue-600/20 text-blue-300 border border-blue-600/40 rounded transition-colors">
@@ -65,29 +72,32 @@ This document defines the visual design standards for ALL UI components in LuxSw
 ```
 
 **Reference Implementation:**
+
 - Display: `partials/status_table.html`
 - Interactive: `panels/agents/fields/tags.html`
 
----
+______________________________________________________________________
 
 ## 3. NOTIFICATION STATUS (Sent/Failed/Rate Limited/etc)
 
 **Standard Pattern:** Matches status indicators exactly (Section 1)
 
 **Current Implementation:**
+
 - Same as status indicators - transparent background with colored border
 - See Section 1 for complete pattern
 - Examples: "Sent" (green), "Failed" (red), "Rate Limited" (yellow)
 
 **Reference Implementation:** `pages/notification_logs.html` (notification status column)
 
----
+______________________________________________________________________
 
 ## 4. CHECK TYPE BADGES (ping, http, tcp, etc)
 
 **Standard Pattern:** Gray solid background, no border, medium rounded corners
 
 **Base Classes:**
+
 ```html
 <span class="px-2 py-1 text-xs font-medium rounded-md bg-dark-bg-tertiary text-dark-text-secondary">
     ping
@@ -95,6 +105,7 @@ This document defines the visual design standards for ALL UI components in LuxSw
 ```
 
 **Current Implementation:**
+
 - Solid gray background (`bg-dark-bg-tertiary`)
 - Muted text color (`text-dark-text-secondary`)
 - Medium rounded corners (`rounded-md`)
@@ -103,19 +114,21 @@ This document defines the visual design standards for ALL UI components in LuxSw
 - All check types use the same gray color (not color-coded)
 
 **Examples:**
+
 - `ping`, `http`, `tcp`, `dns`, `json`, `mysql`, `postgres`, `synthetic`
 
 **Note:** Different from status badges - check types are neutral/informational, not indicating success/failure, so they use consistent gray styling.
 
 **Reference Implementation:** `apps/backend/app/web/templates/macros/badges.html` (`check_type_badge` macro)
 
----
+______________________________________________________________________
 
 ## 5. ROLE BADGES (Admin/Editor/Viewer)
 
 **Standard Pattern:** Same as status indicators, but with role-specific colors
 
 **Base Classes:**
+
 ```html
 <span class="px-2 py-1 text-xs font-medium rounded-md bg-{color}-600/20 text-{color}-400 border border-{color}-600/30">
     Role Name
@@ -123,11 +136,13 @@ This document defines the visual design standards for ALL UI components in LuxSw
 ```
 
 **Current Implementation (Color-coded by role):**
+
 - **Admin**: `bg-purple-600/20 text-purple-400 border border-purple-600/30`
 - **Editor**: `bg-blue-600/20 text-blue-400 border border-blue-600/30`
 - **Viewer**: `bg-gray-600/20 text-gray-400 border border-gray-600/30`
 
 **Key Features:**
+
 - Identical structure to status indicators (Section 1)
 - Transparent background (20% opacity)
 - Colored text (400 shade)
@@ -138,13 +153,14 @@ This document defines the visual design standards for ALL UI components in LuxSw
 
 **Reference Implementation:** `pages/settings/users.html`
 
----
+______________________________________________________________________
 
 ## 6. ICON BUTTONS
 
 **Standard Pattern:** Square buttons with opacity states (from network scan jobs)
 
 **Base Pattern:**
+
 ```html
 <button class="p-1.5 bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 rounded border border-blue-600/30 transition-colors">
     <svg class="w-3 h-3">...</svg>
@@ -152,6 +168,7 @@ This document defines the visual design standards for ALL UI components in LuxSw
 ```
 
 **Disabled State (slightly opaque):**
+
 ```html
 <button class="p-1.5 bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 rounded border border-blue-600/30 transition-colors opacity-30 cursor-not-allowed" disabled>
     <svg class="w-3 h-3">...</svg>
@@ -159,6 +176,7 @@ This document defines the visual design standards for ALL UI components in LuxSw
 ```
 
 **Key Classes:**
+
 - `p-1.5` - Square padding
 - `bg-{color}-600/20` - Transparent colored background
 - `hover:bg-{color}-600/30` - Slightly darker on hover
@@ -170,6 +188,7 @@ This document defines the visual design standards for ALL UI components in LuxSw
 - **Enabled:** Full opacity (default) - Bright and clickable
 
 **Color Variants (by action type):**
+
 - **Blue (Edit)**: `bg-blue-600/20 text-blue-300 border-blue-600/30`
 - **Green (View)**: `bg-green-600/20 text-green-300 border-green-600/30`
 - **Red (Delete)**: `bg-red-600/20 text-red-300 border-red-600/30` *(see Delete Button Pattern below)*
@@ -196,12 +215,14 @@ Red delete buttons use a special double-click pattern with visual feedback:
 ```
 
 **Delete Button States:**
+
 - **Idle**: `bg-red-600/20 hover:bg-red-600/30` - Normal appearance
 - **First Click (Waiting)**: `bg-red-600/50 hover:bg-red-600/60 scale-110 animate-pulse shadow-lg shadow-red-500/50` - **Pulsing with glowing halo**
 - **Second Click (Executing)**: `opacity-50 cursor-not-allowed` - Disabled loading state
 - **Timeout**: Reverts to idle after 2 seconds if no second click
 
 **Key Features:**
+
 - NO browser `confirm()` dialogs
 - Visual feedback via pulsing glow with "light leak" shadow halo on first click
 - 2-second timeout window for confirmation
@@ -212,6 +233,7 @@ Red delete buttons use a special double-click pattern with visual feedback:
 **Implementation:** See `app/web/static/js/confirm-double-click.js`
 
 **Example (Network Scan Jobs):**
+
 ```html
 <!-- Enabled - Full color, clickable -->
 <button class="p-1.5 bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 rounded border border-blue-600/30 transition-colors"
@@ -232,18 +254,20 @@ Red delete buttons use a special double-click pattern with visual feedback:
 
 **Reference Implementation:** `apps/backend/app/web/templates/partials/jobs/network_scan_detail.html`
 
----
+______________________________________________________________________
 
 ## 7. BUTTON STYLES
 
 **Standard Pattern:** Medium rounded corners with colored backgrounds
 
 **Base Classes:**
+
 ```html
 <button class="btn btn-{variant}">Button Text</button>
 ```
 
 **Current Implementation:**
+
 ```css
 /* Base button */
 .btn {
@@ -268,6 +292,7 @@ Red delete buttons use a special double-click pattern with visual feedback:
 ```
 
 **Key Features:**
+
 - Medium rounded corners (`rounded-md`)
 - Focus ring with offset for accessibility
 - 200ms color transitions
@@ -276,13 +301,14 @@ Red delete buttons use a special double-click pattern with visual feedback:
 
 **Reference Implementation:** `app/web/static/css/input.css`
 
----
+______________________________________________________________________
 
 ## 8. CARD CORNERS
 
 **Standard Pattern:** Large rounded corners on all cards
 
 **Base Classes:**
+
 ```css
 .card {
   @apply bg-dark-bg-secondary border border-dark-border rounded-lg shadow-sm;
@@ -290,12 +316,14 @@ Red delete buttons use a special double-click pattern with visual feedback:
 ```
 
 **Current Implementation:**
+
 - All cards use `rounded-lg` (larger radius than buttons)
 - Shadow: `shadow-sm` for subtle depth
 - Border: `border-dark-border` for definition
 - Background: `bg-dark-bg-secondary`
 
 **Variant:**
+
 ```css
 .card-hover {
   @apply card transition-all duration-200 hover:shadow-md hover:border-brand-500/50;
@@ -304,13 +332,14 @@ Red delete buttons use a special double-click pattern with visual feedback:
 
 **Reference Implementation:** `app/web/static/css/input.css`
 
----
+______________________________________________________________________
 
 ## 9. TABLE STYLES
 
 **Standard Pattern:** Consistent padding, hover effects, gray header background
 
 **Base Classes:**
+
 ```css
 .table {
   @apply w-full border-collapse;
@@ -335,6 +364,7 @@ Red delete buttons use a special double-click pattern with visual feedback:
 ```
 
 **Key Features:**
+
 - Headers: `px-6 py-3` with gray background, uppercase text
 - Cells: `px-6 py-4` with top border for row separation
 - Hover: Semi-transparent tertiary background (50% opacity)
@@ -343,6 +373,7 @@ Red delete buttons use a special double-click pattern with visual feedback:
 - NO striped rows (clean, modern look)
 
 **Important:**
+
 - ALWAYS use `class="table"` on table element
 - NO hardcoded classes on `<thead>`, `<tbody>`, `<th>`, or `<td>`
 - CSS handles all styling automatically
@@ -350,13 +381,14 @@ Red delete buttons use a special double-click pattern with visual feedback:
 
 **Reference Implementation:** `app/web/static/css/input.css`
 
----
+______________________________________________________________________
 
 ## 10. SIDE PANELS (Not Modals)
 
 **Standard Pattern:** Slide-out panels from the right side of the screen
 
 **Base Structure:**
+
 ```css
 #side-panel {
   @apply fixed right-0 top-0 h-screen z-40 transition-transform duration-300;
@@ -368,6 +400,7 @@ Red delete buttons use a special double-click pattern with visual feedback:
 ```
 
 **Key Features:**
+
 - Fixed positioning on right edge
 - Full screen height
 - High z-index (40) to overlay content
@@ -375,6 +408,7 @@ Red delete buttons use a special double-click pattern with visual feedback:
 - Panels used for: check details, agent edit, user edit, job details
 
 **Pattern:**
+
 ```html
 <div id="side-panel" class="hidden">
     <!-- Panel content slides in from right when 'hidden' class removed -->
@@ -388,12 +422,13 @@ Red delete buttons use a special double-click pattern with visual feedback:
 ```
 
 **Important:**
+
 - Use side panels, NOT browser modals/dialogs
 - No `confirm()` or `alert()` - use HTMX responses or double-click pattern instead
 
 **Reference Implementation:** `app/web/static/css/input.css`
 
----
+______________________________________________________________________
 
 ## 11. DOUBLE-CLICK DELETE CONFIRMATION
 
@@ -402,6 +437,7 @@ Red delete buttons use a special double-click pattern with visual feedback:
 **Purpose:** Replace browser `confirm()` dialogs with smooth, visual UX
 
 **Implementation Pattern:**
+
 ```javascript
 // Track click state per button
 const deleteClickState = new Map();
@@ -464,6 +500,7 @@ function handleDeleteClick(event, button, deleteUrl, targetId = null) {
 ```
 
 **Key Features:**
+
 - **2-second timeout** (not 300ms) - gives user time to see feedback
 - **Pulsing glow feedback** on first click (`animate-pulse` + `scale-110` + brighter red + `shadow-lg shadow-red-500/50`)
 - **"Light leak" effect** - Glowing red halo around button creates dramatic visual attention
@@ -473,17 +510,20 @@ function handleDeleteClick(event, button, deleteUrl, targetId = null) {
 - Automatic cleanup on completion
 
 **Visual Feedback States:**
+
 1. **Idle**: Normal red button appearance
-2. **First Click**: Brighter red + scale up + **pulsing animation + glowing shadow halo**
-3. **Second Click**: Disabled state with opacity (glow removed)
-4. **Timeout**: Reverts to idle if no second click
+1. **First Click**: Brighter red + scale up + **pulsing animation + glowing shadow halo**
+1. **Second Click**: Disabled state with opacity (glow removed)
+1. **Timeout**: Reverts to idle if no second click
 
 **Current Status:**
+
 - ✅ **Fully Implemented**: All delete buttons use this pattern
 - ✅ Pulsing glow feedback on all delete confirmations
 - ✅ NO browser `confirm()` dialogs anywhere
 
 **Browser Confirms to Remove:**
+
 ```html
 <!-- OLD - Browser modal -->
 <button hx-confirm="Are you sure?">Delete</button>
@@ -499,19 +539,21 @@ function handleDeleteClick(event, button, deleteUrl, targetId = null) {
 
 **Reference Implementation:** `app/web/static/js/confirm-double-click.js` (ES6 module)
 
----
+______________________________________________________________________
 
 ## 12. ACTION FEEDBACK
 
 **Standard Pattern:** All user actions MUST have visible feedback
 
 **Required Feedback Types:**
+
 1. **Success actions**: Toast notification or inline success message
-2. **Error actions**: Toast notification or inline error message
-3. **Loading states**: Spinner, skeleton, or disabled button state
-4. **Delete actions**: Use double-click pattern (Section 11) with visual feedback
+1. **Error actions**: Toast notification or inline error message
+1. **Loading states**: Spinner, skeleton, or disabled button state
+1. **Delete actions**: Use double-click pattern (Section 11) with visual feedback
 
 **Toast Pattern:**
+
 ```javascript
 // Show success toast
 showToast('Check deleted successfully', 'success');
@@ -524,27 +566,29 @@ button.disabled = true;
 button.innerHTML = '<spinner> Deleting...';
 ```
 
----
+______________________________________________________________________
 
 ## IMPLEMENTATION COMPLETE
 
 All design patterns documented above represent the current LuxSwirl design system.
 
 **Completed Sections:**
+
 1. ✅ Status Indicators - Transparent with border, no icons
-2. ✅ Tags - Monospace, color-coded (Agent=blue, Check=green)
-3. ✅ Notification Status - Same as status indicators
-4. ✅ Check Type Badges - Gray solid, no border
-5. ✅ Role Badges - Color-coded (Admin=purple, Editor=blue, Viewer=gray)
-6. ✅ Icon Buttons - Square with opacity states, color-coded by action
-7. ✅ Button Styles - Primary, secondary, danger variants
-8. ✅ Card Corners - rounded-lg on all cards
-9. ✅ Table Styles - Consistent padding, hover effects
-10. ✅ Side Panels - Slide-out from right (not modals)
-11. ✅ Double-Click Delete - **Fully implemented with pulsing glow feedback**
-12. ✅ Action Feedback - Toast notifications for settings save/reset
+1. ✅ Tags - Monospace, color-coded (Agent=blue, Check=green)
+1. ✅ Notification Status - Same as status indicators
+1. ✅ Check Type Badges - Gray solid, no border
+1. ✅ Role Badges - Color-coded (Admin=purple, Editor=blue, Viewer=gray)
+1. ✅ Icon Buttons - Square with opacity states, color-coded by action
+1. ✅ Button Styles - Primary, secondary, danger variants
+1. ✅ Card Corners - rounded-lg on all cards
+1. ✅ Table Styles - Consistent padding, hover effects
+1. ✅ Side Panels - Slide-out from right (not modals)
+1. ✅ Double-Click Delete - **Fully implemented with pulsing glow feedback**
+1. ✅ Action Feedback - Toast notifications for settings save/reset
 
 **Next Steps:**
+
 1. Apply these patterns consistently across all new components
-2. Continue using toast notifications for async actions
-3. Maintain the square icon button pattern for all new action buttons
+1. Continue using toast notifications for async actions
+1. Maintain the square icon button pattern for all new action buttons
