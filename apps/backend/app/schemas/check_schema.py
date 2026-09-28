@@ -409,10 +409,6 @@ class CheckFormUrls:
     update: str
     dependents: str
     update_dependents: str
-    # Where the form sends someone with no alerts yet. Resolved by route name
-    # like the rest: the template used to hard-code /alerts, which is not a
-    # route — the alerts page is /settings/alerts, so both links 404'd.
-    alerts_page: str
 
 
 @dataclass

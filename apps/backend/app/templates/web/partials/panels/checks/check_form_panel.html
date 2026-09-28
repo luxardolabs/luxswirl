@@ -267,7 +267,7 @@
             <div class="flex items-center justify-between border-b border-dark-border pb-2">
                 <h3 class="text-lg font-semibold text-dark-text-primary">Alerts</h3>
                 {% if not alerts or alerts|length == 0 %}
-                <a href="{{ form_urls.alerts_page }}" class="text-xs text-brand-500 hover:text-brand-400">
+                <a href="{{ alerts_page_url }}" class="text-xs text-brand-500 hover:text-brand-400">
                     Create an alert first
                 </a>
                 {% endif %}
@@ -316,7 +316,7 @@
             <div class="card p-6 text-center">
                 <span class="w-12 h-12 mx-auto mb-3 text-dark-text-muted opacity-50 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/bell.svg" %}</span>
                 <p class="text-sm text-dark-text-muted mb-2">No alerts configured yet</p>
-                <a href="{{ form_urls.alerts_page }}" class="text-brand-500 hover:text-brand-400 text-sm">
+                <a href="{{ alerts_page_url }}" class="text-brand-500 hover:text-brand-400 text-sm">
                     Create your first alert
                 </a>
             </div>

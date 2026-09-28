@@ -76,6 +76,16 @@ class CheckRow:
         self.updated_at = check.updated_at
 
 
+def build_alerts_page_url(request: Request) -> str:
+    """Where the check form sends someone with no alerts configured yet.
+
+    A page, not a check action — so it is NOT in CheckFormUrls: that bundle is
+    keyed on a check_id, and the CREATE form has no check yet. Putting it there
+    made /checks/create-form raise UndefinedError on `form_urls`.
+    """
+    return str(request.url_for("settings_alerts").path)
+
+
 def build_check_form_urls(request: Request, check_id: UUID) -> CheckFormUrls:
     """Resolve the check form / dependents panel hrefs by route name."""
 
@@ -87,8 +97,6 @@ def build_check_form_urls(request: Request, check_id: UUID) -> CheckFormUrls:
         update=u("web_update_check"),
         dependents=u("dependents_panel"),
         update_dependents=u("update_dependents"),
-        # No check_id on this one — it is the alerts page, not a check action.
-        alerts_page=str(request.url_for("settings_alerts").path),
     )
 
 
@@ -229,6 +237,7 @@ class ChecksViewService:
         return {
             "form_urls": build_check_form_urls(request, parent_check_id),
             "request": request,
+            "alerts_page_url": build_alerts_page_url(request),
             "current_user": current_user,
             "parent": parent,
             "candidates": filtered,
@@ -372,6 +381,7 @@ class ChecksViewService:
         )
         return {
             "request": request,
+            "alerts_page_url": build_alerts_page_url(request),
             "current_user": current_user,
             "mode_title": mode_title,
             "mode_description": mode_description,
@@ -390,6 +400,7 @@ class ChecksViewService:
         form_data = await ChecksViewService.get_check_create_form_data(db)
         return {
             "request": request,
+            "alerts_page_url": build_alerts_page_url(request),
             "current_user": current_user,
             "check": None,
             # The panel is one template in three modes; it branches on this, so
@@ -420,6 +431,7 @@ class ChecksViewService:
         return {
             "form_urls": build_check_form_urls(request, check_id),
             "request": request,
+            "alerts_page_url": build_alerts_page_url(request),
             "current_user": current_user,
             "check": check,
             "mode": "edit",
@@ -447,6 +459,7 @@ class ChecksViewService:
         return {
             "form_urls": build_check_form_urls(request, check_id),
             "request": request,
+            "alerts_page_url": build_alerts_page_url(request),
             "current_user": current_user,
             "check": check,
             "agents": form_data["agents"],
@@ -474,6 +487,7 @@ class ChecksViewService:
         """Common error-partial context."""
         return {
             "request": request,
+            "alerts_page_url": build_alerts_page_url(request),
             "current_user": current_user,
             "error": error,
         }
@@ -1094,6 +1108,7 @@ class ChecksViewService:
         previews = await CheckCoreService.bulk_preview_checks(url_list)
         return {
             "request": request,
+            "alerts_page_url": build_alerts_page_url(request),
             "current_user": current_user,
             "previews": previews,
         }

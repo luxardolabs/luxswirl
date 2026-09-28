@@ -33,7 +33,7 @@
                 <span class="text-sm text-dark-text-muted">/status/</span>
                 {{ input(name='slug', class='input flex-1', placeholder='production',
                          value=(status_page.slug if status_page else ''), required=true,
-                         extra_attrs='pattern="[a-z0-9\-_]+"') }}
+                         extra_attrs='pattern="[a-z0-9_-]+"') }}
             </div>
             <p class="text-xs text-dark-text-muted mt-1">URL-friendly identifier (lowercase, alphanumeric, hyphens, underscores)</p>
         </div>

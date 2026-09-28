@@ -5,16 +5,42 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 <!-- Maintainer-only working notes (roadmap, internal tooling, operational
      snapshots) live outside the repo and are imported below. The import is a
      no-op for anyone who doesn't have the file (e.g. public clones). -->
+
 @~/.claude/projects/luxswirl.md
+
+<!-- luxarch:claude-pointer asset v1 - DO NOT edit this marker line; it is how repo.claude_pointer_present knows your copy is current. Re-emit with `luxarch --emit claude-pointer`. -->
+
+## How to work here (fleet conduct — read the standard, not just this block)
+
+**`luxarch --doc FLEET-AGENT-CONDUCT-STANDARD` — read it in full before your first change.** It is the one home for *how* agents work in this fleet. This block is a pointer plus the handful of rules that get broken most; it is not a summary and does not replace reading it.
+
+**Report the result, not the mountain.** No "heavy", "multi-hour", "the big one", no narrating difficulty. Done + next in one line, with numbers.
+
+**Decide; do not hand back a menu.** Whether to ask the owner is decided by the **class of action**, never by how confident you feel:
+
+- **Ask** — deleting anything; changing scope; a deferral/allowlist/exemption; publishing outward (pushing another repo, a force-push, a history rewrite); a genuine product fork where the choice is taste, not correctness.
+- **Do it** — aligning code to a ratified standard or a guard red; anything you have evidence for that is reversible in one commit. The standard already decided; say what you did.
+
+When you do ask: **one decision per message**, the evidence that makes it answerable, your recommendation stated as one, and a question answerable in one word. **A recommendation that ends in a menu is not a recommendation** — if you rejected the alternatives, re-offering them asks the owner to redo your analysis.
+
+**Align or escalate; never route around.** A guard red is fixed by changing the code, or escalated to the guard maintainer as genuinely wrong. Never by an exemption, a `# noqa`, a deferral, or a local config. Verification is not authorization: proving something is unreferenced does not license deleting it.
+
+**Escalations go in THIS repo's LuxPM project** — label `fleet-escalation`, title `[<guard> ESCALATION] …`, self-contained enough to forward whole. File it the moment you find it; that is pre-authorized. **Never a GitHub issue** — there is no fallback. The maintainer sweeps the label across every project and picks it up where you filed it.
+
+**A red stays RED while its escalation is open.** The fleet does not gate CI on red. A lit red is honest; a silenced one is a lie you will inherit.
+
+**Commit as `luxardolabs`** using the global git config, and never `git -c user.email=…`. No AI attribution in commit messages.
 
 ## Project Overview
 
 **LuxSwirl** is a production-quality SaaS observability monitoring platform for all types of metrics developed by Luxardo Labs. It consists of three main components:
+
 - **Agent**: Executes health checks (ping, HTTP, TCP, JSON) and reports results to the server
 - **Server**: FastAPI REST API server with production-grade architecture (models, schemas, services, routers)
 - **TimescaleDB**: PostgreSQL extension providing time-series storage with automatic partitioning and retention
 
 The system is designed as a professional SaaS platform with:
+
 - Complete separation of concerns (models, schemas, services, routers)
 - Async/await patterns throughout for high performance
 - Pydantic Settings for type-safe configuration
@@ -89,14 +115,15 @@ Web UI:    web/routers/     →  services/views/ →  services/core/  →  crud/
 ### Three-component runtime
 
 1. **luxswirl_agent** (`apps/agent/`) — Runs health checks. Entry: `apps/agent/app/main.py` (`python -m app.main`). Pushes results to server via HTTP. Built as its own image.
-2. **luxswirl_server** (`apps/backend/`) — FastAPI app: REST API at `/api/v1`, web dashboard at `/dashboard`, Prometheus at `/metrics`. Entry: `apps/backend/app/main.py` (`uvicorn app.main:app`). Built as its own image.
-3. **TimescaleDB** — PostgreSQL extension. Automatic partitioning, configurable retention, continuous aggregates. Schema lives in `apps/backend/app/models/*_model.py`; DDL helpers live in `apps/backend/app/crud/timescale_crud.py`.
+1. **luxswirl_server** (`apps/backend/`) — FastAPI app: REST API at `/api/v1`, web dashboard at `/dashboard`, Prometheus at `/metrics`. Entry: `apps/backend/app/main.py` (`uvicorn app.main:app`). Built as its own image.
+1. **TimescaleDB** — PostgreSQL extension. Automatic partitioning, configurable retention, continuous aggregates. Schema lives in `apps/backend/app/models/*_model.py`; DDL helpers live in `apps/backend/app/crud/timescale_crud.py`.
 
 ### Web UI
 
 **Stack:** HTMX (10-second polling) + Tailwind CSS 3.4 (dark-mode theme) + Chart.js + Jinja2.
 
 **Layout:**
+
 ```
 apps/backend/app/
 ├── web/routers/                     # HTMX/Jinja route handlers (HTTP plumbing only)
@@ -117,11 +144,13 @@ Routers stay tiny: parse query params, call `await SomeViewService.build_*_conte
 ### Check System
 
 All checks inherit from `BaseCheck` (in `apps/agent/app/checks/base.py`) which provides:
+
 - Configuration validation
 - Timer utilities for latency measurement
 - Standardized result format creation
 
 Available check types (in `apps/agent/app/checks/`):
+
 - `ping.py` - ICMP ping checks with cross-platform command handling
 - `http.py` - HTTP/HTTPS endpoint checks
 - `tcp.py` - TCP port connectivity checks
@@ -132,6 +161,7 @@ Available check types (in `apps/agent/app/checks/`):
 - `synthetic.py` - Playwright browser automation checks (**⚠️ Admin only - executes arbitrary code**)
 
 **Synthetic Check Security (IMPORTANT):**
+
 - **Admin Role Required**: Only admins create/modify synthetic checks — enforced in the core service (`CheckCoreService.create_check/update_check/clone_check`), not just the web layer, so the JSON API can't bypass it. Web users are gated by RBAC role; the JSON API has no role model, so any API Bearer token is admin-equivalent.
 - **Arbitrary Code Execution**: Runs user-provided Python scripts using `exec()` with Playwright
 - **AST Validation**: Scripts validated to block obvious attacks (eval, exec, os, subprocess, etc.)
@@ -142,6 +172,7 @@ Available check types (in `apps/agent/app/checks/`):
 - See `SECURITY.md` for complete security model and threat analysis
 
 **JSON Check Details:**
+
 - Uses JSONata (jsonata.org) for querying JSON responses
 - Full Uptime Kuma compatibility - queries can be copied directly from Uptime Kuma
 - Supports advanced queries:
@@ -156,13 +187,15 @@ Available check types (in `apps/agent/app/checks/`):
 - Playground available at: https://try.jsonata.org
 
 To add a new check type:
+
 1. Create a new file in `apps/agent/app/checks/` that inherits from `BaseCheck`
-2. Implement the `run()` method returning a result dictionary
-3. Register it in `apps/agent/app/main.py` using `agent.register_check_type()`
+1. Implement the `run()` method returning a result dictionary
+1. Register it in `apps/agent/app/main.py` using `agent.register_check_type()`
 
 ### Configuration System
 
 Configuration is handled by `shared/config.py` (top-level shared module on `sys.path`):
+
 - Default configurations are embedded in the code (see `DEFAULT_AGENT_CONFIG` and `DEFAULT_SERVER_CONFIG`)
 - Environment variables override defaults (e.g., `LUXSWIRL_AGENT_ID`, `LUXSWIRL_AUTH_KEY`, `LUXSWIRL_SERVER_URL`)
 - Configuration can also be loaded from YAML/JSON files via `--config` flag
@@ -171,6 +204,7 @@ Configuration is handled by `shared/config.py` (top-level shared module on `sys.
 ### Reporter System
 
 The agent uses a sophisticated batching reporter (`apps/agent/app/agent/reporter.py`):
+
 - Results are batched before sending to reduce HTTP overhead
 - Configurable batch size (`report_batch_size`, default 5000) and time interval (`report_interval`, default 10s)
 - Automatic retries with exponential backoff
@@ -186,6 +220,7 @@ The agent uses a sophisticated batching reporter (`apps/agent/app/agent/reporter
 ### Agent Performance Features
 
 The agent includes several reliability features in `agent/core.py`:
+
 - **Concurrency control**: Semaphore limits concurrent checks (`max_concurrent_checks`, default 200)
 - **Self-monitoring**: Agent reports its own health metrics periodically
 - **Watchdog**: Monitors result processing and forces flush if stalled
@@ -241,6 +276,7 @@ See `docs/architecture/backend.md` for the full layering rules and naming conven
 ## Key Configuration Parameters
 
 ### Agent Performance Tuning
+
 - `max_concurrent_checks`: Maximum checks running simultaneously (default: 200)
 - `report_batch_size`: Results per batch sent to server (default: 5000). Caps both fresh in-memory batches and combined SQLite-replay POSTs.
 - `report_interval`: Seconds between batch sends (default: 10)
@@ -248,6 +284,7 @@ See `docs/architecture/backend.md` for the full layering rules and naming conven
 - `interval`: Default check interval if not specified per-check (default: 60)
 
 ### Server Settings
+
 - `port`: Server listen port (default: 9000)
 - `metrics_ttl_seconds`: How long to keep check results (default: 300)
 - `max_history_points`: Historical data points per check (default: 1000)
@@ -258,6 +295,7 @@ See `docs/architecture/backend.md` for the full layering rules and naming conven
 ### Server REST API (v1)
 
 **Agents**
+
 - `GET /api/v1/agents` - List all agents with pagination and filtering
 - `GET /api/v1/agents/{agent_id}` - Get specific agent details
 - `POST /api/v1/agents` - Create a new agent
@@ -266,6 +304,7 @@ See `docs/architecture/backend.md` for the full layering rules and naming conven
 - `GET /api/v1/agents/{agent_id}/stats` - Get agent statistics
 
 **Checks**
+
 - `GET /api/v1/agents/{agent_id}/checks` - List checks for an agent
 - `GET /api/v1/agents/{agent_id}/checks/{check_name}` - Get specific check
 - `POST /api/v1/agents/{agent_id}/checks` - Create a new check
@@ -274,6 +313,7 @@ See `docs/architecture/backend.md` for the full layering rules and naming conven
 - `DELETE /api/v1/agents/{agent_id}/checks/{check_name}` - Delete check
 
 **Check Results**
+
 - `POST /api/v1/reports` - Submit agent report (bulk check results)
 - `GET /api/v1/agents/{agent_id}/results` - Get latest results for agent
 - `GET /api/v1/agents/{agent_id}/checks/{check_name}/history` - Get check history
@@ -281,6 +321,7 @@ See `docs/architecture/backend.md` for the full layering rules and naming conven
 - `GET /api/v1/stats` - Get global aggregated statistics
 
 **Metrics & Health**
+
 - `GET /metrics` - Prometheus-format metrics export
 - `GET /metrics/summary` - Metrics summary (JSON)
 - `GET /health` - Server health check
@@ -293,6 +334,7 @@ All endpoints require Bearer token authentication via the `Authorization` header
 ### Prometheus Metrics
 
 The `/metrics` endpoint exposes:
+
 - `luxswirl_check_success` - Whether check succeeded (1/0)
 - `luxswirl_check_up` - Whether check is still reporting (1/0)
 - `luxswirl_check_latency_seconds` - Check latency in seconds
@@ -308,22 +350,26 @@ All metrics include labels: `agent`, `check`, `type`, `target`
 **HTTPS Enforcement:** External servers MUST use HTTPS to protect credentials in transit. Agent credentials are transmitted in the `Authorization` header and must be encrypted.
 
 **Allowed without HTTPS (internal/local networks):**
+
 - Same Docker network: `http://server:9000`, `http://luxswirl_server:9000`
 - Localhost: `http://localhost:9000`, `http://127.0.0.1:9000`
 - Private networks (RFC 1918): `http://192.168.1.x:9000`, `http://10.x.x.x:9000`, `http://172.16-31.x.x:9000`
 - Local domains: `http://hostname.local:9000`
 
 **Requires HTTPS (external/public):**
+
 - External hostnames: `https://server.example.com:9000`
 - Public IPs: `https://1.2.3.4:9000`
 
 **Testing override (UNSAFE - never use in production):**
+
 ```bash
 # ONLY for testing/development
 LUXSWIRL_ALLOW_INSECURE_HTTP=true LUXSWIRL_SERVER_URL=http://test.example.com:9000 python -m app.main
 ```
 
 **Implementation:**
+
 - URL validation in `shared/url_security.py`
 - Automatic validation during agent startup and registration
 - Clear error messages with fix instructions
@@ -331,6 +377,7 @@ LUXSWIRL_ALLOW_INSECURE_HTTP=true LUXSWIRL_SERVER_URL=http://test.example.com:90
 ### Credential Protection
 
 **Log Scrubbing:** All loggers automatically scrub sensitive credentials using `CredentialFilter` (`shared/logger.py`):
+
 - Database connection strings (passwords masked: `mysql://user:***@host`)
 - Bearer tokens (`Bearer ***`)
 - API keys (`api_key=***`)
@@ -341,12 +388,14 @@ LUXSWIRL_ALLOW_INSECURE_HTTP=true LUXSWIRL_SERVER_URL=http://test.example.com:90
 Agent credentials (`agent_id` + `api_key`) are automatically encrypted using **Fernet encryption (AES-128-CBC + HMAC)** and stored at `/app/data/agent_credentials.json`.
 
 **How it works:**
+
 1. **Registration:** Agent registers with server using `LUXSWIRL_AUTH_KEY` (registration key)
-2. **Approval:** Server generates unique agent-specific API key
-3. **Storage:** Agent encrypts and saves credentials to persistent Docker volume
-4. **Restart:** Agent loads and decrypts credentials automatically using container-derived key
+1. **Approval:** Server generates unique agent-specific API key
+1. **Storage:** Agent encrypts and saves credentials to persistent Docker volume
+1. **Restart:** Agent loads and decrypts credentials automatically using container-derived key
 
 **Encryption details:**
+
 - **Algorithm:** Fernet (AES-128 in CBC mode + HMAC for authentication)
 - **Key derivation:** PBKDF2-HMAC-SHA256 from `hostname + machine-id` (100,000 iterations)
   - Hostname: Docker container ID or system hostname
@@ -356,6 +405,7 @@ Agent credentials (`agent_id` + `api_key`) are automatically encrypted using **F
 - **Migration:** Existing plaintext files automatically migrated on first load
 
 **Docker usage:**
+
 ```yaml
 # docker-compose.yml
 services:
@@ -371,6 +421,7 @@ volumes:
 ```
 
 **Important notes:**
+
 - Credentials **automatically encrypted** on first save (v1.0+)
 - Encryption key derived from container-specific data (deterministic across restarts)
 - **Container rebuild:** If hostname/machine-id changes, old credentials cannot be decrypted
@@ -379,6 +430,7 @@ volumes:
 - **Disable encryption:** Set `LUXSWIRL_DISABLE_CREDENTIAL_ENCRYPTION=true` (testing only - logs warning)
 
 **Security properties:**
+
 - ✅ Protected against casual file inspection
 - ✅ Protected in backups and log dumps
 - ✅ Automatic migration from plaintext
@@ -388,6 +440,7 @@ volumes:
 **Troubleshooting:**
 
 *Cannot decrypt credentials after container rebuild:*
+
 ```bash
 # Error: "Failed to decrypt credentials - encryption key may have changed"
 # Solution: Delete credentials and re-register
@@ -397,6 +450,7 @@ docker-compose restart agent
 ```
 
 *Inspect encrypted credentials (debugging):*
+
 ```bash
 # View encrypted file (binary)
 docker exec luxswirl_agent cat /app/data/agent_credentials.json
@@ -407,6 +461,7 @@ docker-compose up agent -e LUXSWIRL_DISABLE_CREDENTIAL_ENCRYPTION=true
 ```
 
 **Future enhancements:**
+
 - v1.1: OS keyring support (Linux: libsecret, macOS: Keychain, Windows: DPAPI)
 - v1.1: Credential vault integration (HashiCorp Vault, AWS Secrets Manager)
 - v2.0: KMS integration for cloud deployments
@@ -414,12 +469,14 @@ docker-compose up agent -e LUXSWIRL_DISABLE_CREDENTIAL_ENCRYPTION=true
 ### Check Configuration Security
 
 **Database credentials:** Database check types (MySQL, PostgreSQL) require connection strings with passwords. Best practices:
+
 - Use read-only database users for monitoring queries
 - Restrict query permissions (SELECT only)
 - Consider credential vault integration for production (planned v1.1)
 - Connection strings are scrubbed from logs automatically
 
 **Synthetic checks:** Execute arbitrary Python code via `exec()`. Security notes:
+
 - AST validation in `core/synthetic_security.py` blocks dangerous operations
 - **Use only in trusted environments** (self-hosted, controlled scripts)
 - Timeout enforcement (60 seconds default)
@@ -428,8 +485,7 @@ docker-compose up agent -e LUXSWIRL_DISABLE_CREDENTIAL_ENCRYPTION=true
 
 ### Security Audit
 
-A v1.0 security audit assessed risk as MODERATE → LOW after fixes, with positive
-findings on secure subprocess execution, SQL injection prevention, and input validation.
+A v1.0 security audit assessed risk as MODERATE → LOW after fixes, with positive findings on secure subprocess execution, SQL injection prevention, and input validation.
 
 ## Database Architecture
 
@@ -438,12 +494,14 @@ findings on secure subprocess execution, SQL injection prevention, and input val
 See `docs/architecture/DATABASE.md` and `docs/architecture/overview.md` for detailed documentation.
 
 **Models** (`apps/backend/app/models/`):
+
 - `agent.py` - Agent model with relationships and computed properties
 - `check.py` - Check model with agent relationship
 - `check_result.py` - CheckResult model (TimescaleDB hypertable)
 - `base.py` - Base classes and mixins (TimestampMixin, SoftDeleteMixin, etc.)
 
 **Key features:**
+
 - SQLAlchemy 2.0 with `Mapped` and `mapped_column`
 - Async throughout with AsyncSession
 - TimescaleDB hypertable partitioned by timestamp (1-day chunks)
@@ -455,6 +513,7 @@ See `docs/architecture/DATABASE.md` and `docs/architecture/overview.md` for deta
 ### Services Layer
 
 Located in `apps/backend/app/services/core/` (business logic) and `apps/backend/app/services/views/` (template context assembly):
+
 - **AgentService** (`agent_service.py`) - Agent CRUD, stats, online status
 - **CheckService** (`check_service.py`) - Check CRUD, upsert patterns
 - **CheckResultService** (`check_result_service.py`) - Results processing, history, analytics, summaries
@@ -465,6 +524,7 @@ All services use SQLAlchemy 2.0 async API with asyncpg driver.
 ### Configuration
 
 Set database connection via environment variables (Pydantic Settings):
+
 ```bash
 export DATABASE__HOST=localhost
 export DATABASE__PORT=5432
@@ -475,6 +535,7 @@ export DATABASE__ECHO=false  # SQL query logging
 ```
 
 Or use nested delimiter syntax:
+
 ```bash
 export DATABASE__URL=postgresql+asyncpg://luxswirl:luxswirl@localhost:5432/luxswirl
 ```
@@ -525,9 +586,11 @@ export DATABASE__URL=postgresql+asyncpg://luxswirl:luxswirl@localhost:5432/luxsw
 ## Recent Improvements (2024-10-22)
 
 ### Web UI - Check Detail Panel
+
 The check detail panel has been enhanced with Uptime Kuma-style visual design:
 
 **30-Minute Status Bar:**
+
 - Visual timeline showing the last 30 minutes of check health
 - Each bar represents one minute of aggregated check data
 - Gradient styling:
@@ -539,30 +602,33 @@ The check detail panel has been enhanced with Uptime Kuma-style visual design:
 - Implementation: `CheckDetailService` groups results by minute using `defaultdict`
 
 **Time Range Selector:**
+
 - Default: 4 hours of history
 - Options: 4h, 8h, 24h, 3d, 7d
 - HTMX-driven updates on selection change
 - Dynamic labels throughout UI reflecting selected range
 
-**Layout Structure:**
-Following Uptime Kuma's proven design pattern:
+**Layout Structure:** Following Uptime Kuma's proven design pattern:
+
 1. Header with status badge and time selector
-2. Check metadata (name, target, type, interval)
-3. Current status with pulsing indicator dot
-4. 30-minute visual status bar
-5. 2×2 statistics grid (current response, avg response, uptime %, total checks)
-6. Performance chart (Chart.js with latency over time)
-7. Recent events accordion (collapsed by default)
+1. Check metadata (name, target, type, interval)
+1. Current status with pulsing indicator dot
+1. 30-minute visual status bar
+1. 2×2 statistics grid (current response, avg response, uptime %, total checks)
+1. Performance chart (Chart.js with latency over time)
+1. Recent events accordion (collapsed by default)
 
 ### Web UI - Status Dashboard Stability
 
 **Fixed: Check Ordering Inconsistency**
+
 - **Problem**: Checks appeared in different order on each HTMX refresh
 - **Root cause**: Query sorted by `check_name` only, causing unstable sort for duplicate names across agents
 - **Solution**: Changed to `ORDER BY agent_id, check_name` for deterministic ordering
 - **File**: `apps/backend/app/services/views/status_view_service.py:153`
 
 **Fixed: Checks Randomly Disappearing**
+
 - **Problem**: Checks like "check_web" would appear/disappear on refresh
 - **Root cause**: Query only looked at results from last 5 minutes (`cutoff_recent`)
   - Checks with intervals > 5 minutes would have no recent results
@@ -575,12 +641,14 @@ Following Uptime Kuma's proven design pattern:
   - `apps/backend/app/services/views/status_view_service.py:177` (removed timestamp filter)
 
 **Technical Details:**
+
 - Uses window functions (`row_number() OVER (PARTITION BY check_id ORDER BY timestamp DESC)`)
 - Batch queries minimize database round-trips
 - Stable sort ensures consistent UI presentation
 - Status shown even if check hasn't run recently
 
 ### Web UI - Visual Enhancements
+
 - Pulsing status indicator dots (`animate-pulse`)
 - Gradient backgrounds with inner shadows
 - Smooth transitions on hover (`duration-200`)
@@ -596,6 +664,7 @@ See `CHANGELOG.md` for complete change history.
 All database and DNS check types now use the standardized `metrics` parameter for storing check-specific data:
 
 **Pattern:**
+
 ```python
 return self.create_result(
     success=success,
@@ -610,21 +679,25 @@ return self.create_result(
 ```
 
 **DNS Checks** (`checks/dns.py`):
+
 - Stores: TTL, authoritative flag, recursion flags, record count, records, canonical name
 - UI displays DNS Query Details section with blue gradient theme
 - Shows nameserver, record type, flags, and all returned records
 
 **MySQL Checks** (`checks/mysql.py`):
+
 - Stores: connection_latency_ms, query_latency_ms, row_count, columns, error_type
 - UI displays MySQL Query Details section with orange/yellow gradient
 - Shows performance breakdown and query metadata
 
 **PostgreSQL Checks** (`checks/postgres.py`):
+
 - Stores: connection_latency_ms, query_latency_ms, row_count, columns, error_type
 - UI displays PostgreSQL Query Details section with indigo/blue gradient
 - Shows performance breakdown and query metadata
 
 **UI Template** (`web/templates/partials/check_detail_panel.html`):
+
 - Lines 202-289: DNS section
 - Lines 291-357: MySQL section
 - Lines 359-425: PostgreSQL section
@@ -633,6 +706,7 @@ return self.create_result(
 ### Example Check: Self-Monitoring
 
 Created PostgreSQL check for monitoring LuxSwirl's own database:
+
 ```sql
 -- Check: luxswirl_database_health
 -- Target: postgresql://luxswirl:luxswirl@timescaledb:5432/luxswirl
@@ -644,13 +718,14 @@ Created PostgreSQL check for monitoring LuxSwirl's own database:
 ### Architecture Notes
 
 **Metrics Storage:**
+
 - Check results store type-specific data in `metrics` JSONB column
 - Template accesses via `history[0].additional_data.{check_type}`
 - Services map database JSONB to Pydantic schemas for validation
 - UI renders metrics in themed sections matching check type
 
-**Registry Pattern:**
-Both checks and notification providers use registry pattern:
+**Registry Pattern:** Both checks and notification providers use registry pattern:
+
 - `agent.register_check_type()` for check types
 - `NotificationRegistry.register()` for notification providers
 - Enables easy extensibility without modifying core code

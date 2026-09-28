@@ -169,12 +169,28 @@ class StatusPageInDB(StatusPageBase, TimestampSchema):
     config: dict[str, Any] | None = None
     items: list[dict[str, Any]] = Field(default_factory=list)
 
+    # Derived from `items`, which this schema already carries — no extra query,
+    # and no relationship to lazy-load. The list page reads both; they were ORM
+    # properties, so the seam conversion left the template calling for something
+    # the schema did not have and /status-pages raised UndefinedError.
+    @property
+    def check_count(self) -> int:
+        """Count of direct check items (not including checks inside groups)."""
+        return sum(1 for item in self.items if item.get("type") == "check")
+
+    @property
+    def group_count(self) -> int:
+        """Count of group items."""
+        return sum(1 for item in self.items if item.get("type") == "group")
+
 
 class StatusPageResponse(StatusPageInDB):
     """Schema for status page API responses."""
 
-    check_count: int = Field(0, description="Number of direct check items")
-    group_count: int = Field(0, description="Number of group items")
+    # check_count / group_count are derived on StatusPageInDB from `items`.
+    # Re-declaring them here as Fields shadowed those properties (a Pydantic
+    # UserWarning, fatal under filterwarnings=error) and defaulted them to 0,
+    # which nothing ever populated.
 
     model_config = {
         "json_schema_extra": {

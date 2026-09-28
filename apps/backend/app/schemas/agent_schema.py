@@ -162,6 +162,45 @@ class AgentInDB(AgentBase, TimestampSchema):
     agent_run_id: str | None = Field(None, description="Current run ID")
     first_seen: datetime = Field(..., description="When agent was first seen")
     last_seen: datetime = Field(..., description="When agent last reported")
+    # The agent edit form and the key panel read these. They are plain columns;
+    # the seam conversion simply did not carry them, so both panels raised
+    # UndefinedError once the sweep actually reached them.
+    approval_status: AgentApprovalStatus | None = Field(
+        None, description="Registration triage state"
+    )
+    api_key_created_at: datetime | None = Field(
+        None, description="When the agent's API key was issued"
+    )
+    # Agent-reported config and telemetry the panels render. Plain columns;
+    # the view-seam conversion carried none of them, so each agent panel raised
+    # UndefinedError the moment the route-smoke sweep actually reached it.
+    heartbeat_interval: int | None = None
+    check_sync_interval: int | None = None
+    max_concurrent_checks: int | None = None
+    log_level: str | None = None
+    report_batch_size: int | None = None
+    report_interval: int | None = None
+    report_process_interval: int | None = None
+    report_max_queue_size: int | None = None
+    report_max_files_per_batch: int | None = None
+    report_backpressure_threshold: float | None = None
+    watchdog_interval: int | None = None
+    watchdog_stall_threshold: int | None = None
+    queue_depth: int | None = None
+    checks_executed_total: int | None = None
+    stored_reports_count: int | None = None
+    stored_reports_oldest_timestamp: float | None = None
+    status_reason: str | None = None
+    api_key_last_used: datetime | None = None
+
+    # A BOOLEAN, deliberately not the hash. The template only ever asked
+    # `{% if agent.api_key_hash %}` — "does this agent have a key" — and putting
+    # a credential hash on a DTO that reaches a template would be a regression
+    # dressed up as a port.
+    has_api_key: bool = False
+
+    # Computed on the ORM row; carried as a value so nothing lazy-loads.
+    success_rate: float | None = None
 
 
 class AgentResponse(AgentInDB):
