@@ -12,6 +12,7 @@ from shared.logger import get_logger
 from sqlalchemy import String, Text, TypeDecorator
 
 from app.core.config import settings
+from app.core.exceptions import DatabaseException
 
 logger = get_logger("luxswirl.models.encrypted")
 
@@ -79,13 +80,22 @@ class EncryptedString(TypeDecorator):
             # No encryption key configured - store as plaintext
             return value
 
+        # NO plaintext fallback. This branch is reached only when a key IS
+        # configured and encryption FAILED — and the columns this type is used
+        # on hold check targets with embedded credentials and database
+        # connection strings. Returning `value` here wrote the secret to the
+        # database in the clear, under a column every reader believes is
+        # encrypted, with nothing but a log line to say so. Failing the write is
+        # the honest outcome: the caller finds out, and no credential is
+        # silently downgraded. (LUXSWIRL-215)
         try:
             encrypted = fernet.encrypt(value.encode())
-            return cast(str, encrypted.decode())  # Store as base64 string
-        except Exception:
-            # Log error but don't crash - store plaintext as fallback
-            logger.exception("Failed to encrypt field")
-            return value
+        except Exception as e:
+            logger.exception("Failed to encrypt field — refusing to store plaintext")
+            raise DatabaseException(
+                "Could not encrypt a sensitive field; the value was not saved"
+            ) from e
+        return cast(str, encrypted.decode())  # Store as base64 string
 
     def process_result_value(self, value: str | None, dialect) -> str | None:
         """
@@ -177,14 +187,19 @@ class EncryptedJSON(TypeDecorator):
             # No encryption key - store as JSON
             return json.dumps(value)
 
+        # NO plaintext fallback — same reasoning as EncryptedString above. This
+        # type backs `check_config`, which holds API keys and query credentials.
         try:
-            # Serialize to JSON then encrypt
             json_str = json.dumps(value)
             encrypted = fernet.encrypt(json_str.encode())
-            return cast(str, encrypted.decode())
-        except Exception:
-            logger.exception("Failed to encrypt JSON field")
-            return json.dumps(value)
+        except Exception as e:
+            logger.exception(
+                "Failed to encrypt JSON field — refusing to store plaintext"
+            )
+            raise DatabaseException(
+                "Could not encrypt a sensitive field; the value was not saved"
+            ) from e
+        return cast(str, encrypted.decode())
 
     def process_result_value(self, value: str | None, dialect) -> dict | list | None:
         """
