@@ -538,28 +538,14 @@ class CheckCoreService:
 
         # 5. Copy alert assignments from source check
 
-        try:
-            source_alert_ids = await AlertCoreService.get_alert_ids_for_check(
-                db, check_id
-            )
-            for alert_id in source_alert_ids:
-                try:
-                    await AlertCoreService.add_check(db, alert_id, cloned_check.id)
-                except Exception:
-                    logger.warning(
-                        "Failed to copy alert to cloned check",
-                        extra={
-                            "alert_id": str(alert_id),
-                            "cloned_check_id": str(cloned_check.id),
-                        },
-                        exc_info=True,
-                    )
-        except Exception:
-            logger.warning(
-                "Failed to copy alerts from source check",
-                extra={"check_id": str(check_id)},
-                exc_info=True,
-            )
+        # A clone that silently loses its alert wiring is a monitoring gap the
+        # operator cannot see: the check exists, it runs, and nothing is ever
+        # notified about it. Both swallows are gone — a failure rolls the clone
+        # back rather than producing a half-wired one. The target is a check
+        # created moments ago, so there is no duplicate mapping to hit.
+        source_alert_ids = await AlertCoreService.get_alert_ids_for_check(db, check_id)
+        for alert_id in source_alert_ids:
+            await AlertCoreService.add_check(db, alert_id, cloned_check.id)
 
         logger.info(
             "Cloned check",
@@ -1421,15 +1407,19 @@ class CheckCoreService:
         # Verify check exists
         await CheckCoreService.get_check_by_id(db, check_id)
 
-        # Add check to each alert
+        # Add check to each alert. Unlike AlertCoreService.assign_alerts this
+        # takes a raw list rather than a set difference, so "already added" is a
+        # real possibility and is the state the caller asked for — that one is
+        # caught by TYPE and treated as satisfied. Everything else propagates:
+        # the broad swallow here returned success while the check was wired to
+        # fewer alerts than requested. (LUXSWIRL-215)
         for alert_id in alert_ids:
             try:
                 await AlertCoreService.add_check(db, alert_id, check_id)
-            except Exception:
-                logger.warning(
-                    "Failed to add check to alert",
+            except ValidationException:
+                logger.debug(
+                    "Check already assigned to alert — nothing to do",
                     extra={"check_id": str(check_id), "alert_id": str(alert_id)},
-                    exc_info=True,
                 )
 
         logger.info(

@@ -395,29 +395,24 @@ class AlertCoreService:
         current_alert_ids = await AlertCoreService.get_alert_ids_for_check(db, check_id)
         new_alert_ids = set(alert_ids)
 
+        # NOT best-effort, and no longer swallowed. Both loops used to log a
+        # warning and carry on, so the form returned success while the check was
+        # wired to a different set of alerts than the operator had just chosen.
+        # On a monitoring product that means an outage produces no notification
+        # and nothing anywhere says so. A failure here propagates, the
+        # transaction rolls back, and the caller is told. (LUXSWIRL-215)
+        #
+        # Both loops work on a set DIFFERENCE, so `add_check`'s "Check already
+        # added to this alert" cannot fire — every id here is genuinely new or
+        # genuinely being removed.
+
         # Remove from alerts that are no longer selected
-        alerts_to_remove = current_alert_ids - new_alert_ids
-        for alert_id in alerts_to_remove:
-            try:
-                await AlertCoreService.remove_check(db, alert_id, check_id)
-            except Exception:
-                logger.warning(
-                    "Failed to remove check from alert",
-                    extra={"alert_id": str(alert_id)},
-                    exc_info=True,
-                )
+        for alert_id in current_alert_ids - new_alert_ids:
+            await AlertCoreService.remove_check(db, alert_id, check_id)
 
         # Add to newly selected alerts
-        alerts_to_add = new_alert_ids - current_alert_ids
-        for alert_id in alerts_to_add:
-            try:
-                await AlertCoreService.add_check(db, alert_id, check_id)
-            except Exception:
-                logger.warning(
-                    "Failed to add check to alert",
-                    extra={"alert_id": str(alert_id)},
-                    exc_info=True,
-                )
+        for alert_id in new_alert_ids - current_alert_ids:
+            await AlertCoreService.add_check(db, alert_id, check_id)
 
     @staticmethod
     async def bulk_assign_to_checks(

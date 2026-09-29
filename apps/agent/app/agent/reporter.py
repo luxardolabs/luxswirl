@@ -604,6 +604,10 @@ class Reporter:
             extra={"db_path": str(self._db_path)},
         )
 
+        # swallowed-exceptions: this IS the last resort — the server was already
+        # unreachable, which is why the batch is being spooled. Raising here
+        # would take down the reporter loop and lose every subsequent batch too,
+        # so the results are dropped, loudly, and the agent keeps reporting.
         try:
             await asyncio.to_thread(self._store_batch_to_db_sync, batch)
         except Exception:
