@@ -47,11 +47,11 @@ SHA_TAG         := sha-$(COMMIT)
 # Makefile.local (gitignored): copy Makefile.local.example -> Makefile.local and set it.
 # Contributors don't need it — lint/test and the import-linter contracts run without it.
 LUXARCH_REGISTRY ?=
-LUXARCH_VERSION := 0.243.0
+LUXARCH_VERSION := 0.245.0
 LUXARCH_IMAGE    ?= $(LUXARCH_REGISTRY)/luxardolabs/luxarch:$(LUXARCH_VERSION)
 # Dependency-CVE guard (luxaudit) — same private registry as luxarch, mount-only.
 # Scans the pinned poetry.locks against the live advisory feed (see .luxaudit.toml).
-LUXAUDIT_VERSION := 0.11.1
+LUXAUDIT_VERSION := 0.12.0
 LUXAUDIT_IMAGE   ?= $(LUXARCH_REGISTRY)/luxardolabs/luxaudit:$(LUXAUDIT_VERSION)
 # Lint/type/test-standard guard (luxlint) — same private registry. Owns the fleet
 # ruff/mypy config byte-identical (see .luxlint.toml); ruff runs mount-only, mypy

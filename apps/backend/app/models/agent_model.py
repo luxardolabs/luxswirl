@@ -363,14 +363,14 @@ class Agent(UUIDBaseModel):
         "CheckResult",
         back_populates="agent",
         cascade="all, delete-orphan",
-        lazy="noload",  # Don't load by default (could be millions)
+        lazy="raise_on_sql",  # refuse a lazy load — could be millions of rows
     )
 
     metrics: Mapped[list[AgentMetric]] = relationship(
         "AgentMetric",
         back_populates="agent",
         cascade="all, delete-orphan",
-        lazy="noload",  # Don't load by default (time-series data)
+        lazy="raise_on_sql",  # refuse a lazy load — time-series data
     )
 
     @property

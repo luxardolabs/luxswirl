@@ -22,7 +22,7 @@ from uuid import uuid4
 import pytest
 from app.services.core.alert_core_service import AlertCoreService, SendDecision
 
-pytestmark = pytest.mark.pure  # all tests in this module are pure-logic
+pytestmark = pytest.mark.unit  # all tests in this module are pure-logic
 
 
 def _alert(

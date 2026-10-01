@@ -9,7 +9,7 @@ from __future__ import annotations
 import pytest
 from app.services.core.auth_core_service import AuthCoreService
 
-pytestmark = pytest.mark.pure
+pytestmark = pytest.mark.unit
 
 
 class TestPasswordHashing:

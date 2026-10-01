@@ -101,14 +101,14 @@ class NotificationProvider(
         "AlertNotificationMapping",
         back_populates="notification_provider",
         cascade="all, delete-orphan",
-        lazy="noload",
+        lazy="raise_on_sql",
     )
 
     notification_logs: Mapped[list[NotificationLog]] = relationship(
         "NotificationLog",
         back_populates="notification_provider",
         cascade="all, delete-orphan",
-        lazy="noload",
+        lazy="raise_on_sql",
     )
 
     def __repr__(self) -> str:

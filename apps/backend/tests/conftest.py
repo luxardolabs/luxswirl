@@ -1,17 +1,18 @@
-"""Backend test conftest — path setup and marker registration.
+"""Backend test conftest — path setup, the test database, and the route sweep.
 
-Test taxonomy (mirrors luxwx):
-- `pure`        — no I/O, no DB, no network. Fast, runs in seconds.
-- `integration` — real DB via the `db` fixture (transactional rollback per test).
-                  Requires `compose.test.yaml` test DB up. The `db` fixture is
-                  registered globally here via `pytest_plugins`; tests just take a
-                  `db` parameter — no import needed.
-- `api`         — full FastAPI TestClient with overridden deps.
+Tiers are the FLEET's markers, declared by the canonical pytest config, not by
+this file:
+- `unit`        — no I/O, no DB, no network. Fast, runs in seconds.
+- `integration` — crosses a real boundary: the test DB via the `db` fixture
+                  (transactional rollback per test), or an ASGI request through
+                  the real app. Needs the throwaway DB up (`make test-db-up`).
+                  The `db` fixture is registered globally below via
+                  `pytest_plugins`, so tests just take a `db` parameter.
 
 Run a single tier:
-    pytest -m pure                       # fast feedback loop
-    pytest -m integration                # touches the DB
-    pytest -m "not integration"          # skip DB-bound tests
+    pytest -m unit                       # fast feedback loop
+    pytest -m integration                # touches the DB or the app
+    pytest -m "not integration"          # skip both
 """
 
 from __future__ import annotations
@@ -58,20 +59,17 @@ if "test" not in _TEST_DB_NAME:
 pytest_plugins = ["fixtures.db", "fixtures.committed_db"]
 
 
-def pytest_configure(config):
-    """Register the test-tier markers so `pytest --strict-markers` is happy."""
-    config.addinivalue_line(
-        "markers",
-        "pure: pure-logic test — no I/O, no DB, no network. Default tier.",
-    )
-    config.addinivalue_line(
-        "markers",
-        "integration: requires the test DB from compose.test.yaml (uses `db` fixture).",
-    )
-    config.addinivalue_line(
-        "markers",
-        "api: full FastAPI TestClient with overridden dependencies.",
-    )
+# No `pytest_configure` registering markers here. The canonical pytest config
+# declares the fleet's vocabulary — unit / integration / db / slow — and this
+# suite now uses it: `pure` became `unit` and `api` became `integration` (an
+# ASGI request through the real app crosses a real boundary, which is what
+# `integration` means).
+#
+# Registering them here was also unsafe for a second reason: the route-smoke
+# asserter below defines its own `pytest_configure`, and two definitions in one
+# module means the later one silently wins. From asserter v18 that shadowed this
+# one, so every marker went unregistered and `--strict-markers` failed 12 files
+# at collection.
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -81,7 +79,7 @@ def pytest_configure(config):
 # fails the session on any registered route nothing reached.
 # ═══════════════════════════════════════════════════════════════════════════
 
-# luxarch:route-smoke asserter v17 — DO NOT edit the marker line above (fw.route_smoke_wired finds it).
+# luxarch:route-smoke asserter v18 — DO NOT edit the marker line above (fw.route_smoke_wired finds it).
 #
 # WHY THIS FILE EXISTS
 # A dependency deprecates an API; your code keeps working (warning only); a later pin makes it RAISE;
@@ -198,6 +196,11 @@ _SERVER_ERRORS: dict[int, set[int]] = {}
 # silent bounce to a login page is not.
 _REDIRECTS: dict[int, set[tuple[int, str]]] = {}
 _RENDERED: set[int] = set()
+# Under `pytest -n` (xdist) every worker is its own process with its own recorder, and the CONTROLLER,
+# where pytest_sessionfinish certifies, runs no test at all: it saw 0 requests and refused a green run
+# (OPENCLAIM-365). Route ids differ per process, so each worker translates its ids to (host, method,
+# path) before handing them back, and the controller maps them onto its own ids.
+_WORKER_PAYLOADS: list[dict[str, list[object]]] = []
 
 
 def pytest_runtest_logreport(report) -> None:  # type: ignore[no-untyped-def]
@@ -469,6 +472,101 @@ def _session_is_narrowed(session) -> bool:  # type: ignore[no-untyped-def]
     return not want <= got
 
 
+def _by_rid(
+    entries: list[tuple[str, str, str, int]],
+) -> dict[int, list[tuple[str, str, str]]]:
+    out: dict[int, list[tuple[str, str, str]]] = {}
+    for h, m, p, rid in entries:
+        out.setdefault(rid, []).append((h, m, p))
+    return out
+
+
+def _worker_payload(
+    entries: list[tuple[str, str, str, int]],
+) -> dict[str, list[object]]:
+    """This worker's recordings, keyed by (host, method, path) so another process can read them."""
+    by_rid = _by_rid(entries)
+
+    def keyed(rids: set[int]) -> list[tuple[str, str, str]]:
+        return sorted({k for r in rids for k in by_rid.get(r, ())})
+
+    return {
+        "hit": [list(k) for k in keyed(_HIT)],
+        "rendered": [list(k) for k in keyed(_RENDERED)],
+        "server_errors": [
+            [list(k), sorted(v)]
+            for r, v in _SERVER_ERRORS.items()
+            for k in by_rid.get(r, ())
+        ],
+        "redirects": [
+            [list(k), [list(x) for x in sorted(v)]]
+            for r, v in _REDIRECTS.items()
+            for k in by_rid.get(r, ())
+        ],
+    }
+
+
+def _route_key(o: object) -> tuple[str, ...] | None:
+    return tuple(str(x) for x in o) if isinstance(o, list) else None
+
+
+def _merge_worker_payloads(entries: list[tuple[str, str, str, int]]) -> None:
+    rid_by_key: dict[tuple[str, ...], int] = {
+        (h, m, p): rid for h, m, p, rid in entries
+    }
+
+    def rid_of(o: object) -> int | None:
+        key = _route_key(o)
+        return rid_by_key.get(key) if key is not None else None
+
+    for payload in _WORKER_PAYLOADS:
+        for k in payload.get("hit", []):
+            if (rid := rid_of(k)) is not None:
+                _HIT.add(rid)
+        for k in payload.get("rendered", []):
+            if (rid := rid_of(k)) is not None:
+                _RENDERED.add(rid)
+        for item in payload.get("server_errors", []):
+            if (
+                isinstance(item, list)
+                and len(item) == 2
+                and isinstance(item[1], list)
+                and (rid := rid_of(item[0])) is not None
+            ):
+                _SERVER_ERRORS.setdefault(rid, set()).update(
+                    int(str(st)) for st in item[1]
+                )
+        for item in payload.get("redirects", []):
+            if (
+                isinstance(item, list)
+                and len(item) == 2
+                and isinstance(item[1], list)
+                and (rid := rid_of(item[0])) is not None
+            ):
+                _REDIRECTS.setdefault(rid, set()).update(
+                    (int(str(x[0])), str(x[1]))
+                    for x in item[1]
+                    if isinstance(x, list) and len(x) == 2
+                )
+
+
+def pytest_configure(config) -> None:  # type: ignore[no-untyped-def]
+    # The controller collects each worker's payload as the worker goes down. Registered as a plugin
+    # object because the hook is xdist's (`optionalhook=True`, so it is inert without xdist) and the
+    # decorator needs `pytest`, which this block may only import inside a function (see the NOTE above).
+    import pytest
+
+    class _XdistMerge:
+        @pytest.hookimpl(optionalhook=True)
+        def pytest_testnodedown(self, node, error) -> None:  # type: ignore[no-untyped-def]
+            payload = getattr(node, "workeroutput", {}).get("luxarch_route_smoke")
+            if payload:
+                _WORKER_PAYLOADS.append(payload)
+
+    if not config.pluginmanager.has_plugin("luxarch_route_smoke_xdist"):
+        config.pluginmanager.register(_XdistMerge(), "luxarch_route_smoke_xdist")
+
+
 def pytest_sessionfinish(session, exitstatus) -> None:  # type: ignore[no-untyped-def]
     # Only CERTIFY on a green run — a red suite's route list is untrustworthy (a failed test may have
     # aborted before its route ran). But say so OUT LOUD: a silent skip lets coverage lapse invisibly
@@ -489,6 +587,13 @@ def pytest_sessionfinish(session, exitstatus) -> None:  # type: ignore[no-untype
             f"luxarch route-smoke: could not import the app via APP_IMPORT={APP_IMPORT!r} "
             f"({exc}). Set it to your app factory/instance. See luxarch --playbook route-smoke."
         ) from exc
+    workeroutput = getattr(getattr(session, "config", None), "workeroutput", None)
+    if workeroutput is not None:
+        # An xdist WORKER: hand the recordings to the controller and certify nothing here. Each worker
+        # saw only its share of the suite, so a per-worker verdict would be wrong in both directions.
+        workeroutput["luxarch_route_smoke"] = _worker_payload(entries)
+        return
+    _merge_worker_payloads(entries)
     # Loud-fail net #3: a duplicate (HOST, method, path) — from DISTINCT route objects — means the app
     # registered the same method+path twice under one host, so one handler shadows the other (the
     # shadowed one is dead/unreachable). Keyed on HOST because a Host()-composed app reaches the same
@@ -557,7 +662,10 @@ def pytest_sessionfinish(session, exitstatus) -> None:  # type: ignore[no-untype
             "yet. Make ONE real request — a single public-page GET — to disambiguate: if it records, "
             "it's (b), you have real coverage gaps to fill (KEEP that probe, it's load-bearing — remove "
             "the last route test and this refusal returns). If it still doesn't record, it's (a), fix "
-            "the wiring. Refusing to certify on zero requests either way. See --playbook route-smoke."
+            "the wiring. Under `pytest -n` the workers' recordings are merged here (asserter v18+); an "
+            "OLDER asserter under xdist shows exactly this message on a healthy suite, so re-emit it "
+            "(luxarch --emit route-smoke) before hunting (a). Refusing to certify on zero requests "
+            "either way. See --playbook route-smoke."
         )
     # Loud-fail net #4: a route the suite REQUESTED returned 5xx. BOUTIQUE-549 — `--playbook
     # route-smoke` line 84 claims route-smoke "catches ordinary logic bugs that 500 on first request",

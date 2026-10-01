@@ -22,7 +22,7 @@ if _tests_root not in sys.path:
 
 from fixtures.factories import make_agent  # noqa: E402
 
-pytestmark = pytest.mark.api
+pytestmark = pytest.mark.integration
 
 TOKEN = "test-token-xyz"
 
