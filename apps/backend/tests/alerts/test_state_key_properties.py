@@ -23,7 +23,7 @@ from app.services.core.alert_core_service import AlertCoreService
 from hypothesis import given
 from hypothesis import strategies as st
 
-pytestmark = pytest.mark.pure
+pytestmark = pytest.mark.unit
 
 
 def _alert(trigger_type: str, config: dict | None = None):

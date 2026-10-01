@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 @~/.claude/projects/luxswirl.md
 
-<!-- luxarch:claude-pointer asset v2 - DO NOT edit this marker line; it is how repo.claude_pointer_present knows your copy is current. Re-emit with `luxarch --emit claude-pointer`. -->
+<!-- luxarch:claude-pointer asset v4 - DO NOT edit this marker line; it is how repo.claude_pointer_present knows your copy is current. Re-emit with `luxarch --emit claude-pointer`. -->
 
 ## How to work here (fleet conduct — read the standard, not just this block)
 
@@ -22,6 +22,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Do it** — aligning code to a ratified standard or a guard red; anything you have evidence for that is reversible in one commit. The standard already decided; say what you did.
 
 When you do ask: **one decision per message**, the evidence that makes it answerable, your recommendation stated as one, and a question answerable in one word. **A recommendation that ends in a menu is not a recommendation** — if you rejected the alternatives, re-offering them asks the owner to redo your analysis.
+
+**Use the fleet skills; don't improvise the procedure.** `/wrap-up` before you call anything done (tests, every red in touched files, docs, gate, LuxPM closed out, all with evidence). `/pin-bump` to upgrade the guards. `/escalate` when a guard is wrong. `/release` to cut a release.
+
+**You touched it, you own it.** Edit a file for any reason and it has a mypy, ruff or luxarch red: fix every one in that file, not just yours. Never spend time proving a red predates you; fix it. Test what you changed first. **Before fixing any mypy red, read `luxlint --playbook mypy-sweep` in full.**
 
 **Align or escalate; never route around.** A guard red is fixed by changing the code, or escalated to the guard maintainer as genuinely wrong. Never by an exemption, a `# noqa`, a deferral, or a local config. Verification is not authorization: proving something is unreferenced does not license deleting it.
 

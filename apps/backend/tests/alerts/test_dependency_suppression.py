@@ -18,7 +18,7 @@ from app.core.exceptions import ValidationException
 from app.services.core.alert_core_service import AlertCoreService
 from app.services.core.check_core_service import CheckCoreService
 
-pytestmark = pytest.mark.pure  # all tests in this module are pure-logic
+pytestmark = pytest.mark.unit  # all tests in this module are pure-logic
 
 
 def _alert():

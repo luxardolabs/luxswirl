@@ -23,7 +23,7 @@ from app.models.enum_model import SchedulerJobCategory, SchedulerTriggerType
 from app.models.scheduler_model import JobConfiguration
 from app.services.core.scheduler_core_service import SchedulerCoreService
 
-pytestmark = pytest.mark.pure
+pytestmark = pytest.mark.unit
 
 _SVC = SchedulerCoreService()
 

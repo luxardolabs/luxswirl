@@ -1,6 +1,6 @@
 {
   "guard": "luxarch",
-  "guard_version": "0.243.0",
+  "guard_version": "0.245.0",
   "repo": "/repo",
   "targets": [
     {
@@ -1211,7 +1211,7 @@
           "violations": 0,
           "deferred": false,
           "inert": true,
-          "inert_reason": "the harness isolates by holding ONE connection and rolling it back (apps/backend/tests/fixtures/db.py:135), so a pooled test engine cannot work here \u2014 each pytest-asyncio test gets its own loop and a pooled connection belongs to the loop that opened it. **This INERT is the correct END STATE for such a harness, not a todo.** Do NOT migrate to DELETE/TRUNCATE-per-test to satisfy this rule: luxlint's test.no_handrolled_cleanup exists to red exactly that, and rollback isolation is the better pattern (faster, no table-ordering bugs, nothing to forget). An earlier version of this message named that migration as the prerequisite and was wrong \u2014 it pointed at something another fleet guard forbids (WWWLUXARDO-139). Measured, pursuing pooling here costs you: 0 failures on NullPool, 139 pooled, 366 pooled+dispose. And you lose nothing in DETECTION \u2014 the cross-session visibility class this rule guards is caught by durability locks that read on a SEPARATE connection, which works whatever the pool class. Pool the APP engine (fw.dev_prod_pool_parity); leave the test engine alone."
+          "inert_reason": "the harness isolates by holding ONE connection and rolling it back (apps/backend/tests/fixtures/db.py:109), so a pooled test engine cannot work here \u2014 each pytest-asyncio test gets its own loop and a pooled connection belongs to the loop that opened it. **This INERT is the correct END STATE for such a harness, not a todo.** Do NOT migrate to DELETE/TRUNCATE-per-test to satisfy this rule: luxlint's test.no_handrolled_cleanup exists to red exactly that, and rollback isolation is the better pattern (faster, no table-ordering bugs, nothing to forget). An earlier version of this message named that migration as the prerequisite and was wrong \u2014 it pointed at something another fleet guard forbids (WWWLUXARDO-139). Measured, pursuing pooling here costs you: 0 failures on NullPool, 139 pooled, 366 pooled+dispose. And you lose nothing in DETECTION \u2014 the cross-session visibility class this rule guards is caught by durability locks that read on a SEPARATE connection, which works whatever the pool class. Pool the APP engine (fw.dev_prod_pool_parity); leave the test engine alone."
         },
         {
           "rule": "fw.template_context_complete",
@@ -1340,6 +1340,15 @@
           "inert_reason": ""
         },
         {
+          "rule": "fw.no_noload_loader",
+          "status": "PASS",
+          "since": "0.244.0",
+          "violations": 0,
+          "deferred": false,
+          "inert": false,
+          "inert_reason": ""
+        },
+        {
           "rule": "obs.method_span",
           "status": "INERT",
           "since": "0.10.0",
@@ -1458,7 +1467,7 @@
         }
       ],
       "summary": {
-        "PASS": 137,
+        "PASS": 138,
         "FAIL": 4,
         "XFAIL": 2,
         "XPASS": 0,
@@ -1609,9 +1618,9 @@
       },
       {
         "rule": "repo.guard_owned_tools_undeclared",
-        "status": "FAIL",
+        "status": "PASS",
         "since": "0.243.0",
-        "violations": 2,
+        "violations": 0,
         "deferred": false,
         "inert": false,
         "inert_reason": ""
@@ -1620,6 +1629,15 @@
         "rule": "repo.dev_tools_not_in_production",
         "status": "PASS",
         "since": "0.243.0",
+        "violations": 0,
+        "deferred": false,
+        "inert": false,
+        "inert_reason": ""
+      },
+      {
+        "rule": "repo.fleet_skills_present",
+        "status": "PASS",
+        "since": "0.245.0",
         "violations": 0,
         "deferred": false,
         "inert": false,
@@ -1690,18 +1708,18 @@
       },
       {
         "rule": "repo.alembic_env_honors_caller_url",
-        "status": "FAIL",
+        "status": "PASS",
         "since": "0.217.0",
-        "violations": 1,
+        "violations": 0,
         "deferred": false,
         "inert": false,
         "inert_reason": ""
       },
       {
         "rule": "repo.emitted_assets_current",
-        "status": "FAIL",
+        "status": "PASS",
         "since": "0.208.0",
-        "violations": 1,
+        "violations": 0,
         "deferred": false,
         "inert": false,
         "inert_reason": ""
@@ -1807,9 +1825,9 @@
       },
       {
         "rule": "repo.hooks_current",
-        "status": "FAIL",
+        "status": "PASS",
         "since": "0.164.0",
-        "violations": 2,
+        "violations": 0,
         "deferred": false,
         "inert": false,
         "inert_reason": ""
@@ -1843,9 +1861,9 @@
       },
       {
         "rule": "repo.schema_from_migrations",
-        "status": "FAIL",
+        "status": "PASS",
         "since": "0.130.0",
-        "violations": 1,
+        "violations": 0,
         "deferred": false,
         "inert": false,
         "inert_reason": ""
@@ -2032,20 +2050,20 @@
       }
     ],
     "summary": {
-      "PASS": 46,
-      "FAIL": 5,
+      "PASS": 52,
+      "FAIL": 0,
       "XFAIL": 0,
       "XPASS": 1,
       "INERT": 2
     }
   },
   "summary": {
-    "PASS": 189,
-    "FAIL": 9,
+    "PASS": 196,
+    "FAIL": 4,
     "XFAIL": 2,
     "XPASS": 1,
     "INERT": 21
   },
-  "commit": "446abcd219d707346f359f30ac014e7ace4b3152",
-  "generated_at": "2026-10-01T17:38:06Z"
+  "commit": "32070437abd989e0ddb158246bb0e4d5fe8d01b1",
+  "generated_at": "2026-10-01T22:11:57Z"
 }

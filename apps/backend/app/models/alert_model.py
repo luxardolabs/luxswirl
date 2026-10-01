@@ -137,21 +137,21 @@ class Alert(
         "AlertNotificationMapping",
         back_populates="alert",
         cascade="all, delete-orphan",
-        lazy="noload",
+        lazy="raise_on_sql",
     )
 
     check_mappings: Mapped[list[AlertCheckMapping]] = relationship(
         "AlertCheckMapping",
         back_populates="alert",
         cascade="all, delete-orphan",
-        lazy="noload",
+        lazy="raise_on_sql",
     )
 
     notification_logs: Mapped[list[NotificationLog]] = relationship(
         "NotificationLog",
         back_populates="alert",
         cascade="all, delete-orphan",
-        lazy="noload",
+        lazy="raise_on_sql",
     )
 
     @property

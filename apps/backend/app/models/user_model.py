@@ -114,7 +114,7 @@ class User(UUIDBaseModel):
         "Session",
         back_populates="user",
         cascade="all, delete-orphan",
-        lazy="noload",
+        lazy="raise_on_sql",
     )
 
     @property

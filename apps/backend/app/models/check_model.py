@@ -181,28 +181,28 @@ class Check(UUIDBaseModel):
         "Check",
         back_populates="parent_check",
         foreign_keys=[depends_on_check_id],
-        lazy="noload",
+        lazy="raise_on_sql",
     )
 
     check_results: Mapped[list[CheckResult]] = relationship(
         "CheckResult",
         back_populates="check",
         cascade="all, delete-orphan",
-        lazy="noload",  # Don't load by default (could be millions)
+        lazy="raise_on_sql",  # refuse a lazy load — could be millions of rows
     )
 
     alert_mappings: Mapped[list[AlertCheckMapping]] = relationship(
         "AlertCheckMapping",
         back_populates="check",
         cascade="all, delete-orphan",
-        lazy="noload",
+        lazy="raise_on_sql",
     )
 
     artifacts: Mapped[list[CheckArtifact]] = relationship(
         "CheckArtifact",
         back_populates="check",
         cascade="all, delete-orphan",
-        lazy="noload",
+        lazy="raise_on_sql",
     )
 
     def get_config(self, key: str, default=None):
