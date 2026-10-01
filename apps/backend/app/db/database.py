@@ -141,8 +141,25 @@ async def init_db() -> None:
     container CMD before this function executes). This function only handles
     TimescaleDB-specific runtime state, which is idempotent.
     """
+    await init_timescale(get_engine())
+
+
+async def init_timescale(engine: AsyncEngine) -> None:
+    """The TimescaleDB runtime state, against a GIVEN engine.
+
+    Split out from init_db so the test harness can run the real thing against
+    the throwaway database instead of keeping its own copy of the hypertable
+    list. That copy had drifted — it named `notification_logs`, which this
+    function deliberately does not convert — and because the fixture wrapped
+    every conversion in a blanket suppress, the drift was invisible until three
+    /database-health routes started returning 500 for no stated reason. A second
+    description of the same DDL is the bug; there is now one.
+
+    Takes the engine rather than reading settings so the caller decides which
+    database it is, which is the whole point for a suite whose dedicated
+    TEST_DATABASE_URL must never be overridable by the app's own variable.
+    """
     logger.info("Initializing TimescaleDB extensions")
-    engine = get_engine()
 
     async with engine.begin() as conn:
         # Check if TimescaleDB extension exists

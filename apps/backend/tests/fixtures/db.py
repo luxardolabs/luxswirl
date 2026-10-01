@@ -18,44 +18,44 @@ Usage:
 
 from __future__ import annotations
 
-import contextlib
-import os
+import asyncio
 
 import pytest_asyncio
+from alembic import command
+from alembic.config import Config
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
-# Import all model modules so they register with Base.metadata. Without this,
-# Base.metadata.create_all() would only see whatever happened to be imported
-# already, producing an empty schema.
-import app.models  # noqa: F401
-from app.models.base_model import Base
+from app.db.database import init_timescale
 from fixtures._db_url import TEST_DATABASE_URL
 
 # Module-level flag so we only create the schema once per pytest session.
 _schema_created = False
 
 
-# Hypertable definitions matching `app/db/database.py` init_db().
-# (table, time_column, chunk_interval). Kept in sync manually because the
-# init_db helper does many other things (continuous aggregates, retention
-# policies, compression) we don't need for tests.
-# `notification_logs` is NOT here, and must not be: app/db/database.py says in so
-# many words that it is "a plain table (audit log, not metrics)" and never
-# converts it. This list had drifted to include it, and because the conversion
-# was wrapped in a blanket suppress the drift was invisible — TimescaleDB
-# refuses it ("cannot create a unique index without the column sent_at"), and
-# that swallowed refusal is what taught the fixture to swallow ALL of them.
-_HYPERTABLES: tuple[tuple[str, str, str], ...] = (
-    ("check_results", "timestamp", "1 day"),
-    ("agent_metrics", "timestamp", "1 day"),
-    ("check_artifacts", "created_at", "1 day"),
-)
+def _migrate_to_head(url: str) -> None:
+    """`alembic upgrade head` against the given database. Sync, so it runs in a
+    thread: env.py drives the async engine with asyncio.run(), which cannot be
+    called from inside a running loop."""
+    cfg = Config("alembic.ini")
+    # env.py prefers this over settings, so the migration lands in the throwaway
+    # database rather than whichever one DATABASE__URL happens to name.
+    cfg.set_main_option("sqlalchemy.url", url)
+    command.upgrade(cfg, "head")
 
 
 async def _create_schema(engine):
-    """First-call schema setup: drop+recreate public, install timescaledb,
-    create all model tables, convert hypertables.
+    """First-call schema setup — the SAME two steps a container performs.
+
+    `alembic upgrade head` builds the tables and `init_timescale` converts the
+    hypertables, which is exactly what the backend image does on boot (the CMD
+    migrates, then main.py's lifespan calls init_db). Neither half is restated
+    here: a second description of the schema is the thing that drifts, and this
+    file used to carry one — `Base.metadata.create_all` plus a hand-maintained
+    hypertable list. create_all builds from the MODELS while a deploy builds
+    from the CHAIN, so the suite could pass on a schema no deploy would ever
+    produce; and the hypertable list had drifted to name a table init_db
+    deliberately leaves alone.
 
     The engine is disposed between the drop and the CREATE EXTENSION on purpose.
     `DROP SCHEMA public CASCADE` takes the timescaledb extension with it, and
@@ -65,9 +65,9 @@ async def _create_schema(engine):
         HINT: Start a new session and execute CREATE EXTENSION as the first command.
 
     Disposing closes every pooled connection, so the next `begin()` gets a fresh
-    backend and CREATE EXTENSION really is its first command. Without this the
-    extension was never installed, `create_hypertable` did not exist as a
-    function, and the schema came up with zero hypertables.
+    backend and CREATE EXTENSION really is its first command. Without it the
+    extension is never installed and `create_hypertable` does not exist as a
+    function.
     """
     async with engine.begin() as conn:
         await conn.execute(text("DROP SCHEMA IF EXISTS public CASCADE"))
@@ -79,34 +79,8 @@ async def _create_schema(engine):
     async with engine.begin() as conn:
         await conn.execute(text("CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE"))
 
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-
-    # NOT suppressed. A blanket `contextlib.suppress(Exception)` here meant every
-    # conversion could fail and the schema came up with zero hypertables, which
-    # only surfaced as three /database-health routes returning 500 with no
-    # explanation anywhere. A conversion that fails is a broken fixture, not a
-    # detail — so it fails here, where the reason is still in scope.
-    for table, column, interval in _HYPERTABLES:
-        async with engine.begin() as conn:
-            await conn.execute(
-                text(
-                    f"""
-                    SELECT create_hypertable(
-                        '{table}', '{column}',
-                        if_not_exists => TRUE,
-                        chunk_time_interval => INTERVAL '{interval}',
-                        migrate_data => TRUE
-                    )
-                    """
-                )
-            )
-
-    # Continuous aggregates (check_results_5min, _hourly, _daily) are
-    # production-only — they're brittle to recreate in tests (the CAGG
-    # requires uncompressed hypertable state and timescale_view registration).
-    # Tests that need 5min/hourly/daily rollups insert directly into the
-    # underlying tables.
+    await asyncio.to_thread(_migrate_to_head, TEST_DATABASE_URL)
+    await init_timescale(engine)
 
 
 @pytest_asyncio.fixture

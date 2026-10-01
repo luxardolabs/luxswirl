@@ -45,8 +45,22 @@ def include_object(object, name, type_, reflected, compare_to):
 
 
 def get_url() -> str:
-    """Get database URL from application settings."""
-    return settings.database.url
+    """The CALLER's url wins; settings are only the fallback.
+
+    env.py runs *after* a caller sets `sqlalchemy.url` on the Config, so an
+    env.py that picks its own url silently overrides it — and the test harness
+    hands alembic the throwaway database it has just created. Getting this
+    backwards means `make test` migrates whatever env.py chose (under the dev
+    env file: the dev database) while the harness's own dev-DB guard reports
+    fine, because it validates the url the fixture *intends* and the override
+    happens two layers down inside alembic.
+
+    `alembic.ini` deliberately carries no `sqlalchemy.url` — with a value there
+    the two are indistinguishable through the Config and no expression can
+    prefer the caller — so a bare `alembic upgrade head` still falls through to
+    settings. Enforced by repo.alembic_env_honors_caller_url.
+    """
+    return config.get_main_option("sqlalchemy.url") or settings.database.url
 
 
 def run_migrations_offline() -> None:
@@ -82,6 +96,8 @@ def do_run_migrations(connection: Connection) -> None:
 async def run_async_migrations() -> None:
     """Build a fresh async engine and run migrations against it."""
     configuration = config.get_section(config.config_ini_section) or {}
+    # get_url() consults the Config first, so this assignment re-states the
+    # caller's own value rather than overriding it.
     configuration["sqlalchemy.url"] = get_url()
 
     connectable = async_engine_from_config(

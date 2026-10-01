@@ -87,17 +87,21 @@ starlette = ">=1.6.0"   # CVE-2026-54282/54283 (via fastapi). fastapi itself onl
                         # actually runs, not the oldest one without the CVE.
 
 [tool.poetry.group.dev.dependencies]
+# No ruff, no mypy, no `types-*` here on purpose. luxlint runs ruff and mypy
+# MOUNT-ONLY from its pinned image (`make lint` / `make mypy`), so a repo copy
+# pins a version the gate never runs — it goes stale and tells you nothing — and
+# luxlint bakes the fleet's stubs, so a `types-*` dependency here is read by
+# nothing. A typed library whose stubs luxlint does not bake is a luxlint
+# escalation, not a dependency in this file. Enforced by
+# repo.guard_owned_tools_undeclared.
 pytest = "^9.1.1"
 pytest-asyncio = "^1.3.0"
 pytest-cov = "^7.0.0"
 faker = "^40.39.0"
 hypothesis = "^6.168"
 mutmut = "^3.8"
-mypy = "^2.3.1"
-ruff = "^0.16.8"
 import-linter = "^2.15"
 ipython = "^9.17.1"
-types-pyyaml = "^6.0.12.20260906"
 
 [build-system]
 # Fleet's one build backend is hatchling (repo.hatchling_build_backend). Poetry stays the

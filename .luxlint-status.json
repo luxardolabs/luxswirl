@@ -1,11 +1,13 @@
 {
   "guard": "luxlint",
-  "guard_version": "0.44.1",
+  "guard_version": "0.59.2",
   "repo": "/repo",
   "source": [
     "apps/backend/app",
     "apps/agent/app",
-    "apps/shared"
+    "apps/shared",
+    "apps/backend/alembic",
+    "apps/backend/scripts"
   ],
   "rules": [
     {
@@ -13,6 +15,7 @@
       "status": "PASS",
       "since": "0.1.0",
       "violations": 0,
+      "sites": [],
       "deferred": false
     },
     {
@@ -20,20 +23,23 @@
       "status": "PASS",
       "since": "0.1.0",
       "violations": 0,
+      "sites": [],
       "deferred": false
     },
     {
       "rule": "test.no_local_pytest_config",
-      "status": "FAIL",
+      "status": "PASS",
       "since": "0.4.0",
-      "violations": 2,
+      "violations": 0,
+      "sites": [],
       "deferred": false
     },
     {
       "rule": "test.pytest_config_wired",
-      "status": "FAIL",
+      "status": "PASS",
       "since": "0.35.0",
-      "violations": 2,
+      "violations": 0,
+      "sites": [],
       "deferred": false
     },
     {
@@ -41,34 +47,39 @@
       "status": "PASS",
       "since": "0.17.0",
       "violations": 0,
+      "sites": [],
       "deferred": false
     },
     {
       "rule": "secret.no_local_gitleaks_config",
-      "status": "FAIL",
+      "status": "PASS",
       "since": "0.9.0",
-      "violations": 1,
+      "violations": 0,
+      "sites": [],
       "deferred": false
     },
     {
       "rule": "secret.githooks_wired",
-      "status": "FAIL",
+      "status": "PASS",
       "since": "0.10.0",
-      "violations": 1,
+      "violations": 0,
+      "sites": [],
       "deferred": false
     },
     {
       "rule": "lint.ruff",
-      "status": "FAIL",
+      "status": "PASS",
       "since": "0.1.0",
-      "violations": 187,
+      "violations": 0,
+      "sites": [],
       "deferred": false
     },
     {
       "rule": "lint.format",
-      "status": "FAIL",
+      "status": "PASS",
       "since": "0.1.0",
-      "violations": 1,
+      "violations": 0,
+      "sites": [],
       "deferred": false
     },
     {
@@ -76,20 +87,23 @@
       "status": "PASS",
       "since": "0.18.0",
       "violations": 0,
+      "sites": [],
       "deferred": false
     },
     {
       "rule": "lint.js_declared",
-      "status": "FAIL",
+      "status": "PASS",
       "since": "0.25.0",
-      "violations": 25,
+      "violations": 0,
+      "sites": [],
       "deferred": false
     },
     {
       "rule": "lint.source_declared",
-      "status": "FAIL",
+      "status": "PASS",
       "since": "0.38.0",
-      "violations": 15,
+      "violations": 0,
+      "sites": [],
       "deferred": false
     },
     {
@@ -97,6 +111,7 @@
       "status": "PASS",
       "since": "0.3.0",
       "violations": 0,
+      "sites": [],
       "deferred": false
     },
     {
@@ -104,6 +119,7 @@
       "status": "PASS",
       "since": "0.4.0",
       "violations": 0,
+      "sites": [],
       "deferred": false
     },
     {
@@ -111,13 +127,15 @@
       "status": "PASS",
       "since": "0.3.0",
       "violations": 0,
+      "sites": [],
       "deferred": false
     },
     {
       "rule": "test.db_isolated",
-      "status": "FAIL",
+      "status": "PASS",
       "since": "0.33.0",
-      "violations": 1,
+      "violations": 0,
+      "sites": [],
       "deferred": false
     },
     {
@@ -125,6 +143,7 @@
       "status": "PASS",
       "since": "0.36.0",
       "violations": 0,
+      "sites": [],
       "deferred": false
     },
     {
@@ -132,6 +151,7 @@
       "status": "PASS",
       "since": "0.5.0",
       "violations": 0,
+      "sites": [],
       "deferred": false
     },
     {
@@ -139,13 +159,15 @@
       "status": "PASS",
       "since": "0.5.0",
       "violations": 0,
+      "sites": [],
       "deferred": false
     },
     {
       "rule": "docs.markdown_format",
-      "status": "FAIL",
+      "status": "PASS",
       "since": "0.10.0",
-      "violations": 51,
+      "violations": 0,
+      "sites": [],
       "deferred": false
     },
     {
@@ -153,16 +175,18 @@
       "status": "PASS",
       "since": "0.14.0",
       "violations": 0,
+      "sites": [],
       "deferred": false
     }
   ],
   "summary": {
-    "PASS": 11,
-    "FAIL": 10,
+    "PASS": 21,
+    "FAIL": 0,
     "XFAIL": 0,
-    "XPASS": 0
+    "XPASS": 0,
+    "INERT": 0
   },
   "mypy": "separate: `luxlint --mypy` ([mypy].baseline ratchet)",
-  "commit": "01e95ebe7f30aa6b1340f7358573978ebc33b157",
-  "generated_at": "2026-09-06T18:58:55Z"
+  "commit": "446abcd219d707346f359f30ac014e7ace4b3152",
+  "generated_at": "2026-10-01T17:38:06Z"
 }
