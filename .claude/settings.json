@@ -67,6 +67,15 @@
             "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/no-suppression.py\""
           }
         ]
+      },
+      {
+        "matcher": "mcp__luxpm__luxpm_create_issue",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/luxpm-search-before-create.py\""
+          }
+        ]
       }
     ],
     "PostToolUse": [

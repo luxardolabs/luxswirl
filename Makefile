@@ -47,17 +47,17 @@ SHA_TAG         := sha-$(COMMIT)
 # Makefile.local (gitignored): copy Makefile.local.example -> Makefile.local and set it.
 # Contributors don't need it — lint/test and the import-linter contracts run without it.
 LUXARCH_REGISTRY ?=
-LUXARCH_VERSION := 0.216.0
+LUXARCH_VERSION := 0.243.0
 LUXARCH_IMAGE    ?= $(LUXARCH_REGISTRY)/luxardolabs/luxarch:$(LUXARCH_VERSION)
 # Dependency-CVE guard (luxaudit) — same private registry as luxarch, mount-only.
 # Scans the pinned poetry.locks against the live advisory feed (see .luxaudit.toml).
-LUXAUDIT_VERSION := 0.9.0
+LUXAUDIT_VERSION := 0.11.1
 LUXAUDIT_IMAGE   ?= $(LUXARCH_REGISTRY)/luxardolabs/luxaudit:$(LUXAUDIT_VERSION)
 # Lint/type/test-standard guard (luxlint) — same private registry. Owns the fleet
 # ruff/mypy config byte-identical (see .luxlint.toml); ruff runs mount-only, mypy
 # runs as an in-repo tail (needs a current mypy for PEP 758 excepts — the baked
 # lint image freezes an older one, so the tail installs a fresh mypy).
-LUXLINT_VERSION := 0.56.0
+LUXLINT_VERSION := 0.59.2
 LUXLINT_IMAGE    ?= $(LUXARCH_REGISTRY)/luxardolabs/luxlint:$(LUXLINT_VERSION)
 -include Makefile.local
 
@@ -563,7 +563,7 @@ gitleaks: ## secret scan over FULL HISTORY + the commit-identity pass (the hooks
 gitleaks-staged: ## secret scan of the STAGED diff only — what hooks/pre-commit runs
 	@docker run --rm -v $(PWD):/repo $(LUXLINT_IMAGE) --emit-config gitleaks > /tmp/gl.toml
 	@docker run --rm -v $(PWD):/repo -v /tmp/gl.toml:/gl.toml:ro \
-	  ghcr.io/gitleaks/gitleaks:latest protect --staged --source /repo -c /gl.toml --redact
+	  ghcr.io/gitleaks/gitleaks:latest protect --staged --source /repo -c /gl.toml --redact -v
 
 check: guard-version-check honest lint mypy test db-verify arch audit gitleaks ## THE fleet gate — run before every commit
 
@@ -637,13 +637,17 @@ migration-check: test-build ## Verify alembic migrations match the models — `a
 # valid, committable status. `set -e` so a failed stamp aborts (never a false "wrote").
 STAMP = python3 -c 'import json,sys,os; d=json.load(open(sys.argv[1])); d["commit"]=os.environ["SHA"]; d["generated_at"]=os.environ["TS"]; json.dump(d,open(sys.argv[2],"w"),indent=2)'
 
+# LUXARCH_STATUS_WRITE=1 tells luxarch that THIS run is the one writing the
+# snapshot, so repo.guard_status_current does not judge the files it is about to
+# replace. Without it every `make status` bakes a false red into the record the
+# fleet reads.
 status: ## Regenerate committed guard-status files (.lux*-status.json) — commit them
 	@if [ -z "$(LUXARCH_REGISTRY)" ]; then \
 		echo ">> status skipped: LUXARCH_REGISTRY unset (see Makefile.local.example)"; exit 0; \
 	fi
 	@set -e; export SHA=$$(git rev-parse HEAD) TS=$$(date -u +%FT%TZ); \
 	docker run --rm -v $(PWD):/repo $(LUXLINT_IMAGE)  --json > /tmp/lux.json || true; $(STAMP) /tmp/lux.json .luxlint-status.json; \
-	docker run --rm -v $(PWD):/repo $(LUXARCH_IMAGE)  --json > /tmp/lux.json || true; $(STAMP) /tmp/lux.json .luxarch-status.json; \
+	docker run --rm -e LUXARCH_STATUS_WRITE=1 -v $(PWD):/repo $(LUXARCH_IMAGE) --json > /tmp/lux.json || true; $(STAMP) /tmp/lux.json .luxarch-status.json; \
 	docker run --rm -v $(PWD):/repo $(LUXAUDIT_IMAGE) --json > /tmp/lux.json || true; $(STAMP) /tmp/lux.json .luxaudit-status.json; \
 	echo "wrote .lux*-status.json at $$SHA — commit them"
 

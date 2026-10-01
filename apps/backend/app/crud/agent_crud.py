@@ -147,7 +147,15 @@ class AgentCRUD:
 
     @staticmethod
     async def get_latest_metric(db: AsyncSession, agent_id: UUID) -> AgentMetric | None:
-        """Latest agent metric for an agent."""
+        """Latest agent metric for one agent.
+
+        Production reads the fleet in one round-trip through `get_latest_metrics`
+        below. This single-agent form is kept deliberately as that query's
+        equivalence oracle in tests/agents/test_latest_metrics_batch.py — a
+        batched query with no reference implementation to pin it against is how
+        a batching rewrite silently starts reporting the wrong sample. It is the
+        reference the batched shape is checked against, not a leftover caller.
+        """
         result = await db.execute(
             select(AgentMetric)
             .where(AgentMetric.agent_id == agent_id)

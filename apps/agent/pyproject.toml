@@ -62,10 +62,15 @@ asyncpg = "^0.31.0"         # PostgreSQL checks
 dnspython = "^2.7.0"        # DNS checks
 
 [tool.poetry.group.dev.dependencies]
+# No ruff, no mypy, no `types-*` here on purpose. luxlint runs ruff and mypy
+# MOUNT-ONLY from its pinned image (`make lint` / `make mypy`), so a repo copy
+# pins a version the gate never runs — it goes stale and tells you nothing — and
+# luxlint bakes the fleet's stubs, so a `types-*` dependency here is read by
+# nothing. A typed library whose stubs luxlint does not bake is a luxlint
+# escalation, not a dependency in this file. Enforced by
+# repo.guard_owned_tools_undeclared.
 pytest = "^9.1.1"
 pytest-asyncio = "^1.3.0"
-ruff = "^0.16.8"
-mypy = "^2.3.1"
 
 [build-system]
 # Fleet's one build backend is hatchling (repo.hatchling_build_backend). Poetry stays the

@@ -1,6 +1,6 @@
 {
   "guard": "luxarch",
-  "guard_version": "0.138.0",
+  "guard_version": "0.243.0",
   "repo": "/repo",
   "targets": [
     {
@@ -261,28 +261,10 @@
         },
         {
           "rule": "fw.no_inline_html",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.1.0",
-          "violations": 9,
+          "violations": 0,
           "deferred": false,
-          "inert": false,
-          "inert_reason": ""
-        },
-        {
-          "rule": "fw.router_size",
-          "status": "FAIL",
-          "since": "0.1.0",
-          "violations": 1,
-          "deferred": false,
-          "inert": false,
-          "inert_reason": ""
-        },
-        {
-          "rule": "fw.service_size",
-          "status": "XFAIL",
-          "since": "0.1.0",
-          "violations": 4,
-          "deferred": true,
           "inert": false,
           "inert_reason": ""
         },
@@ -441,10 +423,10 @@
         },
         {
           "rule": "fw.views_dont_import_models",
-          "status": "XFAIL",
+          "status": "PASS",
           "since": "0.2.0",
-          "violations": 8,
-          "deferred": true,
+          "violations": 0,
+          "deferred": false,
           "inert": false,
           "inert_reason": ""
         },
@@ -488,7 +470,7 @@
           "rule": "fw.no_session_mutation_outside_crud",
           "status": "XFAIL",
           "since": "0.2.0",
-          "violations": 140,
+          "violations": 137,
           "deferred": true,
           "inert": false,
           "inert_reason": ""
@@ -540,18 +522,18 @@
         },
         {
           "rule": "fw.no_browser_confirm_in_templates",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.2.0",
-          "violations": 2,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": ""
         },
         {
           "rule": "fw.no_inline_style_in_pages",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.2.0",
-          "violations": 25,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": ""
@@ -569,7 +551,7 @@
           "rule": "fw.enum_dto_fields_enum_typed",
           "status": "XFAIL",
           "since": "0.2.0",
-          "violations": 34,
+          "violations": 38,
           "deferred": true,
           "inert": false,
           "inert_reason": ""
@@ -594,39 +576,39 @@
         },
         {
           "rule": "fw.restricted_imports",
-          "status": "INERT",
+          "status": "PASS",
           "since": "0.2.0",
           "violations": 0,
           "deferred": false,
-          "inert": true,
-          "inert_reason": "declare packages + their boundary files under [restricted].imports to enforce them; until then this rule has nothing to check."
+          "inert": false,
+          "inert_reason": ""
         },
         {
           "rule": "fw.restricted_calls",
-          "status": "INERT",
+          "status": "PASS",
           "since": "0.2.0",
           "violations": 0,
           "deferred": false,
-          "inert": true,
-          "inert_reason": "declare call patterns + their boundary files under [restricted].calls to enforce them; until then this rule has nothing to check."
+          "inert": false,
+          "inert_reason": ""
         },
         {
           "rule": "fw.admin_endpoints_rbac",
-          "status": "INERT",
+          "status": "PASS",
           "since": "0.2.0",
           "violations": 0,
           "deferred": false,
-          "inert": true,
-          "inert_reason": "declare [rbac].admin_url_patterns and [rbac].require_names to enforce that admin-tier mutating routes carry an RBAC dependency; until then this rule does not run."
+          "inert": false,
+          "inert_reason": ""
         },
         {
           "rule": "fw.fields_wired_into_pipeline",
-          "status": "INERT",
+          "status": "FAIL",
           "since": "0.2.0",
-          "violations": 0,
+          "violations": 1,
           "deferred": false,
-          "inert": true,
-          "inert_reason": "declare [field_wiring] specs (class + fields + accessors) to enforce that UI/config-driving fields are actually read by the pipeline; until then this rule has nothing to check."
+          "inert": false,
+          "inert_reason": ""
         },
         {
           "rule": "fw.no_aliased_first_party_imports",
@@ -657,9 +639,9 @@
         },
         {
           "rule": "fw.no_hand_rolled_components_in_pages",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.9.1",
-          "violations": 35,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": ""
@@ -684,21 +666,21 @@
         },
         {
           "rule": "fw.no_template_logic",
-          "status": "INERT",
+          "status": "PASS",
           "since": "0.12.0",
           "violations": 0,
           "deferred": false,
-          "inert": true,
-          "inert_reason": "set [templates].lint_logic = true to parse templates for data-shaping/arithmetic/mutation logic that belongs in the view. See --playbook template-logic."
+          "inert": false,
+          "inert_reason": ""
         },
         {
           "rule": "fw.tenant_scoped",
-          "status": "INERT",
+          "status": "PASS",
           "since": "0.14.0",
           "violations": 0,
           "deferred": false,
-          "inert": true,
-          "inert_reason": "set [tenant].column to the tenant FK (e.g. organization_id) to enable per-tenant query scoping; until then this rule does not run. See --playbook tenant-scoped."
+          "inert": false,
+          "inert_reason": ""
         },
         {
           "rule": "fw.component_registry",
@@ -819,9 +801,9 @@
         },
         {
           "rule": "fw.template_refs_resolve",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.54.0",
-          "violations": 1,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": ""
@@ -837,21 +819,21 @@
         },
         {
           "rule": "fw.tenant_route_reachability",
-          "status": "INERT",
+          "status": "PASS",
           "since": "0.55.0",
           "violations": 0,
           "deferred": false,
-          "inert": true,
-          "inert_reason": "declare [tenant].column and the [tenant.auth] role markers to turn on the static cross-tenant reachability analysis; until then it does not run. See --playbook tenant-scoped."
+          "inert": false,
+          "inert_reason": ""
         },
         {
           "rule": "fw.state_changing_get",
-          "status": "INERT",
+          "status": "PASS",
           "since": "0.56.0",
           "violations": 0,
           "deferred": false,
-          "inert": true,
-          "inert_reason": "set [csrf].enabled = true to turn on the static GET/HEAD-mutation reachability check (the SameSite=Lax CSRF stance); until then it does not run. See --playbook state-changing-get."
+          "inert": false,
+          "inert_reason": ""
         },
         {
           "rule": "fw.enum_not_native_pg",
@@ -864,12 +846,12 @@
         },
         {
           "rule": "fw.route_smoke_wired",
-          "status": "INERT",
+          "status": "PASS",
           "since": "0.64.0",
           "violations": 0,
           "deferred": false,
-          "inert": true,
-          "inert_reason": "route-smoke catches a dependency deprecation one release before the pin makes it fatal, but it's off here. To turn it ON: set [route_smoke].enabled = true, then `luxarch --emit route-smoke` into tests/conftest.py (this rule then enforces the asserter is committed)."
+          "inert": false,
+          "inert_reason": ""
         },
         {
           "rule": "fw.session_minted_in_owner",
@@ -936,9 +918,9 @@
         },
         {
           "rule": "fw.no_passthrough_view_service",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.78.0",
-          "violations": 5,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": ""
@@ -954,12 +936,12 @@
         },
         {
           "rule": "fw.mutating_route_authenticated",
-          "status": "INERT",
+          "status": "PASS",
           "since": "0.84.0",
           "violations": 0,
           "deferred": false,
-          "inert": true,
-          "inert_reason": "list this repo's authenticating dependencies in [auth].deps (the fns/factories that ESTABLISH identity \u2014 get_current_user, require_editor, check_subscription_active_hybrid, \u2026) to enforce that every POST/PUT/PATCH/DELETE route is authenticated. Security schemes (HTTPBearer/OAuth2/APIKey), Annotated aliases, router-level deps and in-body 401/403 resolve automatically; carve out public/webhook/login routes in [allowlist].auth_public with evidence."
+          "inert": false,
+          "inert_reason": ""
         },
         {
           "rule": "fw.annotated_dep_is_depends",
@@ -1016,6 +998,15 @@
           "inert_reason": ""
         },
         {
+          "rule": "fw.crud_base_single_pattern",
+          "status": "INERT",
+          "since": "0.195.0",
+          "violations": 0,
+          "deferred": false,
+          "inert": true,
+          "inert_reason": "no crud class defines an `__init__`, so no construction pattern is declared here"
+        },
+        {
           "rule": "fw.template_role_placement",
           "status": "PASS",
           "since": "0.99.0",
@@ -1053,9 +1044,9 @@
         },
         {
           "rule": "fw.js_in_files",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.105.0",
-          "violations": 11,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": ""
@@ -1080,27 +1071,27 @@
         },
         {
           "rule": "fw.color_mode_tokens",
-          "status": "INERT",
+          "status": "PASS",
           "since": "0.107.0",
           "violations": 0,
           "deferred": false,
-          "inert": true,
-          "inert_reason": "no [color_tokens] palette declared \u2014 declare it (token \u2192 tailwind color) to enforce that a hand-rolled light/dark pair uses the token; off until then"
+          "inert": false,
+          "inert_reason": ""
         },
         {
           "rule": "fw.no_nested_session",
-          "status": "INERT",
+          "status": "PASS",
           "since": "0.111.0",
           "violations": 0,
           "deferred": false,
-          "inert": true,
-          "inert_reason": "opt-in \u2014 declare [session].no_nesting = true to turn on the static nested-session double-lock check (off until then)"
+          "inert": false,
+          "inert_reason": ""
         },
         {
           "rule": "fw.jinja_strict_undefined",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.112.0",
-          "violations": 1,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": ""
@@ -1136,7 +1127,7 @@
           "rule": "fw.url_assembly_in_view",
           "status": "FAIL",
           "since": "0.132.0",
-          "violations": 96,
+          "violations": 1,
           "deferred": false,
           "inert": false,
           "inert_reason": ""
@@ -1167,14 +1158,311 @@
           "deferred": false,
           "inert": false,
           "inert_reason": ""
+        },
+        {
+          "rule": "fw.no_crud_reach_through",
+          "status": "PASS",
+          "since": "0.146.0",
+          "violations": 0,
+          "deferred": false,
+          "inert": false,
+          "inert_reason": ""
+        },
+        {
+          "rule": "fw.no_layer_reach_through",
+          "status": "PASS",
+          "since": "0.147.0",
+          "violations": 0,
+          "deferred": false,
+          "inert": false,
+          "inert_reason": ""
+        },
+        {
+          "rule": "fw.datetime_display_via_filter",
+          "status": "PASS",
+          "since": "0.148.0",
+          "violations": 0,
+          "deferred": false,
+          "inert": false,
+          "inert_reason": ""
+        },
+        {
+          "rule": "fw.dto_in_schemas",
+          "status": "PASS",
+          "since": "0.155.0",
+          "violations": 0,
+          "deferred": false,
+          "inert": false,
+          "inert_reason": ""
+        },
+        {
+          "rule": "fw.paginated_result_unpacked",
+          "status": "PASS",
+          "since": "0.157.0",
+          "violations": 0,
+          "deferred": false,
+          "inert": false,
+          "inert_reason": ""
+        },
+        {
+          "rule": "fw.test_engine_pool_parity",
+          "status": "INERT",
+          "since": "0.160.0",
+          "violations": 0,
+          "deferred": false,
+          "inert": true,
+          "inert_reason": "the harness isolates by holding ONE connection and rolling it back (apps/backend/tests/fixtures/db.py:135), so a pooled test engine cannot work here \u2014 each pytest-asyncio test gets its own loop and a pooled connection belongs to the loop that opened it. **This INERT is the correct END STATE for such a harness, not a todo.** Do NOT migrate to DELETE/TRUNCATE-per-test to satisfy this rule: luxlint's test.no_handrolled_cleanup exists to red exactly that, and rollback isolation is the better pattern (faster, no table-ordering bugs, nothing to forget). An earlier version of this message named that migration as the prerequisite and was wrong \u2014 it pointed at something another fleet guard forbids (WWWLUXARDO-139). Measured, pursuing pooling here costs you: 0 failures on NullPool, 139 pooled, 366 pooled+dispose. And you lose nothing in DETECTION \u2014 the cross-session visibility class this rule guards is caught by durability locks that read on a SEPARATE connection, which works whatever the pool class. Pool the APP engine (fw.dev_prod_pool_parity); leave the test engine alone."
+        },
+        {
+          "rule": "fw.template_context_complete",
+          "status": "PASS",
+          "since": "0.174.0",
+          "violations": 0,
+          "deferred": false,
+          "inert": false,
+          "inert_reason": ""
+        },
+        {
+          "rule": "fw.asserter_current",
+          "status": "PASS",
+          "since": "0.188.0",
+          "violations": 0,
+          "deferred": false,
+          "inert": false,
+          "inert_reason": ""
+        },
+        {
+          "rule": "fw.broad_except_is_logged",
+          "status": "PASS",
+          "since": "0.177.0",
+          "violations": 0,
+          "deferred": false,
+          "inert": false,
+          "inert_reason": ""
+        },
+        {
+          "rule": "fw.core_mutation_checks_permission",
+          "status": "PASS",
+          "since": "0.178.0",
+          "violations": 0,
+          "deferred": false,
+          "inert": false,
+          "inert_reason": ""
+        },
+        {
+          "rule": "fw.destructive_macro_gated",
+          "status": "PASS",
+          "since": "0.179.0",
+          "violations": 0,
+          "deferred": false,
+          "inert": false,
+          "inert_reason": ""
+        },
+        {
+          "rule": "fw.route_dep_matches_surface",
+          "status": "PASS",
+          "since": "0.180.0",
+          "violations": 0,
+          "deferred": false,
+          "inert": false,
+          "inert_reason": ""
+        },
+        {
+          "rule": "fw.credential_routes_limited",
+          "status": "PASS",
+          "since": "0.215.0",
+          "violations": 0,
+          "deferred": false,
+          "inert": false,
+          "inert_reason": ""
+        },
+        {
+          "rule": "fw.committed_artifacts_declared",
+          "status": "PASS",
+          "since": "0.226.0",
+          "violations": 0,
+          "deferred": false,
+          "inert": false,
+          "inert_reason": ""
+        },
+        {
+          "rule": "fw.no_reserved_query_params",
+          "status": "PASS",
+          "since": "0.227.0",
+          "violations": 0,
+          "deferred": false,
+          "inert": false,
+          "inert_reason": ""
+        },
+        {
+          "rule": "fw.surface_separation",
+          "status": "INERT",
+          "since": "0.228.0",
+          "violations": 0,
+          "deferred": false,
+          "inert": true,
+          "inert_reason": "opt-in \u2014 N/A until [surfaces].admin and [surfaces].tenant name the two surfaces' template roots (a repo with an operator surface and a customer surface should declare them)"
+        },
+        {
+          "rule": "fw.auth_surface_declared",
+          "status": "PASS",
+          "since": "0.230.0",
+          "violations": 0,
+          "deferred": false,
+          "inert": false,
+          "inert_reason": ""
+        },
+        {
+          "rule": "fw.rate_limit_enforced",
+          "status": "PASS",
+          "since": "0.231.0",
+          "violations": 0,
+          "deferred": false,
+          "inert": false,
+          "inert_reason": ""
+        },
+        {
+          "rule": "fw.module_homes",
+          "status": "FAIL",
+          "since": "0.233.0",
+          "violations": 2,
+          "deferred": false,
+          "inert": false,
+          "inert_reason": ""
+        },
+        {
+          "rule": "fw.file_size",
+          "status": "FAIL",
+          "since": "0.235.0",
+          "violations": 1,
+          "deferred": false,
+          "inert": false,
+          "inert_reason": ""
+        },
+        {
+          "rule": "obs.method_span",
+          "status": "INERT",
+          "since": "0.10.0",
+          "violations": 0,
+          "deferred": false,
+          "inert": true,
+          "inert_reason": "[observability].signals here does not include 'traces' \u2014 N/A, this rule did not run (add 'traces' to enable it)"
+        },
+        {
+          "rule": "obs.span_name_matches_class",
+          "status": "INERT",
+          "since": "0.10.0",
+          "violations": 0,
+          "deferred": false,
+          "inert": true,
+          "inert_reason": "[observability].signals here does not include 'traces' \u2014 N/A, this rule did not run (add 'traces' to enable it)"
+        },
+        {
+          "rule": "obs.record_exception",
+          "status": "INERT",
+          "since": "0.10.0",
+          "violations": 0,
+          "deferred": false,
+          "inert": true,
+          "inert_reason": "[observability].signals here does not include 'traces' \u2014 N/A, this rule did not run (add 'traces' to enable it)"
+        },
+        {
+          "rule": "obs.route_enrich_user",
+          "status": "INERT",
+          "since": "0.10.0",
+          "violations": 0,
+          "deferred": false,
+          "inert": true,
+          "inert_reason": "[observability].signals here does not include 'traces' \u2014 N/A, this rule did not run (add 'traces' to enable it)"
+        },
+        {
+          "rule": "obs.no_router_span",
+          "status": "INERT",
+          "since": "0.10.0",
+          "violations": 0,
+          "deferred": false,
+          "inert": true,
+          "inert_reason": "[observability].signals here does not include 'traces' \u2014 N/A, this rule did not run (add 'traces' to enable it)"
+        },
+        {
+          "rule": "obs.client_span_kind",
+          "status": "INERT",
+          "since": "0.10.0",
+          "violations": 0,
+          "deferred": false,
+          "inert": true,
+          "inert_reason": "[observability].signals here does not include 'traces' \u2014 N/A, this rule did not run (add 'traces' to enable it)"
+        },
+        {
+          "rule": "obs.no_silent_suppress",
+          "status": "INERT",
+          "since": "0.10.0",
+          "violations": 0,
+          "deferred": false,
+          "inert": true,
+          "inert_reason": "[observability].signals here does not include 'traces' \u2014 N/A, this rule did not run (add 'traces' to enable it)"
+        },
+        {
+          "rule": "obs.job_root_span",
+          "status": "INERT",
+          "since": "0.10.0",
+          "violations": 0,
+          "deferred": false,
+          "inert": true,
+          "inert_reason": "[observability].signals here does not include 'traces' \u2014 N/A, this rule did not run (add 'traces' to enable it)"
+        },
+        {
+          "rule": "obs.record_before_raise",
+          "status": "INERT",
+          "since": "0.10.0",
+          "violations": 0,
+          "deferred": false,
+          "inert": true,
+          "inert_reason": "[observability].signals here does not include 'traces' \u2014 N/A, this rule did not run (add 'traces' to enable it)"
+        },
+        {
+          "rule": "obs.enrich_early",
+          "status": "INERT",
+          "since": "0.10.0",
+          "violations": 0,
+          "deferred": false,
+          "inert": true,
+          "inert_reason": "[observability].signals here does not include 'traces' \u2014 N/A, this rule did not run (add 'traces' to enable it)"
+        },
+        {
+          "rule": "obs.entity_id_forwarded",
+          "status": "INERT",
+          "since": "0.10.0",
+          "violations": 0,
+          "deferred": false,
+          "inert": true,
+          "inert_reason": "[observability].signals here does not include 'traces' \u2014 N/A, this rule did not run (add 'traces' to enable it)"
+        },
+        {
+          "rule": "obs.metric_label_cardinality",
+          "status": "PASS",
+          "since": "0.10.0",
+          "violations": 0,
+          "deferred": false,
+          "inert": false,
+          "inert_reason": ""
+        },
+        {
+          "rule": "obs.no_dead_metric",
+          "status": "PASS",
+          "since": "0.10.0",
+          "violations": 0,
+          "deferred": false,
+          "inert": false,
+          "inert_reason": ""
         }
       ],
       "summary": {
-        "PASS": 99,
-        "FAIL": 10,
-        "XFAIL": 4,
+        "PASS": 137,
+        "FAIL": 4,
+        "XFAIL": 2,
         "XPASS": 0,
-        "INERT": 16
+        "INERT": 18
       }
     },
     {
@@ -1218,6 +1506,15 @@
           "inert_reason": ""
         },
         {
+          "rule": "collector.file_size",
+          "status": "PASS",
+          "since": "0.235.0",
+          "violations": 0,
+          "deferred": false,
+          "inert": false,
+          "inert_reason": ""
+        },
+        {
           "rule": "collector.no_per_request_http",
           "status": "PASS",
           "since": "0.1.0",
@@ -1237,7 +1534,7 @@
         }
       ],
       "summary": {
-        "PASS": 5,
+        "PASS": 6,
         "FAIL": 0,
         "XFAIL": 0,
         "XPASS": 0,
@@ -1311,6 +1608,141 @@
         "inert_reason": ""
       },
       {
+        "rule": "repo.guard_owned_tools_undeclared",
+        "status": "FAIL",
+        "since": "0.243.0",
+        "violations": 2,
+        "deferred": false,
+        "inert": false,
+        "inert_reason": ""
+      },
+      {
+        "rule": "repo.dev_tools_not_in_production",
+        "status": "PASS",
+        "since": "0.243.0",
+        "violations": 0,
+        "deferred": false,
+        "inert": false,
+        "inert_reason": ""
+      },
+      {
+        "rule": "repo.makefile_no_command_substitution",
+        "status": "PASS",
+        "since": "0.185.0",
+        "violations": 0,
+        "deferred": false,
+        "inert": false,
+        "inert_reason": ""
+      },
+      {
+        "rule": "repo.guard_pins_not_overridable",
+        "status": "PASS",
+        "since": "0.187.0",
+        "violations": 0,
+        "deferred": false,
+        "inert": false,
+        "inert_reason": ""
+      },
+      {
+        "rule": "repo.guard_upgrade_verifies_write",
+        "status": "PASS",
+        "since": "0.192.0",
+        "violations": 0,
+        "deferred": false,
+        "inert": false,
+        "inert_reason": ""
+      },
+      {
+        "rule": "repo.db_verify_image_is_current",
+        "status": "PASS",
+        "since": "0.196.0",
+        "violations": 0,
+        "deferred": false,
+        "inert": false,
+        "inert_reason": ""
+      },
+      {
+        "rule": "repo.image_name_declares_provenance",
+        "status": "PASS",
+        "since": "0.197.0",
+        "violations": 0,
+        "deferred": false,
+        "inert": false,
+        "inert_reason": ""
+      },
+      {
+        "rule": "repo.deploy_tag_is_immutable",
+        "status": "PASS",
+        "since": "0.197.0",
+        "violations": 0,
+        "deferred": false,
+        "inert": false,
+        "inert_reason": ""
+      },
+      {
+        "rule": "repo.makefile_image_ref_well_formed",
+        "status": "PASS",
+        "since": "0.208.0",
+        "violations": 0,
+        "deferred": false,
+        "inert": false,
+        "inert_reason": ""
+      },
+      {
+        "rule": "repo.alembic_env_honors_caller_url",
+        "status": "FAIL",
+        "since": "0.217.0",
+        "violations": 1,
+        "deferred": false,
+        "inert": false,
+        "inert_reason": ""
+      },
+      {
+        "rule": "repo.emitted_assets_current",
+        "status": "FAIL",
+        "since": "0.208.0",
+        "violations": 1,
+        "deferred": false,
+        "inert": false,
+        "inert_reason": ""
+      },
+      {
+        "rule": "repo.luxpm_receipt_current",
+        "status": "INERT",
+        "since": "0.211.0",
+        "violations": 0,
+        "deferred": false,
+        "inert": true,
+        "inert_reason": "no `.luxpm-receipt` is committed \u2014 there is no tracker attestation to verify. NOT a clearance: it means this repo's tracker currency is entirely self-reported, which is the drift this receipt exists to make visible. Issue one with `luxpm_issue_sync_receipt` and commit it verbatim"
+      },
+      {
+        "rule": "repo.guard_status_current",
+        "status": "INERT",
+        "since": "0.222.0",
+        "violations": 0,
+        "deferred": false,
+        "inert": true,
+        "inert_reason": "this run is WRITING the status files (`make status`), so the files on disk are the ones it is replacing \u2014 judging them would record a red about themselves in the committed snapshot. The next `make check` judges what was written"
+      },
+      {
+        "rule": "repo.claude_pointer_present",
+        "status": "PASS",
+        "since": "0.213.0",
+        "violations": 0,
+        "deferred": false,
+        "inert": false,
+        "inert_reason": ""
+      },
+      {
+        "rule": "repo.gitleaks_scans_identity",
+        "status": "PASS",
+        "since": "0.204.0",
+        "violations": 0,
+        "deferred": false,
+        "inert": false,
+        "inert_reason": ""
+      },
+      {
         "rule": "repo.makefile_test_db_harness",
         "status": "PASS",
         "since": "0.102.0",
@@ -1339,18 +1771,81 @@
       },
       {
         "rule": "repo.release_docs_current",
-        "status": "FAIL",
+        "status": "PASS",
         "since": "0.137.0",
+        "violations": 0,
+        "deferred": false,
+        "inert": false,
+        "inert_reason": ""
+      },
+      {
+        "rule": "repo.github_release_wired",
+        "status": "PASS",
+        "since": "0.150.0",
+        "violations": 0,
+        "deferred": false,
+        "inert": false,
+        "inert_reason": ""
+      },
+      {
+        "rule": "repo.release_tag_hygiene",
+        "status": "PASS",
+        "since": "0.151.0",
+        "violations": 0,
+        "deferred": false,
+        "inert": false,
+        "inert_reason": ""
+      },
+      {
+        "rule": "repo.hooks_wired",
+        "status": "PASS",
+        "since": "0.154.0",
+        "violations": 0,
+        "deferred": false,
+        "inert": false,
+        "inert_reason": ""
+      },
+      {
+        "rule": "repo.hooks_current",
+        "status": "FAIL",
+        "since": "0.164.0",
         "violations": 2,
         "deferred": false,
         "inert": false,
         "inert_reason": ""
       },
       {
-        "rule": "repo.schema_from_migrations",
+        "rule": "repo.allowlist_wellformed",
         "status": "PASS",
-        "since": "0.130.0",
+        "since": "0.165.0",
         "violations": 0,
+        "deferred": false,
+        "inert": false,
+        "inert_reason": ""
+      },
+      {
+        "rule": "repo.python_version_consistent",
+        "status": "PASS",
+        "since": "0.166.0",
+        "violations": 0,
+        "deferred": false,
+        "inert": false,
+        "inert_reason": ""
+      },
+      {
+        "rule": "repo.fleet_dep_floor",
+        "status": "PASS",
+        "since": "0.219.0",
+        "violations": 0,
+        "deferred": false,
+        "inert": false,
+        "inert_reason": ""
+      },
+      {
+        "rule": "repo.schema_from_migrations",
+        "status": "FAIL",
+        "since": "0.130.0",
+        "violations": 1,
         "deferred": false,
         "inert": false,
         "inert_reason": ""
@@ -1368,6 +1863,15 @@
         "rule": "repo.compose_conventions",
         "status": "PASS",
         "since": "0.37.0",
+        "violations": 0,
+        "deferred": false,
+        "inert": false,
+        "inert_reason": ""
+      },
+      {
+        "rule": "repo.compose_command_no_orphan_flags",
+        "status": "PASS",
+        "since": "0.141.0",
         "violations": 0,
         "deferred": false,
         "inert": false,
@@ -1401,6 +1905,15 @@
         "inert_reason": ""
       },
       {
+        "rule": "repo.makefile_db_ephemeral_volume",
+        "status": "PASS",
+        "since": "0.240.0",
+        "violations": 0,
+        "deferred": false,
+        "inert": false,
+        "inert_reason": ""
+      },
+      {
         "rule": "repo.alembic_path_separator",
         "status": "PASS",
         "since": "0.71.0",
@@ -1419,9 +1932,27 @@
         "inert_reason": ""
       },
       {
+        "rule": "repo.migration_notnull_safe",
+        "status": "PASS",
+        "since": "0.239.0",
+        "violations": 0,
+        "deferred": false,
+        "inert": false,
+        "inert_reason": ""
+      },
+      {
         "rule": "repo.buildx_builder_gc_capped",
         "status": "PASS",
         "since": "0.46.0",
+        "violations": 0,
+        "deferred": false,
+        "inert": false,
+        "inert_reason": ""
+      },
+      {
+        "rule": "repo.buildx_strays_refused",
+        "status": "PASS",
+        "since": "0.193.0",
         "violations": 0,
         "deferred": false,
         "inert": false,
@@ -1440,6 +1971,15 @@
         "rule": "repo.hatchling_build_backend",
         "status": "PASS",
         "since": "0.62.0",
+        "violations": 0,
+        "deferred": false,
+        "inert": false,
+        "inert_reason": ""
+      },
+      {
+        "rule": "repo.hatch_version_source_buildable",
+        "status": "PASS",
+        "since": "0.184.0",
         "violations": 0,
         "deferred": false,
         "inert": false,
@@ -1483,29 +2023,29 @@
       },
       {
         "rule": "shared.no_inline_imports",
-        "status": "XFAIL",
+        "status": "XPASS",
         "since": "0.1.0",
-        "violations": 2,
+        "violations": 0,
         "deferred": true,
         "inert": false,
         "inert_reason": ""
       }
     ],
     "summary": {
-      "PASS": 25,
-      "FAIL": 1,
-      "XFAIL": 1,
-      "XPASS": 0,
-      "INERT": 0
+      "PASS": 46,
+      "FAIL": 5,
+      "XFAIL": 0,
+      "XPASS": 1,
+      "INERT": 2
     }
   },
   "summary": {
-    "PASS": 129,
-    "FAIL": 11,
-    "XFAIL": 5,
-    "XPASS": 0,
-    "INERT": 17
+    "PASS": 189,
+    "FAIL": 9,
+    "XFAIL": 2,
+    "XPASS": 1,
+    "INERT": 21
   },
-  "commit": "01e95ebe7f30aa6b1340f7358573978ebc33b157",
-  "generated_at": "2026-09-06T18:58:55Z"
+  "commit": "446abcd219d707346f359f30ac014e7ace4b3152",
+  "generated_at": "2026-10-01T17:38:06Z"
 }
