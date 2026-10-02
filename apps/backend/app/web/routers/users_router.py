@@ -12,15 +12,15 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.auth_deps import AdminUser
 from app.core.config import settings
 from app.core.query_params import ActiveFilter, PerPageFilter
 from app.core.rate_limit import limiter
 from app.db import get_db
 from app.services.views.web_users_view_service import WebUsersViewService
+from app.web.deps import AdminUserWeb
 from app.web.hx_responses import hx_empty_with_toast, hx_toast_without_swap
 from app.web.render import error_partial
-from app.web.templates_config import templates
+from app.web.templates import templates
 
 logger = get_logger("luxswirl.web.routers.users")
 
@@ -31,7 +31,7 @@ router = APIRouter(prefix="/settings", tags=["Web UI - Users"])
 @router.get("/users", response_class=HTMLResponse, include_in_schema=False)
 async def users_page(
     request: Request,
-    user: AdminUser,
+    user: AdminUserWeb,
     db: Annotated[AsyncSession, Depends(get_db)],
     page: Annotated[int, Query(ge=1)] = 1,
     per_page: PerPageFilter = None,
@@ -58,7 +58,7 @@ async def users_page(
 )
 async def users_table_partial(
     request: Request,
-    user: AdminUser,
+    user: AdminUserWeb,
     db: Annotated[AsyncSession, Depends(get_db)],
     page: Annotated[int, Query(ge=1)] = 1,
     per_page: PerPageFilter = None,
@@ -85,7 +85,7 @@ async def users_table_partial(
 @router.get("/users/create-form", response_class=HTMLResponse, include_in_schema=False)
 async def create_user_form(
     request: Request,
-    user: AdminUser,
+    user: AdminUserWeb,
 ):
     """
     HTMX partial - returns form for creating a new user.
@@ -103,7 +103,7 @@ async def create_user_submit(
     request: Request,
     username: Annotated[str, Form()],
     password: Annotated[str, Form()],
-    admin: AdminUser,
+    admin: AdminUserWeb,
     db: Annotated[AsyncSession, Depends(get_db)],
     role: Annotated[str, Form()] = "viewer",
     full_name: Annotated[str | None, Form()] = None,
@@ -156,7 +156,7 @@ async def create_user_submit(
 async def edit_user_form(
     request: Request,
     user_id: UUID,
-    admin: AdminUser,
+    admin: AdminUserWeb,
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     """
@@ -190,7 +190,7 @@ async def update_user_submit(
     request: Request,
     user_id: UUID,
     role: Annotated[str, Form()],
-    admin: AdminUser,
+    admin: AdminUserWeb,
     db: Annotated[AsyncSession, Depends(get_db)],
     full_name: Annotated[str | None, Form()] = None,
     is_active: Annotated[bool, Form()] = False,
@@ -238,7 +238,7 @@ async def update_user_submit(
 @router.post("/users/{user_id}/delete", include_in_schema=False, name="web_delete_user")
 async def delete_user(
     user_id: UUID,
-    admin: AdminUser,
+    admin: AdminUserWeb,
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     """
@@ -279,7 +279,7 @@ async def reset_user_password(
     request: Request,
     user_id: UUID,
     new_password: Annotated[str, Form()],
-    admin: AdminUser,
+    admin: AdminUserWeb,
     db: Annotated[AsyncSession, Depends(get_db)],
     must_change: Annotated[bool, Form()] = True,
 ):
@@ -317,7 +317,7 @@ async def reset_user_password(
 @router.post("/users/{user_id}/unlock", include_in_schema=False, name="web_unlock_user")
 async def unlock_user(
     user_id: UUID,
-    admin: AdminUser,
+    admin: AdminUserWeb,
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     """

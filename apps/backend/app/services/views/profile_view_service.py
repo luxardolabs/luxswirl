@@ -12,7 +12,7 @@ from fastapi import Request
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.auth_deps import AuthedUser
+from app.schemas.auth_schema import AuthedUser
 from app.schemas.user_schema import UserUpdate
 from app.services.core.auth_core_service import AuthCoreService
 from app.services.core.user_core_service import UserCoreService

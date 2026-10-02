@@ -14,14 +14,14 @@ from fastapi import HTTPException, Request, status
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.auth_deps import AuthedUser
 from app.core.config import settings
+from app.schemas.auth_schema import AuthedUser
 from app.services.views.maintenance_job_view_service import MaintenanceJobViewService
 from app.services.views.notification_logs_view_service import (
     NotificationLogsViewService,
 )
 from app.web.hx_responses import hx_toast_trigger, hx_trigger
-from app.web.templates_config import templates
+from app.web.templates import templates
 
 
 def error_partial(

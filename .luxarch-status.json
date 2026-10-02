@@ -1125,9 +1125,9 @@
         },
         {
           "rule": "fw.url_assembly_in_view",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.132.0",
-          "violations": 1,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": ""
@@ -1323,18 +1323,18 @@
         },
         {
           "rule": "fw.module_homes",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.233.0",
-          "violations": 2,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": ""
         },
         {
           "rule": "fw.file_size",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.235.0",
-          "violations": 1,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": ""
@@ -1467,8 +1467,8 @@
         }
       ],
       "summary": {
-        "PASS": 138,
-        "FAIL": 4,
+        "PASS": 141,
+        "FAIL": 1,
         "XFAIL": 2,
         "XPASS": 0,
         "INERT": 18
@@ -2058,12 +2058,12 @@
     }
   },
   "summary": {
-    "PASS": 196,
-    "FAIL": 4,
+    "PASS": 199,
+    "FAIL": 1,
     "XFAIL": 2,
     "XPASS": 1,
     "INERT": 21
   },
-  "commit": "32070437abd989e0ddb158246bb0e4d5fe8d01b1",
-  "generated_at": "2026-10-01T22:11:57Z"
+  "commit": "6c64c21e179cd39c75ef47d11fa2873498fb6f4d",
+  "generated_at": "2026-10-02T03:34:58Z"
 }

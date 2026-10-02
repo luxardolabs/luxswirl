@@ -13,17 +13,14 @@ from fastapi.responses import HTMLResponse
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.auth_deps import (
-    CurrentUserWeb,
-    EditorUserWeb,
-)
 from app.db import get_db
 from app.services.views.alert_form_view_service import AlertFormViewService
 from app.services.views.alerts_view_service import AlertsViewService
 from app.services.views.checks_view_service import ChecksViewService
+from app.web.deps import CurrentUserWeb, EditorUserWeb
 from app.web.hx_responses import hx_close_panel_and_refresh, hx_empty_with_toast
 from app.web.render import render_log_row
-from app.web.templates_config import templates
+from app.web.templates import templates
 
 logger = get_logger("luxswirl.web.alerts")
 

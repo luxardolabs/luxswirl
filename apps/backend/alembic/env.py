@@ -15,7 +15,18 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 config = context.config
 
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    # disable_existing_loggers=False, which is NOT fileConfig's default. The
+    # default sets `disabled = True` on every logger the ini does not name — and
+    # alembic.ini names only alembic's own — so a plain fileConfig() here kills
+    # the whole `luxswirl.*` namespace in the calling process.
+    #
+    # Harmless when alembic runs as its own process (the container CMD), fatal
+    # when it shares one: the test harness migrates in-process at session start,
+    # so the first DB test silently switched the application's logging off for
+    # the rest of the run. Nothing failed — log assertions just went blind, which
+    # is how the audit-trail tests for the synthetic-check gate came to pass
+    # alone and fail in the suite.
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 # Target metadata for autogenerate support.
 target_metadata = Base.metadata

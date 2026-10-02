@@ -171,17 +171,23 @@ destructive = [
 # on /settings is authenticated and not authorized. Only the admin surfaces have
 # a crisp single contract; /agents, /checks and /jobs deliberately mix viewer
 # reads with editor writes, so declaring one dep for them would be a fiction.
+# These prefixes are the WEB surface (the JSON API is under /api/v1), so the
+# required dep is the _Web variant ONLY. Accepting either spelling is what let a
+# web page answer a JSON 403 into an HTMX swap target for nine handlers: the rule
+# was green because the declaration permitted both, not because the routes were
+# right. A declaration that accepts both spellings cannot check the thing the two
+# spellings differ on.
 [[target.authz.signature]]
 prefix = "/settings"
-require_dep = ["AdminUser", "AdminUserWeb", "require_admin", "require_admin_web"]
+require_dep = ["AdminUserWeb", "require_admin_web"]
 
 [[target.authz.signature]]
 prefix = "/registration-keys"
-require_dep = ["AdminUser", "AdminUserWeb", "require_admin", "require_admin_web"]
+require_dep = ["AdminUserWeb", "require_admin_web"]
 
 [[target.authz.signature]]
 prefix = "/scheduler"
-require_dep = ["AdminUser", "AdminUserWeb", "require_admin", "require_admin_web"]
+require_dep = ["AdminUserWeb", "require_admin_web"]
 
 [[target.authz.signature]]
 prefix = "/database-health"

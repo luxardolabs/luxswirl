@@ -9,7 +9,7 @@ from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.auth_deps import AdminUser, CurrentUser
+from app.api.deps import AdminUser, CurrentUser
 from app.core.config import settings
 from app.core.rate_limit import limiter
 from app.core.request_helpers import client_ip_from_request

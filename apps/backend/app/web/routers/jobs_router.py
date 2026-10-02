@@ -10,17 +10,14 @@ from fastapi.responses import HTMLResponse
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.auth_deps import (
-    CurrentUserWeb,
-    EditorUserWeb,
-)
 from app.core.query_params import JobStatusFilter, JobTypeFilter, PerPageFilter
 from app.db import get_db
 from app.services.views.job_bulk_check_view_service import JobBulkCheckViewService
 from app.services.views.jobs_view_service import JobsViewService
+from app.web.deps import CurrentUserWeb, EditorUserWeb
 from app.web.hx_responses import hx_empty_with_toast
 from app.web.render import bulk_check_response
-from app.web.templates_config import templates
+from app.web.templates import templates
 
 logger = get_logger("luxswirl.web.routers.jobs")
 

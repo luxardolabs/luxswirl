@@ -13,9 +13,9 @@ from pydantic import ValidationError
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.auth_deps import AuthedUser
 from app.core.datetime_utils import utc_now
 from app.models.enum_model import UserRole, options_for
+from app.schemas.auth_schema import AuthedUser
 from app.schemas.pagination_schema import build_pagination
 from app.schemas.user_schema import UserCreate, UserResponse, UserUpdate, UserUrls
 from app.services.core.auth_core_service import AuthCoreService

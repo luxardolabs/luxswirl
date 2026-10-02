@@ -11,8 +11,7 @@ from uuid import UUID
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.auth_deps import AuthedUser
-from app.schemas.auth_schema import ChangePasswordRequest, CurrentUserDTO
+from app.schemas.auth_schema import AuthedUser, ChangePasswordRequest, CurrentUserDTO
 from app.services.core.auth_core_service import AuthCoreService
 from app.services.core.settings_core_service import SettingsCoreService
 

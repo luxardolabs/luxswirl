@@ -16,7 +16,7 @@ from fastapi.responses import HTMLResponse
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.auth_deps import AuthedUser
+from app.schemas.auth_schema import AuthedUser
 from app.schemas.notification_provider_schema import (
     NotificationProviderCreate,
     NotificationProviderInDB,

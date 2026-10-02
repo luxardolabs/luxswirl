@@ -16,17 +16,17 @@ from fastapi.responses import Response, StreamingResponse
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.auth_deps import AuthedUser
 from app.core.datetime_utils import utc_now
 from app.core.exceptions import AgentNotFoundException
 from app.models.enum_model import CheckType, MaintenanceJobKind
 from app.schemas.agent_schema import AgentResponse
+from app.schemas.auth_schema import AuthedUser
 from app.schemas.check_schema import CheckCreate, CheckInDB, CheckUpdate
 from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.check_core_service import CheckCoreService
 from app.services.core.maintenance_job_core_service import MaintenanceJobCoreService
 from app.services.views._job_status import build_job_status_context
-from app.web.templates_config import templates
+from app.web.templates import templates
 
 logger = get_logger("luxswirl.web.services.import_export")
 
