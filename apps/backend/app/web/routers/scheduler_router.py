@@ -13,11 +13,11 @@ from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 from shared.logger import get_logger
 
-from app.core.auth_deps import AdminUserWeb
 from app.services.views.scheduler_view_service import SchedulerViewService
+from app.web.deps import AdminUserWeb
 from app.web.hx_responses import hx_empty_with_toast, hx_toast_trigger
 from app.web.render import error_partial
-from app.web.templates_config import templates
+from app.web.templates import templates
 
 logger = get_logger("luxswirl.web.routers.scheduler")
 

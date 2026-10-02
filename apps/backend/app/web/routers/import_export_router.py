@@ -10,11 +10,11 @@ from fastapi.responses import HTMLResponse
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.auth_deps import AdminUserWeb
 from app.core.exceptions import AgentNotFoundException
 from app.db import get_db
 from app.services.views.import_export_view_service import ImportExportViewService
-from app.web.templates_config import templates
+from app.web.deps import AdminUserWeb
+from app.web.templates import templates
 
 logger = get_logger("luxswirl.web.import_export")
 

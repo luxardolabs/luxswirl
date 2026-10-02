@@ -15,19 +15,19 @@ from fastapi.responses import HTMLResponse
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.auth_deps import AuthedUser
 from app.core.config import settings
 from app.core.datetime_utils import utc_now
 from app.core.exceptions import AgentNotFoundException
 from app.models.enum_model import MaintenanceJobKind
 from app.schemas.agent_schema import AgentResponse, AgentUpdate, AgentUrls
+from app.schemas.auth_schema import AuthedUser
 from app.schemas.pagination_schema import build_pagination
 from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.check_core_service import CheckCoreService
 from app.services.core.maintenance_job_core_service import MaintenanceJobCoreService
 from app.services.core.settings_core_service import SettingsCoreService
 from app.web.hx_responses import hx_empty_with_toast
-from app.web.templates_config import templates
+from app.web.templates import templates
 
 logger = get_logger("luxswirl.web.services.agents")
 

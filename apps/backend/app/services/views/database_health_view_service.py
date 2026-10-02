@@ -9,7 +9,7 @@ from fastapi import Request
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.auth_deps import AuthedUser
+from app.schemas.auth_schema import AuthedUser
 from app.services.core.timescale_core_service import TimescaleCoreService
 
 logger = get_logger("luxswirl.web.services.database_health")

@@ -11,7 +11,7 @@ from fastapi import Request, Response
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.auth_deps import AuthedUser
+from app.schemas.auth_schema import AuthedUser
 from app.schemas.pagination_schema import build_pagination
 from app.schemas.setting_schema import SettingResponse, SettingUrls
 from app.services.core.alert_core_service import AlertCoreService
@@ -21,7 +21,7 @@ from app.services.core.settings_core_service import SettingsCoreService
 from app.services.core.timescale_core_service import TimescaleCoreService
 from app.services.core.user_core_service import UserCoreService
 from app.web.template_filters import update_settings_cache
-from app.web.templates_config import templates
+from app.web.templates import templates
 
 logger = get_logger("luxswirl.web.services.settings")
 

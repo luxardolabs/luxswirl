@@ -12,7 +12,7 @@ from fastapi import Request, Response
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.auth_deps import AuthedUser
+from app.schemas.auth_schema import AuthedUser
 from app.services.core.artifact_core_service import ArtifactCoreService
 
 logger = get_logger("luxswirl.web.services.artifacts")

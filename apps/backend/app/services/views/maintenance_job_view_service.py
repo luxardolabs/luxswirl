@@ -6,7 +6,7 @@ from uuid import UUID
 from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.auth_deps import AuthedUser
+from app.schemas.auth_schema import AuthedUser
 from app.schemas.maintenance_job_schema import MaintenanceJobResponse
 from app.services.core.maintenance_job_core_service import MaintenanceJobCoreService
 from app.services.views._job_status import build_job_status_context

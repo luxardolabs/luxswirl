@@ -9,10 +9,10 @@ from fastapi.responses import HTMLResponse
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.auth_deps import AdminUserWeb
 from app.db import get_db
 from app.services.views.database_health_view_service import DatabaseHealthViewService
-from app.web.templates_config import templates
+from app.web.deps import AdminUserWeb
+from app.web.templates import templates
 
 logger = get_logger("luxswirl.web.database_health")
 

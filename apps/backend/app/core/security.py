@@ -305,9 +305,9 @@ async def require_editor_web(
     return current_user
 
 
-# Typed dependency aliases (CurrentUser, AdminUserWeb, …) live in
-# app/core/auth_deps.py — NOT here — to avoid a models-init circular import
-# (see that module's docstring).
+# Typed dependency aliases live with their SURFACE, not here: `app/api/deps`
+# (refuses with 401/403) and `app/web/deps` (refuses with a redirect). The two
+# differ in how they refuse, and that difference is the surface's contract.
 
 
 # ========================================================================

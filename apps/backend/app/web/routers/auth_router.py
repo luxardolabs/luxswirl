@@ -11,7 +11,6 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.auth_deps import OptionalUserWeb
 from app.core.config import settings
 from app.core.rate_limit import limiter
 from app.core.request_helpers import client_ip_from_request
@@ -19,7 +18,8 @@ from app.db import get_db
 from app.schemas.auth_schema import ChangePasswordRequest
 from app.services.views.web_auth_view_service import WebAuthViewService
 from app.services.views.web_users_view_service import WebUsersViewService
-from app.web.templates_config import templates
+from app.web.deps import OptionalUserWeb
+from app.web.templates import templates
 
 logger = get_logger("luxswirl.web.routers.auth")
 

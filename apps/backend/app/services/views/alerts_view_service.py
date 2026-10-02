@@ -12,9 +12,9 @@ from fastapi.responses import HTMLResponse
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.auth_deps import AuthedUser
 from app.models.enum_model import AlertTriggerType
 from app.schemas.alert_schema import AlertCreate, AlertUpdate
+from app.schemas.auth_schema import AuthedUser
 from app.services.core.alert_core_service import AlertCoreService
 from app.services.core.check_core_service import CheckCoreService
 from app.services.core.notification_core_service import NotificationCoreService

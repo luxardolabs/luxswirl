@@ -14,7 +14,6 @@ from fastapi.responses import Response
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.auth_deps import AuthedUser
 from app.core.check_target_validator import CheckTargetBlockedError
 from app.core.exceptions import (
     AgentNotFoundException,
@@ -22,6 +21,7 @@ from app.core.exceptions import (
 )
 from app.core.synthetic_security import SyntheticSecurityError
 from app.models.enum_model import CheckType, MaintenanceJobKind, options_for
+from app.schemas.auth_schema import AuthedUser
 from app.schemas.check_schema import (
     BulkCheckCreateRequest,
     CheckCreate,
@@ -37,7 +37,7 @@ from app.services.core.maintenance_job_core_service import MaintenanceJobCoreSer
 from app.services.core.settings_core_service import SettingsCoreService
 from app.services.views._job_status import build_job_status_context
 from app.web.hx_responses import hx_close_panel_and_refresh, hx_empty_with_toast
-from app.web.templates_config import templates
+from app.web.templates import templates
 
 logger = get_logger("luxswirl.web.services.checks")
 

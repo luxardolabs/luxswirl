@@ -14,9 +14,9 @@ from fastapi import Request
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.auth_deps import AuthedUser
 from app.core.query_params import split_csv
 from app.models.enum_model import CheckHealthStatus, CheckType, MaintenanceJobKind
+from app.schemas.auth_schema import AuthedUser
 from app.schemas.pagination_schema import build_pagination
 from app.schemas.status_page_schema import (
     StatusPageCreate,

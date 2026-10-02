@@ -14,15 +14,19 @@ from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import attributes
 
+from app.core.check_config import pack_config, take_config_updates
 from app.core.check_target_validator import validate_check_target
 from app.core.datetime_utils import utc_now
 from app.core.exceptions import (
     AgentNotFoundException,
-    AuthorizationException,
     CheckNotFoundException,
     ValidationException,
 )
-from app.core.synthetic_security import SyntheticSecurityError, validate_and_raise
+from app.core.synthetic_guard import (
+    SYNTHETIC,
+    require_admin_actor,
+    validate_script,
+)
 from app.crud.check_crud import CheckCRUD
 from app.crud.check_result_crud import CheckResultCRUD
 from app.models.check_model import Check
@@ -98,74 +102,17 @@ class CheckCoreService:
             db, getattr(data, "depends_on_check_id", None), own_check_id=None
         )
 
-        # Pack check-type-specific fields into check_config JSONB (filter by check type)
-        check_config = {}
+        check_config = pack_config(data, data.check_type)
 
-        # Define which fields are valid for each check type
-        type_fields = {
-            "http": ["http_method", "verify_ssl", "expected_status"],
-            "json": [
-                "http_method",
-                "verify_ssl",
-                "expected_status",
-                "json_path",
-                "expected_value",
-            ],
-            "dns": ["record_type", "nameserver", "port", "expect_value"],
-            "mysql": ["connection_string", "query"],
-            "postgres": ["connection_string", "query"],
-        }
-
-        # Get relevant fields for this check type
-        relevant_fields = type_fields.get(data.check_type, [])
-
-        for field in relevant_fields:
-            value = getattr(data, field, None)
-            # Only store non-None, non-empty values
-            if value is not None and value != "":
-                check_config[field] = value
-
-        # Authoritative function-level authz (OWASP API5). Synthetic checks execute
-        # arbitrary Python on the agent host, so only an admin actor may create them.
-        # Enforced here — not just in the web view — so the JSON API path cannot bypass
-        # it. API Bearer tokens are admin-equivalent and pass actor_is_admin=True (see
-        # SECURITY.md); the AST validator below is hardening, NOT the access control.
-        if data.check_type == "synthetic" and not actor_is_admin:
-            raise AuthorizationException("Synthetic checks require admin privileges")
-
-        # Security: Validate synthetic check scripts using AST analysis
-        # This blocks obvious attacks but is not a complete sandbox
-        # Synthetic checks should only be used in trusted, self-hosted environments
-        if (
-            data.check_type == "synthetic"
-            and hasattr(data, "script_code")
-            and data.script_code
-        ):
-            try:
-                validate_and_raise(data.script_code)
-                # SECURITY AUDIT: Log successful validation
-                logger.warning(
-                    "SECURITY AUDIT: Synthetic check script validation passed",
-                    extra={
-                        "event": "synthetic_check_create",
-                        "check_name": data.display_name,
-                        "agent_id": str(agent_id),
-                        "script_length": len(data.script_code),
-                        "action": "CREATE",
-                    },
+        if data.check_type == SYNTHETIC:
+            require_admin_actor(actor_is_admin=actor_is_admin)
+            if getattr(data, "script_code", None):
+                validate_script(
+                    data.script_code,
+                    action="CREATE",
+                    check_name=data.display_name,
+                    agent_id=str(agent_id),
                 )
-            except SyntheticSecurityError:
-                # SECURITY AUDIT: Log failed validation
-                logger.exception(
-                    "SECURITY AUDIT: Synthetic check script validation FAILED",
-                    extra={
-                        "event": "synthetic_check_blocked",
-                        "check_name": data.display_name,
-                        "agent_id": str(agent_id),
-                        "action": "CREATE",
-                    },
-                )
-                raise
 
         # Create new check (UUID-based, no composite key duplication check needed)
         check = Check(
@@ -583,62 +530,20 @@ class CheckCoreService:
                 db, update_data["depends_on_check_id"], own_check_id=check.id
             )
 
-        # Define which fields are valid for each check type
-        type_fields = {
-            "http": ["http_method", "verify_ssl", "expected_status"],
-            "json": [
-                "http_method",
-                "verify_ssl",
-                "expected_status",
-                "json_path",
-                "expected_value",
-            ],
-            "dns": ["record_type", "nameserver", "port", "expect_value"],
-            "mysql": ["connection_string", "query"],
-            "postgres": ["connection_string", "query"],
-        }
-
-        # All possible config fields (must be removed from update_data)
-        all_config_fields = [
-            "http_method",
-            "verify_ssl",
-            "expected_status",
-            "json_path",
-            "expected_value",
-            "record_type",
-            "nameserver",
-            "port",
-            "expect_value",
-            "connection_string",
-            "query",
-        ]
-
-        # Get the check type (from update data or existing check)
+        # The check type after this update, which decides which config fields apply.
         check_type = update_data.get("check_type", check.check_type)
-        relevant_fields = type_fields.get(check_type, [])
 
-        # Authz (OWASP API5): only an admin actor may turn a check into a synthetic one
-        # or change a synthetic check's script (arbitrary code on the agent host).
-        # Enforced in core so the JSON API path cannot bypass the web-layer gate.
-        changing_to_synthetic = update_data.get("check_type") == "synthetic"
-        changing_synthetic_script = check.check_type == "synthetic" and bool(
+        # Authz (OWASP API5): turning a check INTO a synthetic one, or changing an
+        # existing synthetic check's script, both put arbitrary code on an agent host.
+        changing_to_synthetic = update_data.get("check_type") == SYNTHETIC
+        changing_synthetic_script = check.check_type == SYNTHETIC and bool(
             update_data.get("script_code")
         )
-        if (changing_to_synthetic or changing_synthetic_script) and not actor_is_admin:
-            raise AuthorizationException("Synthetic checks require admin privileges")
+        if changing_to_synthetic or changing_synthetic_script:
+            require_admin_actor(actor_is_admin=actor_is_admin)
 
-        # Update check_config fields (only relevant fields for this check type)
-        config_updates = {}
-        for field in relevant_fields:
-            if field in update_data:
-                value = update_data.pop(field)
-                # Only store non-None, non-empty values
-                if value is not None and value != "":
-                    config_updates[field] = value
-
-        # Remove ALL remaining config fields from update_data (they're not direct model fields)
-        for field in all_config_fields:
-            update_data.pop(field, None)
+        # Pops every config name out of update_data, so what is left is columns.
+        config_updates = take_config_updates(update_data, check_type)
 
         logger.info(
             "Config updates",
@@ -665,37 +570,13 @@ class CheckCoreService:
                 },
             )
 
-        # Security: Validate synthetic check scripts if script_code is being updated
-        if (
-            check_type == "synthetic"
-            and "script_code" in update_data
-            and update_data.get("script_code")
-        ):
-            try:
-                validate_and_raise(update_data["script_code"])
-                # SECURITY AUDIT: Log successful validation
-                logger.warning(
-                    "SECURITY AUDIT: Synthetic check script validation passed",
-                    extra={
-                        "event": "synthetic_check_update",
-                        "check_id": str(check_id),
-                        "check_name": check.display_name,
-                        "script_length": len(update_data["script_code"]),
-                        "action": "UPDATE",
-                    },
-                )
-            except SyntheticSecurityError:
-                # SECURITY AUDIT: Log failed validation
-                logger.exception(
-                    "SECURITY AUDIT: Synthetic check script validation FAILED",
-                    extra={
-                        "event": "synthetic_check_blocked",
-                        "check_id": str(check_id),
-                        "check_name": check.display_name,
-                        "action": "UPDATE",
-                    },
-                )
-                raise
+        if check_type == SYNTHETIC and update_data.get("script_code"):
+            validate_script(
+                update_data["script_code"],
+                action="UPDATE",
+                check_id=str(check_id),
+                check_name=check.display_name,
+            )
 
         # Update direct model fields
         for field, value in update_data.items():

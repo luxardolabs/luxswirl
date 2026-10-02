@@ -9,7 +9,7 @@ from typing import Any
 
 from fastapi import Request
 
-from app.core.auth_deps import AuthedUser
+from app.schemas.auth_schema import AuthedUser
 from app.schemas.maintenance_job_schema import MaintenanceJobResponse
 
 

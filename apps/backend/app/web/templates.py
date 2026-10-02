@@ -1,6 +1,12 @@
-"""Centralized Jinja2 templates configuration for all web routers.
+"""The ONE shared Jinja2Templates instance.
 
-Import `templates` from this module instead of creating new Jinja2Templates instances.
+Import `templates` from here; never construct another. A second instance gets
+its own `env`, so the filters registered below and `StrictUndefined` would apply
+to some renders and not others.
+
+Named `templates.py` per FLEET-LAYOUT-STANDARD §2 (it was `templates_config.py`).
+`app.web.templates` the module and `app/templates/` the directory do not
+collide — the directory is a sibling of `app/web/`, not inside it.
 """
 
 from pathlib import Path

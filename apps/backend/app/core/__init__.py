@@ -19,7 +19,7 @@ from app.core.exceptions import (
 # the user model and the auth service, which need the models package. That cycle
 # is what forced six "import here to avoid circular dependency" bodies inside
 # security.py, database_maintenance.py and scheduler_init.py, plus the whole of
-# core/auth_deps.py's existence. Nothing imported the three re-exported names
+# the dependency-alias module's existence. Nothing imported the three re-exported names
 # from `app.core` (every call site imports `app.core.security` directly), so the
 # façade cost a cycle and bought nothing.
 

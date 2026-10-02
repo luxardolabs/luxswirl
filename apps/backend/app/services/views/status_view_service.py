@@ -14,9 +14,9 @@ from fastapi import Request
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.auth_deps import AuthedUser
 from app.core.datetime_utils import utc_now
 from app.core.query_params import split_csv
+from app.schemas.auth_schema import AuthedUser
 from app.schemas.check_schema import DashboardCheck, DashboardCheckAgent
 from app.schemas.pagination_schema import build_pagination
 from app.services.core.agent_core_service import AgentCoreService

@@ -11,17 +11,14 @@ from fastapi.responses import HTMLResponse
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.auth_deps import (
-    CurrentUserWeb,
-    EditorUserWeb,
-)
 from app.core.exceptions import AgentNotFoundException
 from app.core.query_params import PerPageFilter
 from app.db import get_db
 from app.services.views.agents_view_service import AgentsViewService
 from app.services.views.maintenance_job_view_service import MaintenanceJobViewService
+from app.web.deps import CurrentUserWeb, EditorUserWeb
 from app.web.render import status_message
-from app.web.templates_config import templates
+from app.web.templates import templates
 
 logger = get_logger("luxswirl.web.routers.agents")
 

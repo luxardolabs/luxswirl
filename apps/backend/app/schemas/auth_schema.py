@@ -43,6 +43,23 @@ class CurrentUserDTO(BaseModel):
         return utc_now() < self.locked_until
 
 
+# The authenticated principal for layers that RECEIVE the user as a positional
+# argument rather than through Depends() — view services, which routers hand
+# `current_user` down to.
+#
+# It lives beside CurrentUserDTO rather than with the dependency aliases,
+# because it is NOT a dependency: it has no Depends() in it, and the two
+# dependency modules are split by how they refuse (app/api/deps vs
+# app/web/deps), which has nothing to say about a type a view service takes.
+#
+# It is the DTO, NOT an alias of the User ORM model. A bare `type AuthedUser =
+# User` (what this used to be) only moves the import line: the ORM row still
+# crosses the view seam, so the lazy-load-out-of-session risk and the DB-schema
+# coupling both stay fully intact while the guard can no longer see them. See
+# `luxarch --playbook view-seam`.
+type AuthedUser = CurrentUserDTO
+
+
 class LoginRequest(BaseModel):
     """Request schema for user login."""
 

@@ -9,11 +9,11 @@ from fastapi.responses import HTMLResponse
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.auth_deps import CurrentUserWeb
 from app.db import get_db
 from app.services.views.profile_view_service import ProfileViewService
+from app.web.deps import CurrentUserWeb
 from app.web.render import status_message
-from app.web.templates_config import templates
+from app.web.templates import templates
 
 logger = get_logger("luxswirl.web.routers.profile")
 

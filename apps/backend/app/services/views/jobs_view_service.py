@@ -17,12 +17,12 @@ from shared.jobs.network_scan import NetworkScanJob
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.auth_deps import AuthedUser
 from app.core.exceptions import NotFoundException
 from app.core.scan_panel import build_scan_view
 from app.models.enum_model import SERVER_RUNNER, JobStatus, JobType
+from app.schemas.auth_schema import AuthedUser
 from app.schemas.job_schema import JobCreate, JobInDB, JobUrls, ScanActionUrls
-from app.schemas.pagination_schema import build_pagination
+from app.schemas.pagination_schema import build_pagination, paginated_url
 from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.check_core_service import CheckCoreService
 from app.services.core.job_core_service import JobCoreService
@@ -419,6 +419,14 @@ class JobsViewService:
 
         return {
             "create_form_url": request.url_for("job_create_form").path,
+            # Finished hrefs, resolved by ROUTE NAME. The page used to spell
+            # '/jobs/partials/table' and '/jobs' into the template, so moving
+            # either route would have left a dead poll and dead pagination links
+            # with nothing failing loudly (fw.url_assembly_in_view).
+            "table_url": paginated_url(
+                request.url_for("jobs_table_partial").path, pagination
+            ),
+            "page_url": request.url_for("jobs_page").path,
             "request": request,
             "current_user": current_user,
             "summary": summary,

@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.auth_deps import AdminUser
+from app.api.deps import AdminUser
 from app.core.config import settings
 from app.core.query_params import ActiveFilter
 from app.core.rate_limit import limiter

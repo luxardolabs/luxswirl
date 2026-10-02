@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, Query
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.auth_deps import AdminUserWeb
+from app.api.deps import AdminUser
 from app.db import get_db
 from app.schemas.setting_schema import DatabaseGrowthResponse
 from app.services.core.timescale_core_service import TimescaleCoreService
@@ -25,7 +25,7 @@ router = APIRouter(tags=["Database Health"])
 @router.get("/database-health/chart-data", response_model=DatabaseGrowthResponse)
 async def database_growth_chart_data(
     db: Annotated[AsyncSession, Depends(get_db)],
-    current_user: AdminUserWeb,
+    current_user: AdminUser,
     hours: Annotated[
         int, Query(ge=1, le=8760, description="Hours of data to fetch")
     ] = 168,
