@@ -8,6 +8,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.core.datetime_utils import utc_now
+
 
 class BaseSchema(BaseModel):
     """Base schema with common configuration."""
@@ -95,5 +97,5 @@ class ErrorResponse(BaseSchema):
     message: str = Field(..., description="Human-readable error message")
     details: dict[str, Any] | None = Field(None, description="Additional error details")
     timestamp: datetime = Field(
-        default_factory=datetime.utcnow, description="When the error occurred"
+        default_factory=utc_now, description="When the error occurred (UTC)"
     )
