@@ -36,12 +36,39 @@ def str_enum[EnumT: PyEnum](enum_cls: type[EnumT], length: int) -> Enum:
     )
 
 
-# luxarch:naming-convention asset v1 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit naming-convention`.
-# Hand-written notes moved out of the way: this block is an emitted asset and the
-# marker above is what makes its currency checkable. The reasoning (column_0_N_name
-# names ALL columns, so two multi-column constraints sharing a leading column cannot
-# collide at DDL time) lives in the asset's own docstring — `luxarch --emit
-# naming-convention` — and in the alembic playbook.
+# luxarch:naming-convention asset v3 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit naming-convention`.
+# Canonical fleet SQLAlchemy MetaData naming convention — emitted by `luxarch --emit naming-convention`.
+#
+# Constraint and index names end up IN THE DATABASE, so every repo must use the SAME convention or
+# autogenerate churns and names can't be cleanly ALTER'd across repos. Required by
+# `repo.metadata_naming_convention`.
+#
+# THE KEY DETAIL — use `column_0_N_name` (ALL columns), NOT `column_0_name` / `column_0_label` (the FIRST
+# column only). Two multi-column constraints that share a leading column would otherwise generate the SAME
+# name and collide the moment DDL runs (asyncpg DuplicateTableError) — silent until create_all/migrate.
+# The SQLAlchemy-docs example uses the first-column-only forms; do NOT copy it (in one repo it collided
+# and failed 392 tests). `repo.metadata_naming_convention` flags the first-column-only forms for this
+# reason.
+#
+# Note: Postgres truncates identifiers at 63 characters, so `column_0_N_name` on a wide constraint
+# truncates — that is expected, not a bug.
+#
+# Usage:
+#
+#     from sqlalchemy import MetaData
+#     from sqlalchemy.orm import DeclarativeBase
+#
+#     metadata = MetaData(naming_convention=NAMING_CONVENTION)
+#
+#     class Base(DeclarativeBase):
+#         metadata = metadata
+#
+# Adopting on a MATURE schema: the next `alembic revision --autogenerate` will propose renaming existing
+# constraints to match the convention. Review that migration and apply it deliberately (name-only ALTERs) —
+# see `luxarch --playbook alembic`.
+#
+# Pasted as a block (comments and the dict) below your models module's own docstring.
+
 NAMING_CONVENTION = {
     "ix": "ix_%(table_name)s_%(column_0_N_name)s",
     "uq": "uq_%(table_name)s_%(column_0_N_name)s",
@@ -243,7 +270,10 @@ class UUIDBaseModel(
     def __repr__(self) -> str:
         """Generate a helpful repr string."""
         attrs = []
-        for key in self.__mapper__.columns:
+        # The mapped attribute KEYS: iterating `__mapper__.columns` yields Column
+        # objects, which getattr() rejects (TypeError on every repr).
+        for prop in self.__mapper__.column_attrs:
+            key = prop.key
             if key != "id":
                 value = getattr(self, key, None)
                 if value is not None:

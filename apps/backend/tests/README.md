@@ -54,11 +54,11 @@ ______________________________________________________________________
 
 Every test must be tagged with a marker:
 
-| Marker                     | When to use                                                                                                                   | Speed                     | Requires                 |
-| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ------------------------- | ------------------------ |
-| `@pytest.mark.pure`        | Logic that touches no I/O. State-key computation, dedup decision rules, parsing, formatting.                                  | Milliseconds per test.    | Nothing.                 |
-| `@pytest.mark.integration` | Anything that hits the DB. CRUD methods, service methods that own transactions, queries that exercise indexes or constraints. | ~tens of ms per test.     | `make test-db-up` first. |
-| `@pytest.mark.api`         | Full request → response. FastAPI TestClient with overridden auth.                                                             | ~hundreds of ms per test. | DB up + app importable.  |
+| Marker                     | When to use                                                                                                                   | Speed                     | Requires                  |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ------------------------- | ------------------------- |
+| `@pytest.mark.pure`        | Logic that touches no I/O. State-key computation, dedup decision rules, parsing, formatting.                                  | Milliseconds per test.    | Nothing.                  |
+| `@pytest.mark.integration` | Anything that hits the DB. CRUD methods, service methods that own transactions, queries that exercise indexes or constraints. | ~tens of ms per test.     | `make test` brings it up. |
+| `@pytest.mark.api`         | Full request → response. FastAPI TestClient with overridden auth.                                                             | ~hundreds of ms per test. | DB up + app importable.   |
 
 Use `pytestmark = pytest.mark.<tier>` at the module level (not per-test) when every test in the file is the same tier — which it almost always is, because files are organized by tier within a domain.
 
@@ -79,7 +79,7 @@ Previous LLM-generated tests in other projects were fabricated: mocked all depen
 
 1. **No mocks in pure logic tests.** If a module is pure logic, test it directly. No `unittest.mock`, no patching, no faking. If you need to mock something to test it, that module isn't pure and the test belongs in the `integration` tier with a real fixture.
 
-1. **Real DB in integration tests.** Integration tests run against an actual TimescaleDB (`compose.test.yaml`) on tmpfs. No SQLite. No in-memory fake. Indexes, JSONB, hypertables, asyncpg behavior all match production.
+1. **Real DB in integration tests.** Integration tests run against an actual TimescaleDB (the `timescaledb-test` service in `compose.yml`, profile `test`) on tmpfs. No SQLite. No in-memory fake. Indexes, JSONB, hypertables, asyncpg behavior all match production.
 
 ### What this catches
 
@@ -92,38 +92,18 @@ ______________________________________________________________________
 ## How to Run
 
 ```bash
-# Fast feedback loop (pure tests only — no DB needed)
-make test-pure                   # tests/ -m pure
+# THE suite: the test image built from current source, a fresh TimescaleDB in a
+# compose project of its own, branch coverage judged against [test].coverage_min
+make test
 
-# Integration tests (brings the test DB up if needed)
-make test-integration            # tests/ -m integration
-
-# Everything
-make test-all                    # pure + integration
-
-# Bring the test DB up / down explicitly
-make test-db-up                  # docker compose -f compose.test.yaml up -d
-make test-db-down                # docker compose -f compose.test.yaml down -v
-
-# Mutation testing (slow — ~minutes per module)
-make mutmut-alerts               # mutate services/core/alert_core_service.py
-make mutmut-results              # show surviving mutants
+# One-off narrowing (never committed) — any pytest arguments
+make test PYTEST_ARGS='tests/alerts/test_state_key.py'
+make test PYTEST_ARGS='tests/alerts/test_alert_crud_integration.py::TestGetLastNotificationForDedup::test_no_history_returns_none'
+make test PYTEST_ARGS='-m integration'
+make test PYTEST_ARGS='-m "not integration"'
 ```
 
-### Running a single test file or test
-
-```bash
-# Inside the test container
-docker exec luxswirl_tests python -m pytest tests/alerts/test_state_key.py -v
-
-# A single test
-docker exec luxswirl_tests python -m pytest \
-  tests/alerts/test_alert_crud_integration.py::TestGetLastNotificationForDedup::test_no_history_returns_none -v
-
-# Filtered by marker
-docker exec luxswirl_tests python -m pytest tests/alerts/ -m integration
-docker exec luxswirl_tests python -m pytest tests/alerts/ -m "not integration"
-```
+Each run starts and tears down its own database, so there is nothing to bring up first and two runs never collide. A narrowed run still measures coverage against the whole package, so expect the ratchet to fail it; only the full `make test` is the gate.
 
 ______________________________________________________________________
 
@@ -224,4 +204,4 @@ ______________________________________________________________________
 - LUXSWIRL-127 — tracking issue for bringing coverage to target
 - LUXSWIRL-128 — Black + Ruff sweep before OSS publish
 - `tests/_paths.py` — layout-aware helpers (host + container)
-- `compose.test.yaml` — test DB on tmpfs
+- `compose.yml` (profile `test`) — test DB on tmpfs

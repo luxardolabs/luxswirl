@@ -4,7 +4,9 @@
 FROM python:3.14-slim
 
 WORKDIR /app
-RUN pip install --no-cache-dir poetry==1.8.2 && poetry config virtualenvs.create false
+# The Poetry that writes this repo's locks (Makefile POETRY_VERSION, repo.poetry_version_consistent).
+ARG POETRY_VERSION=2.5.1
+RUN pip install --no-cache-dir "poetry==${POETRY_VERSION}" && poetry config virtualenvs.create false
 
 # Deps (incl. dev group: ruff, mypy, import-linter) — cached on lock changes.
 COPY apps/backend/pyproject.toml apps/backend/poetry.lock* /app/
