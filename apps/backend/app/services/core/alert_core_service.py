@@ -7,7 +7,7 @@ import fnmatch
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import cast
+from typing import Any, cast
 from uuid import UUID
 
 from shared.logger import get_logger
@@ -25,7 +25,13 @@ from app.models.check_result_model import CheckResult
 from app.models.enum_model import NotificationStatus
 from app.models.notification_log_model import NotificationLog
 from app.notifications.providers.base import NotificationContext
-from app.schemas.alert_schema import AlertCreate, AlertUpdate
+from app.schemas.alert_schema import (
+    AlertCreate,
+    AlertListResponse,
+    AlertResponse,
+    AlertUpdate,
+)
+from app.schemas.pagination_schema import build_pagination
 from app.services.core.notification_core_service import NotificationCoreService
 
 logger = get_logger("luxswirl.services.alert")
@@ -105,6 +111,60 @@ class AlertCoreService:
             is_global=is_global,
             include_deleted=include_deleted,
         )
+
+    @staticmethod
+    async def list_alerts_page(
+        db: AsyncSession,
+        *,
+        page: int,
+        per_page: int,
+        is_enabled: bool | None = None,
+        is_global: bool | None = None,
+    ) -> AlertListResponse:
+        """One page of alerts for the JSON API.
+
+        Args:
+            db: Database session
+            page: 1-based page number
+            per_page: Alerts per page
+            is_enabled: Filter by enabled status
+            is_global: Filter by global status
+
+        Returns:
+            The page, with its page state
+        """
+        alerts, total = await AlertCoreService.list_alerts(
+            db,
+            skip=(page - 1) * per_page,
+            limit=per_page,
+            is_enabled=is_enabled,
+            is_global=is_global,
+        )
+        items = [
+            AlertResponse(
+                id=a.id,
+                name=a.name,
+                description=a.description,
+                trigger_type=a.trigger_type,
+                trigger_config=a.trigger_config,
+                is_enabled=a.is_enabled,
+                is_global=a.is_global,
+                notify_on_recovery=a.notify_on_recovery,
+                resend_interval_minutes=a.resend_interval_minutes,
+                max_resends=a.max_resends,
+                custom_subject=a.custom_subject,
+                custom_message=a.custom_message,
+                # TODO: count the alert's providers and checks
+                notification_provider_count=0,
+                check_count=0,
+                created_at=a.created_at,
+                updated_at=a.updated_at,
+                deleted_at=a.deleted_at,
+            )
+            for a in alerts
+        ]
+        pagination = build_pagination(page=page, per_page=per_page, total=total)
+        return AlertListResponse.of(items, pagination)
 
     @staticmethod
     async def create_alert(
@@ -522,7 +582,7 @@ class AlertCoreService:
     async def _check_matches_filters(
         db: AsyncSession,
         check: Check,
-        trigger_config: dict,
+        trigger_config: dict[str, Any],
     ) -> bool:
         """
         Check if a check matches the filters in trigger_config.
@@ -669,7 +729,7 @@ class AlertCoreService:
         alert: Alert,
         check: Check,
         check_result: CheckResult,
-        config: dict,
+        config: dict[str, Any],
     ) -> bool:
         """Evaluate status_change trigger."""
         on_status = config.get("on_status", ["error"])
@@ -719,7 +779,7 @@ class AlertCoreService:
         alert: Alert,
         check: Check,
         check_result: CheckResult,
-        config: dict,
+        config: dict[str, Any],
     ) -> bool:
         """Evaluate threshold trigger (e.g., latency > 1000ms)."""
         metric = config.get("metric", "latency_ms")
@@ -738,9 +798,19 @@ class AlertCoreService:
         if current_value is None:
             return False
 
-        # Evaluate operator
-        threshold_float = cast(float, threshold_value)
-        current_float = cast(float, current_value)
+        # trigger_config is free-form JSON, so the threshold may be a number or
+        # a numeric string; anything else cannot be compared and never fires.
+        if not isinstance(threshold_value, int | float | str):
+            return False
+        try:
+            threshold_float = float(threshold_value)
+        except ValueError:
+            logger.warning(
+                "Threshold trigger value is not a number",
+                extra={"alert_id": str(alert.id), "value": threshold_value},
+            )
+            return False
+        current_float = float(current_value)
         if operator == ">":
             return bool(current_float > threshold_float)
         elif operator == ">=":
@@ -760,7 +830,7 @@ class AlertCoreService:
         alert: Alert,
         check: Check,
         check_result: CheckResult,
-        config: dict,
+        config: dict[str, Any],
     ) -> bool:
         """Evaluate repeated_failure trigger."""
         # Similar to status_change with consecutive failures
@@ -774,7 +844,7 @@ class AlertCoreService:
         alert: Alert,
         check: Check,
         check_result: CheckResult,
-        config: dict,
+        config: dict[str, Any],
     ) -> bool:
         """Evaluate ssl_cert_expiry trigger.
 
@@ -1204,7 +1274,7 @@ class AlertCoreService:
 
     @staticmethod
     async def snooze_alert_check(
-        db, alert_id: UUID, check_id: UUID, minutes: int = 15
+        db: AsyncSession, alert_id: UUID, check_id: UUID, minutes: int = 15
     ) -> AlertCheckMapping:
         """
         Snooze an alert-check relationship - temporarily pause notifications for this specific pairing.
@@ -1263,7 +1333,9 @@ class AlertCoreService:
         return mapping
 
     @staticmethod
-    async def unsnooze_alert_check(db, alert_id: UUID, check_id: UUID) -> None:
+    async def unsnooze_alert_check(
+        db: AsyncSession, alert_id: UUID, check_id: UUID
+    ) -> None:
         """
         Un-snooze an alert-check relationship - resume notifications immediately.
 

@@ -567,8 +567,8 @@ class JobCoreService:
             server_only=server_only,
             priority=priority,
             created=created,
+            skip=offset,
             limit=limit,
-            offset=offset,
         )
         return [
             JobListRow(

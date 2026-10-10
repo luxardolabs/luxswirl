@@ -6,11 +6,12 @@ from collections.abc import Sequence
 from datetime import timedelta
 from uuid import UUID
 
-from sqlalchemy import and_, delete, desc, func, select
+from sqlalchemy import ColumnElement, and_, delete, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.datetime_utils import utc_now
 from app.models.agent_model import Agent
+from app.models.enum_model import JobStatus
 from app.models.job_model import Job
 
 
@@ -28,7 +29,9 @@ class JobCRUD:
         return result.scalar_one_or_none()
 
     @staticmethod
-    def _runner_filter(agent_id: UUID | None, server_only: bool):
+    def _runner_filter(
+        agent_id: UUID | None, server_only: bool
+    ) -> ColumnElement[bool] | None:
         """Condition for the agent/server runner filter, or None for no filter.
 
         Single source of truth for "which runner ran this job": server_only maps
@@ -91,17 +94,23 @@ class JobCRUD:
 
     @staticmethod
     async def delete_expired_terminal(db: AsyncSession) -> int:
-        """Delete jobs in terminal state past their expires_at. Returns rowcount."""
+        """Delete jobs in terminal state past their expires_at; returns how many.
+
+        Counts the ids DELETE ... RETURNING hands back: typed, unlike `rowcount`.
+        The purge runs on a schedule, so each batch is what expired since the last.
+        """
         result = await db.execute(
-            delete(Job).where(
+            delete(Job)
+            .where(
                 and_(
                     Job.expires_at.is_not(None),
                     Job.expires_at < utc_now(),
                     Job.status.in_(["completed", "failed", "cancelled"]),
                 )
             )
+            .returning(Job.id)
         )
-        return result.rowcount or 0  # type: ignore[attr-defined]
+        return len(result.scalars().all())
 
     @staticmethod
     async def get_status_counts(
@@ -163,15 +172,16 @@ class JobCRUD:
     @staticmethod
     async def list_jobs_with_agents(
         db: AsyncSession,
+        *,
         status: str | None = None,
         job_type: str | None = None,
         agent_id: UUID | None = None,
         server_only: bool = False,
         priority: str | None = None,
         created: str | None = None,
+        skip: int = 0,
         limit: int = 25,
-        offset: int = 0,
-    ) -> tuple[list[tuple], int]:
+    ) -> tuple[list[tuple[Job, Agent | None]], int]:
         """
         List jobs with agent data, filtering, and pagination.
 
@@ -183,8 +193,8 @@ class JobCRUD:
             server_only: Only server-run jobs (agent_id IS NULL)
             priority: Filter by priority (high/normal/low)
             created: Filter by created time (1h/24h/7d/30d)
+            skip: Rows to skip
             limit: Max results
-            offset: Pagination offset
 
         Returns:
             Tuple of (list of (Job, Agent|None) tuples, total count)
@@ -229,14 +239,14 @@ class JobCRUD:
         total_result = await db.execute(count_query)
         total = total_result.scalar_one()
 
-        query = query.order_by(desc(Job.created_at)).limit(limit).offset(offset)
+        query = query.order_by(desc(Job.created_at)).offset(skip).limit(limit)
         result = await db.execute(query)
         rows = result.all()
 
         return [(job, agent) for job, agent in rows], total
 
     @staticmethod
-    async def get_job_status_summary(db: AsyncSession) -> dict:
+    async def get_job_status_summary(db: AsyncSession) -> dict[str, int]:
         """
         Get job status summary counts.
 
@@ -250,11 +260,10 @@ class JobCRUD:
         total_result = await db.execute(total_query)
         total = total_result.scalar_one()
 
-        status_query = select(Job.status, func.count(Job.id).label("count")).group_by(
-            Job.status
+        status_result = await db.execute(
+            select(Job.status, func.count(Job.id)).group_by(Job.status)
         )
-        status_result = await db.execute(status_query)
-        status_counts = {row.status: row.count for row in status_result.all()}
+        status_counts = dict(status_result.all())
 
         cutoff = utc_now() - timedelta(hours=1)
         active_query = select(func.count(Job.id)).where(
@@ -268,11 +277,6 @@ class JobCRUD:
 
         return {
             "total": total,
-            "pending": status_counts.get("pending", 0),
-            "assigned": status_counts.get("assigned", 0),
-            "running": status_counts.get("running", 0),
-            "completed": status_counts.get("completed", 0),
-            "failed": status_counts.get("failed", 0),
-            "cancelled": status_counts.get("cancelled", 0),
+            **{status.value: status_counts.get(status, 0) for status in JobStatus},
             "active": active_count,
         }

@@ -42,7 +42,7 @@ router = APIRouter(prefix="/notification-providers", tags=["Notification Provide
 )
 async def get_provider_types(
     _: Annotated[str, Depends(verify_api_token)],
-):
+) -> NotificationProviderTypesResponse:
     """Get available notification provider types."""
     providers = NotificationCoreService.get_available_provider_types()
 
@@ -70,43 +70,11 @@ async def list_providers(
     _: Annotated[str, Depends(verify_api_token)],
     provider_type: ProviderTypeFilter = None,
     page: Annotated[int, Query(ge=1, description="Page number")] = 1,
-    page_size: Annotated[int, Query(ge=1, le=1000, description="Items per page")] = 50,
-):
+    per_page: Annotated[int, Query(ge=1, le=1000, description="Items per page")] = 50,
+) -> NotificationProviderListResponse:
     """List all notification providers with pagination."""
-    skip = (page - 1) * page_size
-
-    providers, total = await NotificationCoreService.list_providers(
-        db=db,
-        skip=skip,
-        limit=page_size,
-        provider_type=provider_type,
-    )
-
-    # Convert to response models
-    provider_responses = [
-        NotificationProviderResponse(
-            id=p.id,
-            provider_type=p.provider_type,
-            friendly_name=p.friendly_name,
-            config=p.config,  # Will be masked by schema validator
-            is_default_enabled=p.is_default_enabled,
-            rate_limit_count=p.rate_limit_count,
-            rate_limit_window_minutes=p.rate_limit_window_minutes,
-            created_at=p.created_at,
-            updated_at=p.updated_at,
-            deleted_at=p.deleted_at,
-        )
-        for p in providers
-    ]
-
-    pages = (total + page_size - 1) // page_size
-
-    return NotificationProviderListResponse(
-        items=provider_responses,
-        total=total,
-        page=page,
-        page_size=page_size,
-        pages=pages,
+    return await NotificationCoreService.list_providers_page(
+        db, page=page, per_page=per_page, provider_type=provider_type
     )
 
 
@@ -120,7 +88,7 @@ async def get_provider(
     provider_id: Annotated[UUID, Path(description="Provider UUID")],
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[str, Depends(verify_api_token)],
-):
+) -> NotificationProviderResponse:
     """Get a specific notification provider."""
     try:
         provider = await NotificationCoreService.get_provider_by_id(db, provider_id)
@@ -152,7 +120,7 @@ async def create_provider(
     data: NotificationProviderCreate,
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[str, Depends(verify_api_token)],
-):
+) -> NotificationProviderResponse:
     """Create a new notification provider."""
     try:
         provider = await NotificationCoreService.create_provider(db, data)
@@ -188,7 +156,7 @@ async def update_provider(
     provider_id: Annotated[UUID, Path(description="Provider UUID")],
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[str, Depends(verify_api_token)],
-):
+) -> NotificationProviderResponse:
     """Update a notification provider."""
     try:
         provider = await NotificationCoreService.update_provider(db, provider_id, data)
@@ -249,7 +217,7 @@ async def test_provider(
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[str, Depends(verify_api_token)],
     data: NotificationProviderTestRequest = NotificationProviderTestRequest(),
-):
+) -> NotificationProviderTestResponse:
     """Test a notification provider by sending a test notification."""
     try:
         success, error = await NotificationCoreService.test_provider(

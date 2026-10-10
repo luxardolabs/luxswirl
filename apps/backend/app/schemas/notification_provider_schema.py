@@ -10,6 +10,7 @@ from pydantic import Field, field_validator
 
 from app.models.enum_model import NotificationProviderType
 from app.schemas.base_schema import BaseSchema, TimestampSchema
+from app.schemas.paginated_response_schema import PaginatedResponse
 
 
 class NotificationProviderBase(BaseSchema):
@@ -109,8 +110,12 @@ class NotificationProviderResponse(NotificationProviderInDB):
     # Mask sensitive fields in config (password, api_key, etc.)
     @field_validator("config", mode="before")
     @classmethod
-    def mask_sensitive_fields(cls, v: dict[str, Any]) -> dict[str, Any]:
-        """Mask sensitive configuration fields."""
+    def mask_sensitive_fields(cls, v: object) -> object:
+        """Mask sensitive configuration fields.
+
+        A before-validator sees the raw input, so anything not a dict is passed
+        on for the field's own validation to reject.
+        """
         if not isinstance(v, dict):
             return v
 
@@ -156,14 +161,8 @@ class NotificationProviderResponse(NotificationProviderInDB):
     }
 
 
-class NotificationProviderListResponse(BaseSchema):
-    """Schema for paginated list of notification providers."""
-
-    items: list[NotificationProviderResponse]
-    total: int
-    page: int
-    page_size: int
-    pages: int
+class NotificationProviderListResponse(PaginatedResponse[NotificationProviderResponse]):
+    """One page of notification providers."""
 
 
 class NotificationProviderTestRequest(BaseSchema):

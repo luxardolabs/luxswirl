@@ -43,52 +43,11 @@ async def list_alerts(
     is_enabled: EnabledFilter = None,
     is_global: GlobalFilter = None,
     page: Annotated[int, Query(ge=1, description="Page number")] = 1,
-    page_size: Annotated[int, Query(ge=1, le=1000, description="Items per page")] = 50,
-):
+    per_page: Annotated[int, Query(ge=1, le=1000, description="Items per page")] = 50,
+) -> AlertListResponse:
     """List all alerts with pagination."""
-    skip = (page - 1) * page_size
-
-    alerts, total = await AlertCoreService.list_alerts(
-        db=db,
-        skip=skip,
-        limit=page_size,
-        is_enabled=is_enabled,
-        is_global=is_global,
-    )
-
-    # Convert to response models
-    # TODO: Add counts for notification_provider_count and check_count
-    alert_responses = [
-        AlertResponse(
-            id=a.id,
-            name=a.name,
-            description=a.description,
-            trigger_type=a.trigger_type,
-            trigger_config=a.trigger_config,
-            is_enabled=a.is_enabled,
-            is_global=a.is_global,
-            notify_on_recovery=a.notify_on_recovery,
-            resend_interval_minutes=a.resend_interval_minutes,
-            max_resends=a.max_resends,
-            custom_subject=a.custom_subject,
-            custom_message=a.custom_message,
-            notification_provider_count=0,  # TODO
-            check_count=0,  # TODO
-            created_at=a.created_at,
-            updated_at=a.updated_at,
-            deleted_at=a.deleted_at,
-        )
-        for a in alerts
-    ]
-
-    pages = (total + page_size - 1) // page_size
-
-    return AlertListResponse(
-        items=alert_responses,
-        total=total,
-        page=page,
-        page_size=page_size,
-        pages=pages,
+    return await AlertCoreService.list_alerts_page(
+        db, page=page, per_page=per_page, is_enabled=is_enabled, is_global=is_global
     )
 
 
@@ -102,7 +61,7 @@ async def get_alert(
     alert_id: Annotated[UUID, Path(description="Alert UUID")],
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[str, Depends(verify_api_token)],
-):
+) -> AlertResponse:
     """Get a specific alert."""
     try:
         alert = await AlertCoreService.get_alert_by_id(db, alert_id)
@@ -141,7 +100,7 @@ async def create_alert(
     data: AlertCreate,
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[str, Depends(verify_api_token)],
-):
+) -> AlertResponse:
     """Create a new alert."""
     try:
         alert = await AlertCoreService.create_alert(db, data)
@@ -184,7 +143,7 @@ async def update_alert(
     alert_id: Annotated[UUID, Path(description="Alert UUID")],
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[str, Depends(verify_api_token)],
-):
+) -> AlertResponse:
     """Update an alert."""
     try:
         alert = await AlertCoreService.update_alert(db, alert_id, data)
@@ -254,7 +213,7 @@ async def add_notification_provider(
     provider_id: Annotated[UUID, Query(description="Notification provider UUID")],
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[str, Depends(verify_api_token)],
-):
+) -> MappingCreatedResponse:
     """Add a notification provider to an alert."""
     try:
         mapping = await AlertCoreService.add_notification_provider(
@@ -267,10 +226,9 @@ async def add_notification_provider(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(e)
         ) from e
 
-    return {
-        "message": "Notification provider added successfully",
-        "mapping_id": str(mapping.id),
-    }
+    return MappingCreatedResponse(
+        message="Notification provider added successfully", mapping_id=mapping.id
+    )
 
 
 @router.delete(
@@ -309,7 +267,7 @@ async def add_check(
     check_id: Annotated[UUID, Query(description="Check UUID")],
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[str, Depends(verify_api_token)],
-):
+) -> MappingCreatedResponse:
     """Add a check to an alert."""
     try:
         mapping = await AlertCoreService.add_check(db, alert_id, check_id)
@@ -320,7 +278,9 @@ async def add_check(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(e)
         ) from e
 
-    return {"message": "Check added successfully", "mapping_id": str(mapping.id)}
+    return MappingCreatedResponse(
+        message="Check added successfully", mapping_id=mapping.id
+    )
 
 
 @router.delete(
