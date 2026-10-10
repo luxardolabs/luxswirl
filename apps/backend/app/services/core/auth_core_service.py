@@ -184,13 +184,6 @@ class AuthCoreService:
         Returns:
             User object if authentication successful, None otherwise
         """
-        # Common audit-log fields for every auth event in this call.
-        audit = {
-            "username": username,
-            "client_ip": client_ip,
-            "user_agent": user_agent,
-        }
-
         # Get security settings from database
         security_settings = await SettingsCoreService.get_security_settings(db)
 
@@ -203,7 +196,12 @@ class AuthCoreService:
             self.verify_password(password, self._FAKE_PASSWORD_HASH)
             logger.warning(
                 "Login attempt for non-existent user",
-                extra={"event": "auth.failure.unknown_user", **audit},
+                extra={
+                    "event": "auth.failure.unknown_user",
+                    "username": username,
+                    "client_ip": client_ip,
+                    "user_agent": user_agent,
+                },
             )
             return None
 
@@ -216,7 +214,9 @@ class AuthCoreService:
                 extra={
                     "event": "auth.failure.locked",
                     "locked_until": str(user.locked_until),
-                    **audit,
+                    "username": username,
+                    "client_ip": client_ip,
+                    "user_agent": user_agent,
                 },
             )
             return None
@@ -227,7 +227,12 @@ class AuthCoreService:
             self.verify_password(password, self._FAKE_PASSWORD_HASH)
             logger.warning(
                 "Login attempt for inactive account",
-                extra={"event": "auth.failure.inactive", **audit},
+                extra={
+                    "event": "auth.failure.inactive",
+                    "username": username,
+                    "client_ip": client_ip,
+                    "user_agent": user_agent,
+                },
             )
             return None
 
@@ -247,7 +252,9 @@ class AuthCoreService:
                         "event": "auth.account_locked",
                         "locked_until": str(user.locked_until),
                         "lock_duration_minutes": lock_duration,
-                        **audit,
+                        "username": username,
+                        "client_ip": client_ip,
+                        "user_agent": user_agent,
                     },
                 )
 
@@ -257,7 +264,9 @@ class AuthCoreService:
                     "event": "auth.failure.bad_password",
                     "attempt": user.failed_login_attempts,
                     "max_attempts": max_attempts,
-                    **audit,
+                    "username": username,
+                    "client_ip": client_ip,
+                    "user_agent": user_agent,
                 },
             )
             return None
@@ -269,7 +278,13 @@ class AuthCoreService:
 
         logger.info(
             "Successful login",
-            extra={"event": "auth.login.success", "user_id": str(user.id), **audit},
+            extra={
+                "event": "auth.login.success",
+                "user_id": str(user.id),
+                "username": username,
+                "client_ip": client_ip,
+                "user_agent": user_agent,
+            },
         )
         return user
 

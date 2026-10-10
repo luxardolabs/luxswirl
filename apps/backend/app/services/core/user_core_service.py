@@ -26,7 +26,7 @@ logger = get_logger("luxswirl.services.user")
 class UserCoreService:
     """Service for user management operations."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize user service."""
         self.auth_service = AuthCoreService()
 

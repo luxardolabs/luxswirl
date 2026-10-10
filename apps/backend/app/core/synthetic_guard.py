@@ -21,7 +21,7 @@ See SECURITY.md for the threat model and why this is trusted-environments-only.
 
 from __future__ import annotations
 
-from typing import Any
+from uuid import UUID
 
 from shared.logger import get_logger
 
@@ -43,7 +43,14 @@ def require_admin_actor(*, actor_is_admin: bool) -> None:
         raise AuthorizationException("Synthetic checks require admin privileges")
 
 
-def validate_script(script_code: str, *, action: str, **audit: Any) -> None:
+def validate_script(
+    script_code: str,
+    *,
+    action: str,
+    check_id: UUID | None = None,
+    check_name: str | None = None,
+    agent_id: UUID | None = None,
+) -> None:
     """AST-validate a synthetic script, logging the verdict either way.
 
     Both outcomes are logged under the SECURITY AUDIT prefix, because "a script
@@ -53,21 +60,36 @@ def validate_script(script_code: str, *, action: str, **audit: Any) -> None:
     Args:
         script_code: The operator-supplied script.
         action: CREATE or UPDATE, recorded in the audit line.
-        **audit: Identifying fields for the audit record (check id, name, agent).
+        check_id: The check being updated (None on create).
+        check_name: The check's display name.
+        agent_id: The agent the check runs on (create only).
 
     Raises:
         SyntheticSecurityError: if the script does not pass validation.
     """
-    extra = {"action": action, "script_length": len(script_code), **audit}
     try:
         validate_and_raise(script_code)
     except SyntheticSecurityError:
         logger.exception(
             "SECURITY AUDIT: Synthetic check script validation FAILED",
-            extra={"event": "synthetic_check_blocked", **extra},
+            extra={
+                "event": "synthetic_check_blocked",
+                "action": action,
+                "script_length": len(script_code),
+                "check_id": str(check_id) if check_id else None,
+                "check_name": check_name,
+                "agent_id": str(agent_id) if agent_id else None,
+            },
         )
         raise
     logger.warning(
         "SECURITY AUDIT: Synthetic check script validation passed",
-        extra={"event": f"synthetic_check_{action.lower()}", **extra},
+        extra={
+            "event": f"synthetic_check_{action.lower()}",
+            "action": action,
+            "script_length": len(script_code),
+            "check_id": str(check_id) if check_id else None,
+            "check_name": check_name,
+            "agent_id": str(agent_id) if agent_id else None,
+        },
     )

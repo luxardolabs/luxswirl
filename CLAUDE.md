@@ -388,7 +388,7 @@ LUXSWIRL_ALLOW_INSECURE_HTTP=true LUXSWIRL_SERVER_URL=http://test.example.com:90
 
 ### Credential Protection
 
-**Log Scrubbing:** All loggers automatically scrub sensitive credentials using `CredentialFilter` (`shared/logger.py`):
+**Log Scrubbing:** Every log line passes through the redactor `shared/log_redaction.py:scrub`, which both services hand to the fleet logging module (`configure_logging(redact=...)`, `app/core/logging_config.py`). It scrubs the message, the traceback and every `extra=` field:
 
 - Database connection strings (passwords masked: `mysql://user:***@host`)
 - Bearer tokens (`Bearer ***`)

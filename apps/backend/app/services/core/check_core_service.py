@@ -106,12 +106,12 @@ class CheckCoreService:
 
         if data.check_type == SYNTHETIC:
             require_admin_actor(actor_is_admin=actor_is_admin)
-            if getattr(data, "script_code", None):
+            if data.script_code:
                 validate_script(
                     data.script_code,
                     action="CREATE",
                     check_name=data.display_name,
-                    agent_id=str(agent_id),
+                    agent_id=agent_id,
                 )
 
         # Create new check (UUID-based, no composite key duplication check needed)
@@ -259,7 +259,7 @@ class CheckCoreService:
         ]
 
     @staticmethod
-    async def get_dependency_info(db: AsyncSession, check_id: UUID) -> dict:
+    async def get_dependency_info(db: AsyncSession, check_id: UUID) -> dict[str, Any]:
         """Bundle of parent + parent's latest result + dependent count for UI display."""
         check = await CheckCRUD.get_by_id(db, check_id)
         if check is None:
@@ -415,14 +415,14 @@ class CheckCoreService:
             raise AgentNotFoundException(str(agent_id))
 
         # 3. Build clone data - merge source with overrides
-        def get_override(field_name: str, source_value):
-            """Get override value or use source value."""
-            if overrides and hasattr(overrides, field_name):
-                override_value = getattr(overrides, field_name)
-                # Handle None vs unset distinction
-                if override_value is not None:
-                    return override_value
-            return source_value
+        # Only the fields the caller actually SET override the source; a schema
+        # default the caller never sent (timeout_seconds=10, enabled=True, ...)
+        # must not silently replace the source's value. None also keeps the source.
+        override_fields = (
+            overrides.model_dump(exclude_unset=True, exclude_none=True)
+            if overrides
+            else {}
+        )
 
         # Debug logging for script_code
         source_script_len = len(source.script_code) if source.script_code else 0
@@ -437,41 +437,49 @@ class CheckCoreService:
         )
 
         clone_data = CheckCreate(
-            display_name=get_override("display_name", source.display_name),
-            check_type=get_override("check_type", source.check_type),
-            target=get_override("target", source.target),
-            description=get_override("description", source.description),
-            interval_seconds=get_override("interval_seconds", source.interval_seconds),
-            timeout_seconds=get_override("timeout_seconds", source.timeout_seconds),
-            expected_status=get_override("expected_status", source.expected_status),
-            enabled=get_override("enabled", source.enabled),
+            display_name=override_fields.get("display_name", source.display_name),
+            check_type=override_fields.get("check_type", source.check_type),
+            target=override_fields.get("target", source.target),
+            description=override_fields.get("description", source.description),
+            interval_seconds=override_fields.get(
+                "interval_seconds", source.interval_seconds
+            ),
+            timeout_seconds=override_fields.get(
+                "timeout_seconds", source.timeout_seconds
+            ),
+            expected_status=override_fields.get(
+                "expected_status", source.expected_status
+            ),
+            enabled=override_fields.get("enabled", source.enabled),
             # HTTP/JSON check fields
-            http_method=get_override("http_method", source.http_method),
-            verify_ssl=get_override("verify_ssl", source.verify_ssl),
-            json_path=get_override("json_path", source.json_path),
-            expected_value=get_override("expected_value", source.expected_value),
+            http_method=override_fields.get("http_method", source.http_method),
+            verify_ssl=override_fields.get("verify_ssl", source.verify_ssl),
+            json_path=override_fields.get("json_path", source.json_path),
+            expected_value=override_fields.get("expected_value", source.expected_value),
             # DNS check fields
-            record_type=get_override("record_type", source.record_type),
-            nameserver=get_override("nameserver", source.nameserver),
-            port=get_override("port", source.port),
-            expect_value=get_override("expect_value", source.expect_value),
+            record_type=override_fields.get("record_type", source.record_type),
+            nameserver=override_fields.get("nameserver", source.nameserver),
+            port=override_fields.get("port", source.port),
+            expect_value=override_fields.get("expect_value", source.expect_value),
             # MySQL/Postgres check fields
-            connection_string=get_override(
+            connection_string=override_fields.get(
                 "connection_string", source.connection_string
             ),
-            query=get_override("query", source.query),
+            query=override_fields.get("query", source.query),
             # Common fields
-            retry_attempts=get_override("retry_attempts", source.retry_attempts),
-            retry_interval_seconds=get_override(
+            retry_attempts=override_fields.get("retry_attempts", source.retry_attempts),
+            retry_interval_seconds=override_fields.get(
                 "retry_interval_seconds", source.retry_interval_seconds
             ),
-            resend_notification_after=get_override(
+            resend_notification_after=override_fields.get(
                 "resend_notification_after", source.resend_notification_after
             ),
-            tags=get_override("tags", source.tags),
-            assignment_mode=get_override("assignment_mode", source.assignment_mode),
-            agent_selector=get_override("agent_selector", source.agent_selector),
-            script_code=get_override("script_code", source.script_code),
+            tags=override_fields.get("tags", source.tags),
+            assignment_mode=override_fields.get(
+                "assignment_mode", source.assignment_mode
+            ),
+            agent_selector=override_fields.get("agent_selector", source.agent_selector),
+            script_code=override_fields.get("script_code", source.script_code),
         )
 
         # 4. Create new check using existing create_check method
@@ -574,7 +582,7 @@ class CheckCoreService:
             validate_script(
                 update_data["script_code"],
                 action="UPDATE",
-                check_id=str(check_id),
+                check_id=check_id,
                 check_name=check.display_name,
             )
 
@@ -836,7 +844,7 @@ class CheckCoreService:
         db: AsyncSession,
         check_ids: list[UUID],
         action: str,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """
         Perform bulk action on multiple checks.
 
@@ -918,7 +926,7 @@ class CheckCoreService:
         check_ids: list[UUID],
         update_data: CheckUpdate,
         new_agent_id: UUID | None = None,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """
         Bulk modify multiple checks.
 
@@ -1160,7 +1168,7 @@ class CheckCoreService:
         )
 
     @staticmethod
-    async def bulk_preview_checks(urls: list[str]) -> list[dict]:
+    async def bulk_preview_checks(urls: list[str]) -> list[dict[str, Any]]:
         """
         Preview and validate bulk check URLs.
 
@@ -1171,7 +1179,7 @@ class CheckCoreService:
             List of dicts with url, generated_name, check_type, validation_status, etc.
         """
 
-        async def validate_url(url_str: str) -> dict:
+        async def validate_url(url_str: str) -> dict[str, Any]:
             """Validate a single URL by fetching it."""
             try:
                 # Parse URL to detect check type
@@ -1310,7 +1318,7 @@ class CheckCoreService:
 
     @staticmethod
     def build_check_list_response(
-        checks: list, agent_name: str | None = None
+        checks: list[Check], agent_name: str | None = None
     ) -> CheckListResponse:
         """
         Build CheckListResponse from list of Check models.

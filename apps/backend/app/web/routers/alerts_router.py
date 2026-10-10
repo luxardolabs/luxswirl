@@ -32,7 +32,7 @@ async def create_alert_form(
     request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: CurrentUserWeb,
-):
+) -> HTMLResponse:
     """HTMX partial - returns form for creating a new alert."""
     form_data = await AlertsViewService.get_alert_form_data(db, request)
 
@@ -57,7 +57,7 @@ async def edit_alert_form(
     alert_id: UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: CurrentUserWeb,
-):
+) -> HTMLResponse:
     """HTMX partial - returns form for editing an existing alert."""
     form_data = await AlertsViewService.get_alert_form_data(db, request, alert_id)
 
@@ -81,14 +81,17 @@ async def create_alert(
     request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: EditorUserWeb,
-):
+) -> HTMLResponse:
     """Create a new alert rule."""
     form = await request.form()
 
-    # Debug: log ALL form data
     logger.info(
         "CREATE ALERT form submitted",
-        extra={"form_data": dict(form)},
+        extra={
+            "name": str(form.get("name", "")),
+            "trigger_type": str(form.get("trigger_type", "")),
+            "user_id": str(current_user.id),
+        },
     )
 
     # Extract basic fields
@@ -199,7 +202,7 @@ async def snooze_alert_check(
     ],
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: CurrentUserWeb,
-):
+) -> HTMLResponse:
     """
     Snooze an alert-check relationship for 15 more minutes.
 
@@ -222,7 +225,7 @@ async def unsnooze_alert_check(
     ],
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: CurrentUserWeb,
-):
+) -> HTMLResponse:
     """Un-snooze an alert-check relationship — resume notifications immediately."""
     message = await AlertsViewService.unsnooze_alert_check(
         db, alert_id, check_id, current_user
@@ -238,7 +241,7 @@ async def update_alert(
     alert_id: UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: EditorUserWeb,
-):
+) -> HTMLResponse:
     """Update an existing alert rule."""
     form = await request.form()
 
@@ -329,7 +332,7 @@ async def delete_alert(
     alert_id: UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: EditorUserWeb,
-):
+) -> HTMLResponse:
     """Delete an alert rule (soft delete)."""
     await AlertsViewService.delete_alert(db, alert_id)
 
@@ -344,7 +347,7 @@ async def toggle_alert(
     alert_id: UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: EditorUserWeb,
-):
+) -> HTMLResponse:
     """Toggle alert enabled/disabled status."""
     return await AlertsViewService.toggle_alert_enabled(db, alert_id)
 

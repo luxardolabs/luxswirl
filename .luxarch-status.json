@@ -691,12 +691,12 @@
         },
         {
           "rule": "fw.no_reserved_logging_keys",
-          "status": "PASS",
+          "status": "INERT",
           "since": "0.2.0",
           "violations": 0,
           "deferred": false,
-          "inert": false,
-          "inert_reason": "",
+          "inert": true,
+          "inert_reason": "the fleet logging module (apps/agent/app/core/logging_config.py) is installed: a colliding `extra=` key is written under `attributes` by its own name instead of raising",
           "fix": "",
           "example": ""
         },
@@ -1043,13 +1043,13 @@
         },
         {
           "rule": "fw.session_minted_in_owner",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.65.0",
-          "violations": 4,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
-          "fix": "Replace the raw session open with `async with get_db_context() as db:` (non-request; commits on clean exit) or the get_db request dependency \u2014 the fleet's two owners. The factory (async_sessionmaker / AsyncSession) lives once in the session module. If this is a genuine standalone owner that truly can't use get_db_context (a CLI/startup bootstrap), declare it in [allowlist].session_mint = [{ file, evidence }]. See --playbook db-mutations.",
+          "fix": "",
           "example": ""
         },
         {
@@ -1265,7 +1265,7 @@
           "rule": "fw.json_routes_typed",
           "status": "FAIL",
           "since": "0.100.0",
-          "violations": 11,
+          "violations": 9,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
@@ -1847,10 +1847,10 @@
       ],
       "summary": {
         "PASS": 123,
-        "FAIL": 23,
+        "FAIL": 22,
         "XFAIL": 2,
         "XPASS": 0,
-        "INERT": 19
+        "INERT": 20
       }
     },
     {
@@ -2058,24 +2058,24 @@
       },
       {
         "rule": "repo.logging_canonical",
-        "status": "FAIL",
+        "status": "PASS",
         "since": "0.254.0",
-        "violations": 8,
+        "violations": 0,
         "deferred": false,
         "inert": false,
         "inert_reason": "",
-        "fix": "`luxarch --emit logging > <app>/core/logging_config.py` (unedited), call `configure_logging(service=..., version=...)` once in the target's entrypoint (`main.py` / `__main__.py`), and delete every other setup this names. Existing `logger.info(..., extra={...})` calls keep working, and colliding keys no longer crash. See --playbook logging.",
+        "fix": "",
         "example": ""
       },
       {
         "rule": "repo.log_fields_explicit",
-        "status": "FAIL",
+        "status": "PASS",
         "since": "0.269.0",
-        "violations": 9,
+        "violations": 0,
         "deferred": false,
         "inert": false,
         "inert_reason": "",
-        "fix": "Name every field at the call site: `logger.info(\"evt\", extra={\"order_id\": o.id, \"status\": s})`, directives (`exc_info=True`) on the call itself, identifiers rather than whole objects. A splat, a mapping built elsewhere or a `model_dump()` can carry personal data no reviewer sees; the redactor is the backstop, not the control. No exceptions. See --playbook logging.",
+        "fix": "",
         "example": ""
       },
       {
@@ -2674,20 +2674,20 @@
       }
     ],
     "summary": {
-      "PASS": 56,
-      "FAIL": 3,
+      "PASS": 58,
+      "FAIL": 1,
       "XFAIL": 0,
       "XPASS": 1,
       "INERT": 6
     }
   },
   "summary": {
-    "PASS": 184,
-    "FAIL": 27,
+    "PASS": 186,
+    "FAIL": 24,
     "XFAIL": 2,
     "XPASS": 1,
-    "INERT": 26
+    "INERT": 27
   },
-  "commit": "c1be598938b612ad608091694abd2a8ef4b4e056",
-  "generated_at": "2026-10-10T08:08:20Z"
+  "commit": "58b71bcadd14789ccadc95f1cd5beda8a2de1ed2",
+  "generated_at": "2026-10-10T08:52:25Z"
 }

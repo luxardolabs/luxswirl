@@ -1,17 +1,13 @@
 """Capture the app's own log records, with their `extra` fields intact.
 
-`caplog` does not work on this app's loggers. `shared.logger.setup_logging()`
-sets `propagate = False` on the `luxswirl` namespace root (deliberately — it
-keeps our output isolated from whatever else configured the global root), and
-caplog attaches its handler to the GLOBAL root. So a caplog assertion passes
-when the test file runs alone, before anything has called `setup_logging()`, and
-silently captures nothing once the full suite has — which is the worst shape for
-a test to have.
+The handler sits on the `luxswirl` namespace logger itself, so it sees every
+`luxswirl.*` record whatever the root logger's handlers and level are (the
+fleet logging module replaces the root handler each time `configure_logging()`
+runs, which the app and alembic's env.py both do). The namespace level is
+dropped to DEBUG for the test so an INFO record is not filtered first.
 
-`tests/checks/test_ssl_expiry.py` works around it by monkeypatching the module's
-`logger.warning`, which is fine for a message but throws the `extra` away. An
-audit record IS its extra fields, so this fixture attaches a real handler to the
-namespace root instead and hands back the records.
+Records carry their `extra` fields as attributes (a colliding key is renamed
+`extra_<key>` by the module), and an audit record IS its extra fields.
 """
 
 from __future__ import annotations

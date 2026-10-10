@@ -4,15 +4,16 @@ LuxSwirl Server API - Main application entry point.
 A production-quality SaaS observability monitoring platform for all types of metrics.
 """
 
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, Request, status
+from fastapi import FastAPI, Request, Response, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from shared.logger import configure_logging, get_logger
+from shared.logger import get_logger
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from sqlalchemy.exc import SQLAlchemyError
@@ -36,16 +37,19 @@ from app.background.maintenance_worker import (
 )
 from app.core.config import settings
 from app.core.exceptions import LuxSwirlException
+from app.core.logging_config import configure_logging
+from app.core.logging_options import logging_options
 from app.core.rate_limit import limiter
 from app.core.secrets import resolve_runtime_secrets
 from app.core.security_headers import SecurityHeadersMiddleware
-from app.db import get_session_maker
+from app.db import worker_session
 from app.db.database import close_db, init_db
 from app.db.scheduler_init import init_scheduler_defaults
 from app.notifications.providers.email import EmailNotificationProvider
 from app.notifications.providers.homeassistant import HomeAssistantNotificationProvider
 from app.notifications.providers.webhook import WebhookNotificationProvider
 from app.notifications.registry import NotificationRegistry
+from app.schemas.health_schema import ApiInfoResponse, HealthResponse
 from app.services.core.metrics_collector_core_service import MetricsCollectorCoreService
 from app.services.core.scheduler_core_service import scheduler_service
 from app.services.core.settings_core_service import SettingsCoreService
@@ -75,24 +79,21 @@ from app.web.routers.status_router import router as status_router
 from app.web.routers.users_router import router as web_users_router
 from app.web.template_filters import update_settings_cache
 
+# The fleet logging setup, once per process, before anything is served. At import
+# time, so the uvicorn --reload worker (which re-imports this module) gets it too.
+configure_logging(**logging_options())
+
 # Create module-level logger for middleware (before lifespan)
 logger = get_logger("luxswirl.server")
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """
     Application lifespan manager.
 
     Handles startup and shutdown events.
     """
-    # Configure logging in lifespan so it works with uvicorn --reload
-    configure_logging(
-        {
-            "log_level": settings.logging.level,
-            "module_levels": settings.logging.module_levels,
-        }
-    )
     logger = get_logger("luxswirl.server")
 
     # Startup
@@ -108,9 +109,10 @@ async def lifespan(app: FastAPI):
     await init_db()
     logger.info("Database initialized successfully")
 
-    # Ensure default admin user exists (first-run setup)
-    session_maker = get_session_maker()
-    async with session_maker() as db:
+    # Ensure default admin user exists (first-run setup). Startup runs outside
+    # the request lifecycle, so worker_session() owns this transaction: it
+    # commits the admin seed and the defaults on a clean exit, rolls back on error.
+    async with worker_session() as db:
         user_service = UserCoreService()
         admin = await user_service.ensure_default_admin(db)
         if admin is not None:
@@ -140,12 +142,6 @@ async def lifespan(app: FastAPI):
         await MetricsCollectorCoreService.rebuild_from_database(db, lookback_minutes=10)
         logger.info("Prometheus metrics rebuilt from database")
 
-        # Persist the admin seed + ensure_*_defaults written above. Startup runs
-        # outside the request lifecycle, so this block owns its transaction
-        # (get_db() only auto-commits request-scoped sessions). Without this, the
-        # seeded admin and settings are rolled back when the session closes.
-        await db.commit()
-
     # Register notification providers
     NotificationRegistry.register("email", EmailNotificationProvider)
     NotificationRegistry.register("webhook", WebhookNotificationProvider)
@@ -156,9 +152,8 @@ async def lifespan(app: FastAPI):
     )
 
     # Initialize scheduler default job configurations
-    async with session_maker() as db:
+    async with worker_session() as db:
         await init_scheduler_defaults(db)
-        await db.commit()
     logger.info("Scheduler defaults initialized")
 
     # Start background tasks
@@ -246,7 +241,9 @@ app.add_middleware(SecurityHeadersMiddleware)
 
 # Exception handlers
 @app.exception_handler(LuxSwirlException)
-async def luxswirl_exception_handler(request: Request, exc: LuxSwirlException):
+async def luxswirl_exception_handler(
+    request: Request, exc: LuxSwirlException
+) -> Response:
     """Render a LuxSwirl domain exception (content-negotiated)."""
     get_logger("luxswirl.server").warning(
         "LuxSwirl exception",
@@ -262,7 +259,7 @@ async def luxswirl_exception_handler(request: Request, exc: LuxSwirlException):
 
 
 @app.exception_handler(ValueError)
-async def value_error_handler(request: Request, exc: ValueError):
+async def value_error_handler(request: Request, exc: ValueError) -> Response:
     """Service-layer validation raises bare ValueError — a client error (400).
 
     Web routers used to catch these and render a 400 partial themselves; now
@@ -280,7 +277,9 @@ async def value_error_handler(request: Request, exc: ValueError):
 
 
 @app.exception_handler(RequestValidationError)
-async def validation_exception_handler(request: Request, exc: RequestValidationError):
+async def validation_exception_handler(
+    request: Request, exc: RequestValidationError
+) -> Response:
     """Handle request validation errors.
 
     The errors carry the offending `input`, which for a body that is not valid
@@ -303,7 +302,9 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 
 
 @app.exception_handler(SQLAlchemyError)
-async def database_exception_handler(request: Request, exc: SQLAlchemyError):
+async def database_exception_handler(
+    request: Request, exc: SQLAlchemyError
+) -> Response:
     """Handle database errors."""
     get_logger("luxswirl.server").error("Database error", exc_info=True)
     detail = str(exc) if settings.server.environment != "production" else None
@@ -317,7 +318,7 @@ async def database_exception_handler(request: Request, exc: SQLAlchemyError):
 
 
 @app.exception_handler(Exception)
-async def general_exception_handler(request: Request, exc: Exception):
+async def general_exception_handler(request: Request, exc: Exception) -> Response:
     """Handle all other exceptions."""
     get_logger("luxswirl.server").error("Unhandled exception", exc_info=True)
     detail = str(exc) if settings.server.environment != "production" else None
@@ -361,34 +362,34 @@ app.include_router(scheduler_router)  # Web UI - scheduler admin
 
 
 # Health check endpoint
-@app.get("/health", tags=["Health"])
-async def health_check():
+@app.get("/health", tags=["Health"], response_model=HealthResponse)
+async def health_check() -> HealthResponse:
     """
     Health check endpoint.
 
     Returns the current status of the API.
     """
-    return {
-        "status": "healthy",
-        "version": settings.app_version,
-        "environment": settings.server.environment,
-    }
+    return HealthResponse(
+        status="healthy",
+        version=settings.app_version,
+        environment=settings.server.environment,
+    )
 
 
 # Root API endpoint (only for /api prefix)
-@app.get("/api", tags=["Root"])
-async def api_root():
+@app.get("/api", tags=["Root"], response_model=ApiInfoResponse)
+async def api_root() -> ApiInfoResponse:
     """
     API root endpoint.
 
     Returns basic API information.
     """
-    return {
-        "name": "LuxSwirl Server API",
-        "description": "A production-quality SaaS observability monitoring platform",
-        "version": settings.app_version,
-        "docs": "/docs" if settings.server.environment != "production" else None,
-    }
+    return ApiInfoResponse(
+        name="LuxSwirl Server API",
+        description="A production-quality SaaS observability monitoring platform",
+        version=settings.app_version,
+        docs="/docs" if settings.server.environment != "production" else None,
+    )
 
 
 if __name__ == "__main__":

@@ -153,7 +153,7 @@ A bare `{x}_service.py` (no `core`/`view` qualifier) is a naming violation and w
 
 - **Async throughout** — database queries, HTTP calls, and service/crud methods are `async`. Don't introduce blocking I/O (e.g. `requests`) into the event loop.
 - **Structured logging** via `shared.logger.get_logger(__name__)`; pass fields through `extra=` rather than interpolating them into the message string.
-- **Security**: validate API inputs with Pydantic schemas; rely on the ORM's parameterized queries (never string-concatenate SQL); never log credentials (the `CredentialFilter` masks them); use list-form `subprocess.run([...])`, never `shell=True` with user input.
+- **Security**: validate API inputs with Pydantic schemas; rely on the ORM's parameterized queries (never string-concatenate SQL); never log credentials, and name every `extra=` field at the call site (the redactor in `shared/log_redaction.py` masks credentials as a backstop); use list-form `subprocess.run([...])`, never `shell=True` with user input.
 
 ______________________________________________________________________
 

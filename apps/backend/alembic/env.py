@@ -2,31 +2,26 @@
 
 import asyncio
 import logging
-from logging.config import fileConfig
 
 import app.models  # noqa: F401 — registers tables on Base.metadata
 from alembic import context
 from app.core.config import settings
+from app.core.logging_config import configure_logging
+from app.core.logging_options import logging_options
 from app.models.base_model import Base
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
+from sqlalchemy.sql.schema import SchemaItem
 
 config = context.config
 
-if config.config_file_name is not None:
-    # disable_existing_loggers=False, which is NOT fileConfig's default. The
-    # default sets `disabled = True` on every logger the ini does not name — and
-    # alembic.ini names only alembic's own — so a plain fileConfig() here kills
-    # the whole `luxswirl.*` namespace in the calling process.
-    #
-    # Harmless when alembic runs as its own process (the container CMD), fatal
-    # when it shares one: the test harness migrates in-process at session start,
-    # so the first DB test silently switched the application's logging off for
-    # the rest of the run. Nothing failed — log assertions just went blind, which
-    # is how the audit-trail tests for the synthetic-check gate came to pass
-    # alone and fail in the suite.
-    fileConfig(config.config_file_name, disable_existing_loggers=False)
+# The server's own logging setup, never fileConfig(): when the app or the test
+# harness migrates in-process, env.py runs inside the server, and fileConfig
+# disables every logger alembic.ini does not name (the whole `luxswirl.*`
+# namespace). The same options as app/main.py, so whichever runs last installs
+# the same thing; as its own process (the container CMD) it gets JSON lines too.
+configure_logging(**logging_options())
 
 # Target metadata for autogenerate support.
 target_metadata = Base.metadata
@@ -34,7 +29,13 @@ target_metadata = Base.metadata
 logger = logging.getLogger(__name__)
 
 
-def include_object(object, name, type_, reflected, compare_to):
+def include_object(
+    object: SchemaItem,
+    name: str | None,
+    type_: str,
+    reflected: bool,
+    compare_to: SchemaItem | None,
+) -> bool:
     """Exclude TimescaleDB-managed objects from autogenerate / `alembic check`.
 
     `create_hypertable()` (run at app boot, not in migrations) auto-creates a
@@ -48,7 +49,7 @@ def include_object(object, name, type_, reflected, compare_to):
         type_ == "index"
         and reflected
         and compare_to is None
-        and bool(name)
+        and name is not None
         and name.endswith("_idx")
         and not name.startswith(("idx_", "ix_", "uq_"))
     )

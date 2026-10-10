@@ -42,9 +42,6 @@ cryptography = "^50.0.0"  # CVE-2026-69247/69248/69249 + GHSA-537c-gmf6-5ccf flo
 # Config / schema models
 pydantic = "^2.13.5"
 
-# Logging (shared/logger.py)
-python-json-logger = "^4.2.0"
-
 # Config files (shared/config.py)
 pyyaml = "^6.0"
 

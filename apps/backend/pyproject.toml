@@ -31,9 +31,6 @@ uvicorn = {extras = ["standard"], version = "^0.53.0"}
 jinja2 = "^3.1.0"
 python-multipart = ">=0.0.31,<0.1.0"  # CVE-2026-53538/53539/53540 floor
 
-# Logging (shared/logger.py)
-python-json-logger = "^4.2.0"
-
 # Database
 sqlalchemy = {extras = ["asyncio"], version = "^2.0.54"}
 asyncpg = "^0.31.0"

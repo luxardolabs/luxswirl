@@ -21,7 +21,8 @@ from typing import Any
 from shared.config import get_config, load_config_file
 from shared.jobs.network_discover import NetworkDiscoverJob
 from shared.jobs.network_scan import NetworkScanJob
-from shared.logger import get_logger
+from shared.log_redaction import scrub
+from shared.logger import THIRD_PARTY_LEVELS, get_logger
 
 from app.agent.core import LuxSwirlAgent
 from app.checks.dns import DNSCheck
@@ -32,6 +33,7 @@ from app.checks.ping import PingCheck
 from app.checks.postgres import PostgreSQLCheck
 from app.checks.synthetic import SyntheticCheck
 from app.checks.tcp import TCPCheck
+from app.core.logging_config import configure_logging
 
 
 def _resolve_version() -> str:
@@ -52,8 +54,19 @@ def _resolve_version() -> str:
 
 __version__ = _resolve_version()
 
+# The fleet logging setup, once per process, at import: before the first line is
+# logged. LOG__LEVEL (the server's spelling, kept for existing deployments), else
+# the module reads LOG_LEVEL (default INFO); `--debug` lowers it in main().
+configure_logging(
+    service="luxswirl-agent",
+    version=__version__,
+    level=os.environ.get("LOG__LEVEL"),
+    levels=THIRD_PARTY_LEVELS,
+    redact=scrub,
+)
 
-async def main():
+
+async def main() -> int:
     """Main entry point for the LuxSwirl Agent application."""
     # Set up argument parser
     parser = argparse.ArgumentParser(description="Luxardo Labs LuxSwirl Agent")
@@ -68,12 +81,9 @@ async def main():
 
     args = parser.parse_args()
 
-    # Get logger
     logger = get_logger("luxswirl")
-
-    # Set debug level if requested
     if args.debug:
-        logger.setLevel(logging.DEBUG)
+        logging.getLogger().setLevel(logging.DEBUG)
         logger.debug("Debug logging enabled")
 
     # Check for random Docker hostname (critical for credential encryption)
