@@ -19,7 +19,17 @@ from app.schemas.notification_provider_schema import (
     ProviderUrls,
 )
 from app.schemas.pagination_schema import build_pagination
-from app.schemas.setting_schema import SettingResponse, SettingScalar, SettingUrls
+from app.schemas.registration_key_schema import (
+    RegistrationKeyResponse,
+    RegistrationKeyRow,
+    RegistrationKeyUrls,
+)
+from app.schemas.setting_schema import (
+    SettingResponse,
+    SettingRow,
+    SettingScalar,
+    SettingUrls,
+)
 from app.services.core.alert_core_service import AlertCoreService
 from app.services.core.notification_core_service import NotificationCoreService
 from app.services.core.registration_key_core_service import RegistrationKeyCoreService
@@ -38,6 +48,11 @@ def build_setting_urls(request: Request, key: str) -> SettingUrls:
         update=str(request.url_for("update_setting", key=key).path),
         reset=str(request.url_for("reset_setting", key=key).path),
     )
+
+
+def setting_row(request: Request, setting: SettingResponse) -> SettingRow:
+    """`setting` with its card's update/reset links."""
+    return SettingRow(**dict(setting), urls=build_setting_urls(request, setting.key))
 
 
 class SettingsViewService:
@@ -405,17 +420,20 @@ class SettingsViewService:
             include_revoked=not is_enabled if is_enabled is not None else False,
         )
         return {
-            # Finished hrefs per key, resolved by route name (fw.url_assembly_in_view).
-            "key_urls": {
-                k.id: {
-                    "revoke": request.url_for("revoke_key", key_id=k.id).path,
-                    "delete": request.url_for("delete_key", key_id=k.id).path,
-                }
-                for k in keys
-            },
             "request": request,
             "current_user": current_user,
-            "registration_keys": keys,
+            # Each key carries its finished hrefs, resolved by route name
+            # (fw.url_assembly_in_view).
+            "registration_keys": [
+                RegistrationKeyRow(
+                    **dict(RegistrationKeyResponse.model_validate(k)),
+                    urls=RegistrationKeyUrls(
+                        revoke=request.url_for("revoke_key", key_id=k.id).path,
+                        delete=request.url_for("delete_key", key_id=k.id).path,
+                    ),
+                )
+                for k in keys
+            ],
             "total_keys": total,
             "metrics_settings": await SettingsCoreService.get_metrics_settings(db),
             "page_title": "Settings - API Keys",
@@ -484,26 +502,29 @@ class SettingsViewService:
                 db, "database"
             ),
         }
-        security_groups = await SettingsViewService.get_grouped_security_settings(db)
-        all_settings = [s for rows in groups.values() for s in rows] + [
-            s for rows in security_groups.values() for s in rows
-        ]
+        rows = {
+            category: [setting_row(request, s) for s in settings]
+            for category, settings in groups.items()
+        }
+        security_groups = {
+            subcategory: [setting_row(request, s) for s in settings]
+            for subcategory, settings in (
+                await SettingsViewService.get_grouped_security_settings(db)
+            ).items()
+        }
         return {
             "request": request,
             "current_user": current_user,
-            "setting_urls": {
-                st.key: build_setting_urls(request, st.key) for st in all_settings
-            },
-            "check_settings": groups["check"],
-            "alert_settings": groups["alert"],
-            "system_settings": groups["system"],
-            "job_settings": groups["job"],
+            "check_settings": rows["check"],
+            "alert_settings": rows["alert"],
+            "system_settings": rows["system"],
+            "job_settings": rows["job"],
             "security_groups": security_groups,
             # The tab badge shows how many security settings there are across
             # the subcategory groups.
             "security_count": sum(len(rows) for rows in security_groups.values()),
-            "general_settings": groups["general"],
-            "database_settings": groups["database"],
+            "general_settings": rows["general"],
+            "database_settings": rows["database"],
             "page_title": "Settings - Defaults",
         }
 
@@ -517,10 +538,9 @@ class SettingsViewService:
     ) -> dict[str, Any]:
         """Setting-card partial context (used for update/reset responses)."""
         return {
-            "setting_urls": {setting.key: build_setting_urls(request, setting.key)},
             "request": request,
             "current_user": current_user,
-            "setting": setting,
+            "setting": setting_row(request, setting),
         }
 
     @staticmethod

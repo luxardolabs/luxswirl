@@ -887,19 +887,28 @@ class CheckResultCRUD:
     @staticmethod
     async def get_results_for_status_bars_bulk(
         db: AsyncSession, check_ids: list[UUID], minutes: int = 32
-    ) -> list[CheckResult]:
+    ) -> list[tuple[UUID, datetime, bool, float | None, int | None]]:
         """
         Get results for status bars for multiple checks.
 
+        Selects only what a status bar reads, not the full row and its metrics.
+
         Returns:
-            List of CheckResult objects ordered by check_id, timestamp desc
+            (check_id, timestamp, success, latency_ms, http_status_code) rows,
+            ordered by check_id, timestamp desc
         """
         if not check_ids:
             return []
 
         cutoff = utc_now() - timedelta(minutes=minutes)
         query = (
-            select(CheckResult)
+            select(
+                CheckResult.check_id,
+                CheckResult.timestamp,
+                CheckResult.success,
+                CheckResult.latency_ms,
+                CheckResult.http_status_code,
+            )
             .where(
                 and_(
                     CheckResult.check_id.in_(check_ids),
@@ -909,7 +918,10 @@ class CheckResultCRUD:
             .order_by(CheckResult.check_id, desc(CheckResult.timestamp))
         )
         result = await db.execute(query)
-        return list(result.scalars().all())
+        return [
+            (check_id, timestamp, success, latency_ms, http_status_code)
+            for check_id, timestamp, success, latency_ms, http_status_code in result
+        ]
 
     @staticmethod
     async def get_bucketed_status_bars_bulk(

@@ -118,6 +118,16 @@ class CheckResultResponse(CheckResultInDB):
     }
 
 
+class StatusBarResult(BaseSchema):
+    """One result as a status bar reads it: when, whether it passed, how fast."""
+
+    check_id: UUID
+    timestamp: datetime
+    success: bool
+    latency_ms: float | None
+    http_status_code: int | None
+
+
 class CheckResultListResponse(BaseSchema):
     """Schema for listing check results."""
 

@@ -294,3 +294,9 @@ class StatusPageUrls:
     update: str
     available_checks: str
     public: str
+
+
+class StatusPageRow(StatusPageInDB):
+    """A status page as the list page shows it, with its links."""
+
+    urls: StatusPageUrls

@@ -19,8 +19,15 @@ from app.core.config import settings
 from app.core.datetime_utils import utc_now
 from app.core.exceptions import AgentNotFoundException
 from app.models.enum_model import MaintenanceJobKind
-from app.schemas.agent_schema import AgentResponse, AgentUpdate, AgentUrls
+from app.schemas.agent_schema import (
+    AgentOption,
+    AgentResponse,
+    AgentUpdate,
+    AgentUrls,
+    PendingAgentRow,
+)
 from app.schemas.auth_schema import AuthedUser
+from app.schemas.maintenance_job_schema import MaintenanceJobResponse
 from app.schemas.pagination_schema import build_pagination
 from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.check_core_service import CheckCoreService
@@ -270,7 +277,7 @@ class AgentsViewService:
     @staticmethod
     async def enqueue_delete(
         db: AsyncSession, agent_id: UUID, owner_id: UUID | None = None
-    ):
+    ) -> MaintenanceJobResponse:
         """Enqueue an agent_delete maintenance job; returns the job row."""
         # 404 cleanly if the agent doesn't exist instead of queuing a doomed job.
         await AgentCoreService.get_agent(db, agent_id)
@@ -288,9 +295,11 @@ class AgentsViewService:
     # UI never read (fw.web_routers_single_surface).
 
     @staticmethod
-    def _display_name(agent: AgentResponse) -> str:
-        """How an agent is named to the user, in one place."""
-        return agent.agent_name or agent.hostname or str(agent.id)
+    def _display_name(
+        agent_name: str | None, hostname: str | None, agent_id: UUID
+    ) -> str:
+        """How a toast names an agent: its name, else its hostname, else its id."""
+        return agent_name or hostname or str(agent_id)
 
     @staticmethod
     async def approve_agent(db: AsyncSession, agent_id: UUID) -> HTMLResponse:
@@ -298,7 +307,7 @@ class AgentsViewService:
         agent, _api_key = await AgentCoreService.approve_agent(db, agent_id)
         logger.info("Agent approved via web", extra={"agent_id": str(agent_id)})
         return hx_empty_with_toast(
-            f"Agent '{AgentsViewService._display_name(agent)}' approved successfully",
+            f"Agent '{AgentsViewService._display_name(agent.agent_name, agent.hostname, agent.id)}' approved successfully",
             extra_events={"refreshPage": {}},
         )
 
@@ -311,7 +320,7 @@ class AgentsViewService:
         logger.info("Agent rejected via web", extra={"agent_id": str(agent_id)})
         pending_count = await AgentCoreService.get_pending_count(db)
         return hx_empty_with_toast(
-            f"Agent '{AgentsViewService._display_name(agent)}' rejected",
+            f"Agent '{AgentsViewService._display_name(agent.agent_name, agent.hostname, agent.id)}' rejected",
             extra_events={"updatePendingCount": {"count": pending_count}},
         )
 
@@ -322,14 +331,14 @@ class AgentsViewService:
         agent = await AgentCoreService.pause_agent(db, agent_id, reason)
         logger.info("Agent paused successfully", extra={"agent_id": str(agent_id)})
         return hx_empty_with_toast(
-            f"Agent '{AgentsViewService._display_name(agent)}' paused"
+            f"Agent '{AgentsViewService._display_name(agent.agent_name, agent.hostname, agent.id)}' paused"
         )
 
     @staticmethod
     async def resume_agent(db: AsyncSession, agent_id: UUID) -> HTMLResponse:
         agent = await AgentCoreService.resume_agent(db, agent_id)
         return hx_empty_with_toast(
-            f"Agent '{AgentsViewService._display_name(agent)}' resumed"
+            f"Agent '{AgentsViewService._display_name(agent.agent_name, agent.hostname, agent.id)}' resumed"
         )
 
     @staticmethod
@@ -338,14 +347,14 @@ class AgentsViewService:
     ) -> HTMLResponse:
         agent = await AgentCoreService.disable_agent(db, agent_id, reason)
         return hx_empty_with_toast(
-            f"Agent '{AgentsViewService._display_name(agent)}' disabled"
+            f"Agent '{AgentsViewService._display_name(agent.agent_name, agent.hostname, agent.id)}' disabled"
         )
 
     @staticmethod
     async def enable_agent(db: AsyncSession, agent_id: UUID) -> HTMLResponse:
         agent = await AgentCoreService.enable_agent(db, agent_id)
         return hx_empty_with_toast(
-            f"Agent '{AgentsViewService._display_name(agent)}' enabled"
+            f"Agent '{AgentsViewService._display_name(agent.agent_name, agent.hostname, agent.id)}' enabled"
         )
 
     @staticmethod
@@ -364,7 +373,12 @@ class AgentsViewService:
         """
         agent, plaintext_key = await AgentCoreService.generate_agent_key(db, agent_id)
         return AgentsViewService._render_key_panel(
-            request, current_user, agent, plaintext_key
+            request,
+            current_user,
+            AgentOption(
+                id=agent.id, agent_name=agent.agent_name, hostname=agent.hostname
+            ),
+            plaintext_key,
         )
 
     @staticmethod
@@ -374,14 +388,19 @@ class AgentsViewService:
         """Regenerate the API key (revoking the old one) and render the panel."""
         agent, plaintext_key = await AgentCoreService.regenerate_agent_key(db, agent_id)
         return AgentsViewService._render_key_panel(
-            request, current_user, agent, plaintext_key
+            request,
+            current_user,
+            AgentOption(
+                id=agent.id, agent_name=agent.agent_name, hostname=agent.hostname
+            ),
+            plaintext_key,
         )
 
     @staticmethod
     def _render_key_panel(
         request: Request,
         current_user: AuthedUser,
-        agent: AgentResponse,
+        agent: AgentOption,
         plaintext_key: str,
     ) -> Response:
         """Render the 'key generated — copy it once' panel."""
@@ -434,7 +453,6 @@ class AgentsViewService:
             offset=offset,
             exclude_pending=True,
         )
-        pending_urls = {a.id: build_agent_urls(request, a.id) for a in pending_agents}
         pagination = build_pagination(
             page=page,
             per_page=per_page,
@@ -446,12 +464,22 @@ class AgentsViewService:
             },
         )
         return {
-            "pending_urls": pending_urls,
             "request": request,
             "current_user": current_user,
             "total": total,
             "agent_data": agent_data,
-            "pending_agents": pending_agents,
+            "pending_agents": [
+                PendingAgentRow(
+                    id=a.id,
+                    agent_name=a.agent_name,
+                    hostname=a.hostname,
+                    ip_address=a.ip_address,
+                    version=a.version,
+                    first_seen=a.first_seen,
+                    urls=build_agent_urls(request, a.id),
+                )
+                for a in pending_agents
+            ],
             "active_only": active_only,
             "search": search,
             "hours": hours,
@@ -503,7 +531,7 @@ class AgentsViewService:
     def build_key_generated_panel_context(
         request: Request,
         current_user: AuthedUser,
-        agent: AgentResponse,
+        agent: AgentOption,
         plaintext_key: str,
     ) -> dict[str, Any]:
         """'Key generated — copy this once' panel context."""
@@ -544,7 +572,7 @@ class AgentsViewService:
                 parsed_tags = [t.strip() for t in str(tags).split(",") if t.strip()]
                 update_dict["tags"] = parsed_tags or None
 
-            def _parse_int(v, name):
+            def _parse_int(v: str | int | float | None, name: str) -> None:
                 if v is not None and str(v).strip():
                     try:
                         n = int(v)
@@ -555,7 +583,7 @@ class AgentsViewService:
                     except ValueError:
                         pass
 
-            def _parse_float(v, name):
+            def _parse_float(v: str | int | float | None, name: str) -> None:
                 if v is not None and str(v).strip():
                     try:
                         f = float(v)

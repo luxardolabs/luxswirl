@@ -2,6 +2,7 @@
 Pydantic schemas for Registration Key domain.
 """
 
+from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
@@ -115,6 +116,20 @@ class RegistrationKeyResponse(TimestampSchema):
             }
         }
     }
+
+
+@dataclass(frozen=True)
+class RegistrationKeyUrls:
+    """Finished hrefs for one registration key row (fw.url_assembly_in_view)."""
+
+    revoke: str
+    delete: str
+
+
+class RegistrationKeyRow(RegistrationKeyResponse):
+    """A registration key as the settings page lists it, with its links."""
+
+    urls: RegistrationKeyUrls
 
 
 class RegistrationKeyListResponse(BaseSchema):

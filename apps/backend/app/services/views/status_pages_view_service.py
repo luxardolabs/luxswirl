@@ -17,10 +17,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.query_params import split_csv
 from app.models.enum_model import CheckHealthStatus, CheckType, MaintenanceJobKind
 from app.schemas.auth_schema import AuthedUser
+from app.schemas.maintenance_job_schema import MaintenanceJobResponse
 from app.schemas.pagination_schema import build_pagination
 from app.schemas.status_page_schema import (
     StatusPageCreate,
     StatusPageInDB,
+    StatusPageRow,
     StatusPageUpdate,
     StatusPageUrls,
 )
@@ -40,7 +42,7 @@ ALLOWED_TIME_RANGES: list[int] = [30, 60, 120, 240, 480, 1440]
 def _normalize_status_bar_minutes(minutes: int | None) -> int:
     """Coerce status_bar_minutes to one of the allowed windows; default 30."""
     if minutes in ALLOWED_TIME_RANGES:
-        return minutes  # type: ignore[return-value]
+        return minutes
     return 30
 
 
@@ -76,7 +78,9 @@ def _time_range_choices(base_url: str, *, selected: int) -> list[dict[str, objec
     ]
 
 
-def _resolve_time_range(query_value: int | None, page_config: dict | None) -> int:
+def _resolve_time_range(
+    query_value: int | None, page_config: dict[str, Any] | None
+) -> int:
     """Pick time-range minutes: query > page config > default 30."""
     if query_value is not None and query_value in ALLOWED_TIME_RANGES:
         return query_value
@@ -103,23 +107,29 @@ def build_status_page_urls(
     )
 
 
-def _remove_item_urls(request: Request, status_page: StatusPageInDB) -> list[str]:
-    """One finished remove href per dashboard item, indexed as the template loops.
+def _dashboard_items(
+    request: Request, status_page: StatusPageInDB
+) -> list[tuple[dict[str, Any], str]]:
+    """Each dashboard item paired with its finished remove href.
 
-    The template renders `remove_item_urls[loop.index0]`, so the list order must
-    match `status_page.items`.
+    The remove route addresses an item by its position, so the pairing is
+    built here, in `status_page.items` order, rather than looked up by loop
+    index in the template.
 
     .path, not str(): url_for returns an absolute url from the request's
     scheme/host, which behind TLS-terminating nginx can emit http:// into an
     https:// page.
     """
     return [
-        request.url_for(
-            "remove_item_from_dashboard",
-            status_page_id=status_page.id,
-            item_index=index,
-        ).path
-        for index in range(len(status_page.items or []))
+        (
+            item,
+            request.url_for(
+                "remove_item_from_dashboard",
+                status_page_id=status_page.id,
+                item_index=index,
+            ).path,
+        )
+        for index, item in enumerate(status_page.items or [])
     ]
 
 
@@ -160,15 +170,15 @@ class StatusPagesViewService:
         pagination = build_pagination(
             page=page, per_page=per_page, total=total, filters=filters
         )
-        page_urls = {
-            sp.id: build_status_page_urls(request, sp.id, sp.slug)
-            for sp in status_pages
-        }
         return {
-            "page_urls": page_urls,
             "request": request,
             "current_user": current_user,
-            "status_pages": status_pages,
+            "status_pages": [
+                StatusPageRow(
+                    **dict(sp), urls=build_status_page_urls(request, sp.id, sp.slug)
+                )
+                for sp in status_pages
+            ],
             "public_count": public_count,
             "private_count": private_count,
             "filters": filters,
@@ -195,9 +205,7 @@ class StatusPagesViewService:
         status_page_id: UUID,
     ) -> dict[str, Any]:
         """Populated status-page form (raises StatusPageNotFoundException if missing)."""
-        status_page = await StatusPageCoreService.get_status_page_by_id(
-            db, status_page_id
-        )
+        status_page = await StatusPageCoreService.get_status_page(db, status_page_id)
         return {
             "sp_urls": build_status_page_urls(
                 request, status_page.id, status_page.slug
@@ -215,9 +223,7 @@ class StatusPagesViewService:
         status_page_id: UUID,
     ) -> dict[str, Any]:
         """Full manage page — items, filters, available checks."""
-        status_page = await StatusPageCoreService.get_status_page_by_id(
-            db, status_page_id
-        )
+        status_page = await StatusPageCoreService.get_status_page(db, status_page_id)
         context = await DashboardRender.build_dashboard_context(db, status_page)
         all_tags = await CheckCoreService.get_all_tags_combined(db)
         filtered_checks = await DashboardRender.get_filtered_checks_with_status(
@@ -234,7 +240,7 @@ class StatusPagesViewService:
             "request": request,
             "current_user": current_user,
             "status_page": status_page,
-            "remove_item_urls": _remove_item_urls(request, status_page),
+            "dashboard_items": _dashboard_items(request, status_page),
             "filtered_checks": filtered_checks,
             "dashboard_check_ids": set(dashboard_check_ids),
             **context,
@@ -264,9 +270,7 @@ class StatusPagesViewService:
             search=search or None,
             limit=1000,
         )
-        status_page = await StatusPageCoreService.get_status_page_by_id(
-            db, status_page_id
-        )
+        status_page = await StatusPageCoreService.get_status_page(db, status_page_id)
         dashboard_check_ids = [
             item.get("check_id")
             for item in status_page.items
@@ -287,16 +291,14 @@ class StatusPagesViewService:
         status_page_id: UUID,
     ) -> dict[str, Any]:
         """Dashboard items partial (used after filter changes)."""
-        status_page = await StatusPageCoreService.get_status_page_by_id(
-            db, status_page_id
-        )
+        status_page = await StatusPageCoreService.get_status_page(db, status_page_id)
         context = await DashboardRender.build_dashboard_context(db, status_page)
         all_tags = await CheckCoreService.get_all_tags_combined(db)
         return {
             "request": request,
             "current_user": current_user,
             "status_page": status_page,
-            "remove_item_urls": _remove_item_urls(request, status_page),
+            "dashboard_items": _dashboard_items(request, status_page),
             **context,
             "all_tags": all_tags,
         }
@@ -311,7 +313,7 @@ class StatusPagesViewService:
         description: str,
         is_public: bool,
         status_bar_minutes: int,
-    ):
+    ) -> StatusPageInDB:
         """Create a status page (validates status_bar_minutes)."""
         config = {
             "status_bar_minutes": _normalize_status_bar_minutes(status_bar_minutes)
@@ -340,11 +342,9 @@ class StatusPagesViewService:
         description: str,
         is_public: bool,
         status_bar_minutes: int,
-    ):
+    ) -> StatusPageInDB:
         """Update a status page (merges existing config with new status_bar_minutes)."""
-        existing_page = await StatusPageCoreService.get_status_page_by_id(
-            db, status_page_id
-        )
+        existing_page = await StatusPageCoreService.get_status_page(db, status_page_id)
         existing_config = (existing_page.config or {}) if existing_page else {}
         existing_config["status_bar_minutes"] = _normalize_status_bar_minutes(
             status_bar_minutes
@@ -369,11 +369,9 @@ class StatusPagesViewService:
     @staticmethod
     async def enqueue_delete(
         db: AsyncSession, status_page_id: UUID, owner_id: UUID | None = None
-    ):
+    ) -> MaintenanceJobResponse:
         """Enqueue a status_page_delete maintenance job. See LUXSWIRL-105."""
-        await StatusPageCoreService.get_status_page_by_id(
-            db, status_page_id
-        )  # 404 cleanly
+        await StatusPageCoreService.get_status_page(db, status_page_id)  # 404 cleanly
         return await MaintenanceJobCoreService.enqueue(
             db,
             kind=MaintenanceJobKind.STATUS_PAGE_DELETE,
@@ -427,7 +425,7 @@ class StatusPagesViewService:
             "request": request,
             "current_user": current_user,
             "status_page": status_page,
-            "remove_item_urls": _remove_item_urls(request, status_page),
+            "dashboard_items": _dashboard_items(request, status_page),
             **context,
         }, None
 
@@ -452,7 +450,7 @@ class StatusPagesViewService:
             "request": request,
             "current_user": current_user,
             "status_page": status_page,
-            "remove_item_urls": _remove_item_urls(request, status_page),
+            "dashboard_items": _dashboard_items(request, status_page),
             **context,
         }
 
@@ -471,15 +469,13 @@ class StatusPagesViewService:
             "Reordered items in status page",
             extra={"status_page_id": str(status_page_id)},
         )
-        status_page = await StatusPageCoreService.get_status_page_by_id(
-            db, status_page_id
-        )
+        status_page = await StatusPageCoreService.get_status_page(db, status_page_id)
         context = await DashboardRender.build_dashboard_context(db, status_page)
         return {
             "request": request,
             "current_user": current_user,
             "status_page": status_page,
-            "remove_item_urls": _remove_item_urls(request, status_page),
+            "dashboard_items": _dashboard_items(request, status_page),
             **context,
         }
 
@@ -516,7 +512,7 @@ class StatusPagesViewService:
             "request": request,
             "current_user": current_user,
             "status_page": status_page,
-            "remove_item_urls": _remove_item_urls(request, status_page),
+            "dashboard_items": _dashboard_items(request, status_page),
             **context,
         }, None
 
@@ -546,7 +542,7 @@ class StatusPagesViewService:
             "request": request,
             "current_user": current_user,
             "status_page": status_page,
-            "remove_item_urls": _remove_item_urls(request, status_page),
+            "dashboard_items": _dashboard_items(request, status_page),
             **context,
         }
 
@@ -571,15 +567,13 @@ class StatusPagesViewService:
                 "status_page_id": str(status_page_id),
             },
         )
-        status_page = await StatusPageCoreService.get_status_page_by_id(
-            db, status_page_id
-        )
+        status_page = await StatusPageCoreService.get_status_page(db, status_page_id)
         context = await DashboardRender.build_dashboard_context(db, status_page)
         return {
             "request": request,
             "current_user": current_user,
             "status_page": status_page,
-            "remove_item_urls": _remove_item_urls(request, status_page),
+            "dashboard_items": _dashboard_items(request, status_page),
             **context,
         }
 
@@ -612,7 +606,7 @@ class StatusPagesViewService:
             "request": request,
             "current_user": current_user,
             "status_page": status_page,
-            "remove_item_urls": _remove_item_urls(request, status_page),
+            "dashboard_items": _dashboard_items(request, status_page),
             **context,
             "all_tags": all_tags,
         }
@@ -635,7 +629,7 @@ class StatusPagesViewService:
           - context None, signal "not_found" → 404
           - context None, signal "redirect_login" → 307 to login
         """
-        status_page = await StatusPageCoreService.get_status_page_by_slug(db, slug)
+        status_page = await StatusPageCoreService.get_page_by_slug(db, slug)
         if not status_page:
             return None, "not_found"
         if not status_page.is_public and not current_user:
@@ -690,7 +684,7 @@ class StatusPagesViewService:
         Returns (context, http_status). status is set on error (404, 401),
         None on success.
         """
-        status_page = await StatusPageCoreService.get_status_page_by_slug(db, slug)
+        status_page = await StatusPageCoreService.get_page_by_slug(db, slug)
         if not status_page:
             return None, 404
         if not status_page.is_public and not current_user:

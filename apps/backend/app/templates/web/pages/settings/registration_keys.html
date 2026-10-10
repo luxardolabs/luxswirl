@@ -115,16 +115,16 @@
             {% if not key.revoked_at %}
             <div class="flex items-center gap-2 pt-3 border-t border-dark-border">
                 {{ confirm_action_btn(icon_svg=ICO_BAN, label='Revoke', color='red',
-                    hx_post=key_urls[key.id].revoke,
+                    hx_post=key.urls.revoke,
                     after='reload', extra_classes='flex-1', title='Revoke key') }}
                 {% if current_user.role == 'admin' %}
-                {{ delete_icon_button(delete_url=key_urls[key.id].delete, target_id='key-' ~ key.id) }}
+                {{ delete_icon_button(delete_url=key.urls.delete, target_id='key-' ~ key.id) }}
                 {% endif %}
             </div>
             {% else %}
             <div class="pt-3 border-t border-dark-border">
                 {{ confirm_action_btn(icon_svg=ICO_TRASH, label='Delete Permanently', color='red',
-                    hx_delete=key_urls[key.id].delete,
+                    hx_delete=key.urls.delete,
                     hx_target='#key-' ~ key.id, hx_swap='outerHTML',
                     extra_classes='w-full', title='Permanently delete this revoked key') }}
             </div>

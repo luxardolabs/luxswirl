@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.datetime_utils import utc_now
 from app.core.sparkline import sparkline_path
+from app.schemas.check_result_schema import StatusBarResult
 from app.schemas.check_schema import DashboardCheck
 from app.schemas.status_page_schema import StatusPageInDB
 from app.services.core.agent_core_service import AgentCoreService
@@ -22,6 +23,21 @@ if TYPE_CHECKING:
     pass
 
 logger = get_logger("luxswirl.web.services.dashboard")
+
+
+def mark_check_runs(rendered_items: list[dict[str, Any]]) -> None:
+    """Mark where each run of consecutive check cards opens and closes.
+
+    A run shares one flex row on the public page, so the template opens a row
+    at a check whose predecessor is not a check, and closes it at a check
+    whose successor is not one. Groups carry no markers.
+    """
+    types = [item["type"] for item in rendered_items]
+    for index, item in enumerate(rendered_items):
+        if item["type"] != "check":
+            continue
+        item["opens_run"] = index == 0 or types[index - 1] != "check"
+        item["closes_run"] = index == len(types) - 1 or types[index + 1] != "check"
 
 
 class DashboardRender:
@@ -491,7 +507,7 @@ class DashboardRender:
             )
 
             # Group results by check_id
-            results_by_check: dict[UUID, list] = {}
+            results_by_check: dict[UUID, list[StatusBarResult]] = {}
             for result_row in all_results:
                 if result_row.check_id not in results_by_check:
                     results_by_check[result_row.check_id] = []
@@ -846,7 +862,7 @@ class DashboardRender:
                 )
 
         # PHASE 3: Build rendered items
-        rendered_items = []
+        rendered_items: list[dict[str, Any]] = []
         all_checks = []
 
         for item, check_ids in items_with_checks:
@@ -909,6 +925,8 @@ class DashboardRender:
 
         bucket_size = DashboardRender._get_bucket_size(time_range_minutes)
         num_bars = time_range_minutes // bucket_size
+
+        mark_check_runs(rendered_items)
 
         return {
             "overall_status": overall_status,
