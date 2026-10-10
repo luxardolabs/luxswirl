@@ -37,8 +37,6 @@ from app.schemas.check_schema import (
     BulkCheckCreateResponse,
     CheckCreate,
     CheckInDB,
-    CheckListResponse,
-    CheckResponse,
     CheckUpdate,
 )
 from app.schemas.import_export_schema import CheckExport
@@ -351,7 +349,7 @@ class CheckCoreService:
         db: AsyncSession,
         check_id: UUID,
         agent_id: UUID,
-        overrides: CheckCreate | None = None,
+        overrides: CheckCreate | CheckUpdate | None = None,
         skip_config_update: bool = False,
         *,
         actor_is_admin: bool = False,
@@ -1311,78 +1309,6 @@ class CheckCoreService:
         logger.info(
             "Assigned check to alerts",
             extra={"check_id": str(check_id), "alert_count": len(alert_ids)},
-        )
-
-    @staticmethod
-    def build_check_list_response(
-        checks: list[Check], agent_name: str | None = None
-    ) -> CheckListResponse:
-        """
-        Build CheckListResponse from list of Check models.
-
-        Transforms Check models into CheckResponse schemas with counts.
-        Unpacks check_config JSONB fields and builds fully qualified names.
-
-        Args:
-            checks: List of Check model instances
-            agent_name: Optional agent name for FQN building
-
-        Returns:
-            Dict ready for CheckListResponse validation containing:
-            - checks: List of CheckResponse dicts
-            - total: Total count
-            - enabled_count: Count of enabled checks
-            - disabled_count: Count of disabled checks
-        """
-
-        check_responses = []
-        enabled_count = 0
-        disabled_count = 0
-
-        for check in checks:
-            if check.enabled:
-                enabled_count += 1
-            else:
-                disabled_count += 1
-
-            # Build fully qualified name
-            agent_part = agent_name or str(check.agent_id)
-            fqn = f"{agent_part}:{check.display_name}"
-
-            # Build base check dict
-            check_dict = {
-                "id": check.id,
-                "agent_id": check.agent_id,
-                "display_name": check.display_name,
-                "check_type": check.check_type,
-                "target": check.target,
-                "description": check.description,
-                "interval_seconds": check.interval_seconds,
-                "timeout_seconds": check.timeout_seconds,
-                "enabled": check.enabled,
-                "retry_attempts": check.retry_attempts,
-                "tags": check.tags,
-                "script_code": check.script_code,
-                "created_at": check.created_at,
-                "updated_at": check.updated_at,
-                "fully_qualified_name": fqn,
-                "latest_status": None,
-                "latest_latency_ms": None,
-                "success_rate_24h": None,
-            }
-
-            # Unpack check_config JSONB fields into the check dict
-            # This makes all check-type-specific fields available
-            if check.check_config:
-                check_dict.update(check.check_config)
-
-            check_responses.append(CheckResponse.model_validate(check_dict))
-
-        return CheckListResponse(
-            checks=check_responses,
-            total=len(check_responses),
-            enabled_count=enabled_count,
-            disabled_count=disabled_count,
         )
 
     @staticmethod

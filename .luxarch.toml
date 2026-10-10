@@ -209,6 +209,7 @@ require_dep = ["AdminUser", "AdminUserWeb", "require_admin", "require_admin_web"
 class_name = "Check"
 source_files = [
   "services/core/check_core_service.py",
+  "services/core/check_api_core_service.py",
   "api/v1/routers/check_router.py",
 ]
 fields = [
