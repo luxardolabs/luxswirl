@@ -10,16 +10,16 @@ import contextlib
 from shared.logger import get_logger
 
 from app.core.config import settings
-from app.db import get_session_maker
+from app.db import worker_session
 from app.services.core.job_core_service import JobCoreService
 
 logger = get_logger("luxswirl.background.job_purge")
 
 # Task handle
-_purge_task: asyncio.Task | None = None
+_purge_task: asyncio.Task[None] | None = None
 
 
-async def _job_purge_loop():
+async def _job_purge_loop() -> None:
     """Background task loop to purge expired jobs."""
     interval_hours = settings.server.job_purge_interval_hours
     logger.info(
@@ -27,18 +27,14 @@ async def _job_purge_loop():
         extra={"interval_hours": interval_hours},
     )
 
-    # Get session maker
-    session_maker = get_session_maker()
-
     while True:
         try:
             # Wait for interval
             await asyncio.sleep(interval_hours * 3600)  # Convert hours to seconds
 
-            # Purge expired jobs
-            async with session_maker() as db:
+            # Purge expired jobs: one transaction, committed by the owner
+            async with worker_session() as db:
                 deleted_count = await JobCoreService.purge_expired_jobs(db)
-                await db.commit()
                 if deleted_count > 0:
                     logger.info(
                         "Purged expired jobs",
@@ -55,7 +51,7 @@ async def _job_purge_loop():
             # Continue running despite errors
 
 
-def start_job_purge_task() -> asyncio.Task:
+def start_job_purge_task() -> asyncio.Task[None]:
     """
     Start the job purge background task.
 
@@ -74,7 +70,7 @@ def start_job_purge_task() -> asyncio.Task:
     return _purge_task
 
 
-async def stop_job_purge_task():
+async def stop_job_purge_task() -> None:
     """Stop the job purge background task."""
     global _purge_task
 

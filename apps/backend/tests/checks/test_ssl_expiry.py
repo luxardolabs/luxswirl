@@ -12,10 +12,10 @@ constants: the ingest path and the panel must agree on the same windows.
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from app.core import ssl_expiry as ssl_expiry_module
 from app.core.ssl_expiry import ssl_expiry_fields
 
 KEYS = {
@@ -47,30 +47,18 @@ def test_unreadable_expiry_still_returns_every_field(value: str | None) -> None:
     assert fields["expires_critical"] is False
 
 
-def test_unparseable_date_is_logged(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The app logger does not propagate to root, so assert on it directly."""
-    warnings: list[str] = []
-    monkeypatch.setattr(
-        ssl_expiry_module.logger,
-        "warning",
-        lambda msg, **kw: warnings.append(msg),
-    )
+def test_unparseable_date_is_logged(app_logs: list[logging.LogRecord]) -> None:
+    """A date that cannot be parsed is warned about, through the real logger."""
     ssl_expiry_fields("not a date", warning_days=30, critical_days=7)
-    assert warnings == [
+    assert [r.getMessage() for r in app_logs if r.levelno == logging.WARNING] == [
         "Unparseable SSL certificate expiration date — expiry not shown"
     ]
 
 
-def test_missing_date_is_not_logged(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_missing_date_is_not_logged(app_logs: list[logging.LogRecord]) -> None:
     """No date at all is a plain absence, not a parse failure worth warning about."""
-    warnings: list[str] = []
-    monkeypatch.setattr(
-        ssl_expiry_module.logger,
-        "warning",
-        lambda msg, **kw: warnings.append(msg),
-    )
     ssl_expiry_fields(None, warning_days=30, critical_days=7)
-    assert warnings == []
+    assert [r for r in app_logs if r.levelno >= logging.WARNING] == []
 
 
 @pytest.mark.parametrize(

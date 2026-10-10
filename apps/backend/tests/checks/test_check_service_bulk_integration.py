@@ -204,6 +204,45 @@ class TestCloneCheck:
         assert cloned.check_type == source.check_type
         assert cloned.target == source.target
 
+    async def test_clone_overrides_win_and_unset_fields_keep_the_source(
+        self, db: AsyncSession
+    ):
+        agent = make_agent()
+        db.add(agent)
+        await db.flush()
+        source = await CheckCoreService.create_check(
+            db,
+            agent.id,
+            CheckCreate(
+                display_name="original",
+                check_type="http",
+                target="https://example.test",
+                http_method="GET",
+                interval_seconds=60,
+                timeout_seconds=5,
+                enabled=True,
+            ),
+            skip_config_update=True,
+        )
+
+        cloned = await CheckCoreService.clone_check(
+            db,
+            source.id,
+            agent.id,
+            overrides=CheckCreate(
+                display_name="copy",
+                check_type="http",
+                target="https://other.test",
+                interval_seconds=120,
+            ),
+            skip_config_update=True,
+        )
+
+        assert cloned.target == "https://other.test"
+        assert cloned.interval_seconds == 120
+        # Left unset (None) on the overrides: the source's value carries over.
+        assert cloned.timeout_seconds == 5
+
     async def test_clone_to_different_agent(self, db: AsyncSession):
         agent_a = make_agent()
         agent_b = make_agent()

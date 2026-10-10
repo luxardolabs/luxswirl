@@ -73,9 +73,9 @@ allow = [
 
 [test]
 # The coverage floor (test.coverage_floor_set): the whole percent `make test` measured
-# (branch coverage, emitted test block) on 2026-10-10 — 629 tests, TOTAL 63%. It only
+# (branch coverage, emitted test block) on 2026-10-10 — 664 tests, TOTAL 64%. It only
 # ever goes up.
-coverage_min = 63
+coverage_min = 64
 
 # Warnings the canonical pytest config (filterwarnings = error) must let through.
 # Tracked debt, never blanket: each needs a reason, and it goes away when upstream

@@ -216,15 +216,16 @@ Secrets (`SECURITY__SECRET_KEY`, `SECURITY__AUTH_TOKENS`, `SECURITY__FIELD_ENCRY
 
 ### Logging (`LOG__`)
 
-| Env Variable           | Default                                                                        | Purpose                                                 |
-| ---------------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------- |
-| `LOG__LEVEL`           | `INFO`                                                                         | `DEBUG` \| `INFO` \| `WARNING` \| `ERROR` \| `CRITICAL` |
-| `LOG__FORMAT`          | `%(asctime)s - %(name)s - %(levelname)s - %(message)s`                         | Log line format                                         |
-| `LOG__ENABLE_FILE_LOG` | `true`                                                                         | Enable file logging                                     |
-| `LOG__LOG_DIR`         | `logs`                                                                         | Log directory                                           |
-| `LOG__MAX_BYTES`       | `10485760`                                                                     | Max log file size (10 MB)                               |
-| `LOG__BACKUP_COUNT`    | `5`                                                                            | Number of rotated backup files                          |
-| `LOG__MODULE_LEVELS`   | `{"luxswirl.services.check":"ERROR","luxswirl.services.check_result":"ERROR"}` | Per-module log level overrides                          |
+Both services write one JSON object per line to stdout (the fleet logging module). Every caller field sits under `attributes`, and every line passes through the credential redactor.
+
+| Env Variable         | Default                                                                        | Purpose                                                                                  |
+| -------------------- | ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------- |
+| `LOG__LEVEL`         | `INFO`                                                                         | Root level: `DEBUG` \| `INFO` \| `WARNING` \| `ERROR` \| `CRITICAL` (agent reads it too) |
+| `LOG__MODULE_LEVELS` | `{"luxswirl.services.check":"ERROR","luxswirl.services.check_result":"ERROR"}` | Per-logger levels (server), applied over the built-in third-party defaults               |
+| `LOG_MODULE_LEVELS`  | —                                                                              | Per-logger levels as JSON, applied last: turn one module up at runtime without a deploy  |
+| `LOG_FORMAT`         | `json`                                                                         | `text` gives a readable line for local development; anything that ships uses JSON        |
+
+`LOG__FORMAT`, `LOG__ENABLE_FILE_LOG`, `LOG__LOG_DIR`, `LOG__MAX_BYTES` and `LOG__BACKUP_COUNT` are accepted by the settings model but nothing reads them: there is no file logging, and the line format is fixed.
 
 ### Trusted Proxy Networks — what this controls
 

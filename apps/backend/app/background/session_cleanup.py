@@ -15,13 +15,13 @@ from app.services.core.auth_core_service import AuthCoreService
 logger = get_logger("luxswirl.background.session_cleanup")
 
 # Task handle
-_cleanup_task: asyncio.Task | None = None
+_cleanup_task: asyncio.Task[None] | None = None
 
 # Cleanup interval in hours (run every hour by default)
 CLEANUP_INTERVAL_HOURS = 1
 
 
-async def _session_cleanup_loop():
+async def _session_cleanup_loop() -> None:
     """Background task loop to cleanup expired sessions."""
     logger.info(
         "Session cleanup task started",
@@ -56,7 +56,7 @@ async def _session_cleanup_loop():
             # Continue running despite errors
 
 
-def start_session_cleanup_task() -> asyncio.Task:
+def start_session_cleanup_task() -> asyncio.Task[None]:
     """
     Start the session cleanup background task.
 
@@ -75,7 +75,7 @@ def start_session_cleanup_task() -> asyncio.Task:
     return _cleanup_task
 
 
-async def stop_session_cleanup_task():
+async def stop_session_cleanup_task() -> None:
     """Stop the session cleanup background task."""
     global _cleanup_task
 
