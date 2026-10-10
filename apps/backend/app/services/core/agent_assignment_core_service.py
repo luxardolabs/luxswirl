@@ -6,6 +6,8 @@ Implements REPLICATE and DISTRIBUTE modes for checks.
 
 import hashlib
 from collections.abc import Sequence
+from typing import Any
+from uuid import UUID
 
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,6 +16,9 @@ from app.crud.agent_crud import AgentCRUD
 from app.crud.check_crud import CheckCRUD
 from app.models.agent_model import Agent
 from app.models.check_model import Check
+from app.schemas.check_schema import CheckListResponse
+from app.services.core.agent_core_service import AgentCoreService
+from app.services.core.check_core_service import CheckCoreService
 
 logger = get_logger("luxswirl.services.agent_assignment")
 
@@ -22,7 +27,7 @@ class AgentAssignmentCoreService:
     """Service for agent assignment logic."""
 
     @staticmethod
-    def agent_matches_selector(agent: Agent, selector: dict | None) -> bool:
+    def agent_matches_selector(agent: Agent, selector: dict[str, Any] | None) -> bool:
         """
         Check if agent matches the given selector.
 
@@ -106,7 +111,7 @@ class AgentAssignmentCoreService:
     @staticmethod
     def filter_agents_by_selector(
         agents: Sequence[Agent],
-        selector: dict | None,
+        selector: dict[str, Any] | None,
     ) -> Sequence[Agent]:
         """Filter an already-loaded agent list by a selector.
 
@@ -128,6 +133,19 @@ class AgentAssignmentCoreService:
             for agent in agents
             if AgentAssignmentCoreService.agent_matches_selector(agent, selector)
         ]
+
+    @staticmethod
+    async def check_list_for_agent(
+        db: AsyncSession, agent_id: UUID
+    ) -> CheckListResponse:
+        """The checks `agent_id` should run, as the agent's check-list response.
+
+        Raises:
+            AgentNotFoundException: If the agent does not exist
+        """
+        agent = await AgentCoreService.get_agent_by_id(db, agent_id)
+        checks = await AgentAssignmentCoreService.get_checks_for_agent(db, agent)
+        return CheckCoreService.build_check_list_response(checks, agent.agent_name)
 
     @staticmethod
     async def get_checks_for_agent(

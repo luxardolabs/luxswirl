@@ -5,6 +5,7 @@ Agent service - business logic for agent operations.
 import secrets
 from collections.abc import Sequence
 from datetime import datetime, timedelta
+from typing import Any
 from uuid import UUID
 
 import bcrypt
@@ -649,7 +650,7 @@ class AgentCoreService:
     @staticmethod
     async def process_heartbeat(
         db: AsyncSession,
-        agent: Agent,
+        agent_id: UUID,
         heartbeat: AgentHeartbeat,
         *,
         using_agent_key: bool,
@@ -660,7 +661,7 @@ class AgentCoreService:
         job dispatch. This method handles persistence, gating, and response
         construction.
         """
-        agent = await AgentCoreService.update_from_heartbeat(db, agent.id, heartbeat)
+        agent = await AgentCoreService.update_from_heartbeat(db, agent_id, heartbeat)
 
         config_version = (
             agent.checks_updated_at.isoformat() if agent.checks_updated_at else None
@@ -672,7 +673,7 @@ class AgentCoreService:
             agent.check_sync_interval or settings.server.default_check_sync_interval
         )
 
-        jobs_list: list = []
+        jobs_list: list[dict[str, Any]] = []
         message: str | None = None
         if using_agent_key:
             jobs_list = await JobCoreService.get_jobs_for_dispatch(db, agent.id)

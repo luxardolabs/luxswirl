@@ -58,7 +58,6 @@ tenant_cross = [
   { function = "list_expired", evidence = "session cleanup task — reads by expiry across every user by design" },
 ]
 auth_public = [
-  { function = "agent_heartbeat", evidence = "authenticates in the body via _authenticate_heartbeat() — accepts the agent-specific key OR the registration token, so it cannot use a Depends that assumes one" },
   { function = "create_first_admin", evidence = "first-run setup: re-checks needs_setup() and redirects to /login the moment any user exists, so it is only reachable on an empty install" },
 ]
 js_network = [
@@ -262,7 +261,18 @@ column = "user_id"
 # API-token routes are the system/collector tier.
 superuser = ["AdminUser", "AdminUserWeb", "require_admin", "require_admin_web"]
 tenant_user = ["CurrentUser", "CurrentUserWeb", "EditorUserWeb", "get_current_user"]
-collector = ["verify_api_token", "verify_agent_token"]
+collector = [
+  "verify_api_token",
+  "verify_agent_token",
+  # Agent-authenticated dependencies (app/api/deps.py): each proves the
+  # agent's key before the route runs and yields only the agent or job id.
+  "require_agent",
+  "AuthenticatedAgentId",
+  "require_heartbeat_sender",
+  "AuthenticatedHeartbeat",
+  "require_job_owner",
+  "AgentOwnedJobId",
+]
 public_paths = ["login", "setup", "logout"]
 
 [target.csrf]

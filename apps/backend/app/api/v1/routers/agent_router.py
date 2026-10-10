@@ -14,11 +14,11 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, s
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import AuthenticatedHeartbeat
 from app.core.config import settings
 from app.core.exceptions import AgentNotFoundException
 from app.core.rate_limit import limiter
 from app.core.security import (
-    authenticate_heartbeat,
     verify_api_token,
     verify_registration_token,
 )
@@ -361,25 +361,13 @@ async def get_agent_stats(
 async def agent_heartbeat(
     request: Request,
     heartbeat: AgentHeartbeat,
+    sender: AuthenticatedHeartbeat,
     db: Annotated[AsyncSession, Depends(get_db)],
-    authorization: Annotated[str | None, Header()] = None,
 ) -> AgentHeartbeatResponse:
     """Process agent heartbeat. Auth accepts agent-specific key OR registration token."""
-    agent = await AgentCoreService.get_agent_by_id(db, heartbeat.agent_id)
-    if not agent:
-        raise AgentNotFoundException(str(heartbeat.agent_id))
-
-    using_agent_key = await authenticate_heartbeat(agent, authorization, db)
-
-    try:
-        return await AgentCoreService.process_heartbeat(
-            db, agent, heartbeat, using_agent_key=using_agent_key
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to process heartbeat: {e}",
-        ) from e
+    return await AgentCoreService.process_heartbeat(
+        db, sender.agent_id, heartbeat, using_agent_key=sender.using_agent_key
+    )
 
 
 # ========== Agent API Key Management Endpoints ==========
