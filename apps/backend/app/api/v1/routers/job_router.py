@@ -8,14 +8,15 @@ This router only handles HTTP concerns (request/response, status codes, etc.).
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import AgentOwnedJob
 from app.core.config import settings
 from app.core.exceptions import AgentNotFoundException
 from app.core.query_params import JobStatusFilter, JobTypeFilter
 from app.core.rate_limit import limiter
-from app.core.security import verify_agent_token, verify_api_token
+from app.core.security import verify_api_token
 from app.db import get_db
 from app.schemas.base_schema import ErrorResponse
 from app.schemas.job_schema import (
@@ -244,39 +245,23 @@ async def get_job(
 @limiter.limit(settings.security.agent_api_rate_limit)
 async def submit_job_results(
     request: Request,
-    job_id: UUID,
+    job: AgentOwnedJob,
     result_data: JobResultSubmit,
     db: Annotated[AsyncSession, Depends(get_db)],
-    authorization: Annotated[str | None, Header()] = None,
-):
-    """Submit job results from agent."""
-    job = await JobCoreService.submit_job_result(db, job_id, result_data)
-
-    if not job:
+) -> JobResponse:
+    """Submit job results from the agent the job is assigned to."""
+    updated = await JobCoreService.submit_job_result(db, job.id, result_data)
+    if updated is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Job not found: {job_id}",
+            detail=f"Job not found: {job.id}",
         )
+    job = updated
 
-    # Get agent and verify authentication
     agent_hostname = None
-    if job.agent_id:
+    if job.agent_id is not None:
         agent = await AgentCoreService.get_agent_by_id(db, job.agent_id)
-        if agent:
-            agent_hostname = agent.hostname
-
-            # Security: REQUIRE agent-specific key for job submissions
-            # Registration token is NOT allowed - prevents impersonation attacks
-
-            if not agent.api_key_hash:
-                # Agent hasn't been approved yet - can't submit job results
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Agent must be approved and have agent-specific key to submit job results",
-                )
-
-            # Verify agent-specific key (no fallback to registration token)
-            await verify_agent_token(agent, authorization)
+        agent_hostname = agent.hostname
 
     return JobResponse(
         id=job.id,

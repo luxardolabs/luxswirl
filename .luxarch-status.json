@@ -1142,13 +1142,13 @@
         },
         {
           "rule": "fw.mutating_route_authenticated",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.84.0",
-          "violations": 1,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
-          "fix": "Add an authenticating dependency (one of [auth].deps, an enforcing Security scheme, a dependency that refuses the anonymous caller with 401/403, or an Annotated alias resolving to one) and scope the object to the caller. A dependency that authenticates in a way luxarch cannot read (it lives in another package, or refuses through an exception handler) is declared in [auth].deps. If the route is genuinely public (login/oauth/register/logout, a webhook verified by signature, a public form), record it in [allowlist].auth_public = [{ function|path, evidence }].",
+          "fix": "",
           "example": ""
         },
         {
@@ -1285,13 +1285,13 @@
         },
         {
           "rule": "fw.injected_models_dont_cross_the_seam",
-          "status": "PASS",
+          "status": "FAIL",
           "since": "0.106.0",
-          "violations": 0,
+          "violations": 1,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
-          "fix": "",
+          "fix": "The view-seam standard says a router/view consumes SCHEMAS. For a `Depends`-injected value (user/tenant/customer), the fix is to make the dependency RETURN a schema and alias THAT (`CurrentUser = Annotated[CurrentUserDTO, Depends(get_current_user_dto)]`) \u2014 NOT to annotate the consuming param `CurrentUserDTO` while `get_current_user` still returns an ORM `User` (that half-migration reads green across three rules while the ORM row flows end to end). An unannotated dep can't be verified either \u2014 annotate it. Can't finish now? DEFER honestly ([rules.deferred] + evidence); the red stays visible. See --playbook view-seam.",
           "example": ""
         },
         {
@@ -2688,6 +2688,6 @@
     "XPASS": 1,
     "INERT": 27
   },
-  "commit": "280f527abf05fc431f11e50e9fa196282d1e5c6d",
-  "generated_at": "2026-10-10T09:02:38Z"
+  "commit": "8c88ee2e4d0fe1ac131bbd51447174a486bfef24",
+  "generated_at": "2026-10-10T09:08:29Z"
 }
