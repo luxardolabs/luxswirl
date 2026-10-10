@@ -1,10 +1,16 @@
 {% from 'macros/cards.html' import stat_card %}
 {% from 'macros/badges.html' import check_type_badge, role_badge %}
-{% from 'macros/buttons.html' import icon_view, icon_edit, icon_delete, dashed_add_btn, text_btn %}
-{% from 'macros/form_fields.html' import checkbox, input, select, textarea %}
+{% from 'macros/buttons.html' import icon_view, icon_edit, icon_delete, dashed_add_btn, text_btn, btn_save %}
+{% from 'macros/form_fields.html' import checkbox, input, select, textarea, render_field_from_schema %}
 {% from 'macros/status.html' import status_badge as check_status_badge %}
 {% from 'macros/page.html' import page_header %}
-{% from 'macros/tables.html' import data_table %}
+{% from 'macros/tables.html' import data_table, pagination_controls %}
+{% from 'macros/filters.html' import filter_card, filter_search, filter_select, filter_per_page %}
+{% from 'macros/panels.html' import panel_wrapper, panel_header, panel_content, panel_footer %}
+{% from 'macros/settings.html' import section_header, settings_category_card, settings_nav %}
+{% from 'macros/charts.html' import latency_chart %}
+{% from 'macros/agents.html' import agent_row, sparkline %}
+{% from 'macros/status.html' import status_row_compressed %}
 
 {# ═══════════════════════════════════════════════════════════════════════
    CARDS — macros/cards.html + CSS classes
@@ -150,6 +156,108 @@
                 description="This is how page headers render with a description and action buttons.",
                 actions=example_action
             ) }}
+        </div>
+    </div>
+</section>
+
+{%- set ICO_BELL %}<span class="w-6 h-6 text-brand-500 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/bell.svg" %}</span>{% endset -%}
+
+{# ═══════════════════════════════════════════════════════════════════════
+   FILTERS — macros/filters.html
+   ═══════════════════════════════════════════════════════════════════════ #}
+<section>
+    <h2 class="text-lg font-semibold text-dark-text-primary mb-1">Filters</h2>
+    <p class="text-sm text-dark-text-muted mb-4"><code class="text-brand-400">filter_card</code> wraps a list page's filters and re-queries on change, resetting to page 1. The fields inside are <code class="text-brand-400">filter_search</code>, <code class="text-brand-400">filter_select</code> and <code class="text-brand-400">filter_per_page</code>.</p>
+
+    {% call filter_card('/settings/components') %}
+        {{ filter_search('search', 'Search', 'Name or target…', '') }}
+        {% call filter_select('status', 'Status') %}
+            <option value="">All</option>
+            <option value="up">Up</option>
+            <option value="down">Down</option>
+        {% endcall %}
+        {{ filter_per_page(25) }}
+    {% endcall %}
+</section>
+
+{# ═══════════════════════════════════════════════════════════════════════
+   PAGINATION — macros/tables.html
+   ═══════════════════════════════════════════════════════════════════════ #}
+<section>
+    <h2 class="text-lg font-semibold text-dark-text-primary mb-1">Pagination</h2>
+    <p class="text-sm text-dark-text-muted mb-4"><code class="text-brand-400">pagination_controls</code> renders the page navigation for a <code class="text-brand-400">build_pagination()</code> result (here: page 2 of 42 rows, 10 per page).</p>
+
+    <div class="card p-4">
+        {{ pagination_controls(sample_pagination, '/settings/components') }}
+    </div>
+</section>
+
+{# ═══════════════════════════════════════════════════════════════════════
+   SIDE PANELS — macros/panels.html
+   ═══════════════════════════════════════════════════════════════════════ #}
+<section>
+    <h2 class="text-lg font-semibold text-dark-text-primary mb-1">Side Panels</h2>
+    <p class="text-sm text-dark-text-muted mb-4">Every create/edit form opens in <code class="text-brand-400">panel_wrapper</code> (a full-screen slide-over, so it is not opened here). Inside it: <code class="text-brand-400">panel_header</code>, <code class="text-brand-400">panel_content</code> and <code class="text-brand-400">panel_footer</code>, shown below as they render in the panel.</p>
+
+    <div class="card overflow-hidden max-w-2xl">
+        {{ panel_header('New Registration Key', subtitle='Agents register with this key') }}
+        {% call panel_content() %}
+            <label class="label" for="components-panel-name">Name</label>
+            {{ input('components-panel-name', value='edge-fleet') }}
+        {% endcall %}
+        {% call panel_footer() %}
+            {{ btn_save() }}
+        {% endcall %}
+    </div>
+</section>
+
+{# ═══════════════════════════════════════════════════════════════════════
+   SETTINGS LAYOUT — macros/settings.html
+   ═══════════════════════════════════════════════════════════════════════ #}
+<section>
+    <h2 class="text-lg font-semibold text-dark-text-primary mb-1">Settings Layout</h2>
+    <p class="text-sm text-dark-text-muted mb-4">The settings tab bar (<code class="text-brand-400">settings_nav</code>, also at the top of this page), section headers and the settings index cards.</p>
+
+    <div class="card p-6 space-y-6">
+        {{ settings_nav('components', current_user) }}
+        {{ section_header('Notifications', 'Where alerts are delivered', icon_svg=ICO_BELL) }}
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {{ settings_category_card('Notifications', 'Email, webhook and Home Assistant providers', ICO_BELL, '#') }}
+        </div>
+    </div>
+</section>
+
+{# ═══════════════════════════════════════════════════════════════════════
+   SCHEMA-DRIVEN FIELDS — macros/form_fields.html
+   ═══════════════════════════════════════════════════════════════════════ #}
+<section>
+    <h2 class="text-lg font-semibold text-dark-text-primary mb-1">Schema-driven Fields</h2>
+    <p class="text-sm text-dark-text-muted mb-4"><code class="text-brand-400">render_field_from_schema</code> renders a job parameter from its JSON schema (type, bounds, default, description).</p>
+
+    <div class="card p-6 max-w-md">
+        {{ render_field_from_schema('port', sample_job_param, true, none) }}
+    </div>
+</section>
+
+{# ═══════════════════════════════════════════════════════════════════════
+   DATA DISPLAYS — macros/status.html, macros/charts.html, macros/agents.html
+   ═══════════════════════════════════════════════════════════════════════ #}
+<section>
+    <h2 class="text-lg font-semibold text-dark-text-primary mb-1">Data Displays</h2>
+    <p class="text-sm text-dark-text-muted mb-4">The dashboard's check row with its 15-minute bar, the latency chart (shown in its empty state), and the agent sparkline. <code class="text-brand-400">agent_row</code> is the /agents row; it takes the full agent list item, so it renders there rather than here.</p>
+
+    <div class="card p-6 space-y-6">
+        <div>
+            <h3 class="text-sm font-medium text-dark-text-secondary mb-3">status_row_compressed</h3>
+            <div>{{ status_row_compressed(sample_status_row) }}</div>
+        </div>
+        <div>
+            <h3 class="text-sm font-medium text-dark-text-secondary mb-3">latency_chart</h3>
+            {{ latency_chart(sample_chart_empty) }}
+        </div>
+        <div class="max-w-xs">
+            <h3 class="text-sm font-medium text-dark-text-secondary mb-3">sparkline</h3>
+            {{ sparkline(sample_sparkline, type='cpu', color='brand') }}
         </div>
     </div>
 </section>

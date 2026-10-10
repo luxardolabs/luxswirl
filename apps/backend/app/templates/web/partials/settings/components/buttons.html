@@ -1,4 +1,4 @@
-{% from 'macros/buttons.html' import icon_btn, icon_view, icon_edit, icon_run, icon_delete, icon_history, icon_toggle_on, icon_toggle_off, icon_reset, icon_cancel, btn_prev, btn_next, btn_save, btn_create, btn_delete_text, btn_cancel_text, btn_approve, btn_reject, btn_pause, btn_resume, btn_disable, btn_enable, btn_copy, btn_download, btn_upload, btn_clone, btn_external, btn_password, btn_regenerate, btn_revoke, btn_back, btn_refresh, btn_filter, btn_signin, btn_view_text, btn_edit_text, text_btn, tag_pill_button, collapse_toggle, toggle_switch, link_btn %}
+{% from 'macros/buttons.html' import icon_btn, icon_view, icon_edit, icon_run, icon_delete, icon_history, icon_toggle_on, icon_toggle_off, icon_reset, icon_cancel, btn_prev, btn_next, btn_save, btn_create, btn_delete_text, btn_cancel_text, btn_approve, btn_reject, btn_pause, btn_resume, btn_disable, btn_enable, btn_copy, btn_download, btn_upload, btn_clone, btn_external, btn_password, btn_regenerate, btn_revoke, btn_back, btn_refresh, btn_filter, btn_signin, btn_view_text, btn_edit_text, text_btn, tag_pill_button, collapse_toggle, toggle_switch, link_btn, delete_icon_button, cancel_icon_button, confirm_action_btn, segmented_option, filter_pill %}
 
 {# ═══════════════════════════════════════════════════════════════════════
    ICON ACTION BUTTONS — macros/buttons.html
@@ -358,6 +358,51 @@
                 {{ text_btn('', 'Primary', style='primary', size='xs', type='button') }}
                 {{ text_btn('', 'Secondary', style='secondary', size='xs', type='button') }}
                 {{ text_btn('', 'Danger', style='danger', size='xs', type='button') }}
+            </div>
+        </div>
+    </div>
+</section>
+
+{# ═══════════════════════════════════════════════════════════════════════
+   CONFIRM, SEGMENTED AND FILTER CONTROLS — macros/buttons.html
+   ═══════════════════════════════════════════════════════════════════════ #}
+<section>
+    <h2 class="text-lg font-semibold text-dark-text-primary mb-1">Confirm, Segmented and Filter Controls</h2>
+    <p class="text-sm text-dark-text-muted mb-4">Arm-then-fire confirms (first click arms, the second fires within the timeout), the inline ALL/ANY switch, and client-side list filter pills.</p>
+
+    <div class="card p-6 space-y-6">
+        <div>
+            <h3 class="text-sm font-medium text-dark-text-secondary mb-3">Arm-then-fire Confirms</h3>
+            <div class="flex flex-wrap items-center gap-4">
+                <div class="flex flex-col items-center gap-1">
+                    {{ delete_icon_button(delete_url='#', target_id='components-delete-demo') }}
+                    <span class="text-xs text-dark-text-muted">delete_icon_button</span>
+                </div>
+                <div class="flex flex-col items-center gap-1">
+                    {{ cancel_icon_button(hx_post='#') }}
+                    <span class="text-xs text-dark-text-muted">cancel_icon_button</span>
+                </div>
+                <div class="flex flex-col items-center gap-1">
+                    {{ confirm_action_btn(label='Delete Job', color='red', hx_post='#') }}
+                    <span class="text-xs text-dark-text-muted">confirm_action_btn</span>
+                </div>
+            </div>
+        </div>
+
+        <div>
+            <h3 class="text-sm font-medium text-dark-text-secondary mb-3">Segmented Option</h3>
+            <div class="inline-flex rounded-lg border border-dark-border overflow-hidden">
+                {{ segmented_option('ALL', id='components-seg-all', active=true) }}
+                {{ segmented_option('ANY', id='components-seg-any') }}
+            </div>
+        </div>
+
+        <div>
+            <h3 class="text-sm font-medium text-dark-text-secondary mb-3">Filter Pills</h3>
+            <div class="flex flex-wrap items-center gap-2">
+                {{ filter_pill('All', 24) }}
+                {{ filter_pill('Up', 21, color='green') }}
+                {{ filter_pill('Down', 3, color='red') }}
             </div>
         </div>
     </div>
