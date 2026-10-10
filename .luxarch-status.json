@@ -724,13 +724,13 @@
         },
         {
           "rule": "fw.admin_endpoints_rbac",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.2.0",
-          "violations": 4,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
-          "fix": "NO-CHECK first (open doors \u2014 add a Require* dep and scope by owner/id). IMPERATIVE-CHECK = replace the in-body 403 with a declared Require* dependency. An Annotated alias whose Depends target is a require-name counts as gated. Refine [rbac].admin_url_patterns to scope the surface.",
+          "fix": "",
           "example": ""
         },
         {
@@ -878,13 +878,13 @@
         },
         {
           "rule": "fw.no_dynamic_column_sort",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.29.0",
-          "violations": 5,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
-          "fix": "Map sort keys to columns via an allowlist (dict/enum; unknown key \u2192 safe default) \u2014 never a bare getattr(Model, sort_by), and never a key spliced into `text()` / `literal_column()`. For a GENERIC field accessor (a base-crud get_by_field(field_name=\u2026)), the fleet's answer is a named method per field on the concrete crud \u2014 `select(Model).where(Model.code == code)`, which mypy type-checks and which 12 of 13 fleet base_cruds do instead of a dynamic accessor. If a generic primitive is genuinely wanted, narrow the key's domain before resolving it (membership-test it against `sqlalchemy.inspect(self.model).columns`, `Model.__table__.c`, or a container of string literals; unknown key \u2192 raise) \u2014 that shape is recognised and passes. 'Every caller passes a literal today' is not a fix: the primitive still accepts any string, so the next caller is the defect. See --playbook pagination \u00a7'Safe sort in the crud' and \u00a7'A generic field accessor'.",
+          "fix": "",
           "example": ""
         },
         {
@@ -1846,8 +1846,8 @@
         }
       ],
       "summary": {
-        "PASS": 127,
-        "FAIL": 18,
+        "PASS": 129,
+        "FAIL": 16,
         "XFAIL": 2,
         "XPASS": 0,
         "INERT": 20
@@ -2682,12 +2682,12 @@
     }
   },
   "summary": {
-    "PASS": 191,
-    "FAIL": 19,
+    "PASS": 193,
+    "FAIL": 17,
     "XFAIL": 2,
     "XPASS": 1,
     "INERT": 27
   },
-  "commit": "678d5febf50341df0cb89a1a413bb5abe25526d8",
-  "generated_at": "2026-10-10T09:45:52Z"
+  "commit": "751ac7b884520af52ec44b656bebed213fb02c19",
+  "generated_at": "2026-10-10T10:03:39Z"
 }
