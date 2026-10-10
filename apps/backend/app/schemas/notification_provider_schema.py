@@ -2,6 +2,7 @@
 Pydantic schemas for NotificationProvider domain.
 """
 
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 from uuid import UUID
@@ -163,6 +164,22 @@ class NotificationProviderResponse(NotificationProviderInDB):
 
 class NotificationProviderListResponse(PaginatedResponse[NotificationProviderResponse]):
     """One page of notification providers."""
+
+
+@dataclass(frozen=True)
+class ProviderUrls:
+    """Finished hrefs for one notification provider row (fw.url_assembly_in_view)."""
+
+    toggle: str
+    test: str
+    edit_form: str
+    delete: str
+
+
+class NotificationProviderRow(NotificationProviderInDB):
+    """A provider as the settings page lists it, with its links."""
+
+    urls: ProviderUrls
 
 
 class NotificationProviderTestRequest(BaseSchema):

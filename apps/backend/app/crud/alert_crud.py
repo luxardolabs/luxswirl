@@ -34,11 +34,20 @@ class AlertCRUD:
 
     @staticmethod
     async def get_by_id(
-        db: AsyncSession, alert_id: UUID, *, include_deleted: bool = False
+        db: AsyncSession,
+        alert_id: UUID,
+        *,
+        include_deleted: bool = False,
+        with_mappings: bool = False,
     ) -> Alert | None:
         query = select(Alert).where(Alert.id == alert_id)
         if not include_deleted:
             query = query.where(Alert.deleted_at.is_(None))
+        if with_mappings:
+            query = query.options(
+                selectinload(Alert.notification_mappings),
+                selectinload(Alert.check_mappings),
+            )
         result = await db.execute(query)
         return result.scalar_one_or_none()
 
@@ -77,7 +86,10 @@ class AlertCRUD:
         ) or 0
 
         result = await db.execute(
-            query.options(selectinload(Alert.notification_mappings))
+            query.options(
+                selectinload(Alert.notification_mappings),
+                selectinload(Alert.check_mappings),
+            )
             .order_by(Alert.id)
             .offset(skip)
             .limit(limit)

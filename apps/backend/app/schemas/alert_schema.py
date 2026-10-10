@@ -184,6 +184,21 @@ class AlertListResponse(PaginatedResponse[AlertResponse]):
     """One page of alerts."""
 
 
+@dataclass(frozen=True)
+class AlertUrls:
+    """Finished hrefs for one alert row (fw.url_assembly_in_view)."""
+
+    edit_form: str
+    delete: str
+    toggle: str
+
+
+class AlertRow(AlertResponse):
+    """An alert as the settings page lists it: the API shape plus its links."""
+
+    urls: AlertUrls
+
+
 class AlertNotificationMappingCreate(BaseSchema):
     """Schema for adding a notification provider to an alert."""
 
