@@ -124,3 +124,9 @@ class CheckArtifactStatsResponse(BaseSchema):
     total_size_bytes: int = Field(
         ..., ge=0, description="Combined size of the artifacts in bytes"
     )
+
+
+class CheckArtifactContent(CheckArtifactResponse):
+    """An artifact's metadata plus its bytes, for serving a download."""
+
+    data: bytes = Field(..., description="Binary artifact data")

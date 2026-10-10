@@ -26,8 +26,8 @@ class ArtifactsViewService:
         db: AsyncSession, artifact_id: UUID
     ) -> Response:
         """Serve an artifact's bytes inline, or a 404 body if it is gone."""
-        artifact = await ArtifactCoreService.get_artifact_by_id(db, artifact_id)
-        if not artifact:
+        artifact = await ArtifactCoreService.get_artifact_content(db, artifact_id)
+        if artifact is None:
             return Response(
                 content=b"Artifact not found",
                 status_code=404,
@@ -55,8 +55,8 @@ class ArtifactsViewService:
         Returns (context, error). On error, context is None and error is a
         human-readable string the router can surface as a 4xx response body.
         """
-        artifact = await ArtifactCoreService.get_artifact_by_id(db, artifact_id)
-        if not artifact:
+        artifact = await ArtifactCoreService.get_artifact(db, artifact_id)
+        if artifact is None:
             return None, "Artifact not found"
         if artifact.artifact_type != "trace":
             return None, "This viewer only supports Playwright trace files"

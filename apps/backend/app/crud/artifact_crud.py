@@ -7,6 +7,7 @@ from uuid import UUID
 
 from sqlalchemy import ColumnElement, and_, delete, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import defer
 
 from app.models.check_artifact_model import CheckArtifact
 
@@ -43,9 +44,10 @@ class ArtifactCRUD:
     async def list_by_check(
         db: AsyncSession, check_id: UUID, limit: int = 50
     ) -> list[CheckArtifact]:
-        """Most recent artifacts for a check."""
+        """Most recent artifacts for a check, without their bytes (`data` raises)."""
         result = await db.execute(
             select(CheckArtifact)
+            .options(defer(CheckArtifact.data, raiseload=True))
             .where(CheckArtifact.check_id == check_id)
             .order_by(desc(CheckArtifact.created_at))
             .limit(limit)
@@ -69,6 +71,7 @@ class ArtifactCRUD:
         window = timedelta(days=1)
         result = await db.execute(
             select(CheckArtifact)
+            .options(defer(CheckArtifact.data, raiseload=True))
             .where(
                 and_(
                     CheckArtifact.check_id == check_id,
