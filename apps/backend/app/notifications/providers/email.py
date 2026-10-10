@@ -2,14 +2,15 @@
 Email (SMTP) Notification Provider.
 """
 
+import logging
 import ssl
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from typing import Any
 
 import aiosmtplib
-from shared.logger import get_logger
 
+from app.notifications.email_templates import render_email
 from app.notifications.providers.base import (
     BaseNotificationProvider,
     NotificationContext,
@@ -26,9 +27,9 @@ class EmailNotificationProvider(BaseNotificationProvider):
     provider_type = "email"
 
     @property
-    def logger(self):
+    def logger(self) -> logging.Logger:
         """Get logger instance (lazy initialization to ensure proper configuration)."""
-        return get_logger("luxswirl.notifications.email")
+        return logging.getLogger("luxswirl.notifications.email")
 
     def validate_config(self, config: dict[str, Any]) -> None:
         """
@@ -184,96 +185,31 @@ class EmailNotificationProvider(BaseNotificationProvider):
         Returns:
             HTML email body
         """
-        # Determine status color
         if context.success:
-            status_color = "#10b981"  # green
-            status_text = "✓ UP"
+            status_color, status_text = "#10b981", "✓ UP"  # green
         else:
-            status_color = "#ef4444"  # red
-            status_text = "✗ DOWN"
-
-        # Build HTML
-        html = f"""
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <style>
-        body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }}
-        .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-        .header {{ background: {status_color}; color: white; padding: 20px; border-radius: 8px 8px 0 0; }}
-        .content {{ background: #f9fafb; padding: 20px; border: 1px solid #e5e7eb; border-radius: 0 0 8px 8px; }}
-        .field {{ margin-bottom: 12px; }}
-        .label {{ font-weight: 600; color: #374151; }}
-        .value {{ color: #6b7280; }}
-        .footer {{ margin-top: 20px; padding-top: 20px; border-top: 1px solid #e5e7eb; font-size: 12px; color: #9ca3af; }}
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h2 style="margin: 0;">{status_text} {context.check_name}</h2>
-        </div>
-        <div class="content">
-            <div class="field">
-                <span class="label">Check Name:</span>
-                <span class="value">{context.check_name}</span>
-            </div>
-            <div class="field">
-                <span class="label">Type:</span>
-                <span class="value">{context.check_type}</span>
-            </div>
-            <div class="field">
-                <span class="label">Target:</span>
-                <span class="value">{context.target}</span>
-            </div>
-            <div class="field">
-                <span class="label">Status:</span>
-                <span class="value" style="color: {status_color}; font-weight: 600;">{status_text}</span>
-            </div>
-            <div class="field">
-                <span class="label">Response Time:</span>
-                <span class="value">{f"{context.latency_ms:.2f}ms" if context.latency_ms is not None else "N/A"}</span>
-            </div>
-            <div class="field">
-                <span class="label">Agent:</span>
-                <span class="value">{context.agent_name or "Unknown Agent"}</span>
-            </div>
-            <div class="field">
-                <span class="label">Timestamp:</span>
-                <span class="value">{context.timestamp}</span>
-            </div>
-"""
-
-        # Add error message if present
-        if not context.success and context.error_message:
-            html += f"""
-            <div class="field">
-                <span class="label">Error:</span>
-                <span class="value" style="color: #dc2626;">{context.error_message}</span>
-            </div>
-"""
-
-        # Add HTTP status if present
-        if context.http_status_code:
-            html += f"""
-            <div class="field">
-                <span class="label">HTTP Status:</span>
-                <span class="value">{context.http_status_code}</span>
-            </div>
-"""
-
-        html += """
-        </div>
-        <div class="footer">
-            Sent by LuxSwirl Monitoring System
-        </div>
-    </div>
-</body>
-</html>
-""".strip()
-
-        return html
+            status_color, status_text = "#ef4444", "✗ DOWN"  # red
+        latency = (
+            f"{context.latency_ms:.2f}ms" if context.latency_ms is not None else "N/A"
+        )
+        return render_email(
+            "check_status.html",
+            status_color=status_color,
+            status_text=status_text,
+            check_name=context.check_name,
+            # (label, value, colour or None)
+            fields=[
+                ("Check Name", context.check_name, None),
+                ("Type", context.check_type, None),
+                ("Target", context.target, None),
+                ("Status", status_text, status_color),
+                ("Response Time", latency, None),
+                ("Agent", context.agent_name or "Unknown Agent", None),
+                ("Timestamp", context.timestamp, None),
+            ],
+            error_message=None if context.success else context.error_message,
+            http_status_code=context.http_status_code,
+        )
 
     async def _send_smtp(self, msg: MIMEMultipart) -> None:
         """
