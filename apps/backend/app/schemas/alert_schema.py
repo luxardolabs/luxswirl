@@ -11,6 +11,7 @@ from pydantic import Field
 
 from app.models.enum_model import AlertTriggerType
 from app.schemas.base_schema import BaseSchema, TimestampSchema
+from app.schemas.paginated_response_schema import PaginatedResponse
 
 
 class AlertBase(BaseSchema):
@@ -179,14 +180,8 @@ class AlertOption(BaseSchema):
     notify_on_recovery: bool
 
 
-class AlertListResponse(BaseSchema):
-    """Schema for paginated list of alerts."""
-
-    items: list[AlertResponse]
-    total: int
-    page: int
-    page_size: int
-    pages: int
+class AlertListResponse(PaginatedResponse[AlertResponse]):
+    """One page of alerts."""
 
 
 class AlertNotificationMappingCreate(BaseSchema):

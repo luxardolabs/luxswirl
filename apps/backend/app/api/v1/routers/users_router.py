@@ -34,36 +34,26 @@ logger = get_logger("luxswirl.api.routers.users")
 async def list_users(
     admin: AdminUser,
     db: Annotated[AsyncSession, Depends(get_db)],
-    skip: Annotated[int, Query(ge=0, description="Number of records to skip")] = 0,
-    limit: Annotated[
-        int, Query(ge=1, le=200, description="Maximum records to return")
-    ] = 50,
+    page: Annotated[int, Query(ge=1, description="Page number")] = 1,
+    per_page: Annotated[int, Query(ge=1, le=200, description="Users per page")] = 50,
     role: Annotated[str | None, Query(description="Filter by role")] = None,
     is_active: ActiveFilter = None,
     search: Annotated[str | None, Query(description="Search username or name")] = None,
-):
+) -> UserListResponse:
     """
     List all users with optional filtering and pagination.
 
     **Query Parameters:**
-    - skip: Pagination offset
-    - limit: Page size (1-200)
+    - page: Page number (1-based)
+    - per_page: Users per page (1-200)
     - role: Filter by role (admin, editor, viewer)
     - is_active: Filter by active status
     - search: Search in username or full name
 
     Requires admin role.
     """
-    user_service = UserCoreService()
-    users, total = await user_service.list_users(
-        db, skip=skip, limit=limit, role=role, is_active=is_active, search=search
-    )
-
-    return UserListResponse(
-        users=[UserResponse.model_validate(u) for u in users],
-        total=total,
-        page=skip // limit + 1,
-        page_size=limit,
+    return await UserCoreService().list_users_page(
+        db, page=page, per_page=per_page, role=role, is_active=is_active, search=search
     )
 
 
@@ -71,7 +61,7 @@ async def list_users(
 async def get_user_stats(
     admin: AdminUser,
     db: Annotated[AsyncSession, Depends(get_db)],
-):
+) -> UserStatsResponse:
     """
     Get user statistics.
 
@@ -88,7 +78,7 @@ async def get_user(
     user_id: UUID,
     admin: AdminUser,
     db: Annotated[AsyncSession, Depends(get_db)],
-):
+) -> UserResponse:
     """
     Get user by ID.
 
@@ -116,7 +106,7 @@ async def create_user(
     user_data: UserCreate,
     admin: AdminUser,
     db: Annotated[AsyncSession, Depends(get_db)],
-):
+) -> UserResponse:
     """
     Create a new user.
 
@@ -156,7 +146,7 @@ async def update_user(
     user_data: UserUpdate,
     admin: AdminUser,
     db: Annotated[AsyncSession, Depends(get_db)],
-):
+) -> UserResponse:
     """
     Update user information.
 
@@ -208,7 +198,7 @@ async def delete_user(
     user_id: UUID,
     admin: AdminUser,
     db: Annotated[AsyncSession, Depends(get_db)],
-):
+) -> MessageResponse:
     """
     Delete a user.
 
@@ -233,17 +223,16 @@ async def delete_user(
                 detail="Cannot delete your own account",
             )
 
-        success = await user_service.delete_user(db, user_id)
-
-        if success:
-            logger.warning(
-                "Admin deleted user",
-                extra={
-                    "actor_username": admin.username,
-                    "target_user_id": str(user_id),
-                },
-            )
-            return {"message": "User deleted successfully"}
+        # delete_user raises ValueError for every refusal; it returns only on success.
+        await user_service.delete_user(db, user_id)
+        logger.warning(
+            "Admin deleted user",
+            extra={
+                "actor_username": admin.username,
+                "target_user_id": str(user_id),
+            },
+        )
+        return MessageResponse(message="User deleted successfully")
 
     except ValueError as e:
         if "invalid" in str(e).lower():
@@ -282,7 +271,7 @@ async def reset_user_password(
     password_data: UserPasswordReset,
     admin: AdminUser,
     db: Annotated[AsyncSession, Depends(get_db)],
-):
+) -> MessageResponse:
     """
     Reset a user's password (admin only).
 
@@ -329,9 +318,9 @@ async def reset_user_password(
             },
         )
 
-        return {
-            "message": "Password reset successfully. All user sessions have been terminated."
-        }
+        return MessageResponse(
+            message="Password reset successfully. All user sessions have been terminated."
+        )
 
     except ValueError as e:
         raise HTTPException(
@@ -345,7 +334,7 @@ async def unlock_user(
     user_id: UUID,
     admin: AdminUser,
     db: Annotated[AsyncSession, Depends(get_db)],
-):
+) -> UserResponse:
     """
     Unlock a locked user account.
 

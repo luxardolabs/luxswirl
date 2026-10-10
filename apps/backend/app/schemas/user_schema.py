@@ -9,6 +9,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.models.enum_model import UserRole
+from app.schemas.paginated_response_schema import PaginatedResponse
 
 
 class UserCreate(BaseModel):
@@ -131,13 +132,8 @@ class UserResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-class UserListResponse(BaseModel):
-    """Response schema for paginated user list."""
-
-    users: list[UserResponse]
-    total: int
-    page: int = 1
-    page_size: int = 50
+class UserListResponse(PaginatedResponse[UserResponse]):
+    """One page of users."""
 
 
 class UserStatsResponse(BaseModel):

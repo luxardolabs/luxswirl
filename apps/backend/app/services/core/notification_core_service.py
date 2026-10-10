@@ -2,7 +2,8 @@
 Notification service - business logic for notification provider operations.
 """
 
-from datetime import timedelta
+from datetime import datetime, timedelta
+from typing import Any
 from uuid import UUID
 
 from shared.logger import get_logger
@@ -20,8 +21,11 @@ from app.notifications.registry import NotificationRegistry
 from app.schemas.notification_provider_schema import (
     NotificationProviderCreate,
     NotificationProviderInDB,
+    NotificationProviderListResponse,
+    NotificationProviderResponse,
     NotificationProviderUpdate,
 )
+from app.schemas.pagination_schema import build_pagination
 
 logger = get_logger("luxswirl.services.notification")
 
@@ -105,6 +109,38 @@ class NotificationCoreService:
             include_deleted=include_deleted,
         )
         return [NotificationProviderInDB.model_validate(p) for p in providers], total
+
+    @staticmethod
+    async def list_providers_page(
+        db: AsyncSession,
+        *,
+        page: int,
+        per_page: int,
+        provider_type: str | None = None,
+    ) -> NotificationProviderListResponse:
+        """One page of notification providers for the JSON API, secrets masked.
+
+        Args:
+            db: Database session
+            page: 1-based page number
+            per_page: Providers per page
+            provider_type: Filter by provider type
+
+        Returns:
+            The page, with its page state
+        """
+        providers, total = await NotificationCoreService.list_providers(
+            db,
+            skip=(page - 1) * per_page,
+            limit=per_page,
+            provider_type=provider_type,
+        )
+        items = [
+            NotificationProviderResponse.model_validate(p, from_attributes=True)
+            for p in providers
+        ]
+        pagination = build_pagination(page=page, per_page=per_page, total=total)
+        return NotificationProviderListResponse.of(items, pagination)
 
     @staticmethod
     async def create_provider(
@@ -344,7 +380,7 @@ class NotificationCoreService:
         context: NotificationContext,
         alert_id: UUID,
         check_result_id: UUID,
-        check_result_timestamp,
+        check_result_timestamp: datetime,
         check_id: UUID | None = None,
         notification_hash: str | None = None,
         is_resend: bool = False,
@@ -523,7 +559,7 @@ class NotificationCoreService:
         return False, None
 
     @staticmethod
-    def get_available_provider_types() -> list[dict]:
+    def get_available_provider_types() -> list[dict[str, Any]]:
         """
         Get list of available provider types with their schemas.
 
