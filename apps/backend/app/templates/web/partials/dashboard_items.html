@@ -3,7 +3,7 @@
 {% from 'macros/buttons.html' import icon_edit, delete_icon_button, icon_btn %}
 {% from 'macros/badges.html' import tag as meta_tag, status_pip %}
 {% if status_page.items %}
-    {% for item in status_page.items %}
+    {% for item, remove_url in dashboard_items %}
         {% if item.type == 'group' %}
             <!-- Group -->
             <div id="dashboard-item-{{ loop.index0 }}" class="border border-dark-border rounded-lg bg-dark-bg-secondary dashboard-item" data-item-index="{{ loop.index0 }}" data-item-type="group">
@@ -29,7 +29,7 @@
                             {# Removing a dashboard item is an EditorUserWeb endpoint;
                                this partial renders on a CurrentUserWeb page. #}
                             {% if current_user.role in ('admin', 'editor') %}
-                            {{ delete_icon_button(delete_url=remove_item_urls[loop.index0], target_id='dashboard-item-' ~ loop.index0, hx_target='#dashboard-items', hx_swap='innerHTML', extra_classes='opacity-0 group-hover:opacity-100') }}
+                            {{ delete_icon_button(delete_url=remove_url, target_id='dashboard-item-' ~ loop.index0, hx_target='#dashboard-items', hx_swap='innerHTML', extra_classes='opacity-0 group-hover:opacity-100') }}
                             {% endif %}
                         </div>
                     </div>
@@ -268,7 +268,7 @@
                 </div>
                 {% endif %}
                 {% if current_user.role in ('admin', 'editor') %}
-                {{ delete_icon_button(delete_url=remove_item_urls[loop.index0], target_id='dashboard-item-' ~ loop.index0, hx_target='#dashboard-items', hx_swap='innerHTML', extra_classes='opacity-0 group-hover:opacity-100 flex-shrink-0') }}
+                {{ delete_icon_button(delete_url=remove_url, target_id='dashboard-item-' ~ loop.index0, hx_target='#dashboard-items', hx_swap='innerHTML', extra_classes='opacity-0 group-hover:opacity-100 flex-shrink-0') }}
                 {% endif %}
             </div>
         {% endif %}

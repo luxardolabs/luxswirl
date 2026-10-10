@@ -12,6 +12,7 @@ from uuid import UUID
 
 from fastapi import HTTPException, Request
 from fastapi import status as http_status
+from shared.jobs.base import BaseJob
 from shared.jobs.network_discover import NetworkDiscoverJob
 from shared.jobs.network_scan import NetworkScanJob
 from shared.logger import get_logger
@@ -20,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import NotFoundException
 from app.core.scan_panel import build_scan_view
 from app.models.enum_model import SERVER_RUNNER, JobStatus, JobType
+from app.schemas.agent_schema import AgentOption
 from app.schemas.auth_schema import AuthedUser
 from app.schemas.job_schema import JobCreate, JobInDB, JobUrls, ScanActionUrls
 from app.schemas.pagination_schema import build_pagination, paginated_url
@@ -28,7 +30,7 @@ from app.services.core.check_core_service import CheckCoreService
 from app.services.core.job_core_service import JobCoreService
 from app.services.core.settings_core_service import SettingsCoreService
 
-_JOB_REGISTRY: dict = {
+_JOB_REGISTRY: dict[str, type[BaseJob]] = {
     "network_scan": NetworkScanJob,
     "network_discover": NetworkDiscoverJob,
 }
@@ -64,22 +66,21 @@ def build_scan_action_urls(request: Request, job_id: UUID) -> ScanActionUrls:
     )
 
 
-def build_scan_form_urls(request: Request, job: JobInDB) -> dict[str, str]:
-    """Prefilled "scan this subnet" create-form hrefs, keyed by subnet.
+def build_discover_view(request: Request, job: JobInDB) -> dict[str, Any]:
+    """A network_discover result's "scan this subnet" links, on the things they scan.
 
-    A network_discover result offers one scan per discovered subnet (the
-    inferred network plus each interface's suggested_scan). The prefill payload
-    is query state, so it is encoded here rather than concatenated in the
-    template.
+    One scan is offered per discovered subnet: the inferred network, and each
+    interface's suggested_scan. Each link is a prefilled create-form href; the
+    prefill payload is query state, so it is encoded here rather than
+    concatenated in the template. Each interface comes back with its own
+    `scan_url` (None when it suggests no scan).
     """
     result = job.result or {}
-    subnets = {result.get("inferred_network")}
-    subnets.update(
-        iface.get("suggested_scan") for iface in result.get("interfaces") or []
-    )
     base = request.url_for("job_create_form").path
 
-    def form_url(subnet: str) -> str:
+    def form_url(subnet: str | None) -> str | None:
+        if not subnet:
+            return None
         query = urlencode(
             {
                 "job_type": "network_scan",
@@ -89,7 +90,13 @@ def build_scan_form_urls(request: Request, job: JobInDB) -> dict[str, str]:
         )
         return f"{base}?{query}"
 
-    return {subnet: form_url(subnet) for subnet in subnets if subnet}
+    return {
+        "inferred_scan_url": form_url(result.get("inferred_network")),
+        "discover_interfaces": [
+            {**iface, "scan_url": form_url(iface.get("suggested_scan"))}
+            for iface in result.get("interfaces") or []
+        ],
+    }
 
 
 class JobRow:
@@ -222,9 +229,12 @@ class JobsViewService:
         return job_rows, total
 
     @staticmethod
-    async def list_agents(db: AsyncSession, **kwargs):
-        """List agents (pass-through to core service)."""
-        return await AgentCoreService.list_agents(db, **kwargs)
+    async def agent_options(db: AsyncSession) -> list[AgentOption]:
+        """The admitted agents a job can be pointed at, as picker options."""
+        agents, _ = await AgentCoreService.list_agents(
+            db, limit=1000, exclude_pending=True
+        )
+        return [AgentOption.model_validate(agent) for agent in agents]
 
     @staticmethod
     async def cancel_job(db: AsyncSession, job_id: UUID) -> JobInDB:
@@ -251,7 +261,9 @@ class JobsViewService:
         return JobInDB.model_validate(job)
 
     @staticmethod
-    def transform_job_form_params(form_data: dict, job_type: str) -> dict[str, Any]:
+    def transform_job_form_params(
+        form_data: dict[str, Any], job_type: str
+    ) -> dict[str, Any]:
         """
         Transform web form data into job params dict based on job schema.
 
@@ -300,12 +312,12 @@ class JobsViewService:
         return params
 
     @staticmethod
-    def build_job_types_metadata() -> dict[str, dict]:
+    def build_job_types_metadata() -> dict[str, dict[str, Any]]:
         """
         Build job type metadata for the create-form UI by introspecting
         each registered job class.
         """
-        job_types: dict[str, dict] = {}
+        job_types: dict[str, dict[str, Any]] = {}
         for jt, job_class in _JOB_REGISTRY.items():
             schema_json = (
                 job_class.params_schema.model_json_schema()
@@ -328,8 +340,8 @@ class JobsViewService:
     async def get_merged_form_defaults(
         db: AsyncSession,
         job_type: str | None,
-        job_types: dict[str, dict],
-        prefill_data: dict,
+        job_types: dict[str, dict[str, Any]],
+        prefill_data: dict[str, Any],
     ) -> dict[str, Any]:
         """
         Merge schema defaults < database settings < prefill data.
@@ -499,9 +511,7 @@ class JobsViewService:
             existing_checks = {check.display_name for check in checks}
 
         available_check_tags = await CheckCoreService.get_all_check_tags(db)
-        agents, _ = await JobsViewService.list_agents(
-            db, limit=1000, exclude_pending=True
-        )
+        agents = await JobsViewService.agent_options(db)
 
         check_defaults = await SettingsCoreService.get_check_defaults(db)
         alert_defaults = await SettingsCoreService.get_alert_defaults(db)
@@ -512,7 +522,7 @@ class JobsViewService:
             ),
             "job_urls": build_job_urls(request, job_id),
             "scan_action_urls": build_scan_action_urls(request, job_id),
-            "scan_form_urls": build_scan_form_urls(request, job),
+            **build_discover_view(request, job),
             "request": request,
             "current_user": current_user,
             "job": job,
@@ -535,11 +545,9 @@ class JobsViewService:
         prefill_params: str | None,
     ) -> dict[str, Any]:
         """Job-creation side-panel form context."""
-        agents, _ = await JobsViewService.list_agents(
-            db, limit=1000, exclude_pending=True
-        )
+        agents = await JobsViewService.agent_options(db)
 
-        prefill_data: dict = {}
+        prefill_data: dict[str, Any] = {}
         if prefill_params:
             try:
                 prefill_data = json.loads(prefill_params)

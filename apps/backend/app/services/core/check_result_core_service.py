@@ -25,6 +25,7 @@ from app.schemas.check_result_schema import (
     AgentReportRequest,
     CheckSummary,
     GlobalStatsResponse,
+    StatusBarResult,
 )
 from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.alert_core_service import AlertCoreService
@@ -608,11 +609,26 @@ class CheckResultCoreService:
         db: AsyncSession,
         check_ids: list[UUID],
         minutes: int = 32,
-    ) -> list[CheckResult]:
-        """Bulk results for status bars. Delegates to CRUD."""
-        return await CheckResultCRUD.get_results_for_status_bars_bulk(
-            db, check_ids, minutes
-        )
+    ) -> list[StatusBarResult]:
+        """Bulk results for status bars, newest first within each check."""
+        return [
+            StatusBarResult(
+                check_id=check_id,
+                timestamp=timestamp,
+                success=success,
+                latency_ms=latency_ms,
+                http_status_code=http_status_code,
+            )
+            for (
+                check_id,
+                timestamp,
+                success,
+                latency_ms,
+                http_status_code,
+            ) in await CheckResultCRUD.get_results_for_status_bars_bulk(
+                db, check_ids, minutes
+            )
+        ]
 
     @staticmethod
     async def get_bucketed_status_bars_bulk(

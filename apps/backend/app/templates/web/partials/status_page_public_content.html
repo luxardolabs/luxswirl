@@ -5,14 +5,14 @@
         {% for item in rendered_items %}
             {% if item.type == 'check' %}
                 <!-- Collect checks for flex container -->
-                {% if loop.first or rendered_items[loop.index0 - 1].type != 'check' %}
+                {% if item.opens_run %}
                     <!-- Start new flex section with has-hover for blur effect -->
                     <div class="flex flex-wrap gap-4 card-grid">
                 {% endif %}
 
                 {% include 'partials/public_check_card.html' with context %}
 
-                {% if loop.last or rendered_items[loop.index0 + 1].type != 'check' %}
+                {% if item.closes_run %}
                     <!-- Close flex section -->
                     </div>
                 {% endif %}

@@ -204,3 +204,9 @@ class SettingUrls:
 
     update: str
     reset: str
+
+
+class SettingRow(SettingResponse):
+    """A setting as its card renders it, with its update/reset links."""
+
+    urls: SettingUrls

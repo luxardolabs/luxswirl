@@ -480,3 +480,15 @@ class AgentUrls:
     update: str
     regenerate_key: str
     revoke_key: str
+
+
+class PendingAgentRow(BaseSchema):
+    """An agent awaiting approval, as the agents page lists it, with its links."""
+
+    id: UUID
+    agent_name: str | None
+    hostname: str | None
+    ip_address: str | None
+    version: str | None
+    first_seen: datetime
+    urls: AgentUrls
