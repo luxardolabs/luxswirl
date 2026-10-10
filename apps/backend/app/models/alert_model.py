@@ -159,6 +159,11 @@ class Alert(
         """Get count of notification providers attached to this alert."""
         return len(self.notification_mappings) if self.notification_mappings else 0
 
+    @property
+    def check_count(self) -> int:
+        """Get count of checks this alert is mapped to (needs check_mappings loaded)."""
+        return len(self.check_mappings) if self.check_mappings else 0
+
     def __repr__(self) -> str:
         """Generate a helpful repr string."""
         return (

@@ -113,6 +113,69 @@ class AlertCoreService:
         )
 
     @staticmethod
+    def _to_response(alert: Alert) -> AlertResponse:
+        """The API shape of an alert loaded with both of its mapping lists."""
+        return AlertResponse(
+            id=alert.id,
+            name=alert.name,
+            description=alert.description,
+            trigger_type=alert.trigger_type,
+            trigger_config=alert.trigger_config,
+            is_enabled=alert.is_enabled,
+            is_global=alert.is_global,
+            notify_on_recovery=alert.notify_on_recovery,
+            resend_interval_minutes=alert.resend_interval_minutes,
+            max_resends=alert.max_resends,
+            custom_subject=alert.custom_subject,
+            custom_message=alert.custom_message,
+            notification_provider_count=alert.notification_provider_count,
+            check_count=alert.check_count,
+            created_at=alert.created_at,
+            updated_at=alert.updated_at,
+            deleted_at=alert.deleted_at,
+        )
+
+    @staticmethod
+    async def get_alert_response(db: AsyncSession, alert_id: UUID) -> AlertResponse:
+        """One alert in its API shape, with its provider and check counts.
+
+        Raises:
+            NotFoundException: If alert not found
+        """
+        alert = await AlertCRUD.get_by_id(db, alert_id, with_mappings=True)
+        if alert is None:
+            raise NotFoundException(f"Alert {alert_id} not found")
+        return AlertCoreService._to_response(alert)
+
+    @staticmethod
+    async def update_alert_response(
+        db: AsyncSession, alert_id: UUID, data: AlertUpdate
+    ) -> AlertResponse:
+        """Update an alert and return it in its API shape.
+
+        Raises:
+            NotFoundException: If alert not found
+            ValidationException: If the update is invalid
+        """
+        await AlertCoreService.update_alert(db, alert_id, data)
+        return await AlertCoreService.get_alert_response(db, alert_id)
+
+    @staticmethod
+    async def list_alert_responses(
+        db: AsyncSession,
+        *,
+        skip: int,
+        limit: int,
+        is_enabled: bool | None = None,
+        is_global: bool | None = None,
+    ) -> tuple[list[AlertResponse], int]:
+        """A window of alerts in their API shape, and the total that match."""
+        alerts, total = await AlertCoreService.list_alerts(
+            db, skip=skip, limit=limit, is_enabled=is_enabled, is_global=is_global
+        )
+        return [AlertCoreService._to_response(a) for a in alerts], total
+
+    @staticmethod
     async def list_alerts_page(
         db: AsyncSession,
         *,
@@ -133,36 +196,13 @@ class AlertCoreService:
         Returns:
             The page, with its page state
         """
-        alerts, total = await AlertCoreService.list_alerts(
+        items, total = await AlertCoreService.list_alert_responses(
             db,
             skip=(page - 1) * per_page,
             limit=per_page,
             is_enabled=is_enabled,
             is_global=is_global,
         )
-        items = [
-            AlertResponse(
-                id=a.id,
-                name=a.name,
-                description=a.description,
-                trigger_type=a.trigger_type,
-                trigger_config=a.trigger_config,
-                is_enabled=a.is_enabled,
-                is_global=a.is_global,
-                notify_on_recovery=a.notify_on_recovery,
-                resend_interval_minutes=a.resend_interval_minutes,
-                max_resends=a.max_resends,
-                custom_subject=a.custom_subject,
-                custom_message=a.custom_message,
-                # TODO: count the alert's providers and checks
-                notification_provider_count=0,
-                check_count=0,
-                created_at=a.created_at,
-                updated_at=a.updated_at,
-                deleted_at=a.deleted_at,
-            )
-            for a in alerts
-        ]
         pagination = build_pagination(page=page, per_page=per_page, total=total)
         return AlertListResponse.of(items, pagination)
 

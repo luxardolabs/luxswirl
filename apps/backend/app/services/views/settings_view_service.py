@@ -12,7 +12,12 @@ from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ValidationException
+from app.schemas.alert_schema import AlertRow, AlertUrls
 from app.schemas.auth_schema import AuthedUser
+from app.schemas.notification_provider_schema import (
+    NotificationProviderRow,
+    ProviderUrls,
+)
 from app.schemas.pagination_schema import build_pagination
 from app.schemas.setting_schema import SettingResponse, SettingScalar, SettingUrls
 from app.services.core.alert_core_service import AlertCoreService
@@ -308,22 +313,28 @@ class SettingsViewService:
         return {
             "request": request,
             "current_user": current_user,
-            "providers": providers,
+            "providers": [
+                NotificationProviderRow(
+                    **p.model_dump(),
+                    urls=ProviderUrls(
+                        toggle=request.url_for(
+                            "toggle_provider", provider_id=p.id
+                        ).path,
+                        test=request.url_for(
+                            "web_test_provider", provider_id=p.id
+                        ).path,
+                        edit_form=request.url_for(
+                            "edit_provider_form", provider_id=p.id
+                        ).path,
+                        delete=request.url_for(
+                            "web_delete_provider", provider_id=p.id
+                        ).path,
+                    ),
+                )
+                for p in providers
+            ],
             "total_providers": total,
             "available_types": NotificationCoreService.get_available_provider_types(),
-            "provider_urls": {
-                p.id: {
-                    "toggle": request.url_for("toggle_provider", provider_id=p.id).path,
-                    "test": request.url_for("web_test_provider", provider_id=p.id).path,
-                    "edit_form": request.url_for(
-                        "edit_provider_form", provider_id=p.id
-                    ).path,
-                    "delete": request.url_for(
-                        "web_delete_provider", provider_id=p.id
-                    ).path,
-                }
-                for p in providers
-            },
             "provider_create_form_url": request.url_for("create_provider_form").path,
             "page_title": "Settings - Notifications",
         }
@@ -343,10 +354,9 @@ class SettingsViewService:
             per_page = await SettingsCoreService.get_setting(
                 db, "general.default_page_size", 50
             )
-        offset = (page - 1) * per_page
-        alerts, total = await AlertCoreService.list_alerts(
-            db=db,
-            skip=offset,
+        alerts, total = await AlertCoreService.list_alert_responses(
+            db,
+            skip=(page - 1) * per_page,
             limit=per_page,
             is_enabled=is_enabled,
             is_global=is_global,
@@ -356,19 +366,23 @@ class SettingsViewService:
             page=page, per_page=per_page, total=total, filters=filters
         )
         return {
-            "alert_urls": {
-                a.id: {
-                    "edit_form": request.url_for("edit_alert_form", alert_id=a.id).path,
-                    "delete": request.url_for("web_delete_alert", alert_id=a.id).path,
-                    "toggle": request.url_for("toggle_alert", alert_id=a.id).path,
-                }
-                for a in alerts
-            },
             "alerts_url": request.url_for("settings_alerts").path,
             "alert_create_form_url": request.url_for("create_alert_form").path,
             "request": request,
             "current_user": current_user,
-            "alerts": alerts,
+            "alerts": [
+                AlertRow(
+                    **a.model_dump(),
+                    urls=AlertUrls(
+                        edit_form=request.url_for(
+                            "edit_alert_form", alert_id=a.id
+                        ).path,
+                        delete=request.url_for("web_delete_alert", alert_id=a.id).path,
+                        toggle=request.url_for("toggle_alert", alert_id=a.id).path,
+                    ),
+                )
+                for a in alerts
+            ],
             "total": total,
             "per_page": per_page,
             "filters": filters,

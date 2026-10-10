@@ -64,29 +64,9 @@ async def get_alert(
 ) -> AlertResponse:
     """Get a specific alert."""
     try:
-        alert = await AlertCoreService.get_alert_by_id(db, alert_id)
+        return await AlertCoreService.get_alert_response(db, alert_id)
     except NotFoundException as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
-
-    return AlertResponse(
-        id=alert.id,
-        name=alert.name,
-        description=alert.description,
-        trigger_type=alert.trigger_type,
-        trigger_config=alert.trigger_config,
-        is_enabled=alert.is_enabled,
-        is_global=alert.is_global,
-        notify_on_recovery=alert.notify_on_recovery,
-        resend_interval_minutes=alert.resend_interval_minutes,
-        max_resends=alert.max_resends,
-        custom_subject=alert.custom_subject,
-        custom_message=alert.custom_message,
-        notification_provider_count=0,  # TODO
-        check_count=0,  # TODO
-        created_at=alert.created_at,
-        updated_at=alert.updated_at,
-        deleted_at=alert.deleted_at,
-    )
 
 
 @router.post(
@@ -146,33 +126,13 @@ async def update_alert(
 ) -> AlertResponse:
     """Update an alert."""
     try:
-        alert = await AlertCoreService.update_alert(db, alert_id, data)
+        return await AlertCoreService.update_alert_response(db, alert_id, data)
     except NotFoundException as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
     except ValidationException as e:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(e)
         ) from e
-
-    return AlertResponse(
-        id=alert.id,
-        name=alert.name,
-        description=alert.description,
-        trigger_type=alert.trigger_type,
-        trigger_config=alert.trigger_config,
-        is_enabled=alert.is_enabled,
-        is_global=alert.is_global,
-        notify_on_recovery=alert.notify_on_recovery,
-        resend_interval_minutes=alert.resend_interval_minutes,
-        max_resends=alert.max_resends,
-        custom_subject=alert.custom_subject,
-        custom_message=alert.custom_message,
-        notification_provider_count=0,  # TODO
-        check_count=0,  # TODO
-        created_at=alert.created_at,
-        updated_at=alert.updated_at,
-        deleted_at=alert.deleted_at,
-    )
 
 
 @router.delete(
