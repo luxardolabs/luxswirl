@@ -1549,13 +1549,13 @@
         },
         {
           "rule": "fw.credential_routes_limited",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.215.0",
-          "violations": 8,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
-          "fix": "attach a per-route limit keyed on the real client \u2014 `@limiter.limit(...)` with a trusted-proxy-aware key function. ON PYTHON 3.14+ THAT DECORATOR ALSO NEEDS THE SANCTIONED SLOWAPI CARVE-OUT, or your suite stops COLLECTING: slowapi 0.1.10 calls the deprecated `asyncio.iscoroutinefunction` inside `Limiter.limit`, so under the canonical `filterwarnings = error` the warning is raised at DECORATION time \u2014 at import of any module holding a limited route, before a single test runs. Take the row from `--doc FLEET-RATE-LIMIT-STANDARD` \u00a74 verbatim; do NOT reach for the broad `ignore::DeprecationWarning:slowapi.extension`, which \u00a74 measured as harmful. `--doc FLEET-RATE-LIMIT-STANDARD` \u00a73: a login endpoint cannot key on the authenticated identity, because the credential is what is being verified, so per-route plus per-IP is the honest fallback. An unlimited credential route takes unlimited guessing against every account from one address. If this route genuinely needs no limit, or your limiter has a name this rule does not recognise, put it in `[allowlist].credential_route_limited = [{ function, evidence }]` \u2014 or escalate, so the recognised set grows for the whole fleet rather than one repo carrying a waiver.",
+          "fix": "",
           "example": ""
         },
         {
@@ -1846,8 +1846,8 @@
         }
       ],
       "summary": {
-        "PASS": 123,
-        "FAIL": 22,
+        "PASS": 124,
+        "FAIL": 21,
         "XFAIL": 2,
         "XPASS": 0,
         "INERT": 20
@@ -2682,12 +2682,12 @@
     }
   },
   "summary": {
-    "PASS": 186,
-    "FAIL": 24,
+    "PASS": 187,
+    "FAIL": 23,
     "XFAIL": 2,
     "XPASS": 1,
     "INERT": 27
   },
-  "commit": "58b71bcadd14789ccadc95f1cd5beda8a2de1ed2",
-  "generated_at": "2026-10-10T08:52:25Z"
+  "commit": "280f527abf05fc431f11e50e9fa196282d1e5c6d",
+  "generated_at": "2026-10-10T09:02:38Z"
 }

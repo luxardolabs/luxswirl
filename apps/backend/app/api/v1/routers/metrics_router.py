@@ -12,10 +12,11 @@ unchanged.
 import hmac
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Response, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.core.rate_limit import limiter
 from app.db import get_db
 from app.services.core.metrics_collector_core_service import MetricsCollectorCoreService
 from app.services.core.settings_core_service import SettingsCoreService
@@ -29,7 +30,9 @@ router = APIRouter(tags=["Metrics"])
     description="Export metrics in Prometheus text format (optional auth)",
     response_class=Response,
 )
+@limiter.limit(settings.security.api_rate_limit)
 async def get_metrics(
+    request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
     authorization: Annotated[str | None, Header()] = None,
 ):

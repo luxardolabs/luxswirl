@@ -8,15 +8,17 @@ This router only handles HTTP concerns.
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.check_target_validator import CheckTargetBlockedError
+from app.core.config import settings
 from app.core.exceptions import (
     AgentNotFoundException,
     CheckNotFoundException,
 )
+from app.core.rate_limit import limiter
 from app.core.security import verify_agent_token, verify_api_token
 from app.db import get_db
 from app.schemas.base_schema import ErrorResponse
@@ -52,7 +54,9 @@ logger = get_logger("luxswirl.api.checks")
         404: {"model": ErrorResponse, "description": "Agent not found"},
     },
 )
+@limiter.limit(settings.security.agent_api_rate_limit)
 async def list_checks(
+    request: Request,
     agent_id: Annotated[UUID, Query(description="Agent UUID to fetch checks for")],
     db: Annotated[AsyncSession, Depends(get_db)],
     authorization: Annotated[str | None, Header()] = None,

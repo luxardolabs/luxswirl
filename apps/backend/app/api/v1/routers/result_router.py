@@ -16,12 +16,15 @@ from fastapi import (
     Header,
     HTTPException,
     Query,
+    Request,
     status,
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.datetime_utils import utc_now
 from app.core.exceptions import AgentNotFoundException, CheckNotFoundException
+from app.core.rate_limit import limiter
 from app.core.security import verify_agent_token, verify_api_token
 from app.db import get_db
 from app.schemas.base_schema import ErrorResponse
@@ -47,7 +50,9 @@ router = APIRouter(tags=["Check Results"])
     summary="Submit agent report",
     description="Submit check results from an agent",
 )
+@limiter.limit(settings.security.agent_api_rate_limit)
 async def submit_report(
+    request: Request,
     report: AgentReportRequest,
     background_tasks: BackgroundTasks,
     db: Annotated[AsyncSession, Depends(get_db)],

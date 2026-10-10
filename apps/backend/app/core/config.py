@@ -193,6 +193,16 @@ class SecuritySettings(BaseSettings):
         default="100/minute",
         description="Rate limit for general API requests per IP",
     )
+    agent_api_rate_limit: str = Field(
+        default="600/minute",
+        description=(
+            "Rate limit per IP on the agent-authenticated routes (heartbeat, "
+            "reports, check list, job results). Each request bcrypt-checks the "
+            "agent's key, so this bounds key guessing; it sits well above real "
+            "agent traffic (a report every 10 s, plus polling) so many agents "
+            "behind one NAT address are not throttled"
+        ),
+    )
     registration_rate_limit: str = Field(
         default="5/hour",
         description="Rate limit for agent registration per IP",
