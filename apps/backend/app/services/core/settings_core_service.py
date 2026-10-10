@@ -13,7 +13,7 @@ from app.core.default_settings import DEFAULT_SETTINGS
 from app.core.exceptions import NotFoundException
 from app.crud.setting_crud import SettingCRUD
 from app.models.setting_model import Setting
-from app.schemas.setting_schema import SettingScalar
+from app.schemas.setting_schema import SettingResponse, SettingScalar
 
 logger = get_logger("luxswirl.services.settings")
 
@@ -90,7 +90,7 @@ class SettingsCoreService:
     async def get_settings_by_category(
         db: AsyncSession,
         category: str,
-    ) -> list[Setting]:
+    ) -> list[SettingResponse]:
         """
         Get all settings for a specific category.
 
@@ -99,9 +99,12 @@ class SettingsCoreService:
             category: Category name (check, alert, system, job)
 
         Returns:
-            List of Setting objects
+            The category's settings
         """
-        return list(await SettingCRUD.list_by_category(db, category))
+        return [
+            SettingResponse.model_validate(setting)
+            for setting in await SettingCRUD.list_by_category(db, category)
+        ]
 
     @staticmethod
     async def update_setting(

@@ -11,9 +11,10 @@ from fastapi import Request, Response
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.exceptions import ValidationException
 from app.schemas.auth_schema import AuthedUser
 from app.schemas.pagination_schema import build_pagination
-from app.schemas.setting_schema import SettingResponse, SettingUrls
+from app.schemas.setting_schema import SettingResponse, SettingScalar, SettingUrls
 from app.services.core.alert_core_service import AlertCoreService
 from app.services.core.notification_core_service import NotificationCoreService
 from app.services.core.registration_key_core_service import RegistrationKeyCoreService
@@ -84,7 +85,7 @@ class SettingsViewService:
             return None, f"Invalid value format: {str(e)}"
 
     @staticmethod
-    def _parse_value(value: str, value_type: str | None):
+    def _parse_value(value: str, value_type: str | None) -> SettingScalar:
         """
         Parse string value to appropriate type.
 
@@ -105,15 +106,22 @@ class SettingsViewService:
             return value
 
     @staticmethod
-    def _update_template_cache_if_needed(key: str, parsed_value):
+    def _update_template_cache_if_needed(key: str, parsed_value: SettingScalar) -> None:
         """
         Update template filter cache if display setting was changed.
 
         Args:
             key: Setting key
             parsed_value: New value
+
+        Raises:
+            ValidationException: A display setting's value is not a string.
         """
         if key in ("general.timezone", "general.date_format", "general.time_format"):
+            if not isinstance(parsed_value, str):
+                raise ValidationException(
+                    f"{key} must be a string", details={"setting_key": key}
+                )
             if key == "general.timezone":
                 update_settings_cache(timezone=parsed_value)
             elif key == "general.date_format":
@@ -129,8 +137,8 @@ class SettingsViewService:
     async def _update_timescale_policies_if_needed(
         db: AsyncSession,
         key: str,
-        parsed_value,
-    ):
+        parsed_value: SettingScalar,
+    ) -> None:
         """
         Update TimescaleDB policies if database setting was changed.
 
@@ -138,8 +146,16 @@ class SettingsViewService:
             db: Database session
             key: Setting key
             parsed_value: New value (days)
+
+        Raises:
+            ValidationException: A database setting's value is not a whole number.
         """
         if key.startswith("database."):
+            if isinstance(parsed_value, bool) or not isinstance(parsed_value, int):
+                raise ValidationException(
+                    f"{key} must be a whole number of days",
+                    details={"setting_key": key},
+                )
             if key == "database.retention_days":
                 await TimescaleCoreService.update_retention_policy(
                     db, "check_results", parsed_value
@@ -176,7 +192,7 @@ class SettingsViewService:
     @staticmethod
     async def get_grouped_security_settings(
         db: AsyncSession,
-    ) -> dict[str, list]:
+    ) -> dict[str, list[SettingResponse]]:
         """
         Get security settings grouped by subcategory.
 
@@ -188,7 +204,7 @@ class SettingsViewService:
             db, "security"
         )
 
-        security_groups = defaultdict(list)
+        security_groups: defaultdict[str, list[SettingResponse]] = defaultdict(list)
         for setting in all_security_settings:
             subcategory = setting.subcategory or "Other"
             security_groups[subcategory].append(setting)
@@ -395,11 +411,46 @@ class SettingsViewService:
     def build_components_context(
         request: Request, current_user: AuthedUser
     ) -> dict[str, Any]:
-        """/settings/components — purely presentational, no DB."""
+        """/settings/components — purely presentational, no DB.
+
+        The samples feed the data-bound swatches: each has the shape the real
+        page hands its macro, so the catalogue renders the component itself.
+        """
         return {
             "request": request,
             "current_user": current_user,
             "page_title": "Settings - Components",
+            "sample_pagination": build_pagination(page=2, per_page=10, total=42),
+            "sample_status_row": {
+                "check_id": "00000000-0000-0000-0000-000000000000",
+                "check_name": "api-health",
+                "check_type": "http",
+                "check_tags": ["prod", "api"],
+                "target": "https://api.example.com/health",
+                "enabled": True,
+                "detail_url": "#",
+                "status_class": "success",
+                "latency_display": "142ms",
+                "uptime_display": "99.9%",
+                "minute_bars": [
+                    {
+                        "success": minute != 6,
+                        "minutes_ago": 15 - minute,
+                        "count": 1,
+                        "avg_latency": 140,
+                    }
+                    for minute in range(15)
+                ],
+            },
+            "sample_chart_empty": {"has_data": False},
+            "sample_sparkline": [12.0, 18.5, 15.2, 22.8, 19.1, 25.4, 21.0],
+            "sample_job_param": {
+                "type": "integer",
+                "description": "TCP port to probe",
+                "minimum": 1,
+                "maximum": 65535,
+                "default": 443,
+            },
         }
 
     @staticmethod
@@ -500,7 +551,7 @@ class SettingsViewService:
         )
 
     @staticmethod
-    async def toggle_metrics_enabled(db: AsyncSession):
+    async def toggle_metrics_enabled(db: AsyncSession) -> dict[str, Any]:
         """Toggle metrics endpoint on/off; return updated metrics_settings."""
         current_value = await SettingsCoreService.get_setting(
             db, "metrics.enabled", True
@@ -511,7 +562,7 @@ class SettingsViewService:
         return await SettingsCoreService.get_metrics_settings(db)
 
     @staticmethod
-    async def toggle_metrics_auth(db: AsyncSession):
+    async def toggle_metrics_auth(db: AsyncSession) -> dict[str, Any]:
         """Toggle metrics auth on/off; return updated metrics_settings."""
         current_value = await SettingsCoreService.get_setting(
             db, "metrics.auth_required", False

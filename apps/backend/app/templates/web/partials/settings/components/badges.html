@@ -1,6 +1,6 @@
 {% from 'macros/badges.html' import badge, status_badge, category_badge, status_dot, status_pip, role_badge, check_type_badge, tag %}
-{% from 'macros/status.html' import status_badge as check_status_badge %}
-{% from 'macros/jobs.html' import job_status_badge, priority_indicator %}
+{% from 'macros/status.html' import status_badge as check_status_badge, check_type_icon %}
+{% from 'macros/jobs.html' import job_status_badge, priority_indicator, job_type_icon %}
 
 {# ═══════════════════════════════════════════════════════════════════════
    BADGES — macros/badges.html
@@ -226,6 +226,33 @@
                 {{ priority_indicator(50) }}
                 {{ priority_indicator(90) }}
             </div>
+        </div>
+    </div>
+</section>
+
+{# ═══════════════════════════════════════════════════════════════════════
+   TYPE ICONS — macros/status.html, macros/jobs.html
+   ═══════════════════════════════════════════════════════════════════════ #}
+<section>
+    <h2 class="text-lg font-semibold text-dark-text-primary mb-1">Type Icons</h2>
+    <p class="text-sm text-dark-text-muted mb-4">The icon for a check type (<code class="text-brand-400">check_type_icon</code>) and a job type (<code class="text-brand-400">job_type_icon</code>).</p>
+
+    <div class="card p-6 space-y-4">
+        <div class="flex flex-wrap items-center gap-6">
+            {% for type in ['http', 'json', 'ping', 'tcp', 'dns', 'mysql', 'postgres', 'synthetic'] %}
+            <div class="flex flex-col items-center gap-1">
+                {{ check_type_icon(type) }}
+                <span class="text-xs text-dark-text-muted">{{ type }}</span>
+            </div>
+            {% endfor %}
+        </div>
+        <div class="flex flex-wrap items-center gap-6">
+            {% for type in ['network_scan', 'network_discover'] %}
+            <div class="flex flex-col items-center gap-1">
+                {{ job_type_icon(type) }}
+                <span class="text-xs text-dark-text-muted">{{ type }}</span>
+            </div>
+            {% endfor %}
         </div>
     </div>
 </section>

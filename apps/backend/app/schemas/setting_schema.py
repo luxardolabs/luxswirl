@@ -78,6 +78,7 @@ class SettingResponse(BaseModel):
     id: UUID
     key: str
     category: SettingCategory
+    subcategory: str | None = None
     value: dict[str, Any]  # JSONB storage
     default_value: dict[str, Any]
     display_name: str
