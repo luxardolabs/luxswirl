@@ -16,6 +16,7 @@ from fastapi.responses import HTMLResponse
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.enum_model import NotificationProviderType
 from app.schemas.auth_schema import AuthedUser
 from app.schemas.notification_provider_schema import (
     NotificationProviderCreate,
@@ -119,7 +120,9 @@ class NotificationProvidersViewService:
 
     @staticmethod
     def build_create_form_context(
-        request: Request, current_user: AuthedUser, provider_type: str | None
+        request: Request,
+        current_user: AuthedUser,
+        provider_type: NotificationProviderType | None,
     ) -> dict[str, Any]:
         """Form context for the 'new provider' modal (or type-selector)."""
         available_types = NotificationCoreService.get_available_provider_types()
@@ -160,7 +163,9 @@ class NotificationProvidersViewService:
         }
 
     @staticmethod
-    async def create_provider(db: AsyncSession, form: dict) -> NotificationProviderInDB:
+    async def create_provider(
+        db: AsyncSession, form: dict[str, Any]
+    ) -> NotificationProviderInDB:
         """Parse a create form, build the schema, delegate to core."""
         provider_data = NotificationProviderCreate(
             provider_type=form.get("provider_type", ""),
@@ -181,7 +186,7 @@ class NotificationProvidersViewService:
 
     @staticmethod
     async def update_provider(
-        db: AsyncSession, provider_id: UUID, form: dict
+        db: AsyncSession, provider_id: UUID, form: dict[str, Any]
     ) -> NotificationProviderInDB:
         """Parse an update form, build the schema, delegate to core."""
         update_data = NotificationProviderUpdate(

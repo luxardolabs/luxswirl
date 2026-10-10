@@ -10,6 +10,7 @@ from fastapi.responses import HTMLResponse
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.query_params import ProviderTypeFilter
 from app.db import get_db
 from app.services.views.notification_providers_view_service import (
     NotificationProvidersViewService,
@@ -27,8 +28,8 @@ router = APIRouter(tags=["Web UI - Notification Providers"], include_in_schema=F
 async def create_provider_form(
     request: Request,
     current_user: CurrentUserWeb,
-    provider_type: str | None = None,
-):
+    provider_type: ProviderTypeFilter = None,
+) -> HTMLResponse:
     """HTMX partial — empty 'new provider' form (or type selector)."""
     return templates.TemplateResponse(
         request,
@@ -47,7 +48,7 @@ async def edit_provider_form(
     provider_id: UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: CurrentUserWeb,
-):
+) -> HTMLResponse:
     """HTMX partial — populated edit form."""
     return templates.TemplateResponse(
         request,
@@ -67,7 +68,7 @@ async def create_provider(
     request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: EditorUserWeb,
-):
+) -> HTMLResponse:
     """Create a new notification provider."""
     form = await request.form()
     await NotificationProvidersViewService.create_provider(db, dict(form))
@@ -84,7 +85,7 @@ async def update_provider(
     provider_id: UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: EditorUserWeb,
-):
+) -> HTMLResponse:
     """Update an existing notification provider."""
     form = await request.form()
     await NotificationProvidersViewService.update_provider(db, provider_id, dict(form))
@@ -101,7 +102,7 @@ async def delete_provider(
     provider_id: UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: EditorUserWeb,
-):
+) -> HTMLResponse:
     """Delete a notification provider (soft delete)."""
     await NotificationProvidersViewService.delete_provider(db, provider_id)
     return hx_empty_with_toast("Notification provider deleted")
@@ -115,7 +116,7 @@ async def toggle_provider(
     provider_id: UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: EditorUserWeb,
-):
+) -> HTMLResponse:
     """Toggle notification provider enabled/disabled status."""
     await NotificationProvidersViewService.toggle_provider(db, provider_id)
     return HTMLResponse(
@@ -133,6 +134,6 @@ async def test_provider(
     provider_id: UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: EditorUserWeb,
-):
+) -> HTMLResponse:
     """Send a test notification through this provider (toast feedback)."""
     return await NotificationProvidersViewService.test_provider(db, provider_id)
