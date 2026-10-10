@@ -8,7 +8,8 @@ calling core user service and formatting responses for templates.
 from typing import Any
 from uuid import UUID
 
-from fastapi import Request
+from fastapi import Request, status
+from fastapi.responses import RedirectResponse
 from pydantic import ValidationError
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,7 +21,6 @@ from app.schemas.pagination_schema import build_pagination
 from app.schemas.user_schema import (
     UserCreate,
     UserResponse,
-    UserStatsResponse,
     UserUpdate,
     UserUrls,
 )
@@ -83,18 +83,6 @@ class WebUsersViewService:
     def __init__(self) -> None:
         self.user_service = UserCoreService()
         self.auth_service = AuthCoreService()
-
-    async def get_user_stats(self, db: AsyncSession) -> UserStatsResponse:
-        """
-        Get user statistics for web UI dashboard.
-
-        Args:
-            db: Database session
-
-        Returns:
-            Dict with user statistics
-        """
-        return await self.user_service.get_user_stats(db)
 
     async def list_users(
         self,
@@ -264,20 +252,39 @@ class WebUsersViewService:
         except ValueError as e:
             return None, str(e)
 
-    async def needs_setup(self, db: AsyncSession) -> bool:
+    async def login_setup_redirect(self, db: AsyncSession) -> RedirectResponse | None:
         """
-        Whether the first-run setup wizard should be shown.
+        The redirect /login answers with while first-run setup is pending.
 
-        True when no admin password is configured via env and no admin exists
-        yet. Delegates to the core user service.
+        Setup is pending when no admin password is configured via env and no
+        admin exists yet; the login page then hands over to the /setup wizard.
 
         Args:
             db: Database session
 
         Returns:
-            True if the /setup wizard should handle first admin creation.
+            A redirect to /setup, or None when the login page should render.
         """
-        return await self.user_service.needs_setup(db)
+        if await self.user_service.needs_setup(db):
+            return RedirectResponse(url="/setup", status_code=status.HTTP_302_FOUND)
+        return None
+
+    async def setup_closed_redirect(self, db: AsyncSession) -> RedirectResponse | None:
+        """
+        The redirect /setup answers with once setup is no longer needed.
+
+        Keeps the wizard unreachable after first run (an admin exists or one is
+        configured via env), including a replayed or racing POST.
+
+        Args:
+            db: Database session
+
+        Returns:
+            A redirect to /login, or None while the wizard should still run.
+        """
+        if not await self.user_service.needs_setup(db):
+            return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
+        return None
 
     async def build_users_page_context(
         self,
@@ -303,7 +310,7 @@ class WebUsersViewService:
         )
         for row in users:
             row.urls = build_user_urls(request, row.id)
-        stats = await self.get_user_stats(db)
+        stats = await self.user_service.get_user_stats(db)
         filters = {"role": role, "is_active": is_active, "search": search}
         pagination = build_pagination(
             page=page, per_page=per_page, total=total, filters=filters

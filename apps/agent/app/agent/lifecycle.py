@@ -8,11 +8,22 @@ Handles agent startup and shutdown including:
 - Signal handler registration
 """
 
+from __future__ import annotations
+
 import asyncio
+import signal as signals
+from typing import TYPE_CHECKING, Any
 
 from shared.logger import get_logger
 
 from app.agent.http_client import aclose_all
+
+if TYPE_CHECKING:
+    from app.agent.health import HealthMonitor
+    from app.agent.heartbeat import HeartbeatSender
+    from app.agent.job_processor import JobProcessor
+    from app.agent.reporter import Reporter
+    from app.agent.result_processor import ResultProcessor
 
 logger = get_logger("luxswirl.agent.lifecycle")
 
@@ -26,15 +37,17 @@ class LifecycleManager:
 
     def __init__(
         self,
-        config: dict,
-        metrics: dict,
-        result_queue: asyncio.Queue,
-        reporter,
-        job_processor,
-        heartbeat_sender,
+        config: dict[str, Any],
+        metrics: dict[str, Any],
+        result_queue: asyncio.Queue[dict[str, Any]],
+        reporter: Reporter,
+        job_processor: JobProcessor,
+        heartbeat_sender: HeartbeatSender,
+        result_processor: ResultProcessor,
+        health_monitor: HealthMonitor,
         run_id: str,
         shutdown_timeout: float = 5.0,
-    ):
+    ) -> None:
         """
         Initialize lifecycle manager.
 
@@ -45,6 +58,8 @@ class LifecycleManager:
             reporter: Reporter instance
             job_processor: JobProcessor instance
             heartbeat_sender: HeartbeatSender instance for shutdown heartbeat
+            result_processor: ResultProcessor whose loop shutdown stops
+            health_monitor: HealthMonitor whose loops shutdown stops
             run_id: Unique run ID for this agent instance
             shutdown_timeout: Max seconds to wait for tasks during shutdown
         """
@@ -54,6 +69,8 @@ class LifecycleManager:
         self.reporter = reporter
         self.job_processor = job_processor
         self.heartbeat_sender = heartbeat_sender
+        self.result_processor = result_processor
+        self.health_monitor = health_monitor
         self.run_id = run_id
         self.shutdown_timeout = shutdown_timeout
         self.logger = logger
@@ -67,7 +84,7 @@ class LifecycleManager:
         self.watchdog_task: asyncio.Task[None] | None = None
         self.heartbeat_task: asyncio.Task[None] | None = None
 
-    async def shutdown(self, signal=None) -> None:
+    async def shutdown(self, signal: signals.Signals | None = None) -> None:
         """
         Shutdown the agent gracefully.
 
@@ -86,6 +103,15 @@ class LifecycleManager:
 
         self.logger.info("Shutting down...")
         self.running = False
+
+        # Stop every loop first. Otherwise none of them ever exits: the wait
+        # below runs out its whole timeout, and the regular heartbeat can still
+        # report "online" after the shutdown heartbeat said "offline". The
+        # result processor stops before the final drain below, so the two never
+        # pull from the queue at once.
+        self.heartbeat_sender.stop()
+        self.result_processor.stop()
+        self.health_monitor.stop()
 
         try:
             # Send final shutdown heartbeat to server

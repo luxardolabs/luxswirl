@@ -19,6 +19,7 @@ from app.schemas.check_artifact_schema import (
     CheckArtifactCreate,
     CheckArtifactListResponse,
     CheckArtifactResponse,
+    CheckArtifactStatsResponse,
 )
 from app.services.core.artifact_core_service import ArtifactCoreService
 from app.services.core.check_core_service import CheckCoreService
@@ -42,7 +43,7 @@ async def create_artifact(
     artifact: CheckArtifactCreate,
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[str, Depends(verify_api_token)],
-):
+) -> CheckArtifactResponse:
     """
     Create a new check artifact.
 
@@ -97,7 +98,7 @@ async def get_artifact_metadata(
     artifact_id: Annotated[UUID, Path(description="Artifact UUID")],
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[str, Depends(verify_api_token)],
-):
+) -> CheckArtifactResponse:
     """Get artifact metadata without binary data."""
     artifact = await ArtifactCoreService.get_artifact_by_id(db, artifact_id)
     if not artifact:
@@ -133,7 +134,7 @@ async def download_artifact(
     artifact_id: Annotated[UUID, Path(description="Artifact UUID")],
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[str, Depends(verify_api_token)],
-):
+) -> Response:
     """Download artifact binary data."""
     artifact = await ArtifactCoreService.get_artifact_by_id(db, artifact_id)
     if not artifact:
@@ -169,7 +170,7 @@ async def list_check_artifacts(
     limit: Annotated[
         int, Query(ge=1, le=500, description="Maximum number of artifacts to return")
     ] = 100,
-):
+) -> CheckArtifactListResponse:
     """List artifacts for a check (without binary data)."""
     # Verify check exists
     check = await CheckCoreService.get_check_by_id(db, check_id)
@@ -221,7 +222,7 @@ async def list_check_result_artifacts(
     check_result_id: Annotated[UUID, Path(description="Check result UUID")],
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[str, Depends(verify_api_token)],
-):
+) -> CheckArtifactListResponse:
     """List artifacts for a specific check result."""
     # Verify check exists
     check = await CheckCoreService.get_check_by_id(db, check_id)
@@ -272,7 +273,7 @@ async def delete_artifact(
     artifact_id: Annotated[UUID, Path(description="Artifact UUID")],
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[str, Depends(verify_api_token)],
-):
+) -> Response:
     """Delete an artifact."""
     deleted = await ArtifactCoreService.delete_artifact(db, artifact_id)
     if not deleted:
@@ -286,7 +287,7 @@ async def delete_artifact(
 
 @router.get(
     "/checks/{check_id}/artifacts/stats",
-    response_model=None,
+    response_model=CheckArtifactStatsResponse,
     summary="Get artifact statistics",
     description="Get statistics about artifacts for a check",
     responses={
@@ -297,7 +298,7 @@ async def get_artifact_stats(
     check_id: Annotated[UUID, Path(description="Check UUID")],
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[str, Depends(verify_api_token)],
-):
+) -> CheckArtifactStatsResponse:
     """Get artifact statistics for a check."""
     # Verify check exists
     check = await CheckCoreService.get_check_by_id(db, check_id)
@@ -307,5 +308,4 @@ async def get_artifact_stats(
             detail=f"Check not found: {check_id}",
         )
 
-    stats = await ArtifactCoreService.get_artifact_stats(db, check_id)
-    return stats
+    return await ArtifactCoreService.get_artifact_stats(db, check_id)

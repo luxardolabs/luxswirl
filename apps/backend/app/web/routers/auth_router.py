@@ -39,8 +39,9 @@ async def login_page(
     If already authenticated, redirect to home.
     """
     # First run: no admin exists yet -> send to the setup wizard.
-    if await WebUsersViewService().needs_setup(db):
-        return RedirectResponse(url="/setup", status_code=status.HTTP_302_FOUND)
+    setup_redirect = await WebUsersViewService().login_setup_redirect(db)
+    if setup_redirect is not None:
+        return setup_redirect
 
     # If already logged in, redirect to home or specified redirect
     if user:
