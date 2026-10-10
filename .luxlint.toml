@@ -50,14 +50,6 @@ target = "py314"   # per-repo fact: both components pin python ^3.14 (PEP 758 ex
 # (not 0-byte placeholders bind-mounted at runtime), so the mypy tail resolves it
 # directly via MYPYPATH. Omitting [shared] is this repo's "no overlay" attestation.
 
-[mypy.tail]
-# Honesty attestation (preflight), NOT a deferral: proof the mypy tail sees the code
-# truthfully. The tail (make lint) installs pydantic and emits the config with
-# `plugins = pydantic.mypy`, so pydantic model constructors/fields resolve instead of
-# flooding phantom call-arg/attr-defined. Measured on the backend leg, mypy 2.3.0:
-# without the plugin 1187 errors → with the plugin 998 (−189 phantom pydantic errors).
-pydantic = "tail installs pydantic + emits with plugin; backend 1187→998 (−189 phantom call-arg/attr), mypy 2.3.0"
-
 [gitleaks]
 # Path regexes appended to the canonical allowlist at emit time. Each is a file
 # whose flagged strings were READ and are placeholders, not credentials. The

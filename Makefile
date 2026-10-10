@@ -99,16 +99,6 @@ docker run --rm -u $(REPO_UID):$(REPO_GID) -e HOME=/tmp -v $(PWD)/$(1):/work -w 
   python:3.14-slim sh -c 'python -m venv /tmp/v && /tmp/v/bin/pip install -q $(POETRY_SPEC) && /tmp/v/bin/poetry $(2)'
 endef
 
-# $(call mypy_leg,<component>) — the luxlint mypy tail for ONE app leg. Runs a FRESH
-# mypy (+pydantic for the plugin) on a lean slim image, NOT the baked lint image: the
-# latter freezes mypy 2.1.0 which crashes on this repo's PEP 758 `except A, B:` — the
-# tail is versioned by luxlint, decoupled from the app's dep freeze. MYPYPATH carries
-# the leg's own root (apps/<c> → `app`) plus apps/ (→ vendored `shared`); the canonical
-# config (ignore_missing_imports) treats the rest as Any. Config emitted to .luxlint.mypy.ini.
-define mypy_leg
-docker run --rm -v $(PWD):/w -w /w python:3.14-slim sh -c 'pip install -q -U mypy pydantic && MYPYPATH=/w/apps/$(1):/w/apps mypy --config-file /w/.luxlint.mypy.ini apps/$(1)/app'
-endef
-
 # Compose invocations. ONE compose.yml; the environment is the --env-file, not
 # an overlay (repo.compose_conventions / FLEET-BUILD-DEPLOY-STANDARD).
 DC      := docker compose -f compose.yml
@@ -466,17 +456,11 @@ lint-build: ## Build BOTH lint images (ruff + mypy) from current source
 	DOCKER_BUILDKIT=1 docker build $(NO_CACHE_FLAG) -f apps/backend/Dockerfile.lint -t $(BACKEND_LINT) .
 	DOCKER_BUILDKIT=1 docker build $(NO_CACHE_FLAG) -f apps/agent/Dockerfile.lint -t $(AGENT_LINT) .
 
-lint: ## luxlint ruff (mount-only, canonical set) + the mypy tail per leg — ONE recipe
+lint: ## luxlint: the canonical ruff set, format, tests and docs standard (mount-only)
 	@if [ -z "$(LUXARCH_REGISTRY)" ]; then \
 		echo ">> luxlint skipped: LUXARCH_REGISTRY unset (internal tooling — see Makefile.local.example)"; exit 0; \
 	fi
-	@set +e; rc=0; \
-	docker run --rm -v $(PWD):/repo $(LUXLINT_IMAGE); ruff=$$?; [ $$ruff -ne 0 ] && rc=1; \
-	docker run --rm -v $(PWD):/repo $(LUXLINT_IMAGE) --emit-config mypy > $(PWD)/.luxlint.mypy.ini; \
-	$(call mypy_leg,backend); be=$$?; [ $$be -ne 0 ] && rc=1; \
-	$(call mypy_leg,agent); ae=$$?; [ $$ae -ne 0 ] && rc=1; \
-	rm -f $(PWD)/.luxlint.mypy.ini; \
-	if [ $$rc -ne 0 ]; then echo "lint FAILED (luxlint-ruff=$$ruff mypy-backend=$$be mypy-agent=$$ae)"; exit 1; fi
+	docker run --rm -v $(PWD):/repo $(LUXLINT_IMAGE)
 
 format: ## THE canonical fixer — `luxlint --format` (ruff fix+format AND markdown), in place. PATH=<substr> to scope.
 	@if [ -z "$(LUXARCH_REGISTRY)" ]; then \
@@ -484,16 +468,11 @@ format: ## THE canonical fixer — `luxlint --format` (ruff fix+format AND markd
 	fi
 	docker run --rm -v $(PWD):/repo $(LUXLINT_IMAGE) --format $(if $(PATH_SCOPE),--path $(PATH_SCOPE),)
 
-mypy: ## mypy type-check BOTH components (canonical luxlint config, fresh mypy)
+mypy: ## mypy for both components — `luxlint --mypy` (canonical config, fleet libraries baked, mount-only)
 	@if [ -z "$(LUXARCH_REGISTRY)" ]; then \
-		echo ">> mypy skipped: LUXARCH_REGISTRY unset (needs the luxlint mypy config — see Makefile.local.example)"; exit 0; \
+		echo ">> mypy skipped: LUXARCH_REGISTRY unset (internal tooling — see Makefile.local.example)"; exit 0; \
 	fi
-	@set +e; rc=0; \
-	docker run --rm -v $(PWD):/repo $(LUXLINT_IMAGE) --emit-config mypy > $(PWD)/.luxlint.mypy.ini; \
-	$(call mypy_leg,backend); be=$$?; [ $$be -ne 0 ] && rc=1; \
-	$(call mypy_leg,agent); ae=$$?; [ $$ae -ne 0 ] && rc=1; \
-	rm -f $(PWD)/.luxlint.mypy.ini; \
-	if [ $$rc -ne 0 ]; then echo "mypy FAILED (backend=$$be agent=$$ae)"; exit 1; fi
+	docker run --rm -v $(PWD):/repo $(LUXLINT_IMAGE) --mypy
 
 guard-version-check: ## FATAL: fail if any guard pin is behind the published latest
 	@if [ -z "$(LUXARCH_REGISTRY)" ]; then \
@@ -700,6 +679,18 @@ gitleaks-staged: ## secret scan of the STAGED changes (run by hooks/pre-commit)
 	  --gitleaks-ignore-path /none
 
 check: guard-version-check honest lint mypy test db-verify arch audit gitleaks ## THE fleet gate — run before every commit
+
+# The commit MESSAGE half of the privacy gate (hooks/commit-msg calls it). gitleaks reads patches,
+# never messages, so the message is scanned as a file with the same fleet config — the internal
+# names live only in luxlint's denylist, never spelled out in this public repo.
+gitleaks-message: ## secret + denylist scan of one commit message (MSG=<file>; run by hooks/commit-msg)
+	@[ -n "$(MSG)" ] && [ -f "$(MSG)" ] || { echo "usage: make gitleaks-message MSG=<file>"; exit 2; }
+	@set -e; C=$$(mktemp); D=$$(mktemp -d); trap 'rm -rf "$$C" "$$D"' EXIT INT TERM; \
+	docker run --rm -v $(PWD):/repo $(LUXLINT) --emit-config gitleaks > "$$C"; \
+	mkdir "$$D/t" "$$D/none"; cp "$(MSG)" "$$D/t/COMMIT_MSG"; \
+	docker run --rm -v "$$D/t":/scan:ro -w /scan -v "$$D/none":/none:ro -v "$$C":/gl.toml:ro \
+	  $(GITLEAKS_IMAGE) dir . -c /gl.toml --redact --no-banner --ignore-gitleaks-allow \
+	  --gitleaks-ignore-path /none
 
 docker-clean: ## Remove the locally built image tags (bare backend/agent + lint)
 	-docker rmi $(BACKEND_LOCAL):$(SHA_TAG) $(AGENT_LOCAL):$(SHA_TAG) \
