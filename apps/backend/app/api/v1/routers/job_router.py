@@ -26,8 +26,8 @@ from app.schemas.job_schema import (
     JobResultSubmit,
     JobStatsResponse,
 )
-from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.auth_core_service import AuthCoreService
+from app.services.core.job_api_core_service import JobApiCoreService
 from app.services.core.job_core_service import JobCoreService
 
 router = APIRouter(prefix="/jobs", tags=["Jobs"])
@@ -59,38 +59,7 @@ async def create_job(
         # token from another in an audit trail.
         created_by = f"api:{AuthCoreService.hash_token(token)[:12]}"
 
-        job = await JobCoreService.create_job(db, data, created_by=created_by)
-
-        # Get agent hostname if applicable
-        agent_hostname = None
-        if job.agent_id:
-            agent = await AgentCoreService.get_agent_by_id(db, job.agent_id)
-            if agent:
-                agent_hostname = agent.hostname
-
-        return JobResponse(
-            id=job.id,
-            job_type=job.job_type,
-            agent_id=job.agent_id,
-            agent_hostname=agent_hostname,
-            params=job.params,
-            priority=job.priority,
-            status=job.status,
-            tags=job.tags,
-            created_at=job.created_at,
-            updated_at=job.updated_at,
-            assigned_at=job.assigned_at,
-            started_at=job.started_at,
-            completed_at=job.completed_at,
-            expires_at=job.expires_at,
-            duration_seconds=job.duration_seconds,
-            result=job.result,
-            error=job.error,
-            created_by=job.created_by,
-            schedule=job.schedule,
-            automation_config=job.automation_config,
-            parent_job_id=job.parent_job_id,
-        )
+        return await JobApiCoreService.create_job(db, data, created_by=created_by)
     except AgentNotFoundException as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -116,67 +85,13 @@ async def list_jobs(
     page_size: Annotated[int, Query(ge=1, le=1000, description="Items per page")] = 50,
 ) -> JobListResponse:
     """List all jobs with pagination and filtering."""
-    offset = (page - 1) * page_size
-    agent_uuid, server_only = JobCoreService.resolve_runner_filter(agent_filter)
-
-    jobs, total = await JobCoreService.list_jobs(
-        db=db,
-        agent_id=agent_uuid,
-        server_only=server_only,
+    return await JobApiCoreService.list_jobs(
+        db,
+        agent_filter=agent_filter,
         status=status,
         job_type=job_type,
-        offset=offset,
-        limit=page_size,
-    )
-
-    # One query for the whole page's agents, not one per distinct agent — a
-    # page of jobs can span the entire fleet.
-    hostnames = await AgentCoreService.get_hostnames_by_ids(
-        db, [job.agent_id for job in jobs if job.agent_id]
-    )
-
-    job_responses = []
-    for job in jobs:
-        agent_hostname = hostnames.get(job.agent_id) if job.agent_id else None
-
-        job_responses.append(
-            JobResponse(
-                id=job.id,
-                job_type=job.job_type,
-                agent_id=job.agent_id,
-                agent_hostname=agent_hostname,
-                params=job.params,
-                priority=job.priority,
-                status=job.status,
-                tags=job.tags,
-                created_at=job.created_at,
-                updated_at=job.updated_at,
-                assigned_at=job.assigned_at,
-                started_at=job.started_at,
-                completed_at=job.completed_at,
-                expires_at=job.expires_at,
-                duration_seconds=job.duration_seconds,
-                result=job.result,
-                error=job.error,
-                created_by=job.created_by,
-                schedule=job.schedule,
-                automation_config=job.automation_config,
-                parent_job_id=job.parent_job_id,
-            )
-        )
-
-    # Get stats
-    stats = await JobCoreService.get_job_stats(
-        db, agent_id=agent_uuid, server_only=server_only
-    )
-
-    return JobListResponse(
-        jobs=job_responses,
-        total=total,
-        pending_count=stats.pending,
-        running_count=stats.running,
-        completed_count=stats.completed,
-        failed_count=stats.failed,
+        page=page,
+        page_size=page_size,
     )
 
 
@@ -195,43 +110,13 @@ async def get_job(
     _: Annotated[str, Depends(verify_api_token)],
 ) -> JobResponse:
     """Get a specific job by ID."""
-    job = await JobCoreService.get_job(db, job_id)
-    if not job:
+    job = await JobApiCoreService.get_job(db, job_id)
+    if job is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Job not found: {job_id}",
         )
-
-    # Get agent hostname if applicable
-    agent_hostname = None
-    if job.agent_id:
-        agent = await AgentCoreService.get_agent_by_id(db, job.agent_id)
-        if agent:
-            agent_hostname = agent.hostname
-
-    return JobResponse(
-        id=job.id,
-        job_type=job.job_type,
-        agent_id=job.agent_id,
-        agent_hostname=agent_hostname,
-        params=job.params,
-        priority=job.priority,
-        status=job.status,
-        tags=job.tags,
-        created_at=job.created_at,
-        updated_at=job.updated_at,
-        assigned_at=job.assigned_at,
-        started_at=job.started_at,
-        completed_at=job.completed_at,
-        expires_at=job.expires_at,
-        duration_seconds=job.duration_seconds,
-        result=job.result,
-        error=job.error,
-        created_by=job.created_by,
-        schedule=job.schedule,
-        automation_config=job.automation_config,
-        parent_job_id=job.parent_job_id,
-    )
+    return job
 
 
 @router.post(
@@ -251,41 +136,13 @@ async def submit_job_results(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> JobResponse:
     """Submit job results from the agent the job is assigned to."""
-    job = await JobCoreService.submit_job_result(db, owned_job_id, result_data)
+    job = await JobApiCoreService.submit_job_result(db, owned_job_id, result_data)
     if job is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Job not found: {owned_job_id}",
         )
-
-    agent_hostname = None
-    if job.agent_id is not None:
-        agent = await AgentCoreService.get_agent_by_id(db, job.agent_id)
-        agent_hostname = agent.hostname
-
-    return JobResponse(
-        id=job.id,
-        job_type=job.job_type,
-        agent_id=job.agent_id,
-        agent_hostname=agent_hostname,
-        params=job.params,
-        priority=job.priority,
-        status=job.status,
-        tags=job.tags,
-        created_at=job.created_at,
-        updated_at=job.updated_at,
-        assigned_at=job.assigned_at,
-        started_at=job.started_at,
-        completed_at=job.completed_at,
-        expires_at=job.expires_at,
-        duration_seconds=job.duration_seconds,
-        result=job.result,
-        error=job.error,
-        created_by=job.created_by,
-        schedule=job.schedule,
-        automation_config=job.automation_config,
-        parent_job_id=job.parent_job_id,
-    )
+    return job
 
 
 @router.delete(
@@ -303,15 +160,11 @@ async def cancel_job(
     _: Annotated[str, Depends(verify_api_token)],
 ) -> None:
     """Cancel or delete a job."""
-    job = await JobCoreService.cancel_job(db, job_id)
-
-    if not job:
+    if not await JobApiCoreService.cancel_job(db, job_id):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Job not found or cannot be cancelled: {job_id}",
         )
-
-    return None
 
 
 @router.get(
