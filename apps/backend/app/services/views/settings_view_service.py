@@ -20,7 +20,6 @@ from app.schemas.notification_provider_schema import (
 )
 from app.schemas.pagination_schema import build_pagination
 from app.schemas.registration_key_schema import (
-    RegistrationKeyResponse,
     RegistrationKeyRow,
     RegistrationKeyUrls,
 )
@@ -426,7 +425,7 @@ class SettingsViewService:
             # (fw.url_assembly_in_view).
             "registration_keys": [
                 RegistrationKeyRow(
-                    **dict(RegistrationKeyResponse.model_validate(k)),
+                    **dict(k),
                     urls=RegistrationKeyUrls(
                         revoke=request.url_for("revoke_key", key_id=k.id).path,
                         delete=request.url_for("delete_key", key_id=k.id).path,

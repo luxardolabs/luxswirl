@@ -95,23 +95,7 @@ async def list_registration_keys(
     )
 
     return RegistrationKeyListResponse(
-        keys=[
-            RegistrationKeyResponse(
-                id=key.id,
-                name=key.name,
-                description=key.description,
-                created_by=key.created_by,
-                created_at=key.created_at,
-                updated_at=key.updated_at,
-                last_used_at=key.last_used_at,
-                usage_count=key.usage_count,
-                revoked_at=key.revoked_at,
-                revoked_by=key.revoked_by,
-                revoked_reason=key.revoked_reason,
-                status=key.status,
-            )
-            for key in keys
-        ],
+        keys=keys,
         total=total,
     )
 
@@ -145,20 +129,7 @@ async def get_registration_key(
             detail=f"Registration key not found: {key_id}",
         )
 
-    return RegistrationKeyResponse(
-        id=key.id,
-        name=key.name,
-        description=key.description,
-        created_by=key.created_by,
-        created_at=key.created_at,
-        updated_at=key.updated_at,
-        last_used_at=key.last_used_at,
-        usage_count=key.usage_count,
-        revoked_at=key.revoked_at,
-        revoked_by=key.revoked_by,
-        revoked_reason=key.revoked_reason,
-        status=key.status,
-    )
+    return key
 
 
 @router.patch(
@@ -185,20 +156,7 @@ async def update_registration_key(
     """
     key = await RegistrationKeyCoreService.update_key(db, key_id, data)
 
-    return RegistrationKeyResponse(
-        id=key.id,
-        name=key.name,
-        description=key.description,
-        created_by=key.created_by,
-        created_at=key.created_at,
-        updated_at=key.updated_at,
-        last_used_at=key.last_used_at,
-        usage_count=key.usage_count,
-        revoked_at=key.revoked_at,
-        revoked_by=key.revoked_by,
-        revoked_reason=key.revoked_reason,
-        status=key.status,
-    )
+    return key
 
 
 @router.post(
@@ -231,20 +189,7 @@ async def revoke_registration_key(
         revoked_by=None,  # Future: Get from JWT token
     )
 
-    return RegistrationKeyResponse(
-        id=key.id,
-        name=key.name,
-        description=key.description,
-        created_by=key.created_by,
-        created_at=key.created_at,
-        updated_at=key.updated_at,
-        last_used_at=key.last_used_at,
-        usage_count=key.usage_count,
-        revoked_at=key.revoked_at,
-        revoked_by=key.revoked_by,
-        revoked_reason=key.revoked_reason,
-        status=key.status,
-    )
+    return key
 
 
 @router.delete(

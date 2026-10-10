@@ -15,6 +15,7 @@ from app.crud.registration_key_crud import RegistrationKeyCRUD
 from app.models.registration_key_model import RegistrationKey
 from app.schemas.registration_key_schema import (
     RegistrationKeyCreate,
+    RegistrationKeyResponse,
     RegistrationKeyRevoke,
     RegistrationKeyUpdate,
 )
@@ -79,7 +80,7 @@ class RegistrationKeyCoreService:
         db: AsyncSession,
         data: RegistrationKeyCreate,
         created_by: str | None = None,
-    ) -> tuple[RegistrationKey, str]:
+    ) -> tuple[RegistrationKeyResponse, str]:
         """
         Create a new registration key.
 
@@ -115,13 +116,13 @@ class RegistrationKeyCoreService:
             extra={"key_name": key.name, "key_id": str(key.id)},
         )
 
-        return key, plaintext_key
+        return RegistrationKeyResponse.model_validate(key), plaintext_key
 
     @staticmethod
     async def get_key_by_id(
         db: AsyncSession,
         key_id: UUID,
-    ) -> RegistrationKey | None:
+    ) -> RegistrationKeyResponse | None:
         """
         Get a registration key by ID.
 
@@ -130,9 +131,10 @@ class RegistrationKeyCoreService:
             key_id: Key UUID
 
         Returns:
-            RegistrationKey model or None
+            The key (never its plaintext), or None
         """
-        return await RegistrationKeyCRUD.get_by_id(db, key_id)
+        key = await RegistrationKeyCRUD.get_by_id(db, key_id)
+        return None if key is None else RegistrationKeyResponse.model_validate(key)
 
     @staticmethod
     async def list_keys(
@@ -140,7 +142,7 @@ class RegistrationKeyCoreService:
         skip: int = 0,
         limit: int = 100,
         include_revoked: bool = False,
-    ) -> tuple[list[RegistrationKey], int]:
+    ) -> tuple[list[RegistrationKeyResponse], int]:
         """
         List registration keys with pagination.
 
@@ -153,16 +155,17 @@ class RegistrationKeyCoreService:
         Returns:
             Tuple of (list of keys, total count)
         """
-        return await RegistrationKeyCRUD.list_paginated(
+        keys, total = await RegistrationKeyCRUD.list_paginated(
             db, skip=skip, limit=limit, include_revoked=include_revoked
         )
+        return [RegistrationKeyResponse.model_validate(k) for k in keys], total
 
     @staticmethod
     async def update_key(
         db: AsyncSession,
         key_id: UUID,
         data: RegistrationKeyUpdate,
-    ) -> RegistrationKey:
+    ) -> RegistrationKeyResponse:
         """
         Update a registration key.
 
@@ -177,7 +180,7 @@ class RegistrationKeyCoreService:
         Raises:
             NotFoundException: If key not found
         """
-        key = await RegistrationKeyCoreService.get_key_by_id(db, key_id)
+        key = await RegistrationKeyCRUD.get_by_id(db, key_id)
         if not key:
             raise NotFoundException(f"Registration key not found: {key_id}")
 
@@ -196,7 +199,7 @@ class RegistrationKeyCoreService:
             extra={"key_name": key.name, "key_id": str(key.id)},
         )
 
-        return key
+        return RegistrationKeyResponse.model_validate(key)
 
     @staticmethod
     async def revoke_key(
@@ -204,7 +207,7 @@ class RegistrationKeyCoreService:
         key_id: UUID,
         data: RegistrationKeyRevoke,
         revoked_by: str | None = None,
-    ) -> RegistrationKey:
+    ) -> RegistrationKeyResponse:
         """
         Revoke a registration key.
 
@@ -220,7 +223,7 @@ class RegistrationKeyCoreService:
         Raises:
             NotFoundException: If key not found
         """
-        key = await RegistrationKeyCoreService.get_key_by_id(db, key_id)
+        key = await RegistrationKeyCRUD.get_by_id(db, key_id)
         if not key:
             raise NotFoundException(f"Registration key not found: {key_id}")
 
@@ -241,7 +244,7 @@ class RegistrationKeyCoreService:
             },
         )
 
-        return key
+        return RegistrationKeyResponse.model_validate(key)
 
     @staticmethod
     async def delete_key(
@@ -260,7 +263,7 @@ class RegistrationKeyCoreService:
         Raises:
             NotFoundException: If key not found
         """
-        key = await RegistrationKeyCoreService.get_key_by_id(db, key_id)
+        key = await RegistrationKeyCRUD.get_by_id(db, key_id)
         if not key:
             raise NotFoundException(f"Registration key not found: {key_id}")
 
