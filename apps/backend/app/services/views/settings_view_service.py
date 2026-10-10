@@ -76,7 +76,7 @@ class SettingsViewService:
         """
         try:
             # Get setting to determine type
-            setting = await SettingsCoreService.get_setting_object(db, key)
+            setting = await SettingsCoreService.get_setting_response(db, key)
             if not setting:
                 return None, f"Setting not found: {key}"
 
@@ -97,8 +97,7 @@ class SettingsViewService:
                 db, key, parsed_value
             )
 
-            # Convert at the view seam: the template gets a schema, not an ORM row.
-            return SettingResponse.model_validate(updated_setting), None
+            return updated_setting, None
 
         except ValueError as e:
             return None, f"Invalid value format: {str(e)}"
@@ -249,14 +248,14 @@ class SettingsViewService:
 
         # Update template filter cache if display setting was reset
         if key in ("general.timezone", "general.date_format", "general.time_format"):
-            reset_value = updated_setting.typed_value
+            reset_value = updated_setting.value.get("value")
             SettingsViewService._update_template_cache_if_needed(key, reset_value)
             logger.info(
                 "Reset template filter cache to default",
                 extra={"setting_key": key, "reset_value": reset_value},
             )
 
-        return SettingResponse.model_validate(updated_setting)
+        return updated_setting
 
     @staticmethod
     async def update_metrics_timeout(
