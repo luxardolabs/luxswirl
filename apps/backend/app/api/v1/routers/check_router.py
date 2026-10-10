@@ -15,10 +15,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import AuthenticatedAgentId
 from app.core.check_target_validator import CheckTargetBlockedError
 from app.core.config import settings
-from app.core.exceptions import (
-    AgentNotFoundException,
-    CheckNotFoundException,
-)
 from app.core.rate_limit import limiter
 from app.core.security import verify_api_token
 from app.db import get_db
@@ -32,8 +28,7 @@ from app.schemas.check_schema import (
     CheckUpdate,
 )
 from app.services.core.agent_assignment_core_service import AgentAssignmentCoreService
-from app.services.core.agent_core_service import AgentCoreService
-from app.services.core.check_core_service import CheckCoreService
+from app.services.core.check_api_core_service import CheckApiCoreService
 
 # Agent-facing router (agents call these)
 router = APIRouter(tags=["Checks"])
@@ -91,45 +86,7 @@ async def get_check(
     _: Annotated[str, Depends(verify_api_token)],
 ) -> CheckResponse:
     """Get a specific check."""
-    try:
-        check = await CheckCoreService.get_check_by_id(db, check_id)
-        # Bind the lookup to the {agent_id} in the path — a check under another agent
-        # must 404 here, not resolve via this agent's URL (LUXSWIRL-190 L-5).
-        if not check or check.agent_id != agent_id:
-            raise CheckNotFoundException("unknown", str(check_id))
-
-        # Get agent for FQN
-        agent = await AgentCoreService.get_agent_by_id(db, agent_id)
-        fqn = f"{agent.agent_name or str(agent.id)}:{check.display_name}"
-
-        return CheckResponse(
-            id=check.id,
-            agent_id=check.agent_id,
-            display_name=check.display_name,
-            check_type=check.check_type,
-            target=check.target,
-            description=check.description,
-            interval_seconds=check.interval_seconds,
-            timeout_seconds=check.timeout_seconds,
-            expected_status=check.expected_status,
-            enabled=check.enabled,
-            created_at=check.created_at,
-            updated_at=check.updated_at,
-            fully_qualified_name=fqn,
-            latest_status=None,
-            latest_latency_ms=None,
-            success_rate_24h=None,
-        )
-    except CheckNotFoundException:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Check not found: {check_id}",
-        ) from None
-    except AgentNotFoundException:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Agent not found: {agent_id}",
-        ) from None
+    return await CheckApiCoreService.get_check(db, agent_id, check_id)
 
 
 @management_router.post(
@@ -155,46 +112,10 @@ async def create_check(
     Python code and are restricted to administrators. Use with caution in trusted environments only.
     """
     try:
-        # Get agent by UUID to get agent_name
-        agent = await AgentCoreService.get_agent_by_id(db, agent_id)
-        if not agent:
-            raise AgentNotFoundException(str(agent_id))
-
-        # API Bearer tokens are admin-equivalent by design (see SECURITY.md), so
-        # synthetic checks are permitted on this path.
-        check = await CheckCoreService.create_check(
-            db, agent.id, data, actor_is_admin=True
-        )
-
-        fqn = f"{agent.agent_name or str(agent.id)}:{check.display_name}"
-
-        return CheckResponse(
-            id=check.id,
-            agent_id=check.agent_id,
-            display_name=check.display_name,
-            check_type=check.check_type,
-            target=check.target,
-            description=check.description,
-            interval_seconds=check.interval_seconds,
-            timeout_seconds=check.timeout_seconds,
-            expected_status=check.expected_status,
-            enabled=check.enabled,
-            created_at=check.created_at,
-            updated_at=check.updated_at,
-            fully_qualified_name=fqn,
-            latest_status=None,
-            latest_latency_ms=None,
-            success_rate_24h=None,
-        )
-    except AgentNotFoundException:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Agent not found: {agent_id}",
-        ) from None
+        return await CheckApiCoreService.create_check(db, agent_id, data)
     except CheckTargetBlockedError as e:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail=str(e),
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(e)
         ) from None
 
 
@@ -216,50 +137,10 @@ async def update_check(
 ) -> CheckResponse:
     """Update a check."""
     try:
-        # Bind {check_id} to the path {agent_id} before mutating (LUXSWIRL-190 L-5).
-        existing = await CheckCoreService.get_check_by_id(db, check_id)
-        if existing.agent_id != agent_id:
-            raise CheckNotFoundException("unknown", str(check_id))
-        check = await CheckCoreService.update_check(
-            db, check_id, data, actor_is_admin=True
-        )
-
-        # Get agent for FQN
-        agent = await AgentCoreService.get_agent_by_id(db, agent_id)
-        fqn = f"{agent.agent_name or str(agent.id)}:{check.display_name}"
-
-        return CheckResponse(
-            id=check.id,
-            agent_id=check.agent_id,
-            display_name=check.display_name,
-            check_type=check.check_type,
-            target=check.target,
-            description=check.description,
-            interval_seconds=check.interval_seconds,
-            timeout_seconds=check.timeout_seconds,
-            expected_status=check.expected_status,
-            enabled=check.enabled,
-            created_at=check.created_at,
-            updated_at=check.updated_at,
-            fully_qualified_name=fqn,
-            latest_status=None,
-            latest_latency_ms=None,
-            success_rate_24h=None,
-        )
-    except CheckNotFoundException:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Check not found: {check_id}",
-        ) from None
-    except AgentNotFoundException:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Agent not found: {agent_id}",
-        ) from None
+        return await CheckApiCoreService.update_check(db, agent_id, check_id, data)
     except CheckTargetBlockedError as e:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail=str(e),
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(e)
         ) from None
 
 
@@ -279,18 +160,7 @@ async def delete_check(
     _: Annotated[str, Depends(verify_api_token)],
 ) -> None:
     """Delete a check."""
-    try:
-        # Bind {check_id} to the path {agent_id} before deleting (LUXSWIRL-190 L-5).
-        existing = await CheckCoreService.get_check_by_id(db, check_id)
-        if existing.agent_id != agent_id:
-            raise CheckNotFoundException("unknown", str(check_id))
-        await CheckCoreService.delete_check(db, check_id)
-        return None
-    except CheckNotFoundException:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Check not found: {check_id}",
-        ) from None
+    await CheckApiCoreService.delete_check(db, agent_id, check_id)
 
 
 @management_router.post(
@@ -306,7 +176,7 @@ async def delete_check(
 async def clone_check(
     agent_id: UUID,
     check_id: UUID,
-    data: CheckCreate,
+    data: CheckUpdate,
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[str, Depends(verify_api_token)],
 ) -> CheckResponse:
@@ -328,51 +198,7 @@ async def clone_check(
 
     All other fields will be copied from the source check.
     """
-    try:
-        # Check if any overrides were provided
-        has_overrides = any(data.model_dump(exclude_unset=True).values())
-
-        # Clone check with overrides
-        cloned_check = await CheckCoreService.clone_check(
-            db,
-            check_id=check_id,
-            agent_id=agent_id,
-            overrides=data if has_overrides else None,
-            actor_is_admin=True,
-        )
-
-        # Get agent for FQN
-        agent = await AgentCoreService.get_agent_by_id(db, agent_id)
-        fqn = f"{agent.agent_name or str(agent.id)}:{cloned_check.display_name}"
-
-        return CheckResponse(
-            id=cloned_check.id,
-            agent_id=cloned_check.agent_id,
-            display_name=cloned_check.display_name,
-            check_type=cloned_check.check_type,
-            target=cloned_check.target,
-            description=cloned_check.description,
-            interval_seconds=cloned_check.interval_seconds,
-            timeout_seconds=cloned_check.timeout_seconds,
-            expected_status=cloned_check.expected_status,
-            enabled=cloned_check.enabled,
-            created_at=cloned_check.created_at,
-            updated_at=cloned_check.updated_at,
-            fully_qualified_name=fqn,
-            latest_status=None,
-            latest_latency_ms=None,
-            success_rate_24h=None,
-        )
-    except CheckNotFoundException:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Check not found: {check_id}",
-        ) from None
-    except AgentNotFoundException:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Agent not found: {agent_id}",
-        ) from None
+    return await CheckApiCoreService.clone_check(db, agent_id, check_id, data)
 
 
 @management_router.post(
@@ -422,17 +248,4 @@ async def bulk_create_checks(
 
     Returns detailed results for each check including success/failure status.
     """
-    try:
-        # Verify agent exists
-        agent = await AgentCoreService.get_agent_by_id(db, agent_id)
-        if not agent:
-            raise AgentNotFoundException(str(agent_id))
-
-        # Bulk create checks — core returns the response schema already
-        return await CheckCoreService.bulk_create_checks(db, agent.id, requests)
-
-    except AgentNotFoundException:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Agent not found: {agent_id}",
-        ) from None
+    return await CheckApiCoreService.bulk_create_checks(db, agent_id, requests)

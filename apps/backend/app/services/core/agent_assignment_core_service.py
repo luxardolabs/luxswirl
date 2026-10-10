@@ -18,7 +18,7 @@ from app.models.agent_model import Agent
 from app.models.check_model import Check
 from app.schemas.check_schema import CheckListResponse
 from app.services.core.agent_core_service import AgentCoreService
-from app.services.core.check_core_service import CheckCoreService
+from app.services.core.check_api_core_service import CheckApiCoreService
 
 logger = get_logger("luxswirl.services.agent_assignment")
 
@@ -145,7 +145,7 @@ class AgentAssignmentCoreService:
         """
         agent = await AgentCoreService.get_agent_by_id(db, agent_id)
         checks = await AgentAssignmentCoreService.get_checks_for_agent(db, agent)
-        return CheckCoreService.build_check_list_response(checks, agent.agent_name)
+        return CheckApiCoreService.build_check_list_response(checks, agent.agent_name)
 
     @staticmethod
     async def get_checks_for_agent(
