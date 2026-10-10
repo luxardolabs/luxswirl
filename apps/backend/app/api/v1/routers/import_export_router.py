@@ -20,6 +20,7 @@ from app.schemas.import_export_schema import (
     CheckExport,
 )
 from app.services.core.check_core_service import CheckCoreService
+from app.services.core.import_export_core_service import ImportExportCoreService
 
 logger = get_logger("luxswirl.api.import_export")
 
@@ -45,7 +46,7 @@ async def export_checks(
     Returns:
         The agent and its checks in the export format
     """
-    return await CheckCoreService.export_agent_checks(db, agent_id)
+    return await ImportExportCoreService.export_agent_checks(db, agent_id)
 
 
 @router.post("/import", response_model=BulkImportResponse)
