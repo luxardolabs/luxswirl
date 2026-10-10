@@ -4,19 +4,28 @@
 #   - LUXSWIRL-<n> : internal LuxPM tracker ids. Track work in LuxPM by commit
 #                    SHA instead; in the message reference a public GitHub issue
 #                    (#123) or nothing.
-#   - internal-host    : internal infrastructure hostnames — never in the public repo.
+#   - internal infrastructure names: scanned by `make gitleaks-message` with the
+#     fleet denylist (luxlint's gitleaks config). They are never spelled out here:
+#     a hook that names the string it blocks publishes it.
 #
 # Enforced here (not by convention) so it holds for any committer. Bypass with
 # `git commit --no-verify` if you deliberately mean it.
 set -euo pipefail
 
 msg_file="$1"
-patterns='LUXSWIRL-[0-9]+|internal-host'
+patterns='LUXSWIRL-[0-9]+'
 
 if grep -nEi "$patterns" "$msg_file" >/dev/null 2>&1; then
   echo "✗ commit blocked: internal reference in the commit message" >&2
   grep -nEi "$patterns" "$msg_file" | sed 's/^/      /' >&2
   echo "  → Reference a public GitHub issue (#123) or nothing; link the SHA in LuxPM." >&2
+  echo "    (bypass: git commit --no-verify)" >&2
+  exit 1
+fi
+
+if ! make -s gitleaks-message MSG="$msg_file" >/dev/null 2>&1; then
+  echo "✗ commit blocked: the message matches the fleet secret/denylist scan" >&2
+  make -s gitleaks-message MSG="$msg_file" 2>&1 | grep -E 'RuleID|Finding|leaks found' | sed 's/^/      /' >&2 || true
   echo "    (bypass: git commit --no-verify)" >&2
   exit 1
 fi
