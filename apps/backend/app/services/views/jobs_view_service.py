@@ -494,7 +494,7 @@ class JobsViewService:
 
         agent = None
         if job.agent_id:
-            agent = await AgentCoreService.get_agent_by_id(db, job.agent_id)
+            agent = await AgentCoreService.get_agent(db, job.agent_id)
 
         existing_checks: set[str] = set()
         if job.job_type == "network_scan" and job.result and job.agent_id:
