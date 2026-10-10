@@ -91,22 +91,11 @@ async def get_provider(
 ) -> NotificationProviderResponse:
     """Get a specific notification provider."""
     try:
-        provider = await NotificationCoreService.get_provider_by_id(db, provider_id)
+        provider = await NotificationCoreService.get_provider(db, provider_id)
     except NotFoundException as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
-
-    return NotificationProviderResponse(
-        id=provider.id,
-        provider_type=provider.provider_type,
-        friendly_name=provider.friendly_name,
-        config=provider.config,
-        is_default_enabled=provider.is_default_enabled,
-        rate_limit_count=provider.rate_limit_count,
-        rate_limit_window_minutes=provider.rate_limit_window_minutes,
-        created_at=provider.created_at,
-        updated_at=provider.updated_at,
-        deleted_at=provider.deleted_at,
-    )
+    # Validated from the DTO, so the config passes the secret-masking validator.
+    return NotificationProviderResponse.model_validate(provider, from_attributes=True)
 
 
 @router.post(
