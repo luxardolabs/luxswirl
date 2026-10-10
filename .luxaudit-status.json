@@ -1,23 +1,16 @@
 {
   "guard": "luxaudit",
-  "guard_version": "0.12.0",
+  "guard_version": "0.13.2",
   "repo": "/repo",
   "packages": 100,
   "source": "apps/backend/poetry.lock, apps/agent/poetry.lock",
   "summary": {
-    "PASS": 99,
-    "FAIL": 1,
+    "PASS": 100,
+    "FAIL": 0,
     "XFAIL": 0,
     "INERT": 1
   },
-  "vulnerable": [
-    {
-      "package": "pyjwt",
-      "version": "2.14.0",
-      "vuln_id": "PYSEC-2026-4141",
-      "fix": "2.15.0"
-    }
-  ],
+  "vulnerable": [],
   "deferred": [],
   "banned": [],
   "not_audited": [],
@@ -33,6 +26,6 @@
     "vulnerable": [],
     "deferred": []
   },
-  "commit": "6c64c21e179cd39c75ef47d11fa2873498fb6f4d",
-  "generated_at": "2026-10-02T03:34:58Z"
+  "commit": "76a6f47810cc24e488fa3e389ed0756068a9d83a",
+  "generated_at": "2026-10-10T08:01:16Z"
 }

@@ -18,8 +18,9 @@ import os
 # meant anyone with it exported — the ordinary state on a machine that also runs
 # the dev stack — ran the whole suite against the dev database.
 #
-# Inside the `tests` service container the test DB is `timescaledb-test:5432`;
-# from the host it is published on `localhost:25432`, which is the default.
+# `make test` sets it to `timescaledb-test:5432` on the run's own compose network.
+# The test DB publishes no host port (each run is its own project), so the default
+# below reaches a database only if you publish one there yourself.
 TEST_DATABASE_URL = os.environ.get(
     "TEST_DATABASE_URL",
     "postgresql+asyncpg://luxswirl_test:luxswirl_test@localhost:25432/luxswirl_test",

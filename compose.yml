@@ -186,12 +186,14 @@ services:
   # ── profile: test ────────────────────────────────────────────────────────
   # The throwaway suite topology. Driven by `make test` / `make migration-check`,
   # which name these services explicitly so the app stack above stays down:
-  #   docker compose -p luxswirl-test --profile test up -d --wait timescaledb-test
-  #   docker compose -p luxswirl-test --profile test run --rm tests pytest
+  #   make test        -> a fresh project per run, the suite in the test image
+  #   make db-verify   -> docker compose -p luxswirl-test --profile test run --rm tests …
   timescaledb-test:
     profiles: ["test"]
     image: timescale/timescaledb:latest-pg16
-    container_name: luxswirl_timescaledb_test
+    # No container_name and no published port: `make test` (the emitted test block) runs
+    # every suite in a compose project of its own, so two runs never collide and the
+    # suite reaches the DB by service name on that project's network only.
     # RAM-backed: schema setup is ~200ms per session and the data is meant to die.
     tmpfs:
       - /var/lib/postgresql/data
@@ -200,10 +202,6 @@ services:
       POSTGRES_DB: luxswirl_test
       POSTGRES_USER: luxswirl_test
       POSTGRES_PASSWORD: luxswirl_test
-    # 15432 is taken by luxwx's test DB on shared dev boxes; pick a port that
-    # doesn't collide. The internal port is always 5432.
-    ports:
-      - "25432:5432"
     # Readiness = an AUTHENTICATED TCP query, never a bare `pg_isready`. With no -h,
     # pg_isready connects over the unix SOCKET — which the postgres entrypoint's temporary
     # initdb server also listens on, BEFORE the role/password exist. A socket probe therefore

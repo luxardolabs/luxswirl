@@ -79,6 +79,12 @@ allow = [
   "^apps/backend/app/schemas/registration_key_schema\\.py$",
 ]
 
+[test]
+# The coverage floor (test.coverage_floor_set): the whole percent `make test` measured
+# (branch coverage, emitted test block) on 2026-10-10 — 629 tests, TOTAL 63%. It only
+# ever goes up.
+coverage_min = 63
+
 # Warnings the canonical pytest config (filterwarnings = error) must let through.
 # Tracked debt, never blanket: each needs a reason, and it goes away when upstream
 # does.
@@ -92,7 +98,6 @@ reason  = "slowapi calls asyncio.iscoroutinefunction, removed in 3.16; not ours 
 # config. Each row states why the flagged construct is what this code is FOR.
 ruff = [
   { code = "S102", file = "apps/agent/app/checks/synthetic.py", match = "exec(script_code, script_globals)", evidence = "the exec IS the synthetic check type — running an operator's Playwright script is the feature. Admin-only (enforced in CheckCoreService.create_check/update_check/clone_check, not just the web layer), AST-validated by core/synthetic_security.py, audit-logged, and documented as trusted-environments-only in SECURITY.md" },
-  { code = "S105", file = "apps/backend/app/services/core/auth_core_service.py", match = "_FAKE_PASSWORD_HASH", evidence = "a FIXED bcrypt hash of a throwaway string, compared against when the username does not exist so a failed login costs the same time as a real one. It is the timing-oracle defence; there is no account it opens" },
   { code = "T201", file = "apps/agent/app/main.py", match = "Luxardo Labs LuxSwirl Agent v", evidence = "`--version` on a CLI writes to stdout and exits. A logger would send it to the log sink the operator is not reading, which is the one thing this flag must not do" },
   { code = "ASYNC240", file = "apps/agent/app/main.py", match = "config_path.exists()", evidence = "one stat() at process startup, before a single check is registered — there is no concurrent work on the loop for it to stall, and the process cannot proceed without the answer" },
 ]
