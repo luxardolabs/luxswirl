@@ -17,6 +17,7 @@ Home per FLEET-LAYOUT-STANDARD §2: `app/api/deps` for API dependency aliases.
 """
 
 import contextlib
+from dataclasses import dataclass
 from typing import Annotated
 from uuid import UUID
 
@@ -26,12 +27,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.exceptions import AgentNotFoundException
 from app.core.security import (
+    authenticate_heartbeat,
     get_current_user,
     require_admin,
     require_api_admin,
     verify_agent_token,
 )
 from app.db import get_db
+from app.schemas.agent_schema import AgentHeartbeat
 from app.schemas.auth_schema import CurrentUserDTO
 from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.job_core_service import JobCoreService
@@ -79,3 +82,54 @@ async def require_job_owner(
 
 # The id of a job whose assigned agent authenticated this request.
 AgentOwnedJobId = Annotated[UUID, Depends(require_job_owner)]
+
+
+async def require_agent(
+    agent_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    authorization: Annotated[str | None, Header()] = None,
+) -> UUID:
+    """`agent_id`, once that agent has authenticated with its key and is approved.
+
+    Yields the id, not the row: the route hands it to core, which loads what it
+    needs, so no ORM agent crosses the seam.
+    """
+    try:
+        agent = await AgentCoreService.get_agent_by_id(db, agent_id)
+    except AgentNotFoundException:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Agent not found: {agent_id}",
+        ) from None
+    await verify_agent_token(agent, authorization)
+    return agent.id
+
+
+# The id of the agent that authenticated this request (query parameter agent_id).
+AuthenticatedAgentId = Annotated[UUID, Depends(require_agent)]
+
+
+@dataclass(frozen=True)
+class HeartbeatSender:
+    """Who sent a heartbeat, once authenticated, and with which key."""
+
+    agent_id: UUID
+    using_agent_key: bool
+
+
+async def require_heartbeat_sender(
+    heartbeat: AgentHeartbeat,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    authorization: Annotated[str | None, Header()] = None,
+) -> HeartbeatSender:
+    """The heartbeat's agent, authenticated by its own key or the registration key.
+
+    Reads the same body the route does (FastAPI parses it once). Yields the id
+    and which key was used; core loads the agent itself.
+    """
+    agent = await AgentCoreService.get_agent_by_id(db, heartbeat.agent_id)
+    using_agent_key = await authenticate_heartbeat(agent, authorization, db)
+    return HeartbeatSender(agent_id=agent.id, using_agent_key=using_agent_key)
+
+
+AuthenticatedHeartbeat = Annotated[HeartbeatSender, Depends(require_heartbeat_sender)]

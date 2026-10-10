@@ -8,10 +8,11 @@ This router only handles HTTP concerns.
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import AuthenticatedAgentId
 from app.core.check_target_validator import CheckTargetBlockedError
 from app.core.config import settings
 from app.core.exceptions import (
@@ -19,7 +20,7 @@ from app.core.exceptions import (
     CheckNotFoundException,
 )
 from app.core.rate_limit import limiter
-from app.core.security import verify_agent_token, verify_api_token
+from app.core.security import verify_api_token
 from app.db import get_db
 from app.schemas.base_schema import ErrorResponse
 from app.schemas.check_schema import (
@@ -57,9 +58,8 @@ logger = get_logger("luxswirl.api.checks")
 @limiter.limit(settings.security.agent_api_rate_limit)
 async def list_checks(
     request: Request,
-    agent_id: Annotated[UUID, Query(description="Agent UUID to fetch checks for")],
+    agent_id: AuthenticatedAgentId,
     db: Annotated[AsyncSession, Depends(get_db)],
-    authorization: Annotated[str | None, Header()] = None,
 ) -> CheckListResponse:
     """
     List all checks for an agent.
@@ -69,29 +69,10 @@ async def list_checks(
     - REPLICATE: Checks that match this agent's tags (runs on ALL matching agents)
     - DISTRIBUTE: Checks assigned via hash (runs on ONE agent from matching pool)
 
-    This endpoint uses agent-specific authentication that checks approval status.
+    The agent authenticates with its own key and must be approved
+    (`AuthenticatedAgentId`).
     """
-    # Get agent
-    agent = await AgentCoreService.get_agent_by_id(db, agent_id)
-    if not agent:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Agent not found: {agent_id}",
-        )
-
-    # Verify agent authentication and approval status
-    await verify_agent_token(agent, authorization)
-    try:
-        # Get checks using assignment service (handles manual/replicate/distribute)
-        checks = await AgentAssignmentCoreService.get_checks_for_agent(db, agent)
-
-        # Build response using service
-        return CheckCoreService.build_check_list_response(checks, agent.agent_name)
-    except AgentNotFoundException:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Agent not found: {agent_id}",
-        ) from None
+    return await AgentAssignmentCoreService.check_list_for_agent(db, agent_id)
 
 
 @management_router.get(
