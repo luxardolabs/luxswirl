@@ -3,9 +3,10 @@ Check CRUD - database queries for check operations.
 """
 
 from collections.abc import Sequence
+from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import String, cast, delete, distinct, func, or_, select, update
+from sqlalchemy import String, cast, delete, func, or_, select, update
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload, undefer
@@ -172,10 +173,12 @@ class CheckCRUD:
             .where(Check.depends_on_check_id.in_(parent_check_ids))
             .group_by(Check.depends_on_check_id)
         )
-        return {row[0]: row[1] for row in result.all()}
+        # The WHERE ... IN (parent ids) means no group key is NULL; mypy cannot
+        # read that through the nullable column, so the comprehension narrows.
+        return {parent: n for parent, n in result if parent is not None}
 
     @staticmethod
-    async def count_for_agents_seen_since(db: AsyncSession, cutoff) -> int:
+    async def count_for_agents_seen_since(db: AsyncSession, cutoff: datetime) -> int:
         """Count checks belonging to agents whose last_seen is >= cutoff."""
         result = await db.execute(
             select(func.count(Check.id))
@@ -201,7 +204,7 @@ class CheckCRUD:
         Returns:
             Sorted list of unique check type strings
         """
-        query = select(distinct(Check.check_type)).order_by(Check.check_type)
+        query = select(Check.check_type).distinct().order_by(Check.check_type)
         result = await db.execute(query)
         return [row[0] for row in result.all()]
 

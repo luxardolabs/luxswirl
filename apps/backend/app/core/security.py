@@ -5,6 +5,7 @@ Security utilities - authentication and authorization.
 from __future__ import annotations
 
 import hmac
+from collections.abc import Awaitable, Callable
 from datetime import timedelta
 from typing import TYPE_CHECKING, Annotated, Any
 
@@ -40,7 +41,7 @@ async def get_current_user(
     session_token: Annotated[
         str | None, Cookie(alias=settings.security.session_cookie_name)
     ] = None,
-):
+) -> CurrentUserDTO:
     """
     Get current authenticated user from session cookie.
 
@@ -117,7 +118,9 @@ async def get_current_active_user(
     return current_user
 
 
-def require_role(*allowed_roles: str):
+def require_role(
+    *allowed_roles: str,
+) -> Callable[[CurrentUserDTO], Awaitable[CurrentUserDTO]]:
     """
     Dependency factory for role-based access control.
 
@@ -186,7 +189,7 @@ async def get_optional_user(
     session_token: Annotated[
         str | None, Cookie(alias=settings.security.session_cookie_name)
     ] = None,
-):
+) -> CurrentUserDTO | None:
     """
     Get current user if authenticated, None otherwise.
 
@@ -246,7 +249,7 @@ async def get_current_user_web(
     session_token: Annotated[
         str | None, Cookie(alias=settings.security.session_cookie_name)
     ] = None,
-):
+) -> CurrentUserDTO:
     """
     Get current authenticated user for web routes.
 
@@ -454,6 +457,28 @@ async def get_optional_token(
         return await verify_api_token(authorization)
     except HTTPException:
         return None
+
+
+async def authenticate_heartbeat(
+    agent: Agent,
+    authorization: str | None,
+    db: AsyncSession,
+) -> bool:
+    """Authenticate a heartbeat; True when the agent's own key was used.
+
+    An agent with its own key must present it; only a 401 from that check
+    falls back to the registration key (an agent that has not yet stored its
+    key). Any other refusal (a paused or disabled agent) stands.
+    """
+    if agent.api_key_hash:
+        try:
+            await verify_agent_token(agent, authorization)
+            return True
+        except HTTPException as e:
+            if e.status_code != 401:
+                raise
+    await verify_registration_token(authorization, db)
+    return False
 
 
 async def verify_registration_token(

@@ -217,14 +217,32 @@ class TestListFilteredPaginated:
 # ---------------------------------------------------------------------------
 
 
-class TestGetNameLastseenPairs:
-    async def test_returns_name_and_lastseen(self, db: AsyncSession):
+class TestGetLivenessRows:
+    async def test_returns_id_name_and_lastseen(self, db: AsyncSession):
         now = utc_now()
-        db.add(make_agent(agent_name="a-one", last_seen=now))
-        db.add(make_agent(agent_name="a-two", last_seen=now - timedelta(hours=1)))
+        one = make_agent(agent_name="a-one", last_seen=now)
+        two = make_agent(agent_name="a-two", last_seen=now - timedelta(hours=1))
+        db.add_all([one, two])
         await db.flush()
 
-        pairs = await AgentCRUD.get_name_lastseen_pairs(db)
-        d = {name: ts for name, ts in pairs if name}
-        assert "a-one" in d
-        assert "a-two" in d
+        rows = {
+            agent_id: (name, ts)
+            for agent_id, name, ts in await AgentCRUD.get_liveness_rows(db)
+        }
+
+        assert rows[one.id] == ("a-one", now)
+        assert rows[two.id][0] == "a-two"
+
+    async def test_an_unnamed_agent_is_still_returned_with_its_id(
+        self, db: AsyncSession
+    ):
+        unnamed = make_agent(agent_name=None)
+        db.add(unnamed)
+        await db.flush()
+
+        rows = {
+            agent_id: name
+            for agent_id, name, _ in await AgentCRUD.get_liveness_rows(db)
+        }
+
+        assert rows[unnamed.id] is None

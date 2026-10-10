@@ -60,7 +60,7 @@ async def list_checks(
     agent_id: Annotated[UUID, Query(description="Agent UUID to fetch checks for")],
     db: Annotated[AsyncSession, Depends(get_db)],
     authorization: Annotated[str | None, Header()] = None,
-):
+) -> CheckListResponse:
     """
     List all checks for an agent.
 
@@ -108,7 +108,7 @@ async def get_check(
     check_id: UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[str, Depends(verify_api_token)],
-):
+) -> CheckResponse:
     """Get a specific check."""
     try:
         check = await CheckCoreService.get_check_by_id(db, check_id)
@@ -166,7 +166,7 @@ async def create_check(
     data: CheckCreate,
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[str, Depends(verify_api_token)],
-):
+) -> CheckResponse:
     """
     Create a new check.
 
@@ -232,7 +232,7 @@ async def update_check(
     data: CheckUpdate,
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[str, Depends(verify_api_token)],
-):
+) -> CheckResponse:
     """Update a check."""
     try:
         # Bind {check_id} to the path {agent_id} before mutating (LUXSWIRL-190 L-5).
@@ -328,7 +328,7 @@ async def clone_check(
     data: CheckCreate,
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[str, Depends(verify_api_token)],
-):
+) -> CheckResponse:
     """
     Clone an existing check to a target agent.
 
@@ -409,7 +409,7 @@ async def bulk_create_checks(
     requests: list[BulkCheckCreateRequest],
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[str, Depends(verify_api_token)],
-):
+) -> BulkCheckCreateResponse:
     """
     Bulk create checks from a list of URLs.
 

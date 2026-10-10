@@ -11,7 +11,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import AgentOwnedJob
+from app.api.deps import AgentOwnedJobId
 from app.core.config import settings
 from app.core.exceptions import AgentNotFoundException
 from app.core.query_params import JobStatusFilter, JobTypeFilter
@@ -24,6 +24,7 @@ from app.schemas.job_schema import (
     JobListResponse,
     JobResponse,
     JobResultSubmit,
+    JobStatsResponse,
 )
 from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.auth_core_service import AuthCoreService
@@ -46,7 +47,7 @@ async def create_job(
     data: JobCreate,
     db: Annotated[AsyncSession, Depends(get_db)],
     token: Annotated[str, Depends(verify_api_token)],
-):
+) -> JobResponse:
     """Create a new job."""
     try:
         # A FINGERPRINT, never the token. This used to store the raw bearer
@@ -113,7 +114,7 @@ async def list_jobs(
     job_type: JobTypeFilter = None,
     page: Annotated[int, Query(ge=1, description="Page number")] = 1,
     page_size: Annotated[int, Query(ge=1, le=1000, description="Items per page")] = 50,
-):
+) -> JobListResponse:
     """List all jobs with pagination and filtering."""
     offset = (page - 1) * page_size
     agent_uuid, server_only = JobCoreService.resolve_runner_filter(agent_filter)
@@ -172,10 +173,10 @@ async def list_jobs(
     return JobListResponse(
         jobs=job_responses,
         total=total,
-        pending_count=stats.get("pending", 0),
-        running_count=stats.get("running", 0),
-        completed_count=stats.get("completed", 0),
-        failed_count=stats.get("failed", 0),
+        pending_count=stats.pending,
+        running_count=stats.running,
+        completed_count=stats.completed,
+        failed_count=stats.failed,
     )
 
 
@@ -192,7 +193,7 @@ async def get_job(
     job_id: UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[str, Depends(verify_api_token)],
-):
+) -> JobResponse:
     """Get a specific job by ID."""
     job = await JobCoreService.get_job(db, job_id)
     if not job:
@@ -245,18 +246,17 @@ async def get_job(
 @limiter.limit(settings.security.agent_api_rate_limit)
 async def submit_job_results(
     request: Request,
-    job: AgentOwnedJob,
+    owned_job_id: AgentOwnedJobId,
     result_data: JobResultSubmit,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> JobResponse:
     """Submit job results from the agent the job is assigned to."""
-    updated = await JobCoreService.submit_job_result(db, job.id, result_data)
-    if updated is None:
+    job = await JobCoreService.submit_job_result(db, owned_job_id, result_data)
+    if job is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Job not found: {job.id}",
+            detail=f"Job not found: {owned_job_id}",
         )
-    job = updated
 
     agent_hostname = None
     if job.agent_id is not None:
@@ -316,7 +316,7 @@ async def cancel_job(
 
 @router.get(
     "/stats/summary",
-    response_model=dict,
+    response_model=JobStatsResponse,
     summary="Get job statistics",
     description="Get aggregated job statistics",
 )
@@ -326,7 +326,7 @@ async def get_job_stats(
     agent_filter: Annotated[
         str | None, Query(alias="agent_id", description="Filter by agent ID")
     ] = None,
-):
+) -> JobStatsResponse:
     """Get job statistics."""
     agent_uuid, server_only = JobCoreService.resolve_runner_filter(agent_filter)
     return await JobCoreService.get_job_stats(

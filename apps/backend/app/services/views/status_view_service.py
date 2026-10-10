@@ -46,7 +46,7 @@ class StatusRow:
         fully_qualified_name: str,
         check_tags: list[str] | None = None,
         agent_tags: list[str] | None = None,
-        minute_bars: list[dict] | None = None,
+        minute_bars: list[dict[str, Any]] | None = None,
         depends_on_check_id: UUID | None = None,
         dependent_count: int = 0,
     ):
@@ -196,8 +196,8 @@ class StatusViewService:
             tags=tags,
             search=search,
             check_ids=check_ids,
+            skip=offset,
             limit=limit,
-            offset=offset,
         )
 
         # Extract check IDs for batch querying
@@ -220,7 +220,7 @@ class StatusViewService:
         )
 
         # Batch query: Get 15-minute bars for all checks (if requested)
-        minute_bars_map: dict[UUID, list[dict]] = {}
+        minute_bars_map: dict[UUID, list[dict[str, Any]]] = {}
         if include_minute_bars:
             all_bars_results = await CheckResultCoreService.get_minute_bars_results(
                 db, filtered_check_ids, minutes=15
@@ -228,36 +228,37 @@ class StatusViewService:
 
             # Group results by check_id and minute offset (data shaping in view service)
             now = utc_now()
-            check_minute_buckets: dict[UUID, dict[int, list]] = defaultdict(
-                lambda: defaultdict(list)
-            )
+            # (success, latency_ms) per result: all a bar reads.
+            check_minute_buckets: dict[
+                UUID, dict[int, list[tuple[bool, float | None]]]
+            ] = defaultdict(lambda: defaultdict(list))
 
             for result in all_bars_results:
                 minutes_ago = int((now - result.timestamp).total_seconds() / 60)
                 if 0 <= minutes_ago < 15:
-                    check_minute_buckets[result.check_id][minutes_ago].append(result)
+                    check_minute_buckets[result.check_id][minutes_ago].append(
+                        (result.success, result.latency_ms)
+                    )
 
             # Build minute bars for each check
             for cid in filtered_check_ids:
                 minute_buckets = check_minute_buckets.get(cid, {})
-                bars = []
+                bars: list[dict[str, bool | int | float | None]] = []
 
                 for minute_offset in range(15):  # 0 to 14 minutes ago
                     if minute_offset in minute_buckets:
                         results_in_minute = minute_buckets[minute_offset]
-                        all_success = all(r.success for r in results_in_minute)
+                        all_success = all(ok for ok, _ in results_in_minute)
 
                         # Calculate avg latency (filter out None values)
                         latencies = [
-                            r.latency_ms
-                            for r in results_in_minute
-                            if r.latency_ms is not None
+                            ms for _, ms in results_in_minute if ms is not None
                         ]
                         avg_latency = (
                             sum(latencies) / len(latencies) if latencies else 0
                         )
 
-                        bar = {
+                        bar: dict[str, bool | int | float | None] = {
                             "success": all_success,
                             "count": len(results_in_minute),
                             "avg_latency": round(avg_latency, 1),
@@ -344,7 +345,7 @@ class StatusViewService:
         return rows
 
     @staticmethod
-    async def get_status_summary(db: AsyncSession) -> dict:
+    async def get_status_summary(db: AsyncSession) -> dict[str, Any]:
         """
         Get summary statistics for status page header.
 
@@ -428,8 +429,8 @@ class StatusViewService:
     async def build_dashboard_context(
         db: AsyncSession,
         *,
-        request,
-        current_user,
+        request: Request,
+        current_user: AuthedUser,
         agent_id: UUID | None,
         check_type: str | None,
         status: str | None,
@@ -439,7 +440,7 @@ class StatusViewService:
         per_page: int | None,
         include_minute_bars: bool,
         page_title: str,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Build the full template context for /dashboard."""
         if per_page is None:
             per_page = await SettingsCoreService.get_setting(
@@ -494,8 +495,8 @@ class StatusViewService:
 
     @staticmethod
     async def build_summary_partial_context(
-        db: AsyncSession, *, request, current_user
-    ) -> dict:
+        db: AsyncSession, *, request: Request, current_user: AuthedUser
+    ) -> dict[str, Any]:
         """Build context for the /internal/summary HTMX partial."""
         return {
             "request": request,

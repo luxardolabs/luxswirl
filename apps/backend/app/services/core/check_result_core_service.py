@@ -4,22 +4,27 @@ CheckResult service - business logic for check result operations and analytics.
 
 import json
 from collections.abc import Sequence
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Any
 from uuid import UUID
 
 from shared.logger import get_logger
+from sqlalchemy import Row
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid_extensions import uuid7
 
 from app.core.datetime_utils import utc_now
 from app.core.exceptions import AgentNotFoundException
 from app.core.ssl_expiry import ssl_expiry_fields
-from app.crud.check_result_crud import CheckResultCRUD
+from app.crud.check_result_crud import AggregateRow, CheckResultCRUD
+from app.models.agent_model import Agent
+from app.models.check_artifact_model import CheckArtifact
+from app.models.check_model import Check
 from app.models.check_result_model import CheckResult
 from app.schemas.check_result_schema import (
     AgentReportRequest,
     CheckSummary,
+    GlobalStatsResponse,
 )
 from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.alert_core_service import AlertCoreService
@@ -34,7 +39,9 @@ class CheckResultCoreService:
     """Service for check result operations and analytics."""
 
     @staticmethod
-    async def compute_ssl_cert_info(db: AsyncSession, raw_cert_data: dict) -> dict:
+    async def compute_ssl_cert_info(
+        db: AsyncSession, raw_cert_data: dict[str, Any]
+    ) -> dict[str, Any]:
         """
         Compute SSL certificate expiration info from raw cert data.
 
@@ -409,7 +416,7 @@ class CheckResultCoreService:
     async def get_aggregated_stats(
         db: AsyncSession,
         hours: int = 24,
-    ) -> dict[str, Any]:
+    ) -> GlobalStatsResponse:
         """
         Get aggregated statistics across all agents and checks.
 
@@ -434,103 +441,174 @@ class CheckResultCoreService:
         active_agents = await CheckResultCRUD.count_active_agents_since(db, cutoff_time)
         active_checks = await CheckResultCRUD.count_active_checks_since(db, cutoff_time)
 
-        return {
-            "total_checks": total_checks,
-            "successful_checks": successful_checks,
-            "failed_checks": failed_checks,
-            "success_rate": round(success_rate, 2),
-            "avg_latency_ms": (
+        return GlobalStatsResponse(
+            total_checks=total_checks,
+            successful_checks=successful_checks,
+            failed_checks=failed_checks,
+            success_rate=round(success_rate, 2),
+            avg_latency_ms=(
                 round(row.avg_latency_ms, 2) if row.avg_latency_ms else None
             ),
-            "active_agents": active_agents,
-            "active_checks": active_checks,
-            "time_window_hours": hours,
-        }
+            active_agents=active_agents,
+            active_checks=active_checks,
+            time_window_hours=hours,
+        )
 
     # ------------------------------------------------------------------
     # CRUD delegation methods (used by view services)
     # ------------------------------------------------------------------
 
     @staticmethod
-    async def get_checks_with_agents_filtered(db, **kwargs):
+    async def get_checks_with_agents_filtered(
+        db: AsyncSession,
+        agent_id: UUID | None = None,
+        check_type: str | None = None,
+        status: str | None = None,
+        tags: list[str] | None = None,
+        search: str | None = None,
+        check_ids: list[UUID] | None = None,
+        *,
+        skip: int = 0,
+        limit: int = 1000,
+    ) -> tuple[Sequence[Row[Check, Agent]], int]:
         """Get filtered checks with agents. Delegates to CRUD."""
-        return await CheckResultCRUD.get_checks_with_agents_filtered(db, **kwargs)
+        return await CheckResultCRUD.get_checks_with_agents_filtered(
+            db,
+            agent_id=agent_id,
+            check_type=check_type,
+            status=status,
+            tags=tags,
+            search=search,
+            check_ids=check_ids,
+            skip=skip,
+            limit=limit,
+        )
 
     @staticmethod
-    async def get_latest_results_batch(db, check_ids, cutoff_minutes=32):
+    async def get_latest_results_batch(
+        db: AsyncSession,
+        check_ids: list[UUID],
+        cutoff_minutes: int = 32,
+    ) -> dict[UUID, AggregateRow]:
         """Batch query latest results for checks. Delegates to CRUD."""
         return await CheckResultCRUD.get_latest_results_batch(
             db, check_ids, cutoff_minutes
         )
 
     @staticmethod
-    async def get_24h_stats_batch(db, check_ids):
+    async def get_24h_stats_batch(
+        db: AsyncSession,
+        check_ids: list[UUID],
+    ) -> dict[UUID, AggregateRow]:
         """Batch query 24h stats for checks. Delegates to CRUD."""
         return await CheckResultCRUD.get_24h_stats_batch(db, check_ids)
 
     @staticmethod
-    async def get_minute_bars_results(db, check_ids, minutes=15):
+    async def get_minute_bars_results(
+        db: AsyncSession,
+        check_ids: list[UUID],
+        minutes: int = 15,
+    ) -> list[CheckResult]:
         """Get results for minute bars. Delegates to CRUD."""
         return await CheckResultCRUD.get_minute_bars_results(db, check_ids, minutes)
 
     @staticmethod
-    async def get_status_summary_data(db):
+    async def get_status_summary_data(
+        db: AsyncSession,
+    ) -> dict[str, Any]:
         """Get status summary data. Delegates to CRUD."""
         return await CheckResultCRUD.get_status_summary_data(db)
 
     @staticmethod
-    async def get_check_with_agent(db, check_id):
+    async def get_check_with_agent(
+        db: AsyncSession,
+        check_id: UUID,
+    ) -> Row[Check, Agent] | None:
         """Get check with agent. Delegates to CRUD."""
         return await CheckResultCRUD.get_check_with_agent(db, check_id)
 
     @staticmethod
-    async def get_bucketed_history(db, check_id, hours):
+    async def get_bucketed_history(
+        db: AsyncSession,
+        check_id: UUID,
+        hours: int,
+    ) -> list[AggregateRow]:
         """Get time-bucketed history. Delegates to CRUD."""
         return await CheckResultCRUD.get_bucketed_history(db, check_id, hours)
 
     @staticmethod
-    async def get_raw_results_for_status_bar(db, check_id, minutes=30):
+    async def get_raw_results_for_status_bar(
+        db: AsyncSession,
+        check_id: UUID,
+        minutes: int = 30,
+    ) -> list[CheckResult]:
         """Get raw results for status bar. Delegates to CRUD."""
         return await CheckResultCRUD.get_raw_results_for_status_bar(
             db, check_id, minutes
         )
 
     @staticmethod
-    async def get_check_detail_stats(db, check_id, hours):
-        """Get check detail stats. Delegates to CRUD."""
+    async def get_check_detail_stats(
+        db: AsyncSession,
+        check_id: UUID,
+        hours: int,
+    ) -> AggregateRow:
+        """(total, successful, avg_latency, min_latency, max_latency) over `hours`."""
         return await CheckResultCRUD.get_check_detail_stats(db, check_id, hours)
 
     @staticmethod
-    async def get_latest_result_for_check(db, check_id):
+    async def get_latest_result_for_check(
+        db: AsyncSession,
+        check_id: UUID,
+    ) -> CheckResult | None:
         """Get latest result for a check. Delegates to CRUD."""
         return await CheckResultCRUD.get_latest_result_for_check(db, check_id)
 
     @staticmethod
-    async def get_artifacts_for_result(db, check_result_id, check_result_timestamp):
+    async def get_artifacts_for_result(
+        db: AsyncSession,
+        check_result_id: UUID,
+        check_result_timestamp: datetime,
+    ) -> list[CheckArtifact]:
         """Get artifacts for a check result. Delegates to CRUD."""
         return await CheckResultCRUD.get_artifacts_for_result(
             db, check_result_id, check_result_timestamp
         )
 
     @staticmethod
-    async def get_check_result_by_id(db, check_result_id):
+    async def get_check_result_by_id(
+        db: AsyncSession,
+        check_result_id: UUID,
+    ) -> CheckResult | None:
         """Get a single check result by id. Delegates to CRUD."""
         return await CheckResultCRUD.get_check_result_by_id(db, check_result_id)
 
     @staticmethod
-    async def get_uptime_stats_bulk(db, check_ids, hours=168):
+    async def get_uptime_stats_bulk(
+        db: AsyncSession,
+        check_ids: list[UUID],
+        hours: int = 168,
+    ) -> list[AggregateRow]:
         """Bulk uptime stats. Delegates to CRUD."""
         return await CheckResultCRUD.get_uptime_stats_bulk(db, check_ids, hours)
 
     @staticmethod
-    async def get_last_failure_timestamps_bulk(db, check_ids, hours=168):
+    async def get_last_failure_timestamps_bulk(
+        db: AsyncSession,
+        check_ids: list[UUID],
+        hours: int = 168,
+    ) -> list[Row[UUID, datetime]]:
         """Bulk last failure timestamps. Delegates to CRUD."""
         return await CheckResultCRUD.get_last_failure_timestamps_bulk(
             db, check_ids, hours
         )
 
     @staticmethod
-    async def get_results_for_status_bars_bulk(db, check_ids, minutes=32):
+    async def get_results_for_status_bars_bulk(
+        db: AsyncSession,
+        check_ids: list[UUID],
+        minutes: int = 32,
+    ) -> list[CheckResult]:
         """Bulk results for status bars. Delegates to CRUD."""
         return await CheckResultCRUD.get_results_for_status_bars_bulk(
             db, check_ids, minutes
@@ -538,8 +616,11 @@ class CheckResultCoreService:
 
     @staticmethod
     async def get_bucketed_status_bars_bulk(
-        db, check_ids, minutes=32, bucket_minutes=1
-    ):
+        db: AsyncSession,
+        check_ids: list[UUID],
+        minutes: int = 32,
+        bucket_minutes: int = 1,
+    ) -> list[AggregateRow]:
         """Bucketed/aggregated status bars for larger time ranges. Delegates to CRUD."""
         return await CheckResultCRUD.get_bucketed_status_bars_bulk(
             db, check_ids, minutes, bucket_minutes

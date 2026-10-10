@@ -12,7 +12,8 @@ Performance:
 
 import time
 from datetime import timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
+from uuid import UUID
 
 from prometheus_client import CollectorRegistry, Counter, Gauge, generate_latest
 from shared.logger import get_logger
@@ -280,6 +281,15 @@ server_uptime_seconds = Gauge(
 )
 
 
+def agent_label(agent_name: str | None, agent_id: UUID) -> str:
+    """The `agent` label value: its name, or its id while it has none.
+
+    A registration can exist before it is named; labelling with the bare name
+    exported every such agent as `agent="None"`, all of them in one series.
+    """
+    return agent_name or str(agent_id)
+
+
 class MetricsCollectorCoreService:
     """In-memory Prometheus metrics collector."""
 
@@ -301,7 +311,7 @@ class MetricsCollectorCoreService:
             agent: Agent that executed the check
         """
         labels = {
-            "agent": agent.agent_name,
+            "agent": agent_label(agent.agent_name, agent.id),
             "check": check.display_name,
             "type": check.check_type,
             "target": check.target,
@@ -319,7 +329,7 @@ class MetricsCollectorCoreService:
         # HTTP-specific metrics
         if check.check_type == "http" and result.http_status_code:
             http_labels = {
-                "agent": agent.agent_name,
+                "agent": agent_label(agent.agent_name, agent.id),
                 "check": check.display_name,
                 "target": check.target,
                 "code": str(result.http_status_code),
@@ -332,7 +342,7 @@ class MetricsCollectorCoreService:
         # DNS metrics
         if check.check_type == "dns" and "dns" in metrics_data:
             dns_labels = {
-                "agent": agent.agent_name,
+                "agent": agent_label(agent.agent_name, agent.id),
                 "check": check.display_name,
                 "target": check.target,
             }
@@ -349,7 +359,7 @@ class MetricsCollectorCoreService:
             and check.check_type in metrics_data
         ):
             db_labels = {
-                "agent": agent.agent_name,
+                "agent": agent_label(agent.agent_name, agent.id),
                 "check": check.display_name,
                 "type": check.check_type,
                 "target": check.target,
@@ -377,7 +387,7 @@ class MetricsCollectorCoreService:
         Args:
             agent: Agent to update metrics for
         """
-        labels = {"agent": agent.agent_name}
+        labels = {"agent": agent_label(agent.agent_name, agent.id)}
 
         # Calculate if agent is online based on last_seen (5 minute threshold)
         is_up = agent.is_online
@@ -397,7 +407,7 @@ class MetricsCollectorCoreService:
             metric: Agent metric data
             agent: Agent that reported the metrics
         """
-        labels = {"agent": agent.agent_name}
+        labels = {"agent": agent_label(agent.agent_name, agent.id)}
 
         # Resource usage
         if metric.cpu_percent is not None:
@@ -449,22 +459,19 @@ class MetricsCollectorCoreService:
         )
 
         # Quick query - only get what we need
-        agents = await AgentCRUD.get_name_lastseen_pairs(db)
+        agents = await AgentCRUD.get_liveness_rows(db)
 
         # Update agent_up metric for each agent based on current time
-        for agent_name, last_seen in agents:
-            if not last_seen:
-                # No last_seen = agent is down
-                agent_up.labels(agent=agent_name).set(0)
-                continue
-
-            # Check if agent is online (last_seen within configured threshold)
+        for agent_id, agent_name, last_seen in agents:
+            # Online when last_seen is within the configured threshold
             elapsed = (utc_now() - last_seen).total_seconds()
             is_up = elapsed < timeout_seconds
-            agent_up.labels(agent=agent_name).set(1 if is_up else 0)
+            agent_up.labels(agent=agent_label(agent_name, agent_id)).set(
+                1 if is_up else 0
+            )
 
     @staticmethod
-    def update_system_metrics(metrics: dict) -> None:
+    def update_system_metrics(metrics: dict[str, Any]) -> None:
         """
         Update server-wide aggregate gauges from a metrics dict.
 
@@ -518,7 +525,7 @@ class MetricsCollectorCoreService:
             database_compression_ratio.set(compressed / total)
 
     @staticmethod
-    def update_operational_metrics(operational: dict) -> None:
+    def update_operational_metrics(operational: dict[str, Any]) -> None:
         """
         Update fast-changing operational gauges from a metrics dict.
 

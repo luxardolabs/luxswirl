@@ -57,7 +57,7 @@ async def submit_report(
     background_tasks: BackgroundTasks,
     db: Annotated[AsyncSession, Depends(get_db)],
     authorization: Annotated[str | None, Header()] = None,
-):
+) -> AgentReportResponse:
     """
     Submit a report from an agent containing multiple check results.
 
@@ -111,7 +111,7 @@ async def get_latest_results(
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[str, Depends(verify_api_token)],
     minutes: Annotated[int, Query(ge=1, le=60, description="Minutes to look back")] = 5,
-):
+) -> CheckResultListResponse:
     """Get latest check results for an agent."""
     try:
         results = await CheckResultCoreService.get_latest_results_for_agent(
@@ -189,7 +189,7 @@ async def get_check_history(
     _: Annotated[str, Depends(verify_api_token)],
     hours: Annotated[int, Query(ge=1, le=720, description="Hours of history")] = 24,
     limit: Annotated[int, Query(ge=1, le=10000, description="Max results")] = 1000,
-):
+) -> CheckHistoryResponse:
     """Get historical check results."""
     try:
         results = await CheckResultCoreService.get_check_history(
@@ -281,7 +281,7 @@ async def get_check_summary(
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[str, Depends(verify_api_token)],
     hours: Annotated[int, Query(ge=1, le=720, description="Hours to include")] = 24,
-):
+) -> CheckSummary:
     """Get summary statistics for a check."""
     try:
         return await CheckResultCoreService.get_check_summary(db, check_id, hours)
@@ -307,6 +307,6 @@ async def get_global_stats(
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[str, Depends(verify_api_token)],
     hours: Annotated[int, Query(ge=1, le=720, description="Hours to include")] = 24,
-):
+) -> GlobalStatsResponse:
     """Get global aggregated statistics."""
     return await CheckResultCoreService.get_aggregated_stats(db, hours)
