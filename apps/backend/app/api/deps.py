@@ -27,7 +27,6 @@ from app.core.config import settings
 from app.core.exceptions import AgentNotFoundException
 from app.core.security import get_current_user, require_admin, verify_agent_token
 from app.db import get_db
-from app.models.job_model import Job
 from app.schemas.auth_schema import CurrentUserDTO
 from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.job_core_service import JobCoreService
@@ -40,8 +39,8 @@ async def require_job_owner(
     job_id: UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
     authorization: Annotated[str | None, Header()] = None,
-) -> Job:
-    """The job `job_id`, once its assigned agent has proved its own key.
+) -> UUID:
+    """`job_id`, once the job's assigned agent has proved its own key.
 
     Only the agent the job is assigned to may report on it, with its
     agent-specific key (never the registration key). A job with no agent, or
@@ -54,7 +53,7 @@ async def require_job_owner(
             status_code=status.HTTP_404_NOT_FOUND, detail=f"Job not found: {job_id}"
         )
     if not settings.security.auth_enabled:
-        return job
+        return job.id
     agent = None
     if job.agent_id is not None:
         with contextlib.suppress(AgentNotFoundException):
@@ -68,7 +67,8 @@ async def require_job_owner(
             ),
         )
     await verify_agent_token(agent, authorization)
-    return job
+    return job.id
 
 
-AgentOwnedJob = Annotated[Job, Depends(require_job_owner)]
+# The id of a job whose assigned agent authenticated this request.
+AgentOwnedJobId = Annotated[UUID, Depends(require_job_owner)]

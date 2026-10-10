@@ -7,9 +7,10 @@ diagnostics, and maintenance operations.
 
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import Field, field_validator
+from pydantic import AliasChoices, Field, field_validator
 
 from app.models.enum_model import (
     SERVER_RUNNER,
@@ -29,7 +30,9 @@ class JobBase(BaseSchema):
     agent_id: UUID | None = Field(
         None, description="Agent to run job on (null = server)"
     )
-    params: dict = Field(default_factory=dict, description="Job-specific parameters")
+    params: dict[str, Any] = Field(
+        default_factory=dict[str, Any], description="Job-specific parameters"
+    )
     priority: int = Field(
         0, ge=0, le=100, description="Job priority (higher = runs first)"
     )
@@ -51,10 +54,10 @@ class JobCreate(JobBase):
     """Schema for creating a new job."""
 
     # Future fields (design now, implement in Phase 2)
-    schedule: dict | None = Field(
+    schedule: dict[str, Any] | None = Field(
         None, description="Scheduling config (null = one-time job)"
     )
-    automation_config: dict | None = Field(
+    automation_config: dict[str, Any] | None = Field(
         None, description="Automation rules (null = manual)"
     )
 
@@ -87,19 +90,19 @@ class JobUpdate(BaseSchema):
 class JobResultSubmit(BaseSchema):
     """Schema for agent submitting job results."""
 
-    status: str = Field(..., description="Final job status (completed or failed)")
-    result: dict | None = Field(None, description="Job result data")
+    status: Literal[JobStatus.COMPLETED, JobStatus.FAILED] = Field(
+        ..., description="Final job status (completed or failed)"
+    )
+    result: dict[str, Any] | None = Field(None, description="Job result data")
     error: str | None = Field(
         None, max_length=5000, description="Error message if failed"
     )
 
-    @field_validator("status")
+    @field_validator("status", mode="before")
     @classmethod
-    def validate_status(cls, v: str) -> str:
-        """Validate status is a terminal state."""
-        if v.lower() not in {"completed", "failed"}:
-            raise ValueError("Result status must be 'completed' or 'failed'")
-        return v.lower()
+    def _lowercase_status(cls, v: object) -> object:
+        """Agents may send `COMPLETED`; the terminal states are lowercase."""
+        return v.lower() if isinstance(v, str) else v
 
     model_config = {
         "json_schema_extra": {
@@ -128,7 +131,7 @@ class JobInDB(JobBase, TimestampSchema):
     """Schema for job in database."""
 
     id: UUID = Field(..., description="Job UUID")
-    status: str = Field("pending", description="Job status")
+    status: JobStatus = Field(JobStatus.PENDING, description="Job status")
     created_by: str | None = Field(None, description="User who created the job")
 
     # Timestamps
@@ -138,12 +141,12 @@ class JobInDB(JobBase, TimestampSchema):
     expires_at: datetime | None = None
 
     # Results
-    result: dict | None = None
+    result: dict[str, Any] | None = None
     error: str | None = None
 
     # Future fields
-    schedule: dict | None = None
-    automation_config: dict | None = None
+    schedule: dict[str, Any] | None = None
+    automation_config: dict[str, Any] | None = None
     parent_job_id: UUID | None = None
 
 
@@ -200,10 +203,10 @@ class JobListRow(BaseSchema):
     """
 
     id: UUID
-    job_type: str
+    job_type: JobType
     agent_id: UUID | None = None
     agent_name: str | None = None
-    status: str
+    status: JobStatus
     priority: int
     created_at: datetime | None = None
     started_at: datetime | None = None
@@ -230,6 +233,20 @@ class JobListResponse(BaseSchema):
     failed_count: int = Field(0, description="Number of failed jobs")
 
 
+class JobStatsResponse(BaseSchema):
+    """Job counts by status (server-wide, or for one runner)."""
+
+    pending: int = Field(0, description="Waiting to be assigned")
+    assigned: int = Field(0, description="Assigned, not yet started")
+    running: int = Field(0, description="Executing")
+    completed: int = Field(0, description="Finished successfully")
+    failed: int = Field(0, description="Finished with an error")
+    cancelled: int = Field(0, description="Cancelled before finishing")
+    total: int = Field(0, description="All of the above")
+    active: int = Field(0, description="pending + assigned + running")
+    terminal: int = Field(0, description="completed + failed + cancelled")
+
+
 class JobQueueStats(BaseSchema):
     """Agent job queue statistics (included in heartbeat)."""
 
@@ -248,8 +265,10 @@ class JobDispatch(BaseSchema):
     """Job dispatch info sent to agent in heartbeat response."""
 
     job_id: UUID = Field(..., description="Job UUID")
-    job_type: str = Field(..., description="Job type")
-    params: dict = Field(default_factory=dict, description="Job parameters")
+    job_type: JobType = Field(..., description="Job type")
+    params: dict[str, Any] = Field(
+        default_factory=dict[str, Any], description="Job parameters"
+    )
     priority: int = Field(0, description="Job priority")
     timeout_seconds: int = Field(
         300, ge=1, le=3600, description="Job execution timeout"
@@ -276,7 +295,12 @@ class MaintenanceJobEnqueuedResponse(BaseSchema):
     immediately instead of holding a long transaction.
     """
 
-    job_id: UUID = Field(..., description="Id of the queued maintenance job")
+    # Read straight off the queued MaintenanceJob row, whose key is `id`.
+    job_id: UUID = Field(
+        ...,
+        validation_alias=AliasChoices("job_id", "id"),
+        description="Id of the queued maintenance job",
+    )
     status: MaintenanceJobStatus = Field(..., description="Queued job's status")
     kind: MaintenanceJobKind = Field(..., description="What the job will do")
 

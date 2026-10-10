@@ -11,6 +11,7 @@ Handles:
 
 import asyncio
 from collections.abc import Sequence
+from typing import Any
 from uuid import UUID
 
 from shared.logger import get_logger
@@ -29,6 +30,7 @@ from app.schemas.job_schema import (
     JobInDB,
     JobListRow,
     JobResultSubmit,
+    JobStatsResponse,
 )
 from app.services.core._job_enrichers import enrich_job_result
 from app.services.core.network_scan_core_service import NetworkScanCoreService
@@ -194,10 +196,12 @@ class JobCoreService:
         Returns:
             List of pending jobs
         """
-        if limit is None:
-            limit = settings.server.job_max_dispatch_per_heartbeat
-
-        jobs = await JobCRUD.get_pending_for_agent(db, agent_id, limit)
+        bound = (
+            limit
+            if limit is not None
+            else settings.server.job_max_dispatch_per_heartbeat
+        )
+        jobs = await JobCRUD.get_pending_for_agent(db, agent_id, bound)
 
         # Mark jobs as assigned
         if jobs:
@@ -292,7 +296,7 @@ class JobCoreService:
 
         # Enrich results using pluggable job-specific enrichment
         result_to_store = result_data.result or {}
-        if result_data.status == "completed":
+        if result_data.status == JobStatus.COMPLETED:
             result_to_store = enrich_job_result(job.job_type, result_to_store)
             logger.info(
                 "Enriched results for job",
@@ -300,7 +304,7 @@ class JobCoreService:
             )
 
         # Update job with results
-        if result_data.status == "completed":
+        if result_data.status == JobStatus.COMPLETED:
             job.complete(result_to_store)
             logger.info(
                 "Job completed successfully",
@@ -399,7 +403,7 @@ class JobCoreService:
         db: AsyncSession,
         agent_id: UUID | None = None,
         server_only: bool = False,
-    ) -> dict:
+    ) -> JobStatsResponse:
         """
         Get job statistics.
 
@@ -408,30 +412,30 @@ class JobCoreService:
             agent_id: Optional agent filter
 
         Returns:
-            Dictionary with job counts by status
+            Job counts by status, with the totals derived from them
         """
         rows = await JobCRUD.get_status_counts(
             db, agent_id=agent_id, server_only=server_only
         )
 
-        stats = {
-            "pending": 0,
-            "assigned": 0,
-            "running": 0,
-            "completed": 0,
-            "failed": 0,
-            "cancelled": 0,
-        }
-
-        for status, count in rows:
-            stats[str(status)] = count
-
-        # Calculate totals
-        stats["total"] = sum(stats.values())
-        stats["active"] = stats["pending"] + stats["assigned"] + stats["running"]
-        stats["terminal"] = stats["completed"] + stats["failed"] + stats["cancelled"]
-
-        return stats
+        counts = {str(status): count for status, count in rows}
+        pending = counts.get(JobStatus.PENDING, 0)
+        assigned = counts.get(JobStatus.ASSIGNED, 0)
+        running = counts.get(JobStatus.RUNNING, 0)
+        completed = counts.get(JobStatus.COMPLETED, 0)
+        failed = counts.get(JobStatus.FAILED, 0)
+        cancelled = counts.get(JobStatus.CANCELLED, 0)
+        return JobStatsResponse(
+            pending=pending,
+            assigned=assigned,
+            running=running,
+            completed=completed,
+            failed=failed,
+            cancelled=cancelled,
+            total=sum(counts.values()),
+            active=pending + assigned + running,
+            terminal=completed + failed + cancelled,
+        )
 
     @staticmethod
     async def job_to_dispatch(db: AsyncSession, job: Job) -> JobDispatch:
@@ -472,7 +476,9 @@ class JobCoreService:
         )
 
     @staticmethod
-    async def get_jobs_for_dispatch(db: AsyncSession, agent_id: UUID) -> list[dict]:
+    async def get_jobs_for_dispatch(
+        db: AsyncSession, agent_id: UUID
+    ) -> list[dict[str, Any]]:
         """
         Get all pending jobs for an agent in dispatch format.
 
@@ -584,7 +590,7 @@ class JobCoreService:
         ], total
 
     @staticmethod
-    async def get_job_status_summary(db: AsyncSession) -> dict:
+    async def get_job_status_summary(db: AsyncSession) -> dict[str, Any]:
         """
         Get job status summary counts.
 

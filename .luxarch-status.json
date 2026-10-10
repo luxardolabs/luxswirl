@@ -671,7 +671,7 @@
           "rule": "fw.enum_dto_fields_enum_typed",
           "status": "XFAIL",
           "since": "0.2.0",
-          "violations": 38,
+          "violations": 31,
           "deferred": true,
           "inert": false,
           "inert_reason": "",
@@ -1210,7 +1210,7 @@
           "rule": "fw.crud_paginated_signature",
           "status": "FAIL",
           "since": "0.90.0",
-          "violations": 2,
+          "violations": 1,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
@@ -1265,7 +1265,7 @@
           "rule": "fw.json_routes_typed",
           "status": "FAIL",
           "since": "0.100.0",
-          "violations": 9,
+          "violations": 1,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
@@ -1285,13 +1285,13 @@
         },
         {
           "rule": "fw.injected_models_dont_cross_the_seam",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.106.0",
-          "violations": 1,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
-          "fix": "The view-seam standard says a router/view consumes SCHEMAS. For a `Depends`-injected value (user/tenant/customer), the fix is to make the dependency RETURN a schema and alias THAT (`CurrentUser = Annotated[CurrentUserDTO, Depends(get_current_user_dto)]`) \u2014 NOT to annotate the consuming param `CurrentUserDTO` while `get_current_user` still returns an ORM `User` (that half-migration reads green across three rules while the ORM row flows end to end). An unannotated dep can't be verified either \u2014 annotate it. Can't finish now? DEFER honestly ([rules.deferred] + evidence); the red stays visible. See --playbook view-seam.",
+          "fix": "",
           "example": ""
         },
         {
@@ -1648,13 +1648,13 @@
         },
         {
           "rule": "fw.sqlalchemy_21_ready",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.247.0",
-          "violations": 1,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
-          "fix": "Each of these fails a 2.1 suite under `filterwarnings = error` (or, for the URL, loads a driver the repo does not install) from somewhere far from the cause. Fix each as its finding says. See --playbook sqlalchemy-2-1.",
+          "fix": "",
           "example": ""
         },
         {
@@ -1692,14 +1692,14 @@
         },
         {
           "rule": "fw.crud_reads_bounded",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.274.0",
-          "violations": 1,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
-          "fix": "A read that loads an unbounded result set is how a worker is killed for memory: the table grows and the same code that worked last month loads all of it. A crud read that takes `limit` (or `page_size`, `per_page`, `max_results`) promises a bound, so keep it. Make the bound an `int` with a default, never `None`. Apply it in the query (`.limit(min(limit, CAP))`) on every path, not under `if limit:`, not as `limit or None`, not as a slice of rows already loaded. A caller never passes `None`. When a job genuinely needs every row, give it its own method that reads in batches (`yield_per`, a server-side cursor or keyset pages), never one `.all()`. Reads with no bound at all are triaged with `luxarch --sweep unbounded-reads`.",
-          "example": "red     async def list_filtered(self, db, *, skip: int = 0, limit: int | None = None):\n            stmt = select(Event).where(...).offset(skip)\n            if limit:                       # None (the default) or 0 loads every row\n                stmt = stmt.limit(limit)\n            return (await db.execute(stmt)).scalars().all()\n\n        rows = await event_crud.list_filtered(db, limit=None)   # the caller asks for all of it\n\nclears  MAX_PAGE = 500\n\n        async def list_filtered(self, db, *, skip: int = 0, limit: int = 100):\n            stmt = select(Event).where(...).offset(skip).limit(min(limit, MAX_PAGE))\n            return (await db.execute(stmt)).scalars().all()\n\n        # a job that genuinely needs every row reads it in batches, never in one .all():\n        async def iter_filtered(self, db, *, batch: int = 1000):\n            result = await db.stream_scalars(\n                select(Event).where(...).execution_options(yield_per=batch)\n            )\n            async for row in result:\n                yield row"
+          "fix": "",
+          "example": ""
         },
         {
           "rule": "obs.method_span",
@@ -1846,8 +1846,8 @@
         }
       ],
       "summary": {
-        "PASS": 124,
-        "FAIL": 21,
+        "PASS": 127,
+        "FAIL": 18,
         "XFAIL": 2,
         "XPASS": 0,
         "INERT": 20
@@ -2366,13 +2366,13 @@
       },
       {
         "rule": "repo.fleet_dep_floor",
-        "status": "FAIL",
+        "status": "PASS",
         "since": "0.219.0",
-        "violations": 1,
+        "violations": 0,
         "deferred": false,
         "inert": false,
         "inert_reason": "",
-        "fix": "upgrade the dependency and commit the refreshed lockfile \u2014 `poetry update <name>` / `uv lock --upgrade-package <name>`. These are FLOORS the fleet advances deliberately, not pins: being ahead of the line is fine and expected, and this never asks you to track the latest release. A floor exists because the version skew itself is the hazard \u2014 luxaudit already reds a VULNERABLE dependency, so a red here is about the fleet drifting apart, which is what makes a shared fix land in one repo and not the next. If this repo genuinely cannot move (a pinned transitive, a deliberate hold), that is an owner decision: raise it rather than carrying a silent lag, because the floor is meant to be moved by the fleet and not worked around by a repo.",
+        "fix": "",
         "example": ""
       },
       {
@@ -2674,20 +2674,20 @@
       }
     ],
     "summary": {
-      "PASS": 58,
-      "FAIL": 1,
+      "PASS": 59,
+      "FAIL": 0,
       "XFAIL": 0,
       "XPASS": 1,
       "INERT": 6
     }
   },
   "summary": {
-    "PASS": 187,
-    "FAIL": 23,
+    "PASS": 191,
+    "FAIL": 19,
     "XFAIL": 2,
     "XPASS": 1,
     "INERT": 27
   },
-  "commit": "8c88ee2e4d0fe1ac131bbd51447174a486bfef24",
-  "generated_at": "2026-10-10T09:08:29Z"
+  "commit": "678d5febf50341df0cb89a1a413bb5abe25526d8",
+  "generated_at": "2026-10-10T09:45:52Z"
 }

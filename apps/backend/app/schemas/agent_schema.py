@@ -4,6 +4,7 @@ Pydantic schemas for Agent domain.
 
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import Field
@@ -36,7 +37,9 @@ class AgentRegisterResponse(BaseSchema):
     """Schema for agent registration response."""
 
     agent_id: UUID = Field(..., description="Assigned agent UUID")
-    status: str = Field(..., description="Registration status (pending/approved)")
+    status: AgentApprovalStatus = Field(
+        ..., description="Registration status (always pending: an operator approves)"
+    )
     message: str = Field(..., description="Human-readable message")
 
     model_config = {
@@ -232,6 +235,23 @@ class AgentResponse(AgentInDB):
     }
 
 
+class AgentLifecycleResponse(BaseSchema):
+    """An operator lifecycle action (reject, pause, resume, disable, enable) took effect."""
+
+    message: str = Field(..., description="What happened")
+    agent_name: str = Field(..., description="The agent acted on")
+    status: AgentApprovalStatus = Field(..., description="Its approval status now")
+
+
+class AgentKeyIssuedResponse(AgentLifecycleResponse):
+    """An agent-specific API key was issued (approval or regeneration).
+
+    The plaintext key appears here once; only its hash is stored.
+    """
+
+    api_key: str = Field(..., description="The new agent-specific API key")
+
+
 class AgentListResponse(BaseSchema):
     """Schema for listing agents."""
 
@@ -377,12 +397,12 @@ class AgentHeartbeat(BaseSchema):
 class AgentHeartbeatResponse(BaseSchema):
     """Response to agent heartbeat."""
 
-    status: str = Field("ok", description="Response status")
+    status: Literal["ok"] = Field("ok", description="Response status")
     config_version: str | None = Field(None, description="Latest config version")
     heartbeat_interval: int = Field(60, description="Heartbeat interval in seconds")
     check_sync_interval: int = Field(60, description="Check sync interval in seconds")
     message: str | None = Field(None, description="Optional message to agent")
-    jobs: list[dict] = Field(
+    jobs: list[dict[str, Any]] = Field(
         default_factory=list, description="Pending jobs to execute"
     )
     approval_status: AgentApprovalStatus | None = Field(

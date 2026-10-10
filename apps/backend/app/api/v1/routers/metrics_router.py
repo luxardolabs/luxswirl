@@ -35,7 +35,7 @@ async def get_metrics(
     request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
     authorization: Annotated[str | None, Header()] = None,
-):
+) -> Response:
     """
     Get Prometheus-formatted metrics from in-memory collector.
 

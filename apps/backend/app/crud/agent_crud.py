@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from uuid import UUID
 
 from sqlalchemy import delete, func, or_, select
+from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -132,12 +133,12 @@ class AgentCRUD:
         return list(result.scalars().all())
 
     @staticmethod
-    async def get_name_lastseen_pairs(
+    async def get_liveness_rows(
         db: AsyncSession,
-    ) -> list[tuple[str, datetime | None]]:
-        """Return (agent_name, last_seen) pairs for all agents."""
-        result = await db.execute(select(Agent.agent_name, Agent.last_seen))
-        return [(row[0], row[1]) for row in result.all()]
+    ) -> list[tuple[UUID, str | None, datetime]]:
+        """(id, agent_name, last_seen) for every agent; the name may be unset."""
+        result = await db.execute(select(Agent.id, Agent.agent_name, Agent.last_seen))
+        return [(agent_id, name, last_seen) for agent_id, name, last_seen in result]
 
     @staticmethod
     async def list_seen_since(db: AsyncSession, cutoff: datetime) -> list[Agent]:
@@ -187,7 +188,7 @@ class AgentCRUD:
             select(AgentMetric)
             .where(AgentMetric.agent_id.in_(agent_ids))
             .order_by(AgentMetric.agent_id, AgentMetric.timestamp.desc())
-            .distinct(AgentMetric.agent_id)
+            .ext(distinct_on(AgentMetric.agent_id))
         )
         return {metric.agent_id: metric for metric in result.scalars()}
 

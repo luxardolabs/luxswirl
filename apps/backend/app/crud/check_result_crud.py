@@ -20,6 +20,10 @@ from app.models.check_artifact_model import CheckArtifact
 from app.models.check_model import Check
 from app.models.check_result_model import CheckResult
 
+# A row of labelled aggregates (count/sum/avg/percentile over results): SQLAlchemy
+# 2.1 cannot type `func.*` columns, so the row is typed by its arity only.
+type AggregateRow = Row[*tuple[Any, ...]]
+
 
 class CheckResultCRUD:
     """Database queries for check results."""
@@ -60,7 +64,7 @@ class CheckResultCRUD:
 
     @staticmethod
     async def get_latest_per_check_for_agent(
-        db: AsyncSession, agent_id: UUID, cutoff
+        db: AsyncSession, agent_id: UUID, cutoff: datetime
     ) -> Sequence[CheckResult]:
         """Latest result per check_id for an agent since cutoff."""
         latest_subquery = (
@@ -94,7 +98,7 @@ class CheckResultCRUD:
 
     @staticmethod
     async def get_history_for_check(
-        db: AsyncSession, check_id: UUID, cutoff, limit: int
+        db: AsyncSession, check_id: UUID, cutoff: datetime, limit: int
     ) -> Sequence[CheckResult]:
         """Check history since cutoff, newest first, with check+agent loaded."""
         result = await db.execute(
@@ -113,8 +117,8 @@ class CheckResultCRUD:
 
     @staticmethod
     async def get_summary_stats_for_check(
-        db: AsyncSession, check_id: UUID, cutoff
-    ) -> Any:
+        db: AsyncSession, check_id: UUID, cutoff: datetime
+    ) -> AggregateRow:
         """Aggregate summary stats for a check since cutoff."""
         result = await db.execute(
             select(
@@ -136,8 +140,8 @@ class CheckResultCRUD:
 
     @staticmethod
     async def get_latency_percentiles_for_check(
-        db: AsyncSession, check_id: UUID, cutoff
-    ) -> Any | None:
+        db: AsyncSession, check_id: UUID, cutoff: datetime
+    ) -> AggregateRow | None:
         """p50/p95/p99 latency for a check since cutoff."""
         result = await db.execute(
             select(
@@ -161,7 +165,7 @@ class CheckResultCRUD:
         return result.one_or_none()
 
     @staticmethod
-    async def get_overall_stats(db: AsyncSession, cutoff) -> Any:
+    async def get_overall_stats(db: AsyncSession, cutoff: datetime) -> AggregateRow:
         """Aggregate counts/avg latency across all check results since cutoff."""
         result = await db.execute(
             select(
@@ -175,7 +179,7 @@ class CheckResultCRUD:
         return result.one()
 
     @staticmethod
-    async def count_active_agents_since(db: AsyncSession, cutoff) -> int:
+    async def count_active_agents_since(db: AsyncSession, cutoff: datetime) -> int:
         """Distinct agents whose last_seen >= cutoff."""
         result = await db.execute(
             select(func.count(func.distinct(Agent.id))).where(Agent.last_seen >= cutoff)
@@ -183,7 +187,7 @@ class CheckResultCRUD:
         return result.scalar_one()
 
     @staticmethod
-    async def count_active_checks_since(db: AsyncSession, cutoff) -> int:
+    async def count_active_checks_since(db: AsyncSession, cutoff: datetime) -> int:
         """Checks whose owning agent has last_seen >= cutoff."""
         result = await db.execute(
             select(func.count(func.distinct(Check.id)))
@@ -193,7 +197,9 @@ class CheckResultCRUD:
         return result.scalar_one()
 
     @staticmethod
-    async def get_stats_for_agent(db: AsyncSession, agent_id: UUID, since) -> Any:
+    async def get_stats_for_agent(
+        db: AsyncSession, agent_id: UUID, since: datetime
+    ) -> AggregateRow:
         """Aggregate check-result stats for an agent since a timestamp.
         Returns row with total_checks, successful_checks, avg_latency_ms, last_check_time."""
         result = await db.execute(
@@ -212,8 +218,8 @@ class CheckResultCRUD:
 
     @staticmethod
     async def get_latest_results_for_agent_with_check(
-        db: AsyncSession, agent_id: UUID, cutoff
-    ) -> list:
+        db: AsyncSession, agent_id: UUID, cutoff: datetime
+    ) -> list[Row[CheckResult, Check]]:
         """
         For a single agent, return list of (CheckResult, Check) pairs where
         CheckResult is the latest per check_id since cutoff.
@@ -269,7 +275,7 @@ class CheckResultCRUD:
     @staticmethod
     async def get_latest_results_for_agents_with_check(
         db: AsyncSession, agent_ids: Sequence[UUID], cutoff: datetime
-    ) -> list[Row[tuple[CheckResult, Check]]]:
+    ) -> list[Row[CheckResult, Check]]:
         """The single-agent read above, widened to many agents in one query.
 
         Same shape and same time bound — only the agent predicate changes from
@@ -330,9 +336,10 @@ class CheckResultCRUD:
         tags: list[str] | None = None,
         search: str | None = None,
         check_ids: list[UUID] | None = None,
+        *,
+        skip: int = 0,
         limit: int = 1000,
-        offset: int = 0,
-    ) -> tuple[Sequence[Row], int]:
+    ) -> tuple[Sequence[Row[Check, Agent]], int]:
         """
         Get filtered checks with their agents, paginated.
 
@@ -423,7 +430,7 @@ class CheckResultCRUD:
         total = total_result.scalar_one()
 
         # Paginated results
-        query = query.order_by(Agent.id, Check.display_name).limit(limit).offset(offset)
+        query = query.order_by(Agent.id, Check.display_name).limit(limit).offset(skip)
         result = await db.execute(query)
         checks_and_agents = result.all()
 
@@ -432,7 +439,7 @@ class CheckResultCRUD:
     @staticmethod
     async def get_latest_results_batch(
         db: AsyncSession, check_ids: list[UUID], cutoff_minutes: int = 32
-    ) -> dict[UUID, Any]:
+    ) -> dict[UUID, AggregateRow]:
         """
         Batch query latest results for multiple checks.
 
@@ -472,7 +479,7 @@ class CheckResultCRUD:
     @staticmethod
     async def get_24h_stats_batch(
         db: AsyncSession, check_ids: list[UUID]
-    ) -> dict[UUID, Any]:
+    ) -> dict[UUID, AggregateRow]:
         """
         Batch query 24h success stats for multiple checks.
 
@@ -528,7 +535,7 @@ class CheckResultCRUD:
         return list(result.scalars().all())
 
     @staticmethod
-    async def get_status_summary_data(db: AsyncSession) -> dict:
+    async def get_status_summary_data(db: AsyncSession) -> dict[str, Any]:
         """
         Get all data needed for status summary header.
 
@@ -635,7 +642,9 @@ class CheckResultCRUD:
     # ------------------------------------------------------------------
 
     @staticmethod
-    async def get_check_with_agent(db: AsyncSession, check_id: UUID) -> Row | None:
+    async def get_check_with_agent(
+        db: AsyncSession, check_id: UUID
+    ) -> Row[Check, Agent] | None:
         """
         Get check with its agent by check ID.
 
@@ -653,7 +662,7 @@ class CheckResultCRUD:
     @staticmethod
     async def get_bucketed_history(
         db: AsyncSession, check_id: UUID, hours: int
-    ) -> list:
+    ) -> list[AggregateRow]:
         """
         Get time-bucketed check result history using TimescaleDB time_bucket.
 
@@ -728,7 +737,7 @@ class CheckResultCRUD:
     @staticmethod
     async def get_check_detail_stats(
         db: AsyncSession, check_id: UUID, hours: int
-    ) -> Any:
+    ) -> AggregateRow:
         """
         Get stats for check detail panel (count, success, latencies).
 
@@ -816,7 +825,7 @@ class CheckResultCRUD:
     @staticmethod
     async def get_uptime_stats_bulk(
         db: AsyncSession, check_ids: list[UUID], hours: int = 168
-    ) -> list:
+    ) -> list[AggregateRow]:
         """
         Get uptime stats for multiple checks in a single query.
 
@@ -847,7 +856,7 @@ class CheckResultCRUD:
     @staticmethod
     async def get_last_failure_timestamps_bulk(
         db: AsyncSession, check_ids: list[UUID], hours: int = 168
-    ) -> list:
+    ) -> list[Row[UUID, datetime]]:
         """
         Get last failure timestamp for multiple checks.
 
@@ -908,7 +917,7 @@ class CheckResultCRUD:
         check_ids: list[UUID],
         minutes: int = 32,
         bucket_minutes: int = 1,
-    ) -> list[Any]:
+    ) -> list[AggregateRow]:
         """
         Get aggregated status bar data bucketed by time interval.
         Aggregates in SQL for performance on larger time ranges.
