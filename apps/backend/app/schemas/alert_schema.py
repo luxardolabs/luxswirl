@@ -167,6 +167,18 @@ class AlertResponse(AlertInDB):
     }
 
 
+class AlertOption(BaseSchema):
+    """One alert in the check form's assignment list."""
+
+    id: UUID
+    name: str
+    description: str | None = None
+    trigger_type: AlertTriggerType
+    is_enabled: bool
+    is_global: bool
+    notify_on_recovery: bool
+
+
 class AlertListResponse(BaseSchema):
     """Schema for paginated list of alerts."""
 

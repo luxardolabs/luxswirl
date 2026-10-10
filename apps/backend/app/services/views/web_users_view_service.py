@@ -5,7 +5,7 @@ This service provides user management functionality specifically for web UI,
 calling core user service and formatting responses for templates.
 """
 
-from typing import Any, cast
+from typing import Any
 from uuid import UUID
 
 from fastapi import Request
@@ -17,7 +17,13 @@ from app.core.datetime_utils import utc_now
 from app.models.enum_model import UserRole, options_for
 from app.schemas.auth_schema import AuthedUser
 from app.schemas.pagination_schema import build_pagination
-from app.schemas.user_schema import UserCreate, UserResponse, UserUpdate, UserUrls
+from app.schemas.user_schema import (
+    UserCreate,
+    UserResponse,
+    UserStatsResponse,
+    UserUpdate,
+    UserUrls,
+)
 from app.services.core.auth_core_service import AuthCoreService
 from app.services.core.settings_core_service import SettingsCoreService
 from app.services.core.user_core_service import UserCoreService
@@ -74,11 +80,11 @@ class UserRow:
 class WebUsersViewService:
     """Service for web UI user management."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.user_service = UserCoreService()
         self.auth_service = AuthCoreService()
 
-    async def get_user_stats(self, db: AsyncSession) -> dict:
+    async def get_user_stats(self, db: AsyncSession) -> UserStatsResponse:
         """
         Get user statistics for web UI dashboard.
 
@@ -88,7 +94,7 @@ class WebUsersViewService:
         Returns:
             Dict with user statistics
         """
-        return cast(dict, await self.user_service.get_user_stats(db))
+        return await self.user_service.get_user_stats(db)
 
     async def list_users(
         self,
@@ -271,20 +277,20 @@ class WebUsersViewService:
         Returns:
             True if the /setup wizard should handle first admin creation.
         """
-        return cast(bool, await self.user_service.needs_setup(db))
+        return await self.user_service.needs_setup(db)
 
     async def build_users_page_context(
         self,
         db: AsyncSession,
         *,
-        request,
-        current_user,
+        request: Request,
+        current_user: AuthedUser,
         page: int,
         per_page: int | None,
         role: str | None,
         is_active: bool | None,
         search: str | None,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Build the full template context for /settings/users."""
         if per_page is None:
             per_page = await SettingsCoreService.get_setting(
@@ -318,7 +324,7 @@ class WebUsersViewService:
         }
 
     @staticmethod
-    def build_user_create_form_context(*, current_user) -> dict:
+    def build_user_create_form_context(*, current_user: AuthedUser) -> dict[str, Any]:
         """Build context for the user create form panel.
 
         Form dropdown gets the longer descriptive labels from enum_model.
@@ -330,8 +336,8 @@ class WebUsersViewService:
 
     @staticmethod
     def build_user_edit_form_context(
-        *, request: Request, current_user, edit_user: UserResponse
-    ) -> dict:
+        *, request: Request, current_user: AuthedUser, edit_user: UserResponse
+    ) -> dict[str, Any]:
         """Build context for the user edit form panel."""
         return {
             "user_urls": build_user_urls(request, edit_user.id),
@@ -364,14 +370,14 @@ class WebUsersViewService:
         self,
         db: AsyncSession,
         *,
-        request,
-        current_user,
+        request: Request,
+        current_user: AuthedUser,
         page: int,
         per_page: int | None,
         role: str | None,
         is_active: bool | None,
         search: str | None,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Build context for the /settings/users/partials/table HTMX partial."""
         if per_page is None:
             per_page = await SettingsCoreService.get_setting(

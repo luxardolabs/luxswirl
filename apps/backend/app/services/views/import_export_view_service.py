@@ -18,10 +18,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.datetime_utils import utc_now
 from app.core.exceptions import AgentNotFoundException
-from app.models.enum_model import CheckType, MaintenanceJobKind
+from app.models.enum_model import MaintenanceJobKind
 from app.schemas.agent_schema import AgentResponse
 from app.schemas.auth_schema import AuthedUser
-from app.schemas.check_schema import CheckCreate, CheckInDB, CheckUpdate
+from app.schemas.check_schema import CheckInDB
 from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.check_core_service import CheckCoreService
 from app.services.core.maintenance_job_core_service import MaintenanceJobCoreService
@@ -31,33 +31,13 @@ from app.web.templates import templates
 logger = get_logger("luxswirl.web.services.import_export")
 
 
-class ImportResult:
-    """Result of an import operation."""
-
-    def __init__(self):
-        self.created = 0
-        self.updated = 0
-        self.skipped = 0
-        self.errors = []
-
-    @property
-    def total_processed(self) -> int:
-        """Total checks processed (created + updated + skipped + errors)."""
-        return int(self.created + self.updated + self.skipped + len(self.errors))
-
-    @property
-    def has_errors(self) -> bool:
-        """Whether any errors occurred."""
-        return len(self.errors) > 0
-
-
 class ImportExportViewService:
     """Service for check import/export operations."""
 
     @staticmethod
     def export_checks_to_dict(
         checks: Sequence[CheckInDB], agent: AgentResponse
-    ) -> dict:
+    ) -> dict[str, Any]:
         """
         Transform checks to export format.
 
@@ -95,126 +75,6 @@ class ImportExportViewService:
             "total_checks": len(export_checks),
             "checks": export_checks,
         }
-
-    @staticmethod
-    async def import_checks_from_data(
-        db: AsyncSession,
-        agent_id: UUID,
-        checks_data: list[dict],
-        mode: str,
-    ) -> ImportResult:
-        """
-        Import checks from parsed JSON data.
-
-        Args:
-            db: Database session
-            agent_id: Agent UUID to import checks for
-            checks_data: List of check dictionaries from JSON
-            mode: "merge" (skip existing) or "replace" (update existing)
-
-        Returns:
-            ImportResult with counts and errors
-        """
-        result = ImportResult()
-
-        # Get existing checks
-        existing_checks = await CheckCoreService.list_agent_checks(db, agent_id)
-        existing_map = {c.display_name: c for c in existing_checks}
-
-        # Process each check
-        for check_data in checks_data:
-            try:
-                check_name = check_data.get("name")
-                if not check_name:
-                    result.errors.append(
-                        {"check": "unknown", "error": "Missing check name"}
-                    )
-                    continue
-
-                # Check if exists
-                if check_name in existing_map:
-                    if mode == "replace":
-                        # Update existing check
-                        existing_check = existing_map[check_name]
-                        await CheckCoreService.update_check(
-                            db,
-                            existing_check.id,
-                            CheckUpdate(
-                                check_type=check_data.get("check_type"),
-                                target=check_data.get("target"),
-                                interval_seconds=check_data.get("interval", 60),
-                                timeout_seconds=check_data.get("timeout", 5),
-                                retry_attempts=check_data.get("retry_attempts", 2),
-                                enabled=check_data.get("enabled", True),
-                                description=check_data.get("description"),
-                                http_method=check_data.get("http_method"),
-                                expected_status=check_data.get("expected_status"),
-                                json_path=check_data.get("json_path"),
-                                expected_value=check_data.get("expected_value"),
-                                tags=check_data.get("tags"),
-                            ),
-                            # Import is reachable only via the AdminUserWeb-gated route.
-                            actor_is_admin=True,
-                        )
-                        result.updated += 1
-                    else:  # merge mode - skip existing
-                        result.skipped += 1
-                else:
-                    # Create new check
-                    check_type = check_data.get("check_type")
-                    target = check_data.get("target")
-                    if not check_type or not target:
-                        result.errors.append(
-                            {
-                                "check": check_name,
-                                "error": "Missing check_type or target",
-                            }
-                        )
-                        continue
-                    await CheckCoreService.create_check(
-                        db,
-                        agent_id,
-                        CheckCreate(
-                            display_name=check_name,
-                            check_type=CheckType(check_type),
-                            target=target,
-                            interval_seconds=check_data.get("interval", 60),
-                            timeout_seconds=check_data.get("timeout", 5),
-                            retries=check_data.get("retries", 2),
-                            enabled=check_data.get("enabled", True),
-                            description=check_data.get("description"),
-                            http_method=check_data.get("http_method"),
-                            expected_status=check_data.get("expected_status"),
-                            json_path=check_data.get("json_path"),
-                            expected_value=check_data.get("expected_value"),
-                            tags=check_data.get("tags"),
-                        ),
-                        # Import is reachable only via the AdminUserWeb-gated route.
-                        actor_is_admin=True,
-                    )
-                    result.created += 1
-
-            except Exception as e:
-                result.errors.append(
-                    {"check": check_data.get("name", "unknown"), "error": str(e)}
-                )
-                logger.exception(
-                    "Error importing check",
-                    extra={"check_name": check_data.get("name")},
-                )
-
-        logger.info(
-            "Import complete for agent",
-            extra={
-                "agent_id": str(agent_id),
-                "created_count": result.created,
-                "updated_count": result.updated,
-                "skipped_count": result.skipped,
-                "error_count": len(result.errors),
-            },
-        )
-
-        return result
 
     @staticmethod
     async def build_panel_context(

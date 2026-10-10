@@ -16,11 +16,11 @@ from app.core.request_helpers import client_ip_from_request
 from app.db import get_db
 from app.schemas.auth_schema import (
     ChangePasswordRequest,
+    CurrentUserResponse,
     LoginRequest,
     LoginResponse,
     SessionListResponse,
     SessionResponse,
-    UserResponse,
 )
 from app.schemas.base_schema import MessageResponse, SessionsTerminatedResponse
 from app.services.core.auth_core_service import AuthCoreService
@@ -37,7 +37,7 @@ async def login(
     request: Request,
     response: Response,
     db: Annotated[AsyncSession, Depends(get_db)],
-):
+) -> LoginResponse:
     """
     Login with username and password.
 
@@ -75,15 +75,15 @@ async def login(
     if user.must_change_password:
         # Return special response indicating password change required
         # Frontend should redirect to change password page
-        return {
-            "message": "Password change required",
-            "user": UserResponse.model_validate(user),
-            "must_change_password": True,
-        }
+        return LoginResponse(
+            message="Password change required",
+            user=CurrentUserResponse.model_validate(user),
+            must_change_password=True,
+        )
 
     # Create session
     session, token = await auth_service.create_session(
-        db, user, ip_address=client_ip, user_agent=user_agent
+        db, user.id, ip_address=client_ip, user_agent=user_agent
     )
 
     # Get session lifetime from database security settings
@@ -115,7 +115,7 @@ async def login(
     )
 
     return LoginResponse(
-        message="Login successful", user=UserResponse.model_validate(user)
+        message="Login successful", user=CurrentUserResponse.model_validate(user)
     )
 
 
@@ -129,7 +129,7 @@ async def logout(
     user: CurrentUser,
     db: Annotated[AsyncSession, Depends(get_db)],
     session_token: str | None = None,
-):
+) -> MessageResponse:
     """
     Logout current user and invalidate session.
 
@@ -144,7 +144,7 @@ async def logout(
         session_token: Annotated[
             str | None, Cookie(alias=settings.security.session_cookie_name)
         ] = None,
-    ):
+    ) -> str | None:
         return session_token
 
     # Logout (delete session)
@@ -166,19 +166,19 @@ async def logout(
         },
     )
 
-    return {"message": "Logged out successfully"}
+    return MessageResponse(message="Logged out successfully")
 
 
-@router.get("/me", response_model=UserResponse)
+@router.get("/me", response_model=CurrentUserResponse)
 async def get_current_user_info(
     user: CurrentUser,
-):
+) -> CurrentUserResponse:
     """
     Get current authenticated user information.
 
     Requires valid session cookie.
     """
-    return UserResponse.model_validate(user)
+    return CurrentUserResponse.model_validate(user)
 
 
 @router.post(
@@ -192,7 +192,7 @@ async def change_password(
     password_data: ChangePasswordRequest,
     user: CurrentUser,
     db: Annotated[AsyncSession, Depends(get_db)],
-):
+) -> MessageResponse:
     """
     Change current user's password.
 
@@ -218,7 +218,7 @@ async def change_password(
                 "user_id": str(user.id),
             },
         )
-        return {"message": "Password changed successfully"}
+        return MessageResponse(message="Password changed successfully")
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -230,7 +230,7 @@ async def change_password(
 async def list_my_sessions(
     user: CurrentUser,
     db: Annotated[AsyncSession, Depends(get_db)],
-):
+) -> SessionListResponse:
     """
     List all active sessions for current user.
 
@@ -255,7 +255,7 @@ async def logout_session(
     session_id: str,
     user: CurrentUser,
     db: Annotated[AsyncSession, Depends(get_db)],
-):
+) -> MessageResponse:
     """
     Logout a specific session (revoke access).
 
@@ -282,7 +282,7 @@ async def logout_session(
                     "session_id": str(session_id),
                 },
             )
-            return {"message": "Session logged out successfully"}
+            return MessageResponse(message="Session logged out successfully")
         else:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -304,7 +304,7 @@ async def logout_all_sessions(
     response: Response,
     user: CurrentUser,
     db: Annotated[AsyncSession, Depends(get_db)],
-):
+) -> SessionsTerminatedResponse:
     """
     Logout all sessions for current user.
 
@@ -335,10 +335,10 @@ async def logout_all_sessions(
         },
     )
 
-    return {
-        "message": f"Logged out from all devices ({count} sessions)",
-        "sessions_terminated": count,
-    }
+    return SessionsTerminatedResponse(
+        message=f"Logged out from all devices ({count} sessions)",
+        sessions_terminated=count,
+    )
 
 
 # Admin-only endpoints
@@ -349,7 +349,7 @@ async def list_user_sessions_admin(
     user_id: UUID,
     admin: AdminUser,
     db: Annotated[AsyncSession, Depends(get_db)],
-):
+) -> SessionListResponse:
     """
     List all sessions for a specific user (admin only).
 
@@ -378,7 +378,7 @@ async def logout_user_sessions_admin(
     user_id: UUID,
     admin: AdminUser,
     db: Annotated[AsyncSession, Depends(get_db)],
-):
+) -> SessionsTerminatedResponse:
     """
     Force logout all sessions for a user (admin only).
 
@@ -406,7 +406,7 @@ async def logout_user_sessions_admin(
         },
     )
 
-    return {
-        "message": f"Logged out all sessions for user ({count} total)",
-        "sessions_terminated": count,
-    }
+    return SessionsTerminatedResponse(
+        message=f"Logged out all sessions for user ({count} total)",
+        sessions_terminated=count,
+    )

@@ -734,9 +734,19 @@ class CheckCoreService:
 
     @staticmethod
     async def bulk_import_checks(
-        db: AsyncSession, agent_id: UUID, checks: list[CheckExport], overwrite: bool
+        db: AsyncSession,
+        agent_id: UUID,
+        checks: list[CheckExport],
+        overwrite: bool,
+        *,
+        actor_is_admin: bool,
     ) -> dict[str, Any]:
-        """Import checks for an agent (creating the agent if missing).
+        """Import checks for an agent: the ONE import, for the JSON API and the
+        web upload's worker job alike.
+
+        `overwrite` replaces an existing check of the same name; otherwise it is
+        skipped. `actor_is_admin` is the caller's authority, as for a single
+        create: a synthetic check is refused unless it is True.
 
         Builds the AgentCreate / CheckCreate / CheckUpdate DTOs internally —
         moved here from the api router so routers don't marshal schemas
@@ -781,6 +791,7 @@ class CheckCoreService:
                             expected_value=check_data.expected_value,
                             tags=check_data.tags,
                         ),
+                        actor_is_admin=actor_is_admin,
                     )
                     updated += 1
                 else:
@@ -802,6 +813,7 @@ class CheckCoreService:
                             expected_value=check_data.expected_value,
                             tags=check_data.tags,
                         ),
+                        actor_is_admin=actor_is_admin,
                     )
                     created += 1
             except Exception as e:
@@ -840,85 +852,70 @@ class CheckCoreService:
         )
 
     @staticmethod
-    async def bulk_action(
-        db: AsyncSession,
-        check_ids: list[UUID],
-        action: str,
-    ) -> dict[str, Any]:
-        """
-        Perform bulk action on multiple checks.
+    async def _touch_agents_of(db: AsyncSession, check_ids: list[UUID]) -> int:
+        """Bump checks_updated_at on every agent owning one of `check_ids`, so
+        each reloads its config on its next heartbeat. Returns how many."""
+        checks = await CheckCRUD.get_with_agent_by_ids(db, check_ids)
+        affected_agents = {check.agent for check in checks}
+        for agent in affected_agents:
+            agent.checks_updated_at = utc_now()
+            attributes.flag_modified(agent, "checks_updated_at")
+        return len(affected_agents)
 
-        Args:
-            db: Database session
-            check_ids: List of check UUIDs to process
-            action: Action to perform ("delete", "disable", "enable")
+    @staticmethod
+    async def bulk_set_enabled(
+        db: AsyncSession, check_ids: list[UUID], *, enabled: bool
+    ) -> dict[str, Any]:
+        """Enable or disable `check_ids`: an in-place UPDATE, safe in a request.
 
         Returns:
-            Dict with success/failure counts
+            {"success_count", "failure_count", "errors"}
         """
-
         if not check_ids:
             return {"success_count": 0, "failure_count": 0, "errors": []}
-
-        success_count = 0
-        failure_count = 0
-        errors = []
-
         try:
-            if action == "delete":
-                checks = await CheckCRUD.get_with_agent_by_ids(db, check_ids)
-                affected_agents = {check.agent for check in checks}
-
-                success_count = await CheckCRUD.bulk_delete_by_ids(db, check_ids)
-
-                for agent in affected_agents:
-                    agent.checks_updated_at = utc_now()
-                    attributes.flag_modified(agent, "checks_updated_at")
-
-                logger.info(
-                    "Bulk deleted checks",
-                    extra={
-                        "success_count": success_count,
-                        "affected_agent_count": len(affected_agents),
-                    },
-                )
-
-            elif action in ("disable", "enable"):
-                enabled = action == "enable"
-                success_count = await CheckCRUD.bulk_set_enabled(db, check_ids, enabled)
-
-                checks = await CheckCRUD.get_with_agent_by_ids(db, check_ids)
-                affected_agents = {check.agent for check in checks}
-                for agent in affected_agents:
-                    agent.checks_updated_at = utc_now()
-                    attributes.flag_modified(agent, "checks_updated_at")
-
-                logger.info(
-                    "Bulk action complete",
-                    extra={"action": action, "success_count": success_count},
-                )
-
-            else:
-                logger.warning(
-                    "Bulk action: unknown action",
-                    extra={"action": action, "check_count": len(check_ids)},
-                )
-                errors.append(f"Unknown action: {action}")
-                failure_count = len(check_ids)
-
+            success_count = await CheckCRUD.bulk_set_enabled(db, check_ids, enabled)
+            await CheckCoreService._touch_agents_of(db, check_ids)
         except Exception as e:
-            logger.exception(
-                "Failed to bulk action checks",
-                extra={"action": action},
-            )
-            errors.append(str(e))
-            failure_count = len(check_ids)
+            logger.exception("Failed to bulk-toggle checks", extra={"enabled": enabled})
+            return {
+                "success_count": 0,
+                "failure_count": len(check_ids),
+                "errors": [str(e)],
+            }
+        logger.info(
+            "Bulk toggle complete",
+            extra={"enabled": enabled, "success_count": success_count},
+        )
+        return {"success_count": success_count, "failure_count": 0, "errors": []}
 
-        return {
-            "success_count": success_count,
-            "failure_count": failure_count,
-            "errors": errors,
-        }
+    @staticmethod
+    async def bulk_delete(db: AsyncSession, check_ids: list[UUID]) -> dict[str, Any]:
+        """Delete `check_ids`, cascading through their results.
+
+        The cascade is long, so this runs only in the maintenance worker (the
+        bulk_check_delete job), never inside a web request.
+
+        Returns:
+            {"success_count", "failure_count", "errors"}
+        """
+        if not check_ids:
+            return {"success_count": 0, "failure_count": 0, "errors": []}
+        try:
+            affected = await CheckCoreService._touch_agents_of(db, check_ids)
+            success_count = await CheckCRUD.bulk_delete_by_ids(db, check_ids)
+        except Exception as e:
+            logger.exception("Failed to bulk-delete checks")
+            return {
+                "success_count": 0,
+                "failure_count": len(check_ids),
+                "errors": [str(e)],
+            }
+        logger.info(
+            "Bulk deleted checks",
+            extra={"success_count": success_count, "affected_agent_count": affected},
+        )
+        return {"success_count": success_count, "failure_count": 0, "errors": []}
 
     @staticmethod
     async def bulk_modify(

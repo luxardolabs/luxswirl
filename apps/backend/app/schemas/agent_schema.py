@@ -252,6 +252,14 @@ class AgentKeyIssuedResponse(AgentLifecycleResponse):
     api_key: str = Field(..., description="The new agent-specific API key")
 
 
+class AgentOption(BaseSchema):
+    """One agent in a picker: what a form needs to list and choose it."""
+
+    id: UUID
+    agent_name: str | None = None
+    hostname: str | None = None
+
+
 class AgentListResponse(BaseSchema):
     """Schema for listing agents."""
 

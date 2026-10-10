@@ -2,7 +2,7 @@
 
 job.params expects {"check_ids": ["uuid", ...]}.
 
-Delegates to CheckCoreService.bulk_action(action="delete") so the cascade through
+Delegates to CheckCoreService.bulk_delete so the cascade through
 check_results AND the business invariant — bumping each affected agent's
 checks_updated_at to trigger a config reload — both run. Calling CheckCRUD
 directly here previously dropped the timestamp bump, leaving deleted checks
@@ -30,7 +30,7 @@ async def handle(db: AsyncSession, job: MaintenanceJob) -> None:
         "Bulk deleting checks (cascade)",
         extra={"count": len(check_ids), "job_id": str(job.id)},
     )
-    result = await CheckCoreService.bulk_action(db, check_ids, "delete")
+    result = await CheckCoreService.bulk_delete(db, check_ids)
     logger.info(
         "Bulk deleted checks",
         extra={"result": result, "job_id": str(job.id)},

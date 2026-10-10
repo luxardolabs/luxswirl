@@ -5,12 +5,15 @@ This service provides auth functionality specifically for web UI,
 calling core auth service and formatting responses for templates.
 """
 
-from typing import Any, cast
+from typing import Any
 from uuid import UUID
 
+from fastapi import Request, status
+from fastapi.responses import RedirectResponse
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.schemas.auth_schema import AuthedUser, ChangePasswordRequest, CurrentUserDTO
 from app.services.core.auth_core_service import AuthCoreService
 from app.services.core.settings_core_service import SettingsCoreService
@@ -21,7 +24,7 @@ logger = get_logger("luxswirl.web.services.web_auth")
 class WebAuthViewService:
     """Service for web UI authentication."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.auth_service = AuthCoreService()
 
     async def authenticate_user(
@@ -77,34 +80,57 @@ class WebAuthViewService:
         )
         return token
 
-    async def logout(self, db: AsyncSession, token: str) -> bool:
-        """
-        Logout user (delete session).
+    async def logout_response(
+        self, db: AsyncSession, request: Request, user: AuthedUser | None
+    ) -> RedirectResponse:
+        """End the caller's session on the server, clear its cookie, go to /login.
 
-        Args:
-            db: Database session
-            token: Session token
-
-        Returns:
-            True if session was deleted
+        The session is read from the configured session cookie and deleted, so a
+        copy of that cookie stops working too; clearing the browser's cookie
+        alone left the session valid.
         """
-        return cast(bool, await self.auth_service.logout(db, token))
+        cookie = settings.security.session_cookie_name
+        token = request.cookies.get(cookie)
+        if token and await self.auth_service.logout(db, token) and user:
+            logger.info(
+                "User logged out via web UI",
+                extra={
+                    "event": "auth.logout",
+                    "username": user.username,
+                    "user_id": str(user.id),
+                },
+            )
+        response = RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
+        response.delete_cookie(key=cookie, path=settings.security.session_cookie_path)
+        return response
 
     async def change_password(
-        self, db: AsyncSession, user: AuthedUser, request: ChangePasswordRequest
+        self,
+        db: AsyncSession,
+        user: AuthedUser,
+        *,
+        current_password: str,
+        new_password: str,
     ) -> tuple[bool, str | None]:
         """
         Change user password.
 
+        The form values go through ChangePasswordRequest (its strength rules)
+        and then the core service (the configured complexity policy).
+
         Args:
             db: Database session
             user: The authenticated principal changing their password
-            request: Password change request
+            current_password: The password the user typed as current
+            new_password: The requested new password
 
         Returns:
             Tuple of (success, error_message)
         """
         try:
+            request = ChangePasswordRequest(
+                current_password=current_password, new_password=new_password
+            )
             await self.auth_service.change_password(
                 db,
                 user.id,

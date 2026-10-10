@@ -22,13 +22,11 @@ from app.schemas.alert_schema import (
 )
 from app.schemas.auth_schema import (
     ChangePasswordRequest,
+    CurrentUserResponse,
     LoginRequest,
     LoginResponse,
     SessionListResponse,
     SessionResponse,
-)
-from app.schemas.auth_schema import (
-    UserResponse as AuthUserResponse,
 )
 from app.schemas.base_schema import (
     BaseSchema,
@@ -86,7 +84,7 @@ __all__ = [
     "ChangePasswordRequest",
     "SessionResponse",
     "SessionListResponse",
-    "AuthUserResponse",
+    "CurrentUserResponse",
     # User
     "UserCreate",
     "UserUpdate",
