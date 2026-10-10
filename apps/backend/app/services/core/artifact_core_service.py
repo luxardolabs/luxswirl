@@ -7,12 +7,17 @@ from uuid import UUID
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.exceptions import CheckNotFoundException
 from app.crud.artifact_crud import ArtifactCRUD
 from app.models.check_artifact_model import CheckArtifact
 from app.schemas.check_artifact_schema import (
+    CheckArtifactContent,
     CheckArtifactCreate,
+    CheckArtifactListResponse,
+    CheckArtifactResponse,
     CheckArtifactStatsResponse,
 )
+from app.services.core.check_core_service import CheckCoreService
 from app.services.core.check_result_core_service import CheckResultCoreService
 
 logger = get_logger("luxswirl.services.artifact")
@@ -24,136 +29,127 @@ class ArtifactCoreService:
     @staticmethod
     async def create_artifact(
         db: AsyncSession, data: CheckArtifactCreate
-    ) -> CheckArtifact:
-        """Create a new check artifact.
+    ) -> CheckArtifactResponse:
+        """Store an artifact a check execution produced.
 
         Args:
             db: Database session
             data: Artifact creation data (includes base64-encoded binary data)
 
         Returns:
-            Created CheckArtifact instance
+            The stored artifact's metadata
 
         Raises:
-            None - artifacts are best-effort, failures should not block check execution
+            CheckNotFoundException: If the artifact's check does not exist
         """
-        try:
-            # Decode base64 data to bytes
-            binary_data = data.get_binary_data()
-
-            # Calculate size
-            size_bytes = len(binary_data)
-
-            # Create artifact
-            artifact = CheckArtifact(
-                check_id=data.check_id,
-                check_result_id=data.check_result_id,
-                check_result_timestamp=data.check_result_timestamp,
-                artifact_type=data.artifact_type,
-                content_type=data.content_type,
-                filename=data.filename,
-                size_bytes=size_bytes,
-                data=binary_data,
-            )
-
-            db.add(artifact)
-            await db.flush()
-            await db.refresh(artifact)
-
-            logger.info(
-                "Created artifact",
-                extra={
-                    "artifact_id": str(artifact.id),
-                    "artifact_type": artifact.artifact_type,
-                    "size_bytes": artifact.size_bytes,
-                    "check_id": str(artifact.check_id),
-                },
-            )
-
-            return artifact
-
-        except Exception:
-            logger.exception("Failed to create artifact")
-            # Re-raise so caller can handle
-            raise
+        await ArtifactCoreService._require_check(db, data.check_id)
+        binary_data = data.get_binary_data()
+        artifact = CheckArtifact(
+            check_id=data.check_id,
+            check_result_id=data.check_result_id,
+            check_result_timestamp=data.check_result_timestamp,
+            artifact_type=data.artifact_type,
+            content_type=data.content_type,
+            filename=data.filename,
+            size_bytes=len(binary_data),
+            data=binary_data,
+        )
+        db.add(artifact)
+        await db.flush()
+        await db.refresh(artifact)
+        logger.info(
+            "Created artifact",
+            extra={
+                "artifact_id": str(artifact.id),
+                "artifact_type": artifact.artifact_type,
+                "size_bytes": artifact.size_bytes,
+                "check_id": str(artifact.check_id),
+            },
+        )
+        return ArtifactCoreService._metadata(artifact)
 
     @staticmethod
-    async def get_artifact_by_id(
+    def _metadata(artifact: CheckArtifact) -> CheckArtifactResponse:
+        """The artifact's metadata in its API shape (never its bytes)."""
+        return CheckArtifactResponse(
+            id=artifact.id,
+            check_id=artifact.check_id,
+            check_result_id=artifact.check_result_id,
+            check_result_timestamp=artifact.check_result_timestamp,
+            artifact_type=artifact.artifact_type,
+            content_type=artifact.content_type,
+            filename=artifact.filename,
+            size_bytes=artifact.size_bytes,
+            created_at=artifact.created_at,
+        )
+
+    @staticmethod
+    async def get_artifact(
         db: AsyncSession, artifact_id: UUID
-    ) -> CheckArtifact | None:
-        """Get artifact by ID.
+    ) -> CheckArtifactResponse | None:
+        """An artifact's metadata, or None if there is no such artifact."""
+        artifact = await ArtifactCRUD.get_by_id(db, artifact_id)
+        return None if artifact is None else ArtifactCoreService._metadata(artifact)
 
-        Args:
-            db: Database session
-            artifact_id: Artifact UUID
+    @staticmethod
+    async def get_artifact_content(
+        db: AsyncSession, artifact_id: UUID
+    ) -> CheckArtifactContent | None:
+        """An artifact with its bytes, or None if there is no such artifact."""
+        artifact = await ArtifactCRUD.get_by_id(db, artifact_id)
+        if artifact is None:
+            return None
+        return CheckArtifactContent(
+            **dict(ArtifactCoreService._metadata(artifact)), data=artifact.data
+        )
 
-        Returns:
-            CheckArtifact instance or None if not found
-        """
-        return await ArtifactCRUD.get_by_id(db, artifact_id)
+    @staticmethod
+    async def _require_check(db: AsyncSession, check_id: UUID) -> None:
+        if await CheckCoreService.get_check_by_id(db, check_id) is None:
+            raise CheckNotFoundException("unknown", str(check_id))
 
     @staticmethod
     async def list_artifacts_by_check(
-        db: AsyncSession,
-        check_id: UUID,
-        limit: int = 100,
-        include_data: bool = False,
-    ) -> list[CheckArtifact]:
-        """List artifacts for a specific check.
+        db: AsyncSession, check_id: UUID, limit: int = 100
+    ) -> CheckArtifactListResponse:
+        """A check's most recent artifacts, metadata only.
 
-        Args:
-            db: Database session
-            check_id: Check UUID
-            limit: Maximum number of artifacts to return
-            include_data: Whether to load binary data (default False for performance)
-
-        Returns:
-            List of CheckArtifact instances
+        Raises:
+            CheckNotFoundException: If the check does not exist
         """
+        await ArtifactCoreService._require_check(db, check_id)
         artifacts = await ArtifactCRUD.list_by_check(db, check_id, limit=limit)
-
-        # If caller doesn't want binary data, clear it to save memory
-        if not include_data:
-            for artifact in artifacts:
-                artifact.data = b""
-
-        return list(artifacts)
+        items = [ArtifactCoreService._metadata(a) for a in artifacts]
+        return CheckArtifactListResponse(
+            artifacts=items, total=len(items), check_id=check_id
+        )
 
     @staticmethod
     async def list_artifacts_by_check_result(
-        db: AsyncSession,
-        check_id: UUID,
-        check_result_id: UUID,
-        include_data: bool = False,
-    ) -> list[CheckArtifact]:
-        """List artifacts for a specific check result (execution).
+        db: AsyncSession, check_id: UUID, check_result_id: UUID
+    ) -> CheckArtifactListResponse:
+        """The artifacts one check execution produced, metadata only.
 
-        Args:
-            db: Database session
-            check_id: Check UUID
-            check_result_id: Check result UUID
-            include_data: Whether to load binary data
-
-        Returns:
-            List of CheckArtifact instances
+        Raises:
+            CheckNotFoundException: If the check does not exist
         """
+        await ArtifactCoreService._require_check(db, check_id)
         # check_artifacts is a hypertable partitioned by created_at, so the
         # listing query is bounded on it — source the result's timestamp first.
         check_result = await CheckResultCoreService.get_check_result_by_id(
             db, check_result_id
         )
-        if check_result is None:
-            return []
-        artifacts = await ArtifactCRUD.list_by_check_result(
-            db, check_id, check_result_id, check_result.timestamp
+        artifacts = (
+            []
+            if check_result is None
+            else await ArtifactCRUD.list_by_check_result(
+                db, check_id, check_result_id, check_result.timestamp
+            )
         )
-
-        # If caller doesn't want binary data, clear it
-        if not include_data:
-            for artifact in artifacts:
-                artifact.data = b""
-
-        return list(artifacts)
+        items = [ArtifactCoreService._metadata(a) for a in artifacts]
+        return CheckArtifactListResponse(
+            artifacts=items, total=len(items), check_id=check_id
+        )
 
     @staticmethod
     async def delete_artifact(db: AsyncSession, artifact_id: UUID) -> bool:

@@ -50,39 +50,7 @@ async def create_artifact(
     This endpoint is typically called by agents after executing synthetic checks
     to upload screenshots, traces, and other binary artifacts.
     """
-    try:
-        # Verify check exists
-        check = await CheckCoreService.get_check_by_id(db, artifact.check_id)
-        if not check:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Check not found: {artifact.check_id}",
-            )
-
-        # Create artifact
-        created_artifact = await ArtifactCoreService.create_artifact(db, artifact)
-
-        # Return response without binary data
-        return CheckArtifactResponse(
-            id=created_artifact.id,
-            check_id=created_artifact.check_id,
-            check_result_id=created_artifact.check_result_id,
-            check_result_timestamp=created_artifact.check_result_timestamp,
-            artifact_type=created_artifact.artifact_type,
-            content_type=created_artifact.content_type,
-            filename=created_artifact.filename,
-            size_bytes=created_artifact.size_bytes,
-            created_at=created_artifact.created_at,
-        )
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.exception("Failed to create artifact")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create artifact: {str(e)}",
-        ) from e
+    return await ArtifactCoreService.create_artifact(db, artifact)
 
 
 @router.get(
@@ -100,24 +68,13 @@ async def get_artifact_metadata(
     _: Annotated[str, Depends(verify_api_token)],
 ) -> CheckArtifactResponse:
     """Get artifact metadata without binary data."""
-    artifact = await ArtifactCoreService.get_artifact_by_id(db, artifact_id)
-    if not artifact:
+    artifact = await ArtifactCoreService.get_artifact(db, artifact_id)
+    if artifact is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Artifact not found: {artifact_id}",
         )
-
-    return CheckArtifactResponse(
-        id=artifact.id,
-        check_id=artifact.check_id,
-        check_result_id=artifact.check_result_id,
-        check_result_timestamp=artifact.check_result_timestamp,
-        artifact_type=artifact.artifact_type,
-        content_type=artifact.content_type,
-        filename=artifact.filename,
-        size_bytes=artifact.size_bytes,
-        created_at=artifact.created_at,
-    )
+    return artifact
 
 
 @router.get(
@@ -136,14 +93,12 @@ async def download_artifact(
     _: Annotated[str, Depends(verify_api_token)],
 ) -> Response:
     """Download artifact binary data."""
-    artifact = await ArtifactCoreService.get_artifact_by_id(db, artifact_id)
-    if not artifact:
+    artifact = await ArtifactCoreService.get_artifact_content(db, artifact_id)
+    if artifact is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Artifact not found: {artifact_id}",
         )
-
-    # Return binary data with appropriate content type
     return Response(
         content=artifact.data,
         media_type=artifact.content_type,
@@ -172,40 +127,7 @@ async def list_check_artifacts(
     ] = 100,
 ) -> CheckArtifactListResponse:
     """List artifacts for a check (without binary data)."""
-    # Verify check exists
-    check = await CheckCoreService.get_check_by_id(db, check_id)
-    if not check:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Check not found: {check_id}",
-        )
-
-    # Get artifacts (without binary data)
-    artifacts = await ArtifactCoreService.list_artifacts_by_check(
-        db, check_id, limit=limit, include_data=False
-    )
-
-    # Convert to response models
-    artifact_responses = [
-        CheckArtifactResponse(
-            id=a.id,
-            check_id=a.check_id,
-            check_result_id=a.check_result_id,
-            check_result_timestamp=a.check_result_timestamp,
-            artifact_type=a.artifact_type,
-            content_type=a.content_type,
-            filename=a.filename,
-            size_bytes=a.size_bytes,
-            created_at=a.created_at,
-        )
-        for a in artifacts
-    ]
-
-    return CheckArtifactListResponse(
-        artifacts=artifact_responses,
-        total=len(artifact_responses),
-        check_id=check_id,
-    )
+    return await ArtifactCoreService.list_artifacts_by_check(db, check_id, limit=limit)
 
 
 @router.get(
@@ -224,39 +146,8 @@ async def list_check_result_artifacts(
     _: Annotated[str, Depends(verify_api_token)],
 ) -> CheckArtifactListResponse:
     """List artifacts for a specific check result."""
-    # Verify check exists
-    check = await CheckCoreService.get_check_by_id(db, check_id)
-    if not check:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Check not found: {check_id}",
-        )
-
-    # Get artifacts for this specific result
-    artifacts = await ArtifactCoreService.list_artifacts_by_check_result(
-        db, check_id, check_result_id, include_data=False
-    )
-
-    # Convert to response models
-    artifact_responses = [
-        CheckArtifactResponse(
-            id=a.id,
-            check_id=a.check_id,
-            check_result_id=a.check_result_id,
-            check_result_timestamp=a.check_result_timestamp,
-            artifact_type=a.artifact_type,
-            content_type=a.content_type,
-            filename=a.filename,
-            size_bytes=a.size_bytes,
-            created_at=a.created_at,
-        )
-        for a in artifacts
-    ]
-
-    return CheckArtifactListResponse(
-        artifacts=artifact_responses,
-        total=len(artifact_responses),
-        check_id=check_id,
+    return await ArtifactCoreService.list_artifacts_by_check_result(
+        db, check_id, check_result_id
     )
 
 
