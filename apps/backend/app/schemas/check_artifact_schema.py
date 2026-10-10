@@ -115,3 +115,12 @@ class CheckArtifactListResponse(BaseSchema):
             }
         }
     }
+
+
+class CheckArtifactStatsResponse(BaseSchema):
+    """How many artifacts a check holds, and their combined size."""
+
+    count: int = Field(..., ge=0, description="Number of artifacts")
+    total_size_bytes: int = Field(
+        ..., ge=0, description="Combined size of the artifacts in bytes"
+    )

@@ -15,6 +15,7 @@ import base64
 import hashlib
 import json
 import socket
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -38,12 +39,12 @@ class CheckManager:
 
     def __init__(
         self,
-        config: dict,
+        config: dict[str, Any],
         cache_file: Path,
         credentials: AgentCredentials,
         # Callback for re-registration when agent becomes orphaned
-        on_orphaned_agent,
-    ):
+        on_orphaned_agent: Callable[[], Awaitable[bool]] | None,
+    ) -> None:
         """
         Initialize check manager.
 
@@ -63,7 +64,7 @@ class CheckManager:
         self.check_registry: dict[str, type[BaseCheck]] = {}
 
         # Check stats tracking
-        self.check_stats: dict[str, dict] = {}
+        self.check_stats: dict[str, dict[str, Any]] = {}
 
         # Config version tracking
         self.config_version: str | None = None
@@ -412,7 +413,7 @@ class CheckManager:
         return checks
 
     def _transform_check_config(
-        self, check_cfg: dict, check_type: str, check_name: str
+        self, check_cfg: dict[str, Any], check_type: str, check_name: str
     ) -> dict[str, Any]:
         """
         Transform server check format to agent check format.
@@ -436,9 +437,9 @@ class CheckManager:
         }
 
         # Only add type-specific fields if they exist (not None)
-        # HTTP/JSON check fields
+        # HTTP/JSON check fields (the checks read the verb as `method`)
         if check_cfg.get("http_method") is not None:
-            agent_check_cfg["http_method"] = check_cfg["http_method"]
+            agent_check_cfg["method"] = check_cfg["http_method"]
         if check_cfg.get("expected_status") is not None:
             agent_check_cfg["expected_status"] = check_cfg["expected_status"]
         if check_cfg.get("json_path") is not None:

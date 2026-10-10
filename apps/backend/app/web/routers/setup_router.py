@@ -2,7 +2,7 @@
 Setup router - first-run wizard for creating the initial admin account.
 
 Shown only when no admin exists yet and no admin password was provided via
-``SECURITY__INITIAL_ADMIN_PASSWORD`` (see ``WebUsersViewService.needs_setup``). This
+``SECURITY__INITIAL_ADMIN_PASSWORD`` (see ``UserCoreService.needs_setup``). This
 gives a secure-by-default first run: no default credentials ship with the app;
 the operator creates the first admin interactively. Unattended/automation
 deploys can skip the wizard by setting the env password instead.
@@ -35,8 +35,9 @@ async def setup_page(
     Redirects to /login when setup is not needed (an admin already exists or
     one is configured via env), to avoid exposing the wizard after first run.
     """
-    if not await WebUsersViewService().needs_setup(db):
-        return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
+    closed = await WebUsersViewService().setup_closed_redirect(db)
+    if closed is not None:
+        return closed
     return render_setup(request)
 
 
@@ -58,8 +59,9 @@ async def create_first_admin(
     users = WebUsersViewService()
 
     # Re-check before creating - guards against double-submit / race.
-    if not await users.needs_setup(db):
-        return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
+    closed = await users.setup_closed_redirect(db)
+    if closed is not None:
+        return closed
 
     username = username.strip()
 

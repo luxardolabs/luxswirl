@@ -9,7 +9,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.artifact_crud import ArtifactCRUD
 from app.models.check_artifact_model import CheckArtifact
-from app.schemas.check_artifact_schema import CheckArtifactCreate
+from app.schemas.check_artifact_schema import (
+    CheckArtifactCreate,
+    CheckArtifactStatsResponse,
+)
 from app.services.core.check_result_core_service import CheckResultCoreService
 
 logger = get_logger("luxswirl.services.artifact")
@@ -212,7 +215,9 @@ class ArtifactCoreService:
         return deleted_count
 
     @staticmethod
-    async def get_artifact_stats(db: AsyncSession, check_id: UUID) -> dict:
+    async def get_artifact_stats(
+        db: AsyncSession, check_id: UUID
+    ) -> CheckArtifactStatsResponse:
         """Get statistics about artifacts for a check.
 
         Args:
@@ -220,11 +225,7 @@ class ArtifactCoreService:
             check_id: Check UUID
 
         Returns:
-            Dictionary with count and total size
+            The artifact count and their combined size
         """
-
-        row = await ArtifactCRUD.get_stats_for_check(db, check_id)
-        return {
-            "count": row.artifact_count or 0,
-            "total_size_bytes": row.total_size or 0,
-        }
+        count, total_size = await ArtifactCRUD.get_stats_for_check(db, check_id)
+        return CheckArtifactStatsResponse(count=count, total_size_bytes=total_size)

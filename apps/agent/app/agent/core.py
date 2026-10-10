@@ -13,6 +13,7 @@ This module has been refactored to use a modular architecture with focused compo
 
 import asyncio
 import platform
+import signal as signals
 import time
 import uuid
 from pathlib import Path
@@ -20,6 +21,7 @@ from typing import Any
 
 import httpx
 import psutil
+from shared.jobs.base import BaseJob
 from shared.logger import get_logger
 
 from app.agent.check_executor import CheckExecutor
@@ -69,10 +71,12 @@ class LuxSwirlAgent:
         self.result_queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
 
         # Store the last state of checks
-        self.last_state: dict[str, dict] = {}
+        self.last_state: dict[str, dict[str, Any]] = {}
 
-        # Flag to control the main loop
+        # Flag to control the main loop, and the stop signal its sleep polls:
+        # shutdown() sets it from another task.
         self.running = False
+        self._stop_requested = asyncio.Event()
 
         # Strong references to the in-flight check tasks. asyncio keeps only a
         # WEAK reference to a running task, so a bare `create_task(...)` whose
@@ -207,6 +211,8 @@ class LuxSwirlAgent:
             reporter=self.reporter,
             job_processor=self.job_processor,
             heartbeat_sender=self.heartbeat_sender,
+            result_processor=self.result_processor,
+            health_monitor=self.health_monitor,
             run_id=self.run_id,
             shutdown_timeout=self.shutdown_timeout,
         )
@@ -278,7 +284,7 @@ class LuxSwirlAgent:
         """
         self.check_manager.register_check_type(name, check_class)
 
-    def register_job_type(self, job_class) -> None:
+    def register_job_type(self, job_class: type[BaseJob]) -> None:
         """
         Register a job handler type with the agent.
 
@@ -320,13 +326,14 @@ class LuxSwirlAgent:
     # Main lifecycle methods
     # ========================================================================
 
-    async def shutdown(self, signal=None) -> None:
+    async def shutdown(self, signal: signals.Signals | None = None) -> None:
         """
         Shutdown the agent gracefully.
 
         Args:
             signal: Optional signal that triggered shutdown
         """
+        self._stop_requested.set()
         # Update task references for lifecycle manager
         self.lifecycle_manager.result_processor_task = self.result_processor_task
         self.lifecycle_manager.self_monitor_task = self.self_monitor_task
@@ -387,7 +394,7 @@ class LuxSwirlAgent:
 
         # Start all module components
         self.result_processor.running = True
-        self.heartbeat_sender.running = True
+        self.heartbeat_sender.start()
         self.health_monitor.running = True
         self.lifecycle_manager.running = True
 
@@ -443,7 +450,7 @@ class LuxSwirlAgent:
 
                 # Sleep a short time to avoid high CPU usage and allow for clean shutdown
                 for _ in range(int(0.5 / self.main_loop_sleep)):  # ~0.5 seconds total
-                    if not self.running:
+                    if self._stop_requested.is_set():
                         break
                     await asyncio.sleep(self.main_loop_sleep)
 

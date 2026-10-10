@@ -5,10 +5,23 @@ CheckArtifact CRUD - database queries for check artifacts (screenshots, logs, tr
 from datetime import datetime, timedelta
 from uuid import UUID
 
-from sqlalchemy import and_, delete, desc, func, select
+from sqlalchemy import ColumnElement, and_, delete, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.check_artifact_model import CheckArtifact
+
+
+async def _delete_counted(db: AsyncSession, criteria: ColumnElement[bool]) -> int:
+    """Delete the matching artifacts and return how many went.
+
+    Counts the ids DELETE ... RETURNING hands back, so the count is typed rather
+    than the driver's untyped `rowcount`. Artifacts are retention-bounded, so the
+    id list stays small.
+    """
+    result = await db.execute(
+        delete(CheckArtifact).where(criteria).returning(CheckArtifact.id)
+    )
+    return len(result.scalars().all())
 
 
 class ArtifactCRUD:
@@ -16,11 +29,8 @@ class ArtifactCRUD:
 
     @staticmethod
     async def delete_older_than(db: AsyncSession, cutoff: datetime) -> int:
-        """Delete artifacts created before cutoff. Returns rowcount."""
-        result = await db.execute(
-            delete(CheckArtifact).where(CheckArtifact.created_at < cutoff)
-        )
-        return result.rowcount or 0  # type: ignore[attr-defined]
+        """Delete artifacts created before cutoff. Returns how many were deleted."""
+        return await _delete_counted(db, CheckArtifact.created_at < cutoff)
 
     @staticmethod
     async def get_by_id(db: AsyncSession, artifact_id: UUID) -> CheckArtifact | None:
@@ -73,10 +83,7 @@ class ArtifactCRUD:
 
     @staticmethod
     async def delete_by_id(db: AsyncSession, artifact_id: UUID) -> int:
-        result = await db.execute(
-            delete(CheckArtifact).where(CheckArtifact.id == artifact_id)
-        )
-        return result.rowcount or 0  # type: ignore[attr-defined]
+        return await _delete_counted(db, CheckArtifact.id == artifact_id)
 
     @staticmethod
     async def get_recent_ids_for_check(
@@ -96,25 +103,19 @@ class ArtifactCRUD:
         db: AsyncSession, check_id: UUID, keep_ids: list[UUID]
     ) -> int:
         """Delete all artifacts for a check except those in keep_ids."""
+        criteria = CheckArtifact.check_id == check_id
         if keep_ids:
-            stmt = delete(CheckArtifact).where(
-                and_(
-                    CheckArtifact.check_id == check_id,
-                    CheckArtifact.id.not_in(keep_ids),
-                )
-            )
-        else:
-            stmt = delete(CheckArtifact).where(CheckArtifact.check_id == check_id)
-        result = await db.execute(stmt)
-        return result.rowcount or 0  # type: ignore[attr-defined]
+            criteria = and_(criteria, CheckArtifact.id.not_in(keep_ids))
+        return await _delete_counted(db, criteria)
 
     @staticmethod
-    async def get_stats_for_check(db: AsyncSession, check_id: UUID):
-        """Aggregate (artifact_count, total_size) for a check."""
+    async def get_stats_for_check(db: AsyncSession, check_id: UUID) -> tuple[int, int]:
+        """(artifact_count, total_size_bytes) for a check; 0 bytes when it has none."""
         result = await db.execute(
             select(
-                func.count(CheckArtifact.id).label("artifact_count"),
-                func.sum(CheckArtifact.size_bytes).label("total_size"),
+                func.count(CheckArtifact.id),
+                func.coalesce(func.sum(CheckArtifact.size_bytes), 0),
             ).where(CheckArtifact.check_id == check_id)
         )
-        return result.one()
+        count, total_size = result.one()
+        return count, total_size

@@ -9,10 +9,12 @@ Handles periodic heartbeat communication with the server, including:
 """
 
 import asyncio
+import contextlib
 import logging
 import os
 import resource as sys_resource
 import time
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -21,7 +23,12 @@ import httpx
 import psutil
 from shared.logger import get_logger
 
+from app.agent.http_client import server_client
+
 if TYPE_CHECKING:
+    from app.agent.credentials import AgentCredentials
+    from app.agent.job_processor import JobProcessor
+    from app.agent.reporter import Reporter
     from app.checks.base import BaseCheck
 
 logger = get_logger("luxswirl.agent.heartbeat")
@@ -48,16 +55,16 @@ class HeartbeatSender:
 
     def __init__(
         self,
-        config: dict,
-        metrics: dict,
-        reporter,
-        job_processor,
-        credentials,
-        process,
+        config: dict[str, Any],
+        metrics: dict[str, Any],
+        reporter: Reporter,
+        job_processor: JobProcessor,
+        credentials: AgentCredentials,
+        process: psutil.Process,
         # Callbacks to agent methods
-        on_config_reload,
-        on_agent_approved,
-    ):
+        on_config_reload: Callable[[], Awaitable[None]] | None,
+        on_agent_approved: Callable[[], Awaitable[bool]] | None,
+    ) -> None:
         """
         Initialize heartbeat sender.
 
@@ -81,9 +88,10 @@ class HeartbeatSender:
         self.on_agent_approved = on_agent_approved
         self.logger = logger
 
-        # State
+        # State. `_stop` is the stop signal the loop waits on, so stop() wakes
+        # it at once instead of at the next poll.
         self.running = False
-        self.heartbeat_client: httpx.AsyncClient | None = None
+        self._stop = asyncio.Event()
         self.last_heartbeat_time = time.time()
 
         # Dynamic configuration (can be updated via heartbeat response)
@@ -93,7 +101,7 @@ class HeartbeatSender:
         self.watchdog_stall_threshold = config.get("watchdog_stall_threshold", 3)
 
         # Config version tracking
-        self.config_version = None
+        self.config_version: str | None = None
 
         # Agent state (updated by parent)
         self.hostname: str | None = None
@@ -124,20 +132,9 @@ class HeartbeatSender:
             base_url = push_url.rstrip("/")
 
         heartbeat_url = f"{base_url}/api/v1/heartbeat"
-        auth_key = self.config.get("auth_key")
-
-        # Create HTTP client
-        headers = {}
-        if auth_key:
-            headers["Authorization"] = f"Bearer {auth_key}"
-
-        self.heartbeat_client = httpx.AsyncClient(
-            headers=headers,
-            timeout=10.0,
-        )
 
         try:
-            while self.running:
+            while not self._stop.is_set():
                 try:
                     # Calculate uptime
                     uptime_seconds = int(time.time() - self.metrics["start_time"])
@@ -146,7 +143,7 @@ class HeartbeatSender:
                     try:
                         loop = asyncio.get_event_loop()
 
-                        def get_system_metrics():
+                        def get_system_metrics() -> tuple[float, int]:
                             # Use 5-second interval for accurate CPU measurement
                             # (heartbeat runs every 60s, so this is non-blocking)
                             cpu = self.process.cpu_percent(interval=5.0)
@@ -259,8 +256,11 @@ class HeartbeatSender:
                     }
 
                     # Send heartbeat
-                    response = await self.heartbeat_client.post(
-                        heartbeat_url, json=heartbeat
+                    response = await server_client().post(
+                        heartbeat_url,
+                        json=heartbeat,
+                        headers=self._auth_headers(),
+                        timeout=10.0,
                     )
 
                     if response.status_code == 200:
@@ -339,28 +339,21 @@ class HeartbeatSender:
                 except Exception:
                     self.logger.exception("Error sending heartbeat")
 
-                # Check if we should continue
-                if not self.running:
-                    break
-
-                # Wait for heartbeat_interval with periodic checks for shutdown
-                for _ in range(self.heartbeat_interval):
-                    if not self.running:
-                        break
-                    await asyncio.sleep(1)
+                # Wait out heartbeat_interval, or less if stop() is called
+                with contextlib.suppress(TimeoutError):
+                    await asyncio.wait_for(
+                        self._stop.wait(), timeout=self.heartbeat_interval
+                    )
 
         except asyncio.CancelledError:
             pass
         # swallowed-exceptions: the heartbeat loop must outlive a transient server or network error, or the agent goes silent permanently
         except Exception:
             self.logger.exception("Unhandled exception in heartbeat sender")
-        finally:
-            if self.heartbeat_client:
-                await self.heartbeat_client.aclose()
 
         self.logger.info("Heartbeat sender stopped")
 
-    def _update_reporter_config(self, response_data: dict) -> None:
+    def _update_reporter_config(self, response_data: dict[str, Any]) -> None:
         """Update reporter configuration from heartbeat response."""
         reporter_updates = {}
 
@@ -457,7 +450,7 @@ class HeartbeatSender:
                 self.reporter.backpressure_threshold = new_val
                 reporter_updates["report_backpressure_threshold"] = new_val
 
-    def _update_performance_config(self, response_data: dict) -> None:
+    def _update_performance_config(self, response_data: dict[str, Any]) -> None:
         """Update performance tuning configuration from heartbeat response."""
         if (
             "max_concurrent_checks" in response_data
@@ -507,7 +500,7 @@ class HeartbeatSender:
                 )
                 self.watchdog_stall_threshold = new_val
 
-    def _update_logging_config(self, response_data: dict) -> None:
+    def _update_logging_config(self, response_data: dict[str, Any]) -> None:
         """Update logging configuration from heartbeat response."""
         if "log_level" in response_data and response_data["log_level"] is not None:
             new_level = response_data["log_level"].upper()
@@ -529,7 +522,7 @@ class HeartbeatSender:
                         extra={"new_level": new_level},
                     )
 
-    async def _handle_config_version(self, response_data: dict) -> None:
+    async def _handle_config_version(self, response_data: dict[str, Any]) -> None:
         """Handle config version changes and trigger reload if needed."""
         config_version = response_data.get("config_version")
         if config_version:
@@ -565,7 +558,7 @@ class HeartbeatSender:
                     extra={"config_version": config_version},
                 )
 
-    async def _handle_agent_approval(self, response_data: dict) -> None:
+    async def _handle_agent_approval(self, response_data: dict[str, Any]) -> None:
         """Handle agent approval status and retrieve agent-specific key if needed."""
         approval_status = response_data.get("approval_status")
         if approval_status == "active" and not self.credentials.api_key:
@@ -574,28 +567,32 @@ class HeartbeatSender:
             if self.on_agent_approved:
                 success = await self.on_agent_approved()
                 if success:
+                    # The next heartbeat sends the new key: _auth_headers()
+                    # reads it from config on every request.
                     self.logger.info("Agent-specific key retrieved successfully")
-                    # Update heartbeat client headers with new key
-                    if self.heartbeat_client:
-                        await self.heartbeat_client.aclose()
-                        self.heartbeat_client = httpx.AsyncClient(
-                            headers={
-                                "Authorization": f"Bearer {self.config['auth_key']}"
-                            },
-                            timeout=10.0,
-                        )
                 else:
                     self.logger.warning(
                         "Failed to retrieve agent-specific key, will retry on next heartbeat"
                     )
 
+    def _auth_headers(self) -> dict[str, str]:
+        """The Authorization header for the agent's CURRENT key.
+
+        Read per request, so a key issued on approval is sent from the next
+        heartbeat on without rebuilding anything.
+        """
+        auth_key = self.config.get("auth_key")
+        return {"Authorization": f"Bearer {auth_key}"} if auth_key else {}
+
     def start(self) -> None:
         """Start the heartbeat sender."""
         self.running = True
+        self._stop.clear()
 
     def stop(self) -> None:
-        """Stop the heartbeat sender."""
+        """Stop the heartbeat sender; a loop waiting out its interval wakes now."""
         self.running = False
+        self._stop.set()
 
     async def send_shutdown_heartbeat(self, run_id: str) -> None:
         """
@@ -625,17 +622,6 @@ class HeartbeatSender:
             base_url = push_url.rstrip("/")
 
         heartbeat_url = f"{base_url}/api/v1/heartbeat"
-        auth_key = self.config.get("auth_key")
-
-        # Create temporary HTTP client
-        headers = {}
-        if auth_key:
-            headers["Authorization"] = f"Bearer {auth_key}"
-
-        client = httpx.AsyncClient(
-            headers=headers,
-            timeout=10.0,
-        )
 
         try:
             # Calculate final uptime
@@ -698,7 +684,12 @@ class HeartbeatSender:
                     "heartbeats_total": self.metrics["heartbeats"],
                 },
             )
-            response = await client.post(heartbeat_url, json=heartbeat)
+            response = await server_client().post(
+                heartbeat_url,
+                json=heartbeat,
+                headers=self._auth_headers(),
+                timeout=10.0,
+            )
 
             if response.status_code == 200:
                 self.logger.info("Shutdown heartbeat sent successfully")
@@ -715,5 +706,3 @@ class HeartbeatSender:
         # swallowed-exceptions: the heartbeat loop must outlive a transient server or network error, or the agent goes silent permanently
         except Exception:
             self.logger.exception("Error sending shutdown heartbeat")
-        finally:
-            await client.aclose()
