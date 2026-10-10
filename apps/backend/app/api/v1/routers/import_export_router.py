@@ -2,7 +2,7 @@
 Import/Export router - bulk import/export of checks.
 """
 
-from typing import Annotated, Any
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Body, Depends, HTTPException, status
@@ -10,7 +10,6 @@ from shared.config import get_config
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import AgentNotFoundException
 from app.core.security import verify_api_token
 from app.db import get_db
 from app.schemas.import_export_schema import (
@@ -18,8 +17,8 @@ from app.schemas.import_export_schema import (
     AgentConfigExport,
     BulkImportRequest,
     BulkImportResponse,
+    CheckExport,
 )
-from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.check_core_service import CheckCoreService
 
 logger = get_logger("luxswirl.api.import_export")
@@ -35,7 +34,7 @@ async def export_checks(
     agent_id: UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[str, Depends(verify_api_token)],
-) -> dict[str, Any]:
+) -> AgentChecksExport:
     """
     Export all checks for an agent.
 
@@ -44,56 +43,9 @@ async def export_checks(
         db: Database session
 
     Returns:
-        JSON with agent info and checks list
+        The agent and its checks in the export format
     """
-    try:
-        # Verify agent exists
-        agent = await AgentCoreService.get_agent_by_id(db, agent_id)
-        if not agent:
-            raise AgentNotFoundException(str(agent_id))
-
-        # Get all checks for agent
-        checks = await CheckCoreService.list_checks_for_agent(db, agent_id)
-
-        # Convert to export format
-        export_checks = []
-        for check in checks:
-            export_checks.append(
-                {
-                    "name": check.display_name,
-                    "check_type": check.check_type,
-                    "target": check.target,
-                    "interval": check.interval_seconds or 60,
-                    "timeout": check.timeout_seconds or 5,
-                    "retry_attempts": check.retry_attempts or 2,
-                    "enabled": check.enabled,
-                    "description": check.description,
-                    "http_method": check.http_method,
-                    "expected_status": check.expected_status,
-                    "json_path": check.json_path,
-                    "expected_value": check.expected_value,
-                    "tags": check.tags,
-                }
-            )
-
-        return {
-            "agent_id": agent_id,
-            "agent_hostname": agent.hostname,
-            "total_checks": len(export_checks),
-            "checks": export_checks,
-        }
-
-    except AgentNotFoundException:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Agent '{agent_id}' not found",
-        ) from None
-    except Exception as e:
-        logger.exception("Error exporting checks")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e),
-        ) from e
+    return await CheckCoreService.export_agent_checks(db, agent_id)
 
 
 @router.post("/import", response_model=BulkImportResponse)
@@ -152,7 +104,7 @@ async def import_checks(
 )
 async def export_agent_config(
     _: Annotated[str, Depends(verify_api_token)],
-) -> dict[str, Any]:
+) -> AgentConfigExport:
     """
     Export the default agent configuration with all checks.
 
@@ -167,10 +119,8 @@ async def export_agent_config(
     checks = config.get("checks", [])
     agent_id = config.get("agent_id", "docker-agent")
 
-    # Convert to export format
-    export_checks = []
-    for check in checks:
-        export_checks.append(
+    export_checks = [
+        CheckExport.model_validate(
             {
                 "name": check.get("name"),
                 "check_type": check.get("check_type"),
@@ -187,9 +137,8 @@ async def export_agent_config(
                 "tags": check.get("tags"),
             }
         )
-
-    return {
-        "agent_id": agent_id,
-        "total_checks": len(export_checks),
-        "checks": export_checks,
-    }
+        for check in checks
+    ]
+    return AgentConfigExport(
+        agent_id=str(agent_id), total_checks=len(export_checks), checks=export_checks
+    )

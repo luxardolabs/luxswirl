@@ -13,7 +13,6 @@ from fastapi import (
     APIRouter,
     BackgroundTasks,
     Depends,
-    Header,
     HTTPException,
     Query,
     Request,
@@ -21,11 +20,12 @@ from fastapi import (
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import ReportingAgentId
 from app.core.config import settings
 from app.core.datetime_utils import utc_now
 from app.core.exceptions import AgentNotFoundException, CheckNotFoundException
 from app.core.rate_limit import limiter
-from app.core.security import verify_agent_token, verify_api_token
+from app.core.security import verify_api_token
 from app.db import get_db
 from app.schemas.base_schema import ErrorResponse
 from app.schemas.check_result_schema import (
@@ -37,7 +37,6 @@ from app.schemas.check_result_schema import (
     CheckSummary,
     GlobalStatsResponse,
 )
-from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.check_result_core_service import CheckResultCoreService
 
 router = APIRouter(tags=["Check Results"])
@@ -54,37 +53,18 @@ router = APIRouter(tags=["Check Results"])
 async def submit_report(
     request: Request,
     report: AgentReportRequest,
+    _agent_id: ReportingAgentId,
     background_tasks: BackgroundTasks,
     db: Annotated[AsyncSession, Depends(get_db)],
-    authorization: Annotated[str | None, Header()] = None,
 ) -> AgentReportResponse:
     """
     Submit a report from an agent containing multiple check results.
 
     This endpoint accepts reports and processes them asynchronously.
 
-    This endpoint uses agent-specific authentication that checks approval status.
+    Only the agent's own key is accepted (`ReportingAgentId`), never the
+    registration key.
     """
-    # Get agent by UUID
-    agent = await AgentCoreService.get_agent_by_id(db, report.agent_id)
-    if not agent:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Agent not found: {report.agent_id}",
-        )
-
-    # Security: REQUIRE agent-specific key for check result submissions
-    # Registration token is NOT allowed - prevents impersonation attacks
-    if not agent.api_key_hash:
-        # Agent hasn't been approved yet - can't submit check results
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Agent must be approved and have agent-specific key to submit check results",
-        )
-
-    # Verify agent-specific key (no fallback to registration token)
-    await verify_agent_token(agent, authorization)
-
     # Process report (this commits the transaction)
     result = await CheckResultCoreService.process_agent_report(db, report)
 

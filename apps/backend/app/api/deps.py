@@ -36,6 +36,7 @@ from app.core.security import (
 from app.db import get_db
 from app.schemas.agent_schema import AgentHeartbeat
 from app.schemas.auth_schema import CurrentUserDTO
+from app.schemas.check_result_schema import AgentReportRequest
 from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.job_core_service import JobCoreService
 
@@ -133,3 +134,37 @@ async def require_heartbeat_sender(
 
 
 AuthenticatedHeartbeat = Annotated[HeartbeatSender, Depends(require_heartbeat_sender)]
+
+
+async def require_reporting_agent(
+    report: AgentReportRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    authorization: Annotated[str | None, Header()] = None,
+) -> UUID:
+    """The report's agent, authenticated by its OWN key.
+
+    Check results are accepted only with the agent-specific key, never the
+    registration key, so one agent cannot submit results as another. Runs
+    before the route body, so nothing is written for a caller that fails.
+    """
+    try:
+        agent = await AgentCoreService.get_agent_by_id(db, report.agent_id)
+    except AgentNotFoundException:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Agent not found: {report.agent_id}",
+        ) from None
+    if not agent.api_key_hash:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "Agent must be approved and have agent-specific key to submit "
+                "check results"
+            ),
+        )
+    await verify_agent_token(agent, authorization)
+    return agent.id
+
+
+# The id of the agent whose own key authenticated this report.
+ReportingAgentId = Annotated[UUID, Depends(require_reporting_agent)]

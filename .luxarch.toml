@@ -272,6 +272,8 @@ collector = [
   "AuthenticatedHeartbeat",
   "require_job_owner",
   "AgentOwnedJobId",
+  "require_reporting_agent",
+  "ReportingAgentId",
 ]
 public_paths = ["login", "setup", "logout"]
 
