@@ -1,32 +1,26 @@
 """Integration tests for CheckCoreService bulk operations.
 
-bulk_action / bulk_modify / clone_check exercise the high-LOC paths in
+bulk_delete / bulk_set_enabled / bulk_modify / clone_check exercise the high-LOC paths in
 check_core_service.py that the basic CRUD tests don't reach.
 """
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
 from uuid import uuid4
 
 import pytest
+from app.crud.check_crud import CheckCRUD
+from app.schemas.check_schema import CheckCreate, CheckUpdate
+from app.services.core.check_core_service import CheckCoreService
+from app.services.views.checks_view_service import ChecksViewService
+from fixtures.factories import make_agent, make_check
 from sqlalchemy.ext.asyncio import AsyncSession
-
-_tests_root = str(Path(__file__).resolve().parent.parent)
-if _tests_root not in sys.path:
-    sys.path.insert(0, _tests_root)
-
-from app.crud.check_crud import CheckCRUD  # noqa: E402
-from app.schemas.check_schema import CheckCreate, CheckUpdate  # noqa: E402
-from app.services.core.check_core_service import CheckCoreService  # noqa: E402
-from fixtures.factories import make_agent, make_check  # noqa: E402
 
 pytestmark = pytest.mark.integration
 
 
 # ---------------------------------------------------------------------------
-# bulk_action
+# bulk_delete / bulk_set_enabled
 # ---------------------------------------------------------------------------
 
 
@@ -40,9 +34,7 @@ class TestBulkAction:
             db.add(c)
         await db.flush()
 
-        result = await CheckCoreService.bulk_action(
-            db, [c.id for c in checks], "delete"
-        )
+        result = await CheckCoreService.bulk_delete(db, [c.id for c in checks])
         assert result["success_count"] == 3
         assert result["failure_count"] == 0
         # All gone
@@ -57,8 +49,8 @@ class TestBulkAction:
             db.add(c)
         await db.flush()
 
-        result = await CheckCoreService.bulk_action(
-            db, [c.id for c in checks], "disable"
+        result = await CheckCoreService.bulk_set_enabled(
+            db, [c.id for c in checks], enabled=False
         )
         assert result["success_count"] == 2
 
@@ -74,10 +66,13 @@ class TestBulkAction:
             db.add(c)
         await db.flush()
 
-        result = await CheckCoreService.bulk_action(
-            db, [c.id for c in checks], "enable"
+        result = await CheckCoreService.bulk_set_enabled(
+            db, [c.id for c in checks], enabled=True
         )
         assert result["success_count"] == 2
+
+        for c in await CheckCRUD.get_checks_by_ids(db, [c.id for c in checks]):
+            assert c.enabled is True
 
     async def test_unknown_action_records_failure(self, db: AsyncSession):
         agent = make_agent()
@@ -87,14 +82,20 @@ class TestBulkAction:
         db.add(check)
         await db.flush()
 
-        result = await CheckCoreService.bulk_action(db, [check.id], "vaporize")
-        assert result["success_count"] == 0
-        assert result["failure_count"] == 1
-        assert any("Unknown action" in e for e in result["errors"])
+        # The free-form action string arrives from the web form; the view
+        # refuses one it does not know rather than guessing.
+        success, failure, message, kind = await ChecksViewService.execute_bulk_action(
+            db, "vaporize", "false", None, "all", "", [check.id]
+        )
+        assert (success, failure, kind) == (0, 0, "warning")
+        assert "Unknown action" in message
+        (unchanged,) = await CheckCRUD.get_checks_by_ids(db, [check.id])
+        assert unchanged.enabled is check.enabled
 
     async def test_empty_input_returns_zero(self, db: AsyncSession):
-        result = await CheckCoreService.bulk_action(db, [], "delete")
-        assert result == {"success_count": 0, "failure_count": 0, "errors": []}
+        empty = {"success_count": 0, "failure_count": 0, "errors": []}
+        assert await CheckCoreService.bulk_delete(db, []) == empty
+        assert await CheckCoreService.bulk_set_enabled(db, [], enabled=True) == empty
 
     async def test_delete_bumps_agent_checks_updated_at(self, db: AsyncSession):
         """Deleting a check must bump the agent's checks_updated_at so the
@@ -106,7 +107,7 @@ class TestBulkAction:
         db.add(check)
         await db.flush()
 
-        await CheckCoreService.bulk_action(db, [check.id], "delete")
+        await CheckCoreService.bulk_delete(db, [check.id])
         await db.flush()
         await db.refresh(agent)
         assert agent.checks_updated_at is not None

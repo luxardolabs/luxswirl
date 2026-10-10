@@ -5,12 +5,14 @@ job.params expects {"agent_id": str, "mode": "merge"|"replace", "checks": [...]}
 
 from uuid import UUID
 
+from pydantic import ValidationError
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.maintenance_job_model import MaintenanceJob
+from app.schemas.import_export_schema import CheckExport
+from app.services.core.check_core_service import CheckCoreService
 from app.services.core.maintenance_job_core_service import MaintenanceJobCoreService
-from app.services.views.import_export_view_service import ImportExportViewService
 
 logger = get_logger("luxswirl.maintenance.bulk_check_import")
 
@@ -47,18 +49,30 @@ async def handle(db: AsyncSession, job: MaintenanceJob) -> None:
         },
     )
 
-    result = await ImportExportViewService.import_checks_from_data(
-        db, agent_id, checks_data, mode
+    # The upload was only structurally checked when it was enqueued; each entry
+    # is validated here, and one that is not a check is an error, not an abort.
+    checks: list[CheckExport] = []
+    invalid: list[dict[str, str]] = []
+    for raw in checks_data:
+        try:
+            checks.append(CheckExport.model_validate(raw))
+        except ValidationError as exc:
+            name = raw.get("name") if isinstance(raw, dict) else None
+            invalid.append({"check": str(name or "unknown"), "error": str(exc)})
+
+    # The upload route is admin-only (AdminUserWeb), so the job acts as admin.
+    result = await CheckCoreService.bulk_import_checks(
+        db, agent_id, checks, overwrite=(mode == "replace"), actor_is_admin=True
     )
 
     logger.info(
         "Bulk check import complete",
         extra={
             "agent_id": str(agent_id),
-            "created_count": result.created,
-            "updated": result.updated,
-            "skipped": result.skipped,
-            "errors_count": len(result.errors) if result.errors else 0,
+            "created_count": result["created"],
+            "updated": result["updated"],
+            "skipped": result["skipped"],
+            "errors_count": len(result["errors"]) + len(invalid),
             "job_id": str(job.id),
         },
     )

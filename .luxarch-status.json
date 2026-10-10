@@ -174,13 +174,13 @@
         },
         {
           "rule": "fw.web_no_cascading_delete",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.1.0",
-          "violations": 1,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
-          "fix": "Enqueue a maintenance job; don't cascade-delete in a web transaction. The handler is red whether it runs the cascade itself or reaches it through a view or core service.",
+          "fix": "",
           "example": ""
         },
         {
@@ -273,13 +273,13 @@
         },
         {
           "rule": "fw.no_dto_in_routers",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.1.0",
-          "violations": 1,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
-          "fix": "Assemble the DTO in the view/core seam.",
+          "fix": "",
           "example": ""
         },
         {
@@ -671,7 +671,7 @@
           "rule": "fw.enum_dto_fields_enum_typed",
           "status": "XFAIL",
           "since": "0.2.0",
-          "violations": 31,
+          "violations": 30,
           "deferred": true,
           "inert": false,
           "inert_reason": "",
@@ -746,13 +746,13 @@
         },
         {
           "rule": "fw.no_aliased_first_party_imports",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.7.0",
-          "violations": 1,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
-          "fix": "Import the canonical name directly \u2014 those layers were de-aliased so `as` isn't needed (it defeats grep/refactor tooling). Third-party disambiguation aliases are unaffected.",
+          "fix": "",
           "example": ""
         },
         {
@@ -1120,13 +1120,13 @@
         },
         {
           "rule": "fw.no_passthrough_view_service",
-          "status": "PASS",
+          "status": "FAIL",
           "since": "0.78.0",
-          "violations": 0,
+          "violations": 2,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
-          "fix": "",
+          "fix": "A view service is the WEB SEAM: shape inputs (form\u2192DTO), assemble template context, convert the core result to a response schema (e.g. `return PageResponse.model_validate(core_result)`). A method whose whole body is `return await core.same(*args, **kwargs)` \u2014 or the hand-named thread-through \u2014 does NO view work: router\u2192view\u2192core is satisfied only nominally while the presentation lives in core (a hollow green \u2014 the import contract stays green while the layering is inverted). Fix: do the conversion/assembly in the view; keep only business logic in core. If the operation needs no web shaping, the view still owns the response (render the HTMX fragment / build the DTO), it never just relays. See --doc ARCHITECTURE and --playbook view-seam.",
           "example": ""
         },
         {
@@ -1659,13 +1659,13 @@
         },
         {
           "rule": "fw.non_request_callers_use_core",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.257.0",
-          "violations": 1,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
-          "fix": "Only the web request path (routers, `web/`, middleware, request `deps`) and the services layer may import a view service. A job, worker, scheduler, script or MCP tool has no HTTP request, so it has nothing for a view to shape: call the owning `*_core_service.py` directly, as a JSON router does (`fw.api_routers_dont_import_views`). If the view method holds logic the caller needs, that logic belongs in core: move it there and have both call it. Do this BEFORE flipping that view method's parameters to DTOs: a view method whose only callers are jobs is a seam that should not exist. See --playbook view-seam and --doc ARCHITECTURE.",
+          "fix": "",
           "example": ""
         },
         {
@@ -1846,8 +1846,8 @@
         }
       ],
       "summary": {
-        "PASS": 129,
-        "FAIL": 16,
+        "PASS": 132,
+        "FAIL": 13,
         "XFAIL": 2,
         "XPASS": 0,
         "INERT": 20
@@ -2682,12 +2682,12 @@
     }
   },
   "summary": {
-    "PASS": 193,
-    "FAIL": 17,
+    "PASS": 196,
+    "FAIL": 14,
     "XFAIL": 2,
     "XPASS": 1,
     "INERT": 27
   },
-  "commit": "751ac7b884520af52ec44b656bebed213fb02c19",
-  "generated_at": "2026-10-10T10:03:39Z"
+  "commit": "bb6317d35e326ea39b0836631a28c3a371572baf",
+  "generated_at": "2026-10-10T10:28:50Z"
 }

@@ -15,7 +15,6 @@ from app.core.config import settings
 from app.core.rate_limit import limiter
 from app.core.request_helpers import client_ip_from_request
 from app.db import get_db
-from app.schemas.auth_schema import ChangePasswordRequest
 from app.services.views.web_auth_view_service import WebAuthViewService
 from app.services.views.web_users_view_service import WebUsersViewService
 from app.web.deps import OptionalUserWeb
@@ -32,7 +31,7 @@ async def login_page(
     user: OptionalUserWeb,
     db: Annotated[AsyncSession, Depends(get_db)],
     redirect: str | None = None,
-):
+) -> Response:
     """
     Login page.
 
@@ -72,7 +71,7 @@ async def login_submit(
     password: Annotated[str, Form()],
     db: Annotated[AsyncSession, Depends(get_db)],
     redirect: Annotated[str, Form()] = "/",
-):
+) -> Response:
     """
     Handle login form submission.
 
@@ -162,43 +161,11 @@ async def login_submit(
 @router.post("/logout", include_in_schema=False, name="web_logout")
 async def logout(
     request: Request,
-    response: Response,
     user: OptionalUserWeb,
     db: Annotated[AsyncSession, Depends(get_db)],
-    session_token: str | None = None,
-):
-    """
-    Logout current user.
-
-    Accepts both GET and POST.
-    Deletes session and clears cookie, then redirects to login.
-    """
-    if user and session_token:
-        web_auth = WebAuthViewService()
-
-        # Get session token from cookie
-
-        # Extract token manually from request
-        cookie_token = request.cookies.get("session_token")
-        if cookie_token:
-            await web_auth.logout(db, cookie_token)
-            logger.info(
-                "User logged out via web UI",
-                extra={
-                    "event": "auth.logout",
-                    "username": user.username,
-                    "user_id": str(user.id),
-                },
-            )
-
-    # Clear cookie and redirect to login
-    response = RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
-    response.delete_cookie(
-        key=settings.security.session_cookie_name,
-        path=settings.security.session_cookie_path,
-    )
-
-    return response
+) -> Response:
+    """Log out (GET or POST): end the session on the server, then go to /login."""
+    return await WebAuthViewService().logout_response(db, request, user)
 
 
 @router.get("/change-password", response_class=HTMLResponse, include_in_schema=False)
@@ -206,7 +173,7 @@ async def change_password_page(
     request: Request,
     user: OptionalUserWeb,
     required: bool = False,
-):
+) -> Response:
     """
     Change password page.
 
@@ -242,7 +209,7 @@ async def change_password_submit(
     user: OptionalUserWeb,
     db: Annotated[AsyncSession, Depends(get_db)],
     required: Annotated[bool, Form()] = False,
-):
+) -> Response:
     """
     Handle change password form submission.
     """
@@ -269,12 +236,9 @@ async def change_password_submit(
     web_auth = WebAuthViewService()
 
     try:
-        request_data = ChangePasswordRequest(
-            current_password=current_password,
-            new_password=new_password,
-            confirm_password=confirm_password,
+        success, error = await web_auth.change_password(
+            db, user, current_password=current_password, new_password=new_password
         )
-        success, error = await web_auth.change_password(db, user, request_data)
 
         if not success:
             raise ValueError(error)

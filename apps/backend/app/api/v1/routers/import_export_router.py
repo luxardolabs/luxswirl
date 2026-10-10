@@ -120,8 +120,9 @@ async def import_checks(
     try:
         # All DTO construction + the create/update loop live in the core service
         # (LUXSWIRL-168) — the router just hands off and shapes the response.
+        # Every JSON-API bearer token is an admin credential (SECURITY.md).
         result = await CheckCoreService.bulk_import_checks(
-            db, request.agent_id, request.checks, request.overwrite
+            db, request.agent_id, request.checks, request.overwrite, actor_is_admin=True
         )
         # Prefixed keys: `created` is a reserved LogRecord attribute, so
         # splatting the result dict into `extra` raised and turned every

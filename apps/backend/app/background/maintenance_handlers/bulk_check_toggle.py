@@ -30,7 +30,9 @@ async def handle(db: AsyncSession, job: MaintenanceJob) -> None:
         action,
         extra={"count": len(check_ids), "job_id": str(job.id)},
     )
-    result = await CheckCoreService.bulk_action(db, check_ids, action)
+    result = await CheckCoreService.bulk_set_enabled(
+        db, check_ids, enabled=(action == "enable")
+    )
     logger.info(
         "Bulk %s complete",
         action,

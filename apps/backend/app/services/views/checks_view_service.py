@@ -21,6 +21,8 @@ from app.core.exceptions import (
 )
 from app.core.synthetic_security import SyntheticSecurityError
 from app.models.enum_model import CheckType, MaintenanceJobKind, options_for
+from app.schemas.agent_schema import AgentOption
+from app.schemas.alert_schema import AlertOption
 from app.schemas.auth_schema import AuthedUser
 from app.schemas.check_schema import (
     BulkCheckCreateRequest,
@@ -147,7 +149,7 @@ class ChecksViewService:
         return checks, total
 
     @staticmethod
-    async def get_form_defaults(db: AsyncSession) -> dict:
+    async def get_form_defaults(db: AsyncSession) -> dict[str, Any]:
         """
         Get all defaults needed for check forms.
 
@@ -167,18 +169,18 @@ class ChecksViewService:
     # ====================================================================
 
     @staticmethod
-    async def get_agents_list(db: AsyncSession):
+    async def get_agents_list(db: AsyncSession) -> list[AgentOption]:
         """Get all agents for dropdowns (excludes pending)."""
         agents, _ = await AgentCoreService.list_agents(
             db, limit=1000, exclude_pending=True
         )
-        return agents
+        return [AgentOption.model_validate(agent) for agent in agents]
 
     @staticmethod
-    async def get_alerts_list(db: AsyncSession):
+    async def get_alerts_list(db: AsyncSession) -> list[AlertOption]:
         """Get all alerts for dropdowns."""
         alerts, _ = await AlertCoreService.list_alerts(db, limit=1000)
-        return alerts
+        return [AlertOption.model_validate(alert) for alert in alerts]
 
     @staticmethod
     async def build_dependents_panel_context(
@@ -260,7 +262,7 @@ class ChecksViewService:
         return await CheckCoreService.set_dependents(db, parent_check_id, ids)
 
     @staticmethod
-    async def get_check_create_form_data(db: AsyncSession) -> dict:
+    async def get_check_create_form_data(db: AsyncSession) -> dict[str, Any]:
         """
         Get all data needed for check create form.
 
@@ -276,7 +278,9 @@ class ChecksViewService:
         }
 
     @staticmethod
-    async def get_check_edit_form_data(db: AsyncSession, check_id: UUID) -> dict:
+    async def get_check_edit_form_data(
+        db: AsyncSession, check_id: UUID
+    ) -> dict[str, Any]:
         """
         Get all data needed for check edit form.
 
@@ -300,7 +304,9 @@ class ChecksViewService:
         }
 
     @staticmethod
-    async def get_check_clone_form_data(db: AsyncSession, check_id: UUID) -> dict:
+    async def get_check_clone_form_data(
+        db: AsyncSession, check_id: UUID
+    ) -> dict[str, Any]:
         """
         Get all data needed for check clone form.
 
@@ -982,7 +988,7 @@ class ChecksViewService:
         tag: str,
         check_ids: list[UUID],
         owner_id: UUID | None = None,
-    ):
+    ) -> tuple[MaintenanceJobResponse, int, str]:
         """Enqueue a maintenance job for a bulk check action (delete/enable/disable).
 
         Dispatches to either bulk_check_delete or bulk_check_toggle depending on
@@ -1022,11 +1028,11 @@ class ChecksViewService:
         enabled: str,
         tag: str,
         check_ids: list[UUID],
-        update_data,
+        update_data: CheckUpdate,
         new_agent_id: UUID | None,
         alert_id: UUID | None,
         owner_id: UUID | None = None,
-    ):
+    ) -> tuple[MaintenanceJobResponse, int]:
         """Resolve selection + enqueue bulk_check_modify job.
 
         Returns (MaintenanceJobResponse, resolved_count). See LUXSWIRL-105.
@@ -1059,12 +1065,16 @@ class ChecksViewService:
         check_ids: list[UUID],
     ) -> tuple[int, int, str, str]:
         """
-        Run a bulk enable/disable/delete and return
+        Run a synchronous bulk enable/disable and return
         (success_count, failure_count, message, toast_kind).
 
+        Only enable/disable run here: a delete cascades through results, so the
+        router enqueues it (enqueue_bulk_check_action) and it never reaches this.
         toast_kind ∈ {"success", "warning"} — warning if any failures.
         Router calls StatusViewService separately to build the OOB-swap context.
         """
+        if action not in ("enable", "disable"):
+            return 0, 0, f"Unknown action: {action}", "warning"
         check_ids_to_process = await ChecksViewService._resolve_bulk_check_ids(
             db, select_all, agent, enabled, tag, check_ids, list_limit=100000
         )
@@ -1073,7 +1083,9 @@ class ChecksViewService:
             extra={"action": action, "check_count": len(check_ids_to_process)},
         )
 
-        result = await CheckCoreService.bulk_action(db, check_ids_to_process, action)
+        result = await CheckCoreService.bulk_set_enabled(
+            db, check_ids_to_process, enabled=(action == "enable")
+        )
         logger.info(
             "Bulk action complete",
             extra={
@@ -1082,11 +1094,7 @@ class ChecksViewService:
             },
         )
 
-        action_past = {
-            "enable": "Enabled",
-            "disable": "Disabled",
-            "delete": "Deleted",
-        }.get(action, action)
+        action_past = "Enabled" if action == "enable" else "Disabled"
         count = result["success_count"]
         message = f"{action_past} {count} check{'s' if count != 1 else ''}"
         if result["failure_count"] > 0:
@@ -1147,7 +1155,7 @@ class ChecksViewService:
             return None
 
     @staticmethod
-    def parse_agent_selector(agent_selector: str | None) -> dict | None:
+    def parse_agent_selector(agent_selector: str | None) -> dict[str, Any] | None:
         """
         Parse agent selector JSON string.
 

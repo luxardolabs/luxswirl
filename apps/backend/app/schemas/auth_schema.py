@@ -80,7 +80,11 @@ class LoginResponse(BaseModel):
     """Response schema for successful login."""
 
     message: str = Field(..., description="Success message")
-    user: UserResponse = Field(..., description="Logged in user details")
+    user: CurrentUserResponse = Field(..., description="Logged in user details")
+    must_change_password: bool = Field(
+        False,
+        description="True when no session was issued: the password must be changed first",
+    )
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -136,12 +140,12 @@ class ChangePasswordRequest(BaseModel):
     )
 
 
-class UserResponse(BaseModel):
-    """Response schema for user data (excluding sensitive fields)."""
+class CurrentUserResponse(BaseModel):
+    """The signed-in user's own record (no lockout or audit fields)."""
 
     id: UUID
     username: str
-    role: str
+    role: UserRole
     full_name: str | None = None
     is_active: bool
     must_change_password: bool
