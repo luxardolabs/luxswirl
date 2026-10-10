@@ -7,7 +7,7 @@ Renders HTML pages and HTMX partials for managing users.
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Form, Query, Request
+from fastapi import APIRouter, Depends, Form, Query, Request, Response
 from fastapi.responses import HTMLResponse, RedirectResponse
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -38,7 +38,7 @@ async def users_page(
     role: Annotated[str | None, Query()] = None,
     is_active: ActiveFilter = None,
     search: Annotated[str | None, Query()] = None,
-):
+) -> HTMLResponse:
     """User management page (admin only)."""
     context = await WebUsersViewService().build_users_page_context(
         db,
@@ -65,7 +65,7 @@ async def users_table_partial(
     role: Annotated[str | None, Query()] = None,
     is_active: ActiveFilter = None,
     search: Annotated[str | None, Query()] = None,
-):
+) -> HTMLResponse:
     """HTMX partial: users table with filtering and pagination."""
     context = await WebUsersViewService().build_users_table_partial_context(
         db,
@@ -86,7 +86,7 @@ async def users_table_partial(
 async def create_user_form(
     request: Request,
     user: AdminUserWeb,
-):
+) -> HTMLResponse:
     """
     HTMX partial - returns form for creating a new user.
     """
@@ -109,7 +109,7 @@ async def create_user_submit(
     full_name: Annotated[str | None, Form()] = None,
     is_active: Annotated[bool, Form()] = True,
     must_change_password: Annotated[bool, Form()] = True,
-):
+) -> Response:
     """
     Handle create user form submission via HTMX.
     """
@@ -158,7 +158,7 @@ async def edit_user_form(
     user_id: UUID,
     admin: AdminUserWeb,
     db: Annotated[AsyncSession, Depends(get_db)],
-):
+) -> Response:
     """
     HTMX partial - returns form for editing a user.
     """
@@ -195,7 +195,7 @@ async def update_user_submit(
     full_name: Annotated[str | None, Form()] = None,
     is_active: Annotated[bool, Form()] = False,
     must_change_password: Annotated[bool, Form()] = False,
-):
+) -> Response:
     """
     Handle edit user form submission via HTMX.
     """
@@ -240,7 +240,7 @@ async def delete_user(
     user_id: UUID,
     admin: AdminUserWeb,
     db: Annotated[AsyncSession, Depends(get_db)],
-):
+) -> HTMLResponse:
     """
     Delete user (admin only).
     """
@@ -282,7 +282,7 @@ async def reset_user_password(
     admin: AdminUserWeb,
     db: Annotated[AsyncSession, Depends(get_db)],
     must_change: Annotated[bool, Form()] = True,
-):
+) -> RedirectResponse:
     """
     Reset user password (admin only).
     """
@@ -319,7 +319,7 @@ async def unlock_user(
     user_id: UUID,
     admin: AdminUserWeb,
     db: Annotated[AsyncSession, Depends(get_db)],
-):
+) -> HTMLResponse:
     """
     Unlock locked user account (admin only).
     """
@@ -329,10 +329,7 @@ async def unlock_user(
     unlocked_user, error = await web_users.unlock_user(db, user_id)
 
     if error or unlocked_user is None:
-        return RedirectResponse(
-            url=f"/settings/users?error={error or 'User not found'}",
-            status_code=302,
-        )
+        return hx_toast_without_swap(error or "User not found")
 
     logger.info(
         "Admin unlocked user via web UI",
@@ -343,7 +340,8 @@ async def unlock_user(
         },
     )
 
-    return RedirectResponse(
-        url=f"/settings/users?success=User {unlocked_user.username} unlocked",
-        status_code=302,
+    # The panel posts with hx-swap="none": close it and refresh the list.
+    return hx_empty_with_toast(
+        f"User {unlocked_user.username} unlocked",
+        extra_events={"closeSidePanel": None, "refreshPage": None},
     )
