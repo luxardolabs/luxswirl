@@ -9,6 +9,7 @@ key must not authenticate.
 from __future__ import annotations
 
 import pytest
+from app.crud.registration_key_crud import RegistrationKeyCRUD
 from app.models.registration_key_model import RegistrationKey
 from app.schemas.registration_key_schema import (
     RegistrationKeyCreate,
@@ -68,8 +69,10 @@ class TestVerifyAndUpdateUsage:
     async def test_create_key_returns_verifiable_plaintext(self, db: AsyncSession):
         key, plaintext = await self._make(db, "prod")
         assert plaintext.startswith("luxswirl_rk_")
-        assert key.key_hash != plaintext  # only the hash is persisted
-        assert svc.verify_key(plaintext, key.key_hash) is True
+        stored = await RegistrationKeyCRUD.get_by_id(db, key.id)
+        assert stored is not None
+        assert stored.key_hash != plaintext  # only the hash is persisted
+        assert svc.verify_key(plaintext, stored.key_hash) is True
 
     async def test_valid_key_authenticates_and_bumps_usage(self, db: AsyncSession):
         key, plaintext = await self._make(db, "valid")
