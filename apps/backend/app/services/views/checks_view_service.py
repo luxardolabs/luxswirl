@@ -21,7 +21,6 @@ from app.core.exceptions import (
 )
 from app.core.synthetic_security import SyntheticSecurityError
 from app.models.enum_model import CheckType, MaintenanceJobKind, options_for
-from app.schemas.agent_schema import AgentOption
 from app.schemas.alert_schema import AlertOption
 from app.schemas.auth_schema import AuthedUser
 from app.schemas.check_schema import (
@@ -169,14 +168,6 @@ class ChecksViewService:
     # ====================================================================
 
     @staticmethod
-    async def get_agents_list(db: AsyncSession) -> list[AgentOption]:
-        """Get all agents for dropdowns (excludes pending)."""
-        agents, _ = await AgentCoreService.list_agents(
-            db, limit=1000, exclude_pending=True
-        )
-        return [AgentOption.model_validate(agent) for agent in agents]
-
-    @staticmethod
     async def get_alerts_list(db: AsyncSession) -> list[AlertOption]:
         """Get all alerts for dropdowns."""
         alerts, _ = await AlertCoreService.list_alerts(db, limit=1000)
@@ -269,7 +260,7 @@ class ChecksViewService:
         Returns:
             Dict with agents and alerts lists
         """
-        agents = await ChecksViewService.get_agents_list(db)
+        agents = await AgentCoreService.list_agent_options(db)
         alerts = await ChecksViewService.get_alerts_list(db)
 
         return {
@@ -290,7 +281,7 @@ class ChecksViewService:
         check = await CheckCoreService.get_check_by_id(
             db, check_id, include_script_code=True
         )
-        agents = await ChecksViewService.get_agents_list(db)
+        agents = await AgentCoreService.list_agent_options(db)
         alerts = await ChecksViewService.get_alerts_list(db)
         assigned_alert_ids = await AlertCoreService.get_alert_ids_for_check(
             db, check.id
@@ -314,7 +305,7 @@ class ChecksViewService:
             Dict with source_check, agents, alerts
         """
         source_check = await CheckCoreService.get_check_by_id(db, check_id)
-        agents = await ChecksViewService.get_agents_list(db)
+        agents = await AgentCoreService.list_agent_options(db)
         alerts = await ChecksViewService.get_alerts_list(db)
 
         return {
@@ -322,26 +313,6 @@ class ChecksViewService:
             "agents": agents,
             "alerts": alerts,
         }
-
-    @staticmethod
-    async def get_available_agent_tags(db: AsyncSession) -> list[str]:
-        """
-        Get all available agent tags for assignment selector.
-
-        Returns:
-            Sorted list of unique agent tags
-        """
-        available_tags = set()
-        agents, _ = await AgentCoreService.list_agents(
-            db, limit=1000, exclude_pending=True
-        )
-        for agent in agents:
-            for tag in agent.tags or []:
-                tag = tag.strip()
-                if tag:
-                    available_tags.add(tag)
-        # post-db-filter: dependency eligibility needs the full candidate set; the tag list is aggregated across rows
-        return sorted(available_tags)
 
     @staticmethod
     def get_assignment_mode_text(assignment_mode: str) -> tuple[str, str]:
@@ -381,7 +352,7 @@ class ChecksViewService:
         """HTMX selector partial. Returns None for manual mode (caller renders empty)."""
         if assignment_mode == "manual":
             return None
-        available_tags = await ChecksViewService.get_available_agent_tags(db)
+        available_tags = await AgentCoreService.list_agent_tags(db)
         mode_title, mode_description = ChecksViewService.get_assignment_mode_text(
             assignment_mode
         )
@@ -416,7 +387,7 @@ class ChecksViewService:
             "agents": form_data["agents"],
             "alerts": form_data["alerts"],
             "available_check_tags": await CheckCoreService.get_all_check_tags(db),
-            "available_tags": await ChecksViewService.get_available_agent_tags(db),
+            "available_tags": await AgentCoreService.list_agent_tags(db),
             "eligible_parent_checks": await CheckCoreService.list_eligible_parent_rows(
                 db
             ),
@@ -445,7 +416,7 @@ class ChecksViewService:
             "alerts": form_data["alerts"],
             "assigned_alert_ids": form_data["assigned_alert_ids"],
             "available_check_tags": await CheckCoreService.get_all_check_tags(db),
-            "available_tags": await ChecksViewService.get_available_agent_tags(db),
+            "available_tags": await AgentCoreService.list_agent_tags(db),
             "eligible_parent_checks": await CheckCoreService.list_eligible_parent_rows(
                 db, exclude_check_id=check.id
             ),
@@ -474,7 +445,7 @@ class ChecksViewService:
                 db, check.id
             ),
             "available_check_tags": await CheckCoreService.get_all_check_tags(db),
-            "available_tags": await ChecksViewService.get_available_agent_tags(db),
+            "available_tags": await AgentCoreService.list_agent_tags(db),
             "eligible_parent_checks": await CheckCoreService.list_eligible_parent_rows(
                 db, exclude_check_id=check.id
             ),

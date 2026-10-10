@@ -131,19 +131,14 @@ class AgentsViewService:
             Tuple of (agent data list, total count)
         """
         # Get agents
-        orm_agents, total = await AgentCoreService.list_agents(
-            db=db,
+        agents, total = await AgentCoreService.list_agent_responses(
+            db,
             active_only=active_only,
             search=search,
             limit=limit,
             offset=offset,
             exclude_pending=exclude_pending,
         )
-        # Convert at the seam. get_agent_data is annotated AgentResponse and was
-        # being handed ORM rows, so the agents list rendered a model straight into
-        # the macro — which broke the moment the macro asked for has_api_key, a
-        # field that exists on the DTO by design and on the row not at all.
-        agents = [AgentCoreService.to_response(a) for a in orm_agents]
 
         # Get check counts and sparklines for each agent in parallel
         async def get_agent_data(agent: AgentResponse) -> AgentData:
@@ -375,9 +370,7 @@ class AgentsViewService:
         return AgentsViewService._render_key_panel(
             request,
             current_user,
-            AgentOption(
-                id=agent.id, agent_name=agent.agent_name, hostname=agent.hostname
-            ),
+            agent,
             plaintext_key,
         )
 
@@ -390,9 +383,7 @@ class AgentsViewService:
         return AgentsViewService._render_key_panel(
             request,
             current_user,
-            AgentOption(
-                id=agent.id, agent_name=agent.agent_name, hostname=agent.hostname
-            ),
+            agent,
             plaintext_key,
         )
 
@@ -626,7 +617,7 @@ class AgentsViewService:
                 update_dict["log_level"] = ll if ll else None
 
             update_data = AgentUpdate(**update_dict)
-            await AgentCoreService.update_agent(db, agent_id, update_data)
+            await AgentCoreService.update_agent_response(db, agent_id, update_data)
             await AgentsViewService.force_reload(db, agent_id)
             logger.info(
                 "Updated agent via web UI",

@@ -122,8 +122,7 @@ async def get_agent(
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[str, Depends(verify_api_token)],
 ) -> AgentResponse:
-    agent = await AgentCoreService.get_agent_by_name_or_raise(db, agent_name)
-    return AgentCoreService.to_response(agent)
+    return await AgentCoreService.get_agent_response_by_name(db, agent_name)
 
 
 @router.post(
@@ -138,8 +137,7 @@ async def create_agent(
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[str, Depends(verify_api_token)],
 ) -> AgentResponse:
-    agent = await AgentCoreService.create_agent(db, data)
-    return AgentCoreService.to_response(agent)
+    return await AgentCoreService.create_agent_response(db, data)
 
 
 @router.patch(
@@ -154,8 +152,7 @@ async def update_agent(
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[str, Depends(verify_api_token)],
 ) -> AgentResponse:
-    agent = await AgentCoreService.update_agent(db, agent_id, data)
-    return AgentCoreService.to_response(agent)
+    return await AgentCoreService.update_agent_response(db, agent_id, data)
 
 
 @router.delete(
@@ -198,8 +195,8 @@ async def approve_agent(
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[str, Depends(verify_api_token)],
 ) -> AgentKeyIssuedResponse:
-    agent = await AgentCoreService.get_agent_by_name_or_raise(db, agent_name)
-    _approved_agent, api_key = await AgentCoreService.approve_agent(db, agent.id)
+    agent_id = await AgentCoreService.agent_id_by_name(db, agent_name)
+    _approved_agent, api_key = await AgentCoreService.approve_agent(db, agent_id)
     return AgentKeyIssuedResponse(
         message="Agent approved successfully",
         agent_name=agent_name,
@@ -220,8 +217,8 @@ async def reject_agent(
     _: Annotated[str, Depends(verify_api_token)],
     reason: Annotated[str | None, Query(description="Reason for rejection")] = None,
 ) -> AgentLifecycleResponse:
-    agent = await AgentCoreService.get_agent_by_name_or_raise(db, agent_name)
-    await AgentCoreService.reject_agent(db, agent.id, reason)
+    agent_id = await AgentCoreService.agent_id_by_name(db, agent_name)
+    await AgentCoreService.reject_agent(db, agent_id, reason)
     return AgentLifecycleResponse(
         message="Agent rejected",
         agent_name=agent_name,
@@ -241,8 +238,8 @@ async def pause_agent(
     _: Annotated[str, Depends(verify_api_token)],
     reason: Annotated[str | None, Query(description="Reason for pausing")] = None,
 ) -> AgentLifecycleResponse:
-    agent = await AgentCoreService.get_agent_by_name_or_raise(db, agent_name)
-    await AgentCoreService.pause_agent(db, agent.id, reason)
+    agent_id = await AgentCoreService.agent_id_by_name(db, agent_name)
+    await AgentCoreService.pause_agent(db, agent_id, reason)
     return AgentLifecycleResponse(
         message="Agent paused", agent_name=agent_name, status=AgentApprovalStatus.PAUSED
     )
@@ -259,8 +256,8 @@ async def resume_agent(
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[str, Depends(verify_api_token)],
 ) -> AgentLifecycleResponse:
-    agent = await AgentCoreService.get_agent_by_name_or_raise(db, agent_name)
-    await AgentCoreService.resume_agent(db, agent.id)
+    agent_id = await AgentCoreService.agent_id_by_name(db, agent_name)
+    await AgentCoreService.resume_agent(db, agent_id)
     return AgentLifecycleResponse(
         message="Agent resumed",
         agent_name=agent_name,
@@ -280,8 +277,8 @@ async def disable_agent(
     _: Annotated[str, Depends(verify_api_token)],
     reason: Annotated[str | None, Query(description="Reason for disabling")] = None,
 ) -> AgentLifecycleResponse:
-    agent = await AgentCoreService.get_agent_by_name_or_raise(db, agent_name)
-    await AgentCoreService.disable_agent(db, agent.id, reason)
+    agent_id = await AgentCoreService.agent_id_by_name(db, agent_name)
+    await AgentCoreService.disable_agent(db, agent_id, reason)
     return AgentLifecycleResponse(
         message="Agent disabled",
         agent_name=agent_name,
@@ -300,8 +297,8 @@ async def enable_agent(
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[str, Depends(verify_api_token)],
 ) -> AgentLifecycleResponse:
-    agent = await AgentCoreService.get_agent_by_name_or_raise(db, agent_name)
-    await AgentCoreService.enable_agent(db, agent.id)
+    agent_id = await AgentCoreService.agent_id_by_name(db, agent_name)
+    await AgentCoreService.enable_agent(db, agent_id)
     return AgentLifecycleResponse(
         message="Agent enabled",
         agent_name=agent_name,
@@ -320,13 +317,8 @@ async def regenerate_agent_key_by_name(
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[str, Depends(verify_api_token)],
 ) -> AgentKeyIssuedResponse:
-    agent = await AgentCoreService.get_agent_by_name_or_raise(db, agent_name)
-    if agent.approval_status != "active":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Can only regenerate keys for active agents",
-        )
-    _regen_agent, api_key = await AgentCoreService.regenerate_agent_key(db, agent.id)
+    agent_id = await AgentCoreService.agent_id_by_name(db, agent_name)
+    api_key = await AgentCoreService.regenerate_active_agent_key(db, agent_id)
     return AgentKeyIssuedResponse(
         message="API key regenerated successfully",
         agent_name=agent_name,
@@ -388,17 +380,7 @@ async def recover_agent_key(
 ) -> AgentKeyRecoveryResponse:
     await verify_registration_token(authorization, db)
 
-    agent = await AgentCoreService.get_agent_by_id(db, agent_id)
-    if not agent:
-        raise AgentNotFoundException(str(agent_id))
-
-    if agent.approval_status != "active":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Agent must be active to recover key. Current status: {agent.approval_status}",
-        )
-
-    _, new_key = await AgentCoreService.regenerate_agent_key(db, agent_id)
+    new_key = await AgentCoreService.recover_agent_key(db, agent_id)
     logger.info(
         "Agent recovered API key using registration token",
         extra={"agent_id": str(agent_id)},
