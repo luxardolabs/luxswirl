@@ -90,7 +90,7 @@ async def get_user(
 
     user_service = UserCoreService()
 
-    user = await user_service.get_user_by_id(db, user_id)
+    user = await user_service.get_user(db, user_id)
 
     if not user:
         raise HTTPException(
@@ -98,7 +98,7 @@ async def get_user(
             detail=f"User not found: {user_id}",
         )
 
-    return UserResponse.model_validate(user)
+    return user
 
 
 @router.post("", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
@@ -290,7 +290,7 @@ async def reset_user_password(
     auth_service = AuthCoreService()
 
     try:
-        user = await user_service.get_user_by_id(db, user_id)
+        user = await user_service.get_user(db, user_id)
 
         if not user:
             raise HTTPException(
