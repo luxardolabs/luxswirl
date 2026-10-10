@@ -70,21 +70,22 @@ class SettingsCoreService:
         return cast("SettingScalar | _T", setting.typed_value)
 
     @staticmethod
-    async def get_setting_object(
+    async def get_setting_response(
         db: AsyncSession,
         key: str,
-    ) -> Setting | None:
+    ) -> SettingResponse | None:
         """
-        Get a setting object by key (not just the value).
+        Get a whole setting by key (not just the value).
 
         Args:
             db: Database session
             key: Setting key (e.g., "check.default_interval")
 
         Returns:
-            The Setting object, or None if not found
+            The setting, or None if not found
         """
-        return await SettingCRUD.get_by_key(db, key)
+        setting = await SettingCRUD.get_by_key(db, key)
+        return None if setting is None else SettingResponse.model_validate(setting)
 
     @staticmethod
     async def get_settings_by_category(
@@ -111,7 +112,7 @@ class SettingsCoreService:
         db: AsyncSession,
         key: str,
         new_value: SettingScalar,
-    ) -> Setting:
+    ) -> SettingResponse:
         """
         Update a setting value.
 
@@ -144,13 +145,13 @@ class SettingsCoreService:
             "Updated setting",
             extra={"setting_key": key, "new_value": new_value},
         )
-        return setting
+        return SettingResponse.model_validate(setting)
 
     @staticmethod
     async def reset_setting(
         db: AsyncSession,
         key: str,
-    ) -> Setting:
+    ) -> SettingResponse:
         """
         Reset a setting to its default value.
 
@@ -182,7 +183,7 @@ class SettingsCoreService:
             "Reset setting to default",
             extra={"setting_key": key, "default_value": default_value},
         )
-        return setting
+        return SettingResponse.model_validate(setting)
 
     @staticmethod
     async def create_setting(
