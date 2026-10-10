@@ -21,7 +21,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import NotFoundException
 from app.core.scan_panel import build_scan_view
 from app.models.enum_model import SERVER_RUNNER, JobStatus, JobType
-from app.schemas.agent_schema import AgentOption
 from app.schemas.auth_schema import AuthedUser
 from app.schemas.job_schema import JobCreate, JobInDB, JobUrls, ScanActionUrls
 from app.schemas.pagination_schema import build_pagination, paginated_url
@@ -227,14 +226,6 @@ class JobsViewService:
             job_rows.append(job_row)
 
         return job_rows, total
-
-    @staticmethod
-    async def agent_options(db: AsyncSession) -> list[AgentOption]:
-        """The admitted agents a job can be pointed at, as picker options."""
-        agents, _ = await AgentCoreService.list_agents(
-            db, limit=1000, exclude_pending=True
-        )
-        return [AgentOption.model_validate(agent) for agent in agents]
 
     @staticmethod
     async def cancel_job(db: AsyncSession, job_id: UUID) -> JobInDB:
@@ -511,7 +502,7 @@ class JobsViewService:
             existing_checks = {check.display_name for check in checks}
 
         available_check_tags = await CheckCoreService.get_all_check_tags(db)
-        agents = await JobsViewService.agent_options(db)
+        agents = await AgentCoreService.list_agent_options(db)
 
         check_defaults = await SettingsCoreService.get_check_defaults(db)
         alert_defaults = await SettingsCoreService.get_alert_defaults(db)
@@ -545,7 +536,7 @@ class JobsViewService:
         prefill_params: str | None,
     ) -> dict[str, Any]:
         """Job-creation side-panel form context."""
-        agents = await JobsViewService.agent_options(db)
+        agents = await AgentCoreService.list_agent_options(db)
 
         prefill_data: dict[str, Any] = {}
         if prefill_params:

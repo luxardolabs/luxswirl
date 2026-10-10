@@ -5,25 +5,19 @@ Covers the registration → approval → state-change → key-management lifecyc
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import bcrypt
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession
-
-_tests_root = str(Path(__file__).resolve().parent.parent)
-if _tests_root not in sys.path:
-    sys.path.insert(0, _tests_root)
-
-from app.core.exceptions import (  # noqa: E402
+from app.core.exceptions import (
     AgentNotFoundException,
     DuplicateResourceException,
 )
-from app.schemas.agent_schema import AgentCreate, AgentUpdate  # noqa: E402
-from app.services.core.agent_core_service import AgentCoreService  # noqa: E402
-from fixtures.factories import make_agent  # noqa: E402
+from app.models.agent_model import Agent
+from app.schemas.agent_schema import AgentCreate, AgentUpdate
+from app.services.core.agent_core_service import AgentCoreService
+from fixtures.factories import make_agent
+from sqlalchemy.ext.asyncio import AsyncSession
 
 pytestmark = pytest.mark.integration
 
@@ -138,12 +132,19 @@ class TestUpdateAgent:
 # ---------------------------------------------------------------------------
 
 
+async def _stored(db: AsyncSession, agent_id: UUID) -> Agent:
+    """The agent as persisted: the lifecycle methods return only a DTO."""
+    return await AgentCoreService.get_agent_by_id(db, agent_id)
+
+
 class TestApprovalWorkflow:
     async def test_approve_pending_agent_assigns_api_key(self, db: AsyncSession):
         pending = await AgentCoreService.register_agent(db, hostname="h")
         assert pending.approval_status == "pending"
 
-        agent, plaintext_key = await AgentCoreService.approve_agent(db, pending.id)
+        approved, plaintext_key = await AgentCoreService.approve_agent(db, pending.id)
+        assert approved.id == pending.id
+        agent = await _stored(db, pending.id)
         assert agent.approval_status == "active"
         assert plaintext_key.startswith("luxswirl_ak_")
         assert agent.api_key_hash is not None
@@ -161,9 +162,8 @@ class TestApprovalWorkflow:
 
     async def test_reject_pending_agent(self, db: AsyncSession):
         pending = await AgentCoreService.register_agent(db, hostname="h")
-        rejected = await AgentCoreService.reject_agent(
-            db, pending.id, reason="failed audit"
-        )
+        await AgentCoreService.reject_agent(db, pending.id, reason="failed audit")
+        rejected = await _stored(db, pending.id)
         assert rejected.approval_status == "rejected"
         assert rejected.status_reason == "failed audit"
 
@@ -171,7 +171,8 @@ class TestApprovalWorkflow:
         a = make_agent(approval_status="active")
         db.add(a)
         await db.flush()
-        paused = await AgentCoreService.pause_agent(db, a.id, reason="maintenance")
+        await AgentCoreService.pause_agent(db, a.id, reason="maintenance")
+        paused = await _stored(db, a.id)
         assert paused.approval_status == "paused"
         assert paused.status_reason == "maintenance"
 
@@ -179,18 +180,21 @@ class TestApprovalWorkflow:
         a = make_agent(approval_status="paused", status_reason="was-paused")
         db.add(a)
         await db.flush()
-        resumed = await AgentCoreService.resume_agent(db, a.id)
+        await AgentCoreService.resume_agent(db, a.id)
+        resumed = await _stored(db, a.id)
         assert resumed.approval_status == "active"
 
     async def test_disable_then_enable(self, db: AsyncSession):
         a = make_agent(approval_status="active")
         db.add(a)
         await db.flush()
-        disabled = await AgentCoreService.disable_agent(db, a.id, reason="security")
+        await AgentCoreService.disable_agent(db, a.id, reason="security")
+        disabled = await _stored(db, a.id)
         assert disabled.approval_status == "disabled"
         assert disabled.status_reason == "security"
 
-        enabled = await AgentCoreService.enable_agent(db, a.id)
+        await AgentCoreService.enable_agent(db, a.id)
+        enabled = await _stored(db, a.id)
         assert enabled.approval_status == "active"
 
 
@@ -204,12 +208,11 @@ class TestApiKeyManagement:
         self, db: AsyncSession
     ):
         pending = await AgentCoreService.register_agent(db, hostname="h")
-        approved, original_key = await AgentCoreService.approve_agent(db, pending.id)
-        original_hash = approved.api_key_hash
+        _, original_key = await AgentCoreService.approve_agent(db, pending.id)
+        original_hash = (await _stored(db, pending.id)).api_key_hash
 
-        regenerated, new_key = await AgentCoreService.regenerate_agent_key(
-            db, approved.id
-        )
+        _, new_key = await AgentCoreService.regenerate_agent_key(db, pending.id)
+        regenerated = await _stored(db, pending.id)
         assert new_key != original_key
         assert regenerated.api_key_hash != original_hash
         assert bcrypt.checkpw(new_key.encode(), regenerated.api_key_hash.encode())
@@ -220,11 +223,11 @@ class TestApiKeyManagement:
 
     async def test_revoke_clears_hash(self, db: AsyncSession):
         pending = await AgentCoreService.register_agent(db, hostname="h")
-        approved, _ = await AgentCoreService.approve_agent(db, pending.id)
-        assert approved.api_key_hash is not None
+        await AgentCoreService.approve_agent(db, pending.id)
+        assert (await _stored(db, pending.id)).api_key_hash is not None
 
-        revoked = await AgentCoreService.revoke_agent_key(db, approved.id)
-        assert revoked.api_key_hash is None
+        await AgentCoreService.revoke_agent_key(db, pending.id)
+        assert (await _stored(db, pending.id)).api_key_hash is None
 
 
 # ---------------------------------------------------------------------------
