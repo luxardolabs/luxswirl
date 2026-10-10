@@ -25,7 +25,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.exceptions import AgentNotFoundException
-from app.core.security import get_current_user, require_admin, verify_agent_token
+from app.core.security import (
+    get_current_user,
+    require_admin,
+    require_api_admin,
+    verify_agent_token,
+)
 from app.db import get_db
 from app.schemas.auth_schema import CurrentUserDTO
 from app.services.core.agent_core_service import AgentCoreService
@@ -33,6 +38,8 @@ from app.services.core.job_core_service import JobCoreService
 
 CurrentUser = Annotated[CurrentUserDTO, Depends(get_current_user)]
 AdminUser = Annotated[CurrentUserDTO, Depends(require_admin)]
+# A JSON-API bearer token: on this API every token is an admin credential.
+ApiAdmin = Annotated[str, Depends(require_api_admin)]
 
 
 async def require_job_owner(

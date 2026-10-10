@@ -1,12 +1,26 @@
 """
 Timescale CRUD - raw SQL/DDL queries for TimescaleDB management.
 
-Hypertable names and interval values flowing into f-strings are validated by
-the service layer before reaching this module.
+Every caller value is a BOUND parameter: a hypertable name is cast to
+`regclass` (so it must name an existing relation), day counts are bound as
+intervals, and hour counts and bucket widths become intervals in SQL. Nothing a caller passes is spliced into
+the statement text.
 """
 
-from sqlalchemy import text
+from datetime import datetime, timedelta
+from typing import Any
+
+from sqlalchemy import cast, func, literal, select, text
+from sqlalchemy.dialects.postgresql import REGCLASS
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql.elements import Cast
+
+from app.models.check_result_model import CheckResult
+
+
+def _relation(name: str) -> Cast[Any]:
+    """`name` as a bound value cast to regclass: it must name an existing relation."""
+    return cast(literal(name), REGCLASS)
 
 
 class TimescaleCRUD:
@@ -15,9 +29,7 @@ class TimescaleCRUD:
     @staticmethod
     async def remove_retention_policy(db: AsyncSession, hypertable_name: str) -> None:
         await db.execute(
-            text(
-                f"SELECT remove_retention_policy('{hypertable_name}', if_exists => TRUE)"
-            )
+            select(func.remove_retention_policy(_relation(hypertable_name), True))
         )
 
     @staticmethod
@@ -25,18 +37,17 @@ class TimescaleCRUD:
         db: AsyncSession, hypertable_name: str, retention_days: int
     ) -> None:
         await db.execute(
-            text(
-                f"SELECT add_retention_policy('{hypertable_name}', "
-                f"INTERVAL '{retention_days} days', if_not_exists => TRUE)"
+            select(
+                func.add_retention_policy(
+                    _relation(hypertable_name), timedelta(days=retention_days), True
+                )
             )
         )
 
     @staticmethod
     async def remove_compression_policy(db: AsyncSession, hypertable_name: str) -> None:
         await db.execute(
-            text(
-                f"SELECT remove_compression_policy('{hypertable_name}', if_exists => TRUE)"
-            )
+            select(func.remove_compression_policy(_relation(hypertable_name), True))
         )
 
     @staticmethod
@@ -44,9 +55,12 @@ class TimescaleCRUD:
         db: AsyncSession, hypertable_name: str, compress_after_days: int
     ) -> None:
         await db.execute(
-            text(
-                f"SELECT add_compression_policy('{hypertable_name}', "
-                f"INTERVAL '{compress_after_days} days', if_not_exists => TRUE)"
+            select(
+                func.add_compression_policy(
+                    _relation(hypertable_name),
+                    timedelta(days=compress_after_days),
+                    True,
+                )
             )
         )
 
@@ -68,7 +82,9 @@ class TimescaleCRUD:
         return (row[0], row[1])
 
     @staticmethod
-    async def get_hypertable_stats(db: AsyncSession) -> list[tuple]:
+    async def get_hypertable_stats(
+        db: AsyncSession,
+    ) -> list[tuple[str, bool, int, str | None]]:
         """Returns rows of (name, compression_enabled, num_chunks, total_size_pretty)."""
         result = await db.execute(
             text(
@@ -88,7 +104,7 @@ class TimescaleCRUD:
                 """
             )
         )
-        return [tuple(row) for row in result.fetchall()]
+        return [(name, enabled, chunks, size) for name, enabled, chunks, size in result]
 
     @staticmethod
     async def get_compression_stats_for_check_results(
@@ -130,7 +146,9 @@ class TimescaleCRUD:
         return [(row[0], row[1]) for row in result.fetchall()]
 
     @staticmethod
-    async def get_table_row_counts(db: AsyncSession) -> list[tuple]:
+    async def get_table_row_counts(
+        db: AsyncSession,
+    ) -> list[tuple[str, int, datetime | None, datetime | None, int, str]]:
         """Returns rows of (table_name, row_count, oldest, newest, size_bytes, size_pretty)."""
         result = await db.execute(
             text(
@@ -169,25 +187,22 @@ class TimescaleCRUD:
                 """
             )
         )
-        return [tuple(row) for row in result.fetchall()]
+        return [
+            (table, rows, oldest, newest, size, pretty)
+            for table, rows, oldest, newest, size, pretty in result
+        ]
 
     @staticmethod
     async def get_daily_growth(db: AsyncSession, days: int) -> list[tuple[str, int]]:
-        """Returns (date_str, row_count) per day for the last N days."""
+        """Returns (date_str, row_count) per day for the last N days, newest first."""
+        day = func.date(CheckResult.timestamp)
         result = await db.execute(
-            text(
-                f"""
-                SELECT
-                    DATE(timestamp) as date,
-                    COUNT(*) as row_count
-                FROM check_results
-                WHERE timestamp >= NOW() - INTERVAL '{days} days'
-                GROUP BY DATE(timestamp)
-                ORDER BY date DESC
-                """
-            )
+            select(day, func.count())
+            .where(CheckResult.timestamp >= func.now() - timedelta(days=days))
+            .group_by(day)
+            .order_by(day.desc())
         )
-        return [(str(row[0]), row[1]) for row in result.fetchall()]
+        return [(str(on), count) for on, count in result]
 
     @staticmethod
     async def get_avg_row_sizes(
@@ -216,29 +231,29 @@ class TimescaleCRUD:
     @staticmethod
     async def get_growth_buckets(
         db: AsyncSession, bucket: str, hours: int
-    ) -> list[tuple]:
+    ) -> list[tuple[datetime, int, int, int, int]]:
         """Returns time-bucketed (timestamp, result_count, artifact_bytes, check_count, agent_metric_count)."""
         result = await db.execute(
             text(
-                f"""
+                """
                 WITH results_bucketed AS (
-                    SELECT time_bucket(INTERVAL '{bucket}', timestamp) as bucket, COUNT(*) as count
-                    FROM check_results WHERE timestamp >= NOW() - INTERVAL '{hours} hours'
+                    SELECT time_bucket(CAST(CAST(:bucket AS text) AS interval), timestamp) as bucket, COUNT(*) as count
+                    FROM check_results WHERE timestamp >= NOW() - make_interval(hours => :hours)
                     GROUP BY bucket
                 ),
                 artifacts_bucketed AS (
-                    SELECT time_bucket(INTERVAL '{bucket}', created_at) as bucket, COALESCE(SUM(size_bytes), 0) as bytes
-                    FROM check_artifacts WHERE created_at >= NOW() - INTERVAL '{hours} hours'
+                    SELECT time_bucket(CAST(CAST(:bucket AS text) AS interval), created_at) as bucket, COALESCE(SUM(size_bytes), 0) as bytes
+                    FROM check_artifacts WHERE created_at >= NOW() - make_interval(hours => :hours)
                     GROUP BY bucket
                 ),
                 checks_bucketed AS (
-                    SELECT time_bucket(INTERVAL '{bucket}', created_at) as bucket, COUNT(*) as count
-                    FROM checks WHERE created_at >= NOW() - INTERVAL '{hours} hours'
+                    SELECT time_bucket(CAST(CAST(:bucket AS text) AS interval), created_at) as bucket, COUNT(*) as count
+                    FROM checks WHERE created_at >= NOW() - make_interval(hours => :hours)
                     GROUP BY bucket
                 ),
                 agent_metrics_bucketed AS (
-                    SELECT time_bucket(INTERVAL '{bucket}', timestamp) as bucket, COUNT(*) as count
-                    FROM agent_metrics WHERE timestamp >= NOW() - INTERVAL '{hours} hours'
+                    SELECT time_bucket(CAST(CAST(:bucket AS text) AS interval), timestamp) as bucket, COUNT(*) as count
+                    FROM agent_metrics WHERE timestamp >= NOW() - make_interval(hours => :hours)
                     GROUP BY bucket
                 )
                 SELECT
@@ -253,6 +268,10 @@ class TimescaleCRUD:
                 FULL OUTER JOIN agent_metrics_bucketed am ON COALESCE(r.bucket, a.bucket, c.bucket) = am.bucket
                 ORDER BY time_bucket ASC
                 """
-            )
+            ),
+            {"bucket": bucket, "hours": hours},
         )
-        return [tuple(row) for row in result.fetchall()]
+        return [
+            (bucket_at, results, artifact_bytes, checks, agent_metrics)
+            for bucket_at, results, artifact_bytes, checks, agent_metrics in result
+        ]

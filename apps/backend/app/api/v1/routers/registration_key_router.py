@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.security import verify_api_token
+from app.api.deps import ApiAdmin
 from app.db import get_db
 from app.schemas.base_schema import ErrorResponse
 from app.schemas.registration_key_schema import (
@@ -41,8 +41,8 @@ router = APIRouter(prefix="/registration-keys", tags=["Registration Keys"])
 async def create_registration_key(
     data: RegistrationKeyCreate,
     db: Annotated[AsyncSession, Depends(get_db)],
-    token: Annotated[str, Depends(verify_api_token)],
-):
+    token: ApiAdmin,
+) -> RegistrationKeyCreateResponse:
     """
     Create a new registration key.
 
@@ -75,13 +75,13 @@ async def create_registration_key(
 )
 async def list_registration_keys(
     db: Annotated[AsyncSession, Depends(get_db)],
-    token: Annotated[str, Depends(verify_api_token)],
+    token: ApiAdmin,
     skip: Annotated[int, Query(ge=0, description="Number of records to skip")] = 0,
     limit: Annotated[
         int, Query(ge=1, le=1000, description="Maximum records to return")
     ] = 100,
     include_revoked: Annotated[bool, Query(description="Include revoked keys")] = False,
-):
+) -> RegistrationKeyListResponse:
     """
     List all registration keys.
 
@@ -130,8 +130,8 @@ async def list_registration_keys(
 async def get_registration_key(
     key_id: UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
-    token: Annotated[str, Depends(verify_api_token)],
-):
+    token: ApiAdmin,
+) -> RegistrationKeyResponse:
     """
     Get a specific registration key by ID.
 
@@ -176,8 +176,8 @@ async def update_registration_key(
     key_id: UUID,
     data: RegistrationKeyUpdate,
     db: Annotated[AsyncSession, Depends(get_db)],
-    token: Annotated[str, Depends(verify_api_token)],
-):
+    token: ApiAdmin,
+) -> RegistrationKeyResponse:
     """
     Update a registration key's metadata (name, description).
 
@@ -216,8 +216,8 @@ async def revoke_registration_key(
     key_id: UUID,
     data: RegistrationKeyRevoke,
     db: Annotated[AsyncSession, Depends(get_db)],
-    token: Annotated[str, Depends(verify_api_token)],
-):
+    token: ApiAdmin,
+) -> RegistrationKeyResponse:
     """
     Revoke a registration key.
 
@@ -261,7 +261,7 @@ async def revoke_registration_key(
 async def delete_registration_key(
     key_id: UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
-    token: Annotated[str, Depends(verify_api_token)],
+    token: ApiAdmin,
     hard_delete: Annotated[
         bool, Query(description="Permanently delete (dangerous)")
     ] = False,
