@@ -353,7 +353,9 @@ async def get_agent_stats(
     response_model=AgentHeartbeatResponse,
     summary="Agent heartbeat",
 )
+@limiter.limit(settings.security.agent_api_rate_limit)
 async def agent_heartbeat(
+    request: Request,
     heartbeat: AgentHeartbeat,
     db: Annotated[AsyncSession, Depends(get_db)],
     authorization: Annotated[str | None, Header()] = None,
@@ -385,7 +387,9 @@ async def agent_heartbeat(
     description="Agent calls this with registration token to get new agent-specific key",
     response_model=AgentKeyRecoveryResponse,
 )
+@limiter.limit(settings.security.registration_rate_limit)
 async def recover_agent_key(
+    request: Request,
     agent_id: UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
     authorization: Annotated[str | None, Header()] = None,
@@ -420,7 +424,9 @@ async def recover_agent_key(
     summary="Get agent API key",
     description="Agent retrieves its agent-specific key after approval",
 )
+@limiter.limit(settings.security.registration_rate_limit)
 async def get_agent_api_key(
+    request: Request,
     agent_id: UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
     authorization: Annotated[str | None, Header()] = None,

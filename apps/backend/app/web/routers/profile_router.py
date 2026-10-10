@@ -9,6 +9,8 @@ from fastapi.responses import HTMLResponse
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
+from app.core.rate_limit import limiter
 from app.db import get_db
 from app.services.views.profile_view_service import ProfileViewService
 from app.web.deps import CurrentUserWeb
@@ -58,6 +60,7 @@ async def update_profile(
     include_in_schema=False,
     name="web_change_password",
 )
+@limiter.limit(settings.security.password_reset_rate_limit)
 async def change_password(
     request: Request,
     current_password: Annotated[str, Form()],

@@ -8,11 +8,13 @@ This router only handles HTTP concerns (request/response, status codes, etc.).
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.exceptions import AgentNotFoundException
 from app.core.query_params import JobStatusFilter, JobTypeFilter
+from app.core.rate_limit import limiter
 from app.core.security import verify_agent_token, verify_api_token
 from app.db import get_db
 from app.schemas.base_schema import ErrorResponse
@@ -239,7 +241,9 @@ async def get_job(
         404: {"model": ErrorResponse, "description": "Job not found"},
     },
 )
+@limiter.limit(settings.security.agent_api_rate_limit)
 async def submit_job_results(
+    request: Request,
     job_id: UUID,
     result_data: JobResultSubmit,
     db: Annotated[AsyncSession, Depends(get_db)],
