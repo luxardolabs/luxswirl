@@ -14,6 +14,7 @@ from uuid import UUID
 
 import pytest
 from app.core.datetime_utils import utc_now
+from app.crud.session_crud import SessionCRUD
 from app.models.session_model import Session
 from app.services.core.auth_core_service import AuthCoreService
 from fixtures.factories import make_user
@@ -227,6 +228,17 @@ class TestMultiSessionHelpers:
         # All gone
         assert await auth.get_user_sessions(db, user.id) == []
 
+    async def test_logout_all_leaves_other_users_sessions(self, db: AsyncSession, auth):
+        user = make_user(username="leaver")
+        other = make_user(username="stayer")
+        db.add_all([user, other])
+        await db.flush()
+        await auth.create_session(db, user.id)
+        await auth.create_session(db, other.id)
+
+        assert await auth.logout_all_sessions(db, user.id) == 1
+        assert len(await auth.get_user_sessions(db, other.id)) == 1
+
     async def test_logout_session_by_id(self, db: AsyncSession, auth):
         user = make_user()
         db.add(user)
@@ -324,3 +336,25 @@ class TestChangePassword:
 
         await auth.change_password(db, user.id, "TestPass123!", "NewPassword456!")
         assert await auth.get_user_sessions(db, user.id) == []
+
+
+class TestDeleteExpiredBefore:
+    async def test_counts_and_removes_only_sessions_expired_before_the_cutoff(
+        self, db: AsyncSession, auth
+    ):
+        user = make_user(username="aged")
+        db.add(user)
+        await db.flush()
+        old, _ = await auth.create_session(db, user.id)
+        recent, _ = await auth.create_session(db, user.id)
+        (await _stored(db, old.id)).expires_at = utc_now() - timedelta(days=10)
+        (await _stored(db, recent.id)).expires_at = utc_now() - timedelta(days=1)
+        await db.flush()
+
+        deleted = await SessionCRUD.delete_expired_before(
+            db, utc_now() - timedelta(days=7)
+        )
+
+        assert deleted == 1
+        assert await db.get(Session, old.id) is None
+        assert await db.get(Session, recent.id) is not None

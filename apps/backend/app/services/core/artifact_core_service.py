@@ -204,6 +204,7 @@ class ArtifactCoreService:
                 extra={
                     "deleted_count": deleted_count,
                     "check_id": str(check_id),
+                    # post-db-filter: log field: keep_ids is the bounded keep-list the delete excluded
                     "kept_count": len(keep_ids),
                 },
             )

@@ -644,6 +644,7 @@ class DashboardRender:
         )
         logger.info(
             "Got checks in details map",
+            # post-db-filter: log field: the map is the page's rendered checks
             extra={"count": len(check_details_map_uuid)},
         )
 

@@ -590,6 +590,7 @@ class MetricsCollectorCoreService:
 
         logger.info(
             "Found active agents",
+            # post-db-filter: log field: every agent listed is iterated to rebuild its metrics
             extra={"agent_count": len(agents)},
         )
 
@@ -629,6 +630,7 @@ class MetricsCollectorCoreService:
         logger.info(
             "Metrics rebuilt",
             extra={
+                # post-db-filter: log field: every agent listed was iterated
                 "agent_count": len(agents),
                 "check_count": check_count,
                 "lookback_minutes": lookback_minutes,

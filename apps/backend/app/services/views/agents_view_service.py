@@ -5,7 +5,6 @@ This web service acts as an aggregation layer, delegating to core services
 while providing web-specific functionality and data aggregation.
 """
 
-import asyncio
 from datetime import timedelta
 from typing import Any
 from uuid import UUID
@@ -140,21 +139,21 @@ class AgentsViewService:
             exclude_pending=exclude_pending,
         )
 
-        # Get check counts and sparklines for each agent in parallel
-        async def get_agent_data(agent: AgentResponse) -> AgentData:
-            # Get check counts
-            checks = await CheckCoreService.list_agent_checks(db, agent.id)
-            # post-db-filter: filters the agent's own checks, already loaded for the card
-            enabled_checks = sum(1 for c in checks if c.enabled)
+        # One query each for the whole page's check counts and metrics.
+        agent_ids = [agent.id for agent in agents]
+        check_counts = await CheckCoreService.check_counts_by_agent(db, agent_ids)
+        metrics_by_agent = await AgentCoreService.get_agent_metrics(
+            db, agent_ids, utc_now() - timedelta(hours=hours)
+        )
 
-            # Get sparkline data with smart bucketing (max 200 samples for performance)
-            cutoff_time = utc_now() - timedelta(hours=hours)
-            all_metrics = await AgentCoreService.get_agent_metrics(
-                db, agent.id, cutoff_time
-            )
+        def get_agent_data(agent: AgentResponse) -> AgentData:
+            counts = check_counts[agent.id]
+            # Sparklines with smart bucketing (max 200 samples for performance)
+            all_metrics = metrics_by_agent[agent.id]
 
             # Smart bucketing: ~200 samples max, but use appropriate aggregation per metric
             max_samples = 200
+            # post-db-filter: every sample in the window is drawn or bucketed into the sparkline
             if len(all_metrics) <= max_samples:
                 # Few enough points - use all data
                 cpu_sparkline = [
@@ -184,6 +183,7 @@ class AgentsViewService:
                 ]
             else:
                 # Too many points - bucket with appropriate aggregation
+                # post-db-filter: every sample in the window is drawn or bucketed into the sparkline
                 bucket_size = len(all_metrics) // max_samples
                 cpu_sparkline = []
                 memory_sparkline = []
@@ -192,6 +192,7 @@ class AgentsViewService:
                 fd_sparkline = []
                 subprocess_sparkline = []
 
+                # post-db-filter: every sample in the window is drawn or bucketed into the sparkline
                 for i in range(0, len(all_metrics), bucket_size):
                     bucket = all_metrics[i : i + bucket_size]
 
@@ -246,8 +247,8 @@ class AgentsViewService:
 
             return AgentData(
                 agent=agent,
-                total_checks=len(checks),
-                enabled_checks=enabled_checks,
+                total_checks=counts.total,
+                enabled_checks=counts.enabled,
                 cpu_sparkline=cpu_sparkline,
                 memory_sparkline=memory_sparkline,
                 queue_sparkline=queue_sparkline,
@@ -259,8 +260,7 @@ class AgentsViewService:
                 urls=build_agent_urls(request, agent.id),
             )
 
-        # Execute all queries concurrently
-        agent_data = await asyncio.gather(*[get_agent_data(agent) for agent in agents])
+        agent_data = [get_agent_data(agent) for agent in agents]
 
         return agent_data, total
 

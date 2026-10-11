@@ -141,6 +141,14 @@ class AgentCRUD:
         return [(agent_id, name, last_seen) for agent_id, name, last_seen in result]
 
     @staticmethod
+    async def count_seen_since(db: AsyncSession, cutoff: datetime) -> int:
+        """How many agents have a last_seen >= cutoff."""
+        result = await db.execute(
+            select(func.count()).select_from(Agent).where(Agent.last_seen >= cutoff)
+        )
+        return result.scalar_one()
+
+    @staticmethod
     async def list_seen_since(db: AsyncSession, cutoff: datetime) -> list[Agent]:
         """All agents whose last_seen is >= cutoff."""
         result = await db.execute(select(Agent).where(Agent.last_seen >= cutoff))
@@ -260,25 +268,17 @@ class AgentCRUD:
 
     @staticmethod
     async def get_agent_metrics(
-        db: AsyncSession, agent_id: UUID, cutoff_time: datetime
+        db: AsyncSession, agent_ids: Sequence[UUID], cutoff_time: datetime
     ) -> Sequence[AgentMetric]:
-        """
-        Get agent metrics since a cutoff time, ordered ascending.
-
-        Args:
-            db: Database session
-            agent_id: Agent UUID
-            cutoff_time: Only return metrics after this time
-
-        Returns:
-            List of AgentMetric objects ordered by timestamp ascending
-        """
+        """Every listed agent's metrics since cutoff, by agent then oldest first."""
+        if not agent_ids:
+            return []
         result = await db.execute(
             select(AgentMetric)
             .where(
-                AgentMetric.agent_id == agent_id,
+                AgentMetric.agent_id.in_(agent_ids),
                 AgentMetric.timestamp >= cutoff_time,
             )
-            .order_by(AgentMetric.timestamp.asc())
+            .order_by(AgentMetric.agent_id, AgentMetric.timestamp.asc())
         )
         return list(result.scalars().all())

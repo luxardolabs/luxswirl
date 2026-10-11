@@ -244,6 +244,7 @@ async def list_my_sessions(
 
     return SessionListResponse(
         sessions=sessions,
+        # post-db-filter: the list is returned whole; total is its length, not a separate count
         total=len(sessions),
     )
 
@@ -369,6 +370,7 @@ async def list_user_sessions_admin(
 
     return SessionListResponse(
         sessions=sessions,
+        # post-db-filter: the list is returned whole; total is its length, not a separate count
         total=len(sessions),
     )
 

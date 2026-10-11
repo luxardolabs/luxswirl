@@ -6,6 +6,7 @@ into the in-memory Prometheus metrics collector.
 """
 
 from datetime import timedelta
+from typing import Any
 
 from shared.logger import get_logger
 
@@ -26,7 +27,7 @@ logger = get_logger("luxswirl.scheduler.monitoring")
 _ACTIVE_AGENT_TIMEOUT_SECONDS = 300
 
 
-async def collect_database_metrics() -> dict:
+async def collect_database_metrics() -> dict[str, Any]:
     """
     Collect PostgreSQL/TimescaleDB health metrics + push system gauges to Prometheus.
 
@@ -41,7 +42,7 @@ async def collect_database_metrics() -> dict:
         Dict with collected metrics (also retained for scheduler logging)
     """
     async with worker_session() as db:
-        metrics: dict = {}
+        metrics: dict[str, Any] = {}
 
         # Database size
         db_size = await MonitoringCRUD.get_database_size_bytes(db)
@@ -99,8 +100,7 @@ async def collect_database_metrics() -> dict:
 
         # Active agents (seen within timeout)
         cutoff = utc_now() - timedelta(seconds=_ACTIVE_AGENT_TIMEOUT_SECONDS)
-        active_agents_list = await AgentCRUD.list_seen_since(db, cutoff)
-        metrics["active_agent_count"] = len(active_agents_list)
+        metrics["active_agent_count"] = await AgentCRUD.count_seen_since(db, cutoff)
 
         # Active checks (belonging to active agents)
         metrics["active_check_count"] = await CheckCRUD.count_for_agents_seen_since(
@@ -125,7 +125,7 @@ async def collect_database_metrics() -> dict:
         return metrics
 
 
-async def collect_operational_metrics() -> dict:
+async def collect_operational_metrics() -> dict[str, Any]:
     """
     Collect fast-changing operational state and push to Prometheus.
 
@@ -141,7 +141,7 @@ async def collect_operational_metrics() -> dict:
         Dict with collected operational state (also retained for scheduler logging)
     """
     async with worker_session() as db:
-        operational: dict = {}
+        operational: dict[str, Any] = {}
 
         # Enabled alert rules
         operational["alerts_enabled"] = await AlertCRUD.count_enabled(db)

@@ -188,6 +188,27 @@ class CheckCRUD:
         return result.scalar_one()
 
     @staticmethod
+    async def count_by_agent(
+        db: AsyncSession, agent_ids: Sequence[UUID]
+    ) -> dict[UUID, tuple[int, int]]:
+        """agent_id -> (checks, enabled checks), one grouped query for them all.
+
+        Agents with no checks are absent.
+        """
+        if not agent_ids:
+            return {}
+        result = await db.execute(
+            select(
+                Check.agent_id,
+                func.count(Check.id),
+                func.count(Check.id).filter(Check.enabled.is_(True)),
+            )
+            .where(Check.agent_id.in_(agent_ids))
+            .group_by(Check.agent_id)
+        )
+        return {agent_id: (total, enabled) for agent_id, total, enabled in result.all()}
+
+    @staticmethod
     async def count_all(db: AsyncSession) -> int:
         """Total check count (including internal/system checks)."""
         result = await db.execute(select(func.count(Check.id)))

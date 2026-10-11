@@ -208,6 +208,13 @@ class CheckStatusInfo(BaseSchema):
     interval_seconds: int | None = None
 
 
+class AgentCheckCounts(BaseSchema):
+    """How many checks an agent has, and how many of them are enabled."""
+
+    total: int = 0
+    enabled: int = 0
+
+
 class CheckView(CheckInDB):
     """A check as the web panels read it: every stored field, plus its agent.
 

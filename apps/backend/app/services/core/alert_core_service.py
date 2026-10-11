@@ -498,6 +498,7 @@ class AlertCoreService:
             "Assigned global alerts to check",
             extra={
                 "check_id": str(check_id),
+                # post-db-filter: log field: the ids were just used to create the mappings
                 "global_alert_count": len(global_alert_ids),
             },
         )
@@ -629,6 +630,7 @@ class AlertCoreService:
         logger.debug(
             "Evaluating alerts for check",
             extra={
+                # post-db-filter: log field: every alert listed is evaluated below
                 "alert_count": len(all_alerts),
                 "check_name": check.display_name,
                 "check_id": str(check.id),
@@ -810,6 +812,7 @@ class AlertCoreService:
                 db, check.id, 2
             )
 
+            # post-db-filter: the read is LIMIT 2; this asks whether both rows exist
             if len(recent_results) >= 2:
                 previous_status = "success" if recent_results[1].success else "error"
                 # If previous was error and current is success -> recovery
@@ -829,6 +832,7 @@ class AlertCoreService:
                 db, check.id, consecutive_failures
             )
 
+            # post-db-filter: the read is LIMIT consecutive_failures; this asks whether that many exist
             if len(recent_results) < consecutive_failures:
                 return False
 

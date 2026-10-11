@@ -454,11 +454,7 @@ class AuthCoreService:
         Returns:
             Number of sessions deleted
         """
-        sessions = await SessionCRUD.list_active_for_user(db, user_id)
-        count = len(sessions)
-
-        for session in sessions:
-            await db.delete(session)
+        count = await SessionCRUD.delete_active_for_user(db, user_id)
 
         logger.info(
             "Logged out all sessions for user",
@@ -510,11 +506,7 @@ class AuthCoreService:
         Returns:
             Number of sessions deleted
         """
-        sessions = await SessionCRUD.list_expired(db)
-
-        count = len(sessions)
-        for session in sessions:
-            await db.delete(session)
+        count = await SessionCRUD.delete_expired(db)
 
         if count > 0:
             logger.info(
