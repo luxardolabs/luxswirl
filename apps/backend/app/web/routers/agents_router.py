@@ -50,6 +50,7 @@ async def agents_list_page(
     return templates.TemplateResponse(request, "pages/agents.html", context)
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.get(
     "/agents/{agent_id}/edit-form", response_class=HTMLResponse, include_in_schema=False
 )
@@ -176,6 +177,7 @@ async def delete_agent_web(
     )
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post("/agents/{agent_id}/force-reload", include_in_schema=False)
 async def force_reload_agent(
     agent_id: UUID,
@@ -189,6 +191,7 @@ async def force_reload_agent(
 # ---- Approval workflow (HTMX) -------------------------------------------
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post("/agents/{agent_id}/approve-web", include_in_schema=False)
 async def approve_agent_web(
     agent_id: UUID,
@@ -199,6 +202,7 @@ async def approve_agent_web(
     return await AgentsViewService.approve_agent(db, agent_id)
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post("/agents/{agent_id}/reject-web", include_in_schema=False)
 async def reject_agent_web(
     agent_id: UUID,
@@ -210,6 +214,7 @@ async def reject_agent_web(
     return await AgentsViewService.reject_agent(db, agent_id, reason)
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post("/agents/{agent_id}/pause-web", include_in_schema=False)
 async def pause_agent_web(
     agent_id: UUID,
@@ -220,6 +225,7 @@ async def pause_agent_web(
     return await AgentsViewService.pause_agent(db, agent_id, reason)
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post("/agents/{agent_id}/resume-web", include_in_schema=False)
 async def resume_agent_web(
     agent_id: UUID,
@@ -229,6 +235,7 @@ async def resume_agent_web(
     return await AgentsViewService.resume_agent(db, agent_id)
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post("/agents/{agent_id}/disable-web", include_in_schema=False)
 async def disable_agent_web(
     agent_id: UUID,
@@ -239,6 +246,7 @@ async def disable_agent_web(
     return await AgentsViewService.disable_agent(db, agent_id, reason)
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post("/agents/{agent_id}/enable-web", include_in_schema=False)
 async def enable_agent_web(
     agent_id: UUID,
@@ -251,6 +259,7 @@ async def enable_agent_web(
 # ---- Key management (HTMX) ----------------------------------------------
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.get(
     "/agents/{agent_id}/key-management-panel",
     response_class=HTMLResponse,
@@ -281,6 +290,7 @@ async def get_key_management_panel(
         raise
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post(
     "/agents/{agent_id}/generate-key-web",
     response_class=HTMLResponse,
@@ -303,6 +313,7 @@ async def generate_key_web(
         raise HTTPException(status_code=404, detail="Agent not found") from None
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post(
     "/agents/{agent_id}/regenerate-key-web",
     response_class=HTMLResponse,
@@ -323,6 +334,7 @@ async def regenerate_key_web(
         raise HTTPException(status_code=404, detail="Agent not found") from None
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.delete("/agents/{agent_id}/revoke-key-web", include_in_schema=False)
 async def revoke_key_web(
     agent_id: UUID,

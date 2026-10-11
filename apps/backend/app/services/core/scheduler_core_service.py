@@ -26,6 +26,7 @@ from app.models.scheduler_model import JobConfiguration
 from app.schemas.scheduler_schema import (
     SchedulerExecutionResponse,
     SchedulerJobResponse,
+    SchedulerRunResult,
 )
 from app.services.core.cleanup_core_service import (
     cleanup_check_artifacts,
@@ -162,7 +163,7 @@ class SchedulerCoreService:
                         timeout=job.max_runtime_seconds,
                     )
                 else:
-                    raise Exception(f"Function '{function_name}' not found")
+                    raise LookupError(f"Function '{function_name}' not found")
 
                 # Success - update execution
                 execution.completed_at = datetime.now(UTC)
@@ -383,7 +384,7 @@ class SchedulerCoreService:
             )
             return SchedulerJobResponse.model_validate(job)
 
-    async def execute_job_synchronously(self, job_key: str) -> dict[str, Any]:
+    async def execute_job_synchronously(self, job_key: str) -> SchedulerRunResult:
         """
         Execute a job synchronously (wait for completion).
 
@@ -393,7 +394,8 @@ class SchedulerCoreService:
             job_key: Job ID to run
 
         Returns:
-            Dict with execution result
+            The run's outcome; a failed run carries its error. The run is
+            recorded either way.
 
         Raises:
             ValueError: If job not found
@@ -429,7 +431,7 @@ class SchedulerCoreService:
                         timeout=job.max_runtime_seconds,
                     )
                 else:
-                    raise Exception(f"Function '{function_name}' not found")
+                    raise LookupError(f"Function '{function_name}' not found")
 
                 # Success
                 execution.completed_at = datetime.now(UTC)
@@ -458,29 +460,44 @@ class SchedulerCoreService:
                 job.retry_count = 0
                 job.next_run_at = self._calculate_next_run(job)
 
-                return {
-                    "status": final_status,
-                    "execution_id": str(execution.id),
-                    "duration_seconds": execution.duration_seconds,
-                }
+                await db.flush()
+                await db.refresh(job)
+                return SchedulerRunResult(
+                    status=final_status,
+                    execution_id=execution.id,
+                    duration_seconds=execution.duration_seconds,
+                    job=SchedulerJobResponse.model_validate(job),
+                )
 
             except TimeoutError:
-                execution.status = SchedulerExecutionStatus.FAILED
-                execution.error_message = (
-                    f"Job timed out after {job.max_runtime_seconds} seconds"
-                )
-                execution.completed_at = datetime.now(UTC)
-                job.last_status = SchedulerExecutionStatus.FAILED
-                job.failed_runs += 1
-                raise
-
+                error = f"Job timed out after {job.max_runtime_seconds} seconds"
             except Exception as e:
-                execution.status = SchedulerExecutionStatus.FAILED
-                execution.error_message = str(e)
-                execution.completed_at = datetime.now(UTC)
-                job.last_status = SchedulerExecutionStatus.FAILED
-                job.failed_runs += 1
-                raise
+                error = str(e) or type(e).__name__
+
+            # A failed manual run is RETURNED, not raised: raising rolled back
+            # the worker session, so the FAILED execution record and the failed
+            # count vanished and the Run button answered a 500 instead of an
+            # error toast.
+            execution.status = SchedulerExecutionStatus.FAILED
+            execution.error_message = error
+            execution.completed_at = datetime.now(UTC)
+            execution.duration_seconds = (
+                execution.completed_at - execution.started_at
+            ).total_seconds()
+            job.last_status = SchedulerExecutionStatus.FAILED
+            job.failed_runs += 1
+            logger.warning(
+                "Manual job run failed", extra={"job_key": job_key, "error": error}
+            )
+            await db.flush()
+            await db.refresh(job)
+            return SchedulerRunResult(
+                status=SchedulerExecutionStatus.FAILED,
+                execution_id=execution.id,
+                duration_seconds=execution.duration_seconds,
+                error=error,
+                job=SchedulerJobResponse.model_validate(job),
+            )
 
     async def reset_job(self, job_key: str) -> SchedulerJobResponse:
         """

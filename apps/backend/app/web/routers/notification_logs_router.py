@@ -29,6 +29,7 @@ logger = get_logger("luxswirl.web.routers.notification_logs")
 router = APIRouter(tags=["Web UI - Notification Logs"])
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.get("/notification-logs", response_class=HTMLResponse, include_in_schema=False)
 async def notification_logs_page(
     request: Request,

@@ -33,6 +33,7 @@ router = APIRouter(tags=["Web UI - Checks"])
 # ---- HTMX selectors / forms ---------------------------------------------
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.get(
     "/checks/assignment-mode-selector",
     response_class=HTMLResponse,
@@ -55,6 +56,7 @@ async def assignment_mode_selector(
     )
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.get(
     "/checks/create-form",
     response_class=HTMLResponse,
@@ -143,6 +145,7 @@ async def clone_check_handler(
     )
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post("/checks/create", response_class=HTMLResponse, include_in_schema=False)
 async def create_check_assignment(
     request: Request,
@@ -156,6 +159,7 @@ async def create_check_assignment(
     )
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post(
     "/checks/{check_id}/update",
     response_class=HTMLResponse,
@@ -175,6 +179,7 @@ async def update_check(
     )
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post(
     "/checks/{check_id}/toggle", response_class=HTMLResponse, include_in_schema=False
 )
@@ -268,6 +273,7 @@ async def update_dependents(
 # ---- Bulk operations ----------------------------------------------------
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post(
     "/checks/bulk-action", response_class=HTMLResponse, include_in_schema=False
 )
@@ -318,6 +324,7 @@ async def bulk_action(
     return bulk_oob_response(oob_context, message, toast_kind)
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post(
     "/checks/bulk-modify", response_class=HTMLResponse, include_in_schema=False
 )
@@ -360,6 +367,7 @@ async def bulk_modify(
     )
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post(
     "/checks/bulk-preview", response_class=HTMLResponse, include_in_schema=False
 )

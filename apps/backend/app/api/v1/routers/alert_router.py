@@ -141,6 +141,7 @@ async def delete_alert(
 # Notification provider mappings
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post(
     "/{alert_id}/notification-providers",
     status_code=status.HTTP_201_CREATED,
@@ -171,6 +172,7 @@ async def add_notification_provider(
     )
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.delete(
     "/{alert_id}/notification-providers/{provider_id}",
     status_code=status.HTTP_204_NO_CONTENT,
@@ -195,6 +197,7 @@ async def remove_notification_provider(
 # Check mappings
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post(
     "/{alert_id}/checks",
     status_code=status.HTTP_201_CREATED,
@@ -223,6 +226,7 @@ async def add_check(
     )
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.delete(
     "/{alert_id}/checks/{check_id}",
     status_code=status.HTTP_204_NO_CONTENT,

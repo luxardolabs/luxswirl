@@ -185,7 +185,8 @@ class TestManualRunPersists:
         key = await _seed_job(worker_db)
 
         out = await _svc(result={"deleted": 5}).execute_job_synchronously(key)
-        assert out["status"] == SchedulerExecutionStatus.SUCCESS
+        assert out.status == SchedulerExecutionStatus.SUCCESS
+        assert out.job.total_runs == 1
 
         (execution,) = await _executions(worker_db, key)
         assert execution.status == SchedulerExecutionStatus.SUCCESS
@@ -194,12 +195,35 @@ class TestManualRunPersists:
         assert job.last_run_at is not None
         assert job.total_runs == 1
 
-    async def test_failure_propagates_to_caller(self, worker_db):
-        # execute_job_synchronously re-raises on failure so the admin "Run" button
-        # surfaces an error toast (vs the scheduled path, which records + swallows).
+    async def test_failure_is_returned_and_recorded(self, worker_db):
+        """A failed manual run used to re-raise inside the worker session, which
+        rolled back the FAILED record it had just written — and the Run button
+        answered a 500 rather than an error toast."""
         key = await _seed_job(worker_db)
-        with pytest.raises(RuntimeError):
-            await _svc(raises=RuntimeError("boom")).execute_job_synchronously(key)
+
+        out = await _svc(raises=RuntimeError("boom")).execute_job_synchronously(key)
+
+        assert out.status == SchedulerExecutionStatus.FAILED
+        assert out.error == "boom"
+        assert out.toast == (
+            f"Job failed ({out.duration_seconds:.1f}s) - boom",
+            "error",
+        )
+        (execution,) = await _executions(worker_db, key)
+        assert execution.status == SchedulerExecutionStatus.FAILED
+        assert execution.error_message == "boom"
+        assert (await _get_job(worker_db, key)).failed_runs == 1
+        assert out.job.failed_runs == 1
+
+    async def test_an_unregistered_function_is_a_recorded_failure(self, worker_db):
+        key = await _seed_job(worker_db, function_name="no_such_function")
+
+        out = await _svc().execute_job_synchronously(key)
+
+        assert out.status == SchedulerExecutionStatus.FAILED
+        assert "no_such_function" in (out.error or "")
+        (execution,) = await _executions(worker_db, key)
+        assert execution.status == SchedulerExecutionStatus.FAILED
 
 
 class TestToggleAndResetPersist:
@@ -286,10 +310,15 @@ class TestTimeoutHandling:
         (execution,) = await _executions(worker_db, key)
         assert execution.status == SchedulerExecutionStatus.FAILED
 
-    async def test_manual_timeout_propagates(self, worker_db):
+    async def test_manual_timeout_is_recorded_failed(self, worker_db):
         key = await _seed_job(worker_db)
-        with pytest.raises(TimeoutError):
-            await _svc(raises=TimeoutError()).execute_job_synchronously(key)
+
+        out = await _svc(raises=TimeoutError()).execute_job_synchronously(key)
+
+        assert out.status == SchedulerExecutionStatus.FAILED
+        assert "timed out" in (out.error or "")
+        (execution,) = await _executions(worker_db, key)
+        assert execution.status == SchedulerExecutionStatus.FAILED
 
 
 class TestJobHistory:

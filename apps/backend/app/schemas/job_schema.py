@@ -150,10 +150,15 @@ class JobInDB(JobBase, TimestampSchema):
     parent_job_id: UUID | None = None
 
 
-class JobResponse(JobInDB):
-    """Schema for job API responses."""
+class JobDetail(JobInDB):
+    """A job as its detail panel shows it: the stored fields plus its duration."""
 
     duration_seconds: float | None = Field(None, description="Job execution duration")
+
+
+class JobResponse(JobDetail):
+    """Schema for job API responses."""
+
     agent_hostname: str | None = Field(
         None, description="Hostname of agent that ran the job"
     )

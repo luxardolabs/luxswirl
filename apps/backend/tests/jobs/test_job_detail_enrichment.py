@@ -13,11 +13,7 @@ the agent reported.
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
 from uuid import uuid4
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.crud.job_crud import JobCRUD
 from app.models.enum_model import JobType
@@ -135,3 +131,14 @@ class TestRunnerToken:
 
         assert detail is not None
         assert detail.runner_token == str(agent.id)
+
+
+async def test_detail_carries_the_duration_the_panel_shows(db: AsyncSession):
+    """The panel reads job.duration_seconds; the detail DTO had no such field, so
+    under StrictUndefined every job detail panel 500'd."""
+    job = await _scan_job(db, result={**RAW_RESULT, "scan_duration_seconds": 12.5})
+
+    detail = await JobCoreService.get_job_detail(db, job.id)
+
+    assert detail is not None
+    assert detail.duration_seconds == 12.5

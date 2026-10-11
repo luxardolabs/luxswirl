@@ -261,7 +261,7 @@ class SettingsViewService:
     async def update_metrics_timeout(
         db: AsyncSession,
         timeout: str,
-    ) -> tuple[dict[str, Any] | None, str | None]:
+    ) -> dict[str, Any]:
         """
         Validate and update the metrics agent timeout setting.
 
@@ -270,27 +270,27 @@ class SettingsViewService:
             timeout: Timeout value as string from form
 
         Returns:
-            Tuple of (the metrics settings dict, error message). The settings
-            side is None whenever there is an error — a genuine multi-key
-            settings mapping, not an entity crossing the seam.
+            The metrics settings after the update.
+
+        Raises:
+            ValueError: If the value is missing, not a number, or outside
+                30-3600 seconds; the message is the form error to show.
         """
         if not timeout:
-            return None, "Timeout value required"
+            raise ValueError("Timeout value required")
 
         try:
             timeout_int = int(timeout)
         except ValueError:
-            return None, "Invalid timeout value"
+            raise ValueError("Invalid timeout value") from None
 
         if timeout_int < 30 or timeout_int > 3600:
-            return None, "Timeout must be between 30 and 3600 seconds"
+            raise ValueError("Timeout must be between 30 and 3600 seconds")
 
         await SettingsCoreService.update_setting(
             db, "metrics.agent_timeout_seconds", timeout_int
         )
-
-        metrics_settings = await SettingsCoreService.get_metrics_settings(db)
-        return metrics_settings, None
+        return await SettingsCoreService.get_metrics_settings(db)
 
     # ------------------------------------------------------------------
     # Page-context builders.

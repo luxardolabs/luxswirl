@@ -288,6 +288,19 @@ class AuthCoreService:
         )
         return CurrentUserResponse.model_validate(user)
 
+    async def get_current_user_response(
+        self, db: AsyncSession, user_id: UUID
+    ) -> CurrentUserResponse:
+        """The signed-in user's own record.
+
+        Raises:
+            NotFoundException: If the user no longer exists
+        """
+        user = await UserCRUD.get_by_id(db, user_id)
+        if user is None:
+            raise NotFoundException(f"User {user_id} not found")
+        return CurrentUserResponse.model_validate(user)
+
     async def create_session(
         self,
         db: AsyncSession,

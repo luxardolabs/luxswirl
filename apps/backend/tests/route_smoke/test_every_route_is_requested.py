@@ -16,6 +16,8 @@ import re
 
 import pytest
 from _route_table import iter_routes
+from app.core.rate_limit import limiter
+from app.main import app
 
 pytestmark = [pytest.mark.route_smoke, pytest.mark.integration]
 
@@ -27,6 +29,24 @@ SKIP_PATHS = frozenset(
         # Requested by test_logout_ends_the_session below, on its own session:
         # doing it here would revoke the cookie the rest of the sweep rides on.
         "/logout",
+    }
+)
+
+# The first-run wizard closes once any user exists and sends the visitor to
+# /login, signed in or not; its form is rendered by
+# test_setup_wizard_renders_on_an_empty_install.
+SETUP_PATHS = frozenset({"/setup"})
+
+# Each ends the session the sweep rides on, so each is requested by its own
+# test below on a fresh login. Inside the sweep, POST /change-password
+# (FORM_BODY carries the real password) ended it mid-run and every web POST
+# after it answered 307 -> /login without reaching its handler.
+SESSION_ENDING = frozenset(
+    {
+        ("POST", "/change-password"),
+        ("POST", "/profile/change-password"),
+        ("POST", "/api/v1/auth/change-password"),
+        ("POST", "/api/v1/auth/logout-all"),
     }
 )
 
@@ -58,18 +78,33 @@ FORM_BODY = {
 
 def _routes():
     """(method, path) for every registered HTTP route worth requesting."""
-    from app.main import app
-
     seen = []
     for route, path in iter_routes(app.routes):
         methods = getattr(route, "methods", None)
         if not path or not methods or path in SKIP_PATHS:
             continue
         for method in sorted(methods):
-            if method in ("HEAD", "OPTIONS"):
+            if method in ("HEAD", "OPTIONS") or (method, path) in SESSION_ENDING:
                 continue
             seen.append((method, path))
     return sorted(set(seen))
+
+
+# Path endings that destroy the seeded world. DELETE /api/v1/agents/{agent_id}
+# cascades away the seeded check, job and artifact; run before the reads and
+# writes, it turned every one of their routes into a 404.
+DESTRUCTIVE_SUFFIXES = ("/delete", "/revoke", "/revoke-key", "/logout-all")
+
+
+def _phase(method: str, path: str) -> int:
+    """Reads, then writes, then whatever destroys the seeded rows."""
+    if method == "DELETE" or path.endswith(DESTRUCTIVE_SUFFIXES):
+        return 2
+    return 0 if method == "GET" else 1
+
+
+def _ordered_routes() -> list[tuple[str, str]]:
+    return sorted(_routes(), key=lambda route: (_phase(*route), route))
 
 
 def _fill(path: str, ids: dict[str, str]) -> str:
@@ -83,13 +118,14 @@ async def test_every_route_answers_without_blowing_up(smoke_world):
 
     failures = []
     attempted = []
-    for method, path in _routes():
+    for method, path in _ordered_routes():
         url = _fill(path, ids)
         kwargs = {"headers": headers}
         if method in ("POST", "PUT", "PATCH"):
-            # Send both shapes: form routes read the body, JSON routes ignore it
-            # and answer 422, which still reached the handler's dependencies.
-            kwargs["data"] = FORM_BODY
+            # The JSON API reads a JSON body; sent as a form, every one of its
+            # writes answered 422 before its handler ran.
+            body_kind = "json" if path.startswith("/api/") else "data"
+            kwargs[body_kind] = FORM_BODY
         attempted.append((method, path))
         try:
             response = await client.request(method, url, **kwargs)
@@ -98,6 +134,13 @@ async def test_every_route_answers_without_blowing_up(smoke_world):
             continue
         if response.status_code >= 500:
             failures.append(f"{method} {path} -> {response.status_code}")
+        # The sweep rides an admin session: a bounce to the login page means
+        # the session is gone and the handler never ran.
+        if (
+            response.headers.get("location", "").startswith("/login")
+            and path not in SETUP_PATHS
+        ):
+            failures.append(f"{method} {path} -> {response.status_code} to /login")
 
     # Self-check: the sweep is only worth anything if it actually issued a
     # request for every route it enumerated.
@@ -135,3 +178,66 @@ async def test_setup_wizard_renders_on_an_empty_install(empty_install):
     response = await empty_install.get("/setup")
     assert response.status_code == 200, response.status_code
     assert b"password" in response.content.lower()
+
+
+NEW_PASSWORD = "RouteSmokeNew123!"
+
+
+async def _logs_in(client, password: str) -> bool:
+    """Whether the real login route issues a session for `password`."""
+    limiter.reset()
+    response = await client.post(
+        "/login", data={"username": "route-smoke-admin", "password": password}
+    )
+    return "luxswirl_session=" in response.headers.get("set-cookie", "")
+
+
+async def _signed_out(client, headers: dict[str, str]) -> bool:
+    response = await client.get("/dashboard", headers=headers)
+    return response.headers.get("location", "").startswith("/login")
+
+
+@pytest.mark.parametrize(
+    ("path", "body"),
+    [
+        (
+            "/change-password",
+            {"data": {"new_password": NEW_PASSWORD, "confirm_password": NEW_PASSWORD}},
+        ),
+        (
+            "/profile/change-password",
+            {"data": {"new_password": NEW_PASSWORD, "confirm_password": NEW_PASSWORD}},
+        ),
+        (
+            "/api/v1/auth/change-password",
+            {"json": {"new_password": NEW_PASSWORD}},
+        ),
+    ],
+)
+async def test_a_password_change_takes_and_ends_every_session(smoke_world, path, body):
+    """Each password-change route, on its own session: the sweep's admin
+    session ends with it, which inside the sweep logged out every route after."""
+    client = smoke_world["client"]
+    headers = smoke_world["web_headers"]
+    old_password = smoke_world["admin_password"]
+    for fields in body.values():
+        fields["current_password"] = old_password
+    limiter.reset()
+
+    response = await client.post(path, headers=headers, **body)
+
+    assert response.status_code < 400, (response.status_code, response.text[:300])
+    assert await _signed_out(client, headers)
+    assert not await _logs_in(client, old_password)
+    assert await _logs_in(client, NEW_PASSWORD)
+
+
+async def test_logout_all_ends_the_callers_sessions(smoke_world):
+    client = smoke_world["client"]
+    headers = smoke_world["web_headers"]
+
+    response = await client.post("/api/v1/auth/logout-all", headers=headers)
+
+    assert response.status_code == 200, response.text
+    assert response.json()["sessions_terminated"] >= 1
+    assert await _signed_out(client, headers)

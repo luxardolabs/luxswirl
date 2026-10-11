@@ -52,6 +52,7 @@ async def status_pages_list(
     return templates.TemplateResponse(request, "pages/status_pages.html", context)
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.get(
     "/status-pages/create-form",
     response_class=HTMLResponse,
@@ -71,6 +72,7 @@ async def create_form(
     )
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.get(
     "/status-pages/{status_page_id}/edit-form",
     response_class=HTMLResponse,
@@ -99,6 +101,7 @@ async def edit_form(
 # ---- create / update / delete --------------------------------------------
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post(
     "/status-pages/create", response_class=HTMLResponse, include_in_schema=False
 )
@@ -119,6 +122,7 @@ async def create_status_page(
     return hx_close_panel_and_refresh()
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post(
     "/status-pages/{status_page_id}/update",
     response_class=HTMLResponse,
@@ -142,6 +146,7 @@ async def update_status_page(
     return hx_close_panel_and_refresh()
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.delete(
     "/status-pages/{status_page_id}",
     response_class=HTMLResponse,
@@ -196,6 +201,7 @@ async def manage_status_page(
         return error_page(request, current_user, str(e), 404)
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.get(
     "/status-pages/{status_page_id}/available-checks",
     response_class=HTMLResponse,
@@ -229,6 +235,7 @@ async def get_available_checks(
     )
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post(
     "/status-pages/{status_page_id}/add-check",
     response_class=HTMLResponse,
@@ -255,6 +262,7 @@ async def add_check_to_dashboard(
     )
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.delete(
     "/status-pages/{status_page_id}/remove-item/{item_index}",
     response_class=HTMLResponse,
@@ -279,6 +287,7 @@ async def remove_item_from_dashboard(
     )
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post(
     "/status-pages/{status_page_id}/reorder",
     response_class=HTMLResponse,
@@ -298,6 +307,7 @@ async def reorder_dashboard_items(
     return templates.TemplateResponse(request, "partials/dashboard_items.html", context)
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post(
     "/status-pages/{status_page_id}/add-group",
     response_class=HTMLResponse,
@@ -325,6 +335,7 @@ async def add_group_to_dashboard(
     )
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.patch(
     "/status-pages/{status_page_id}/rename-group/{item_index}",
     response_class=HTMLResponse,
@@ -347,6 +358,7 @@ async def rename_group_in_dashboard(
     return templates.TemplateResponse(request, "partials/dashboard_items.html", context)
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.patch(
     "/status-pages/{status_page_id}/update-group-filters/{item_index}",
     response_class=HTMLResponse,
@@ -367,6 +379,7 @@ async def update_group_filters_in_dashboard(
     return templates.TemplateResponse(request, "partials/dashboard_items.html", context)
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.patch(
     "/status-pages/{status_page_id}/group/{item_index}/sort",
     response_class=HTMLResponse,
@@ -388,6 +401,7 @@ async def update_group_sort_in_dashboard(
     return templates.TemplateResponse(request, "partials/dashboard_items.html", context)
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.get(
     "/status-pages/{status_page_id}/dashboard-items",
     response_class=HTMLResponse,
@@ -446,6 +460,7 @@ async def view_public_status_page(
         )
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.get(
     "/status/{slug}/partial", response_class=HTMLResponse, include_in_schema=False
 )

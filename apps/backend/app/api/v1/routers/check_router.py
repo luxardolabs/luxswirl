@@ -201,6 +201,7 @@ async def clone_check(
     return await CheckApiCoreService.clone_check(db, agent_id, check_id, data)
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @management_router.post(
     "/bulk",
     response_model=BulkCheckCreateResponse,

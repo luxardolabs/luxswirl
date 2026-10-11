@@ -27,6 +27,7 @@ router = APIRouter(tags=["Web UI - Jobs"])
 # ---- Page / partials ----------------------------------------------------
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.get("/jobs", response_class=HTMLResponse, include_in_schema=False)
 async def jobs_page(
     request: Request,
@@ -62,6 +63,7 @@ async def jobs_page(
     return templates.TemplateResponse(request, "pages/jobs.html", context)
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.get(
     "/jobs/partials/table", response_class=HTMLResponse, include_in_schema=False
 )
@@ -93,6 +95,7 @@ async def jobs_table_partial(
     return templates.TemplateResponse(request, "partials/jobs_table.html", context)
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.get(
     "/jobs/{job_id}/detail", response_class=HTMLResponse, include_in_schema=False
 )
@@ -138,6 +141,7 @@ async def job_create_form(
 # ---- Mutations ----------------------------------------------------------
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post("/jobs/create", response_class=HTMLResponse, include_in_schema=False)
 async def create_job_web(
     request: Request,
@@ -164,6 +168,7 @@ async def delete_job_web(
     return hx_empty_with_toast("Job deleted successfully", kind="success")
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post("/jobs/{job_id}/cancel", include_in_schema=False)
 async def cancel_job_web(
     job_id: UUID,
@@ -180,6 +185,7 @@ async def cancel_job_web(
 # ---- Bulk-create-checks-from-job (separate concern → JobBulkCheckViewService) ---
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post(
     "/jobs/{job_id}/create-checks/bulk-ping",
     response_class=HTMLResponse,
@@ -199,6 +205,7 @@ async def bulk_create_ping_checks(
     return bulk_check_response(request, current_user, result, error, "ping check(s)")
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post(
     "/jobs/{job_id}/create-checks/bulk-web",
     response_class=HTMLResponse,
@@ -218,6 +225,7 @@ async def bulk_create_web_checks(
     return bulk_check_response(request, current_user, result, error, "HTTP check(s)")
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post(
     "/jobs/{job_id}/create-checks/bulk-ssh",
     response_class=HTMLResponse,
@@ -237,6 +245,7 @@ async def bulk_create_ssh_checks(
     return bulk_check_response(request, current_user, result, error, "SSH check(s)")
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post(
     "/jobs/{job_id}/create-checks/bulk-database",
     response_class=HTMLResponse,
@@ -258,6 +267,7 @@ async def bulk_create_database_checks(
     )
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post(
     "/jobs/{job_id}/quick-create-check",
     response_class=HTMLResponse,

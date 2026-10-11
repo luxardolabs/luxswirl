@@ -80,3 +80,22 @@ async def test_a_required_password_change_is_flagged_and_issues_no_session(
     assert resp.status_code == 200, resp.text
     assert resp.json()["must_change_password"] is True
     assert settings.security.session_cookie_name not in resp.cookies
+
+
+async def test_me_returns_the_signed_in_user(
+    client: AsyncClient, db: AsyncSession
+) -> None:
+    """/me validated the session's CurrentUserDTO, which carries no
+    updated_at, as a CurrentUserResponse: every signed-in caller got a 400."""
+    db.add(make_user(username="ops4"))
+    await db.flush()
+    login = await client.post(
+        "/api/v1/auth/login", json={"username": "ops4", "password": "TestPass123!"}
+    )
+    assert login.status_code == 200, login.text
+
+    resp = await client.get("/api/v1/auth/me")
+
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["username"] == "ops4"
+    assert resp.json()["updated_at"]

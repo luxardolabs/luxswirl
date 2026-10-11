@@ -23,6 +23,7 @@ logger = get_logger("luxswirl.web.registration_keys")
 router = APIRouter(tags=["Web UI - Registration Keys"], include_in_schema=False)
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.get("/registration-keys/create-form", response_class=HTMLResponse)
 async def create_key_form(
     request: Request,
@@ -36,6 +37,7 @@ async def create_key_form(
     )
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post("/registration-keys/create", response_class=HTMLResponse)
 async def create_key(
     request: Request,
@@ -55,6 +57,7 @@ async def create_key(
     )
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post("/registration-keys/{key_id}/revoke", response_class=HTMLResponse)
 async def revoke_key(
     request: Request,

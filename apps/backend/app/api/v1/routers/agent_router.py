@@ -58,6 +58,7 @@ _NOT_FOUND: dict[int | str, dict[str, Any]] = {
 }
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @agent_ops_router.post(
     "/agents/register",
     response_model=AgentRegisterResponse,
@@ -225,6 +226,7 @@ async def reject_agent(
     )
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post(
     "/{agent_name}/pause",
     response_model=AgentLifecycleResponse,
@@ -244,6 +246,7 @@ async def pause_agent(
     )
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post(
     "/{agent_name}/resume",
     response_model=AgentLifecycleResponse,
@@ -264,6 +267,7 @@ async def resume_agent(
     )
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post(
     "/{agent_name}/disable",
     response_model=AgentLifecycleResponse,
@@ -285,6 +289,7 @@ async def disable_agent(
     )
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post(
     "/{agent_name}/enable",
     response_model=AgentLifecycleResponse,
@@ -326,6 +331,7 @@ async def regenerate_agent_key_by_name(
     )
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.get(
     "/{agent_id}/stats",
     response_model=AgentStatsResponse,
@@ -392,6 +398,7 @@ async def recover_agent_key(
     )
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @agent_ops_router.get(
     "/agents/{agent_id}/api-key",
     summary="Get agent API key",
@@ -449,6 +456,7 @@ async def regenerate_agent_key(
     )
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.delete(
     "/{agent_id}/revoke-key",
     status_code=status.HTTP_204_NO_CONTENT,

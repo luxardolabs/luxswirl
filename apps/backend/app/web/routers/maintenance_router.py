@@ -25,6 +25,7 @@ logger = get_logger("luxswirl.web.routers.maintenance")
 router = APIRouter(tags=["Web UI - Maintenance"])
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.get(
     "/maintenance/{job_id}/status",
     response_class=HTMLResponse,

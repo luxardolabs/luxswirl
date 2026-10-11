@@ -25,6 +25,7 @@ router = APIRouter(tags=["Web UI - Settings"], include_in_schema=False)
 # ---- Pages --------------------------------------------------------------
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.get("/settings", response_class=HTMLResponse)
 async def settings_landing(
     request: Request,
@@ -36,6 +37,7 @@ async def settings_landing(
     return templates.TemplateResponse(request, "pages/settings/index.html", context)
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.get("/settings/notifications", response_class=HTMLResponse)
 async def settings_notifications(
     request: Request,
@@ -51,6 +53,7 @@ async def settings_notifications(
     )
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.get("/settings/alerts", response_class=HTMLResponse)
 async def settings_alerts(
     request: Request,
@@ -68,6 +71,7 @@ async def settings_alerts(
     return templates.TemplateResponse(request, "pages/settings/alerts.html", context)
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.get("/settings/registration-keys", response_class=HTMLResponse)
 async def settings_registration_keys(
     request: Request,
@@ -97,6 +101,7 @@ async def settings_components(
     )
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.get("/settings/logo-demo", response_class=HTMLResponse)
 async def settings_logo_demo(
     request: Request,
@@ -110,6 +115,7 @@ async def settings_logo_demo(
     )
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.get("/settings/defaults", response_class=HTMLResponse)
 async def settings_defaults(
     request: Request,
@@ -194,6 +200,7 @@ async def reset_setting(
 # ---- Metrics card mutations ---------------------------------------------
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post("/settings/metrics/generate-token", response_class=HTMLResponse)
 async def generate_metrics_token(
     request: Request,
@@ -204,6 +211,7 @@ async def generate_metrics_token(
     return await SettingsViewService.render_new_metrics_token(db, request, current_user)
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post("/settings/metrics/toggle-enabled", response_class=HTMLResponse)
 async def toggle_metrics_enabled(
     request: Request,
@@ -221,6 +229,7 @@ async def toggle_metrics_enabled(
     )
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post("/settings/metrics/toggle-auth", response_class=HTMLResponse)
 async def toggle_metrics_auth(
     request: Request,
@@ -238,6 +247,7 @@ async def toggle_metrics_auth(
     )
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post("/settings/metrics/update-timeout", response_class=HTMLResponse)
 async def update_metrics_timeout(
     request: Request,
@@ -247,11 +257,12 @@ async def update_metrics_timeout(
     """Update agent timeout threshold."""
     form_data = await request.form()
     timeout_str = str(form_data.get("timeout") or "")
-    metrics_settings, error = await SettingsViewService.update_metrics_timeout(
-        db, timeout_str
-    )
-    if error:
-        return error_partial(request, current_user, error)
+    try:
+        metrics_settings = await SettingsViewService.update_metrics_timeout(
+            db, timeout_str
+        )
+    except ValueError as e:
+        return error_partial(request, current_user, str(e))
     return templates.TemplateResponse(
         request,
         "partials/settings/metrics_card.html",

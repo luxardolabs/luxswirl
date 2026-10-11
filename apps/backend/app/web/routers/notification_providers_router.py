@@ -40,6 +40,7 @@ async def create_provider_form(
     )
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.get(
     "/notification-providers/{provider_id}/edit-form", response_class=HTMLResponse
 )
@@ -59,6 +60,7 @@ async def edit_provider_form(
     )
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post(
     "/notification-providers/create",
     response_class=HTMLResponse,
@@ -75,6 +77,7 @@ async def create_provider(
     return hx_close_panel_and_refresh()
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post(
     "/notification-providers/{provider_id}/update",
     response_class=HTMLResponse,
@@ -108,6 +111,7 @@ async def delete_provider(
     return hx_empty_with_toast("Notification provider deleted")
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post(
     "/notification-providers/{provider_id}/toggle", response_class=HTMLResponse
 )
@@ -124,6 +128,7 @@ async def toggle_provider(
     )
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post(
     "/notification-providers/{provider_id}/test",
     response_class=HTMLResponse,

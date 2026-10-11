@@ -24,6 +24,7 @@ logger = get_logger("luxswirl.web.routers.scheduler")
 router = APIRouter(tags=["Web UI - Scheduler"], include_in_schema=False)
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.get("/scheduler", response_class=HTMLResponse)
 async def scheduler_page(
     request: Request,
@@ -45,6 +46,7 @@ async def scheduler_page(
     )
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post("/scheduler/jobs/{job_key}/toggle", response_class=HTMLResponse)
 async def toggle_job(
     job_key: str,
@@ -76,6 +78,7 @@ async def toggle_job(
         return hx_empty_with_toast(str(e), kind="error", status_code=404)
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post("/scheduler/jobs/{job_key}/run", response_class=HTMLResponse)
 async def run_job(
     job_key: str,
@@ -87,7 +90,6 @@ async def run_job(
     """
     try:
         data = await SchedulerViewService.run_job(request, job_key)
-        result = data["result"]
         row = data["row"]
 
         response = templates.TemplateResponse(
@@ -99,17 +101,15 @@ async def run_job(
             {"current_user": current_user, "row": row},
         )
 
-        duration = result.get("duration_seconds", 0)
-        response.headers["HX-Trigger"] = hx_toast_trigger(
-            f"Job completed ({duration:.1f}s) - {result['status']}",
-            kind="success" if result["status"] == "success" else "warning",
-        )
+        message, kind = data["toast"]
+        response.headers["HX-Trigger"] = hx_toast_trigger(message, kind=kind)
         return response
 
     except ValueError as e:
         return hx_empty_with_toast(str(e), kind="error", status_code=404)
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post("/scheduler/jobs/{job_key}/reset", response_class=HTMLResponse)
 async def reset_job(
     job_key: str,
@@ -140,6 +140,7 @@ async def reset_job(
         return hx_empty_with_toast(str(e), kind="error", status_code=404)
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.get("/scheduler/jobs/{job_key}/history", response_class=HTMLResponse)
 async def job_history(
     job_key: str,

@@ -26,8 +26,8 @@ from app.models.job_model import Job
 from app.schemas.agent_schema import AgentOption
 from app.schemas.job_schema import (
     JobCreate,
+    JobDetail,
     JobDispatch,
-    JobInDB,
     JobListRow,
     JobResultSubmit,
     JobStatsResponse,
@@ -125,7 +125,7 @@ class JobCoreService:
         return await JobCRUD.get_by_id(db, job_id)
 
     @staticmethod
-    async def get_job_detail(db: AsyncSession, job_id: UUID) -> JobInDB | None:
+    async def get_job_detail(db: AsyncSession, job_id: UUID) -> JobDetail | None:
         """The job as the detail panel needs it — enriched, and a DTO.
 
         A network_scan result is enriched here rather than in the view: the
@@ -137,7 +137,7 @@ class JobCoreService:
         if job is None:
             return None
 
-        detail = JobInDB.model_validate(job)
+        detail = JobDetail.model_validate(job)
         if detail.job_type == JobType.NETWORK_SCAN and detail.result:
             detail.result = NetworkScanCoreService.enrich_result(detail.result)
         return detail
