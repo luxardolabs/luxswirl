@@ -261,6 +261,7 @@ class JobCRUD:
         total_result = await db.execute(total_query)
         total = total_result.scalar_one()
 
+        # unbounded-reads: GROUP BY status, an enum of 6 members (JobStatus): at most 6 rows
         status_result = await db.execute(
             select(Job.status, func.count(Job.id)).group_by(Job.status)
         )

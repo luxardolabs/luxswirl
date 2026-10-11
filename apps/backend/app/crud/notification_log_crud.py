@@ -223,5 +223,6 @@ class NotificationLogCRUD:
             NotificationLog.status,
             func.count(NotificationLog.id).label("count"),
         ).group_by(NotificationLog.status)
+        # unbounded-reads: GROUP BY status, an enum of 6 members (NotificationStatus): at most 6 rows
         result = await db.execute(query)
         return [tuple(row) for row in result.all()]
