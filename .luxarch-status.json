@@ -988,13 +988,13 @@
         },
         {
           "rule": "fw.no_orphan_pages",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.54.0",
-          "violations": 1,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
-          "fix": "Delete the orphan page, or add the route/include that renders it. If it IS reached (via a computed template name), this rule would already be inert \u2014 so a hit here means genuinely no static reference exists.",
+          "fix": "",
           "example": ""
         },
         {
@@ -1879,8 +1879,8 @@
         }
       ],
       "summary": {
-        "PASS": 149,
-        "FAIL": 2,
+        "PASS": 150,
+        "FAIL": 1,
         "XFAIL": 2,
         "XPASS": 0,
         "INERT": 17
@@ -2748,12 +2748,12 @@
     }
   },
   "summary": {
-    "PASS": 219,
-    "FAIL": 5,
+    "PASS": 220,
+    "FAIL": 4,
     "XFAIL": 2,
     "XPASS": 0,
     "INERT": 20
   },
-  "commit": "e2bf03c6596b45bc3656387924fe802f5854851f",
-  "generated_at": "2026-10-11T20:30:20Z"
+  "commit": "bf21295f7043a2f1c14d38c84d9ca5894b4cb3c7",
+  "generated_at": "2026-10-11T20:37:22Z"
 }
