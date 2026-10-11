@@ -11,7 +11,7 @@ from sqlalchemy import Integer, Row, and_, cast, desc, func, or_, select, text
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import defer, selectinload
 from sqlalchemy.sql import ColumnElement
 
 from app.core.datetime_utils import utc_now
@@ -806,6 +806,7 @@ class CheckResultCRUD:
         window = timedelta(days=1)
         query = (
             select(CheckArtifact)
+            .options(defer(CheckArtifact.data, raiseload=True))
             .where(
                 and_(
                     CheckArtifact.check_result_id == check_result_id,

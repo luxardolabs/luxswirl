@@ -17,16 +17,17 @@ from app.core.datetime_utils import utc_now
 from app.core.exceptions import AgentNotFoundException
 from app.core.ssl_expiry import ssl_expiry_fields
 from app.crud.check_result_crud import AggregateRow, CheckResultCRUD
-from app.models.agent_model import Agent
-from app.models.check_artifact_model import CheckArtifact
-from app.models.check_model import Check
 from app.models.check_result_model import CheckResult
+from app.schemas.agent_schema import AgentOption
+from app.schemas.check_artifact_schema import CheckArtifactResponse
 from app.schemas.check_result_schema import (
     AgentReportRequest,
     CheckSummary,
     GlobalStatsResponse,
+    RecentCheckResult,
     StatusBarResult,
 )
+from app.schemas.check_schema import CheckStatusInfo
 from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.alert_core_service import AlertCoreService
 from app.services.core.check_core_service import CheckCoreService
@@ -471,9 +472,9 @@ class CheckResultCoreService:
         *,
         skip: int = 0,
         limit: int = 1000,
-    ) -> tuple[Sequence[Row[Check, Agent]], int]:
-        """Get filtered checks with agents. Delegates to CRUD."""
-        return await CheckResultCRUD.get_checks_with_agents_filtered(
+    ) -> tuple[list[tuple[CheckStatusInfo, AgentOption]], int]:
+        """Filtered checks, each with its agent, and the total that match."""
+        rows, total = await CheckResultCRUD.get_checks_with_agents_filtered(
             db,
             agent_id=agent_id,
             check_type=check_type,
@@ -484,6 +485,10 @@ class CheckResultCoreService:
             skip=skip,
             limit=limit,
         )
+        return [
+            (CheckStatusInfo.model_validate(check), AgentOption.model_validate(agent))
+            for check, agent in rows
+        ], total
 
     @staticmethod
     async def get_latest_results_batch(
@@ -509,9 +514,14 @@ class CheckResultCoreService:
         db: AsyncSession,
         check_ids: list[UUID],
         minutes: int = 15,
-    ) -> list[CheckResult]:
-        """Get results for minute bars. Delegates to CRUD."""
-        return await CheckResultCRUD.get_minute_bars_results(db, check_ids, minutes)
+    ) -> list[StatusBarResult]:
+        """Results for the minute bars: what a bar reads, per result."""
+        return [
+            StatusBarResult.model_validate(result)
+            for result in await CheckResultCRUD.get_minute_bars_results(
+                db, check_ids, minutes
+            )
+        ]
 
     @staticmethod
     async def get_status_summary_data(
@@ -524,9 +534,13 @@ class CheckResultCoreService:
     async def get_check_with_agent(
         db: AsyncSession,
         check_id: UUID,
-    ) -> Row[Check, Agent] | None:
-        """Get check with agent. Delegates to CRUD."""
-        return await CheckResultCRUD.get_check_with_agent(db, check_id)
+    ) -> tuple[CheckStatusInfo, AgentOption] | None:
+        """The check and its agent, or None if there is no such check."""
+        row = await CheckResultCRUD.get_check_with_agent(db, check_id)
+        if row is None:
+            return None
+        check, agent = row
+        return CheckStatusInfo.model_validate(check), AgentOption.model_validate(agent)
 
     @staticmethod
     async def get_bucketed_history(
@@ -542,11 +556,14 @@ class CheckResultCoreService:
         db: AsyncSession,
         check_id: UUID,
         minutes: int = 30,
-    ) -> list[CheckResult]:
-        """Get raw results for status bar. Delegates to CRUD."""
-        return await CheckResultCRUD.get_raw_results_for_status_bar(
-            db, check_id, minutes
-        )
+    ) -> list[RecentCheckResult]:
+        """The check's results over the last `minutes`, for its status bar."""
+        return [
+            RecentCheckResult.model_validate(result)
+            for result in await CheckResultCRUD.get_raw_results_for_status_bar(
+                db, check_id, minutes
+            )
+        ]
 
     @staticmethod
     async def get_check_detail_stats(
@@ -561,20 +578,24 @@ class CheckResultCoreService:
     async def get_latest_result_for_check(
         db: AsyncSession,
         check_id: UUID,
-    ) -> CheckResult | None:
-        """Get latest result for a check. Delegates to CRUD."""
-        return await CheckResultCRUD.get_latest_result_for_check(db, check_id)
+    ) -> RecentCheckResult | None:
+        """The check's most recent result, or None if it has none."""
+        result = await CheckResultCRUD.get_latest_result_for_check(db, check_id)
+        return None if result is None else RecentCheckResult.model_validate(result)
 
     @staticmethod
     async def get_artifacts_for_result(
         db: AsyncSession,
         check_result_id: UUID,
         check_result_timestamp: datetime,
-    ) -> list[CheckArtifact]:
-        """Get artifacts for a check result. Delegates to CRUD."""
-        return await CheckResultCRUD.get_artifacts_for_result(
-            db, check_result_id, check_result_timestamp
-        )
+    ) -> list[CheckArtifactResponse]:
+        """The artifacts one check execution produced, metadata only."""
+        return [
+            CheckArtifactResponse.model_validate(artifact)
+            for artifact in await CheckResultCRUD.get_artifacts_for_result(
+                db, check_result_id, check_result_timestamp
+            )
+        ]
 
     @staticmethod
     async def get_check_result_by_id(
