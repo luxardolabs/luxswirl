@@ -885,7 +885,7 @@ class CheckCoreService:
             "Bulk toggle complete",
             extra={"enabled": enabled, "success_count": success_count},
         )
-        return {"success_count": success_count, "failure_count": 0, "errors": []}
+        return CheckCoreService._bulk_outcome(check_ids, success_count)
 
     @staticmethod
     async def bulk_delete(db: AsyncSession, check_ids: list[UUID]) -> dict[str, Any]:
@@ -915,7 +915,18 @@ class CheckCoreService:
             "Bulk deleted checks",
             extra={"success_count": success_count, "affected_agent_count": affected},
         )
-        return {"success_count": success_count, "failure_count": 0, "errors": []}
+        return CheckCoreService._bulk_outcome(check_ids, success_count)
+
+    @staticmethod
+    def _bulk_outcome(check_ids: list[UUID], success_count: int) -> dict[str, Any]:
+        """A bulk result whose counts add up to the checks asked for: an id the
+        statement did not touch (no such check) is a failure, not a silence."""
+        missing = len(set(check_ids)) - success_count
+        return {
+            "success_count": success_count,
+            "failure_count": missing,
+            "errors": [f"{missing} check(s) not found"] if missing else [],
+        }
 
     @staticmethod
     async def bulk_modify(

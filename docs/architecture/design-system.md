@@ -299,7 +299,7 @@ ______________________________________________________________________
 - Icon support via inline flex
 - Size variants for different contexts
 
-**Reference Implementation:** `app/web/static/css/input.css`
+**Reference Implementation:** `apps/backend/app/static/css/input.css`
 
 ______________________________________________________________________
 
@@ -330,7 +330,7 @@ ______________________________________________________________________
 }
 ```
 
-**Reference Implementation:** `app/web/static/css/input.css`
+**Reference Implementation:** `apps/backend/app/static/css/input.css`
 
 ______________________________________________________________________
 
@@ -379,7 +379,7 @@ ______________________________________________________________________
 - CSS handles all styling automatically
 - Only add width/alignment classes when needed (e.g., `class="w-12"`)
 
-**Reference Implementation:** `app/web/static/css/input.css`
+**Reference Implementation:** `apps/backend/app/static/css/input.css`
 
 ______________________________________________________________________
 
@@ -426,7 +426,7 @@ ______________________________________________________________________
 - Use side panels, NOT browser modals/dialogs
 - No `confirm()` or `alert()` - use HTMX responses or double-click pattern instead
 
-**Reference Implementation:** `app/web/static/css/input.css`
+**Reference Implementation:** `apps/backend/app/static/css/input.css`
 
 ______________________________________________________________________
 

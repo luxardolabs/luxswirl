@@ -421,53 +421,57 @@ class SchedulerCoreService:
                 status="running",
             )
 
+            # The run and its success bookkeeping share a savepoint: if either
+            # fails (the job, or flushing its output), only they roll back, and
+            # the failure below is still recorded in a live transaction.
             try:
-                function_name = job.function_name
+                async with db.begin_nested():
+                    function_name = job.function_name
 
-                if function_name in self.job_functions:
-                    func = self.job_functions[function_name]
-                    result = await asyncio.wait_for(
-                        func(**(job.parameters or {})),
-                        timeout=job.max_runtime_seconds,
+                    if function_name in self.job_functions:
+                        func = self.job_functions[function_name]
+                        result = await asyncio.wait_for(
+                            func(**(job.parameters or {})),
+                            timeout=job.max_runtime_seconds,
+                        )
+                    else:
+                        raise LookupError(f"Function '{function_name}' not found")
+
+                    # Success
+                    execution.completed_at = datetime.now(UTC)
+                    execution.duration_seconds = (
+                        execution.completed_at - execution.started_at
+                    ).total_seconds()
+                    execution.output = result
+
+                    errors = result.get("errors") if isinstance(result, dict) else None
+                    has_errors = False
+                    if errors is not None:
+                        has_errors = (
+                            len(errors) > 0 if isinstance(errors, list) else errors > 0
+                        )
+                    final_status = (
+                        SchedulerExecutionStatus.WARNING
+                        if has_errors
+                        else SchedulerExecutionStatus.SUCCESS
                     )
-                else:
-                    raise LookupError(f"Function '{function_name}' not found")
+                    execution.status = final_status
 
-                # Success
-                execution.completed_at = datetime.now(UTC)
-                execution.duration_seconds = (
-                    execution.completed_at - execution.started_at
-                ).total_seconds()
-                execution.output = result
+                    # Update job stats
+                    job.last_run_at = datetime.now(UTC)
+                    job.last_status = final_status
+                    job.total_runs += 1
+                    job.retry_count = 0
+                    job.next_run_at = self._calculate_next_run(job)
 
-                errors = result.get("errors") if isinstance(result, dict) else None
-                has_errors = False
-                if errors is not None:
-                    has_errors = (
-                        len(errors) > 0 if isinstance(errors, list) else errors > 0
+                    await db.flush()
+                    await db.refresh(job)
+                    return SchedulerRunResult(
+                        status=final_status,
+                        execution_id=execution.id,
+                        duration_seconds=execution.duration_seconds,
+                        job=SchedulerJobResponse.model_validate(job),
                     )
-                final_status = (
-                    SchedulerExecutionStatus.WARNING
-                    if has_errors
-                    else SchedulerExecutionStatus.SUCCESS
-                )
-                execution.status = final_status
-
-                # Update job stats
-                job.last_run_at = datetime.now(UTC)
-                job.last_status = final_status
-                job.total_runs += 1
-                job.retry_count = 0
-                job.next_run_at = self._calculate_next_run(job)
-
-                await db.flush()
-                await db.refresh(job)
-                return SchedulerRunResult(
-                    status=final_status,
-                    execution_id=execution.id,
-                    duration_seconds=execution.duration_seconds,
-                    job=SchedulerJobResponse.model_validate(job),
-                )
 
             except TimeoutError:
                 error = f"Job timed out after {job.max_runtime_seconds} seconds"
@@ -477,7 +481,9 @@ class SchedulerCoreService:
             # A failed manual run is RETURNED, not raised: raising rolled back
             # the worker session, so the FAILED execution record and the failed
             # count vanished and the Run button answered a 500 instead of an
-            # error toast.
+            # error toast. The savepoint's rollback expired both rows.
+            await db.refresh(execution)
+            await db.refresh(job)
             execution.status = SchedulerExecutionStatus.FAILED
             execution.error_message = error
             execution.completed_at = datetime.now(UTC)
