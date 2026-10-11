@@ -14,6 +14,7 @@ class HealthResponse(BaseSchema):
 
     status: Literal["healthy"] = Field(..., description="Always `healthy` when served")
     version: str = Field(..., description="The running build's VERSION")
+    commit: str = Field(..., description="The commit the running build was made from")
     environment: Environment = Field(..., description="Deployment environment")
 
 

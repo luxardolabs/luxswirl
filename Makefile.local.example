@@ -11,3 +11,10 @@
 # `make lint`) are simply skipped with a notice.
 #
 # LUXARCH_REGISTRY := your.registry.example:5000
+
+# `make smoke` (run by `make dev-deploy`) probes the deployed dev stack from
+# outside. Point it at the address the dev stack answers on, and export
+# SMOKE_AUTH_TOKEN (one of the stack's SECURITY__AUTH_TOKENS) in your shell for
+# the authenticated probe.
+#
+# SMOKE_URL := https://luxswirl.dev.example

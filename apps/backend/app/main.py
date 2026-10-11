@@ -372,6 +372,7 @@ async def health_check() -> HealthResponse:
     return HealthResponse(
         status="healthy",
         version=settings.app_version,
+        commit=settings.build_commit,
         environment=settings.server.environment,
     )
 
