@@ -30,7 +30,9 @@ async def database_health_page(
     context = await DatabaseHealthViewService.build_health_page_context(
         db, request, current_user
     )
-    return templates.TemplateResponse(request, "pages/database_health.html", context)
+    return templates.TemplateResponse(
+        request, "pages/settings/database_health.html", context
+    )
 
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
@@ -44,4 +46,6 @@ async def database_health_refresh(
     context = await DatabaseHealthViewService.build_health_refresh_context(
         db, request, current_user
     )
-    return templates.TemplateResponse(request, "partials/database_health.html", context)
+    return templates.TemplateResponse(
+        request, "partials/settings/database_health.html", context
+    )

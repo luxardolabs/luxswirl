@@ -19,7 +19,7 @@ from app.db import get_db
 from app.services.views.web_users_view_service import WebUsersViewService
 from app.web.deps import AdminUserWeb
 from app.web.hx_responses import hx_empty_with_toast, hx_toast_without_swap
-from app.web.render import error_partial
+from app.web.render import settings_error_partial
 from app.web.templates import templates
 
 logger = get_logger("luxswirl.web.routers.users")
@@ -130,7 +130,7 @@ async def create_user_submit(
     )
 
     if error:
-        return error_partial(request, admin, error)
+        return settings_error_partial(request, admin, error)
 
     assert new_user is not None
     logger.info(
@@ -175,7 +175,9 @@ async def edit_user_form(
         )
 
         if context is None:
-            return error_partial(request, admin, "User not found", status_code=404)
+            return settings_error_partial(
+                request, admin, "User not found", status_code=404
+            )
 
         return templates.TemplateResponse(
             request,
@@ -184,7 +186,9 @@ async def edit_user_form(
         )
 
     except ValueError:
-        return error_partial(request, admin, "Invalid user ID", status_code=400)
+        return settings_error_partial(
+            request, admin, "Invalid user ID", status_code=400
+        )
 
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
@@ -217,7 +221,7 @@ async def update_user_submit(
     )
 
     if error:
-        return error_partial(request, admin, error)
+        return settings_error_partial(request, admin, error)
 
     assert updated_user is not None
     logger.info(

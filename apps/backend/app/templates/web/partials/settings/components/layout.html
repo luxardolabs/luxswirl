@@ -1,4 +1,4 @@
-{% from 'macros/cards.html' import stat_card %}
+{% from 'macros/cards.html' import stat_card, error_card %}
 {% from 'macros/badges.html' import check_type_badge, role_badge %}
 {% from 'macros/buttons.html' import icon_view, icon_edit, icon_delete, dashed_add_btn, text_btn, btn_save %}
 {% from 'macros/form_fields.html' import checkbox, input, select, textarea, render_field_from_schema %}
@@ -32,6 +32,11 @@
                 {{ stat_card("Warning", "3", icon=icon_alert, color="yellow") }}
                 {{ stat_card("Down", "1", icon=icon_down, color="red") }}
             </div>
+        </div>
+
+        <div>
+            <h3 class="text-sm font-medium text-dark-text-secondary mb-3">error_card(error)</h3>
+            {{ error_card("Check 'web-01' could not be saved: the target is not a valid URL.") }}
         </div>
 
         <div>

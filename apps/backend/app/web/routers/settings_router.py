@@ -14,7 +14,7 @@ from app.db import get_db
 from app.services.views.settings_view_service import SettingsViewService
 from app.web.deps import AdminUserWeb
 from app.web.hx_responses import hx_empty_with_toast, hx_toast_trigger
-from app.web.render import error_partial
+from app.web.render import settings_error_partial
 from app.web.templates import templates
 
 logger = get_logger("luxswirl.web.settings")
@@ -110,7 +110,7 @@ async def settings_logo_demo(
     """Logo animation design playground (admin-only, no DB)."""
     return templates.TemplateResponse(
         request,
-        "pages/logo-demo.html",
+        "pages/settings/logo-demo.html",
         {"request": request, "current_user": current_user},
     )
 
@@ -262,7 +262,7 @@ async def update_metrics_timeout(
             db, timeout_str
         )
     except ValueError as e:
-        return error_partial(request, current_user, str(e))
+        return settings_error_partial(request, current_user, str(e))
     return templates.TemplateResponse(
         request,
         "partials/settings/metrics_card.html",

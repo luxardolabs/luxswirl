@@ -39,7 +39,7 @@ async def import_export_form(
     try:
         return templates.TemplateResponse(
             request,
-            "partials/import_export_panel.html",
+            "partials/settings/import_export_panel.html",
             await ImportExportViewService.build_panel_context(
                 db, request, current_user, agent_id
             ),
@@ -48,7 +48,7 @@ async def import_export_form(
     except AgentNotFoundException:
         return templates.TemplateResponse(
             request,
-            "partials/error_message.html",
+            "partials/settings/error_message.html",
             {
                 "current_user": current_user,
                 "error": f"Agent '{agent_id}' not found",
