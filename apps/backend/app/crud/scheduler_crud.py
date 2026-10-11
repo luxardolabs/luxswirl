@@ -132,6 +132,7 @@ class JobConfigurationCRUD:
     @staticmethod
     async def get_all_ordered(db: AsyncSession) -> list[JobConfiguration]:
         """Get all jobs ordered by display_name."""
+        # unbounded-reads: the seeded scheduler-job catalogue, all rendered on its page
         result = await db.execute(
             select(JobConfiguration).order_by(JobConfiguration.display_name)
         )

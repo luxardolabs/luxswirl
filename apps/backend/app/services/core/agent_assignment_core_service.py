@@ -166,8 +166,7 @@ class AgentAssignmentCoreService:
         """
         checks_to_run = []
 
-        # Get all checks
-        all_checks = await CheckCRUD.list_all(db)
+        all_checks = await CheckCRUD.list_assignment_candidates(db, agent.id)
 
         # Distribute-mode checks each need the set of agents matching their
         # selector. That set is the same table read every time — filtering is

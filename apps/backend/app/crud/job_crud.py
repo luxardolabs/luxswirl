@@ -166,6 +166,7 @@ class JobCRUD:
             List of job type strings
         """
         query = select(Job.job_type).distinct().order_by(Job.job_type)
+        # unbounded-reads: DISTINCT over the job-type catalogue: one row per type
         result = await db.execute(query)
         return [row[0] for row in result.all()]
 

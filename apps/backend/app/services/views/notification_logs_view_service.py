@@ -3,12 +3,16 @@ Notification Logs Service - web-specific business logic for notification logs pa
 """
 
 from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID
 
+from fastapi import Request
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.enum_model import NotificationStatus
+from app.models.enum_model import CheckType, NotificationStatus
+from app.schemas.auth_schema import CurrentUserDTO
+from app.schemas.notification_log_schema import NotificationLogEntry
 from app.schemas.pagination_schema import build_pagination
 from app.services.core.notification_log_core_service import NotificationLogCoreService
 from app.services.core.settings_core_service import SettingsCoreService
@@ -27,10 +31,10 @@ class NotificationLogRow:
         alert_id: UUID,
         snoozed_until: datetime | None,
         provider_name: str,
-        check_name: str,
-        check_type: str,
-        check_target: str,
-        status: str,
+        check_name: str | None,
+        check_type: CheckType | None,
+        check_target: str | None,
+        status: NotificationStatus,
         error_message: str | None,
         check_success: bool,
         check_latency_ms: float | None,
@@ -101,6 +105,26 @@ class NotificationLogRow:
         return f"{hours}h {minutes}m"
 
 
+def _log_row(entry: NotificationLogEntry) -> NotificationLogRow:
+    """A log entry as its table row; a log with no check result reads as failed."""
+    return NotificationLogRow(
+        log_id=entry.id,
+        sent_at=entry.sent_at,
+        alert_name=entry.alert_name,
+        alert_id=entry.alert_id,
+        snoozed_until=entry.snoozed_until,
+        provider_name=entry.provider_name,
+        check_name=entry.display_name,
+        check_type=entry.check_type,
+        check_target=entry.target,
+        status=entry.status,
+        error_message=entry.error_message,
+        check_success=entry.success if entry.success is not None else False,
+        check_latency_ms=entry.latency_ms,
+        check_id=entry.check_id,
+    )
+
+
 class NotificationLogsViewService:
     """Service for notification logs page."""
 
@@ -140,25 +164,7 @@ class NotificationLogsViewService:
         )
 
         # Convert to view models
-        log_rows = [
-            NotificationLogRow(
-                log_id=row.id,
-                sent_at=row.sent_at,
-                alert_name=row.alert_name,
-                alert_id=row.alert_id,
-                snoozed_until=row.snoozed_until,
-                provider_name=row.provider_name,
-                check_name=row.display_name,
-                check_type=row.check_type,
-                check_target=row.target,
-                status=row.status,
-                error_message=row.error_message,
-                check_success=row.success if row.success is not None else False,
-                check_latency_ms=row.latency_ms,
-                check_id=row.check_id,
-            )
-            for row in rows
-        ]
+        log_rows = [_log_row(entry) for entry in rows]
 
         return log_rows, total
 
@@ -170,36 +176,21 @@ class NotificationLogsViewService:
         row = await NotificationLogCoreService.get_log_by_id(db, log_id)
         if row is None:
             return None
-        return NotificationLogRow(
-            log_id=row.id,
-            sent_at=row.sent_at,
-            alert_name=row.alert_name,
-            alert_id=row.alert_id,
-            snoozed_until=row.snoozed_until,
-            provider_name=row.provider_name,
-            check_name=row.display_name,
-            check_type=row.check_type,
-            check_target=row.target,
-            status=row.status,
-            error_message=row.error_message,
-            check_success=row.success if row.success is not None else False,
-            check_latency_ms=row.latency_ms,
-            check_id=row.check_id,
-        )
+        return _log_row(row)
 
     @staticmethod
     async def build_logs_page_context(
-        db,
+        db: AsyncSession,
         *,
-        request,
-        current_user,
+        request: Request,
+        current_user: CurrentUserDTO,
         status: NotificationStatus | None,
         alert_id: UUID | None,
         notification_provider_id: UUID | None,
         search: str | None,
         page: int,
         per_page: int | None,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Build the full template context for /notification-logs."""
         if per_page is None:
             per_page = await SettingsCoreService.get_setting(

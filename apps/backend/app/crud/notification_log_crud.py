@@ -2,10 +2,11 @@
 NotificationLog CRUD - database queries for notification log operations.
 """
 
+from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import and_, delete, func, or_, select
+from sqlalchemy import Row, Select, and_, delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.alert_check_mapping_model import AlertCheckMapping
@@ -14,13 +15,19 @@ from app.models.check_model import Check
 from app.models.notification_log_model import NotificationLog
 from app.models.notification_provider_model import NotificationProvider
 
+# The table-row select spans 14 columns; SQLAlchemy types only the first ten,
+# and cannot know the outer-joined check columns may be NULL. Rows are
+# validated into NotificationLogEntry in core, which carries the real types.
+LogRowSelect = Select[*tuple[Any, ...]]
+LogRow = Row[*tuple[Any, ...]]
+
 
 class NotificationLogCRUD:
     """Database queries for notification logs."""
 
     @staticmethod
     async def count_for_provider_since(
-        db: AsyncSession, provider_id, since, statuses: list[str]
+        db: AsyncSession, provider_id: UUID, since: datetime, statuses: list[str]
     ) -> int:
         """Count notification logs for a provider sent since a timestamp with given statuses."""
         result = await db.execute(
@@ -37,15 +44,17 @@ class NotificationLogCRUD:
         return result.scalar() or 0
 
     @staticmethod
-    async def delete_older_than(db: AsyncSession, cutoff) -> int:
-        """Delete notification log records older than cutoff. Returns rowcount."""
+    async def delete_older_than(db: AsyncSession, cutoff: datetime) -> int:
+        """Delete notification log records older than cutoff; the number deleted."""
         result = await db.execute(
-            delete(NotificationLog).where(NotificationLog.sent_at < cutoff)
+            delete(NotificationLog)
+            .where(NotificationLog.sent_at < cutoff)
+            .returning(NotificationLog.id)
         )
-        return result.rowcount or 0  # type: ignore[attr-defined]
+        return len(result.all())
 
     @staticmethod
-    def _log_rows_query():
+    def _log_rows_query() -> LogRowSelect:
         """SELECT + joins for a notification-log table row.
 
         Uses the ORM (typed columns) so EncryptedString fields like
@@ -87,7 +96,7 @@ class NotificationLogCRUD:
         )
 
     @staticmethod
-    def _count_query():
+    def _count_query() -> Select[int]:
         """Row count over the same joins (search filters reference joined tables)."""
         return (
             select(func.count())
@@ -117,7 +126,7 @@ class NotificationLogCRUD:
         search: str | None = None,
         limit: int = 25,
         skip: int = 0,
-    ) -> tuple[list, int]:
+    ) -> tuple[list[LogRow], int]:
         """
         Get paginated notification logs with filters and joins.
 
@@ -160,7 +169,7 @@ class NotificationLogCRUD:
         return list(result.all()), total
 
     @staticmethod
-    async def get_log_by_id(db: AsyncSession, log_id: UUID) -> Any | None:
+    async def get_log_by_id(db: AsyncSession, log_id: UUID) -> LogRow | None:
         """
         Fetch a single notification log row by id, with the same shape as
         `get_logs_paginated` so the page partial can re-render it after a
@@ -182,6 +191,7 @@ class NotificationLogCRUD:
             List of Row(id, name) objects
         """
         query = select(Alert.id, Alert.name).order_by(Alert.name)
+        # unbounded-reads: operator-defined alert rules, listed whole in a filter dropdown
         result = await db.execute(query)
         return [tuple(row) for row in result.all()]
 
@@ -194,8 +204,10 @@ class NotificationLogCRUD:
             List of Row(id, friendly_name) objects
         """
         query = select(
-            NotificationProvider.id, NotificationProvider.friendly_name
+            NotificationProvider.id,
+            NotificationProvider.friendly_name,
         ).order_by(NotificationProvider.friendly_name)
+        # unbounded-reads: operator-defined providers, listed whole in a filter dropdown
         result = await db.execute(query)
         return [tuple(row) for row in result.all()]
 

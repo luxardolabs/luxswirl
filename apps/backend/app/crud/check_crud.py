@@ -6,7 +6,7 @@ from collections.abc import Sequence
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import String, cast, delete, func, or_, select, update
+from sqlalchemy import String, and_, cast, delete, func, or_, select, update
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload, undefer
@@ -14,6 +14,7 @@ from sqlalchemy.orm import selectinload, undefer
 from app.core.datetime_utils import utc_now
 from app.models.agent_model import Agent
 from app.models.check_model import Check
+from app.models.enum_model import AssignmentMode
 
 
 class CheckCRUD:
@@ -109,25 +110,89 @@ class CheckCRUD:
 
     @staticmethod
     async def bulk_delete_by_ids(db: AsyncSession, check_ids: list[UUID]) -> int:
-        """Delete checks in bulk. Returns rowcount."""
+        """Delete checks in bulk; the number deleted."""
         if not check_ids:
             return 0
-        result = await db.execute(delete(Check).where(Check.id.in_(check_ids)))
-        return result.rowcount or 0  # type: ignore[attr-defined]
+        result = await db.execute(
+            delete(Check).where(Check.id.in_(check_ids)).returning(Check.id)
+        )
+        return len(result.all())
 
     @staticmethod
     async def bulk_set_enabled(
         db: AsyncSession, check_ids: list[UUID], enabled: bool
     ) -> int:
-        """Bulk update enabled flag. Returns rowcount."""
+        """Bulk update enabled flag; the number of checks updated."""
         if not check_ids:
             return 0
         result = await db.execute(
             update(Check)
             .where(Check.id.in_(check_ids))
             .values(enabled=enabled, updated_at=utc_now())
+            .returning(Check.id)
         )
-        return result.rowcount or 0  # type: ignore[attr-defined]
+        return len(result.all())
+
+    @staticmethod
+    async def list_assignment_candidates(
+        db: AsyncSession, agent_id: UUID
+    ) -> list[Check]:
+        """The checks that could run on `agent_id`: its own manual checks, and
+        every replicate/distribute check (their selectors are matched in core).
+
+        Another agent's manual check can never be assigned here, so it is not
+        read: this runs on every agent's check sync.
+        """
+        result = await db.execute(
+            select(Check).where(
+                or_(
+                    and_(
+                        Check.assignment_mode == AssignmentMode.MANUAL,
+                        Check.agent_id == agent_id,
+                    ),
+                    Check.assignment_mode.in_(
+                        [AssignmentMode.REPLICATE, AssignmentMode.DISTRIBUTE]
+                    ),
+                )
+            )
+        )
+        return list(result.scalars().all())
+
+    @staticmethod
+    async def list_without_parent(
+        db: AsyncSession, exclude_check_id: UUID | None = None
+    ) -> list[Check]:
+        """Checks that do not depend on another, optionally excluding one."""
+        query = select(Check).where(Check.depends_on_check_id.is_(None))
+        if exclude_check_id is not None:
+            query = query.where(Check.id != exclude_check_id)
+        result = await db.execute(query)
+        return list(result.scalars().all())
+
+    @staticmethod
+    async def list_non_parents(db: AsyncSession, exclude_check_id: UUID) -> list[Check]:
+        """Checks no other check depends on, excluding `exclude_check_id`."""
+        parents = (
+            select(Check.depends_on_check_id)
+            .where(Check.depends_on_check_id.is_not(None))
+            .scalar_subquery()
+        )
+        result = await db.execute(
+            select(Check).where(Check.id != exclude_check_id, Check.id.not_in(parents))
+        )
+        return list(result.scalars().all())
+
+    @staticmethod
+    async def parents_among(db: AsyncSession, check_ids: Sequence[UUID]) -> set[UUID]:
+        """Which of `check_ids` some other check depends on."""
+        if not check_ids:
+            return set()
+        result = await db.execute(
+            select(Check.depends_on_check_id)
+            .where(Check.depends_on_check_id.in_(check_ids))
+            .distinct()
+        )
+        return {parent_id for parent_id in result.scalars() if parent_id is not None}
 
     @staticmethod
     async def list_all(db: AsyncSession) -> list[Check]:
@@ -226,6 +291,7 @@ class CheckCRUD:
             Sorted list of unique check type strings
         """
         query = select(Check.check_type).distinct().order_by(Check.check_type)
+        # unbounded-reads: DISTINCT over the check-type catalogue: one row per type
         result = await db.execute(query)
         return [row[0] for row in result.all()]
 
