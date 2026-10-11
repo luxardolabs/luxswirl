@@ -1236,20 +1236,12 @@ class AgentCoreService:
 
     @staticmethod
     async def get_agent_metrics(
-        db: AsyncSession, agent_id: UUID, cutoff_time: datetime
-    ) -> list[AgentMetricSample]:
-        """
-        Get agent metrics since a cutoff time, ordered ascending.
-
-        Args:
-            db: Database session
-            agent_id: Agent UUID
-            cutoff_time: Only return metrics after this time
-
-        Returns:
-            List of AgentMetric objects ordered by timestamp ascending
-        """
-        return [
-            AgentMetricSample.model_validate(row)
-            for row in await AgentCRUD.get_agent_metrics(db, agent_id, cutoff_time)
-        ]
+        db: AsyncSession, agent_ids: Sequence[UUID], cutoff_time: datetime
+    ) -> dict[UUID, list[AgentMetricSample]]:
+        """Each listed agent's metrics since cutoff, oldest first; one query."""
+        by_agent: dict[UUID, list[AgentMetricSample]] = {
+            agent_id: [] for agent_id in agent_ids
+        }
+        for row in await AgentCRUD.get_agent_metrics(db, agent_ids, cutoff_time):
+            by_agent[row.agent_id].append(AgentMetricSample.model_validate(row))
+        return by_agent

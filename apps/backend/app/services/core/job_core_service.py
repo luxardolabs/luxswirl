@@ -210,6 +210,7 @@ class JobCoreService:
 
             logger.info(
                 "Dispatched jobs to agent",
+                # post-db-filter: log field: every job listed was just assigned
                 extra={"job_count": len(jobs), "agent_id": str(agent_id)},
             )
 

@@ -17,9 +17,11 @@ class SessionCRUD:
 
     @staticmethod
     async def delete_expired_before(db: AsyncSession, cutoff: datetime) -> int:
-        """Delete sessions with expires_at older than cutoff. Returns rowcount."""
-        result = await db.execute(delete(Session).where(Session.expires_at < cutoff))
-        return result.rowcount or 0  # type: ignore[attr-defined]
+        """Delete sessions with expires_at older than cutoff; the number deleted."""
+        result = await db.execute(
+            delete(Session).where(Session.expires_at < cutoff).returning(Session.id)
+        )
+        return len(result.all())
 
     @staticmethod
     async def get_by_token_hash(db: AsyncSession, token_hash: str) -> Session | None:
@@ -51,9 +53,20 @@ class SessionCRUD:
         return result.scalar_one_or_none()
 
     @staticmethod
-    async def list_expired(db: AsyncSession) -> list[Session]:
-        """All sessions with expires_at <= now."""
+    async def delete_expired(db: AsyncSession) -> int:
+        """Delete every session with expires_at <= now; the number deleted."""
         result = await db.execute(
-            select(Session).where(Session.expires_at <= utc_now())
+            delete(Session).where(Session.expires_at <= utc_now()).returning(Session.id)
         )
-        return list(result.scalars().all())
+        return len(result.all())
+
+    @staticmethod
+    async def delete_active_for_user(db: AsyncSession, user_id: UUID) -> int:
+        """Delete a user's non-expired sessions; the number deleted."""
+        result = await db.execute(
+            delete(Session)
+            .where(Session.user_id == user_id)
+            .where(Session.expires_at > utc_now())
+            .returning(Session.id)
+        )
+        return len(result.all())

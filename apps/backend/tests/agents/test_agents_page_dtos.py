@@ -13,7 +13,7 @@ from app.db.database import get_db
 from app.main import app
 from app.models.agent_metric_model import AgentMetric
 from app.services.core.auth_core_service import AuthCoreService
-from fixtures.factories import make_agent, make_user
+from fixtures.factories import make_agent, make_check, make_user
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -69,3 +69,47 @@ async def test_pending_and_active_agents_render(
     assert resp.status_code == 200, resp.text[:500]
     assert "awaiting-approval" in resp.text
     assert "edge-1" in resp.text
+
+
+async def test_a_page_of_several_agents_renders_each_ones_check_counts(
+    client: AsyncClient, db: AsyncSession
+) -> None:
+    """Each card loaded (and decrypted) every one of its agent's checks only to
+    count them, one agent at a time; the counts now come from one grouped query
+    for the page, and must still land on the right card."""
+    agents = [
+        make_agent(
+            agent_name=f"fleet-{n}", approval_status="active", last_seen=utc_now()
+        )
+        for n in range(3)
+    ]
+    db.add_all(agents)
+    await db.flush()
+    for n, agent in enumerate(agents):
+        db.add_all(
+            [
+                make_check(agent_id=agent.id, display_name=f"c{n}_{i}", enabled=i < n)
+                for i in range(n + 2)
+            ]
+        )
+        db.add(
+            AgentMetric(
+                agent_id=agent.id,
+                timestamp=utc_now() - timedelta(minutes=1),
+                cpu_percent=5.0,
+                memory_mb=64,
+                queue_depth=0,
+                checks_executed=n,
+            )
+        )
+    await db.flush()
+
+    resp = await client.get("/agents")
+
+    assert resp.status_code == 200, resp.text[:500]
+    for n in range(3):
+        assert f"fleet-{n}" in resp.text
+        assert (
+            f'{n}<span class="text-sm text-dark-text-muted">/{n + 2}</span>'
+            in resp.text
+        )

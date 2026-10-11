@@ -117,10 +117,11 @@ class SchedulerViewService:
 
         return {
             "job_rows": job_rows,
+            # post-db-filter: every job row is rendered on this page; counts are over those rows
             "total_jobs": len(jobs),
-            # post-db-filter: the scheduler's job list is the in-memory registry, not a table
+            # post-db-filter: every job row is rendered on this page; counts are over those rows
             "enabled_count": sum(1 for j in jobs if j.enabled),
-            # post-db-filter: the scheduler's job list is the in-memory registry, not a table
+            # post-db-filter: every job row is rendered on this page; counts are over those rows
             "disabled_count": sum(1 for j in jobs if not j.enabled),
             "now": now,
         }

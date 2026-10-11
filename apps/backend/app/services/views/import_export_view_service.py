@@ -87,12 +87,12 @@ class ImportExportViewService:
         agent = await AgentCoreService.get_agent(db, agent_id)
         if not agent:
             raise AgentNotFoundException(str(agent_id))
-        checks = await CheckCoreService.list_agent_checks(db, agent_id)
+        counts = await CheckCoreService.check_counts_by_agent(db, [agent_id])
         return {
             "current_user": current_user,
             "agent": agent,
             "agent_id": agent_id,
-            "check_count": len(checks),
+            "check_count": counts[agent_id].total,
             # .path, not str(): url_for returns an absolute url from the
             # request's scheme/host, which behind TLS-terminating nginx can emit
             # http:// into an https:// page.

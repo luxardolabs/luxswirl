@@ -33,6 +33,7 @@ from app.models.check_model import Check
 from app.models.enum_model import AssignmentMode, CheckType
 from app.schemas.agent_schema import AgentCreate
 from app.schemas.check_schema import (
+    AgentCheckCounts,
     BulkCheckCreateRequest,
     BulkCheckCreateResponse,
     CheckCreate,
@@ -708,6 +709,20 @@ class CheckCoreService:
             )
             grouped.setdefault(agent_name, []).append(CheckInDB.model_validate(c))
         return grouped
+
+    @staticmethod
+    async def check_counts_by_agent(
+        db: AsyncSession, agent_ids: Sequence[UUID]
+    ) -> dict[UUID, AgentCheckCounts]:
+        """Each listed agent's check counts, zero for an agent with none."""
+        counts = await CheckCRUD.count_by_agent(db, agent_ids)
+        return {
+            agent_id: AgentCheckCounts(
+                total=counts.get(agent_id, (0, 0))[0],
+                enabled=counts.get(agent_id, (0, 0))[1],
+            )
+            for agent_id in agent_ids
+        }
 
     @staticmethod
     async def list_agent_checks(db: AsyncSession, agent_id: UUID) -> list[CheckInDB]:
