@@ -1,0 +1,14 @@
+format: luxpm-sync-receipt/1
+project: LUXSWIRL
+repository_url: https://github.com/luxardolabs/luxswirl
+issued_at: 2026-10-11T04:37:53+00:00
+last_activity_at: 2026-10-11T04:37:47+00:00
+stale_days: 14
+open: 58
+open_stale: 50
+closed_without_summary: 86
+open_escalations: 2
+open_untriaged: 49
+last_known_commit: 8e4c2a2
+key_id: cbb673eafd0c3932
+signature: ftfpa9WZtP6KX/bEKDl0nNxUTdBmRpdelUQecVdYYj+UO64rUxRin1r3vGYNmt8a4MwtTorvhprdHQqGz5HtDg==
