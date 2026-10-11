@@ -222,6 +222,10 @@ class ArtifactCoreService:
 
         Returns:
             The artifact count and their combined size
+
+        Raises:
+            CheckNotFoundException: If the check does not exist
         """
+        await ArtifactCoreService._require_check(db, check_id)
         count, total_size = await ArtifactCRUD.get_stats_for_check(db, check_id)
         return CheckArtifactStatsResponse(count=count, total_size_bytes=total_size)
