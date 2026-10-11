@@ -177,23 +177,6 @@ def profile_status_message(
     )
 
 
-def toast_partial(
-    request: Request,
-    template: str,
-    context: dict[str, Any],
-    message: str,
-    status_code: int = status.HTTP_200_OK,
-) -> Response:
-    """Render a partial with an HX-Trigger toast (used for inline row re-renders)."""
-    return templates.TemplateResponse(
-        request,
-        template,
-        context,
-        status_code=status_code,
-        headers={"HX-Trigger": hx_toast_trigger(message)},
-    )
-
-
 def job_status_oob_response(
     request: Request,
     current_user: AuthedUser,
