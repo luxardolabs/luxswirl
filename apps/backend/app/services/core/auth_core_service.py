@@ -17,7 +17,7 @@ from app.core.exceptions import NotFoundException
 from app.crud.session_crud import SessionCRUD
 from app.crud.user_crud import UserCRUD
 from app.models.session_model import Session
-from app.models.user_model import User
+from app.schemas.auth_schema import CurrentUserResponse, SessionResponse
 from app.services.core.settings_core_service import SettingsCoreService
 
 logger = get_logger("luxswirl.services.auth")
@@ -164,7 +164,7 @@ class AuthCoreService:
         password: str,
         client_ip: str | None = None,
         user_agent: str | None = None,
-    ) -> User | None:
+    ) -> CurrentUserResponse | None:
         """
         Authenticate user by username and password.
 
@@ -286,7 +286,7 @@ class AuthCoreService:
                 "user_agent": user_agent,
             },
         )
-        return user
+        return CurrentUserResponse.model_validate(user)
 
     async def create_session(
         self,
@@ -294,7 +294,7 @@ class AuthCoreService:
         user_id: UUID,
         ip_address: str | None = None,
         user_agent: str | None = None,
-    ) -> tuple[Session, str]:
+    ) -> tuple[SessionResponse, str]:
         """
         Create a new session for user.
 
@@ -347,7 +347,7 @@ class AuthCoreService:
             },
         )
 
-        return session, token
+        return SessionResponse.model_validate(session), token
 
     async def verify_session(self, db: AsyncSession, token: str) -> Session | None:
         """
@@ -412,7 +412,9 @@ class AuthCoreService:
 
         return False
 
-    async def get_user_sessions(self, db: AsyncSession, user_id: UUID) -> list[Session]:
+    async def get_user_sessions(
+        self, db: AsyncSession, user_id: UUID
+    ) -> list[SessionResponse]:
         """
         Get all active sessions for a user.
 
@@ -421,9 +423,12 @@ class AuthCoreService:
             user_id: User UUID
 
         Returns:
-            List of Session objects
+            The user's active sessions (never their tokens)
         """
-        return await SessionCRUD.list_active_for_user(db, user_id)
+        return [
+            SessionResponse.model_validate(s)
+            for s in await SessionCRUD.list_active_for_user(db, user_id)
+        ]
 
     async def logout_all_sessions(self, db: AsyncSession, user_id: UUID) -> int:
         """
@@ -436,7 +441,7 @@ class AuthCoreService:
         Returns:
             Number of sessions deleted
         """
-        sessions = await self.get_user_sessions(db, user_id)
+        sessions = await SessionCRUD.list_active_for_user(db, user_id)
         count = len(sessions)
 
         for session in sessions:

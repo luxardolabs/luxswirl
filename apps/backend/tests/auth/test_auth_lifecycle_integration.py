@@ -9,22 +9,24 @@ Covers the stateful pieces of AuthCoreService that talk to the DB:
 
 from __future__ import annotations
 
-import sys
 from datetime import timedelta
-from pathlib import Path
+from uuid import UUID
 
 import pytest
+from app.core.datetime_utils import utc_now
+from app.models.session_model import Session
+from app.services.core.auth_core_service import AuthCoreService
+from fixtures.factories import make_user
 from sqlalchemy.ext.asyncio import AsyncSession
 
-_tests_root = str(Path(__file__).resolve().parent.parent)
-if _tests_root not in sys.path:
-    sys.path.insert(0, _tests_root)
-
-from app.core.datetime_utils import utc_now  # noqa: E402
-from app.services.core.auth_core_service import AuthCoreService  # noqa: E402
-from fixtures.factories import make_user  # noqa: E402
-
 pytestmark = pytest.mark.integration
+
+
+async def _stored(db: AsyncSession, session_id: UUID) -> Session:
+    """The persisted session row: create_session hands back only a DTO."""
+    row = await db.get(Session, session_id)
+    assert row is not None
+    return row
 
 
 @pytest.fixture
@@ -141,9 +143,10 @@ class TestSessionLifecycle:
         db.add(user)
         await db.flush()
 
-        session, token = await auth.create_session(
+        created, token = await auth.create_session(
             db, user.id, ip_address="10.0.0.1", user_agent="test-agent"
         )
+        session = await _stored(db, created.id)
         # Token is the hex-encoded random value the client gets
         assert len(token) == 64
         # Session row stores only the hash, not the plaintext
@@ -172,7 +175,8 @@ class TestSessionLifecycle:
         user = make_user()
         db.add(user)
         await db.flush()
-        session, token = await auth.create_session(db, user.id)
+        created, token = await auth.create_session(db, user.id)
+        session = await _stored(db, created.id)
 
         # Backdate the session past expiry
         session.expires_at = utc_now() - timedelta(minutes=1)
@@ -266,8 +270,8 @@ class TestCleanupExpiredSessions:
         fresh, _ = await auth.create_session(db, user.id)
         expired_a, _ = await auth.create_session(db, user.id)
         expired_b, _ = await auth.create_session(db, user.id)
-        expired_a.expires_at = utc_now() - timedelta(hours=1)
-        expired_b.expires_at = utc_now() - timedelta(hours=2)
+        (await _stored(db, expired_a.id)).expires_at = utc_now() - timedelta(hours=1)
+        (await _stored(db, expired_b.id)).expires_at = utc_now() - timedelta(hours=2)
         await db.flush()
 
         count = await auth.cleanup_expired_sessions(db)

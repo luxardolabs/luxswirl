@@ -51,7 +51,9 @@ class WebAuthViewService:
         user = await self.auth_service.authenticate_user(
             db, username, password, client_ip=client_ip, user_agent=user_agent
         )
-        return CurrentUserDTO.model_validate(user) if user else None
+        return (
+            CurrentUserDTO.model_validate(user, from_attributes=True) if user else None
+        )
 
     async def create_session(
         self,
