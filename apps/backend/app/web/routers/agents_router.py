@@ -17,7 +17,7 @@ from app.db import get_db
 from app.services.views.agents_view_service import AgentsViewService
 from app.services.views.maintenance_job_view_service import MaintenanceJobViewService
 from app.web.deps import CurrentUserWeb, EditorUserWeb
-from app.web.render import status_message
+from app.web.render import agent_status_message
 from app.web.templates import templates
 
 logger = get_logger("luxswirl.web.routers.agents")
@@ -126,9 +126,7 @@ async def update_agent_web(
             "log_level": log_level,
         },
     )
-    return status_message(
-        request, "partials/agents/status_message.html", kind, message, status
-    )
+    return agent_status_message(request, kind, message, status)
 
 
 @router.delete(

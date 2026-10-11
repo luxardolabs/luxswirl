@@ -14,7 +14,7 @@ from app.core.rate_limit import limiter
 from app.db import get_db
 from app.services.views.profile_view_service import ProfileViewService
 from app.web.deps import CurrentUserWeb
-from app.web.render import status_message
+from app.web.render import profile_status_message
 from app.web.templates import templates
 
 logger = get_logger("luxswirl.web.routers.profile")
@@ -47,9 +47,8 @@ async def update_profile(
 ) -> Response:
     """Update user profile information."""
     kind, message = await ProfileViewService.update_profile(db, user, full_name)
-    return status_message(
+    return profile_status_message(
         request,
-        "partials/profile/status_message.html",
         kind,
         message,
         status_code=200 if kind == "success" else 400,
@@ -75,9 +74,8 @@ async def change_password(
     kind, message = await ProfileViewService.change_password(
         db, user, current_password, new_password, confirm_password
     )
-    return status_message(
+    return profile_status_message(
         request,
-        "partials/profile/status_message.html",
         kind,
         message,
         status_code=200 if kind == "success" else 400,

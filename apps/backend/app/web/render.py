@@ -7,7 +7,7 @@ router, so it owns these `templates.TemplateResponse`
 builders.
 """
 
-from typing import Any, cast
+from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException, Request, status
@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.schemas.auth_schema import AuthedUser
+from app.schemas.check_schema import BulkCheckCreateSummary
 from app.services.views.maintenance_job_view_service import MaintenanceJobViewService
 from app.services.views.notification_logs_view_service import (
     NotificationLogsViewService,
@@ -29,13 +30,11 @@ def error_partial(
     current_user: AuthedUser | None,
     error: str,
     status_code: int = status.HTTP_400_BAD_REQUEST,
-    template: str = "partials/error_message.html",
 ) -> Response:
-    """Render an error partial (HTMX swap target). `template` defaults to the
-    management error card; public status pages pass the simpler partials/error.html."""
+    """Render the management error card (HTMX swap target)."""
     return templates.TemplateResponse(
         request,
-        template,
+        "partials/error_message.html",
         {"request": request, "current_user": current_user, "error": error},
         status_code=status_code,
     )
@@ -122,20 +121,44 @@ def render_error_response(
     return error_page(request, None, message, status_code=status_code)
 
 
-def status_message(
+def _status_context(
+    kind: str, message: str, extra: dict[str, Any] | None
+) -> dict[str, Any]:
+    context: dict[str, Any] = {"kind": kind, "message": message}
+    if extra:
+        context.update(extra)
+    return context
+
+
+def agent_status_message(
     request: Request,
-    template: str,
     kind: str,
     message: str,
     status_code: int = status.HTTP_200_OK,
     extra: dict[str, Any] | None = None,
 ) -> Response:
-    """Render a `{kind, message}` status-message partial at `template`."""
-    context: dict[str, Any] = {"kind": kind, "message": message}
-    if extra:
-        context.update(extra)
+    """Render the agent edit form's `{kind, message}` status card."""
     return templates.TemplateResponse(
-        request, template, context, status_code=status_code
+        request,
+        "partials/agents/status_message.html",
+        _status_context(kind, message, extra),
+        status_code=status_code,
+    )
+
+
+def profile_status_message(
+    request: Request,
+    kind: str,
+    message: str,
+    status_code: int = status.HTTP_200_OK,
+    extra: dict[str, Any] | None = None,
+) -> Response:
+    """Render the profile page's `{kind, message}` status card."""
+    return templates.TemplateResponse(
+        request,
+        "partials/profile/status_message.html",
+        _status_context(kind, message, extra),
+        status_code=status_code,
     )
 
 
@@ -183,7 +206,9 @@ def job_status_oob_response(
     )
 
 
-def bulk_oob_response(oob_context: dict, message: str, toast_kind: str) -> HTMLResponse:
+def bulk_oob_response(
+    oob_context: dict[str, Any], message: str, toast_kind: str
+) -> HTMLResponse:
     """Render the OOB-swap bulk-response template + HX-Trigger toast headers."""
     body = templates.get_template("partials/checks/bulk_oob_response.html").render(
         **oob_context
@@ -205,7 +230,7 @@ def bulk_oob_response(oob_context: dict, message: str, toast_kind: str) -> HTMLR
 def bulk_check_response(
     request: Request,
     current_user: AuthedUser,
-    result: Any,
+    result: BulkCheckCreateSummary | None,
     error: str | None,
     success_label: str,
 ) -> Response:
@@ -236,18 +261,15 @@ def render_setup(
     status_code: int = status.HTTP_200_OK,
 ) -> Response:
     """Render the setup page, pre-filling sensible defaults."""
-    return cast(
-        Response,
-        templates.TemplateResponse(
-            request,
-            "pages/setup.html",
-            {
-                "current_user": None,
-                "username": username or settings.security.initial_admin_username,
-                "error": error,
-            },
-            status_code=status_code,
-        ),
+    return templates.TemplateResponse(
+        request,
+        "pages/setup.html",
+        {
+            "current_user": None,
+            "username": username or settings.security.initial_admin_username,
+            "error": error,
+        },
+        status_code=status_code,
     )
 
 
