@@ -1615,24 +1615,24 @@
         },
         {
           "rule": "fw.rate_limit_key_unspoofable",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.278.0",
-          "violations": 1,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
-          "fix": "Key on the address the server resolved from a BOUNDED trust list: set `--forwarded-allow-ips` / `FORWARDED_ALLOW_IPS` to the proxies YOU operate (the private ranges your reverse proxy sits in, or a single public address of one you run), never `*` and never a CDN's published ranges, and key on `request.client` / slowapi `get_remote_address`. Behind a CDN, key on its overwritten client header (`CF-Connecting-IP`) only on a request proven to come through YOUR zone. Never key on the leftmost X-Forwarded-For entry or the raw header: a proxy appends to it, so everything left of the proxy's entry is what the client sent. `--doc FLEET-RATE-LIMIT-STANDARD` \u00a71.3.",
+          "fix": "",
           "example": ""
         },
         {
           "rule": "fw.trusted_host_enforced",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.280.0",
-          "violations": 1,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
-          "fix": "Install the emitted middleware on the app the entry point serves, over a REQUIRED setting: `luxarch --emit trusted-host > app/core/trusted_host.py`, declare `ALLOWED_HOSTS: AllowedHosts` (no default) on the settings class, and `app.add_middleware(AllowedHostsMiddleware, allowed_hosts=settings.ALLOWED_HOSTS, health_paths=(...))` unconditionally. The hostnames go in each `.env.<env>` (`ALLOWED_HOSTS=dev.example.com` in `.env.dev`), with the key documented in `.env.example`: never hardcode them in code, and never ask for them. An nginx `default_server` returning 444 is recommended defence in depth, not a substitute. See `luxarch --doc FLEET-BUILD-DEPLOY-STANDARD` \"Trusted hosts\".",
+          "fix": "",
           "example": ""
         },
         {
@@ -1879,8 +1879,8 @@
         }
       ],
       "summary": {
-        "PASS": 147,
-        "FAIL": 4,
+        "PASS": 149,
+        "FAIL": 2,
         "XFAIL": 2,
         "XPASS": 0,
         "INERT": 17
@@ -2748,12 +2748,12 @@
     }
   },
   "summary": {
-    "PASS": 217,
-    "FAIL": 7,
+    "PASS": 219,
+    "FAIL": 5,
     "XFAIL": 2,
     "XPASS": 0,
     "INERT": 20
   },
-  "commit": "2e5cf7fb2b84476da4e40dc0bc7ab5948f99aaf0",
-  "generated_at": "2026-10-11T20:19:34Z"
+  "commit": "e2bf03c6596b45bc3656387924fe802f5854851f",
+  "generated_at": "2026-10-11T20:30:20Z"
 }
