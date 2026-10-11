@@ -6,12 +6,12 @@ Does NOT touch the database directly - delegates to scheduler_service.
 """
 
 from datetime import UTC, datetime
-from typing import cast
+from typing import Any
 
 from fastapi import Request
 from shared.logger import get_logger
 
-from app.schemas.scheduler_schema import SchedulerJobUrls
+from app.schemas.scheduler_schema import SchedulerJobResponse, SchedulerJobUrls
 from app.services.core.scheduler_core_service import scheduler_service
 
 logger = get_logger("luxswirl.web.services.scheduler_view")
@@ -48,7 +48,7 @@ def _format_duration(seconds: float | None) -> str:
     return f"{hours:.1f}h"
 
 
-def _format_schedule(job) -> str:
+def _format_schedule(job: SchedulerJobResponse) -> str:
     """Format job schedule for display."""
     if job.trigger_type == "cron":
         return f"cron: {job.cron_expression or '?'}"
@@ -65,11 +65,11 @@ def _format_schedule(job) -> str:
     return job.trigger_type or "unknown"
 
 
-def _is_running(job) -> bool:
+def _is_running(job: SchedulerJobResponse) -> bool:
     """Check if a job currently holds a lease (is running)."""
     if not job.lease_token or not job.lease_expires_at:
         return False
-    return cast(bool, job.lease_expires_at > datetime.now(UTC))
+    return job.lease_expires_at > datetime.now(UTC)
 
 
 def build_scheduler_job_urls(request: Request, job_key: str) -> SchedulerJobUrls:
@@ -90,7 +90,7 @@ class SchedulerViewService:
     """View service for scheduler admin UI."""
 
     @staticmethod
-    async def get_list_context(request: Request) -> dict:
+    async def get_list_context(request: Request) -> dict[str, Any]:
         """
         Build template context for the scheduler list page.
 
@@ -126,7 +126,7 @@ class SchedulerViewService:
         }
 
     @staticmethod
-    async def toggle_job(request: Request, job_key: str) -> dict:
+    async def toggle_job(request: Request, job_key: str) -> dict[str, Any]:
         """
         Toggle job enabled state and return updated row context.
 
@@ -147,7 +147,7 @@ class SchedulerViewService:
         }
 
     @staticmethod
-    async def run_job(request: Request, job_key: str) -> dict:
+    async def run_job(request: Request, job_key: str) -> dict[str, Any]:
         """
         Execute job synchronously and return updated row context.
 
@@ -179,7 +179,7 @@ class SchedulerViewService:
         return {"result": result, "row": row}
 
     @staticmethod
-    async def reset_job(request: Request, job_key: str) -> dict:
+    async def reset_job(request: Request, job_key: str) -> dict[str, Any]:
         """
         Reset job and return updated row context.
 
@@ -200,7 +200,7 @@ class SchedulerViewService:
         }
 
     @staticmethod
-    async def get_job_history(job_key: str, limit: int = 50) -> dict:
+    async def get_job_history(job_key: str, limit: int = 50) -> dict[str, Any]:
         """
         Get job details and execution history for the history panel.
 
