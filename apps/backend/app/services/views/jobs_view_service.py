@@ -493,7 +493,7 @@ class JobsViewService:
 
         existing_checks: set[str] = set()
         if job.job_type == "network_scan" and job.result and job.agent_id:
-            checks = await CheckCoreService.list_checks_for_agent(db, job.agent_id)
+            checks = await CheckCoreService.list_agent_checks(db, job.agent_id)
             existing_checks = {check.display_name for check in checks}
 
         available_check_tags = await CheckCoreService.get_all_check_tags(db)

@@ -38,6 +38,7 @@ from app.schemas.check_schema import (
     CheckCreate,
     CheckInDB,
     CheckUpdate,
+    CheckView,
 )
 from app.schemas.import_export_schema import CheckExport
 from app.services.core.agent_core_service import AgentCoreService
@@ -1319,13 +1320,13 @@ class CheckCoreService:
         alert_ids: list[UUID],
         *,
         actor_is_admin: bool = False,
-    ) -> Check:
+    ) -> CheckView:
         """Create a check and assign the supplied alerts in one workflow."""
         check = await CheckCoreService.create_check(
             db, agent_id, data, actor_is_admin=actor_is_admin
         )
         await CheckCoreService.assign_alerts(db, check.id, alert_ids)
-        return check
+        return CheckView.model_validate(check)
 
     @staticmethod
     async def update_check_with_alerts(
@@ -1335,14 +1336,14 @@ class CheckCoreService:
         alert_ids: list[UUID] | None = None,
         *,
         actor_is_admin: bool = False,
-    ) -> Check:
+    ) -> CheckView:
         """Update a check and optionally sync the alert assignment list."""
         check = await CheckCoreService.update_check(
             db, check_id, data, actor_is_admin=actor_is_admin
         )
         if alert_ids is not None:
             await AlertCoreService.sync_check_alerts(db, check.id, alert_ids)
-        return check
+        return CheckView.model_validate(check)
 
     @staticmethod
     async def clone_check_with_alerts(
@@ -1353,7 +1354,7 @@ class CheckCoreService:
         alert_ids: list[UUID],
         *,
         actor_is_admin: bool = False,
-    ) -> Check:
+    ) -> CheckView:
         """Clone a check and assign the supplied alerts in one workflow."""
         cloned_check = await CheckCoreService.clone_check(
             db,
@@ -1363,7 +1364,7 @@ class CheckCoreService:
             actor_is_admin=actor_is_admin,
         )
         await AlertCoreService.sync_check_alerts(db, cloned_check.id, alert_ids)
-        return cloned_check
+        return CheckView.model_validate(cloned_check)
 
     @staticmethod
     async def get_distinct_check_types(db: AsyncSession) -> list[str]:

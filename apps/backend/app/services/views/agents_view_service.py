@@ -143,7 +143,7 @@ class AgentsViewService:
         # Get check counts and sparklines for each agent in parallel
         async def get_agent_data(agent: AgentResponse) -> AgentData:
             # Get check counts
-            checks = await CheckCoreService.list_checks_for_agent(db, agent.id)
+            checks = await CheckCoreService.list_agent_checks(db, agent.id)
             # post-db-filter: filters the agent's own checks, already loaded for the card
             enabled_checks = sum(1 for c in checks if c.enabled)
 
