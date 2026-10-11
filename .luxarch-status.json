@@ -1,6 +1,6 @@
 {
   "guard": "luxarch",
-  "guard_version": "0.276.0",
+  "guard_version": "0.279.1",
   "repo": "/repo",
   "targets": [
     {
@@ -284,13 +284,13 @@
         },
         {
           "rule": "fw.enum_query_params",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.1.0",
-          "violations": 1,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
-          "fix": "Type the param as its enum so FastAPI validates at the boundary, or allowlist (path,param) in [allowlist].enum_query_freetext with evidence it's genuinely free-text.",
+          "fix": "",
           "example": ""
         },
         {
@@ -317,13 +317,13 @@
         },
         {
           "rule": "fw.no_inline_html",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.1.0",
-          "violations": 4,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
-          "fix": "Move the markup to app/templates/web/ (a partial or macro), an email to app/templates/email/, an LLM prompt to app/templates/llm/, and render it \u2014 TemplateResponse or an included partial. This keeps Jinja autoescaping in the loop (an inline f-string bypasses it \u2192 stored XSS) and gives the fragment ONE home. See --playbook component-macros.",
+          "fix": "",
           "example": ""
         },
         {
@@ -471,13 +471,13 @@
         },
         {
           "rule": "fw.js_no_reload",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.1.0",
-          "violations": 1,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
-          "fix": "Fire the refreshPage HX-Trigger from the server. A genuine exception is allowlisted per-file WITH evidence: [[allowlist.js_network]] file=\"<basename.js>\", pattern=\"window.location.reload\", evidence=\"<why>\" (pattern is paren-insensitive).",
+          "fix": "",
           "example": ""
         },
         {
@@ -572,11 +572,11 @@
           "rule": "fw.no_session_mutation_outside_crud",
           "status": "XFAIL",
           "since": "0.2.0",
-          "violations": 140,
+          "violations": 142,
           "deferred": true,
           "inert": false,
           "inert_reason": "",
-          "fix": "Move db.add/add_all/merge/flush/refresh/delete into the model's crud.",
+          "fix": "Start with the tool, not by eye: `luxarch --sweep transaction-flow --ops --path <file>` buckets every site; each edit cites its bucket (--playbook db-mutations \u00a78). Then move db.add/add_all/merge/flush/refresh/delete into the model's crud.",
           "example": ""
         },
         {
@@ -603,13 +603,13 @@
         },
         {
           "rule": "fw.no_naive_utcnow",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.2.0",
-          "violations": 1,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
-          "fix": "Use a tz-aware now(UTC) \u2014 naive utcnow() serializes without a Z and breaks ISO-8601 parsers. As a callable: default_factory=lambda: datetime.now(UTC).",
+          "fix": "",
           "example": ""
         },
         {
@@ -625,13 +625,13 @@
         },
         {
           "rule": "fw.paginated_responses_subclass_base",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.2.0",
-          "violations": 3,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
-          "fix": "Subclass PaginatedResponse instead of re-declaring page meta: `luxarch --emit paginated-response` is the class (items, total, page, per_page, total_pages, has_next), filled with `.of(items, build_pagination(...))`. A skip/limit or offset/has_more envelope moves to it. (JSON-API only \u2014 an HTMX/template app doesn't add PaginatedResponse; see the playbook.)",
+          "fix": "",
           "example": ""
         },
         {
@@ -671,7 +671,7 @@
           "rule": "fw.enum_dto_fields_enum_typed",
           "status": "XFAIL",
           "since": "0.2.0",
-          "violations": 30,
+          "violations": 31,
           "deferred": true,
           "inert": false,
           "inert_reason": "",
@@ -735,13 +735,13 @@
         },
         {
           "rule": "fw.fields_wired_into_pipeline",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.2.0",
-          "violations": 1,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
-          "fix": "Wire the field into the trigger/resolve code, remove it, or add it to the wiring exempt list.",
+          "fix": "",
           "example": ""
         },
         {
@@ -812,13 +812,13 @@
         },
         {
           "rule": "fw.no_template_logic",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.12.0",
-          "violations": 26,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
-          "fix": "Move the computation into the view service and pass the finished value to the template (the view assembles state; the template renders it). See --playbook template-logic.",
+          "fix": "",
           "example": ""
         },
         {
@@ -834,13 +834,13 @@
         },
         {
           "rule": "fw.component_registry",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.15.0",
-          "violations": 24,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
-          "fix": "Register every PUBLIC component macro in the component index (the catalogue agents discover macros from) \u2014 or _-prefix it if it's an internal helper. The library is the ONE branded source of a component; an unregistered macro is invisible, so the next agent reinvents it (a 'generic button' when btn_* already exist). Declare the registry with [components].index (a file, a dir, or a LIST of them if the library is split by audience); missing one \u2192 create it. A macro is registered when the index names it IN CODE, tied to its file \u2014 `{% from \"macros/x.html\" import name %}` (then show it: `{{ name(\u2026) }}`), or `{% import \"macros/x.html\" as x %}` and `x.name(\u2026)`. A mention in prose, a table of names, a comment or a CSS class is not a registration. Point at the ACTUAL catalogue(s), never a broad parent dir \u2014 a broad parent makes a macro merely USED beneath it count as registered (a false green). Never a generic/parallel macro. See --playbook component-macros.",
+          "fix": "",
           "example": ""
         },
         {
@@ -1120,13 +1120,13 @@
         },
         {
           "rule": "fw.no_passthrough_view_service",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.78.0",
-          "violations": 2,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
-          "fix": "A view service is the WEB SEAM: shape inputs (form\u2192DTO), assemble template context, convert the core result to a response schema (e.g. `return PageResponse.model_validate(core_result)`). A method whose whole body is `return await core.same(*args, **kwargs)` \u2014 or the hand-named thread-through \u2014 does NO view work: router\u2192view\u2192core is satisfied only nominally while the presentation lives in core (a hollow green \u2014 the import contract stays green while the layering is inverted). Fix: do the conversion/assembly in the view; keep only business logic in core. If the operation needs no web shaping, the view still owns the response (render the HTMX fragment / build the DTO), it never just relays. See --doc ARCHITECTURE and --playbook view-seam.",
+          "fix": "",
           "example": ""
         },
         {
@@ -1208,13 +1208,13 @@
         },
         {
           "rule": "fw.crud_paginated_signature",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.90.0",
-          "violations": 1,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
-          "fix": "Any crud method taking a page window names the offset `skip` and makes it keyword-only (`*, skip, limit`), so callers can't transpose skip/limit. A `*_paginated` method also returns a `(rows, total)` tuple: `async def list_x_paginated(self, db, *, skip, limit, ...) -> tuple[list[X], int]`. See --playbook pagination.",
+          "fix": "",
           "example": ""
         },
         {
@@ -1263,13 +1263,13 @@
         },
         {
           "rule": "fw.json_routes_typed",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.100.0",
-          "violations": 1,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
-          "fix": "Give the route a `response_model=<Schema>` (or a concrete Pydantic return annotation) so its shape is in openapi.json \u2014 a bare dict/Any (also `list[dict]`, `Optional[dict]`, `JSONResponse`, `response_model=dict[...]`) is no contract, and a consumer (iOS codegen + ContractTest) can't rely on it. Exempt: 204 no-content, a raw Response (Streaming/File/Redirect) on every return, websockets. See --doc ARCHITECTURE.",
+          "fix": "",
           "example": ""
         },
         {
@@ -1521,7 +1521,7 @@
           "violations": 0,
           "deferred": false,
           "inert": true,
-          "inert_reason": "0 mutating core methods take a user (actor, current_user, requesting_user, user or a `*User` type), so no permission check was judged. 6 mutating method(s) take a `user_id` instead, which this rule cannot read as an actor (it is as often an owner filter). NOT a clearance: an id-only actor is checked nowhere here.",
+          "inert_reason": "0 mutating core methods take a user (actor, current_user, requesting_user, user or a `*User` type), so no permission check was judged. 5 mutating method(s) take a `user_id` instead, which this rule cannot read as an actor (it is as often an owner filter). NOT a clearance: an id-only actor is checked nowhere here.",
           "fix": "",
           "example": ""
         },
@@ -1606,6 +1606,17 @@
           "rule": "fw.rate_limit_enforced",
           "status": "PASS",
           "since": "0.231.0",
+          "violations": 0,
+          "deferred": false,
+          "inert": false,
+          "inert_reason": "",
+          "fix": "",
+          "example": ""
+        },
+        {
+          "rule": "fw.rate_limit_key_unspoofable",
+          "status": "PASS",
+          "since": "0.278.0",
           "violations": 0,
           "deferred": false,
           "inert": false,
@@ -1846,8 +1857,8 @@
         }
       ],
       "summary": {
-        "PASS": 132,
-        "FAIL": 13,
+        "PASS": 144,
+        "FAIL": 2,
         "XFAIL": 2,
         "XPASS": 0,
         "INERT": 20
@@ -1914,13 +1925,13 @@
         },
         {
           "rule": "collector.no_per_request_http",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.1.0",
-          "violations": 1,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
-          "fix": "Reuse a long-lived httpx.AsyncClient / aiohttp.ClientSession (one per process, opened in an async method, closed on shutdown); never construct one per call, and never call the module-level httpx.get/post/\u2026 helpers. Declare the module in [[target]].source_client so collector.client_lifecycle evaluates.",
+          "fix": "",
           "example": ""
         },
         {
@@ -1936,8 +1947,8 @@
         }
       ],
       "summary": {
-        "PASS": 5,
-        "FAIL": 1,
+        "PASS": 6,
+        "FAIL": 0,
         "XFAIL": 0,
         "XPASS": 0,
         "INERT": 1
@@ -1981,12 +1992,12 @@
       },
       {
         "rule": "repo.oci_image_labels",
-        "status": "INERT",
+        "status": "PASS",
         "since": "0.21.0",
         "violations": 0,
         "deferred": false,
-        "inert": true,
-        "inert_reason": "no image this repo ships was found (no release target pushes a build, and no root Dockerfile) \u2014 nothing to check. If this repo does ship an image, its release recipe is not one make can dry-run: that is worth an escalation",
+        "inert": false,
+        "inert_reason": "",
         "fix": "",
         "example": ""
       },
@@ -2630,12 +2641,12 @@
       },
       {
         "rule": "repo.dockerfile_provenance_args",
-        "status": "INERT",
+        "status": "PASS",
         "since": "0.50.0",
         "violations": 0,
         "deferred": false,
-        "inert": true,
-        "inert_reason": "no image this repo ships was found (no release target pushes a build, and no root Dockerfile) \u2014 nothing to check",
+        "inert": false,
+        "inert_reason": "",
         "fix": "",
         "example": ""
       },
@@ -2674,20 +2685,20 @@
       }
     ],
     "summary": {
-      "PASS": 59,
+      "PASS": 61,
       "FAIL": 0,
       "XFAIL": 0,
       "XPASS": 1,
-      "INERT": 6
+      "INERT": 4
     }
   },
   "summary": {
-    "PASS": 196,
-    "FAIL": 14,
+    "PASS": 211,
+    "FAIL": 2,
     "XFAIL": 2,
     "XPASS": 1,
-    "INERT": 27
+    "INERT": 25
   },
-  "commit": "bb6317d35e326ea39b0836631a28c3a371572baf",
-  "generated_at": "2026-10-10T10:28:50Z"
+  "commit": "59b75b8ce8c1d60b0a5bf86bd41506411201abe6",
+  "generated_at": "2026-10-11T03:11:57Z"
 }

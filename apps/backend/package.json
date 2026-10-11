@@ -4,8 +4,8 @@
   "description": "LuxSwirl Monitoring - Web UI Assets",
   "private": true,
   "scripts": {
-    "dev": "tailwindcss -i ./app/static/css/input.css -o ./app/static/css/output.css --watch",
-    "build": "tailwindcss -i ./app/static/css/input.css -o ./app/static/css/output.css --minify",
+    "dev": "tailwindcss -i ./app/static/css/input.css -o ./app/static/css/app.css --watch",
+    "build": "tailwindcss -i ./app/static/css/input.css -o ./app/static/css/app.css --minify",
     "build:prod": "NODE_ENV=production npm run build"
   },
   "keywords": ["monitoring", "observability", "htmx", "tailwind"],
