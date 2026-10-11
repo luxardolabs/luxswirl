@@ -32,6 +32,7 @@ from app.schemas.check_schema import (
 from app.schemas.maintenance_job_schema import MaintenanceJobResponse
 from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.alert_core_service import AlertCoreService
+from app.services.core.check_api_core_service import CheckApiCoreService
 from app.services.core.check_core_service import CheckCoreService
 from app.services.core.maintenance_job_core_service import MaintenanceJobCoreService
 from app.services.core.settings_core_service import SettingsCoreService
@@ -177,8 +178,8 @@ class ChecksViewService:
         tags: str = "",
         search: str = "",
     ) -> dict[str, Any]:
-        parent = await CheckCoreService.get_check_by_id(db, parent_check_id)
-        candidates = await CheckCoreService.list_potential_dependents(
+        parent = await CheckApiCoreService.get_check_view(db, parent_check_id)
+        candidates = await CheckApiCoreService.list_potential_dependent_views(
             db, parent_check_id
         )
 
@@ -271,7 +272,7 @@ class ChecksViewService:
         Returns:
             Dict with check, agents, alerts, and assigned_alert_ids
         """
-        check = await CheckCoreService.get_check_by_id(
+        check = await CheckApiCoreService.get_check_view(
             db, check_id, include_script_code=True
         )
         agents = await AgentCoreService.list_agent_options(db)
@@ -297,7 +298,7 @@ class ChecksViewService:
         Returns:
             Dict with source_check, agents, alerts
         """
-        source_check = await CheckCoreService.get_check_by_id(db, check_id)
+        source_check = await CheckApiCoreService.get_check_view(db, check_id)
         agents = await AgentCoreService.list_agent_options(db)
         alerts = await AlertCoreService.list_alert_options(db)
 
@@ -706,7 +707,7 @@ class ChecksViewService:
     ) -> Response:
         """Orchestrate POST /checks/{id}/update. Synthetic admin gate, transform, update."""
         try:
-            check = await CheckCoreService.get_check_by_id(db, check_id)
+            check = await CheckApiCoreService.get_check_view(db, check_id)
             denial = ChecksViewService.assert_synthetic_admin_update(
                 form_kwargs["check_type"],
                 check.check_type,
@@ -792,7 +793,7 @@ class ChecksViewService:
     ) -> Response:
         """Orchestrate POST /checks/{id}/clone."""
         try:
-            source_check = await CheckCoreService.get_check_by_id(db, source_check_id)
+            source_check = await CheckApiCoreService.get_check_view(db, source_check_id)
 
             try:
                 target_agent = await AgentCoreService.resolve_for_assignment(
@@ -866,7 +867,7 @@ class ChecksViewService:
         db: AsyncSession, request: Request, check_id: UUID
     ) -> dict[str, Any]:
         """Toggle enabled flag, return context for the toggle-button partial."""
-        check = await CheckCoreService.get_check_by_id(db, check_id)
+        check = await CheckApiCoreService.get_check_view(db, check_id)
         updated_check = await CheckCoreService.update_check_with_alerts(
             db, check.id, CheckUpdate(enabled=not check.enabled)
         )
@@ -894,7 +895,7 @@ class ChecksViewService:
         See LUXSWIRL-105.
         """
         try:
-            check = await CheckCoreService.get_check_by_id(db, check_id)
+            check = await CheckApiCoreService.get_check_view(db, check_id)
             job = await MaintenanceJobCoreService.enqueue(
                 db,
                 kind=MaintenanceJobKind.BULK_CHECK_DELETE,

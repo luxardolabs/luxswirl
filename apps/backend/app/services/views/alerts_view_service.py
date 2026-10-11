@@ -17,7 +17,7 @@ from app.models.enum_model import AlertTriggerType
 from app.schemas.alert_schema import AlertCreate, AlertResponse, AlertUpdate
 from app.schemas.auth_schema import AuthedUser
 from app.services.core.alert_core_service import AlertCoreService
-from app.services.core.check_core_service import CheckCoreService
+from app.services.core.check_api_core_service import CheckApiCoreService
 from app.services.core.notification_core_service import NotificationCoreService
 
 logger = get_logger("luxswirl.web.services.alerts")
@@ -54,7 +54,7 @@ class AlertsViewService:
         providers, _ = await NotificationCoreService.list_providers(db, limit=1000)
 
         # Get all checks for assignment
-        checks = await CheckCoreService.list_all_checks(db)
+        checks = await CheckApiCoreService.list_all_check_views(db)
 
         # The form posts to update when editing, create otherwise. Reverse the
         # route name so the path lives with the route, not in the template.

@@ -106,3 +106,27 @@ async def test_get_is_bound_to_the_path_agent(
     assert (
         await client.get(f"/api/v1/agents/{owner.id}/checks/{uuid4()}")
     ).status_code == 404
+
+
+async def test_get_reports_the_stored_assignment(
+    client: AsyncClient, db: AsyncSession
+) -> None:
+    agent = make_agent(agent_name="edge")
+    db.add(agent)
+    await db.flush()
+    check = make_check(
+        agent_id=agent.id,
+        assignment_mode="replicate",
+        agent_selector={"tags": ["prod"]},
+        retry_interval_seconds=45,
+    )
+    db.add(check)
+    await db.flush()
+
+    resp = await client.get(f"/api/v1/agents/{agent.id}/checks/{check.id}")
+
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["assignment_mode"] == "replicate"
+    assert body["agent_selector"] == {"tags": ["prod"]}
+    assert body["retry_interval_seconds"] == 45

@@ -10,6 +10,7 @@ from uuid import UUID
 from pydantic import Field
 
 from app.models.enum_model import AssignmentMode, CheckType
+from app.schemas.agent_schema import AgentOption
 from app.schemas.base_schema import BaseSchema, TimestampSchema
 
 
@@ -66,7 +67,7 @@ class CheckCreate(CheckBase):
         AssignmentMode.MANUAL,
         description="Assignment mode: manual, replicate, distribute",
     )
-    agent_selector: dict | None = Field(
+    agent_selector: dict[str, Any] | None = Field(
         None, description="Agent selector for replicate/distribute modes"
     )
 
@@ -137,7 +138,7 @@ class CheckUpdate(BaseSchema):
 
     # Agent assignment (Phase 2)
     assignment_mode: AssignmentMode | None = None
-    agent_selector: dict | None = None
+    agent_selector: dict[str, Any] | None = None
 
     # Synthetic check script
     script_code: str | None = None
@@ -189,6 +190,19 @@ class CheckInDB(CheckBase, TimestampSchema):
     tags: list[str] | None = None
     script_code: str | None = None
     depends_on_check_id: UUID | None = None
+    # Assignment: how the check reaches agents beyond its own
+    assignment_mode: AssignmentMode = AssignmentMode.MANUAL
+    agent_selector: dict[str, Any] | None = None
+
+
+class CheckView(CheckInDB):
+    """A check as the web panels read it: every stored field, plus its agent.
+
+    Validates straight from a loaded Check row (`Check.agent` loads with it).
+    """
+
+    agent: AgentOption | None = None
+    fully_qualified_name: str
 
 
 class CheckResponse(CheckInDB):
