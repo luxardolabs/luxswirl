@@ -10,10 +10,12 @@ from uuid import uuid4
 
 import pytest
 from app.crud.check_crud import CheckCRUD
+from app.models.check_model import Check
 from app.schemas.check_schema import CheckCreate, CheckUpdate
 from app.services.core.check_core_service import CheckCoreService
 from app.services.views.checks_view_service import ChecksViewService
 from fixtures.factories import make_agent, make_check
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 pytestmark = pytest.mark.integration
@@ -299,3 +301,42 @@ class TestDependencyInfo:
         # Just confirm the call returns a dict shape — exact contents vary
         # by implementation but it should include parent info
         assert isinstance(info, dict)
+
+
+class TestBulkFailureLeavesTheSessionUsable:
+    """A failed bulk statement is reported as failures — and that report only
+    reaches anyone if the session it ran in can still commit afterwards."""
+
+    @pytest.mark.parametrize("operation", ["toggle", "delete"])
+    async def test_a_database_error_is_reported_and_the_session_survives(
+        self, db: AsyncSession, monkeypatch: pytest.MonkeyPatch, operation: str
+    ):
+        agent = make_agent()
+        db.add(agent)
+        await db.flush()
+        check = make_check(agent_id=agent.id)
+        db.add(check)
+        await db.flush()
+
+        async def _fails(session: AsyncSession, *_args: object) -> int:
+            await session.execute(text("SELECT 1 / 0"))
+            return 0
+
+        target = "bulk_set_enabled" if operation == "toggle" else "bulk_delete_by_ids"
+        monkeypatch.setattr(CheckCRUD, target, staticmethod(_fails))
+
+        if operation == "toggle":
+            result = await CheckCoreService.bulk_set_enabled(
+                db, [check.id], enabled=False
+            )
+        else:
+            result = await CheckCoreService.bulk_delete(db, [check.id])
+
+        assert result["success_count"] == 0
+        assert result["failure_count"] == 1
+        assert "division by zero" in result["errors"][0]
+        # The request's own commit happens after this returns: it must work.
+        assert (
+            await db.execute(select(func.count()).select_from(Check))
+        ).scalar_one() >= 1
+        await db.flush()
