@@ -200,8 +200,10 @@ Let's create a simple HTTP check to monitor a public API.
 ### Option B: Via API (Advanced)
 
 ```bash
-# Get API token (web UI → Settings → API Tokens → Create Token)
-export API_TOKEN="your_token_here"
+# The server generates an API token on first boot, logs it once in a
+# "GENERATED INITIAL API TOKEN" banner and stores it in /app/data/api_token.
+# Set your own with SECURITY__AUTH_TOKENS (see .env.example).
+export API_TOKEN="$(docker exec luxswirl_server cat /app/data/api_token)"
 
 # Create check via API. The check fields are FLAT (no nested "config").
 # agent_id is the agent's UUID — copy it from the Agents page.
