@@ -132,3 +132,14 @@ async def test_upload_answers_metadata_and_refuses_an_unknown_check(
     assert created.json()["size_bytes"] == len(PNG)
     assert "data" not in created.json()
     assert unknown.status_code == 404
+
+
+async def test_stats_count_the_checks_artifacts_and_refuse_an_unknown_check(
+    client: AsyncClient, artifact: CheckArtifact
+) -> None:
+    stats = await client.get(f"/api/v1/checks/{artifact.check_id}/artifacts/stats")
+    unknown = await client.get(f"/api/v1/checks/{uuid4()}/artifacts/stats")
+
+    assert stats.status_code == 200, stats.text
+    assert stats.json() == {"count": 1, "total_size_bytes": len(PNG)}
+    assert unknown.status_code == 404

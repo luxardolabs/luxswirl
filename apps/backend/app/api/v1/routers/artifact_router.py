@@ -22,7 +22,6 @@ from app.schemas.check_artifact_schema import (
     CheckArtifactStatsResponse,
 )
 from app.services.core.artifact_core_service import ArtifactCoreService
-from app.services.core.check_core_service import CheckCoreService
 
 logger = get_logger("luxswirl.api.artifact")
 
@@ -191,12 +190,4 @@ async def get_artifact_stats(
     _: Annotated[str, Depends(verify_api_token)],
 ) -> CheckArtifactStatsResponse:
     """Get artifact statistics for a check."""
-    # Verify check exists
-    check = await CheckCoreService.get_check_by_id(db, check_id)
-    if not check:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Check not found: {check_id}",
-        )
-
     return await ArtifactCoreService.get_artifact_stats(db, check_id)
