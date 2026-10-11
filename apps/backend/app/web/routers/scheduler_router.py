@@ -16,7 +16,7 @@ from shared.logger import get_logger
 from app.services.views.scheduler_view_service import SchedulerViewService
 from app.web.deps import AdminUserWeb
 from app.web.hx_responses import hx_empty_with_toast, hx_toast_trigger
-from app.web.render import error_partial
+from app.web.render import settings_error_partial
 from app.web.templates import templates
 
 logger = get_logger("luxswirl.web.routers.scheduler")
@@ -37,7 +37,7 @@ async def scheduler_page(
 
     return templates.TemplateResponse(
         request,
-        "pages/scheduler.html",
+        "pages/settings/scheduler.html",
         {
             "current_user": current_user,
             "page_title": "Scheduler",
@@ -61,7 +61,7 @@ async def toggle_job(
 
         response = templates.TemplateResponse(
             request,
-            "partials/scheduler_job_row.html",
+            "partials/settings/scheduler_job_row.html",
             # One shape for both callers: the page loops `for row in job_rows`
             # and includes the partial, so an action re-render passes the same
             # `row` rather than splatting it flat.
@@ -94,7 +94,7 @@ async def run_job(
 
         response = templates.TemplateResponse(
             request,
-            "partials/scheduler_job_row.html",
+            "partials/settings/scheduler_job_row.html",
             # One shape for both callers: the page loops `for row in job_rows`
             # and includes the partial, so an action re-render passes the same
             # `row` rather than splatting it flat.
@@ -124,7 +124,7 @@ async def reset_job(
 
         response = templates.TemplateResponse(
             request,
-            "partials/scheduler_job_row.html",
+            "partials/settings/scheduler_job_row.html",
             # One shape for both callers: the page loops `for row in job_rows`
             # and includes the partial, so an action re-render passes the same
             # `row` rather than splatting it flat.
@@ -155,7 +155,7 @@ async def job_history(
 
         return templates.TemplateResponse(
             request,
-            "partials/scheduler_history_panel.html",
+            "partials/settings/scheduler_history_panel.html",
             {
                 "current_user": current_user,
                 **context,
@@ -163,4 +163,4 @@ async def job_history(
         )
 
     except ValueError as e:
-        return error_partial(request, current_user, str(e), status_code=404)
+        return settings_error_partial(request, current_user, str(e), status_code=404)

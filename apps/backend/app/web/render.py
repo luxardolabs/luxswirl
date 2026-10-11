@@ -40,6 +40,21 @@ def error_partial(
     )
 
 
+def settings_error_partial(
+    request: Request,
+    current_user: AuthedUser | None,
+    error: str,
+    status_code: int = status.HTTP_400_BAD_REQUEST,
+) -> Response:
+    """Render the admin surface's error card (HTMX swap target)."""
+    return templates.TemplateResponse(
+        request,
+        "partials/settings/error_message.html",
+        {"request": request, "current_user": current_user, "error": error},
+        status_code=status_code,
+    )
+
+
 def error_page(
     request: Request,
     current_user: AuthedUser | None,

@@ -106,6 +106,16 @@ require_names = ["require_admin", "require_admin_web", "AdminUser", "AdminUserWe
 #     already enforced by dedicated rules plus the import-linter contracts, so a
 #     second hand-rolled pattern list would duplicate them.
 
+[target.surfaces]
+# The operator console is one signed-in surface; the admin tier inside it
+# (settings, users, registration keys, scheduler, database health,
+# import/export) is gated by require_admin*. Its templates live under the
+# settings roots so a change made for admins cannot land on an editor's or
+# viewer's screen. Markup both use belongs in a neutral dir (components/,
+# macros/, layouts/).
+admin = ["pages/settings/", "partials/settings/"]
+tenant = ["pages/", "partials/"]
+
 [target.restricted]
 # Boundaries no other rule covers. Each is clean today — these are floors, not
 # burn-downs.
@@ -322,9 +332,6 @@ paths = ["apps/shared"]
 # 1442, alert_core_service.py 1266, agent_core_service.py 1041 (limit 1000). LOC splits remain
 # deferred; no dedicated open ticket (originally parked under the closed LUXSWIRL-170).
 "fw.service_size" = "Service LOC splits deferred — checks_view_service 1560, check_core_service 1442, alert_core_service 1266, agent_core_service 1041 (limit 1000)"
-# New coverage luxarch adds over the old in-repo suite (apps/shared was never scanned).
-# Recorded, not silent — drains when apps/shared/config.py moves its env-expansion imports up.
-"shared.no_inline_imports" = "apps/shared/config.py inline imports in _expand_env_vars/validate_config — pending lift to module top"
 
 # ── luxarch 0.2.1 adoption deferrals (parent LUXSWIRL-194) ──────────────────
 # Genuine larger refactors, recorded (XFAIL) not silenced. Each drains its child ticket.
