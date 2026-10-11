@@ -314,109 +314,24 @@ ______________________________________________________________________
 
 ### Complete Template Organization
 
+The tree under `apps/backend/app/templates/web/`. Each directory holds one role (enforced by `fw.template_role_placement`); the files themselves are the reference, so this lists directories, not every file.
+
 ```
-web/templates/
-├── base.html                    # Base template - all pages extend this
-├── error.html                   # Generic error page
-│
-├── pages/                       # Full page views
-│   ├── status.html
-│   ├── agents.html
-│   ├── checks.html
-│   ├── jobs.html
-│   ├── notification_logs.html
-│   ├── status_pages.html
-│   ├── database_health.html
-│   └── settings/               # Settings pages (feature grouping)
-│       ├── index.html          # Landing/overview
-│       ├── notifications.html
-│       ├── alerts.html
-│       ├── registration_keys.html
-│       ├── defaults.html
-│       └── users.html
-│
-├── partials/                    # Reusable fragments
-│   ├── topnav.html             # Top navigation bar
-│   ├── sidebar.html            # Sidebar navigation
-│   ├── status_table.html
-│   ├── status_summary.html
-│   ├── agents/
-│   │   ├── agent_card.html
-│   │   └── agent_list.html
-│   ├── checks/
-│   │   ├── check_row.html
-│   │   └── check_list.html
-│   ├── notifications/
-│   │   └── provider_list.html
-│   ├── alerts/
-│   │   └── alert_list.html
-│   ├── registration_keys/
-│   │   ├── key_list.html
-│   │   └── key_display.html
-│   └── settings/
-│       ├── setting_card.html     # Settings card (HTMX target)
-│       ├── metrics_card.html
-│       ├── metrics_token.html
-│       └── users_table.html
-│
-├── panels/                      # Side panel content
-│   ├── agents/
-│   │   ├── agent_create_panel.html
-│   │   └── agent_edit_panel.html
-│   ├── checks/
-│   │   ├── check_create_panel.html
-│   │   ├── check_detail_panel.html
-│   │   └── check_edit_panel.html
-│   ├── notifications/
-│   │   ├── provider_create_panel.html
-│   │   └── provider_edit_panel.html
-│   ├── alerts/
-│   │   ├── alert_create_panel.html
-│   │   └── alert_edit_panel.html
-│   ├── registration_keys/
-│   │   ├── key_create_panel.html
-│   │   ├── key_created_panel.html
-│   │   ├── agent_key_manage_panel.html
-│   │   └── agent_key_generated_panel.html
-│   └── settings/
-│       ├── user_create_panel.html
-│       └── user_edit_panel.html
-│
-├── forms/                       # Reusable form components
-│   ├── agents/
-│   │   └── agent_form.html
-│   ├── checks/
-│   │   └── check_form.html
-│   ├── notifications/
-│   │   └── provider_form.html
-│   ├── alerts/
-│   │   └── alert_form.html
-│   └── settings/
-│       ├── user_form.html
-│       └── registration_key_form.html
-│
-├── macros/                      # Reusable template functions
-│   ├── agents.html             # Agent-specific components
-│   ├── badges.html             # Base badge + status/role/category badges, tags
-│   ├── buttons.html            # Button patterns
-│   ├── cards.html              # Card components
-│   ├── charts.html             # Chart/sparkline components
-│   ├── filters.html            # Filter controls
-│   ├── form_fields.html        # Form field components
-│   ├── jobs.html               # Job-specific components
-│   ├── page.html               # Page-level layout helpers
-│   ├── panels.html             # Side panel components
-│   ├── settings.html           # Settings-specific macros
-│   ├── status.html             # Status badges/indicators (builds on badges.html)
-│   └── tables.html             # Table components
-│
-├── icons/                       # SVG icon templates (NOT macros)
-│   ├── hero/                   # Heroicons
-│   └── weather/                # Weather icons
-│
-└── layouts/                     # Standalone page layouts
-    └── public_status.html      # Public status page layout
+templates/web/
+├── layouts/          # bases pages extend (base.html, public_status.html)
+├── macros/           # component macro libraries (buttons, cards, form_fields, …),
+│                     #   catalogued at /settings/components
+├── icons/            # inline SVGs ({% include "icons/hero/outline/x.svg" %})
+├── pages/            # full pages: one per console screen
+│   └── settings/     # ADMIN surface: settings, users, registration keys,
+│                     #   scheduler, database health, components, logo demo
+└── partials/         # HTMX swap targets and included fragments, grouped by domain
+    │                 #   (agents/, checks/, jobs/, panels/, profile/, …)
+    └── settings/     # ADMIN surface: setting cards, users, scheduler rows and
+                      #   history, database health, import/export, registration-key panels
 ```
+
+**Two surfaces.** Everything under `pages/settings/` and `partials/settings/` is rendered only by admin-gated routes; the rest of `pages/` and `partials/` is the console every signed-in user sees. Neither renders or includes the other's templates (`fw.surface_separation`, declared in `.luxarch.toml` `[target.surfaces]`). Markup both need lives in a macro: the error card is `error_card` in `macros/cards.html`, called by `partials/error_message.html` and `partials/settings/error_message.html`.
 
 ______________________________________________________________________
 

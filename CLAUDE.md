@@ -245,19 +245,22 @@ The agent includes several reliability features in `agent/core.py`:
 
 ### Dev stack
 
-Two **separate** steps — `build-dev` builds, `dev-up` brings up. They are decoupled on purpose: `dev-up` does NOT build.
+`make dev-deploy` is the deploy: it builds this commit, pins `.env.dev` to it, brings the stack up and waits for every HEALTHCHECK, then runs `make smoke` against what it deployed. A smoke FAIL fails the deploy. The steps underneath stay separate, and `dev-up` does NOT build.
 
 ```bash
-make build-dev     # BUILD ONLY: (re)build both :dev images from current source (baked, no source mounts)
-make dev-up        # START ONLY: `compose up -d` — does NOT build; recreates onto whatever :dev image is on disk
+make dev-deploy    # build-dev + up --wait + smoke: the way to put a commit on the dev stack
+make smoke         # probe the deployed stack: /health names the commit, CSS served, forged Host refused, auth, containers healthy, entry points import
+make build-dev     # BUILD ONLY: both images as :sha-<commit> from current source, and pin .env.dev to that tag
+make dev-up        # START ONLY: `compose up -d` — does NOT build; runs whatever tag .env.dev pins
+make dev-pin TAG=sha-…  # point .env.dev at an already-built tag (the rollback path)
 make dev-restart   # restart the running containers ONLY — no rebuild, does NOT pick up code changes
-make dev-rebuild   # `compose build --no-cache` then up — full from-scratch rebuild
+make dev-rebuild   # build-dev with --no-cache, then up
 make dev-logs      # follow logs
 make dev-shell     # bash into the server container
 make dev-down      # stop the stack (volume preserved)
 ```
 
-Dev runs **baked images** (code COPYd in — no source bind-mounts). **To pick up a code change you MUST `make build-dev` FIRST, then `make dev-up`** (chain them: `make build-dev && make dev-up`). `make dev-up` alone only recreates the container onto the existing `:dev` image — it will run STALE code if you didn't build first. `make dev-restart` just bounces the containers (also stale). The `luxswirl_db_data` volume persists across `down`/`up`; only `make clean-all` (`down -v`) drops it.
+Dev runs **baked images** (code COPYd in — no source bind-mounts), so a code change reaches the stack only through a build: use `make dev-deploy`. `make dev-up` alone recreates the containers onto the tag `.env.dev` already pins, and `make dev-restart` just bounces them; both run the old code. `make smoke` needs `SMOKE_URL` in `Makefile.local` (see `Makefile.local.example`) and `SMOKE_AUTH_TOKEN` in the environment. The `luxswirl_db_data` volume persists across `down`/`up`; only `make clean-all` (`down -v`) drops it.
 
 ### Build & release
 

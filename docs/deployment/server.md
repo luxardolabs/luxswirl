@@ -626,7 +626,7 @@ print(pwd_context.hash('new_password_here'))
 
 ```bash
 curl http://localhost:9000/health
-# Response: {"status":"healthy","version":"1.0.0","environment":"production"}
+# Response: {"status":"healthy","version":"1.0.0","commit":"<build commit>","environment":"production"}
 ```
 
 **Database connectivity:**
