@@ -21,9 +21,9 @@ from app.core.config import settings
 from app.core.datetime_utils import utc_now
 from app.core.exceptions import AgentNotFoundException
 from app.crud.job_crud import JobCRUD
-from app.models.agent_model import Agent
 from app.models.enum_model import SERVER_RUNNER, JobStatus, JobType
 from app.models.job_model import Job
+from app.schemas.agent_schema import AgentOption
 from app.schemas.job_schema import (
     JobCreate,
     JobDispatch,
@@ -504,7 +504,7 @@ class JobCoreService:
         return [job.model_dump() for job in jobs_dispatch]
 
     @staticmethod
-    async def get_agents_with_jobs(db: AsyncSession) -> list[Agent]:
+    async def get_agents_with_jobs(db: AsyncSession) -> list[AgentOption]:
         """
         Get distinct agents that have jobs (excluding pending/rejected).
 
@@ -512,9 +512,12 @@ class JobCoreService:
             db: Database session
 
         Returns:
-            List of Agent objects
+            The agents, as picker options
         """
-        return await JobCRUD.get_agents_with_jobs(db)
+        return [
+            AgentOption.model_validate(agent)
+            for agent in await JobCRUD.get_agents_with_jobs(db)
+        ]
 
     @staticmethod
     async def get_distinct_job_types(db: AsyncSession) -> list[str]:

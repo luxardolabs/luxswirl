@@ -26,6 +26,7 @@ from app.schemas.job_schema import JobCreate, JobInDB, JobUrls, ScanActionUrls
 from app.schemas.pagination_schema import build_pagination, paginated_url
 from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.check_core_service import CheckCoreService
+from app.services.core.job_api_core_service import JobApiCoreService
 from app.services.core.job_core_service import JobCoreService
 from app.services.core.settings_core_service import SettingsCoreService
 
@@ -228,7 +229,7 @@ class JobsViewService:
         return job_rows, total
 
     @staticmethod
-    async def cancel_job(db: AsyncSession, job_id: UUID) -> JobInDB:
+    async def cancel_job(db: AsyncSession, job_id: UUID) -> None:
         """
         Cancel a pending/running job.
 
@@ -236,20 +237,14 @@ class JobsViewService:
             db: Database session
             job_id: Job UUID
 
-        Returns:
-            Cancelled job
-
         Raises:
             NotFoundException: If job not found or already in terminal state
         """
-        job = await JobCoreService.cancel_job(db, job_id)
-        if not job:
+        if not await JobApiCoreService.cancel_job(db, job_id):
             raise NotFoundException(
                 f"Job not found or already in terminal state: {job_id}"
             )
-
         logger.info("Cancelled job", extra={"job_id": str(job_id)})
-        return JobInDB.model_validate(job)
 
     @staticmethod
     def transform_job_form_params(
@@ -609,7 +604,7 @@ class JobsViewService:
             params=params,
             priority=priority,
         )
-        job = await JobCoreService.create_job(db, job_data)
+        job = await JobApiCoreService.create_job(db, job_data)
         logger.info(
             "Created job via web UI",
             extra={"job_id": str(job.id), "job_type": job_type},
@@ -620,8 +615,7 @@ class JobsViewService:
     async def handle_delete_job(db: AsyncSession, job_id: UUID) -> None:
         """Delete a job. Raises NotFoundException (→ 404) if it doesn't exist;
         other failures propagate (→ 500). get_db() owns the transaction."""
-        job = await JobCoreService.get_job(db, job_id)
-        if not job:
+        if await JobApiCoreService.get_job(db, job_id) is None:
             raise NotFoundException(f"Job not found: {job_id}")
         await JobCoreService.delete_job(db, job_id)
         logger.info(

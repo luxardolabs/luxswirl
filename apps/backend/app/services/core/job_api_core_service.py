@@ -64,7 +64,7 @@ class JobApiCoreService:
 
     @staticmethod
     async def create_job(
-        db: AsyncSession, data: JobCreate, *, created_by: str
+        db: AsyncSession, data: JobCreate, *, created_by: str | None = None
     ) -> JobResponse:
         """Create a job.
 
