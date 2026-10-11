@@ -54,8 +54,6 @@ hypertable_unbounded = [
 ]
 tenant_cross = [
   { function = "get_by_token_hash", evidence = "the session token IS the credential — this is the pre-auth lookup that establishes who the caller is, so there is no user to scope by yet", token_source = "apps/backend/app/services/core/auth_core_service.py" },
-  { function = "delete_expired_before", evidence = "session cleanup task — deletes by expiry across every user by design" },
-  { function = "list_expired", evidence = "session cleanup task — reads by expiry across every user by design" },
 ]
 auth_public = [
   { function = "create_first_admin", evidence = "first-run setup: re-checks needs_setup() and redirects to /login the moment any user exists, so it is only reachable on an empty install" },
@@ -299,8 +297,6 @@ lint_logic = true
 # NOTE: the old pages/alerts.html carve-out is intentionally absent — that orphan has
 # since been deleted, so exempting it would be a phantom (evidence-less) entry.
 exempt = [
-  { page = "macros/tables.html",  evidence = "canonical table/pagination macro source — it emits THE <table>, not a violation" },
-  { page = "macros/filters.html", evidence = "filter_select macro source (its docstring mentions <select>)" },
   { page = "logo-demo",           evidence = "admin-only design playground, not a product page" },
 ]
 

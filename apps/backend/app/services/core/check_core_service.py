@@ -11,6 +11,7 @@ from uuid import UUID
 
 import httpx
 from shared.logger import get_logger
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import attributes
 
@@ -868,10 +869,12 @@ class CheckCoreService:
         """
         if not check_ids:
             return {"success_count": 0, "failure_count": 0, "errors": []}
+        # swallowed-exceptions: a DB failure is reported as failures; the savepoint keeps the caller's session committable, which is what delivers that report
         try:
-            success_count = await CheckCRUD.bulk_set_enabled(db, check_ids, enabled)
-            await CheckCoreService._touch_agents_of(db, check_ids)
-        except Exception as e:
+            async with db.begin_nested():
+                success_count = await CheckCRUD.bulk_set_enabled(db, check_ids, enabled)
+                await CheckCoreService._touch_agents_of(db, check_ids)
+        except SQLAlchemyError as e:
             logger.exception("Failed to bulk-toggle checks", extra={"enabled": enabled})
             return {
                 "success_count": 0,
@@ -896,10 +899,12 @@ class CheckCoreService:
         """
         if not check_ids:
             return {"success_count": 0, "failure_count": 0, "errors": []}
+        # swallowed-exceptions: a DB failure is reported as failures; the savepoint keeps the worker's session committable, which is what delivers that report
         try:
-            affected = await CheckCoreService._touch_agents_of(db, check_ids)
-            success_count = await CheckCRUD.bulk_delete_by_ids(db, check_ids)
-        except Exception as e:
+            async with db.begin_nested():
+                affected = await CheckCoreService._touch_agents_of(db, check_ids)
+                success_count = await CheckCRUD.bulk_delete_by_ids(db, check_ids)
+        except SQLAlchemyError as e:
             logger.exception("Failed to bulk-delete checks")
             return {
                 "success_count": 0,
