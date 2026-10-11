@@ -105,6 +105,31 @@ require_names = ["require_admin", "require_admin_web", "AdminUser", "AdminUserWe
 #     about (raw SQL confined to crud, layer direction, models out of views) are
 #     already enforced by dedicated rules plus the import-linter contracts, so a
 #     second hand-rolled pattern list would duplicate them.
+#
+#   fw.no_reserved_logging_keys — the fleet logging module is installed
+#     (app/core/logging_config.py, configure_logging() in app/main.py): it
+#     renames a colliding `extra=` key, which is the rule's documented end state.
+#
+#   fw.crud_base_single_pattern — every crud class is static methods taking the
+#     session per call; none defines __init__, so there is one pattern already.
+#
+#   fw.test_engine_pool_parity — the harness isolates by rolling back one held
+#     connection (tests/fixtures/db.py); the guard names this its end state.
+#
+#   fw.core_mutation_checks_permission — the one actor-dependent core gate (a
+#     synthetic check needs an admin) takes `actor_is_admin: bool`, because the
+#     JSON API has no user: every bearer token is admin-equivalent (SECURITY.md).
+#     The `user_id` params on UserCoreService/AuthCoreService are the TARGET of
+#     admin-gated (/users) or self-only (logout-all) routes, not an actor.
+#
+#   obs.* trace rules — luxswirl exports metrics only ([observability] above);
+#     there is no tracing to check. Adding it is a product decision, not drift.
+#
+#   collector.influx_async_client_only (agent) — the agent posts results to the
+#     server over HTTP; there is no InfluxDB client.
+#
+#   fw.no_orphan_pages / fw.no_orphan_partials — NOT confirmed: inert only while
+#     web/render.py's uncalled toast_partial renders a template by variable.
 
 [target.surfaces]
 # The operator console is one signed-in surface; the admin tier inside it
