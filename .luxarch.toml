@@ -127,9 +127,6 @@ require_names = ["require_admin", "require_admin_web", "AdminUser", "AdminUserWe
 #
 #   collector.influx_async_client_only (agent) — the agent posts results to the
 #     server over HTTP; there is no InfluxDB client.
-#
-#   fw.no_orphan_pages / fw.no_orphan_partials — NOT confirmed: inert only while
-#     web/render.py's uncalled toast_partial renders a template by variable.
 
 [target.surfaces]
 # The operator console is one signed-in surface; the admin tier inside it
