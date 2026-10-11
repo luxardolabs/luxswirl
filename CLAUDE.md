@@ -143,7 +143,7 @@ apps/backend/app/
 │   ├── pages/                       # Full pages
 │   ├── partials/                    # HTMX swap targets
 │   └── macros/                      # Reusable Jinja components
-├── static/                          # css/input.css -> css/app.css (Tailwind), JS, images
+├── static/                          # css/input.css -> css/app.css (Tailwind, built in the image; gitignored), JS, images
 └── services/views/                  # Template context assembly
     ├── *_view_service.py            # One per page family
     └── _dashboard_render.py         # Shared helper (underscore-prefixed)
@@ -506,7 +506,7 @@ A v1.0 security audit assessed risk as MODERATE → LOW after fixes, with positi
 
 ### Schema
 
-See `docs/architecture/DATABASE.md` and `docs/architecture/overview.md` for detailed documentation.
+See `docs/architecture/database.md` and `docs/architecture/overview.md` for detailed documentation.
 
 **Models** (`apps/backend/app/models/`):
 

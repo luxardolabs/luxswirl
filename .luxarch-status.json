@@ -1,6 +1,6 @@
 {
   "guard": "luxarch",
-  "guard_version": "0.279.1",
+  "guard_version": "0.281.0",
   "repo": "/repo",
   "targets": [
     {
@@ -572,7 +572,7 @@
           "rule": "fw.no_session_mutation_outside_crud",
           "status": "XFAIL",
           "since": "0.2.0",
-          "violations": 142,
+          "violations": 144,
           "deferred": true,
           "inert": false,
           "inert_reason": "",
@@ -988,13 +988,13 @@
         },
         {
           "rule": "fw.no_orphan_pages",
-          "status": "INERT",
+          "status": "FAIL",
           "since": "0.54.0",
-          "violations": 0,
+          "violations": 1,
           "deferred": false,
-          "inert": true,
-          "inert_reason": "this app renders a page by a computed name (a non-literal TemplateResponse), so an unreferenced page can't be proven dead. Orphan detection runs only when every render uses a literal template name.",
-          "fix": "",
+          "inert": false,
+          "inert_reason": "",
+          "fix": "Delete the orphan page, or add the route/include that renders it. If it IS reached (via a computed template name), this rule would already be inert \u2014 so a hit here means genuinely no static reference exists.",
           "example": ""
         },
         {
@@ -1131,12 +1131,12 @@
         },
         {
           "rule": "fw.no_orphan_partials",
-          "status": "INERT",
+          "status": "PASS",
           "since": "0.79.0",
           "violations": 0,
           "deferred": false,
-          "inert": true,
-          "inert_reason": "this app renders a template by a non-literal TemplateResponse, or includes one by a computed name with no pinnable literal prefix ({% include some_var %}), so an unreferenced partial can't be proven dead. (A computed include WITH a literal prefix \u2014 {% include 'x/' ~ v %}, or a var set to one \u2014 is scoped to that subtree, not a global stand-down.) Run `--sweep orphan-templates` to LIST the no-static-reference partials for review (NOT a clearance).",
+          "inert": false,
+          "inert_reason": "",
           "fix": "",
           "example": ""
         },
@@ -1560,13 +1560,13 @@
         },
         {
           "rule": "fw.committed_artifacts_declared",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.226.0",
-          "violations": 1,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
-          "fix": "Declare in .luxarch.toml: `[build] artifacts_committed = [\"<repo-relative path>\", \u2026]` plus `evidence = \"<who builds the image and why it cannot run the asset toolchain>\"`. Only for a repo whose image is built outside its control (external CI / k8s); otherwise build the asset in the image and gitignore it. See FLEET-BUILD-DEPLOY-STANDARD, 'Generated JS/CSS'.",
+          "fix": "",
           "example": ""
         },
         {
@@ -1582,12 +1582,12 @@
         },
         {
           "rule": "fw.surface_separation",
-          "status": "INERT",
+          "status": "PASS",
           "since": "0.228.0",
           "violations": 0,
           "deferred": false,
-          "inert": true,
-          "inert_reason": "opt-in \u2014 N/A until [surfaces].admin and [surfaces].tenant name the two surfaces' template roots (read: admin=[], tenant=[]). Each is a path prefix, or a list of them, relative to the web templates dir (`admin = \"pages/admin/\"`, `tenant = [\"pages/\", \"partials/\"]`); the admin root may sit inside the tenant one. A repo with an operator surface and a customer surface should declare them",
+          "inert": false,
+          "inert_reason": "",
           "fix": "",
           "example": ""
         },
@@ -1615,13 +1615,24 @@
         },
         {
           "rule": "fw.rate_limit_key_unspoofable",
-          "status": "PASS",
+          "status": "FAIL",
           "since": "0.278.0",
-          "violations": 0,
+          "violations": 1,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
-          "fix": "",
+          "fix": "Key on the address the server resolved from a BOUNDED trust list: set `--forwarded-allow-ips` / `FORWARDED_ALLOW_IPS` to the proxies YOU operate (the private ranges your reverse proxy sits in, or a single public address of one you run), never `*` and never a CDN's published ranges, and key on `request.client` / slowapi `get_remote_address`. Behind a CDN, key on its overwritten client header (`CF-Connecting-IP`) only on a request proven to come through YOUR zone. Never key on the leftmost X-Forwarded-For entry or the raw header: a proxy appends to it, so everything left of the proxy's entry is what the client sent. `--doc FLEET-RATE-LIMIT-STANDARD` \u00a71.3.",
+          "example": ""
+        },
+        {
+          "rule": "fw.trusted_host_enforced",
+          "status": "FAIL",
+          "since": "0.280.0",
+          "violations": 1,
+          "deferred": false,
+          "inert": false,
+          "inert_reason": "",
+          "fix": "Install the emitted middleware on the app the entry point serves, over a REQUIRED setting: `luxarch --emit trusted-host > app/core/trusted_host.py`, declare `ALLOWED_HOSTS: AllowedHosts` (no default) on the settings class, and `app.add_middleware(AllowedHostsMiddleware, allowed_hosts=settings.ALLOWED_HOSTS, health_paths=(...))` unconditionally. The hostnames go in each `.env.<env>` (`ALLOWED_HOSTS=dev.example.com` in `.env.dev`), with the key documented in `.env.example`: never hardcode them in code, and never ask for them. An nginx `default_server` returning 444 is recommended defence in depth, not a substitute. See `luxarch --doc FLEET-BUILD-DEPLOY-STANDARD` \"Trusted hosts\".",
           "example": ""
         },
         {
@@ -1692,13 +1703,13 @@
         },
         {
           "rule": "fw.generated_assets_built_in_image",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.262.0",
-          "violations": 1,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
-          "fix": "Add the Node stage to the Dockerfile (`luxarch --emit css-stage`) and COPY only its output into the app stage; gitignore the output; for live changes `make css-watch` (`luxarch --emit css-watch`), never npm on the host or a node service in compose. An image built by a pipeline this repo does not own declares `[build].artifacts_committed` with evidence instead. See luxarch --doc FLEET-BUILD-DEPLOY-STANDARD.",
+          "fix": "",
           "example": ""
         },
         {
@@ -1710,6 +1721,17 @@
           "inert": false,
           "inert_reason": "",
           "fix": "",
+          "example": ""
+        },
+        {
+          "rule": "fw.admin_bootstrap_safe",
+          "status": "FAIL",
+          "since": "0.280.0",
+          "violations": 1,
+          "deferred": false,
+          "inert": false,
+          "inert_reason": "",
+          "fix": "luxarch --doc FLEET-ADMIN-BOOTSTRAP-STANDARD is the standard; `luxarch --emit admin-bootstrap` (+ `-crud`, `-view`, `-router`, `-cli`, `-form`) is the implementation: no default password anywhere (the env-example key present but EMPTY), INITIAL_ADMIN_EMAIL / INITIAL_ADMIN_PASSWORD(_FILE) applied only while the users table is empty and with must_change_password set, otherwise /setup gated by a one-time token from the log, recovery via `python -m app.cli reset-password <user>`, and login sends a must_change_password user to the change form. A red here is aligned, not waived.",
           "example": ""
         },
         {
@@ -1857,11 +1879,11 @@
         }
       ],
       "summary": {
-        "PASS": 144,
-        "FAIL": 2,
+        "PASS": 147,
+        "FAIL": 4,
         "XFAIL": 2,
         "XPASS": 0,
-        "INERT": 20
+        "INERT": 17
       }
     },
     {
@@ -1944,6 +1966,17 @@
           "inert_reason": "",
           "fix": "",
           "example": ""
+        },
+        {
+          "rule": "fw.trusted_host_enforced",
+          "status": "INERT",
+          "since": "0.280.0",
+          "violations": 0,
+          "deferred": false,
+          "inert": true,
+          "inert_reason": "no HTTP surface: this collector target builds no FastAPI/Starlette app that a launch surface serves, so there is no Host header to refuse",
+          "fix": "",
+          "example": ""
         }
       ],
       "summary": {
@@ -1951,7 +1984,7 @@
         "FAIL": 0,
         "XFAIL": 0,
         "XPASS": 0,
-        "INERT": 1
+        "INERT": 2
       }
     }
   ],
@@ -2157,24 +2190,24 @@
       },
       {
         "rule": "repo.deploy_tag_is_immutable",
-        "status": "PASS",
+        "status": "FAIL",
         "since": "0.197.0",
-        "violations": 0,
+        "violations": 2,
         "deferred": false,
         "inert": false,
         "inert_reason": "",
-        "fix": "",
+        "fix": "pin an immutable identifier in `.env.<env>` (compose) or the overlay's `images: newTag:` (kustomize): `sha-<commit>` (every build, no ceremony \u2014 the sha is already computed for BUILD_COMMIT) or `TAG=<version>` for a cut release. A moving tag cannot be a deployment record: you cannot say which bits are running and you cannot roll back to them. `luxarch --emit image-block` prints the canonical scheme, where `:dev` survives only as a human-readable alias nothing pins. See --doc FLEET-BUILD-DEPLOY-STANDARD.",
         "example": ""
       },
       {
         "rule": "repo.release_scans_candidate",
-        "status": "PASS",
+        "status": "FAIL",
         "since": "0.250.0",
-        "violations": 0,
+        "violations": 2,
         "deferred": false,
         "inert": false,
         "inert_reason": "",
-        "fix": "",
+        "fix": "Re-emit `luxarch --emit image-block` (v14): its `release` builds, `docker save`s the tag it is about to push, runs `luxaudit --image-archive` (luxaudit >= 0.13.0) on THAT archive with THIS repo as `/repo` (`-v \"$(CURDIR)\":/repo`; `$(PWD)` is the caller's directory) and only then pushes. Multi-arch (`PLATFORMS`): push a `candidate-<commit>` tag nothing pins, pin its digest, pull + save + scan each platform by that digest, then `docker buildx imagetools create` the release tag from it. See --doc FLEET-BUILD-DEPLOY-STANDARD, Architectures.",
         "example": ""
       },
       {
@@ -2212,23 +2245,23 @@
       },
       {
         "rule": "repo.luxpm_receipt_current",
-        "status": "INERT",
+        "status": "PASS",
         "since": "0.211.0",
         "violations": 0,
         "deferred": false,
-        "inert": true,
-        "inert_reason": "no `.luxpm-receipt` is committed \u2014 there is no tracker attestation to verify. NOT a clearance: it means this repo's tracker currency is entirely self-reported, which is the drift this receipt exists to make visible. Issue one with `luxpm_issue_sync_receipt` and commit it verbatim",
+        "inert": false,
+        "inert_reason": "",
         "fix": "",
         "example": ""
       },
       {
         "rule": "repo.luxpm_backlog_triaged",
-        "status": "INERT",
+        "status": "PASS",
         "since": "0.252.0",
         "violations": 0,
         "deferred": false,
-        "inert": true,
-        "inert_reason": "no `.luxpm-receipt` is committed \u2014 the backlog counts are only trusted from a verified receipt (`repo.luxpm_receipt_current` says what to fix). NOT a clearance",
+        "inert": false,
+        "inert_reason": "",
         "fix": "",
         "example": ""
       },
@@ -2247,6 +2280,17 @@
         "rule": "repo.claude_pointer_present",
         "status": "PASS",
         "since": "0.213.0",
+        "violations": 0,
+        "deferred": false,
+        "inert": false,
+        "inert_reason": "",
+        "fix": "",
+        "example": ""
+      },
+      {
+        "rule": "repo.agent_instructions_resolve",
+        "status": "PASS",
+        "since": "0.280.0",
         "violations": 0,
         "deferred": false,
         "inert": false,
@@ -2509,12 +2553,12 @@
       },
       {
         "rule": "repo.stack_smoke_wired",
-        "status": "INERT",
+        "status": "PASS",
         "since": "0.268.0",
         "violations": 0,
         "deferred": false,
-        "inert": true,
-        "inert_reason": "no `dev-deploy` target in a committed makefile \u2014 no deploy to end with a probe",
+        "inert": false,
+        "inert_reason": "",
         "fix": "",
         "example": ""
       },
@@ -2527,6 +2571,17 @@
         "inert": false,
         "inert_reason": "",
         "fix": "",
+        "example": ""
+      },
+      {
+        "rule": "repo.image_block_wired",
+        "status": "FAIL",
+        "since": "0.280.0",
+        "violations": 7,
+        "deferred": false,
+        "inert": false,
+        "inert_reason": "",
+        "fix": "Paste `luxarch --emit image-block` into the Makefile and delete the hand-written publish and deploy targets; set its settings ABOVE it (REGISTRY, and as needed RELEASE_REGISTRY, PLATFORMS for a multi-arch image, PUBLIC_REGISTRY for a public copy, IMAGE_NAME, BUILD_CONTEXT). Where the block cannot serve this repo, escalate to the luxarch maintainer and leave this red lit: a hand-written copy is the drift the block exists to end. See --doc FLEET-BUILD-DEPLOY-STANDARD.",
         "example": ""
       },
       {
@@ -2674,10 +2729,10 @@
       },
       {
         "rule": "shared.no_inline_imports",
-        "status": "XPASS",
+        "status": "PASS",
         "since": "0.1.0",
         "violations": 0,
-        "deferred": true,
+        "deferred": false,
         "inert": false,
         "inert_reason": "",
         "fix": "",
@@ -2685,20 +2740,20 @@
       }
     ],
     "summary": {
-      "PASS": 61,
-      "FAIL": 0,
+      "PASS": 64,
+      "FAIL": 3,
       "XFAIL": 0,
-      "XPASS": 1,
-      "INERT": 4
+      "XPASS": 0,
+      "INERT": 1
     }
   },
   "summary": {
-    "PASS": 211,
-    "FAIL": 2,
+    "PASS": 217,
+    "FAIL": 7,
     "XFAIL": 2,
-    "XPASS": 1,
-    "INERT": 25
+    "XPASS": 0,
+    "INERT": 20
   },
-  "commit": "59b75b8ce8c1d60b0a5bf86bd41506411201abe6",
-  "generated_at": "2026-10-11T03:11:57Z"
+  "commit": "2e5cf7fb2b84476da4e40dc0bc7ab5948f99aaf0",
+  "generated_at": "2026-10-11T20:19:34Z"
 }
