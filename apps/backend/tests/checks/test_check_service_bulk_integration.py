@@ -340,3 +340,19 @@ class TestBulkFailureLeavesTheSessionUsable:
             await db.execute(select(func.count()).select_from(Check))
         ).scalar_one() >= 1
         await db.flush()
+
+
+class TestBulkCountsAddUp:
+    async def test_ids_with_no_check_are_failures(self, db: AsyncSession):
+        agent = make_agent()
+        db.add(agent)
+        await db.flush()
+        check = make_check(agent_id=agent.id)
+        db.add(check)
+        await db.flush()
+
+        result = await CheckCoreService.bulk_delete(db, [check.id, uuid4(), uuid4()])
+
+        assert result["success_count"] == 1
+        assert result["failure_count"] == 2
+        assert result["errors"] == ["2 check(s) not found"]

@@ -139,11 +139,11 @@ Web UI:    web/routers/     →  services/views/ →  services/core/  →  crud/
 ```
 apps/backend/app/
 ├── web/routers/                     # HTMX/Jinja route handlers (HTTP plumbing only)
-├── web/templates/
+├── templates/web/
 │   ├── pages/                       # Full pages
 │   ├── partials/                    # HTMX swap targets
 │   └── macros/                      # Reusable Jinja components
-├── web/static/                      # Tailwind output, JS, images
+├── static/                          # css/input.css -> css/app.css (Tailwind), JS, images
 └── services/views/                  # Template context assembly
     ├── *_view_service.py            # One per page family
     └── _dashboard_render.py         # Shared helper (underscore-prefixed)
@@ -708,7 +708,7 @@ return self.create_result(
 - UI displays PostgreSQL Query Details section with indigo/blue gradient
 - Shows performance breakdown and query metadata
 
-**UI Template** (`web/templates/partials/check_detail_panel.html`):
+**UI Template** (`templates/web/partials/panels/checks/check_detail_panel.html`):
 
 - Lines 202-289: DNS section
 - Lines 291-357: MySQL section

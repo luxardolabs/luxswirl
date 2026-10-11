@@ -42,3 +42,9 @@ async def handle(db: AsyncSession, job: MaintenanceJob) -> None:
             "job_id": str(job.id),
         },
     )
+    # The core reports a failed statement as failures rather than raising (its
+    # savepoint keeps the session usable), so a job that changed nothing must
+    # fail itself, or the worker finalises it as done. A partial result (some
+    # checks already gone) completes with its counts logged above.
+    if result["success_count"] == 0 and result["failure_count"]:
+        raise RuntimeError("; ".join(result["errors"]))

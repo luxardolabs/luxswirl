@@ -87,6 +87,41 @@ async def _finalize(job_id, success: bool, error: str | None = None) -> None:
             )
 
 
+async def process_next_job() -> bool:
+    """Claim the next queued job, run its handler and record the outcome.
+
+    A handler that raises leaves the job FAILED with its error; one that
+    returns leaves it DONE. Returns False when the queue was empty.
+    """
+    job = await _claim_one()
+    if job is None:
+        return False
+
+    logger.info(
+        "Maintenance worker claimed job",
+        extra={
+            "job_id": str(job.id),
+            "kind": job.kind,
+            "target_id": str(job.target_id) if job.target_id else None,
+        },
+    )
+    try:
+        await _run_handler(job)
+    except Exception as e:
+        logger.exception(
+            "Maintenance job handler failed",
+            extra={"job_id": str(job.id), "kind": job.kind},
+        )
+        await _finalize(job.id, success=False, error=str(e))
+    else:
+        await _finalize(job.id, success=True)
+        logger.info(
+            "Maintenance job completed",
+            extra={"job_id": str(job.id), "kind": job.kind},
+        )
+    return True
+
+
 async def _periodic_cleanup_if_due(last_cleanup_at: list) -> None:
     """Drop terminal rows older than _TERMINAL_RETENTION once per hour."""
     now = utc_now()
@@ -111,35 +146,9 @@ async def _maintenance_worker_loop() -> None:
 
     while True:
         try:
-            job = await _claim_one()
-            if job is None:
+            if not await process_next_job():
                 await _periodic_cleanup_if_due(last_cleanup_at)
                 await asyncio.sleep(_POLL_IDLE_SECONDS)
-                continue
-
-            logger.info(
-                "Maintenance worker claimed job",
-                extra={
-                    "job_id": str(job.id),
-                    "kind": job.kind,
-                    "target_id": str(job.target_id) if job.target_id else None,
-                },
-            )
-
-            try:
-                await _run_handler(job)
-            except Exception as e:
-                logger.exception(
-                    "Maintenance job handler failed",
-                    extra={"job_id": str(job.id), "kind": job.kind},
-                )
-                await _finalize(job.id, success=False, error=str(e))
-            else:
-                await _finalize(job.id, success=True)
-                logger.info(
-                    "Maintenance job completed",
-                    extra={"job_id": str(job.id), "kind": job.kind},
-                )
 
         except asyncio.CancelledError:
             logger.info("Maintenance worker cancelled")

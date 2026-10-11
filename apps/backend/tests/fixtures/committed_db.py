@@ -28,6 +28,7 @@ import fixtures.db as _dbfix
 # Candidate tables worker-job tests touch. Only those that actually exist are
 # truncated, so the list can stay generous without breaking on schema changes.
 _WORKER_TABLES = (
+    "maintenance_jobs",
     "job_executions",
     "job_configurations",
     "agent_metrics",
