@@ -20,9 +20,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.crud.scheduler_crud import JobConfigurationCRUD, JobExecutionCRUD
 from app.db import worker_session
 from app.models.enum_model import SchedulerExecutionStatus
-from app.models.scheduler_model import JobConfiguration, JobExecution
+from app.models.scheduler_model import JobConfiguration
 
 # Import job functions from cleanup + monitoring core services
+from app.schemas.scheduler_schema import (
+    SchedulerExecutionResponse,
+    SchedulerJobResponse,
+)
 from app.services.core.cleanup_core_service import (
     cleanup_check_artifacts,
     cleanup_notification_logs,
@@ -345,12 +349,13 @@ class SchedulerCoreService:
     # Admin API methods
     # =========================================================================
 
-    async def get_all_jobs(self) -> list[JobConfiguration]:
+    async def get_all_jobs(self) -> list[SchedulerJobResponse]:
         """Get all job configurations."""
         async with worker_session() as db:
-            return await JobConfigurationCRUD.get_all_ordered(db)
+            jobs = await JobConfigurationCRUD.get_all_ordered(db)
+            return [SchedulerJobResponse.model_validate(job) for job in jobs]
 
-    async def toggle_job(self, job_key: str) -> JobConfiguration:
+    async def toggle_job(self, job_key: str) -> SchedulerJobResponse:
         """
         Toggle a job's enabled status.
 
@@ -358,7 +363,7 @@ class SchedulerCoreService:
             job_key: Job ID to toggle
 
         Returns:
-            Updated JobConfiguration
+            The updated job
 
         Raises:
             ValueError: If job not found
@@ -376,9 +381,9 @@ class SchedulerCoreService:
             logger.info(
                 "Toggled job", extra={"job_key": job_key, "enabled": job.enabled}
             )
-            return job
+            return SchedulerJobResponse.model_validate(job)
 
-    async def execute_job_synchronously(self, job_key: str) -> dict:
+    async def execute_job_synchronously(self, job_key: str) -> dict[str, Any]:
         """
         Execute a job synchronously (wait for completion).
 
@@ -477,7 +482,7 @@ class SchedulerCoreService:
                 job.failed_runs += 1
                 raise
 
-    async def reset_job(self, job_key: str) -> JobConfiguration:
+    async def reset_job(self, job_key: str) -> SchedulerJobResponse:
         """
         Reset a job's retry state and re-enable it.
 
@@ -485,7 +490,7 @@ class SchedulerCoreService:
             job_key: Job ID to reset
 
         Returns:
-            Updated JobConfiguration
+            The updated job
 
         Raises:
             ValueError: If job not found
@@ -510,11 +515,11 @@ class SchedulerCoreService:
             await db.refresh(job)
 
             logger.info("Job reset", extra={"job_key": job_key})
-            return job
+            return SchedulerJobResponse.model_validate(job)
 
     async def get_job_history(
         self, job_key: str, limit: int = 50
-    ) -> tuple[JobConfiguration, list[JobExecution]]:
+    ) -> tuple[SchedulerJobResponse, list[SchedulerExecutionResponse]]:
         """
         Get job configuration and execution history.
 
@@ -535,7 +540,9 @@ class SchedulerCoreService:
                 raise ValueError(f"Job {job_key} not found")
 
             executions = await JobExecutionCRUD.get_by_job_key(db, job_key, limit=limit)
-            return job, executions
+            return SchedulerJobResponse.model_validate(job), [
+                SchedulerExecutionResponse.model_validate(ex) for ex in executions
+            ]
 
 
 # Global instance
