@@ -3,7 +3,7 @@ name: adversarial-audit
 description: Attack the WHOLE platform, not just a change — take the attack surface from `luxarch --sweep attack-surface`, rank it by this repo's committed audit profile, hand each slice to an independent attacker, verify every break with a second agent, and file each confirmed break in LuxPM with its failing test. Direct it in plain words ("what changed since the last release", "just payments, go deep", "quick"); re-runs attack only what changed. Use for a first full review of an app, on the owner's schedule, or when asked to audit or red-team the platform.
 ---
 
-<!-- luxarch:adversarial-audit-skill asset v2 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit adversarial-audit-skill`. -->
+<!-- luxarch:adversarial-audit-skill asset v3 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit adversarial-audit-skill`. -->
 
 # Adversarial audit: the whole platform
 
@@ -11,7 +11,7 @@ Emitted from luxarch (`luxarch --emit adversarial-audit-skill`); re-emit, never 
 
 `/adversarial` attacks a change, so its surface is `git diff` and code that never changes is never attacked. This skill takes its surface from the guard's inventory of the platform instead. The guard decides what the platform is, and the repo's profile says what matters in it; the agents attack. One independent attacker per slice, a reproduced failure as the only evidence, and a second pass before anything is believed.
 
-**Cost.** One attacker per slice plus verifiers. Start it on purpose, never from a timer or a hook. If the person did not ask for an audit, offer it in one line instead of running it.
+**Cost.** Measured on a 130-route app (2026-10-11): the default direction attacked 8 slices with 51 agents (8 attackers, 43 verifiers), about 3.7M tokens and 14 minutes, and found 42 real defects. So budget roughly **450k tokens per slice attacked** at the default depth; `quick` is about half that, `deep` more. Start it on purpose, never from a timer or a hook. If the person did not ask for an audit, offer it in one line instead of running it.
 
 ## 1. Inventory
 
@@ -81,7 +81,7 @@ What the owner says is a hard limit, applied in the order they said it; the defa
 **Before spending anything, print one line**, then go:
 
 ```
-Plan: <the direction as you read it> · tiers <…> · <n> slices · <k> attackers (+ verify[, chaining]) · skipping <m> (<why>)
+Plan: <the direction as you read it> · tiers <…> · <n> slices · <k> attackers (+ verify[, chaining]) · ≈<n × 450k> tokens · skipping <m> (<why>)
 ```
 
 Ask the owner first only when their words conflict ("quick but everything"), when the plan would spend more than twice the default, or when the profile needs their review (step 2).
@@ -143,6 +143,8 @@ for the guard or test that should already have caught it. Read-only except <scra
 REPORT: REAL or NOT REAL, with the run's output; for REAL, the severity and the smallest fix.
 ```
 
+Tier the verification by what is at stake. **Full verification** (the second agent above) for every critical, high or medium finding, and for any finding about security, tenancy, money or data integrity whatever its rating. **Light verification** for a low-severity correctness finding (an unhandled error that returns 500 instead of 422, a missing validation): you re-run its reproduction once yourself, with no second agent, and mark it `verified: light` in the report and the issue. A light check that does not reproduce the failure is NOT REAL, the same as a full one.
+
 Only REAL findings go on. A NOT REAL one is recorded in the run's report with its reason, never filed.
 
 ## 6. `deep` only: the chaining pass
@@ -152,6 +154,8 @@ One more independent agent gets every REAL finding and UNREPRODUCED lead from th
 ## 7. File the burn-down and record the run
 
 For each REAL finding, search LuxPM first (`luxpm_semantic_search`) and comment on a matching issue if one exists. Otherwise create one issue per finding under the repo's audit epic (`luxpm_list_issues` with `search: "[adversarial-audit]"`; create `[adversarial-audit] <repo>` if none exists): the route or job, what goes wrong, severity, the reproducing test (its text, or its path and failing line), and the fix. Priority follows severity: a security or money finding is urgent or high. A finding a fleet guard or emitted asset claims to catch but passed is also a `/escalate`, so the guard learns it for every repo.
+
+**Keep the reproductions where the burn-down can reach them.** `<scratch>` dies with this session, and the burn-down happens later, often in another one. Before filing, copy each attacker's `<scratch>/<slice id>/` and the verifiers' files into `.adversarial-audit/runs/<date>/<slice id>/` in the repo, and make sure `.gitignore` carries `/.adversarial-audit/` (commit that line; the run files themselves stay uncommitted). Each issue cites its reproduction there by path and failing line; never paste a whole verifier transcript into an issue. File the issues in one batch, not one call per issue.
 
 Then record the run in two places:
 
@@ -166,13 +170,13 @@ Then record the run in two places:
   findings = ["<issue keys>"]
   ```
 
-  Delete the tables of `retired` ids; leave unattacked slices' tables as they were. A slice whose round did not finish gets no table, so it stays `stale` or `never`.
+  Delete the tables of the `retired` ids the sweep lists for the target you audited (in a repo with several targets, each id carries its target's `<app>:` prefix and the sweep only ever retires its own); leave unattacked slices' tables as they were. A slice whose round did not finish gets no table, so it stays `stale` or `never`.
 
 - **The epic, in LuxPM.** One activity titled `adversarial-audit run <date>`: the Plan line, the commit, the slices attacked and skipped (with why), and the counts CONFIRMED, REAL, NOT REAL, UNREPRODUCED and filed. LuxPM holds the findings and their burn-down; the file holds what was attacked, when, and what matters.
 
 ## 8. Burn it down
 
-Each finding is worked like any red: its reproducing test moves into the suite, is seen to fail, the fix makes it pass, and `/wrap-up` closes the issue with that evidence. Work them in severity order. Never fix a finding inside the audit run: the attacker and the fixer are different passes.
+Each finding is worked like any red: its reproducing test moves from `.adversarial-audit/runs/…` into the suite, is seen to fail, the fix makes it pass, and `/wrap-up` closes the issue with that evidence. Once every finding of a run is closed, delete that run's directory. Work them in severity order. Never fix a finding inside the audit run: the attacker and the fixer are different passes.
 
 ## 9. Report
 

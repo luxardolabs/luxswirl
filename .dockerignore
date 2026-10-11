@@ -35,8 +35,10 @@ ENV/
 env/
 .venv
 
-# Node
+# Node (any depth: the css stage copies apps/backend/, whose host node_modules must not
+# overlay the stage's own npm ci)
 node_modules/
+**/node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

@@ -1,6 +1,6 @@
 {
   "guard": "luxlint",
-  "guard_version": "0.63.1",
+  "guard_version": "0.65.0",
   "repo": "/repo",
   "source": [
     "apps/backend/app",
@@ -60,10 +60,16 @@
     },
     {
       "rule": "secret.githooks_wired",
-      "status": "PASS",
+      "status": "FAIL",
       "since": "0.10.0",
-      "violations": 0,
-      "sites": [],
+      "violations": 1,
+      "sites": [
+        {
+          "path": "hooks/commit-msg",
+          "line": null,
+          "detail": "hooks/commit-msg is not the hook this luxlint emits (the scan of the commit MESSAGE, which is published with the commit): a hand-edited or older copy can scan nothing and still pass a token check. Re-run `luxlint --emit-hooks | sh` and commit hooks/."
+        }
+      ],
       "deferred": false
     },
     {
@@ -188,13 +194,13 @@
     }
   ],
   "summary": {
-    "PASS": 22,
-    "FAIL": 0,
+    "PASS": 21,
+    "FAIL": 1,
     "XFAIL": 0,
     "XPASS": 0,
     "INERT": 0
   },
   "mypy": "separate: `luxlint --mypy` ([mypy].baseline ratchet)",
-  "commit": "59b75b8ce8c1d60b0a5bf86bd41506411201abe6",
-  "generated_at": "2026-10-11T03:11:57Z"
+  "commit": "2e5cf7fb2b84476da4e40dc0bc7ab5948f99aaf0",
+  "generated_at": "2026-10-11T20:19:34Z"
 }

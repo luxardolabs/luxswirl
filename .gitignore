@@ -73,6 +73,8 @@ backups/
 # Node / frontend tooling (Tailwind build deps — not committed)
 # =============================================================================
 node_modules/
+# Compiled Tailwind output: the backend image builds its own (Dockerfile css stage).
+apps/backend/app/static/css/app.css
 
 # Lint cache not covered above
 .import_linter_cache/

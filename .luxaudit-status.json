@@ -1,16 +1,23 @@
 {
   "guard": "luxaudit",
-  "guard_version": "0.13.2",
+  "guard_version": "0.14.0",
   "repo": "/repo",
   "packages": 99,
   "source": "apps/backend/poetry.lock, apps/agent/poetry.lock",
   "summary": {
-    "PASS": 99,
-    "FAIL": 0,
+    "PASS": 98,
+    "FAIL": 1,
     "XFAIL": 0,
     "INERT": 1
   },
-  "vulnerable": [],
+  "vulnerable": [
+    {
+      "package": "mako",
+      "version": "1.4.1",
+      "vuln_id": "CVE-2026-102991",
+      "fix": "1.4.2"
+    }
+  ],
   "deferred": [],
   "banned": [],
   "not_audited": [],
@@ -26,6 +33,6 @@
     "vulnerable": [],
     "deferred": []
   },
-  "commit": "59b75b8ce8c1d60b0a5bf86bd41506411201abe6",
-  "generated_at": "2026-10-11T03:11:57Z"
+  "commit": "2e5cf7fb2b84476da4e40dc0bc7ab5948f99aaf0",
+  "generated_at": "2026-10-11T20:19:34Z"
 }

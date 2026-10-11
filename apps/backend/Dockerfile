@@ -1,6 +1,28 @@
 # LuxSwirl backend (FastAPI server + HTMX portal).
 # Build context = repo root: `docker build -f apps/backend/Dockerfile .`
 # No Playwright/Chromium here — synthetic checks run in the agent image only.
+# The app directory within the repo-root build context, for the css stage below.
+ARG APP_DIR=apps/backend
+
+# luxarch:css-stage asset v2 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit css-stage`.
+# ---- css: compile the stylesheet; only its output reaches the app image (luxarch --doc FLEET-BUILD-DEPLOY-STANDARD) ----
+# Paste above your app stage, then copy ONLY the output into it:
+#   COPY --from=css /build/app/static/css/app.css /app/app/static/css/app.css
+# Node, node_modules and the Tailwind toolchain never reach the runtime image.
+# APP_DIR is the app's directory WITHIN the build context; unset, it is the context itself. When the
+# image builds from a wider context than the app (`-f apps/backend/Dockerfile` from the repo root, to
+# vendor a shared package), bind it ONCE above the Dockerfile's first FROM, outside this block:
+#   ARG APP_DIR=apps/backend
+# The COPY --from line above is unchanged: the stage lays the app directory out at /build either way.
+FROM node:24-slim AS css
+ARG APP_DIR
+WORKDIR /build
+COPY ${APP_DIR:-.}/package.json ${APP_DIR:-.}/package-lock.json ./
+RUN npm ci --no-audit --no-fund
+COPY ${APP_DIR:-.}/ .
+RUN npm run build:css
+# ---- end css stage ----
+
 FROM python:3.14-slim
 
 WORKDIR /app
@@ -51,6 +73,8 @@ LABEL org.opencontainers.image.source="https://github.com/luxardolabs/luxswirl" 
 # app package -> /app/app ; shared -> /app/shared ; alembic at component root.
 # PYTHONPATH=/app resolves both `import app.*` and `import shared.*`.
 COPY --chown=luxswirl:luxswirl apps/backend/app /app/app
+# The stylesheet the css stage compiled from this same source (gitignored on the host).
+COPY --from=css --chown=luxswirl:luxswirl /build/app/static/css/app.css /app/app/static/css/app.css
 COPY --chown=luxswirl:luxswirl apps/backend/alembic /app/alembic
 COPY --chown=luxswirl:luxswirl apps/backend/alembic.ini /app/alembic.ini
 COPY --chown=luxswirl:luxswirl apps/shared /app/shared
