@@ -5,6 +5,7 @@ Provides web-specific alert operations by delegating to core services.
 This layer isolates web routers from direct core service dependencies.
 """
 
+from typing import Any
 from uuid import UUID
 
 from fastapi import Request
@@ -13,7 +14,7 @@ from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.enum_model import AlertTriggerType
-from app.schemas.alert_schema import AlertCreate, AlertUpdate
+from app.schemas.alert_schema import AlertCreate, AlertResponse, AlertUpdate
 from app.schemas.auth_schema import AuthedUser
 from app.services.core.alert_core_service import AlertCoreService
 from app.services.core.check_core_service import CheckCoreService
@@ -32,7 +33,7 @@ class AlertsViewService:
     @staticmethod
     async def get_alert_form_data(
         db: AsyncSession, request: Request, alert_id: UUID | None = None
-    ) -> dict:
+    ) -> dict[str, Any]:
         """
         Get all data needed for alert create/edit form.
 
@@ -47,7 +48,7 @@ class AlertsViewService:
         # Get alert if editing
         alert = None
         if alert_id:
-            alert = await AlertCoreService.get_alert_by_id(db, alert_id)
+            alert = await AlertCoreService.get_alert_response(db, alert_id)
 
         # Get available notification providers
         providers, _ = await NotificationCoreService.list_providers(db, limit=1000)
@@ -77,7 +78,7 @@ class AlertsViewService:
         name: str,
         description: str | None,
         trigger_type: str,
-        trigger_config: dict,
+        trigger_config: dict[str, Any],
         is_enabled: bool,
         is_global: bool,
         notify_on_recovery: bool,
@@ -87,7 +88,7 @@ class AlertsViewService:
         custom_message: str | None,
         notification_provider_ids: list[UUID],
         check_ids: list[UUID],
-    ):
+    ) -> AlertResponse:
         """Build the AlertCreate DTO from raw form inputs and create the alert."""
         alert_data = AlertCreate(
             name=name,
@@ -104,7 +105,7 @@ class AlertsViewService:
             notification_provider_ids=notification_provider_ids,
             check_ids=check_ids,
         )
-        return await AlertCoreService.create_alert(db, alert_data)
+        return await AlertCoreService.create_alert_response(db, alert_data)
 
     @staticmethod
     async def update_alert(
@@ -119,8 +120,8 @@ class AlertsViewService:
         max_resends: int | None,
         custom_subject: str | None,
         custom_message: str | None,
-        trigger_config: dict | None,
-    ):
+        trigger_config: dict[str, Any] | None,
+    ) -> AlertResponse:
         """Build the AlertUpdate DTO from raw form inputs and update the alert."""
         update_data = AlertUpdate(
             name=name,
@@ -133,17 +134,19 @@ class AlertsViewService:
             custom_message=custom_message or None,
             trigger_config=trigger_config,
         )
-        return await AlertCoreService.update_alert(db, alert_id, update_data)
+        return await AlertCoreService.update_alert_response(db, alert_id, update_data)
 
     @staticmethod
-    async def set_alert_enabled(db: AsyncSession, alert_id: UUID, enabled: bool):
+    async def set_alert_enabled(
+        db: AsyncSession, alert_id: UUID, enabled: bool
+    ) -> AlertResponse:
         """Enable/disable an alert (builds the partial AlertUpdate internally)."""
-        return await AlertCoreService.update_alert(
+        return await AlertCoreService.update_alert_response(
             db, alert_id, AlertUpdate(is_enabled=enabled)
         )
 
     @staticmethod
-    async def delete_alert(db: AsyncSession, alert_id: UUID):
+    async def delete_alert(db: AsyncSession, alert_id: UUID) -> None:
         """
         Delete an alert rule (soft delete).
 
@@ -162,7 +165,7 @@ class AlertsViewService:
         Returns the toast message the caller shows.
         """
         minutes = AlertsViewService.SNOOZE_MINUTES
-        mapping = await AlertCoreService.snooze_alert_check(
+        snooze = await AlertCoreService.snooze_alert_check(
             db, alert_id, check_id, minutes=minutes
         )
         logger.info(
@@ -170,11 +173,11 @@ class AlertsViewService:
             extra={
                 "username": current_user.username,
                 "user_id": str(current_user.id),
-                "snoozed_until": str(mapping.snoozed_until),
-                "alert_name": mapping.alert.name,
-                "alert_id": str(mapping.alert.id),
-                "check_name": mapping.check.display_name,
-                "check_id": str(mapping.check.id),
+                "snoozed_until": str(snooze.snoozed_until),
+                "alert_name": snooze.alert_name,
+                "alert_id": str(snooze.alert_id),
+                "check_name": snooze.check_name,
+                "check_id": str(snooze.check_id),
             },
         )
         return f"Snoozed for {minutes} minutes"
@@ -194,7 +197,7 @@ class AlertsViewService:
     @staticmethod
     async def toggle_alert_enabled(db: AsyncSession, alert_id: UUID) -> HTMLResponse:
         """Flip an alert's enabled flag and ask the page to refresh."""
-        alert = await AlertCoreService.get_alert_by_id(db, alert_id)
+        alert = await AlertCoreService.get_alert_response(db, alert_id)
         updated = await AlertsViewService.set_alert_enabled(
             db, alert_id, not alert.is_enabled
         )

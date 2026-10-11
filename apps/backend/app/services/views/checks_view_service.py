@@ -21,7 +21,6 @@ from app.core.exceptions import (
 )
 from app.core.synthetic_security import SyntheticSecurityError
 from app.models.enum_model import CheckType, MaintenanceJobKind, options_for
-from app.schemas.alert_schema import AlertOption
 from app.schemas.auth_schema import AuthedUser
 from app.schemas.check_schema import (
     BulkCheckCreateRequest,
@@ -168,12 +167,6 @@ class ChecksViewService:
     # ====================================================================
 
     @staticmethod
-    async def get_alerts_list(db: AsyncSession) -> list[AlertOption]:
-        """Get all alerts for dropdowns."""
-        alerts, _ = await AlertCoreService.list_alerts(db, limit=1000)
-        return [AlertOption.model_validate(alert) for alert in alerts]
-
-    @staticmethod
     async def build_dependents_panel_context(
         db: AsyncSession,
         request: Request,
@@ -261,7 +254,7 @@ class ChecksViewService:
             Dict with agents and alerts lists
         """
         agents = await AgentCoreService.list_agent_options(db)
-        alerts = await ChecksViewService.get_alerts_list(db)
+        alerts = await AlertCoreService.list_alert_options(db)
 
         return {
             "agents": agents,
@@ -282,7 +275,7 @@ class ChecksViewService:
             db, check_id, include_script_code=True
         )
         agents = await AgentCoreService.list_agent_options(db)
-        alerts = await ChecksViewService.get_alerts_list(db)
+        alerts = await AlertCoreService.list_alert_options(db)
         assigned_alert_ids = await AlertCoreService.get_alert_ids_for_check(
             db, check.id
         )
@@ -306,7 +299,7 @@ class ChecksViewService:
         """
         source_check = await CheckCoreService.get_check_by_id(db, check_id)
         agents = await AgentCoreService.list_agent_options(db)
-        alerts = await ChecksViewService.get_alerts_list(db)
+        alerts = await AlertCoreService.list_alert_options(db)
 
         return {
             "source_check": source_check,

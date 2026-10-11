@@ -83,33 +83,13 @@ async def create_alert(
 ) -> AlertResponse:
     """Create a new alert."""
     try:
-        alert = await AlertCoreService.create_alert(db, data)
+        return await AlertCoreService.create_alert_response(db, data)
     except ValidationException as e:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(e)
         ) from e
     except DuplicateResourceException as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) from e
-
-    return AlertResponse(
-        id=alert.id,
-        name=alert.name,
-        description=alert.description,
-        trigger_type=alert.trigger_type,
-        trigger_config=alert.trigger_config,
-        is_enabled=alert.is_enabled,
-        is_global=alert.is_global,
-        notify_on_recovery=alert.notify_on_recovery,
-        resend_interval_minutes=alert.resend_interval_minutes,
-        max_resends=alert.max_resends,
-        custom_subject=alert.custom_subject,
-        custom_message=alert.custom_message,
-        notification_provider_count=len(data.notification_provider_ids),
-        check_count=len(data.check_ids),
-        created_at=alert.created_at,
-        updated_at=alert.updated_at,
-        deleted_at=alert.deleted_at,
-    )
 
 
 @router.patch(
@@ -176,7 +156,7 @@ async def add_notification_provider(
 ) -> MappingCreatedResponse:
     """Add a notification provider to an alert."""
     try:
-        mapping = await AlertCoreService.add_notification_provider(
+        mapping_id = await AlertCoreService.add_notification_provider(
             db, alert_id, provider_id
         )
     except NotFoundException as e:
@@ -187,7 +167,7 @@ async def add_notification_provider(
         ) from e
 
     return MappingCreatedResponse(
-        message="Notification provider added successfully", mapping_id=mapping.id
+        message="Notification provider added successfully", mapping_id=mapping_id
     )
 
 
@@ -230,7 +210,7 @@ async def add_check(
 ) -> MappingCreatedResponse:
     """Add a check to an alert."""
     try:
-        mapping = await AlertCoreService.add_check(db, alert_id, check_id)
+        mapping_id = await AlertCoreService.add_check(db, alert_id, check_id)
     except NotFoundException as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
     except ValidationException as e:
@@ -239,7 +219,7 @@ async def add_check(
         ) from e
 
     return MappingCreatedResponse(
-        message="Check added successfully", mapping_id=mapping.id
+        message="Check added successfully", mapping_id=mapping_id
     )
 
 
