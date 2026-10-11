@@ -45,26 +45,29 @@ class TestCreateAgent:
 
 class TestRegisterAgent:
     async def test_creates_with_pending_status(self, db: AsyncSession):
-        agent = await AgentCoreService.register_agent(
+        registered = await AgentCoreService.register_agent(
             db,
             hostname="newcomer.example.test",
             ip_address="10.0.0.1",
         )
+        agent = await _stored(db, registered.id)
         assert agent.approval_status == "pending"
         assert agent.agent_name is None  # assigned during approval
         assert agent.hostname == "newcomer.example.test"
 
     async def test_packs_tags_as_array(self, db: AsyncSession):
-        agent = await AgentCoreService.register_agent(
+        registered = await AgentCoreService.register_agent(
             db,
             hostname="h",
             tags=["prod", "us-east"],
         )
+        agent = await _stored(db, registered.id)
         # Tags column is a real ARRAY(String) for agents (LUXSWIRL-176)
         assert agent.tags == ["prod", "us-east"]
 
     async def test_none_tags_stored_as_none(self, db: AsyncSession):
-        agent = await AgentCoreService.register_agent(db, hostname="h", tags=None)
+        registered = await AgentCoreService.register_agent(db, hostname="h", tags=None)
+        agent = await _stored(db, registered.id)
         assert agent.tags is None
 
 
@@ -140,7 +143,7 @@ async def _stored(db: AsyncSession, agent_id: UUID) -> Agent:
 class TestApprovalWorkflow:
     async def test_approve_pending_agent_assigns_api_key(self, db: AsyncSession):
         pending = await AgentCoreService.register_agent(db, hostname="h")
-        assert pending.approval_status == "pending"
+        assert (await _stored(db, pending.id)).approval_status == "pending"
 
         approved, plaintext_key = await AgentCoreService.approve_agent(db, pending.id)
         assert approved.id == pending.id

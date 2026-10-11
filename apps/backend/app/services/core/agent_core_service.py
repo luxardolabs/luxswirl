@@ -30,10 +30,12 @@ from app.schemas.agent_schema import (
     AgentHeartbeat,
     AgentHeartbeatResponse,
     AgentListResponse,
+    AgentMetricSample,
     AgentOption,
     AgentResponse,
     AgentStatsResponse,
     AgentUpdate,
+    PendingAgent,
 )
 from app.services.core.job_core_service import JobCoreService
 from app.services.core.metrics_collector_core_service import MetricsCollectorCoreService
@@ -162,7 +164,7 @@ class AgentCoreService:
     @staticmethod
     async def resolve_for_assignment(
         db: AsyncSession, agent_id: UUID | None, assignment_mode: str
-    ) -> tuple[Agent, UUID]:
+    ) -> AgentOption:
         """
         Resolve which agent to use for a check, based on assignment mode.
 
@@ -178,7 +180,7 @@ class AgentCoreService:
             assignment_mode: "manual", "replicate", or "distribute"
 
         Returns:
-            Tuple of (Agent, agent_id_string_to_persist)
+            The agent the check is assigned to (its id is what to persist)
 
         Raises:
             AgentNotFoundException: If agent not found, or no agents available
@@ -187,10 +189,9 @@ class AgentCoreService:
         if assignment_mode == "manual":
             if agent_id is None:
                 raise AgentNotFoundException("Agent required for manual assignment")
-            agent = await AgentCoreService.get_agent_by_id(db, agent_id)
-            if not agent:
-                raise AgentNotFoundException(str(agent_id))
-            return agent, agent.id
+            return AgentOption.model_validate(
+                await AgentCoreService.get_agent_by_id(db, agent_id)
+            )
 
         # replicate / distribute: pick first available agent as placeholder
         agents, _ = await AgentCoreService.list_agents(
@@ -198,8 +199,7 @@ class AgentCoreService:
         )
         if not agents:
             raise AgentNotFoundException("No agents available")
-        agent = agents[0]
-        return agent, agent.id
+        return AgentOption.model_validate(agents[0])
 
     @staticmethod
     async def get_agent_by_name(db: AsyncSession, agent_name: str) -> Agent | None:
@@ -389,7 +389,7 @@ class AgentCoreService:
         ip_address: str | None = None,
         version: str | None = None,
         tags: list[str] | None = None,
-    ) -> Agent:
+    ) -> AgentOption:
         """
         Register a new agent with pending approval status.
 
@@ -430,7 +430,7 @@ class AgentCoreService:
                 "ip_address": ip_address,
             },
         )
-        return agent
+        return AgentOption.model_validate(agent)
 
     @staticmethod
     async def update_agent(
@@ -1160,7 +1160,7 @@ class AgentCoreService:
         return AgentOption.model_validate(agent)
 
     @staticmethod
-    async def get_pending_agents(db: AsyncSession) -> Sequence[Agent]:
+    async def get_pending_agents(db: AsyncSession) -> list[PendingAgent]:
         """
         Get all agents with pending approval status.
 
@@ -1170,7 +1170,9 @@ class AgentCoreService:
         Returns:
             List of pending agents
         """
-        return await AgentCRUD.list_pending(db)
+        return [
+            PendingAgent.model_validate(row) for row in await AgentCRUD.list_pending(db)
+        ]
 
     @staticmethod
     async def get_all_tags(db: AsyncSession) -> list[str]:
@@ -1200,7 +1202,7 @@ class AgentCoreService:
         return sorted(tags_set)
 
     @staticmethod
-    async def get_admitted_agents(db: AsyncSession) -> list[Agent]:
+    async def get_admitted_agents(db: AsyncSession) -> list[AgentOption]:
         """
         Get all admitted agents (active, paused, or disabled).
 
@@ -1213,7 +1215,10 @@ class AgentCoreService:
         Returns:
             List of admitted Agent objects ordered by name
         """
-        return await AgentCRUD.get_admitted_agents(db)
+        return [
+            AgentOption.model_validate(row)
+            for row in await AgentCRUD.get_admitted_agents(db)
+        ]
 
     @staticmethod
     async def get_active_agent_count(db: AsyncSession, minutes: int = 10) -> int:
@@ -1232,7 +1237,7 @@ class AgentCoreService:
     @staticmethod
     async def get_agent_metrics(
         db: AsyncSession, agent_id: UUID, cutoff_time: datetime
-    ) -> Sequence[AgentMetric]:
+    ) -> list[AgentMetricSample]:
         """
         Get agent metrics since a cutoff time, ordered ascending.
 
@@ -1244,4 +1249,7 @@ class AgentCoreService:
         Returns:
             List of AgentMetric objects ordered by timestamp ascending
         """
-        return await AgentCRUD.get_agent_metrics(db, agent_id, cutoff_time)
+        return [
+            AgentMetricSample.model_validate(row)
+            for row in await AgentCRUD.get_agent_metrics(db, agent_id, cutoff_time)
+        ]

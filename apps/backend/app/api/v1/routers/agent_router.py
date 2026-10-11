@@ -16,7 +16,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import AuthenticatedHeartbeat
 from app.core.config import settings
-from app.core.exceptions import AgentNotFoundException
 from app.core.rate_limit import limiter
 from app.core.security import (
     verify_api_token,
@@ -175,7 +174,7 @@ async def delete_agent(
     `maintenance_jobs` table directly. See LUXSWIRL-105.
     """
     # 404 if the agent doesn't exist
-    await AgentCoreService.get_agent_by_id(db, agent_id)
+    await AgentCoreService.get_agent(db, agent_id)
     job = await MaintenanceJobCoreService.enqueue(
         db,
         kind=MaintenanceJobKind.AGENT_DELETE,
@@ -407,9 +406,7 @@ async def get_agent_api_key(
 ) -> None:
     await verify_registration_token(authorization, db)
 
-    agent = await AgentCoreService.get_agent_by_id(db, agent_id)
-    if not agent:
-        raise AgentNotFoundException(str(agent_id))
+    agent = await AgentCoreService.get_agent(db, agent_id)
 
     if agent.approval_status != "active":
         raise HTTPException(
@@ -417,7 +414,7 @@ async def get_agent_api_key(
             detail=f"Agent not approved yet. Current status: {agent.approval_status}",
         )
 
-    if not agent.api_key_hash:
+    if not agent.has_api_key:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Agent has no API key. This is an internal error - keys should be auto-generated on approval.",

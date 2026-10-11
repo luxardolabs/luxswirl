@@ -258,6 +258,7 @@ class AgentOption(BaseSchema):
     id: UUID
     agent_name: str | None = None
     hostname: str | None = None
+    tags: list[str] | None = None
 
 
 class AgentListResponse(BaseSchema):
@@ -482,8 +483,8 @@ class AgentUrls:
     revoke_key: str
 
 
-class PendingAgentRow(BaseSchema):
-    """An agent awaiting approval, as the agents page lists it, with its links."""
+class PendingAgent(BaseSchema):
+    """An agent awaiting approval: what an admin sees to decide."""
 
     id: UUID
     agent_name: str | None
@@ -491,4 +492,21 @@ class PendingAgentRow(BaseSchema):
     ip_address: str | None
     version: str | None
     first_seen: datetime
+
+
+class PendingAgentRow(PendingAgent):
+    """A pending agent as the agents page lists it, with its links."""
+
     urls: AgentUrls
+
+
+class AgentMetricSample(BaseSchema):
+    """One self-monitoring sample an agent reported, as the sparklines read it."""
+
+    timestamp: datetime
+    cpu_percent: float | None
+    memory_mb: int | None
+    queue_depth: int | None
+    checks_executed: int | None
+    open_file_descriptors: int | None
+    subprocess_count: int | None

@@ -632,9 +632,10 @@ class ChecksViewService:
                 return ChecksViewService.job_status_response(request, current_user, job)
 
             # Single check
-            _agent, resolved_id = await AgentCoreService.resolve_for_assignment(
+            resolved = await AgentCoreService.resolve_for_assignment(
                 db, form_kwargs["agent_id"], form_kwargs["assignment_mode"]
             )
+            resolved_id = resolved.id
             check_data = ChecksViewService.transform_form_data(
                 display_name=form_kwargs["display_name"],
                 check_type=check_type,
@@ -794,12 +795,10 @@ class ChecksViewService:
             source_check = await CheckCoreService.get_check_by_id(db, source_check_id)
 
             try:
-                (
-                    target_agent,
-                    resolved_id,
-                ) = await AgentCoreService.resolve_for_assignment(
+                target_agent = await AgentCoreService.resolve_for_assignment(
                     db, form_kwargs["agent_id"], form_kwargs["assignment_mode"]
                 )
+                resolved_id = target_agent.id
             except AgentNotFoundException as e:
                 return ChecksViewService.error_response(
                     request, current_user, str(e), 404

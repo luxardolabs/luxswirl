@@ -460,15 +460,7 @@ class AgentsViewService:
             "total": total,
             "agent_data": agent_data,
             "pending_agents": [
-                PendingAgentRow(
-                    id=a.id,
-                    agent_name=a.agent_name,
-                    hostname=a.hostname,
-                    ip_address=a.ip_address,
-                    version=a.version,
-                    first_seen=a.first_seen,
-                    urls=build_agent_urls(request, a.id),
-                )
+                PendingAgentRow(**dict(a), urls=build_agent_urls(request, a.id))
                 for a in pending_agents
             ],
             "active_only": active_only,
