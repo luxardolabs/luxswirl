@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.notification_log_crud import NotificationLogCRUD
 from app.models.enum_model import NotificationStatus
+from app.schemas.notification_log_schema import NotificationLogEntry
 
 logger = get_logger("luxswirl.services.notification_log")
 
@@ -25,7 +26,7 @@ class NotificationLogCoreService:
         search: str | None = None,
         limit: int = 25,
         offset: int = 0,
-    ) -> tuple[list, int]:
+    ) -> tuple[list[NotificationLogEntry], int]:
         """
         Get paginated notification logs with filters and joins.
 
@@ -39,9 +40,9 @@ class NotificationLogCoreService:
             offset: Pagination offset
 
         Returns:
-            Tuple of (list of result rows, total count)
+            Tuple of (the page's log entries, total count)
         """
-        return await NotificationLogCRUD.get_logs_paginated(
+        rows, total = await NotificationLogCRUD.get_logs_paginated(
             db,
             status=status,
             alert_id=alert_id,
@@ -50,11 +51,19 @@ class NotificationLogCoreService:
             limit=limit,
             skip=offset,
         )
+        return [
+            NotificationLogEntry.model_validate(row._mapping) for row in rows
+        ], total
 
     @staticmethod
-    async def get_log_by_id(db: AsyncSession, log_id: UUID):
-        """Fetch a single notification log row in the same shape as get_logs_paginated."""
-        return await NotificationLogCRUD.get_log_by_id(db, log_id)
+    async def get_log_by_id(
+        db: AsyncSession, log_id: UUID
+    ) -> NotificationLogEntry | None:
+        """One notification log, in the same shape as get_logs_paginated."""
+        row = await NotificationLogCRUD.get_log_by_id(db, log_id)
+        return (
+            None if row is None else NotificationLogEntry.model_validate(row._mapping)
+        )
 
     @staticmethod
     async def get_all_alerts_for_dropdown(db: AsyncSession) -> list[tuple[str, str]]:
@@ -79,7 +88,7 @@ class NotificationLogCoreService:
         return [(str(row[0]), str(row[1])) for row in rows]
 
     @staticmethod
-    async def get_status_counts(db: AsyncSession) -> dict:
+    async def get_status_counts(db: AsyncSession) -> dict[str, int]:
         """
         Get notification log counts by status.
 

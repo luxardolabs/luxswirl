@@ -29,13 +29,16 @@ class AgentCRUD:
 
     @staticmethod
     async def delete_stale_agents(db: AsyncSession, cutoff: datetime) -> int:
-        """Delete agents with last_seen older than cutoff. Returns rowcount."""
-        result = await db.execute(delete(Agent).where(Agent.last_seen < cutoff))
-        return result.rowcount or 0  # type: ignore[attr-defined]
+        """Delete agents with last_seen older than cutoff; the number deleted."""
+        result = await db.execute(
+            delete(Agent).where(Agent.last_seen < cutoff).returning(Agent.id)
+        )
+        return len(result.all())
 
     @staticmethod
     async def list_all(db: AsyncSession) -> list[Agent]:
         """Return all agents (unfiltered, unsorted)."""
+        # unbounded-reads: the fleet roster: a distributed check is hashed over every matching agent, so all are the input
         result = await db.execute(select(Agent))
         return list(result.scalars().all())
 
@@ -137,6 +140,7 @@ class AgentCRUD:
         db: AsyncSession,
     ) -> list[tuple[UUID, str | None, datetime]]:
         """(id, agent_name, last_seen) for every agent; the name may be unset."""
+        # unbounded-reads: one agent_up gauge per agent: the whole fleet, three narrow columns
         result = await db.execute(select(Agent.id, Agent.agent_name, Agent.last_seen))
         return [(agent_id, name, last_seen) for agent_id, name, last_seen in result]
 

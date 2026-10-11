@@ -191,24 +191,21 @@ class CheckCoreService:
         if parent_check_id in desired:
             raise ValidationException("A check cannot depend on itself")
 
-        all_checks = await CheckCRUD.list_all(db)
-        by_id = {c.id: c for c in all_checks}
-
-        for cid in desired:
-            child = by_id.get(cid)
-            if child is None:
-                raise ValidationException(f"Check {cid} not found")
-            # post-db-filter: the dependency rules need the whole check set (who is already a parent, who has a parent), so it is one read then several in-memory passes rather than N queries
-            child_dependents = sum(
-                1 for c in all_checks if c.depends_on_check_id == cid
+        children = await CheckCRUD.get_checks_by_ids(db, list(desired))
+        by_id = {c.id: c for c in children}
+        missing = desired - by_id.keys()
+        if missing:
+            raise ValidationException(f"Check {next(iter(missing))} not found")
+        already_parents = await CheckCRUD.parents_among(db, list(desired))
+        if already_parents:
+            name = by_id[next(iter(already_parents))].display_name
+            raise ValidationException(
+                f"Check '{name}' is itself a parent — single-level only"
             )
-            if child_dependents > 0:
-                raise ValidationException(
-                    f"Check '{child.display_name}' is itself a parent — single-level only"
-                )
 
-        # post-db-filter: the dependency rules need the whole check set (who is already a parent, who has a parent), so it is one read then several in-memory passes rather than N queries
-        current = {c.id for c in all_checks if c.depends_on_check_id == parent_check_id}
+        current_children = await CheckCRUD.list_dependents(db, parent_check_id)
+        by_id.update({c.id: c for c in current_children})
+        current = {c.id for c in current_children}
         to_add = desired - current
         to_remove = current - desired
 
@@ -246,17 +243,7 @@ class CheckCoreService:
         Excludes: the parent itself, any check that already has children, and
         the parent's chain ancestor (none in single-level v1, so trivial).
         """
-        all_checks = await CheckCRUD.list_all(db)
-        # post-db-filter: the dependency rules need the whole check set (who is already a parent, who has a parent), so it is one read then several in-memory passes rather than N queries
-        parents_of_others = {
-            c.depends_on_check_id for c in all_checks if c.depends_on_check_id
-        }
-        # post-db-filter: the dependency rules need the whole check set (who is already a parent, who has a parent), so it is one read then several in-memory passes rather than N queries
-        return [
-            c
-            for c in all_checks
-            if c.id != parent_check_id and c.id not in parents_of_others
-        ]
+        return await CheckCRUD.list_non_parents(db, parent_check_id)
 
     @staticmethod
     async def get_dependency_info(db: AsyncSession, check_id: UUID) -> dict[str, Any]:
@@ -290,13 +277,7 @@ class CheckCoreService:
         db: AsyncSession, exclude_check_id: UUID | None = None
     ) -> list[Check]:
         """Checks that may be selected as a parent (excludes those already with a parent)."""
-        all_checks = await CheckCRUD.list_all(db)
-        # post-db-filter: the dependency rules need the whole check set (who is already a parent, who has a parent), so it is one read then several in-memory passes rather than N queries
-        return [
-            c
-            for c in all_checks
-            if c.depends_on_check_id is None and c.id != exclude_check_id
-        ]
+        return await CheckCRUD.list_without_parent(db, exclude_check_id)
 
     @staticmethod
     async def _validate_dependency(

@@ -26,6 +26,7 @@ class SettingCRUD:
         database that separately each time costs one query per default at
         every startup.
         """
+        # unbounded-reads: the settings catalogue (one row per default)
         result = await db.execute(select(Setting.key))
         return set(result.scalars())
 
@@ -38,6 +39,7 @@ class SettingCRUD:
 
     @staticmethod
     async def list_all(db: AsyncSession) -> Sequence[Setting]:
+        # unbounded-reads: the settings catalogue (one row per default)
         result = await db.execute(
             select(Setting).order_by(Setting.category, Setting.key)
         )
