@@ -34,6 +34,7 @@ from app.services.core.notification_core_service import NotificationCoreService
 router = APIRouter(prefix="/notification-providers", tags=["Notification Providers"])
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.get(
     "/types",
     response_model=NotificationProviderTypesResponse,
@@ -195,6 +196,7 @@ async def delete_provider(
     return None
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post(
     "/{provider_id}/test",
     response_model=NotificationProviderTestResponse,

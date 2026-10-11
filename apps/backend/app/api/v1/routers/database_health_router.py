@@ -22,6 +22,7 @@ logger = get_logger("luxswirl.api.database_health")
 router = APIRouter(tags=["Database Health"])
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.get("/database-health/chart-data", response_model=DatabaseGrowthResponse)
 async def database_growth_chart_data(
     db: Annotated[AsyncSession, Depends(get_db)],

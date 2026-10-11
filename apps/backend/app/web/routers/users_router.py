@@ -53,6 +53,7 @@ async def users_page(
     return templates.TemplateResponse(request, "pages/settings/users.html", context)
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.get(
     "/users/partials/table", response_class=HTMLResponse, include_in_schema=False
 )
@@ -82,6 +83,7 @@ async def users_table_partial(
     )
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.get("/users/create-form", response_class=HTMLResponse, include_in_schema=False)
 async def create_user_form(
     request: Request,
@@ -98,6 +100,7 @@ async def create_user_form(
     )
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post("/users/create", response_class=HTMLResponse, include_in_schema=False)
 async def create_user_submit(
     request: Request,
@@ -150,6 +153,7 @@ async def create_user_submit(
     )
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.get(
     "/users/{user_id}/edit-form", response_class=HTMLResponse, include_in_schema=False
 )
@@ -183,6 +187,7 @@ async def edit_user_form(
         return error_partial(request, admin, "Invalid user ID", status_code=400)
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post(
     "/users/{user_id}/update", response_class=HTMLResponse, include_in_schema=False
 )
@@ -235,6 +240,7 @@ async def update_user_submit(
     )
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post("/users/{user_id}/delete", include_in_schema=False, name="web_delete_user")
 async def delete_user(
     user_id: UUID,
@@ -269,6 +275,7 @@ async def delete_user(
     return hx_empty_with_toast("User deleted successfully")
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post(
     "/users/{user_id}/reset-password",
     include_in_schema=False,

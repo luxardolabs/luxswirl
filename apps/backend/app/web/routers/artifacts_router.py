@@ -20,6 +20,7 @@ logger = get_logger("luxswirl.web.routers.artifacts")
 router = APIRouter(tags=["Web UI - Artifacts"])
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.get(
     "/artifacts/{artifact_id}/view",
     response_class=Response,
@@ -33,6 +34,7 @@ async def view_artifact(
     return await ArtifactsViewService.build_artifact_download_response(db, artifact_id)
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.get(
     "/artifacts/{artifact_id}/viewer",
     response_class=HTMLResponse,

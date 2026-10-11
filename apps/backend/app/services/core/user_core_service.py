@@ -70,10 +70,13 @@ class UserCoreService:
             created_by=created_by,
         )
 
-        db.add(user)
-
         try:
-            await db.flush()
+            # A savepoint, so a duplicate rolls back only this insert: callers
+            # turn the ValueError into a form error and the request's session
+            # is still committed afterwards.
+            async with db.begin_nested():
+                db.add(user)
+                await db.flush()
             await db.refresh(user)
             logger.info(
                 "Created user",
@@ -86,8 +89,6 @@ class UserCoreService:
             )
             return UserResponse.model_validate(user)
         except IntegrityError as e:
-            # No rollback here — the ValueError propagates to get_db(), which
-            # owns the transaction and rolls back on any exception.
             if "username" in str(e):
                 raise ValueError(
                     f"Username '{user_data.username}' already exists"
@@ -232,7 +233,8 @@ class UserCoreService:
             )
 
         try:
-            await db.flush()
+            async with db.begin_nested():
+                await db.flush()
             await db.refresh(user)
             logger.info(
                 "Updated user",
@@ -240,7 +242,6 @@ class UserCoreService:
             )
             return UserResponse.model_validate(user)
         except IntegrityError as e:
-            # get_db() owns the transaction and rolls back on the raised error.
             raise ValueError(f"User update failed: {e}") from e
 
     async def delete_user(self, db: AsyncSession, user_id: UUID) -> bool:

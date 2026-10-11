@@ -63,3 +63,23 @@ class SchedulerExecutionResponse(BaseSchema):
     output: dict[str, Any] | None
     records_processed: int | None
     duration_seconds: float | None
+
+
+class SchedulerRunResult(BaseSchema):
+    """The outcome of running a scheduled job on demand."""
+
+    status: SchedulerExecutionStatus
+    execution_id: UUID
+    duration_seconds: float | None
+    error: str | None = None
+    job: SchedulerJobResponse  # the job, with this run counted
+
+    @property
+    def toast(self) -> tuple[str, str]:
+        """The (message, kind) the Run button reports."""
+        took = f"{self.duration_seconds or 0:.1f}s"
+        if self.status == SchedulerExecutionStatus.FAILED:
+            return f"Job failed ({took}) - {self.error}", "error"
+        if self.status == SchedulerExecutionStatus.SUCCESS:
+            return f"Job completed ({took})", "success"
+        return f"Job completed with errors ({took})", "warning"

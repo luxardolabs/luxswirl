@@ -86,6 +86,20 @@ def build_scheduler_job_urls(request: Request, job_key: str) -> SchedulerJobUrls
     )
 
 
+def _job_row(request: Request, job: SchedulerJobResponse) -> dict[str, Any]:
+    """One row of the scheduler table: the page, and every action's re-render."""
+    return {
+        "job": job,
+        "schedule_display": _format_schedule(job),
+        "category_color": CATEGORY_COLORS.get(job.category, "gray"),
+        "status_color": STATUS_COLORS.get(job.last_status or "", "gray"),
+        "is_running": _is_running(job),
+        "avg_duration": _format_duration(job.average_duration),
+        "now": datetime.now(UTC),
+        "urls": build_scheduler_job_urls(request, job.job_key),
+    }
+
+
 class SchedulerViewService:
     """View service for scheduler admin UI."""
 
@@ -99,21 +113,7 @@ class SchedulerViewService:
         """
         jobs = await scheduler_service.get_all_jobs()
         now = datetime.now(UTC)
-
-        job_rows = []
-        for job in jobs:
-            job_rows.append(
-                {
-                    "job": job,
-                    "schedule_display": _format_schedule(job),
-                    "category_color": CATEGORY_COLORS.get(job.category, "gray"),
-                    "status_color": STATUS_COLORS.get(job.last_status or "", "gray"),
-                    "is_running": _is_running(job),
-                    "avg_duration": _format_duration(job.average_duration),
-                    "now": now,
-                    "urls": build_scheduler_job_urls(request, job.job_key),
-                }
-            )
+        job_rows = [_job_row(request, job) for job in jobs]
 
         return {
             "job_rows": job_rows,
@@ -134,17 +134,7 @@ class SchedulerViewService:
             Dict with updated job row data for template rendering.
         """
         job = await scheduler_service.toggle_job(job_key)
-        now = datetime.now(UTC)
-        return {
-            "job": job,
-            "schedule_display": _format_schedule(job),
-            "category_color": CATEGORY_COLORS.get(job.category, "gray"),
-            "status_color": STATUS_COLORS.get(job.last_status or "", "gray"),
-            "is_running": _is_running(job),
-            "avg_duration": _format_duration(job.average_duration),
-            "urls": build_scheduler_job_urls(request, job.job_key),
-            "now": now,
-        }
+        return _job_row(request, job)
 
     @staticmethod
     async def run_job(request: Request, job_key: str) -> dict[str, Any]:
@@ -152,31 +142,10 @@ class SchedulerViewService:
         Execute job synchronously and return updated row context.
 
         Returns:
-            Dict with execution result and updated job row data.
+            Dict with the updated job row and the run's (message, kind) toast.
         """
         result = await scheduler_service.execute_job_synchronously(job_key)
-
-        # Reload job for updated stats
-        jobs = await scheduler_service.get_all_jobs()
-        # post-db-filter: the scheduler's job list is the in-memory registry, not a table
-        job = next((j for j in jobs if j.job_key == job_key), None)
-        now = datetime.now(UTC)
-
-        row = {
-            "job": job,
-            "schedule_display": _format_schedule(job) if job else "",
-            "category_color": CATEGORY_COLORS.get(job.category, "gray")
-            if job
-            else "gray",
-            "status_color": STATUS_COLORS.get(job.last_status or "", "gray")
-            if job
-            else "gray",
-            "is_running": _is_running(job) if job else False,
-            "avg_duration": _format_duration(job.average_duration) if job else "-",
-            "now": now,
-        }
-
-        return {"result": result, "row": row}
+        return {"row": _job_row(request, result.job), "toast": result.toast}
 
     @staticmethod
     async def reset_job(request: Request, job_key: str) -> dict[str, Any]:
@@ -187,17 +156,7 @@ class SchedulerViewService:
             Dict with updated job row data.
         """
         job = await scheduler_service.reset_job(job_key)
-        now = datetime.now(UTC)
-        return {
-            "job": job,
-            "schedule_display": _format_schedule(job),
-            "category_color": CATEGORY_COLORS.get(job.category, "gray"),
-            "status_color": STATUS_COLORS.get(job.last_status or "", "gray"),
-            "is_running": _is_running(job),
-            "avg_duration": _format_duration(job.average_duration),
-            "urls": build_scheduler_job_urls(request, job.job_key),
-            "now": now,
-        }
+        return _job_row(request, job)
 
     @staticmethod
     async def get_job_history(job_key: str, limit: int = 50) -> dict[str, Any]:

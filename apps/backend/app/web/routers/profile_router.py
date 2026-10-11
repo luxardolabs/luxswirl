@@ -22,6 +22,7 @@ logger = get_logger("luxswirl.web.routers.profile")
 router = APIRouter(tags=["Web UI - Profile"])
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.get("/profile", response_class=HTMLResponse, include_in_schema=False)
 async def profile_panel(
     request: Request,
@@ -36,6 +37,7 @@ async def profile_panel(
     )
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post("/profile/update", response_class=HTMLResponse, include_in_schema=False)
 async def update_profile(
     request: Request,

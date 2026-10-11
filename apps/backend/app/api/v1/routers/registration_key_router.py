@@ -159,6 +159,7 @@ async def update_registration_key(
     return key
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post(
     "/{key_id}/revoke",
     response_model=RegistrationKeyResponse,

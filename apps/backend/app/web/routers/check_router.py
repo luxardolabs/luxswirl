@@ -60,6 +60,7 @@ async def check_detail_panel(
     )
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.get(
     "/checks/detail/empty", response_class=HTMLResponse, include_in_schema=False
 )

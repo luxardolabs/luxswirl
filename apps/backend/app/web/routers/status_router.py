@@ -35,6 +35,7 @@ async def root_redirect(request: Request):
     return RedirectResponse(url=target, status_code=302)
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.get("/internal/summary", response_class=HTMLResponse, include_in_schema=False)
 async def status_summary_partial(
     request: Request,

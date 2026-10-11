@@ -27,6 +27,7 @@ logger = get_logger("luxswirl.web.alerts")
 router = APIRouter(tags=["Web UI - Alerts"], include_in_schema=False)
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.get("/alerts/create-form", response_class=HTMLResponse)
 async def create_alert_form(
     request: Request,
@@ -51,6 +52,7 @@ async def create_alert_form(
     )
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.get("/alerts/{alert_id}/edit-form", response_class=HTMLResponse)
 async def edit_alert_form(
     request: Request,
@@ -76,6 +78,7 @@ async def edit_alert_form(
     )
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post("/alerts/create", response_class=HTMLResponse, name="web_create_alert")
 async def create_alert(
     request: Request,
@@ -192,6 +195,7 @@ async def create_alert(
 # registered first swallows the literal one — DELETE /alerts/snooze was reaching
 # delete_alert with alert_id="snooze" and 422ing, which made unsnooze
 # unreachable.
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post("/alerts/snooze", response_class=HTMLResponse)
 async def snooze_alert_check(
     request: Request,
@@ -215,6 +219,7 @@ async def snooze_alert_check(
     return await render_log_row(request, db, log_id, message)
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.delete("/alerts/snooze", response_class=HTMLResponse)
 async def unsnooze_alert_check(
     request: Request,
@@ -233,6 +238,7 @@ async def unsnooze_alert_check(
     return await render_log_row(request, db, log_id, message)
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post(
     "/alerts/{alert_id}/update", response_class=HTMLResponse, name="web_update_alert"
 )
@@ -341,6 +347,7 @@ async def delete_alert(
     return hx_empty_with_toast("Alert deleted")
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post("/alerts/{alert_id}/toggle", response_class=HTMLResponse)
 async def toggle_alert(
     request: Request,

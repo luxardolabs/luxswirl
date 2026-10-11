@@ -57,6 +57,7 @@ async def list_users(
     )
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.get("/stats", response_model=UserStatsResponse)
 async def get_user_stats(
     admin: AdminUser,
@@ -256,6 +257,7 @@ async def delete_user(
         ) from e
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post(
     "/{user_id}/reset-password",
     status_code=status.HTTP_200_OK,
@@ -329,6 +331,7 @@ async def reset_user_password(
         ) from e
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post("/{user_id}/unlock", response_model=UserResponse)
 async def unlock_user(
     user_id: UUID,

@@ -13,22 +13,24 @@ auth dependency — that would exercise a fiction.
 
 from __future__ import annotations
 
-import sys
 from datetime import timedelta
-from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
 import pytest
 import pytest_asyncio
-from httpx import ASGITransport, AsyncClient
-
-_tests_root = str(Path(__file__).resolve().parent.parent)
-if _tests_root not in sys.path:
-    sys.path.insert(0, _tests_root)
-
-from app.core.datetime_utils import utc_now  # noqa: E402
-from fixtures.factories import (  # noqa: E402
+from app.core.config import settings
+from app.core.datetime_utils import utc_now
+from app.db.database import get_db
+from app.main import app
+from app.models.check_artifact_model import CheckArtifact
+from app.models.job_model import Job
+from app.models.registration_key_model import RegistrationKey
+from app.models.scheduler_model import JobConfiguration
+from app.models.status_page_model import StatusPage
+from app.services.core.auth_core_service import AuthCoreService
+from app.services.core.settings_core_service import SettingsCoreService
+from fixtures.factories import (
     make_agent,
     make_alert,
     make_check,
@@ -36,6 +38,8 @@ from fixtures.factories import (  # noqa: E402
     make_notification_provider,
     make_user,
 )
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy import text
 
 API_TOKEN = "route-smoke-api-token"
 ADMIN_PASSWORD = "RouteSmoke123!"
@@ -43,18 +47,13 @@ ADMIN_PASSWORD = "RouteSmoke123!"
 
 async def _seed(session_maker) -> dict[str, Any]:
     """Create one of each entity the route table's path params refer to."""
-    from app.models.check_artifact_model import CheckArtifact
-    from app.models.job_model import Job
-    from app.models.registration_key_model import RegistrationKey
-    from app.models.scheduler_model import JobConfiguration
-    from app.models.status_page_model import StatusPage
-
     now = utc_now()
     async with session_maker() as db:
+        # What startup seeds in production: without it every settings route
+        # (the metrics card's toggles among them) answered 404.
+        await SettingsCoreService.ensure_default_settings(db)
         admin = make_user(username="route-smoke-admin", role="admin")
-        admin.password_hash = __import__(
-            "app.services.core.auth_core_service", fromlist=["AuthCoreService"]
-        ).AuthCoreService.hash_password(ADMIN_PASSWORD)
+        admin.password_hash = AuthCoreService.hash_password(ADMIN_PASSWORD)
         other_user = make_user(username="route-smoke-other", role="viewer")
         agent = make_agent(agent_name="route-smoke-agent")
         db.add_all([admin, other_user, agent])
@@ -139,9 +138,7 @@ async def _seed(session_maker) -> dict[str, Any]:
             "key_id": str(key.id),
             "status_page_id": str(status_page.id),
             "slug": status_page.slug,
-            # No setting is seeded: the {key} routes answer 404 for an
-            # unknown key, which still exercises the handler.
-            "key": "route.smoke.unknown",
+            "key": "metrics.agent_timeout_seconds",
             "item_index": "0",
             "session_id": str(uuid4()),
         }
@@ -150,6 +147,7 @@ async def _seed(session_maker) -> dict[str, Any]:
 # Tables this fixture seeds that worker_db does not already truncate. Cleaned up
 # here so a committed route-smoke world cannot leak into another test's counts.
 _SEEDED_TABLES = (
+    "settings",
     "alert_check_mappings",
     "alert_notification_mappings",
     "alerts",
@@ -162,8 +160,6 @@ _SEEDED_TABLES = (
 
 
 async def _truncate_seeded(session_maker) -> None:
-    from sqlalchemy import text
-
     async with session_maker() as db:
         existing = (
             (
@@ -193,10 +189,6 @@ async def empty_install(worker_db, monkeypatch):
     /login, which is what the seeded sweep saw, so setup.html was never
     rendered by anything. This fixture is the only place that state exists.
     """
-    from app.core.config import settings
-    from app.db.database import get_db as _get_db
-    from app.main import app
-
     monkeypatch.setattr(settings.security, "rate_limit_enabled", False)
     monkeypatch.setattr(settings.security, "initial_admin_password", None)
     await _truncate_seeded(worker_db)
@@ -210,7 +202,7 @@ async def empty_install(worker_db, monkeypatch):
                 await session.rollback()
                 raise
 
-    app.dependency_overrides[_get_db] = _override_get_db
+    app.dependency_overrides[get_db] = _override_get_db
     async with AsyncClient(
         transport=ASGITransport(app=app),
         base_url="http://route-smoke",
@@ -224,10 +216,6 @@ async def empty_install(worker_db, monkeypatch):
 @pytest_asyncio.fixture
 async def smoke_world(worker_db, monkeypatch):
     """The app with a seeded DB, an admin session cookie and the API token set."""
-    from app.core.config import settings
-    from app.db.database import get_db as _get_db
-    from app.main import app
-
     monkeypatch.setattr(settings.security, "auth_enabled", True)
     monkeypatch.setattr(settings.security, "auth_tokens", [API_TOKEN])
     # The limiter is deliberately outside RATE_LIMIT_ENABLED for login; this
@@ -252,7 +240,7 @@ async def smoke_world(worker_db, monkeypatch):
                 await session.rollback()
                 raise
 
-    app.dependency_overrides[_get_db] = _override_get_db
+    app.dependency_overrides[get_db] = _override_get_db
     transport = ASGITransport(app=app)
     async with AsyncClient(
         transport=transport, base_url="http://route-smoke", follow_redirects=False
@@ -272,6 +260,7 @@ async def smoke_world(worker_db, monkeypatch):
             "ids": ids,
             "web_headers": {"Cookie": f"luxswirl_session={session_token}"},
             "api_headers": {"Authorization": f"Bearer {API_TOKEN}"},
+            "admin_password": ADMIN_PASSWORD,
         }
     app.dependency_overrides.clear()
     await _truncate_seeded(worker_db)

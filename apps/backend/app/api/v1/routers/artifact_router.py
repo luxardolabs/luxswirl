@@ -52,6 +52,7 @@ async def create_artifact(
     return await ArtifactCoreService.create_artifact(db, artifact)
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.get(
     "/artifacts/{artifact_id}",
     response_model=CheckArtifactResponse,
@@ -150,6 +151,7 @@ async def list_check_result_artifacts(
     )
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.delete(
     "/artifacts/{artifact_id}",
     status_code=status.HTTP_204_NO_CONTENT,

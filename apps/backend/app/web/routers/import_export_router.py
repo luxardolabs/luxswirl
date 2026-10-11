@@ -21,6 +21,7 @@ logger = get_logger("luxswirl.web.import_export")
 router = APIRouter(tags=["Web UI - Import/Export"])
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.get(
     "/agents/{agent_id}/import-export-form",
     response_class=HTMLResponse,
@@ -56,6 +57,7 @@ async def import_export_form(
         )
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.get(
     "/agents/{agent_id}/export", include_in_schema=False, name="web_export_checks"
 )
@@ -72,6 +74,7 @@ async def export_checks(
     return await ImportExportViewService.build_export_download(db, agent_id)
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post(
     "/agents/{agent_id}/import",
     response_class=HTMLResponse,

@@ -118,6 +118,7 @@ async def login(
     )
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post(
     "/logout",
     status_code=status.HTTP_200_OK,
@@ -171,13 +172,14 @@ async def logout(
 @router.get("/me", response_model=CurrentUserResponse)
 async def get_current_user_info(
     user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> CurrentUserResponse:
     """
     Get current authenticated user information.
 
     Requires valid session cookie.
     """
-    return CurrentUserResponse.model_validate(user)
+    return await AuthCoreService().get_current_user_response(db, user.id)
 
 
 @router.post(
@@ -225,6 +227,7 @@ async def change_password(
         ) from e
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.get("/sessions", response_model=SessionListResponse)
 async def list_my_sessions(
     user: CurrentUser,
@@ -245,6 +248,7 @@ async def list_my_sessions(
     )
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.delete(
     "/sessions/{session_id}",
     status_code=status.HTTP_200_OK,
@@ -343,6 +347,7 @@ async def logout_all_sessions(
 # Admin-only endpoints
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.get("/sessions/user/{user_id}", response_model=SessionListResponse)
 async def list_user_sessions_admin(
     user_id: UUID,
@@ -368,6 +373,7 @@ async def list_user_sessions_admin(
     )
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post(
     "/sessions/user/{user_id}/logout-all",
     status_code=status.HTTP_200_OK,

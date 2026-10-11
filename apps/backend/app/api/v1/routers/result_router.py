@@ -131,6 +131,7 @@ async def get_check_history(
         ) from None
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.get(
     "/agents/{agent_name}/checks/{check_id}/summary",
     response_model=CheckSummary,
@@ -162,6 +163,7 @@ async def get_check_summary(
         ) from None
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.get(
     "/stats",
     summary="Get global statistics",

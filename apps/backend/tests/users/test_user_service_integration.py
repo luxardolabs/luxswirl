@@ -5,22 +5,15 @@ CRUD lifecycle, role enforcement, lockout/unlock, password complexity gate.
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
 from uuid import uuid4
 
 import pytest
+from app.core.config import settings
+from app.crud.user_crud import UserCRUD
+from app.schemas.user_schema import UserCreate, UserUpdate
+from app.services.core.user_core_service import UserCoreService
+from fixtures.factories import make_user
 from sqlalchemy.ext.asyncio import AsyncSession
-
-_tests_root = str(Path(__file__).resolve().parent.parent)
-if _tests_root not in sys.path:
-    sys.path.insert(0, _tests_root)
-
-from app.core.config import settings  # noqa: E402
-from app.crud.user_crud import UserCRUD  # noqa: E402
-from app.schemas.user_schema import UserCreate, UserUpdate  # noqa: E402
-from app.services.core.user_core_service import UserCoreService  # noqa: E402
-from fixtures.factories import make_user  # noqa: E402
 
 pytestmark = pytest.mark.integration
 
@@ -67,6 +60,17 @@ class TestCreateUser:
         await svc.create_user(db, _create_data(username="dup"))
         with pytest.raises(ValueError, match="already exists"):
             await svc.create_user(db, _create_data(username="dup"))
+
+    async def test_a_duplicate_leaves_the_session_usable(self, db: AsyncSession, svc):
+        """The web form catches the ValueError and renders an error partial, so
+        the request's session is then COMMITTED. A duplicate used to leave it
+        in a failed flush: the commit raised after the response had started."""
+        await svc.create_user(db, _create_data(username="dup2"))
+        with pytest.raises(ValueError, match="already exists"):
+            await svc.create_user(db, _create_data(username="dup2"))
+
+        assert await UserCRUD.get_by_username(db, "dup2") is not None
+        await db.flush()
 
     async def test_weak_password_rejected(self, db: AsyncSession, svc):
         with pytest.raises(ValueError):
@@ -131,7 +135,7 @@ class TestUpdateUser:
         assert updated.full_name == "Just the name"
 
     async def test_missing_user_raises(self, db: AsyncSession, svc):
-        with pytest.raises(Exception):  # noqa: B017
+        with pytest.raises(ValueError, match="User not found"):
             await svc.update_user(db, uuid4(), UserUpdate(role="admin"))
 
 

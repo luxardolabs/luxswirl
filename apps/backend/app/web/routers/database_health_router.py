@@ -19,6 +19,7 @@ logger = get_logger("luxswirl.web.database_health")
 router = APIRouter(tags=["Web UI - Database Health"], include_in_schema=False)
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.get("/database-health", response_class=HTMLResponse)
 async def database_health_page(
     request: Request,
@@ -32,6 +33,7 @@ async def database_health_page(
     return templates.TemplateResponse(request, "pages/database_health.html", context)
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.get("/database-health/refresh", response_class=HTMLResponse)
 async def database_health_refresh(
     request: Request,
