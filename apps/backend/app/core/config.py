@@ -326,6 +326,9 @@ class Settings(BaseSettings):
     build_timestamp: str = Field(
         default="unknown", description="Build timestamp (ISO 8601)"
     )
+    build_commit: str = Field(
+        default="local", description="Commit the running image was built from"
+    )
     environment: Literal["development", "staging", "production"] = Field(
         default="development",
         description="Environment",

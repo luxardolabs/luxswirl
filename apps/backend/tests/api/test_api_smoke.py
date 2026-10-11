@@ -8,17 +8,12 @@ misconfigured routes, broken Depends() chains, and auth bypasses.
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
 import pytest
+from app.core.config import settings
+from app.db.database import get_db
+from app.main import app
+from fixtures.factories import make_agent
 from httpx import ASGITransport, AsyncClient
-
-_tests_root = str(Path(__file__).resolve().parent.parent)
-if _tests_root not in sys.path:
-    sys.path.insert(0, _tests_root)
-
-from fixtures.factories import make_agent  # noqa: E402
 
 pytestmark = pytest.mark.integration
 
@@ -37,11 +32,6 @@ async def client(db, monkeypatch):
     Use this for testing route wiring + response shapes. Auth-specific tests
     flip auth_enabled back on via their own fixture.
     """
-    # Imports are inside the fixture so the prune from conftest has already
-    # removed /app/src/* shadows by the time `db`/`main` resolve their deps.
-    from app.core.config import settings  # noqa: inline-import (post-prune resolution)
-    from app.db.database import get_db as _get_db  # noqa: inline-import (post-prune resolution)
-    from app.main import app  # noqa: inline-import (post-prune resolution)
 
     # Disable auth so we don't have to thread bearer tokens through smoke tests
     monkeypatch.setattr(settings.security, "auth_enabled", False)
@@ -49,7 +39,7 @@ async def client(db, monkeypatch):
     async def _override_get_db():
         yield db
 
-    app.dependency_overrides[_get_db] = _override_get_db
+    app.dependency_overrides[get_db] = _override_get_db
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
@@ -61,9 +51,6 @@ async def client(db, monkeypatch):
 @pytest.fixture
 async def authed_client(db, monkeypatch):
     """Like `client`, but auth_enabled=True with a known fixed token."""
-    from app.core.config import settings  # noqa: inline-import (post-prune resolution)
-    from app.db.database import get_db as _get_db  # noqa: inline-import (post-prune resolution)
-    from app.main import app  # noqa: inline-import (post-prune resolution)
 
     monkeypatch.setattr(settings.security, "auth_enabled", True)
     monkeypatch.setattr(settings.security, "auth_tokens", ["test-token-xyz"])
@@ -71,7 +58,7 @@ async def authed_client(db, monkeypatch):
     async def _override_get_db():
         yield db
 
-    app.dependency_overrides[_get_db] = _override_get_db
+    app.dependency_overrides[get_db] = _override_get_db
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
@@ -91,6 +78,13 @@ class TestHealthRoutes:
         assert resp.status_code == 200
         body = resp.json()
         assert "status" in body
+
+    async def test_health_names_the_build_commit(self, client, monkeypatch):
+        """`make smoke` proves the deployed stack runs THIS build by finding the
+        commit in /health; without it every dev deploy's smoke fails."""
+        monkeypatch.setattr(settings, "build_commit", "abc1234")
+        resp = await client.get("/health")
+        assert resp.json()["commit"] == "abc1234"
 
     async def test_root_returns_api_info(self, client):
         resp = await client.get("/")
