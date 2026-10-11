@@ -568,7 +568,7 @@ export DATABASE__URL=postgresql+asyncpg://luxswirl:luxswirl@localhost:5432/luxsw
   - JSON router: `app/api/v1/routers/{name}_router.py`
   - Web router: `app/web/routers/{name}_router.py`
   - Files prefixed with `_` are shared helpers (exempt from naming rule, use only when genuinely multi-consumer)
-- **Imports**: `app.`-prefixed within each component (`from app.models.foo import ...`) — `apps/backend/app/` and `apps/agent/app/` are both the `app` package. `shared.*` is a flat top-level import (vendored into each image at build). The repo enforces top-of-file imports via a PreToolUse hook (`.claude/hooks/no-inline-imports.py`) — use `TYPE_CHECKING` for circular deps.
+- **Imports**: `app.`-prefixed within each component (`from app.models.foo import ...`) — `apps/backend/app/` and `apps/agent/app/` are both the `app` package. `shared.*` is a flat top-level import (vendored into each image at build). Imports go at the top of the file, enforced by `make arch` (`fw.no_inline_imports`, `shared.no_inline_imports`) — use `TYPE_CHECKING` for circular deps.
 - **Docstrings**: Google style format with Args, Returns, Raises sections
 - **Logging**: Structured logging via `shared.logger.get_logger()`
 - **Error handling**:
