@@ -26,8 +26,10 @@ from app.models.enum_model import NotificationStatus
 from app.models.notification_log_model import NotificationLog
 from app.notifications.providers.base import NotificationContext
 from app.schemas.alert_schema import (
+    AlertCheckSnooze,
     AlertCreate,
     AlertListResponse,
+    AlertOption,
     AlertResponse,
     AlertUpdate,
 )
@@ -174,6 +176,31 @@ class AlertCoreService:
             db, skip=skip, limit=limit, is_enabled=is_enabled, is_global=is_global
         )
         return [AlertCoreService._to_response(a) for a in alerts], total
+
+    @staticmethod
+    async def create_alert_response(
+        db: AsyncSession, data: AlertCreate
+    ) -> AlertResponse:
+        """Create an alert and return it in its API shape, counts included.
+
+        Raises:
+            ValidationException: If the alert is invalid
+            DuplicateResourceException: If an alert with that name exists
+        """
+        alert = await AlertCoreService.create_alert(db, data)
+        return await AlertCoreService.get_alert_response(db, alert.id)
+
+    @staticmethod
+    async def list_alert_options(db: AsyncSession) -> list[AlertOption]:
+        """Every alert as a picker option."""
+        alerts, _ = await AlertCoreService.list_alerts(db, limit=1000)
+        return [AlertOption.model_validate(alert) for alert in alerts]
+
+    @staticmethod
+    async def count_alerts(db: AsyncSession) -> int:
+        """How many alerts exist (soft-deleted excluded)."""
+        _, total = await AlertCoreService.list_alerts(db, skip=0, limit=1)
+        return total
 
     @staticmethod
     async def list_alerts_page(
@@ -359,7 +386,7 @@ class AlertCoreService:
         db: AsyncSession,
         alert_id: UUID,
         provider_id: UUID,
-    ) -> AlertNotificationMapping:
+    ) -> UUID:
         """Add a notification provider to an alert."""
         existing = await AlertCRUD.get_notif_mapping(db, alert_id, provider_id)
 
@@ -376,7 +403,7 @@ class AlertCoreService:
         await db.flush()
         await db.refresh(mapping)
 
-        return mapping
+        return mapping.id
 
     @staticmethod
     async def remove_notification_provider(
@@ -392,7 +419,7 @@ class AlertCoreService:
         db: AsyncSession,
         alert_id: UUID,
         check_id: UUID,
-    ) -> AlertCheckMapping:
+    ) -> UUID:
         """Add a check to an alert."""
         existing = await AlertCRUD.get_check_mapping(db, alert_id, check_id)
 
@@ -409,7 +436,7 @@ class AlertCoreService:
         await db.flush()
         await db.refresh(mapping)
 
-        return mapping
+        return mapping.id
 
     @staticmethod
     async def remove_check(
@@ -1315,7 +1342,7 @@ class AlertCoreService:
     @staticmethod
     async def snooze_alert_check(
         db: AsyncSession, alert_id: UUID, check_id: UUID, minutes: int = 15
-    ) -> AlertCheckMapping:
+    ) -> AlertCheckSnooze:
         """
         Snooze an alert-check relationship - temporarily pause notifications for this specific pairing.
 
@@ -1370,7 +1397,13 @@ class AlertCoreService:
             },
         )
 
-        return mapping
+        return AlertCheckSnooze(
+            alert_id=mapping.alert.id,
+            alert_name=mapping.alert.name,
+            check_id=mapping.check.id,
+            check_name=mapping.check.display_name,
+            snoozed_until=new_snooze_time,
+        )
 
     @staticmethod
     async def unsnooze_alert_check(

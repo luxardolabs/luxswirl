@@ -274,3 +274,13 @@ class AlertFormData:
     provider_ids: list[UUID]
     check_ids: list[UUID]
     days_thresholds: list[int] | None = None
+
+
+class AlertCheckSnooze(BaseSchema):
+    """A snoozed alert-check pair: who, and until when."""
+
+    alert_id: UUID
+    alert_name: str
+    check_id: UUID
+    check_name: str
+    snoozed_until: datetime

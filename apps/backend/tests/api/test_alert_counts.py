@@ -7,6 +7,7 @@ List, get and update all answered `notification_provider_count: 0` and
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from uuid import uuid4
 
 import pytest
 import pytest_asyncio
@@ -105,3 +106,27 @@ async def test_update_reports_the_counts(
     assert resp.status_code == 200, resp.text
     assert resp.json()["description"] == "renamed"
     assert _counts(resp.json()) == (2, 3)
+
+
+async def test_create_reports_the_counts(client: AsyncClient, db: AsyncSession) -> None:
+    agent = make_agent()
+    provider = make_notification_provider()
+    db.add_all([agent, provider])
+    await db.flush()
+    check = make_check(agent_id=agent.id)
+    db.add(check)
+    await db.flush()
+
+    resp = await client.post(
+        "/api/v1/alerts",
+        json={
+            "name": f"created-{uuid4().hex[:6]}",
+            "trigger_type": "status_change",
+            "trigger_config": {},
+            "notification_provider_ids": [str(provider.id)],
+            "check_ids": [str(check.id)],
+        },
+    )
+
+    assert resp.status_code == 201, resp.text
+    assert _counts(resp.json()) == (1, 1)

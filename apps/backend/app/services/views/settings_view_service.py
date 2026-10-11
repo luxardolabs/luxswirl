@@ -302,7 +302,7 @@ class SettingsViewService:
     ) -> dict[str, Any]:
         """/settings landing page — totals across providers/alerts/keys/users."""
         _, providers_count = await NotificationCoreService.list_providers(db, limit=1)
-        _, alerts_count = await AlertCoreService.list_alerts(db, skip=0, limit=1)
+        alerts_count = await AlertCoreService.count_alerts(db)
         _, keys_count = await RegistrationKeyCoreService.list_keys(db, skip=0, limit=1)
         users_count = await UserCoreService.get_active_user_count(db)
         return {
