@@ -5,7 +5,6 @@ All business logic is delegated to CheckResultCoreService.
 This router only handles HTTP concerns.
 """
 
-from datetime import timedelta
 from typing import Annotated
 from uuid import UUID
 
@@ -22,7 +21,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import ReportingAgentId
 from app.core.config import settings
-from app.core.datetime_utils import utc_now
 from app.core.exceptions import AgentNotFoundException, CheckNotFoundException
 from app.core.rate_limit import limiter
 from app.core.security import verify_api_token
@@ -33,10 +31,10 @@ from app.schemas.check_result_schema import (
     AgentReportResponse,
     CheckHistoryResponse,
     CheckResultListResponse,
-    CheckResultResponse,
     CheckSummary,
     GlobalStatsResponse,
 )
+from app.services.core.check_result_api_core_service import CheckResultApiCoreService
 from app.services.core.check_result_core_service import CheckResultCoreService
 
 router = APIRouter(tags=["Check Results"])
@@ -94,57 +92,8 @@ async def get_latest_results(
 ) -> CheckResultListResponse:
     """Get latest check results for an agent."""
     try:
-        results = await CheckResultCoreService.get_latest_results_for_agent(
+        return await CheckResultApiCoreService.latest_results_for_agent(
             db, agent_name, minutes
-        )
-
-        result_responses = []
-        success_count = 0
-        failure_count = 0
-
-        for result in results:
-            if result.success:
-                success_count += 1
-            else:
-                failure_count += 1
-
-            # Get check and agent info
-            result_agent_name = result.agent.agent_name if result.agent else None
-            result_check_name = result.check.display_name if result.check else None
-            result_check_type = result.check.check_type if result.check else None
-            result_target = result.check.target if result.check else None
-
-            result_responses.append(
-                CheckResultResponse(
-                    id=result.id,
-                    agent_id=result.agent_id,
-                    check_id=result.check_id,
-                    timestamp=result.timestamp,
-                    success=result.success,
-                    latency_ms=result.latency_ms,
-                    latency_seconds=result.latency_seconds,
-                    error=result.error,
-                    error_type=result.error_type,
-                    http_status_code=result.http_status_code,
-                    http_response_time_ms=result.http_response_time_ms,
-                    metrics=result.get_metrics(),
-                    status=result.status,
-                    agent_name=result_agent_name,
-                    check_name=result_check_name,
-                    check_type=result_check_type,
-                    target=result_target,
-                )
-            )
-
-        total = len(result_responses)
-        success_rate = (success_count / total * 100) if total > 0 else 0.0
-
-        return CheckResultListResponse(
-            results=result_responses,
-            total=total,
-            success_count=success_count,
-            failure_count=failure_count,
-            success_rate=round(success_rate, 2),
         )
     except AgentNotFoundException:
         raise HTTPException(
@@ -172,77 +121,13 @@ async def get_check_history(
 ) -> CheckHistoryResponse:
     """Get historical check results."""
     try:
-        results = await CheckResultCoreService.get_check_history(
-            db, check_id, hours, limit
-        )
-
-        if not results:
-            raise CheckNotFoundException("unknown", str(check_id))
-
-        # Get summary statistics
-        summary = await CheckResultCoreService.get_check_summary(db, check_id, hours)
-
-        # Convert results to responses
-        result_responses = []
-        for result in results:
-            result_agent_name = result.agent.agent_name if result.agent else None
-            result_check_name = result.check.display_name if result.check else None
-            result_check_type = result.check.check_type if result.check else None
-            result_target = result.check.target if result.check else None
-
-            result_responses.append(
-                CheckResultResponse(
-                    id=result.id,
-                    agent_id=result.agent_id,
-                    check_id=result.check_id,
-                    timestamp=result.timestamp,
-                    success=result.success,
-                    latency_ms=result.latency_ms,
-                    latency_seconds=result.latency_seconds,
-                    error=result.error,
-                    error_type=result.error_type,
-                    http_status_code=result.http_status_code,
-                    http_response_time_ms=result.http_response_time_ms,
-                    metrics=result.get_metrics(),
-                    status=result.status,
-                    agent_name=result_agent_name,
-                    check_name=result_check_name,
-                    check_type=result_check_type,
-                    target=result_target,
-                )
-            )
-
-        # Get check info from first result
-        first_result = results[0]
-        agent_id = first_result.agent_id
-        check_name = (
-            first_result.check.display_name if first_result.check else "unknown"
-        )
-        check_type = first_result.check.check_type if first_result.check else "unknown"
-        target = first_result.check.target if first_result.check else "unknown"
-
-        end_time = utc_now()
-        start_time = end_time - timedelta(hours=hours)
-
-        return CheckHistoryResponse(
-            agent_id=agent_id,
-            check_name=check_name,
-            check_type=check_type,
-            target=target,
-            start_time=start_time,
-            end_time=end_time,
-            data_points=result_responses,
-            summary=summary,
+        return await CheckResultApiCoreService.check_history(
+            db, agent_name, check_id, hours, limit
         )
     except CheckNotFoundException:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Check not found: {agent_name}:{check_id}",
-        ) from None
-    except AgentNotFoundException:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Agent not found: {agent_name}",
         ) from None
 
 
