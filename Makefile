@@ -948,6 +948,7 @@ TEST_WORKDIR  := apps/backend
 TEST_ENV      := -e TEST_DATABASE_URL=postgresql+asyncpg://luxswirl_test:luxswirl_test@timescaledb-test:5432/luxswirl_test \
                  -e DATABASE__URL=postgresql+asyncpg://luxswirl_test:luxswirl_test@timescaledb-test:5432/luxswirl_test \
                  -e LUXSWIRL_INTEGRATION=1 \
+                 -e ALLOWED_HOSTS=test,route-smoke \
                  -e PYTHONPATH=/repo/apps/backend:/repo/apps:/repo/apps/backend/tests \
                  -e HYPOTHESIS_STORAGE_DIRECTORY=/out/.hypothesis
 

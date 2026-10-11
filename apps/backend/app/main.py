@@ -42,6 +42,7 @@ from app.core.logging_options import logging_options
 from app.core.rate_limit import limiter
 from app.core.secrets import resolve_runtime_secrets
 from app.core.security_headers import SecurityHeadersMiddleware
+from app.core.trusted_host import AllowedHostsMiddleware
 from app.db import worker_session
 from app.db.database import close_db, init_db
 from app.db.scheduler_init import init_scheduler_defaults
@@ -237,6 +238,14 @@ app.add_middleware(
 
 # Security headers middleware (SWIRL-43)
 app.add_middleware(SecurityHeadersMiddleware)
+
+# Trusted hosts: added last, so it is the outermost layer and a forged Host is refused with
+# 400 before any other middleware or route sees the request (FLEET-BUILD-DEPLOY-STANDARD).
+app.add_middleware(
+    AllowedHostsMiddleware,
+    allowed_hosts=settings.allowed_hosts,
+    health_paths=("/health",),
+)
 
 
 # Exception handlers

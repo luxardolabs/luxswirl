@@ -11,6 +11,8 @@ from cryptography.fernet import Fernet
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from app.core.trusted_host import AllowedHosts
+
 
 class DatabaseSettings(BaseSettings):
     """Database configuration settings."""
@@ -334,6 +336,12 @@ class Settings(BaseSettings):
         description="Environment",
     )
     debug: bool = Field(default=False, description="Debug mode")
+
+    # The Host names this deployment serves (ALLOWED_HOSTS in .env.<env>, comma-separated).
+    # Required, no default: an unset, empty or `*` value refuses to start. It must list the
+    # public hostname nginx forwards AND the in-network name the agent posts to
+    # (luxswirl_server, plus any STACK_SUFFIX).
+    allowed_hosts: AllowedHosts
 
     # Sub-settings
     database: DatabaseSettings = Field(default_factory=DatabaseSettings)
