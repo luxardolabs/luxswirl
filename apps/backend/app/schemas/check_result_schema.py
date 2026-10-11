@@ -118,6 +118,18 @@ class CheckResultResponse(CheckResultInDB):
     }
 
 
+class RecentCheckResult(BaseSchema):
+    """One recent result as the check detail panel and status bars read it."""
+
+    id: UUID
+    check_id: UUID
+    timestamp: datetime
+    success: bool
+    latency_ms: float | None
+    error: str | None
+    http_status_code: int | None
+
+
 class StatusBarResult(BaseSchema):
     """One result as a status bar reads it: when, whether it passed, how fast."""
 

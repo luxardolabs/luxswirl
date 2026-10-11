@@ -195,6 +195,19 @@ class CheckInDB(CheckBase, TimestampSchema):
     agent_selector: dict[str, Any] | None = None
 
 
+class CheckStatusInfo(BaseSchema):
+    """What a status-dashboard row reads about a check (no config, no secrets)."""
+
+    id: UUID
+    display_name: str
+    check_type: str
+    target: str
+    enabled: bool
+    tags: list[str] | None = None
+    depends_on_check_id: UUID | None = None
+    interval_seconds: int | None = None
+
+
 class CheckView(CheckInDB):
     """A check as the web panels read it: every stored field, plus its agent.
 

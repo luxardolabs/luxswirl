@@ -2,8 +2,10 @@
 Check detail service - provides detailed check information for side panel.
 """
 
+import copy
 import json
 from collections import defaultdict
+from datetime import datetime
 from typing import Any
 from uuid import UUID
 
@@ -14,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.datetime_utils import utc_now
 from app.core.ssl_expiry import ssl_expiry_fields
 from app.core.synthetic_timings import build_synthetic_view
+from app.schemas.check_result_schema import RecentCheckResult
 from app.services.core.check_core_service import CheckCoreService
 from app.services.core.check_result_core_service import CheckResultCoreService
 from app.services.core.settings_core_service import SettingsCoreService
@@ -21,10 +24,31 @@ from app.services.core.settings_core_service import SettingsCoreService
 logger = get_logger("luxswirl.web.services.check_detail")
 
 
-class ResultProxy:
-    """Lightweight proxy mimicking CheckResult for template compatibility."""
+# Every key the synthetic panel reads, with what "not reported" looks like.
+SYNTHETIC_PANEL_DEFAULTS: dict[str, Any] = {
+    "status": "unknown",
+    "steps": [],
+    "console_errors": [],
+    "request_failures": [],
+    "browser_timing": {},
+    "total_execution_time_ms": None,
+    "track_durations": {},
+    "track_timings": {},
+}
 
-    def __init__(self, timestamp, success, latency_ms, error, metrics, check_id=None):
+
+class ResultProxy:
+    """One bucket of history, shaped like a result for the panel's template."""
+
+    def __init__(
+        self,
+        timestamp: datetime,
+        success: bool | None,
+        latency_ms: float | None,
+        error: str | None,
+        metrics: dict[str, Any] | str | None,
+        check_id: UUID | None = None,
+    ) -> None:
         self.timestamp = timestamp
         self.success = success
         self.latency_ms = latency_ms
@@ -32,14 +56,16 @@ class ResultProxy:
         self._metrics = metrics
         self.check_id = check_id
 
-    def get_metrics(self):
+    def get_metrics(self) -> dict[str, Any]:
+        """The bucket's metrics as a dict; JSON text is decoded, junk is {}."""
         if not self._metrics:
             return {}
         if isinstance(self._metrics, str):
             try:
-                return json.loads(self._metrics)
+                decoded = json.loads(self._metrics)
             except json.JSONDecodeError, TypeError:
                 return {}
+            return decoded if isinstance(decoded, dict) else {}
         return self._metrics
 
 
@@ -80,7 +106,7 @@ class CheckDetailViewService:
     @staticmethod
     async def get_check_detail(
         db: AsyncSession, request: Request, check_id: UUID, hours: int = 4
-    ) -> dict | None:
+    ) -> dict[str, Any] | None:
         """
         Get full check details including recent history.
 
@@ -126,18 +152,27 @@ class CheckDetailViewService:
         # Convert history to dicts and process SSL certs
         history: list[dict[str, Any]] = []
         for result in history_models:
-            history_item = {
+            metrics = result.get_metrics()  # SSL cert already computed by the server
+            history_item: dict[str, Any] = {
                 "timestamp": result.timestamp.isoformat(),  # ISO string for JSON serialization
                 "success": result.success,
                 "latency_ms": result.latency_ms,
                 "error": result.error,
-                "additional_data": result.get_metrics(),  # SSL cert already computed by the server
+                "additional_data": metrics,
             }
+
+            # Complete the synthetic block the same way: the panel reads every
+            # one of these keys, and a script that reports no page timings (the
+            # agent's default) leaves the track_* keys out.
+            synthetic = metrics.get("synthetic") if metrics else None
+            if isinstance(synthetic, dict):
+                for key, empty in SYNTHETIC_PANEL_DEFAULTS.items():
+                    synthetic.setdefault(key, copy.copy(empty))
 
             # Complete the certificate the agent reported: the panel reads the
             # expiry flags unconditionally, so they are set for every cert.
-            if history_item["additional_data"]:
-                response = history_item["additional_data"].get("response", {})
+            if metrics:
+                response = metrics.get("response", {})
                 ssl_cert = response.get("ssl_certificate")
                 if ssl_cert:
                     # The panel renders the raw notAfter string trimmed; trim it
@@ -339,11 +374,11 @@ class CheckDetailViewService:
         ]
 
         # Group results by minute
-        minute_buckets = defaultdict(list)
-        for result in status_bar_results:
-            minutes_ago = int((now - result.timestamp).total_seconds() / 60)
+        minute_buckets: defaultdict[int, list[RecentCheckResult]] = defaultdict(list)
+        for recent in status_bar_results:
+            minutes_ago = int((now - recent.timestamp).total_seconds() / 60)
             if 0 <= minutes_ago < 30:
-                minute_buckets[minutes_ago].append(result)
+                minute_buckets[minutes_ago].append(recent)
 
         # Create 30 bars (most recent first)
         for minute_offset in range(30):
@@ -354,7 +389,7 @@ class CheckDetailViewService:
                 avg_latency = sum(r.latency_ms or 0 for r in results_in_minute) / len(
                     results_in_minute
                 )
-                bar = {
+                bar: dict[str, bool | int | float | None] = {
                     "success": all_success,
                     "count": len(results_in_minute),
                     "avg_latency": round(avg_latency, 1),
