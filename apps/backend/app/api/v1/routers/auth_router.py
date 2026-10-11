@@ -20,7 +20,6 @@ from app.schemas.auth_schema import (
     LoginRequest,
     LoginResponse,
     SessionListResponse,
-    SessionResponse,
 )
 from app.schemas.base_schema import MessageResponse, SessionsTerminatedResponse
 from app.services.core.auth_core_service import AuthCoreService
@@ -77,12 +76,12 @@ async def login(
         # Frontend should redirect to change password page
         return LoginResponse(
             message="Password change required",
-            user=CurrentUserResponse.model_validate(user),
+            user=user,
             must_change_password=True,
         )
 
     # Create session
-    session, token = await auth_service.create_session(
+    _, token = await auth_service.create_session(
         db, user.id, ip_address=client_ip, user_agent=user_agent
     )
 
@@ -241,7 +240,7 @@ async def list_my_sessions(
     sessions = await auth_service.get_user_sessions(db, user.id)
 
     return SessionListResponse(
-        sessions=[SessionResponse.model_validate(s) for s in sessions],
+        sessions=sessions,
         total=len(sessions),
     )
 
@@ -364,7 +363,7 @@ async def list_user_sessions_admin(
     sessions = await auth_service.get_user_sessions(db, user_id)
 
     return SessionListResponse(
-        sessions=[SessionResponse.model_validate(s) for s in sessions],
+        sessions=sessions,
         total=len(sessions),
     )
 
