@@ -10,10 +10,15 @@ from __future__ import annotations
 
 import pytest
 from app.core.config import Settings, settings
-from app.core.trusted_host import AllowedHostsError, parse_allowed_hosts
+from app.core.trusted_host import (
+    AllowedHostsError,
+    AllowedHostsMiddleware,
+    parse_allowed_hosts,
+)
 from app.main import app
 from httpx import ASGITransport, AsyncClient
 from pydantic import ValidationError
+from starlette.types import Receive, Scope, Send
 
 pytestmark = pytest.mark.integration
 
@@ -90,3 +95,22 @@ def test_allowed_hosts_reads_a_comma_separated_env(
         "swirl.example.com",
         "luxswirl_server",
     ]
+
+
+async def test_no_www_redirect_to_a_plain_http_url() -> None:
+    # Starlette's default answers a bare domain with a redirect to http://www.<domain>/,
+    # dropping https and nginx's port. Build the middleware with the options main.py installs.
+    [entry] = [m for m in app.user_middleware if m.cls is AllowedHostsMiddleware]
+    options = {**entry.kwargs, "allowed_hosts": ["www.swirl.example.com"]}
+
+    async def ok(scope: Scope, receive: Receive, send: Send) -> None:
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        await send({"type": "http.response.body", "body": b""})
+
+    wrapped = AllowedHostsMiddleware(ok, **options)
+    transport = ASGITransport(app=wrapped, client=("10.0.0.7", 50000))
+    async with AsyncClient(
+        transport=transport, base_url="http://swirl.example.com"
+    ) as c:
+        r = await c.get("/login")
+    assert r.status_code == 400
