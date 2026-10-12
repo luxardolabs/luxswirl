@@ -234,6 +234,9 @@ services:
       # test (startup, settings validation) also lands on the throwaway DB.
       DATABASE__URL: postgresql+asyncpg://luxswirl_test:luxswirl_test@timescaledb-test:5432/luxswirl_test
       LUXSWIRL_INTEGRATION: "1"
+      # Required by the app settings (anything importing app.core.config,
+      # alembic env.py included): the Host names the suite's ASGI clients send.
+      ALLOWED_HOSTS: test,route-smoke
     # No source bind-mounts — app/shared/tests are baked in by `make test-build`.
     # `run --rm tests` overrides this; the default keeps the container alive so
     # it does not exit when brought up via `up`.

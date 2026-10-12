@@ -245,6 +245,9 @@ app.add_middleware(
     AllowedHostsMiddleware,
     allowed_hosts=settings.allowed_hosts,
     health_paths=("/health",),
+    # No www redirect: it builds an http:// URL without the port, while nginx
+    # serves TLS on 9000, so the redirect would land nowhere.
+    www_redirect=False,
 )
 
 
