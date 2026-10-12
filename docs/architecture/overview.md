@@ -753,6 +753,7 @@ ______________________________________________________________________
 
 **Layer 2: Application** (FastAPI middleware)
 
+- Trusted hosts: any `Host` not in `ALLOWED_HOSTS` gets 400
 - CORS headers (`SERVER__CORS_ORIGINS`)
 - CSRF protection (SameSite cookies)
 - Security headers (X-Frame-Options, CSP)
