@@ -92,6 +92,9 @@ services:
       # Server settings
       SERVER__ENVIRONMENT: production
 
+      # Trusted hosts (REQUIRED) — public hostname + the agent's in-network name
+      ALLOWED_HOSTS: your-domain.com,luxswirl_server
+
       # CORS (REQUIRED in production) — the exact URL users type in the browser
       SERVER__CORS_ORIGINS: '["https://your-domain.com:9000"]'
       SERVER__CORS_CREDENTIALS: "true"
@@ -193,6 +196,8 @@ The database is configured with a **single** connection URL — there are no sep
 
 \* Required in production mode
 
+`ALLOWED_HOSTS` is required in every mode: see [Trusted hosts](../reference/settings-reference.md#trusted-hosts-allowed_hosts).
+
 **Example:**
 
 ```yaml
@@ -286,6 +291,9 @@ services:
 
       # Server
       SERVER__ENVIRONMENT: production
+
+      # Trusted hosts (REQUIRED)
+      ALLOWED_HOSTS: monitoring.yourdomain.com,luxswirl_server
 
       # CORS (YOUR DOMAIN!)
       SERVER__CORS_ORIGINS: '["https://monitoring.yourdomain.com:9000"]'

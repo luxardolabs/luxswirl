@@ -74,7 +74,7 @@ Set `SERVER__CORS_ORIGINS` in the environment file for that deployment. A new en
 
 ```bash
 cp .env.example .env.mycompany
-# set ENV=mycompany, TAG=<version>, and SERVER__CORS_ORIGINS for your domain
+# set ENV=mycompany, TAG=<version>, ALLOWED_HOSTS and SERVER__CORS_ORIGINS for your domain
 docker compose --env-file .env.mycompany up -d
 ```
 
@@ -142,7 +142,8 @@ SECURITY__SESSION_COOKIE_NAME=luxswirl_session  # Unique per app
 All settings can be overridden via environment variables using the nested delimiter `__`:
 
 ```bash
-# CORS
+# Trusted hosts (required) and CORS
+ALLOWED_HOSTS=your-domain.com,luxswirl_server
 SERVER__CORS_ORIGINS='["https://your-domain.com"]'
 
 # Database
@@ -219,6 +220,7 @@ For a new deployment (not dev.example.com):
 
    ```bash
    SERVER__CORS_ORIGINS=["https://luxswirl.mycompany.com"]
+   ALLOWED_HOSTS=luxswirl.mycompany.com,luxswirl_server
    ```
 
 1. **Update nginx config** (`nginx/conf.d/luxswirl.conf`):

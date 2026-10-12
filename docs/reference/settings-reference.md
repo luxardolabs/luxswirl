@@ -154,6 +154,14 @@ These are parsed by Pydantic in `app/core/config.py` and are **not** stored in t
 
 Environment variables use a `<GROUP>__<FIELD>` convention (double underscore nested delimiter): `SERVER__`, `DATABASE__`, `SECURITY__`, `LOG__`.
 
+### Trusted hosts (`ALLOWED_HOSTS`)
+
+| Env Variable    | Default             | Purpose                                                                                                                                                                                                                                                                                                                                |
+| --------------- | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ALLOWED_HOSTS` | none (**required**) | Comma-separated Host names the server answers; any other `Host` header gets 400. List the public hostname (no scheme, no port) **and** `luxswirl_server` (plus `STACK_SUFFIX`, if set), the name the agent posts to inside the compose network. `*.example.com` admits that domain's subdomains. Unset, empty or `*` refuses to start. |
+
+The container's own healthcheck (`http://localhost:9000/health` from inside the container) passes without `localhost` being listed; any request that arrives through a proxy is checked.
+
 ### Server (`SERVER__`)
 
 | Env Variable                                  | Default             | Purpose                                                                                                                                                                        |

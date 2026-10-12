@@ -226,6 +226,9 @@ sudo nano .env
 POSTGRES_PASSWORD=CHANGE_THIS_SECURE_PASSWORD_123
 DATABASE__URL=postgresql+asyncpg://luxswirl:CHANGE_THIS_SECURE_PASSWORD_123@timescaledb:5432/luxswirl
 
+# Trusted hosts — REQUIRED: the public hostname, plus the in-network name the agent uses.
+ALLOWED_HOSTS=luxswirl.example.com,luxswirl_server
+
 # CORS — MUST be the exact URL users type in the browser (JSON array).
 SERVER__CORS_ORIGINS='["https://luxswirl.example.com:9000"]'
 
@@ -312,7 +315,7 @@ services:
       - DATABASE__URL=postgresql+asyncpg://luxswirl:${POSTGRES_PASSWORD}@timescaledb:5432/luxswirl
       - SERVER__ENVIRONMENT=production
       - LOG__LEVEL=INFO
-      # SERVER__CORS_ORIGINS / SECURITY__* come from your .env file.
+      # ALLOWED_HOSTS / SERVER__CORS_ORIGINS / SECURITY__* come from your .env file.
     expose:
       - "9000"   # Internal only; reach it via nginx
     volumes:
@@ -521,6 +524,9 @@ DATABASE__URL=postgresql+asyncpg://luxswirl:CHANGE_THIS_SECURE_PASSWORD@localhos
 # secrets manager. SECURITY__FIELD_ENCRYPTION_KEY is handled the same way.
 # SECURITY__SECRET_KEY=
 SERVER__CORS_ORIGINS='["https://luxswirl.example.com"]'
+# The public hostname, plus localhost: the systemd agent below posts to
+# http://localhost:9000.
+ALLOWED_HOSTS=luxswirl.example.com,localhost
 
 # Server
 SERVER__PORT=9000
