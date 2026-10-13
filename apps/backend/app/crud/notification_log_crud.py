@@ -25,6 +25,15 @@ LogRow = Row[*tuple[Any, ...]]
 class NotificationLogCRUD:
     """Database queries for notification logs."""
 
+    # ── Writes (flushed; the session owner commits) ───────────────────────────
+
+    @staticmethod
+    async def add_log(db: AsyncSession, log_entry: NotificationLog) -> NotificationLog:
+        db.add(log_entry)
+        await db.flush()
+        await db.refresh(log_entry)
+        return log_entry
+
     @staticmethod
     async def count_for_provider_since(
         db: AsyncSession, provider_id: UUID, since: datetime, statuses: list[str]

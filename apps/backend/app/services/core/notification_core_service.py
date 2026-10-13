@@ -192,9 +192,7 @@ class NotificationCoreService:
             rate_limit_window_minutes=data.rate_limit_window_minutes,
         )
 
-        db.add(provider)
-        await db.flush()
-        await db.refresh(provider)
+        provider = await NotificationProviderCRUD.add_provider(db, provider)
 
         logger.info(
             "Created notification provider",
@@ -264,8 +262,7 @@ class NotificationCoreService:
         if data.rate_limit_window_minutes is not None:
             provider.rate_limit_window_minutes = data.rate_limit_window_minutes
 
-        await db.flush()
-        await db.refresh(provider)
+        provider = await NotificationProviderCRUD.save_provider(db, provider)
 
         logger.info(
             "Updated notification provider",
@@ -294,7 +291,7 @@ class NotificationCoreService:
         provider = await NotificationCoreService.get_provider_by_id(db, provider_id)
 
         if hard_delete:
-            await db.delete(provider)
+            await NotificationProviderCRUD.hard_delete_provider(db, provider)
         else:
             provider.deleted_at = utc_now()
 
@@ -430,7 +427,7 @@ class NotificationCoreService:
                 resend_count=resend_count,
                 sent_at=utc_now(),
             )
-            db.add(log_entry)
+            log_entry = await NotificationLogCRUD.add_log(db, log_entry)
 
             logger.info(
                 "Notification suppressed - provider is disabled",
@@ -459,7 +456,7 @@ class NotificationCoreService:
                 resend_count=resend_count,
                 sent_at=utc_now(),
             )
-            db.add(log_entry)
+            log_entry = await NotificationLogCRUD.add_log(db, log_entry)
 
             logger.warning(
                 "Notification rate limited",
@@ -519,11 +516,7 @@ class NotificationCoreService:
                 extra={"provider_id": str(provider_id), "error_message": error_msg},
             )
 
-        db.add(log_entry)
-        await db.flush()
-        await db.refresh(log_entry)
-
-        return log_entry
+        return await NotificationLogCRUD.add_log(db, log_entry)
 
     @staticmethod
     async def _check_rate_limit(

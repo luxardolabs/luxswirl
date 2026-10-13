@@ -14,6 +14,33 @@ from app.models.notification_provider_model import NotificationProvider
 class NotificationProviderCRUD:
     """Database queries for notification providers."""
 
+    # ── Writes (flushed; the session owner commits) ───────────────────────────
+
+    @staticmethod
+    async def add_provider(
+        db: AsyncSession, provider: NotificationProvider
+    ) -> NotificationProvider:
+        db.add(provider)
+        await db.flush()
+        await db.refresh(provider)
+        return provider
+
+    @staticmethod
+    async def save_provider(
+        db: AsyncSession, provider: NotificationProvider
+    ) -> NotificationProvider:
+        """Write a provider's changed fields; the refreshed row."""
+        await db.flush()
+        await db.refresh(provider)
+        return provider
+
+    @staticmethod
+    async def hard_delete_provider(
+        db: AsyncSession, provider: NotificationProvider
+    ) -> None:
+        await db.delete(provider)
+        await db.flush()
+
     @staticmethod
     async def get_by_id(
         db: AsyncSession, provider_id: UUID, include_deleted: bool = False
