@@ -29,6 +29,7 @@ import fixtures.db as _dbfix
 # truncated, so the list can stay generous without breaking on schema changes.
 _WORKER_TABLES = (
     "maintenance_jobs",
+    "jobs",
     "job_executions",
     "job_configurations",
     "agent_metrics",
