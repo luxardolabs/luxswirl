@@ -30,6 +30,7 @@ import fixtures.db as _dbfix
 _WORKER_TABLES = (
     "maintenance_jobs",
     "jobs",
+    "registration_keys",
     "job_executions",
     "job_configurations",
     "agent_metrics",

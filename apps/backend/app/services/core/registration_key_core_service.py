@@ -107,9 +107,7 @@ class RegistrationKeyCoreService:
             created_by=created_by,
         )
 
-        db.add(key)
-        await db.flush()
-        await db.refresh(key)
+        key = await RegistrationKeyCRUD.add_key(db, key)
 
         logger.info(
             "Created registration key",
@@ -191,8 +189,7 @@ class RegistrationKeyCoreService:
         if data.description is not None:
             key.description = data.description
 
-        await db.flush()
-        await db.refresh(key)
+        key = await RegistrationKeyCRUD.save_key(db, key)
 
         logger.info(
             "Updated registration key",
@@ -232,8 +229,7 @@ class RegistrationKeyCoreService:
         key.revoked_by = revoked_by
         key.revoked_reason = data.reason
 
-        await db.flush()
-        await db.refresh(key)
+        key = await RegistrationKeyCRUD.save_key(db, key)
 
         logger.info(
             "Revoked registration key",
@@ -268,7 +264,7 @@ class RegistrationKeyCoreService:
             raise NotFoundException(f"Registration key not found: {key_id}")
 
         if hard_delete:
-            await db.delete(key)
+            await RegistrationKeyCRUD.hard_delete_key(db, key)
             logger.info(
                 "Hard deleted registration key",
                 extra={"key_name": key.name, "key_id": str(key.id)},
@@ -303,11 +299,11 @@ class RegistrationKeyCoreService:
         # Check each key
         for key in active_keys:
             if RegistrationKeyCoreService.verify_key(plaintext_key, key.key_hash):
-                # Update usage stats
-                key.last_used_at = utc_now()
-                key.usage_count += 1
-                await db.flush()
-                await db.refresh(key)
+                # Count the use atomically; the row is returned updated.
+                used = await RegistrationKeyCRUD.record_usage(db, key.id)
+                if used is None:  # deleted between the read and the update
+                    return None
+                key = used
 
                 logger.debug(
                     "Verified registration key",
