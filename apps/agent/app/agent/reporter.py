@@ -304,6 +304,16 @@ class Reporter:
 
         self.logger.info("Reporter stopped")
 
+    def _stopped(self) -> bool:
+        """True once stop() has run.
+
+        A loop re-reads this after every await: stop() runs on another task, so
+        the flag can change while this one is suspended. A method call, not the
+        bare attribute, so a type checker does not carry a `while self.running`
+        narrowing across the await and call the exit branch unreachable.
+        """
+        return not self.running
+
     async def batch_processor(self) -> None:
         """Process batches asynchronously to avoid blocking result handling."""
         self.logger.info(
@@ -513,7 +523,7 @@ class Reporter:
                     retry_count += 1
                     self.metrics["send_failures"] += 1
 
-                    if not self.running:
+                    if self._stopped():
                         break
 
                     await asyncio.sleep(self.retry_delay)
@@ -525,7 +535,7 @@ class Reporter:
                 retry_count += 1
                 self.metrics["send_failures"] += 1
 
-                if not self.running:
+                if self._stopped():
                     break
 
                 await asyncio.sleep(self.retry_delay)
@@ -535,7 +545,7 @@ class Reporter:
                 retry_count += 1
                 self.metrics["send_failures"] += 1
 
-                if not self.running:
+                if self._stopped():
                     break
 
                 await asyncio.sleep(self.retry_delay)
@@ -676,7 +686,7 @@ class Reporter:
                     aborted = False
 
                     for row_id, checks in pending:
-                        if not self.running:
+                        if self._stopped():
                             break
 
                         # Flush before adding if appending would exceed the cap.
@@ -733,12 +743,12 @@ class Reporter:
                             )
 
                 # Check if we should continue running
-                if not self.running:
+                if self._stopped():
                     break
 
                 # Wait before checking again, with periodic checks of running status
                 for _ in range(self.process_interval):
-                    if not self.running:
+                    if self._stopped():
                         break
                     await asyncio.sleep(1)
 
@@ -746,7 +756,7 @@ class Reporter:
                 self.logger.exception("Error in stored reports processor")
 
                 # Check if we should continue running
-                if not self.running:
+                if self._stopped():
                     break
 
                 # Shorter sleep on error
