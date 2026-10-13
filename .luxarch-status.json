@@ -572,7 +572,7 @@
           "rule": "fw.no_session_mutation_outside_crud",
           "status": "XFAIL",
           "since": "0.2.0",
-          "violations": 144,
+          "violations": 143,
           "deferred": true,
           "inert": false,
           "inert_reason": "",
@@ -779,13 +779,13 @@
         },
         {
           "rule": "fw.no_hand_rolled_components_in_pages",
-          "status": "PASS",
+          "status": "FAIL",
           "since": "0.9.1",
-          "violations": 0,
+          "violations": 5,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
-          "fix": "",
+          "fix": "USE THE MACRO \u2014 call your field macro (button/select/input/textarea); the fleet has one for each (buttons.html, forms.html). The `<form>` wrapper itself stays raw (page-specific action/method) \u2014 compose raw `<form>` + field macros, the fleet standard. Fixing this red means finding and calling the field macro, not exempting: even a showcase page renders its macros. Scans ALL templates (pages, partials, flat) except macros/ \u2014 a raw component is wrong wherever it composes. [templates].exempt is a LAST resort for a single deliberate raw-vs-macro comparison line (with evidence). A single DELIBERATE counter-example (e.g. a component showcase demonstrating the wrong pattern next to the macro) may carry an inline `{# no_hand_rolled_components_in_pages: <reason> #}` waiver on, or in the comment block directly above, the line \u2014 reason REQUIRED. That is the per-LINE carve-out; do NOT stand the rule down on the whole page with [templates].exempt.",
           "example": ""
         },
         {
@@ -988,12 +988,12 @@
         },
         {
           "rule": "fw.no_orphan_pages",
-          "status": "PASS",
+          "status": "INERT",
           "since": "0.54.0",
           "violations": 0,
           "deferred": false,
-          "inert": false,
-          "inert_reason": "",
+          "inert": true,
+          "inert_reason": "this app renders a page by a computed name (a non-literal TemplateResponse), so an unreferenced page can't be proven dead. Orphan detection runs only when every render uses a literal template name.",
           "fix": "",
           "example": ""
         },
@@ -1076,24 +1076,24 @@
         },
         {
           "rule": "fw.enums_in_enum_model",
-          "status": "PASS",
+          "status": "FAIL",
           "since": "0.68.0",
-          "violations": 0,
+          "violations": 1,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
-          "fix": "",
+          "fix": "Move the Enum class to app/models/enum_model.py (or enums.py), or to its domain submodule of the package app/models/enum_model/ (import from the submodule, no re-export), and import it where used \u2014 enums cross every layer by design (ADR-001) so they have one home, and a stray enum is caught only by ricochet off another rule (or not at all, if only a core/service imports it). If it's genuinely NOT a model enum (error-infrastructure core owns, not DB-persisted, and moving it makes an import cycle), exempt it: [allowlist].enum_placement = [{ enum, evidence }]. See --playbook enum-typing.",
           "example": ""
         },
         {
           "rule": "fw.enums_declared",
-          "status": "PASS",
+          "status": "FAIL",
           "since": "0.69.0",
-          "violations": 0,
+          "violations": 1,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
-          "fix": "",
+          "fix": "Add each enum to `[enums].declared` in .luxarch.toml. Placement (enums_in_enum_model) gives it one home; declaration is what makes the value/column rules examine it \u2014 without it the enum is invisible to enforcement, so a move without a declaration only relocates the problem. Declaring a column-less enum is harmless (those rules stay inert for it). See --playbook enum-typing.",
           "example": ""
         },
         {
@@ -1131,12 +1131,12 @@
         },
         {
           "rule": "fw.no_orphan_partials",
-          "status": "PASS",
+          "status": "INERT",
           "since": "0.79.0",
           "violations": 0,
           "deferred": false,
-          "inert": false,
-          "inert_reason": "",
+          "inert": true,
+          "inert_reason": "this app renders a template by a non-literal TemplateResponse, or includes one by a computed name with no pinnable literal prefix ({% include some_var %}), so an unreferenced partial can't be proven dead. (A computed include WITH a literal prefix \u2014 {% include 'x/' ~ v %}, or a var set to one \u2014 is scoped to that subtree, not a global stand-down.) Run `--sweep orphan-templates` to LIST the no-static-reference partials for review (NOT a clearance).",
           "fix": "",
           "example": ""
         },
@@ -1450,13 +1450,13 @@
         },
         {
           "rule": "fw.dto_in_schemas",
-          "status": "PASS",
+          "status": "FAIL",
           "since": "0.155.0",
-          "violations": 0,
+          "violations": 2,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
-          "fix": "",
+          "fix": "Move the DTO to `app/schemas/<domain>_schema.py` and import it where it's built. A DTO defined inside a service is invisible to the schema-scanning rules \u2014 most importantly fw.enum_dto_fields_enum_typed \u2014 so its closed-set fields go unchecked and the enum family reads green over untyped data. Relocation is mechanical: the type moves, the boundary stays typed. Do this BEFORE fw.no_inline_imports \u2014 a lazy import usually exists to dodge the circular dependency a misplaced DTO created, and lifts on its own once the DTO moves. Internal value types never returned outward are not flagged. See --playbook burn-down-order \u00a72.",
           "example": ""
         },
         {
@@ -1637,13 +1637,13 @@
         },
         {
           "rule": "fw.module_homes",
-          "status": "PASS",
+          "status": "FAIL",
           "since": "0.233.0",
-          "violations": 0,
+          "violations": 1,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
-          "fix": "",
+          "fix": "Move each to its home and import it from there at every call site \u2014 no re-export shim left behind (fw.no_threaded_aliasing): `app/core/config.py` (settings), `app/db/database.py` (the engine and session maker), `app/web/deps` / `app/api/deps` (FastAPI dependency aliases, by surface), `app/web/templates.py` (the one `Jinja2Templates`). A router-local `CurrentUser = Annotated[\u2026]` is a duplicate dependency: import the shared one. See --doc FLEET-LAYOUT-STANDARD \u00a72.",
           "example": ""
         },
         {
@@ -1725,24 +1725,24 @@
         },
         {
           "rule": "fw.admin_bootstrap_safe",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.280.0",
-          "violations": 1,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
-          "fix": "luxarch --doc FLEET-ADMIN-BOOTSTRAP-STANDARD is the standard; `luxarch --emit admin-bootstrap` (+ `-crud`, `-view`, `-router`, `-cli`, `-form`) is the implementation: no default password anywhere (the env-example key present but EMPTY), INITIAL_ADMIN_EMAIL (or _USERNAME) / INITIAL_ADMIN_PASSWORD(_FILE) applied only while the users table is empty and with must_change_password set, otherwise /setup gated by a one-time token from the log, recovery via `python -m app.cli reset-password <user>`, and login sends a must_change_password user to the change form. A red here is aligned, not waived.",
+          "fix": "",
           "example": ""
         },
         {
           "rule": "fw.redirect_target_safe",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.285.0",
-          "violations": 2,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
-          "fix": "send every redirect target the request supplies through ONE helper: `luxarch --emit safe-redirect > app/core/safe_redirect.py`, then `RedirectResponse(safe_redirect_target(next), \u2026)`. It keeps a same-origin path and falls back to `/` for anything else (`//x`, `https://x`, `/\\\\x`, encoded tricks). A fixed path built in front of the value (`f\"/items/{slug}\"`) is already safe. An OAuth `redirect_uri` is matched exactly against the registered list instead. See --doc FLEET-AUTH-SESSION-STANDARD \u00a76.",
+          "fix": "",
           "example": ""
         },
         {
@@ -1758,35 +1758,35 @@
         },
         {
           "rule": "fw.single_use_claim_atomic",
-          "status": "FAIL",
+          "status": "INERT",
           "since": "0.287.0",
-          "violations": 1,
+          "violations": 0,
           "deferred": false,
-          "inert": false,
-          "inert_reason": "",
-          "fix": "Claim it in one statement that only matches an available row: `update(Model).where(Model.token_hash == h, Model.used_at.is_(None), Model.expires_at > now).values(used_at=now).returning(Model)`, and refuse when it returns no row. Or load the row with `.with_for_update()` before checking and writing it. See --doc FLEET-AUTH-SESSION-STANDARD \u00a71.2.",
+          "inert": true,
+          "inert_reason": "no code claims a single-use record (no check-then-write on a row, no marker write) \u2014 nothing to judge",
+          "fix": "",
           "example": ""
         },
         {
           "rule": "fw.logout_revokes_server_side",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.288.0",
-          "violations": 1,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
-          "fix": "Revoke on the server, not only in the browser: give the user a `sessions_valid_after` timestamp, set it to now at logout, and have the auth dependency (which already loads the user) refuse a token issued before it. That signs out everywhere with no extra I/O. Use a per-token denylist only if signing out one device alone is a product need. See --doc FLEET-AUTH-SESSION-STANDARD \u00a72.1.",
+          "fix": "",
           "example": ""
         },
         {
           "rule": "fw.auth_posts_refuse_cross_site",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.289.0",
-          "violations": 6,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
-          "fix": "Install the one cross-site guard: `luxarch --emit same-origin > app/core/same_origin.py`, then `app.add_middleware(SameOriginMiddleware, allowed_hosts=settings.ALLOWED_HOSTS)`. It refuses an unsafe-method request whose `Sec-Fetch-Site` is `cross-site` or whose `Origin` the app does not serve; a webhook (no browser headers) passes. An OAuth `form_post` callback goes in `cross_site_paths` and checks its `state` cookie. See --doc FLEET-AUTH-SESSION-STANDARD \u00a75.",
+          "fix": "",
           "example": ""
         },
         {
@@ -1934,11 +1934,11 @@
         }
       ],
       "summary": {
-        "PASS": 151,
+        "PASS": 148,
         "FAIL": 5,
         "XFAIL": 2,
         "XPASS": 0,
-        "INERT": 17
+        "INERT": 20
       }
     },
     {
@@ -2245,24 +2245,24 @@
       },
       {
         "rule": "repo.deploy_tag_is_immutable",
-        "status": "FAIL",
+        "status": "PASS",
         "since": "0.197.0",
-        "violations": 2,
+        "violations": 0,
         "deferred": false,
         "inert": false,
         "inert_reason": "",
-        "fix": "pin an immutable identifier in `.env.<env>` (compose) or the overlay's `images: newTag:` (kustomize): `sha-<commit>` (every build, no ceremony \u2014 the sha is already computed for BUILD_COMMIT) or `TAG=<version>` for a cut release. A moving tag cannot be a deployment record: you cannot say which bits are running and you cannot roll back to them. `luxarch --emit image-block` prints the canonical scheme, where `:dev` survives only as a human-readable alias nothing pins. See --doc FLEET-BUILD-DEPLOY-STANDARD.",
+        "fix": "",
         "example": ""
       },
       {
         "rule": "repo.release_scans_candidate",
-        "status": "FAIL",
+        "status": "PASS",
         "since": "0.250.0",
-        "violations": 2,
+        "violations": 0,
         "deferred": false,
         "inert": false,
         "inert_reason": "",
-        "fix": "Re-emit `luxarch --emit image-block` (v14): its `release` builds, `docker save`s the tag it is about to push, runs `luxaudit --image-archive` (luxaudit >= 0.13.0) on THAT archive with THIS repo as `/repo` (`-v \"$(CURDIR)\":/repo`; `$(PWD)` is the caller's directory) and only then pushes. Multi-arch (`PLATFORMS`): push a `candidate-<commit>` tag nothing pins, pin its digest, pull + save + scan each platform by that digest, then `docker buildx imagetools create` the release tag from it. See --doc FLEET-BUILD-DEPLOY-STANDARD, Architectures.",
+        "fix": "",
         "example": ""
       },
       {
@@ -2489,7 +2489,7 @@
         "rule": "repo.images_on_fleet_line",
         "status": "FAIL",
         "since": "0.282.0",
-        "violations": 2,
+        "violations": 1,
         "deferred": false,
         "inert": false,
         "inert_reason": "",
@@ -2641,13 +2641,13 @@
       },
       {
         "rule": "repo.image_block_wired",
-        "status": "FAIL",
+        "status": "PASS",
         "since": "0.280.0",
-        "violations": 7,
+        "violations": 0,
         "deferred": false,
         "inert": false,
         "inert_reason": "",
-        "fix": "Paste `luxarch --emit image-block` into the Makefile and delete the hand-written publish and deploy targets; set its settings ABOVE it (REGISTRY, and as needed RELEASE_REGISTRY, PLATFORMS for a multi-arch image, PUBLIC_REGISTRY for a public copy, IMAGE_NAME, BUILD_CONTEXT, IMAGES for more than one image). Where the block cannot serve this repo, escalate to the luxarch maintainer and leave this red lit: a hand-written copy is the drift the block exists to end. See --doc FLEET-BUILD-DEPLOY-STANDARD.",
+        "fix": "",
         "example": ""
       },
       {
@@ -2806,8 +2806,8 @@
       }
     ],
     "summary": {
-      "PASS": 64,
-      "FAIL": 4,
+      "PASS": 67,
+      "FAIL": 1,
       "XFAIL": 0,
       "XPASS": 0,
       "INERT": 1
@@ -2815,11 +2815,11 @@
   },
   "summary": {
     "PASS": 221,
-    "FAIL": 9,
+    "FAIL": 6,
     "XFAIL": 2,
     "XPASS": 0,
-    "INERT": 20
+    "INERT": 23
   },
-  "commit": "808408b62a635ed9764122d09ba6b1ccc9b88079",
-  "generated_at": "2026-10-13T00:44:09Z"
+  "commit": "3565b3a27327423b4d323363dad2fd371dc203c1",
+  "generated_at": "2026-10-13T03:17:50Z"
 }
