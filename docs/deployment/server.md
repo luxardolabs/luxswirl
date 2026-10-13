@@ -147,10 +147,11 @@ Navigate to: `http://localhost:9000`
 
 There are **no default credentials**. On first launch the app redirects you to a setup page to create the admin account:
 
+1. Copy the one-time setup token the server printed in its log (`docker compose logs luxswirl_server | grep setup`).
 1. Open the URL above — you'll be redirected to **`/setup`**.
-1. Choose an admin **username** and **password**, submit, then sign in. (Accounts are username + password only — no email.)
+1. Paste the token, choose an admin **username** and **password**, submit, then sign in. (Accounts are username + password only — no email.)
 
-**Unattended / automation (optional):** set `SECURITY__INITIAL_ADMIN_PASSWORD` (and optionally `SECURITY__INITIAL_ADMIN_USERNAME`, default `admin`) in your `.env` before first boot. The admin is created automatically and you log in with it; a password change is forced on first login.
+**Unattended / automation (optional):** set `INITIAL_ADMIN_USERNAME` and `INITIAL_ADMIN_PASSWORD` in your `.env` before first boot; the admin is created on that boot and a password change is forced at first sign-in. **Locked out:** `docker compose exec luxswirl_server python -m app.cli reset-password <username>`. See [First admin and recovery](../reference/settings-reference.md#first-admin-and-recovery).
 
 ### 4. Create Registration Key
 
@@ -206,13 +207,11 @@ SERVER__CORS_ORIGINS: '["https://server.example.com:9000", "https://monitoring.e
 
 ### Security Settings
 
-| Variable                           | Required | Default        | Description                                                                                                         |
-| ---------------------------------- | -------- | -------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `SECURITY__SECRET_KEY`             | No       | Auto-generated | JWT signing key. Auto-generated + persisted to `/app/data` on first boot; set only to inject from a secrets manager |
-| `SECURITY__FIELD_ENCRYPTION_KEY`   | No       | Auto-generated | Fernet key for encrypting sensitive DB fields. Auto-generated + persisted on first boot                             |
-| `SECURITY__RATE_LIMIT_ENABLED`     | No       | `true`         | Enable rate limiting                                                                                                |
-| `SECURITY__INITIAL_ADMIN_USERNAME` | No       | `admin`        | First-run admin username (unattended setup)                                                                         |
-| `SECURITY__INITIAL_ADMIN_PASSWORD` | No       | (empty)        | First-run admin password (unattended setup; empty → /setup wizard)                                                  |
+| Variable                         | Required | Default        | Description                                                                                                         |
+| -------------------------------- | -------- | -------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `SECURITY__SECRET_KEY`           | No       | Auto-generated | JWT signing key. Auto-generated + persisted to `/app/data` on first boot; set only to inject from a secrets manager |
+| `SECURITY__FIELD_ENCRYPTION_KEY` | No       | Auto-generated | Fernet key for encrypting sensitive DB fields. Auto-generated + persisted on first boot                             |
+| `SECURITY__RATE_LIMIT_ENABLED`   | No       | `true`         | Enable rate limiting                                                                                                |
 
 ### Logging Configuration
 
@@ -485,7 +484,7 @@ For a fixed-IP proxy (e.g., AWS ALB on a known subnet), tighten to just that ran
 
 On first boot the server applies Alembic migrations (`alembic upgrade head`) and sets up TimescaleDB automatically — hypertables, continuous aggregates, compression, and retention. There's no manual database setup.
 
-The admin account is created through the `/setup` wizard on first launch (or automatically when `SECURITY__INITIAL_ADMIN_PASSWORD` is set, for unattended installs) — there is **no** default admin user.
+The admin account is created through the token-gated `/setup` page on first launch (or from `INITIAL_ADMIN_USERNAME`/`INITIAL_ADMIN_PASSWORD` on an empty install, for unattended installs) — there is **no** default admin user.
 
 ### Database Backup
 

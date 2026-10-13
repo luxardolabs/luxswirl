@@ -82,9 +82,3 @@ class UserCRUD:
             select(func.count(User.id)).where(User.locked_until > utc_now())
         )
         return result.scalar_one()
-
-    @staticmethod
-    async def get_first_admin(db: AsyncSession) -> User | None:
-        """Return the first admin user (or None if none exist)."""
-        result = await db.execute(select(User).where(User.role == "admin").limit(1))
-        return result.scalar_one_or_none()

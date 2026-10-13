@@ -1,0 +1,23 @@
+{# luxarch:admin-bootstrap-form asset v2 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit admin-bootstrap-form`.
+
+   The /setup form. `luxarch --emit admin-bootstrap-form`. Drop in at
+   app/templates/web/partials/admin_setup_form.html and include it from the page the router renders
+   (SETUP_TEMPLATE in `luxarch --emit admin-bootstrap-router`). Context: `login`, `login_kind` ("email" or "username", the core's LOGIN_KIND), `error`.
+   The standard is `luxarch --doc FLEET-ADMIN-BOOTSTRAP-STANDARD`. #}
+<form method="post" action="/setup" class="admin-setup-form">
+  <h1>Create the first admin</h1>
+  <p>
+    There are no users yet. The server printed a one-time setup token in its log when it started;
+    paste it below. Only someone who can read the server log can create this account.
+  </p>
+  {% if error %}<p role="alert" class="admin-setup-error">{{ error }}</p>{% endif %}
+  <label for="setup-token">Setup token</label>
+  <input id="setup-token" name="token" type="text" autocomplete="off" required>
+  <label for="setup-login">{{ "Email" if login_kind == "email" else "Username" }}</label>
+  <input id="setup-login" name="login" type="{{ "email" if login_kind == "email" else "text" }}" autocomplete="username" value="{{ login }}" required>
+  <label for="setup-password">Password</label>
+  <input id="setup-password" name="password" type="password" autocomplete="new-password" required>
+  <label for="setup-password-confirm">Confirm password</label>
+  <input id="setup-password-confirm" name="password_confirm" type="password" autocomplete="new-password" required>
+  <button type="submit">Create admin</button>
+</form>

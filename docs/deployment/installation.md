@@ -1275,7 +1275,7 @@ ______________________________________________________________________
 
 **After successful installation**:
 
-1. **Create your admin account**: on first launch the app redirects to `/setup` to create the admin (username + password — no default credentials). For unattended installs, set `SECURITY__INITIAL_ADMIN_PASSWORD` before first boot instead; a password change is forced on first login.
+1. **Create your admin account**: on first launch the app redirects to `/setup`, which asks for the one-time token the server printed in its log, then the admin username and password (no default credentials). For unattended installs, set `INITIAL_ADMIN_USERNAME` and `INITIAL_ADMIN_PASSWORD` before first boot instead; a password change is forced on first login. See [First admin and recovery](../reference/settings-reference.md#first-admin-and-recovery).
 1. **Create checks**: Dashboard → Create Check
 1. **Set up notifications**: Settings → Notifications
 1. **Deploy additional agents**: See [Quickstart](../quickstart/quickstart.md#step-10-add-more-agents-optional)

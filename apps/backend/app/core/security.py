@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.datetime_utils import utc_now
-from app.crud.user_crud import UserCRUD
+from app.crud import admin_bootstrap_crud
 from app.db import get_db
 from app.schemas.auth_schema import CurrentUserDTO
 from app.services.core.auth_core_service import AuthCoreService
@@ -238,14 +238,11 @@ async def _unauthenticated_web_redirect(
 ) -> HTTPException:
     """Build the redirect for an unauthenticated web request.
 
-    First run (no admin seeded from env and none in the DB) -> the /setup wizard,
-    since no credentials exist yet. Otherwise -> /login, preserving the originally
-    requested path. Mirrors UserCoreService.needs_setup.
+    First run (no user at all, FLEET-ADMIN-BOOTSTRAP-STANDARD) -> /setup, since no
+    credentials exist yet. Otherwise -> /login, preserving the originally
+    requested path.
     """
-    if (
-        not settings.security.initial_admin_password
-        and await UserCRUD.get_first_admin(db) is None
-    ):
+    if await admin_bootstrap_crud.count_users(db) == 0:
         return HTTPException(
             status_code=status.HTTP_307_TEMPORARY_REDIRECT,
             headers={"Location": "/setup"},

@@ -14,7 +14,6 @@ from fastapi import HTTPException, Request, status
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import settings
 from app.schemas.auth_schema import AuthedUser
 from app.schemas.check_schema import BulkCheckCreateSummary
 from app.services.views.maintenance_job_view_service import MaintenanceJobViewService
@@ -248,26 +247,6 @@ def bulk_check_response(
         request,
         "partials/success_message.html",
         {"current_user": current_user, "message": message},
-    )
-
-
-def render_setup(
-    request: Request,
-    *,
-    username: str = "",
-    error: str | None = None,
-    status_code: int = status.HTTP_200_OK,
-) -> Response:
-    """Render the setup page, pre-filling sensible defaults."""
-    return templates.TemplateResponse(
-        request,
-        "pages/setup.html",
-        {
-            "current_user": None,
-            "username": username or settings.security.initial_admin_username,
-            "error": error,
-        },
-        status_code=status_code,
     )
 
 

@@ -16,8 +16,8 @@ from app.core.rate_limit import limiter
 from app.core.request_helpers import client_ip_from_request
 from app.core.safe_redirect import safe_redirect_target
 from app.db import get_db
+from app.services.views.admin_bootstrap_view_service import AdminBootstrapViewService
 from app.services.views.web_auth_view_service import WebAuthViewService
-from app.services.views.web_users_view_service import WebUsersViewService
 from app.web.deps import OptionalUserWeb
 from app.web.templates import templates
 
@@ -39,10 +39,10 @@ async def login_page(
     If first-run setup is pending, redirect to the setup wizard.
     If already authenticated, redirect to home.
     """
-    # First run: no admin exists yet -> send to the setup wizard.
-    setup_redirect = await WebUsersViewService().login_setup_redirect(db)
-    if setup_redirect is not None:
-        return setup_redirect
+    # First run: no user exists yet -> the token-gated /setup.
+    setup_path = await AdminBootstrapViewService().login_page_redirect(db)
+    if setup_path:
+        return RedirectResponse(url=setup_path, status_code=status.HTTP_302_FOUND)
 
     # Already signed in: go to the requested page, if it is a page on this site.
     if user:

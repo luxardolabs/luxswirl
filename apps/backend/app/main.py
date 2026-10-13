@@ -35,6 +35,7 @@ from app.background.maintenance_worker import (
     start_maintenance_worker,
     stop_maintenance_worker,
 )
+from app.cli import bootstrap_on_startup
 from app.core.config import settings
 from app.core.exceptions import LuxSwirlException
 from app.core.logging_config import configure_logging
@@ -55,8 +56,8 @@ from app.schemas.health_schema import ApiInfoResponse, HealthResponse
 from app.services.core.metrics_collector_core_service import MetricsCollectorCoreService
 from app.services.core.scheduler_core_service import scheduler_service
 from app.services.core.settings_core_service import SettingsCoreService
-from app.services.core.user_core_service import UserCoreService
 from app.web.render import render_error_response
+from app.web.routers.admin_bootstrap_router import router as admin_bootstrap_router
 from app.web.routers.agents_router import router as agents_router
 from app.web.routers.alerts_router import router as alerts_router
 from app.web.routers.artifacts_router import router as artifacts_router
@@ -75,7 +76,6 @@ from app.web.routers.profile_router import router as profile_router
 from app.web.routers.registration_keys_router import router as registration_keys_router
 from app.web.routers.scheduler_router import router as scheduler_router
 from app.web.routers.settings_router import router as settings_router
-from app.web.routers.setup_router import router as setup_router
 from app.web.routers.status_pages_router import router as status_pages_router
 from app.web.routers.status_router import router as status_router
 from app.web.routers.users_router import router as web_users_router
@@ -111,19 +111,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await init_db()
     logger.info("Database initialized successfully")
 
-    # Ensure default admin user exists (first-run setup). Startup runs outside
-    # the request lifecycle, so worker_session() owns this transaction: it
-    # commits the admin seed and the defaults on a clean exit, rolls back on error.
-    async with worker_session() as db:
-        user_service = UserCoreService()
-        admin = await user_service.ensure_default_admin(db)
-        if admin is not None:
-            logger.info(
-                "Default admin check complete", extra={"username": admin.username}
-            )
-        else:
-            logger.info("No admin configured - first-run setup wizard enabled (/setup)")
+    # The first admin (FLEET-ADMIN-BOOTSTRAP-STANDARD): seeded from INITIAL_ADMIN_*
+    # only while the users table is empty, otherwise /setup opens behind a one-time
+    # token printed in this log. It owns its own transaction.
+    await bootstrap_on_startup()
 
+    # Startup runs outside the request lifecycle, so worker_session() owns this
+    # transaction: it commits the defaults on a clean exit, rolls back on error.
+    async with worker_session() as db:
         # Ensure default settings exist
         await SettingsCoreService.ensure_default_settings(db)
         logger.info("Default settings initialized")
@@ -363,7 +358,7 @@ app.mount("/static", StaticFiles(directory=str(_APP_DIR / "static")), name="stat
 app.include_router(metrics_router)  # Prometheus metrics (root level /metrics)
 app.include_router(api_router)  # JSON API routes
 app.include_router(web_auth_router)  # Web UI - auth (login/logout)
-app.include_router(setup_router)  # Web UI - first-run setup wizard
+app.include_router(admin_bootstrap_router)  # Web UI - first-admin /setup (token-gated)
 app.include_router(profile_router)  # Web UI - user profile
 app.include_router(status_router)  # Web UI - status page
 app.include_router(check_router)  # Web UI - check details
