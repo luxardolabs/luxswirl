@@ -570,13 +570,13 @@
         },
         {
           "rule": "fw.no_session_mutation_outside_crud",
-          "status": "XFAIL",
+          "status": "PASS",
           "since": "0.2.0",
-          "violations": 143,
-          "deferred": true,
+          "violations": 0,
+          "deferred": false,
           "inert": false,
           "inert_reason": "",
-          "fix": "Start with the tool, not by eye: `luxarch --sweep transaction-flow --ops --path <file>` buckets every site; each edit cites its bucket (--playbook db-mutations \u00a78). Then move db.add/add_all/merge/flush/refresh/delete into the model's crud.",
+          "fix": "",
           "example": ""
         },
         {
@@ -669,13 +669,13 @@
         },
         {
           "rule": "fw.enum_dto_fields_enum_typed",
-          "status": "XFAIL",
+          "status": "PASS",
           "since": "0.2.0",
-          "violations": 31,
-          "deferred": true,
+          "violations": 0,
+          "deferred": false,
           "inert": false,
           "inert_reason": "",
-          "fix": "Type the field as its Enum/Literal, or allowlist (path,field) in enum_dto_freetext with evidence.",
+          "fix": "",
           "example": ""
         },
         {
@@ -1769,13 +1769,13 @@
         },
         {
           "rule": "fw.logout_revokes_server_side",
-          "status": "PASS",
+          "status": "FAIL",
           "since": "0.288.0",
-          "violations": 0,
+          "violations": 3,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
-          "fix": "",
+          "fix": "Revoke on the server, not only in the browser: give the user a `sessions_valid_after` timestamp, set it to now at logout, and have the auth dependency (which already loads the user) refuse a token issued before it. That signs out everywhere with no extra I/O. Use a per-token denylist only if signing out one device alone is a product need. See --doc FLEET-AUTH-SESSION-STANDARD \u00a72.1.",
           "example": ""
         },
         {
@@ -1934,9 +1934,9 @@
         }
       ],
       "summary": {
-        "PASS": 148,
-        "FAIL": 5,
-        "XFAIL": 2,
+        "PASS": 149,
+        "FAIL": 6,
+        "XFAIL": 0,
         "XPASS": 0,
         "INERT": 20
       }
@@ -2814,12 +2814,12 @@
     }
   },
   "summary": {
-    "PASS": 221,
-    "FAIL": 6,
-    "XFAIL": 2,
+    "PASS": 222,
+    "FAIL": 7,
+    "XFAIL": 0,
     "XPASS": 0,
     "INERT": 23
   },
-  "commit": "cac47dffb7fd9944aee933cc48796118952571c4",
-  "generated_at": "2026-10-13T05:22:04Z"
+  "commit": "1cffcc72ee70386b2a4d4cc27b974ccce0e9fe1f",
+  "generated_at": "2026-10-13T10:37:29Z"
 }
