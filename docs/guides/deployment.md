@@ -144,7 +144,7 @@ All settings can be overridden via environment variables using the nested delimi
 ```bash
 # Trusted hosts (required) and CORS
 ALLOWED_HOSTS=your-domain.com,luxswirl_server
-SERVER__CORS_ORIGINS='["https://your-domain.com"]'
+SERVER__CORS_ORIGINS=["https://your-domain.com"]
 
 # Database
 DATABASE__URL=postgresql+asyncpg://user:pass@host:5432/db

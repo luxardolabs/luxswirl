@@ -230,7 +230,7 @@ DATABASE__URL=postgresql+asyncpg://luxswirl:CHANGE_THIS_SECURE_PASSWORD_123@time
 ALLOWED_HOSTS=luxswirl.example.com,luxswirl_server
 
 # CORS — MUST be the exact URL users type in the browser (JSON array).
-SERVER__CORS_ORIGINS='["https://luxswirl.example.com:9000"]'
+SERVER__CORS_ORIGINS=["https://luxswirl.example.com:9000"]
 
 # Environment & logging
 SERVER__ENVIRONMENT=production
@@ -523,7 +523,7 @@ DATABASE__URL=postgresql+asyncpg://luxswirl:CHANGE_THIS_SECURE_PASSWORD@localhos
 # first boot and persists to ./data/server. Set only if injecting from a
 # secrets manager. SECURITY__FIELD_ENCRYPTION_KEY is handled the same way.
 # SECURITY__SECRET_KEY=
-SERVER__CORS_ORIGINS='["https://luxswirl.example.com"]'
+SERVER__CORS_ORIGINS=["https://luxswirl.example.com"]
 # The public hostname, plus localhost: the systemd agent below posts to
 # http://localhost:9000.
 ALLOWED_HOSTS=luxswirl.example.com,localhost
