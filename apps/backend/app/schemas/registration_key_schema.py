@@ -8,6 +8,7 @@ from uuid import UUID
 
 from pydantic import Field
 
+from app.models.enum_model import RegistrationKeyStatus
 from app.schemas.base_schema import BaseSchema, TimestampSchema
 
 
@@ -96,7 +97,7 @@ class RegistrationKeyResponse(TimestampSchema):
     revoked_at: datetime | None = Field(None, description="Revocation timestamp")
     revoked_by: str | None = Field(None, description="Admin who revoked key")
     revoked_reason: str | None = Field(None, description="Revocation reason")
-    status: str = Field(..., description="Key status (active/revoked)")
+    status: RegistrationKeyStatus = Field(..., description="Key status")
 
     model_config = {
         "json_schema_extra": {

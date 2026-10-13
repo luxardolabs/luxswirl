@@ -8,6 +8,7 @@ from uuid import UUID
 
 from pydantic import Field
 
+from app.models.enum_model import ArtifactContentType, CheckArtifactType
 from app.schemas.base_schema import BaseSchema
 
 
@@ -24,14 +25,8 @@ class CheckArtifactCreate(BaseSchema):
     check_result_timestamp: datetime = Field(
         ..., description="Check result timestamp (from agent)"
     )
-    artifact_type: str = Field(
-        ...,
-        description="Type of artifact: screenshot, trace, video, har",
-        pattern="^(screenshot|trace|video|har)$",
-    )
-    content_type: str = Field(
-        ..., description="MIME type: image/png, application/zip, video/mp4, etc"
-    )
+    artifact_type: CheckArtifactType = Field(..., description="Type of artifact")
+    content_type: ArtifactContentType = Field(..., description="MIME type")
     filename: str = Field(
         ..., description="Original filename for download", max_length=255
     )
@@ -65,8 +60,8 @@ class CheckArtifactResponse(BaseSchema):
     check_id: UUID = Field(..., description="Check UUID")
     check_result_id: UUID = Field(..., description="Check result UUID")
     check_result_timestamp: datetime = Field(..., description="Check result timestamp")
-    artifact_type: str = Field(..., description="Type: screenshot, trace, video, har")
-    content_type: str = Field(..., description="MIME type")
+    artifact_type: CheckArtifactType = Field(..., description="Type of artifact")
+    content_type: ArtifactContentType = Field(..., description="MIME type")
     filename: str = Field(..., description="Original filename")
     size_bytes: int = Field(..., description="Size of binary data in bytes")
     created_at: datetime = Field(..., description="When artifact was created")

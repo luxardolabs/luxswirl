@@ -129,6 +129,16 @@ class BulkCheckOutcome(StrEnum):
     FAILED = "failed"
 
 
+class ArtifactContentType(StrEnum):
+    """MIME type of a synthetic check's artifact — the types the agent uploads
+    (screenshot PNG, Playwright trace zip). Closed on purpose: the console
+    serves an artifact inline with this type, so an open set would let an agent
+    upload ``text/html`` and run script on the console's origin."""
+
+    PNG = "image/png"
+    ZIP = "application/zip"
+
+
 # What a check result reports as its status: the outcome, or a failure's error
 # type (CheckResult.status).
 CheckResultStatus = Literal["success", "failure"] | CheckErrorType
@@ -235,6 +245,13 @@ class MaintenanceJobKind(StrEnum):
 # ============================================================================
 
 
+class RegistrationKeyStatus(StrEnum):
+    """Whether an agent registration key can still be used."""
+
+    ACTIVE = "active"
+    REVOKED = "revoked"
+
+
 class AlertTriggerType(StrEnum):
     """Condition under which an alert rule fires."""
 
@@ -296,6 +313,17 @@ class SettingCategory(StrEnum):
 # ============================================================================
 # Users
 # ============================================================================
+
+
+class SettingValueType(StrEnum):
+    """Python type a setting's stored value carries (Setting.set_typed_value)."""
+
+    INT = "int"
+    FLOAT = "float"
+    BOOL = "bool"
+    STRING = "string"
+    LIST = "list"
+    DICT = "dict"
 
 
 class UserRole(StrEnum):

@@ -117,7 +117,7 @@ class UserResponse(BaseModel):
 
     id: UUID
     username: str
-    role: str
+    role: UserRole
     full_name: str | None = None
     is_active: bool
     must_change_password: bool

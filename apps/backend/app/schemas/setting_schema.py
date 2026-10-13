@@ -8,7 +8,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.models.enum_model import SettingCategory
+from app.models.enum_model import HttpMethod, SettingCategory, SettingValueType
 
 # A setting's stored value. The closed set the storage format documents ("int, float,
 # bool, string, list, dict") — written as a real union so mypy can see it, rather than
@@ -20,9 +20,7 @@ class SettingValue(BaseModel):
     """Schema for setting value storage."""
 
     value: Any = Field(..., description="The actual value")
-    type: str = Field(
-        ..., description="Value type: int, float, bool, string, list, dict"
-    )
+    type: SettingValueType = Field(..., description="Value type")
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -137,7 +135,7 @@ class CheckDefaults(BaseModel):
     retry_interval_seconds: int
     expected_status: int
     verify_ssl: bool
-    http_method: str
+    http_method: HttpMethod
 
     model_config = ConfigDict(
         json_schema_extra={
