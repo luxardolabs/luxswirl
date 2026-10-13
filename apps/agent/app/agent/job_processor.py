@@ -7,7 +7,7 @@ and handles job execution with proper error handling.
 
 import asyncio
 import contextlib
-import time
+import itertools
 from typing import Any
 
 import httpx
@@ -41,11 +41,15 @@ class JobProcessor:
         self.max_concurrent = config.get("job_queue_size", 5)
         self.semaphore = asyncio.Semaphore(self.max_concurrent)
 
-        # Job queue (priority, timestamp, job_data)
-        self.job_queue: asyncio.PriorityQueue = asyncio.PriorityQueue()
+        # Job queue: (priority, sequence, job_data). The sequence breaks ties in
+        # arrival order, so the heap never compares two job dicts (TypeError).
+        self.job_queue: asyncio.PriorityQueue[tuple[int, int, dict[str, Any]]] = (
+            asyncio.PriorityQueue()
+        )
+        self._sequence = itertools.count()
 
-        # Active jobs tracking
-        self.active_jobs: dict[str, asyncio.Task] = {}
+        # The task running each job, by job id, while it runs (heartbeat jobs_running).
+        self.active_jobs: dict[str, asyncio.Task[Any]] = {}
 
         # Job type registry
         self.job_registry: dict[str, type[BaseJob]] = {}
@@ -65,7 +69,7 @@ class JobProcessor:
         self.running = False
 
         # Background worker task
-        self.worker_task: asyncio.Task | None = None
+        self.worker_task: asyncio.Task[None] | None = None
 
     def register_job_type(self, job_class: type[BaseJob]) -> None:
         """
@@ -136,6 +140,16 @@ class JobProcessor:
 
         self.logger.info("Job processor stopped")
 
+    def _stopped(self) -> bool:
+        """True once stop() has run.
+
+        Re-read after every await: stop() runs on another task, so the flag can
+        change while this one is suspended. A method call, not the bare attribute,
+        so a type checker does not carry a `while self.running` narrowing across
+        the await and call the exit branch unreachable.
+        """
+        return not self.running
+
     async def enqueue_jobs(self, jobs: list[dict[str, Any]]) -> None:
         """
         Enqueue jobs from heartbeat response.
@@ -147,12 +161,9 @@ class JobProcessor:
             return
 
         for job_data in jobs:
-            # Extract priority (negative for max-heap behavior)
-            priority = -job_data.get("priority", 0)
-            timestamp = time.time()
-
-            # Add to queue (priority, timestamp for FIFO tie-breaking, job_data)
-            await self.job_queue.put((priority, timestamp, job_data))
+            # Negative priority: the heap pops the smallest, and higher runs first.
+            priority = -int(job_data.get("priority", 0))
+            await self.job_queue.put((priority, next(self._sequence), job_data))
 
         self.logger.info(
             "Enqueued jobs",
@@ -167,7 +178,7 @@ class JobProcessor:
             try:
                 # Get job from queue (with timeout to allow clean shutdown)
                 try:
-                    priority, timestamp, job_data = await asyncio.wait_for(
+                    _priority, _sequence, job_data = await asyncio.wait_for(
                         self.job_queue.get(),
                         timeout=1.0,
                     )
@@ -176,10 +187,17 @@ class JobProcessor:
 
                 # Execute job with concurrency control
                 async with self.semaphore:
-                    if not self.running:
+                    if self._stopped():
                         break
 
-                    await self._execute_job(job_data)
+                    job_id = str(job_data.get("job_id"))
+                    current = asyncio.current_task()
+                    if current is not None:
+                        self.active_jobs[job_id] = current
+                    try:
+                        await self._execute_job(job_data)
+                    finally:
+                        self.active_jobs.pop(job_id, None)
 
                 # Mark task as done
                 self.job_queue.task_done()
