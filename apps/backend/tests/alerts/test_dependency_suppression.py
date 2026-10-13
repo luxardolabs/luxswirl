@@ -10,7 +10,7 @@ CRUD calls are mocked; no database fixture required.
 from __future__ import annotations
 
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
 import pytest
@@ -52,22 +52,35 @@ def _provider_mapping(provider_id=None, deleted=False):
     )
 
 
+@pytest.fixture
+def written():
+    """The suppression rows handed to the crud write (the row is the behaviour)."""
+    with patch(
+        "app.services.core.alert_core_service.AlertCRUD.add_notification_logs",
+        AsyncMock(),
+    ) as add_logs:
+        yield add_logs
+
+
+def _logs(written: AsyncMock) -> list:
+    written.assert_awaited_once()
+    return list(written.await_args.args[1])
+
+
 @pytest.mark.asyncio
-async def test_suppression_no_parent_returns_false():
+async def test_suppression_no_parent_returns_false(written):
     db = AsyncMock()
-    db.add = MagicMock()
     check = _check(parent_id=None)
     result = await AlertCoreService._handle_parent_suppression(
         db, _alert(), check, _check_result()
     )
     assert result is False
-    db.add.assert_not_called()
+    written.assert_not_awaited()
 
 
 @pytest.mark.asyncio
-async def test_suppression_parent_no_results_fails_open():
+async def test_suppression_parent_no_results_fails_open(written):
     db = AsyncMock()
-    db.add = MagicMock()
     parent_id = uuid4()
     check = _check(parent_id=parent_id)
     with patch(
@@ -78,13 +91,12 @@ async def test_suppression_parent_no_results_fails_open():
             db, _alert(), check, _check_result()
         )
     assert result is False
-    db.add.assert_not_called()
+    written.assert_not_awaited()
 
 
 @pytest.mark.asyncio
-async def test_suppression_parent_up_returns_false():
+async def test_suppression_parent_up_returns_false(written):
     db = AsyncMock()
-    db.add = MagicMock()
     parent_id = uuid4()
     check = _check(parent_id=parent_id)
     with patch(
@@ -95,14 +107,15 @@ async def test_suppression_parent_up_returns_false():
             db, _alert(), check, _check_result()
         )
     assert result is False
-    db.add.assert_not_called()
+    written.assert_not_awaited()
 
 
 @pytest.mark.asyncio
-async def test_suppression_parent_down_first_occurrence_writes_log_per_provider():
+async def test_suppression_parent_down_first_occurrence_writes_log_per_provider(
+    written,
+):
     """First time leaf enters parent-down: write a suppressed row per active provider."""
     db = AsyncMock()
-    db.add = MagicMock()
     parent_id = uuid4()
     parent = SimpleNamespace(display_name="gateway")
     check = _check(parent_id=parent_id, parent_check=parent)
@@ -131,18 +144,18 @@ async def test_suppression_parent_down_first_occurrence_writes_log_per_provider(
         )
 
     assert result is True
-    assert db.add.call_count == 2  # third mapping was soft-deleted
-    logged = db.add.call_args_list[0].args[0]
+    logs = _logs(written)
+    assert len(logs) == 2  # third mapping was soft-deleted
+    logged = logs[0]
     assert logged.status == "suppressed"
     assert "gateway" in logged.error_message
     assert logged.notification_hash == "parent_down"
 
 
 @pytest.mark.asyncio
-async def test_suppression_parent_down_steady_state_dedups(monkeypatch):
+async def test_suppression_parent_down_steady_state_dedups(monkeypatch, written):
     """LUXSWIRL-148: continuously-parent-down leaf doesn't write a row every tick."""
     db = AsyncMock()
-    db.add = MagicMock()
     parent_id = uuid4()
     check = _check(
         parent_id=parent_id, parent_check=SimpleNamespace(display_name="gateway")
@@ -164,14 +177,13 @@ async def test_suppression_parent_down_steady_state_dedups(monkeypatch):
         )
 
     assert result is True  # still suppressed (don't proceed to send)
-    db.add.assert_not_called()  # no new row — deduped
+    written.assert_not_awaited()  # no new row — deduped
 
 
 @pytest.mark.asyncio
-async def test_suppression_transition_from_other_state_writes_log():
+async def test_suppression_transition_from_other_state_writes_log(written):
     """Leaf was firing on its own (status:down), parent went down → one suppression row."""
     db = AsyncMock()
-    db.add = MagicMock()
     parent_id = uuid4()
     check = _check(
         parent_id=parent_id, parent_check=SimpleNamespace(display_name="gateway")
@@ -198,8 +210,9 @@ async def test_suppression_transition_from_other_state_writes_log():
         )
 
     assert result is True
-    assert db.add.call_count == 1
-    assert db.add.call_args_list[0].args[0].notification_hash == "parent_down"
+    logs = _logs(written)
+    assert len(logs) == 1
+    assert logs[0].notification_hash == "parent_down"
 
 
 @pytest.mark.asyncio
