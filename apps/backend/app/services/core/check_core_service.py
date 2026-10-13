@@ -142,9 +142,7 @@ class CheckCoreService:
             depends_on_check_id=getattr(data, "depends_on_check_id", None),
         )
 
-        db.add(check)
-        await db.flush()
-        await db.refresh(check, ["agent"])
+        check = await CheckCRUD.add_check(db, check)
 
         # Apply global alerts as defaults for this new check
 
@@ -210,12 +208,12 @@ class CheckCoreService:
         to_add = desired - current
         to_remove = current - desired
 
-        for cid in to_add:
-            by_id[cid].depends_on_check_id = parent_check_id
-        for cid in to_remove:
-            by_id[cid].depends_on_check_id = None
-
-        await db.flush()
+        await CheckCRUD.set_parent(
+            db,
+            parent_check_id,
+            attach=[by_id[cid] for cid in to_add],
+            detach=[by_id[cid] for cid in to_remove],
+        )
         logger.info(
             "Bulk updated check dependents",
             extra={
@@ -578,8 +576,7 @@ class CheckCoreService:
         check.agent.checks_updated_at = utc_now()
         attributes.flag_modified(check.agent, "checks_updated_at")
 
-        await db.flush()
-        await db.refresh(check, ["agent"])
+        check = await CheckCRUD.save_check(db, check)
 
         logger.info(
             "Updated check",
@@ -832,11 +829,10 @@ class CheckCoreService:
         check = await CheckCoreService.get_check_by_id(db, check_id)
 
         # Get agent before deleting check
-        await db.refresh(check, ["agent"])
+        await CheckCRUD.load_agent(db, check)
         agent = check.agent
 
-        await db.delete(check)
-        await db.flush()
+        await CheckCRUD.delete_check(db, check)
 
         # Update agent's checks_updated_at timestamp to trigger config reload
         agent.checks_updated_at = utc_now()
