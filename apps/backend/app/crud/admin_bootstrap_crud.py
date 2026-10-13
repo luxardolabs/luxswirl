@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 # isort: split
 # --- EDIT THIS: your user model. The fleet home is app/models/user_model.py, class User.
+from app.core.datetime_utils import utc_now
 from app.models.enum_model import UserRole
 from app.models.user_model import User
 
@@ -57,6 +58,11 @@ def _store_password(
 ) -> None:
     user.password_hash = password_hash
     user.must_change_password = must_change_password
+    # A new password also lifts a failed-login lockout: the recovery reset exists for
+    # the owner who is locked out.
+    user.failed_login_attempts = 0
+    user.locked_until = None
+    user.password_changed_at = utc_now()
 
 
 # --- EDIT THIS: the stored hash, for checking the current password on a change.
