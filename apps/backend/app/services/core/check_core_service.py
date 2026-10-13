@@ -4,7 +4,7 @@ Check service - business logic for check operations.
 
 import asyncio
 import ssl
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from typing import Any
 from urllib.parse import urlparse
 from uuid import UUID
@@ -729,7 +729,7 @@ class CheckCoreService:
     async def bulk_import_checks(
         db: AsyncSession,
         agent_id: UUID,
-        checks: list[CheckExport],
+        checks: Sequence[Mapping[str, Any]],
         overwrite: bool,
         *,
         actor_is_admin: bool,
@@ -737,8 +737,10 @@ class CheckCoreService:
         """Import checks for an agent: the ONE import, for the JSON API and the
         web upload's worker job alike.
 
-        `overwrite` replaces an existing check of the same name; otherwise it is
-        skipped. `actor_is_admin` is the caller's authority, as for a single
+        Each entry is validated on its own: one that is not a valid check (an
+        unknown type or method from an older export) is an error for that check,
+        never a refusal of the whole import. `overwrite` replaces an existing
+        check of the same name; otherwise it is skipped. `actor_is_admin` is the caller's authority, as for a single
         create: a synthetic check is refused unless it is True.
 
         Builds the AgentCreate / CheckCreate / CheckUpdate DTOs internally —
@@ -761,8 +763,10 @@ class CheckCoreService:
         existing = await CheckCoreService.list_checks_for_agent(db, agent_id)
         existing_map = {c.display_name: c for c in existing}
 
-        for check_data in checks:
+        for raw in checks:
+            name = str(raw.get("name") or "unknown")
             try:
+                check_data = CheckExport.model_validate(raw)
                 if check_data.name in existing_map:
                     if not overwrite:
                         skipped += 1
@@ -771,7 +775,7 @@ class CheckCoreService:
                         db,
                         existing_map[check_data.name].id,
                         CheckUpdate(
-                            check_type=CheckType(check_data.check_type),
+                            check_type=check_data.check_type,
                             target=check_data.target,
                             interval_seconds=check_data.interval,
                             timeout_seconds=check_data.timeout,
@@ -793,7 +797,7 @@ class CheckCoreService:
                         agent_id,
                         CheckCreate(
                             display_name=check_data.name,
-                            check_type=CheckType(check_data.check_type),
+                            check_type=check_data.check_type,
                             target=check_data.target,
                             interval_seconds=check_data.interval,
                             timeout_seconds=check_data.timeout,
@@ -810,11 +814,8 @@ class CheckCoreService:
                     )
                     created += 1
             except Exception as e:
-                errors.append({"check": check_data.name, "error": str(e)})
-                logger.exception(
-                    "Error importing check",
-                    extra={"check_name": check_data.name},
-                )
+                errors.append({"check": name, "error": str(e)})
+                logger.exception("Error importing check", extra={"check_name": name})
 
         return {
             "created": created,
