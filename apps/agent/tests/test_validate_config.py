@@ -212,6 +212,18 @@ class TestJSONValidation:
 
 
 class TestMySQLValidation:
+    def test_non_text_connection_string_rejected_clearly(self):
+        # JSON config can carry a number; urlparse() would treat it as bytes and
+        # fail with an unrelated AttributeError.
+        with pytest.raises(ValueError, match="MySQL connection string must be text"):
+            MySQLCheck(
+                _base_cfg(
+                    check_type="mysql",
+                    target="placeholder",
+                    connection_string=5432,
+                )
+            )
+
     def test_valid_with_target_connection_string(self):
         MySQLCheck(
             _base_cfg(
@@ -245,6 +257,20 @@ class TestMySQLValidation:
 
 
 class TestPostgresValidation:
+    def test_non_text_connection_string_rejected_clearly(self):
+        # JSON config can carry a number; urlparse() would treat it as bytes and
+        # fail with an unrelated AttributeError.
+        with pytest.raises(
+            ValueError, match="PostgreSQL connection string must be text"
+        ):
+            PostgreSQLCheck(
+                _base_cfg(
+                    check_type="postgres",
+                    target="placeholder",
+                    connection_string=5432,
+                )
+            )
+
     def test_valid_config(self):
         PostgreSQLCheck(
             _base_cfg(
