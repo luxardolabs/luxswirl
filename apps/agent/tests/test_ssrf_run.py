@@ -20,7 +20,7 @@ from app.checks.postgres import PostgreSQLCheck
 from app.checks.tcp import TCPCheck
 from shared.ssrf import SsrfBlockedError
 
-pytestmark = pytest.mark.pure
+pytestmark = pytest.mark.unit
 
 METADATA_IP = "169.254.169.254"
 

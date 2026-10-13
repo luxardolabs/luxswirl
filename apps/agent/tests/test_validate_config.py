@@ -19,7 +19,7 @@ from app.checks.postgres import PostgreSQLCheck
 from app.checks.synthetic import SyntheticCheck
 from app.checks.tcp import TCPCheck
 
-pytestmark = pytest.mark.pure
+pytestmark = pytest.mark.unit
 
 
 def _base_cfg(**overrides):
