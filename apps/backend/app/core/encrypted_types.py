@@ -5,19 +5,32 @@ Provides transparent encryption/decryption for sensitive database fields.
 """
 
 import json
-from typing import cast
+from typing import Any
 
 from cryptography.fernet import Fernet, InvalidToken
 from shared.logger import get_logger
 from sqlalchemy import String, Text, TypeDecorator
+from sqlalchemy.engine import Dialect
 
 from app.core.config import settings
 from app.core.exceptions import DatabaseException
 
 logger = get_logger("luxswirl.models.encrypted")
 
+# What an EncryptedJSON column holds: a JSON object or array.
+JsonContainer = dict[str, Any] | list[Any]
 
-class EncryptedString(TypeDecorator):
+
+def _json_container(raw: str) -> JsonContainer | None:
+    """The JSON object or array in ``raw``; None for invalid JSON or a bare value."""
+    try:
+        loaded = json.loads(raw)
+    except json.JSONDecodeError:
+        return None
+    return loaded if isinstance(loaded, dict | list) else None
+
+
+class EncryptedString(TypeDecorator[str]):
     """
     SQLAlchemy type for encrypted string fields.
 
@@ -39,7 +52,7 @@ class EncryptedString(TypeDecorator):
     impl = String
     cache_ok = True
 
-    def __init__(self, length: int = 500, **kwargs):
+    def __init__(self, length: int = 500, **kwargs: Any) -> None:
         """
         Initialize encrypted string type.
 
@@ -61,7 +74,7 @@ class EncryptedString(TypeDecorator):
             self._fernet = Fernet(key.encode())
         return self._fernet
 
-    def process_bind_param(self, value: str | None, dialect) -> str | None:
+    def process_bind_param(self, value: str | None, dialect: Dialect) -> str | None:
         """
         Encrypt value before saving to database.
 
@@ -95,9 +108,9 @@ class EncryptedString(TypeDecorator):
             raise DatabaseException(
                 "Could not encrypt a sensitive field; the value was not saved"
             ) from e
-        return cast(str, encrypted.decode())  # Store as base64 string
+        return encrypted.decode()  # Store as base64 string
 
-    def process_result_value(self, value: str | None, dialect) -> str | None:
+    def process_result_value(self, value: str | None, dialect: Dialect) -> str | None:
         """
         Decrypt value after loading from database.
 
@@ -119,7 +132,7 @@ class EncryptedString(TypeDecorator):
         try:
             # Try to decrypt (will fail if plaintext)
             decrypted = fernet.decrypt(value.encode())
-            return cast(str, decrypted.decode())
+            return decrypted.decode()
         except InvalidToken:
             # Not encrypted - return plaintext as-is
             # This handles migration from plaintext to encrypted
@@ -132,7 +145,7 @@ class EncryptedString(TypeDecorator):
             return value
 
 
-class EncryptedJSON(TypeDecorator):
+class EncryptedJSON(TypeDecorator[JsonContainer]):
     """
     SQLAlchemy type for encrypted JSON/JSONB fields.
 
@@ -154,7 +167,7 @@ class EncryptedJSON(TypeDecorator):
     impl = Text
     cache_ok = True
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs: Any) -> None:
         """Initialize encrypted JSON type."""
         super().__init__(**kwargs)
         self._fernet: Fernet | None = None
@@ -168,7 +181,9 @@ class EncryptedJSON(TypeDecorator):
             self._fernet = Fernet(key.encode())
         return self._fernet
 
-    def process_bind_param(self, value: dict | list | None, dialect) -> str | None:
+    def process_bind_param(
+        self, value: JsonContainer | None, dialect: Dialect
+    ) -> str | None:
         """
         Encrypt JSON before saving to database.
 
@@ -199,9 +214,11 @@ class EncryptedJSON(TypeDecorator):
             raise DatabaseException(
                 "Could not encrypt a sensitive field; the value was not saved"
             ) from e
-        return cast(str, encrypted.decode())
+        return encrypted.decode()
 
-    def process_result_value(self, value: str | None, dialect) -> dict | list | None:
+    def process_result_value(
+        self, value: str | None, dialect: Dialect
+    ) -> JsonContainer | None:
         """
         Decrypt JSON after loading from database.
 
@@ -218,24 +235,18 @@ class EncryptedJSON(TypeDecorator):
         fernet = self._get_fernet()
         if fernet is None:
             # No encryption key - parse as JSON
-            try:
-                return cast(dict | list, json.loads(value))
-            except json.JSONDecodeError:
-                return None
+            return _json_container(value)
 
         try:
             # Try to decrypt (will fail if plaintext JSON)
             decrypted = fernet.decrypt(value.encode())
-            return cast(dict | list, json.loads(decrypted.decode()))
         except InvalidToken:
             # Not encrypted - parse as plaintext JSON (migration support)
-            try:
-                return cast(dict | list, json.loads(value))
-            except json.JSONDecodeError:
-                return None
+            return _json_container(value)
         # swallowed-exceptions: a row we cannot decrypt still has to load —
         # failing the read would take out every page that touches the table,
         # and the error is recorded.
         except Exception:
             logger.exception("Failed to decrypt JSON field")
             return None
+        return _json_container(decrypted.decode())
