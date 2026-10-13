@@ -1,4 +1,4 @@
-# luxarch:trusted-host asset v1 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit trusted-host`.
+# luxarch:trusted-host asset v2 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit trusted-host`.
 """The app refuses a Host header it does not serve: a required, per-environment ALLOWED_HOSTS.
 
 Emitted by ``luxarch --emit trusted-host``. Drop it in at ``app/core/trusted_host.py``; the standard
@@ -33,9 +33,10 @@ the committed ``.env.example``. Comma-separated; ``*.example.com`` admits that d
 The container's own HEALTHCHECK requests ``http://localhost:<port>/health`` from inside the
 container, so its Host is ``localhost``, which ALLOWED_HOSTS does not list. Rather than allowing
 ``localhost`` everywhere (a client could then send ``Host: localhost`` to any route), exactly one
-request shape passes without the check: a loopback peer, a loopback Host, and one of
-``health_paths``. Anything that comes through a proxy has the proxy's address as its peer, so it is
-checked like every other request, including the smoke probe's forged Host on the health path.
+request shape passes without the check: a loopback peer, a loopback Host, one of
+``health_paths``, and no forwarding header. Behind uvicorn ``--proxy-headers`` the peer is whatever
+``X-Forwarded-For`` resolved to, so a request carrying any forwarding header (``X-Forwarded-For``,
+``Forwarded``, ``X-Real-IP``) is checked like every other request, whatever its peer claims.
 """
 
 from __future__ import annotations
@@ -51,6 +52,15 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 
 ENV_KEY = "ALLOWED_HOSTS"
 _LOOPBACK_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
+_FORWARDING = frozenset(
+    {
+        b"x-forwarded-for",
+        b"forwarded",
+        b"x-real-ip",
+        b"x-forwarded-host",
+        b"x-forwarded-proto",
+    }
+)
 
 
 class AllowedHostsError(ValueError):
@@ -78,7 +88,15 @@ def parse_allowed_hosts(value: object) -> list[str]:
             raise AllowedHostsError(
                 f"{ENV_KEY} holds {item!r}, which is not a hostname: set it in .env.<env>"
             )
-        host = item.strip()
+        # v2: lowercased (a proxy's `$host` is, and the comparison is exact), and never with a port:
+        # Starlette compares the Host without its port, so `example.com:18000` never matched and an
+        # app that started cleanly refused every request.
+        host = item.strip().lower()
+        if host and _has_port(host):
+            raise AllowedHostsError(
+                f"{ENV_KEY} lists {host!r} with a port, which never matches (the port is not part "
+                f"of the comparison): drop ':{host.rsplit(':', 1)[1]}' in .env.<env>"
+            )
         if host:
             hosts.append(host)
     if not hosts:
@@ -92,6 +110,19 @@ def parse_allowed_hosts(value: object) -> list[str]:
             "environment's hostnames in .env.<env> instead"
         )
     return hosts
+
+
+def _has_port(host: str) -> bool:
+    """`example.com:8000` or `[::1]:8000`; a bare IPv6 literal (`::1`) has colons but no port."""
+    if host.startswith("["):
+        return "]:" in host
+    if host.count(":") > 1:
+        try:
+            ipaddress.ip_address(host)
+        except ValueError:
+            return True
+        return False
+    return ":" in host
 
 
 # The settings field type. NoDecode keeps pydantic-settings from reading the env value as JSON, so
@@ -143,9 +174,13 @@ class AllowedHostsMiddleware(TrustedHostMiddleware):
             return False
         host = ""
         for key, value in scope.get("headers", []):
-            if key == b"host":
+            # v2: a forwarding header means a proxy relayed this request. Behind uvicorn
+            # `--proxy-headers`, the "peer" is then whatever X-Forwarded-For resolved to, and a
+            # client could make it 127.0.0.1. The container's own HEALTHCHECK never sends one.
+            if key in _FORWARDING:
+                return False
+            if key == b"host" and not host:
                 host = _host_name(value.decode("latin-1"))
-                break
         path = str(scope.get("path", ""))
         return host in _LOOPBACK_HOSTS and any(
             path == p or path.startswith(p.rstrip("/") + "/") for p in self.health_paths
