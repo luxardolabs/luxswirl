@@ -2,7 +2,7 @@
 Check model - represents health check definitions.
 """
 
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from sqlalchemy import ARRAY, ForeignKey, Index, Integer, String, Text, Uuid
@@ -205,9 +205,25 @@ class Check(UUIDBaseModel):
         lazy="raise_on_sql",
     )
 
-    def get_config(self, key: str, default=None):
+    def get_config(self, key: str, default: Any = None) -> Any:
         """Get a value from check_config JSONB."""
         return self.check_config.get(key, default) if self.check_config else default
+
+    # Typed reads of check_config. The column is JSON, so a value is only trusted
+    # to be the type its accessor promises once it has been checked; anything
+    # else reads as None, never as a wrongly-typed value.
+    def _config_str(self, key: str) -> str | None:
+        value = self.get_config(key)
+        return value if isinstance(value, str) else None
+
+    def _config_int(self, key: str) -> int | None:
+        value = self.get_config(key)
+        # bool is an int subclass; a flag is not a number.
+        return value if isinstance(value, int) and not isinstance(value, bool) else None
+
+    def _config_bool(self, key: str) -> bool | None:
+        value = self.get_config(key)
+        return value if isinstance(value, bool) else None
 
     @property
     def fully_qualified_name(self) -> str:
@@ -219,39 +235,39 @@ class Check(UUIDBaseModel):
     # Convenience properties - declared but NOT as mapped columns
     @property
     def http_method(self) -> str | None:
-        return cast(str | None, self.get_config("http_method"))
+        return self._config_str("http_method")
 
     @property
     def verify_ssl(self) -> bool | None:
-        return cast(bool | None, self.get_config("verify_ssl"))
+        return self._config_bool("verify_ssl")
 
     @property
     def expected_status(self) -> int | None:
-        return cast(int | None, self.get_config("expected_status"))
+        return self._config_int("expected_status")
 
     @property
     def json_path(self) -> str | None:
-        return cast(str | None, self.get_config("json_path"))
+        return self._config_str("json_path")
 
     @property
     def expected_value(self) -> str | None:
-        return cast(str | None, self.get_config("expected_value"))
+        return self._config_str("expected_value")
 
     @property
     def record_type(self) -> str | None:
-        return cast(str | None, self.get_config("record_type"))
+        return self._config_str("record_type")
 
     @property
     def nameserver(self) -> str | None:
-        return cast(str | None, self.get_config("nameserver"))
+        return self._config_str("nameserver")
 
     @property
     def port(self) -> int | None:
-        return cast(int | None, self.get_config("port"))
+        return self._config_int("port")
 
     @property
     def expect_value(self) -> str | None:
-        return cast(str | None, self.get_config("expect_value"))
+        return self._config_str("expect_value")
 
     @property
     def connection_string(self) -> str | None:
@@ -263,7 +279,7 @@ class Check(UUIDBaseModel):
         return self.connection_string_encrypted
 
     @connection_string.setter
-    def connection_string(self, value: str | None):
+    def connection_string(self, value: str | None) -> None:
         """
         Set connection string (automatically encrypted).
 
@@ -274,7 +290,7 @@ class Check(UUIDBaseModel):
 
     @property
     def query(self) -> str | None:
-        return cast(str | None, self.get_config("query"))
+        return self._config_str("query")
 
     def __repr__(self) -> str:
         """Generate a helpful repr string."""

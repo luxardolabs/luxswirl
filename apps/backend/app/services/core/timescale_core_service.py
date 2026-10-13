@@ -6,6 +6,8 @@ metrics. All raw SQL lives in TimescaleCRUD; this service validates inputs and
 shapes results.
 """
 
+from typing import Any
+
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -125,7 +127,7 @@ class TimescaleCoreService:
             raise
 
     @staticmethod
-    async def get_database_size(db: AsyncSession) -> dict:
+    async def get_database_size(db: AsyncSession) -> dict[str, Any]:
         """Get database size information."""
         row = await TimescaleCRUD.get_database_size(db)
         if row is None:
@@ -133,7 +135,7 @@ class TimescaleCoreService:
         return {"total_size_bytes": row[0], "total_size_pretty": row[1]}
 
     @staticmethod
-    async def get_hypertable_stats(db: AsyncSession) -> list[dict]:
+    async def get_hypertable_stats(db: AsyncSession) -> list[dict[str, Any]]:
         """Get statistics for all hypertables."""
         rows = await TimescaleCRUD.get_hypertable_stats(db)
         return [
@@ -147,7 +149,7 @@ class TimescaleCoreService:
         ]
 
     @staticmethod
-    async def get_compression_stats(db: AsyncSession) -> dict:
+    async def get_compression_stats(db: AsyncSession) -> dict[str, Any]:
         """Get compression statistics for check_results hypertable."""
         row = await TimescaleCRUD.get_compression_stats_for_check_results(db)
         if row is None:
@@ -168,7 +170,7 @@ class TimescaleCoreService:
         }
 
     @staticmethod
-    async def get_retention_info(db: AsyncSession) -> list[dict]:
+    async def get_retention_info(db: AsyncSession) -> list[dict[str, Any]]:
         """Get current retention policies."""
         rows = await TimescaleCRUD.get_retention_policies(db)
         return [
@@ -176,10 +178,10 @@ class TimescaleCoreService:
         ]
 
     @staticmethod
-    async def get_table_row_counts(db: AsyncSession) -> dict:
+    async def get_table_row_counts(db: AsyncSession) -> dict[str, Any]:
         """Get row counts and sizes for major tables."""
         rows = await TimescaleCRUD.get_table_row_counts(db)
-        counts: dict[str, dict] = {}
+        counts: dict[str, dict[str, Any]] = {}
         for row in rows:
             counts[row[0]] = {
                 "row_count": row[1],
@@ -191,14 +193,18 @@ class TimescaleCoreService:
         return counts
 
     @staticmethod
-    async def get_daily_growth_rate(db: AsyncSession, days: int = 7) -> list[dict]:
+    async def get_daily_growth_rate(
+        db: AsyncSession, days: int = 7
+    ) -> list[dict[str, Any]]:
         """Get daily data growth rate for the past N days."""
         _validate_interval_days(days, "days")
         rows = await TimescaleCRUD.get_daily_growth(db, days)
         return [{"date": date, "row_count": count} for date, count in rows]
 
     @staticmethod
-    async def get_growth_chart_data(db: AsyncSession, hours: int = 168) -> list[dict]:
+    async def get_growth_chart_data(
+        db: AsyncSession, hours: int = 168
+    ) -> list[dict[str, Any]]:
         """Get storage growth breakdown by table category over the given window."""
         _validate_hours(hours)
         bucket = _bucket_for_hours(hours)
@@ -214,7 +220,7 @@ class TimescaleCoreService:
 
         rows = await TimescaleCRUD.get_growth_buckets(db, bucket, hours)
 
-        growth: list[dict] = []
+        growth: list[dict[str, Any]] = []
         for row in rows:
             results_mb = round((row[1] * avg_check_result) / (1024 * 1024), 2)
             artifacts_mb = round(row[2] / (1024 * 1024), 2)
@@ -235,7 +241,7 @@ class TimescaleCoreService:
         return growth
 
     @staticmethod
-    async def get_health_summary(db: AsyncSession) -> dict:
+    async def get_health_summary(db: AsyncSession) -> dict[str, Any]:
         """Get comprehensive database health summary."""
         return {
             "database_size": await TimescaleCoreService.get_database_size(db),

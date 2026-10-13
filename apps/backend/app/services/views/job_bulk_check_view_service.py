@@ -2,6 +2,7 @@
 Job bulk check view service — bulk check creation from job results.
 """
 
+from typing import Any
 from uuid import UUID
 
 from shared.logger import get_logger
@@ -23,7 +24,7 @@ class JobBulkCheckViewService:
 
     @staticmethod
     async def _parse_bulk_form_data(
-        db: AsyncSession, form_data: dict
+        db: AsyncSession, form_data: dict[str, Any]
     ) -> tuple[BulkCheckParams | None, str | None]:
         """
         Parse common bulk check form data into core BulkCheckParams.
@@ -76,7 +77,7 @@ class JobBulkCheckViewService:
 
     @staticmethod
     async def create_ping_checks_from_job(
-        db: AsyncSession, job_id: UUID, form_data: dict
+        db: AsyncSession, job_id: UUID, form_data: dict[str, Any]
     ) -> tuple[BulkCheckCreateSummary | None, str | None]:
         """Parse form, then delegate to core."""
         params, error = await JobBulkCheckViewService._parse_bulk_form_data(
@@ -91,7 +92,7 @@ class JobBulkCheckViewService:
 
     @staticmethod
     async def create_web_checks_from_job(
-        db: AsyncSession, job_id: UUID, form_data: dict
+        db: AsyncSession, job_id: UUID, form_data: dict[str, Any]
     ) -> tuple[BulkCheckCreateSummary | None, str | None]:
         """Parse form, then delegate to core."""
         params, error = await JobBulkCheckViewService._parse_bulk_form_data(
@@ -106,7 +107,7 @@ class JobBulkCheckViewService:
 
     @staticmethod
     async def create_ssh_checks_from_job(
-        db: AsyncSession, job_id: UUID, form_data: dict
+        db: AsyncSession, job_id: UUID, form_data: dict[str, Any]
     ) -> tuple[BulkCheckCreateSummary | None, str | None]:
         """Parse form, then delegate to core."""
         params, error = await JobBulkCheckViewService._parse_bulk_form_data(
@@ -121,7 +122,7 @@ class JobBulkCheckViewService:
 
     @staticmethod
     async def create_database_checks_from_job(
-        db: AsyncSession, job_id: UUID, form_data: dict
+        db: AsyncSession, job_id: UUID, form_data: dict[str, Any]
     ) -> tuple[BulkCheckCreateSummary | None, str | None]:
         """Parse form, then delegate to core."""
         params, error = await JobBulkCheckViewService._parse_bulk_form_data(
@@ -136,7 +137,7 @@ class JobBulkCheckViewService:
 
     @staticmethod
     async def quick_create_check(
-        db: AsyncSession, form_data: dict
+        db: AsyncSession, form_data: dict[str, Any]
     ) -> tuple[bool, str | None]:
         """
         Parse form data from a per-host quick-action button (network scan UI)

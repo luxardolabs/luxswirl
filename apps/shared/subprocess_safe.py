@@ -19,7 +19,7 @@ logger = get_logger("luxswirl.subprocess_safe")
 
 
 async def run_subprocess_safely(
-    *args,
+    *args: str,
     timeout: float,
     capture_output: bool = True,
     grace_seconds: float = 2.0,
@@ -158,7 +158,7 @@ async def run_subprocess_safely(
 
 
 async def run_subprocess_no_output(
-    *args,
+    *args: str,
     timeout: float,
     grace_seconds: float = 2.0,
     kill_timeout: float = 5.0,

@@ -8,11 +8,12 @@ See core.request_helpers.client_ip_from_request for the trust model.
 """
 
 from slowapi import Limiter
+from starlette.requests import Request
 
 from app.core.request_helpers import client_ip_from_request
 
 
-def _rate_limit_key(request) -> str:
+def _rate_limit_key(request: Request) -> str:
     """slowapi key function: real client IP, with trusted-proxy XFF handling."""
     return client_ip_from_request(request)
 

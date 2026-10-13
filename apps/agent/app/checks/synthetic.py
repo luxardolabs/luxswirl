@@ -11,7 +11,7 @@ import traceback
 from pathlib import Path
 from typing import Any
 
-from playwright.async_api import async_playwright
+from playwright.async_api import Page, async_playwright
 from shared.logger import get_logger
 
 from app.checks.base import BaseCheck
@@ -257,7 +257,9 @@ class SyntheticCheck(BaseCheck):
             metrics={"synthetic": result_data},  # result_data no longer has artifacts
         )
 
-    async def _execute_user_script(self, script_code: str, page) -> dict[str, Any]:
+    async def _execute_user_script(
+        self, script_code: str, page: Page
+    ) -> dict[str, Any]:
         """Execute user-provided script code in a controlled environment.
 
         Args:

@@ -7,6 +7,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+from jinja2 import Environment
+
 from app.schemas.pagination_schema import paginated_url
 
 # Abbreviation mapping for the timeago filter
@@ -284,7 +286,7 @@ def _compute_static_version() -> str:
     ]
 
 
-def register_filters(jinja_env):
+def register_filters(jinja_env: Environment) -> None:
     """
     Register all custom filters with a Jinja2 environment.
 

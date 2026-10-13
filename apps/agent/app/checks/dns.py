@@ -12,6 +12,7 @@ try:
     import dns.asyncresolver
     import dns.exception
     import dns.rdatatype
+    import dns.resolver
 
     DNS_AVAILABLE = True
 except ImportError:
@@ -187,7 +188,9 @@ class DNSCheck(BaseCheck):
             },
         )
 
-    def _extract_records(self, answers, record_type: str) -> list[str]:
+    def _extract_records(
+        self, answers: dns.resolver.Answer, record_type: str
+    ) -> list[str]:
         """Extract DNS records from answer based on record type.
 
         Args:

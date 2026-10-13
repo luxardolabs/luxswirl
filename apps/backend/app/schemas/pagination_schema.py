@@ -18,6 +18,7 @@ page state are preserved identically across prev/next links — no template
 ever concatenates query strings by hand.
 """
 
+from typing import Any
 from urllib.parse import urlencode
 
 from pydantic import BaseModel
@@ -49,7 +50,7 @@ def build_pagination(
     page: int,
     per_page: int,
     total: int,
-    filters: dict | None = None,
+    filters: dict[str, Any] | None = None,
 ) -> Pagination:
     """Construct a Pagination from raw paging inputs.
 

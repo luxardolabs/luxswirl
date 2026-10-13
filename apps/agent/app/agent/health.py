@@ -16,6 +16,9 @@ from typing import Any
 import psutil
 from shared.logger import get_logger
 
+from app.agent.reporter import Reporter
+from app.checks.base import BaseCheck
+
 logger = get_logger("luxswirl.agent.health")
 
 
@@ -24,11 +27,11 @@ class HealthMonitor:
 
     def __init__(
         self,
-        config: dict,
-        metrics: dict,
-        reporter,
-        result_queue: asyncio.Queue,
-        checks: list,
+        config: dict[str, Any],
+        metrics: dict[str, Any],
+        reporter: Reporter,
+        result_queue: asyncio.Queue[dict[str, Any]],
+        checks: list[BaseCheck],
         watchdog_interval: int = 30,
         watchdog_stall_threshold: int = 3,
         heartbeat_interval: int = 60,

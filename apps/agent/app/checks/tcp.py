@@ -131,7 +131,7 @@ class TCPCheck(BaseCheck):
             **additional_data,
         )
 
-    async def _get_address_info(self, host: str, port: int) -> tuple | None:
+    async def _get_address_info(self, host: str, port: int) -> tuple[Any, ...] | None:
         """Get socket address information.
 
         Args:

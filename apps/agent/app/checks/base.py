@@ -91,7 +91,7 @@ class BaseCheck(ABC):
         success: bool,
         latency_ms: float | None = None,
         error: str | None = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> dict[str, Any]:
         """Create a standardized result dictionary.
 

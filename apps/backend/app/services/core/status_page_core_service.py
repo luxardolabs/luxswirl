@@ -401,7 +401,7 @@ class StatusPageCoreService:
 
     @staticmethod
     async def reorder_all_items(
-        db: AsyncSession, status_page_id: UUID, client_items: list[dict]
+        db: AsyncSession, status_page_id: UUID, client_items: list[dict[str, Any]]
     ) -> StatusPageInDB:
         """
         Reorder all items in a status page based on client state.
@@ -522,7 +522,7 @@ class StatusPageCoreService:
 
     @staticmethod
     async def update_group_filters(
-        db: AsyncSession, status_page_id: UUID, item_index: int, filter: dict
+        db: AsyncSession, status_page_id: UUID, item_index: int, filter: dict[str, Any]
     ) -> StatusPageInDB:
         """
         Update filters for a dynamic filter group.

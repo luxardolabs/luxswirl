@@ -5,6 +5,7 @@ This service handles the parsing of web form data for alert creation/updates,
 including checkbox collection and threshold extraction.
 """
 
+from typing import Any
 from uuid import UUID
 
 from shared.logger import get_logger
@@ -18,7 +19,7 @@ class AlertFormViewService:
     """Service for parsing alert form data."""
 
     @staticmethod
-    def parse_alert_form(form: dict) -> AlertFormData:
+    def parse_alert_form(form: dict[str, Any]) -> AlertFormData:
         """
         Parse alert form data for providers, checks, and thresholds.
 
