@@ -6,7 +6,7 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Form, Path, Request, UploadFile
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, Response
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -32,7 +32,7 @@ async def import_export_form(
     agent_id: Annotated[UUID, Path(description="Agent ID")],
     current_user: AdminUserWeb,
     db: Annotated[AsyncSession, Depends(get_db)],
-):
+) -> HTMLResponse:
     """
     Get the import/export form for an agent.
     """
@@ -64,7 +64,7 @@ async def import_export_form(
 async def export_checks(
     agent_id: Annotated[UUID, Path(description="Agent ID")],
     db: Annotated[AsyncSession, Depends(get_db)],
-):
+) -> Response:
     """
     Export all checks for an agent as JSON download.
 
@@ -88,7 +88,7 @@ async def import_checks(
     mode: Annotated[str, Form()],  # "merge" or "replace"
     current_user: AdminUserWeb,
     db: Annotated[AsyncSession, Depends(get_db)],
-):
+) -> Response:
     """Enqueue a bulk_check_import maintenance job; return the polling partial.
 
     File parsing + structural validation stay in the request (fast — kilobytes).

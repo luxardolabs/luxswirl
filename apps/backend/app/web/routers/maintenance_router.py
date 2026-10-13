@@ -36,7 +36,7 @@ async def maintenance_job_status(
     job_id: Annotated[UUID, Path(description="Maintenance job UUID")],
     current_user: CurrentUserWeb,
     db: Annotated[AsyncSession, Depends(get_db)],
-):
+) -> HTMLResponse:
     """Render the polling partial. Returns 404 if the row was reaped."""
     try:
         context = await MaintenanceJobViewService.build_status_partial_context(

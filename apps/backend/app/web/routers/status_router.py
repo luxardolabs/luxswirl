@@ -8,7 +8,7 @@ StatusViewService.
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -29,7 +29,7 @@ router = APIRouter(tags=["Web UI - Status"])
 
 
 @router.get("/", response_class=RedirectResponse, include_in_schema=False)
-async def root_redirect(request: Request):
+async def root_redirect(request: Request) -> Response:
     qs = request.url.query
     target = "/dashboard" + (f"?{qs}" if qs else "")
     return RedirectResponse(url=target, status_code=302)
@@ -41,7 +41,7 @@ async def status_summary_partial(
     request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: CurrentUserWeb,
-):
+) -> HTMLResponse:
     """HTMX partial - summary stats header (polled ~10s)."""
     context = await StatusViewService.build_summary_partial_context(
         db,
@@ -63,7 +63,7 @@ async def status_page(
     search: Annotated[str | None, Query(description="Search checks")] = None,
     page: Annotated[int, Query(ge=1, description="Page number")] = 1,
     per_page: PerPageFilter = None,
-):
+) -> HTMLResponse:
     """Main status dashboard - split-screen layout with inline 15-minute bars."""
     context = await StatusViewService.build_dashboard_context(
         db,

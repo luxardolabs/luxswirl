@@ -6,7 +6,7 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Form, Path, Query, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, Response
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -44,7 +44,7 @@ async def assignment_mode_selector(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: CurrentUserWeb,
     assignment_mode: Annotated[str, Query()] = "manual",
-):
+) -> HTMLResponse:
     """Return assignment selector UI based on mode."""
     context = await ChecksViewService.build_assignment_mode_selector_context(
         db, request, current_user, assignment_mode
@@ -67,7 +67,7 @@ async def create_form(
     request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: CurrentUserWeb,
-):
+) -> HTMLResponse:
     """Get the create form for a new check."""
     context = await ChecksViewService.build_create_form_context(
         db, request, current_user
@@ -88,7 +88,7 @@ async def edit_form(
     check_id: Annotated[UUID, Path(description="Check UUID")],
     current_user: CurrentUserWeb,
     db: Annotated[AsyncSession, Depends(get_db)],
-):
+) -> Response:
     """Get the edit form for an existing check."""
     try:
         context = await ChecksViewService.build_edit_form_context(
@@ -112,7 +112,7 @@ async def clone_form(
     check_id: Annotated[UUID, Path(description="Check UUID to clone")],
     current_user: CurrentUserWeb,
     db: Annotated[AsyncSession, Depends(get_db)],
-):
+) -> Response:
     """Get the clone form for an existing check."""
     try:
         context = await ChecksViewService.build_clone_form_context(
@@ -138,7 +138,7 @@ async def clone_check_handler(
     current_user: EditorUserWeb,
     db: Annotated[AsyncSession, Depends(get_db)],
     fields: Annotated[CheckCloneFields, Depends()],
-):
+) -> Response:
     """Create a clone of an existing check."""
     return await ChecksViewService.handle_clone_check_form(
         db, request, check_id, current_user, fields.as_dict()
@@ -152,7 +152,7 @@ async def create_check_assignment(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: EditorUserWeb,
     fields: Annotated[CheckCreateFields, Depends()],
-):
+) -> Response:
     """Create a new check (or bulk import if check_type is http-bulk)."""
     return await ChecksViewService.handle_create_check_form(
         db, request, current_user, fields.as_dict()
@@ -172,7 +172,7 @@ async def update_check(
     current_user: EditorUserWeb,
     db: Annotated[AsyncSession, Depends(get_db)],
     fields: Annotated[CheckUpdateFields, Depends()],
-):
+) -> Response:
     """Update an existing check."""
     return await ChecksViewService.handle_update_check_form(
         db, request, check_id, current_user, fields.as_dict()
@@ -188,7 +188,7 @@ async def toggle_check(
     check_id: Annotated[UUID, Path(description="Check UUID")],
     current_user: EditorUserWeb,
     db: Annotated[AsyncSession, Depends(get_db)],
-):
+) -> HTMLResponse:
     """Toggle check enabled/disabled status."""
     context = await ChecksViewService.toggle_check_handler(db, request, check_id)
     return templates.TemplateResponse(
@@ -207,7 +207,7 @@ async def delete_check(
     check_id: Annotated[UUID, Path(description="Check UUID")],
     current_user: EditorUserWeb,
     db: Annotated[AsyncSession, Depends(get_db)],
-):
+) -> Response:
     """Delete a check (enqueues a background cascade — see LUXSWIRL-105)."""
     return await ChecksViewService.enqueue_check_delete(
         db, request, current_user, check_id
@@ -231,7 +231,7 @@ async def dependents_panel(
     agent_name: Annotated[str, Query()] = "",
     tags: Annotated[str, Query()] = "",
     search: Annotated[str, Query()] = "",
-):
+) -> Response:
     """Side-panel: manage which checks depend on this one."""
     try:
         context = await ChecksViewService.build_dependents_panel_context(
@@ -262,7 +262,7 @@ async def update_dependents(
     current_user: EditorUserWeb,
     db: Annotated[AsyncSession, Depends(get_db)],
     dependent_ids: Annotated[list[str], Form()] = [],  # noqa: B006
-):
+) -> HTMLResponse:
     added, removed = await ChecksViewService.set_dependents(db, check_id, dependent_ids)
     msg = f"Updated dependents: +{added} −{removed}"
     return hx_empty_with_toast(
@@ -287,7 +287,7 @@ async def bulk_action(
     enabled: Annotated[str, Form()] = "all",
     tag: Annotated[str, Form()] = "",
     check_ids: Annotated[list[UUID], Form()] = [],  # noqa: B006
-):
+) -> HTMLResponse:
     """Perform bulk action on checks (delete, disable, enable).
 
     `action=delete` enqueues a maintenance job (cascade through check_results
@@ -342,7 +342,7 @@ async def bulk_modify(
     retry_attempts: Annotated[str, Form()] = "",
     agent_id: OptionalIdForm = None,
     alert_id: OptionalIdForm = None,
-):
+) -> HTMLResponse:
     """Enqueue a bulk_check_modify maintenance job. See LUXSWIRL-105."""
     interval_int = int(interval) if interval else None
     timeout_int = int(timeout) if timeout else None
@@ -376,7 +376,7 @@ async def bulk_check_preview(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: EditorUserWeb,
     bulk_urls: Annotated[str, Form()] = "",
-):
+) -> HTMLResponse:
     """Generate preview of bulk check names from URLs and validate them."""
     context = await ChecksViewService.build_bulk_preview_context(
         db, request, current_user, bulk_urls

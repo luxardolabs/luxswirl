@@ -28,7 +28,7 @@ router = APIRouter(tags=["Web UI - Registration Keys"], include_in_schema=False)
 async def create_key_form(
     request: Request,
     current_user: AdminUserWeb,
-):
+) -> HTMLResponse:
     """HTMX partial — empty 'create new key' form."""
     return templates.TemplateResponse(
         request,
@@ -45,7 +45,7 @@ async def create_key(
     current_user: AdminUserWeb,
     db: Annotated[AsyncSession, Depends(get_db)],
     description: Annotated[str | None, Form()] = None,
-):
+) -> HTMLResponse:
     """Create a new registration key and show it once in a modal."""
     context = await RegistrationKeysViewService.create_key(
         db, request, current_user, name, description
@@ -65,7 +65,7 @@ async def revoke_key(
     current_user: AdminUserWeb,
     db: Annotated[AsyncSession, Depends(get_db)],
     reason: Annotated[str | None, Form()] = None,
-):
+) -> HTMLResponse:
     """Revoke a registration key."""
     await RegistrationKeysViewService.revoke_key(db, key_id, reason)
     return HTMLResponse(
@@ -79,7 +79,7 @@ async def delete_key(
     key_id: UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: AdminUserWeb,
-):
+) -> HTMLResponse:
     """Delete a registration key (soft delete)."""
     await RegistrationKeysViewService.delete_key(db, key_id)
     return hx_empty_with_toast("Registration key deleted")

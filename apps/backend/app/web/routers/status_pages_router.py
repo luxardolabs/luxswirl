@@ -6,7 +6,7 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Form, Path, Query, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -44,7 +44,7 @@ async def status_pages_list(
     ] = "all",
     page: Annotated[int, Query(ge=1, description="Page number")] = 1,
     per_page: PerPageFilter = None,
-):
+) -> HTMLResponse:
     """Status pages list page — manage custom status dashboards."""
     context = await StatusPagesViewService.build_list_context(
         db, request, current_user, is_public, page, per_page
@@ -63,7 +63,7 @@ async def create_form(
     request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: CurrentUserWeb,
-):
+) -> HTMLResponse:
     """Get the create form for a new status page."""
     return templates.TemplateResponse(
         request,
@@ -84,7 +84,7 @@ async def edit_form(
     status_page_id: Annotated[UUID, Path(description="Status page UUID")],
     current_user: CurrentUserWeb,
     db: Annotated[AsyncSession, Depends(get_db)],
-):
+) -> Response:
     """Get the edit form for an existing status page."""
     try:
         context = await StatusPagesViewService.build_edit_form_context(
@@ -114,7 +114,7 @@ async def create_status_page(
     description: Annotated[str, Form()] = "",
     is_public: Annotated[bool, Form()] = False,
     status_bar_minutes: Annotated[int, Form()] = 30,
-):
+) -> HTMLResponse:
     """Create a new status page."""
     await StatusPagesViewService.create_status_page(
         db, name, slug, description, is_public, status_bar_minutes
@@ -138,7 +138,7 @@ async def update_status_page(
     description: Annotated[str, Form()] = "",
     is_public: Annotated[bool, Form()] = False,
     status_bar_minutes: Annotated[int, Form()] = 30,
-):
+) -> HTMLResponse:
     """Update an existing status page."""
     await StatusPagesViewService.update_status_page(
         db, status_page_id, name, slug, description, is_public, status_bar_minutes
@@ -157,7 +157,7 @@ async def delete_status_page(
     status_page_id: Annotated[UUID, Path(description="Status page UUID")],
     current_user: EditorUserWeb,
     db: Annotated[AsyncSession, Depends(get_db)],
-):
+) -> HTMLResponse:
     """Enqueue a status_page_delete maintenance job; return the polling partial.
 
     Status pages cascade through dashboard_items. The cascade runs in the
@@ -187,7 +187,7 @@ async def manage_status_page(
     status_page_id: Annotated[UUID, Path(description="Status page UUID")],
     current_user: CurrentUserWeb,
     db: Annotated[AsyncSession, Depends(get_db)],
-):
+) -> Response:
     """Management page for editing status page items (checks and groups)."""
     try:
         context = await StatusPagesViewService.build_manage_context(
@@ -217,7 +217,7 @@ async def get_available_checks(
     status: HealthStatusFilter = None,
     tags: Annotated[str, Query(description="Comma-separated tags")] = "",
     search: Annotated[str, Query(description="Search query")] = "",
-):
+) -> HTMLResponse:
     """Get filtered list of available checks for adding to dashboard."""
     context = await StatusPagesViewService.build_available_checks_context(
         db,
@@ -247,7 +247,7 @@ async def add_check_to_dashboard(
     check_id: Annotated[UUID, Form()],
     current_user: EditorUserWeb,
     db: Annotated[AsyncSession, Depends(get_db)],
-):
+) -> HTMLResponse:
     """Add a check to the dashboard. Returns refreshed dashboard_items partial."""
     context, error = await StatusPagesViewService.add_check_to_dashboard(
         db, request, current_user, status_page_id, check_id
@@ -274,7 +274,7 @@ async def remove_item_from_dashboard(
     item_index: Annotated[int, Path(description="Item index")],
     current_user: EditorUserWeb,
     db: Annotated[AsyncSession, Depends(get_db)],
-):
+) -> HTMLResponse:
     """Remove an item from the dashboard."""
     context = await StatusPagesViewService.remove_item_from_dashboard(
         db, request, current_user, status_page_id, item_index
@@ -299,7 +299,7 @@ async def reorder_dashboard_items(
     items_json: Annotated[str, Form()],
     current_user: EditorUserWeb,
     db: Annotated[AsyncSession, Depends(get_db)],
-):
+) -> HTMLResponse:
     """Reorder items in the dashboard. Returns refreshed dashboard_items partial."""
     context = await StatusPagesViewService.reorder_dashboard_items(
         db, request, current_user, status_page_id, items_json
@@ -320,7 +320,7 @@ async def add_group_to_dashboard(
     current_user: EditorUserWeb,
     db: Annotated[AsyncSession, Depends(get_db)],
     filter_json: Annotated[str | None, Form()] = None,
-):
+) -> HTMLResponse:
     """Add a group to the dashboard. Returns refreshed dashboard_items partial."""
     context, error = await StatusPagesViewService.add_group_to_dashboard(
         db, request, current_user, status_page_id, name, filter_json
@@ -348,7 +348,7 @@ async def rename_group_in_dashboard(
     name: Annotated[str, Form()],
     current_user: EditorUserWeb,
     db: Annotated[AsyncSession, Depends(get_db)],
-):
+) -> HTMLResponse:
     """Rename a group. Returns refreshed dashboard_items partial."""
     if not name.strip():
         return HTMLResponse(content="", status_code=400)
@@ -371,7 +371,7 @@ async def update_group_filters_in_dashboard(
     filter_json: Annotated[str, Form()],
     current_user: EditorUserWeb,
     db: Annotated[AsyncSession, Depends(get_db)],
-):
+) -> HTMLResponse:
     """Update filters for a dynamic filter group. Returns dashboard_items partial."""
     context = await StatusPagesViewService.update_group_filters(
         db, request, current_user, status_page_id, item_index, filter_json
@@ -393,7 +393,7 @@ async def update_group_sort_in_dashboard(
     db: Annotated[AsyncSession, Depends(get_db)],
     sort_by: Annotated[str, Form()] = "manual",
     sort_direction: Annotated[str, Form()] = "asc",
-):
+) -> HTMLResponse:
     """Update sort settings for a group. Returns refreshed dashboard_items partial."""
     context = await StatusPagesViewService.update_group_sort(
         db, request, current_user, status_page_id, item_index, sort_by, sort_direction
@@ -412,7 +412,7 @@ async def get_dashboard_items(
     status_page_id: Annotated[UUID, Path(description="Status page UUID")],
     current_user: CurrentUserWeb,
     db: Annotated[AsyncSession, Depends(get_db)],
-):
+) -> HTMLResponse:
     """Get dashboard items HTML (used for refreshing after filter changes)."""
     context = await StatusPagesViewService.build_dashboard_items_context(
         db, request, current_user, status_page_id
@@ -430,7 +430,7 @@ async def view_public_status_page(
     current_user: OptionalUserWeb,
     db: Annotated[AsyncSession, Depends(get_db)],
     time_range: TimeRangeFilter = None,
-):
+) -> Response:
     """Public view of a status page by slug at /status/{slug}."""
     try:
         context, signal = await StatusPagesViewService.build_public_view(
@@ -470,7 +470,7 @@ async def view_public_status_page_partial(
     current_user: OptionalUserWeb,
     db: Annotated[AsyncSession, Depends(get_db)],
     time_range: TimeRangeFilter = None,
-):
+) -> HTMLResponse:
     """Partial refresh endpoint for public status page (HTMX polling)."""
     context, status_code = await StatusPagesViewService.build_public_view_partial(
         db, request, current_user, slug, time_range

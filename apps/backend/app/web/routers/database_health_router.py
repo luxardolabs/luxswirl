@@ -25,7 +25,7 @@ async def database_health_page(
     request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: AdminUserWeb,
-):
+) -> HTMLResponse:
     """Database health page — comprehensive database metrics and monitoring."""
     context = await DatabaseHealthViewService.build_health_page_context(
         db, request, current_user
@@ -41,7 +41,7 @@ async def database_health_refresh(
     request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: AdminUserWeb,
-):
+) -> HTMLResponse:
     """HTMX endpoint — refresh database health metrics."""
     context = await DatabaseHealthViewService.build_health_refresh_context(
         db, request, current_user
