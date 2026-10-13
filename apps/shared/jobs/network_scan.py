@@ -12,12 +12,22 @@ import ipaddress
 import platform
 import socket
 import time
+from collections.abc import Sequence
 from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
 from shared.jobs.base import BaseJob
 from shared.subprocess_safe import get_subprocess_config, run_subprocess_no_output
+
+
+def _subnets_of(
+    network: ipaddress.IPv4Network | ipaddress.IPv6Network, prefix: int
+) -> Sequence[ipaddress.IPv4Network | ipaddress.IPv6Network]:
+    """The /prefix subnets of ``network``, typed for either address family."""
+    if isinstance(network, ipaddress.IPv4Network):
+        return list(network.subnets(new_prefix=prefix))
+    return list(network.subnets(new_prefix=prefix))
 
 
 class NetworkScanParams(BaseModel):
@@ -194,11 +204,11 @@ class NetworkScanJob(BaseJob):
             # Create semaphore for concurrency control
             sem = asyncio.Semaphore(max_concurrent)
 
-            async def scan_host(ip: ipaddress.IPv4Address | ipaddress.IPv6Address):
+            async def scan_host(ip: str) -> None:
                 """Scan a single host."""
                 async with sem:
                     result = await self._scan_single_host(
-                        str(ip),
+                        ip,
                         timeout=timeout,
                         ports=ports,
                     )
@@ -206,7 +216,7 @@ class NetworkScanJob(BaseJob):
                         discovered_hosts.append(result)
 
             # Scan all hosts concurrently
-            await asyncio.gather(*[scan_host(ip) for ip in hosts])  # type: ignore[arg-type]
+            await asyncio.gather(*[scan_host(str(ip)) for ip in hosts])
             hosts_count = len(hosts)
 
         # Sort by IP
@@ -284,7 +294,7 @@ class NetworkScanJob(BaseJob):
             List of all discovered hosts across all chunks
         """
         # Break network into /24 subnets
-        chunks = list(network.subnets(new_prefix=24))
+        chunks = _subnets_of(network, 24)
         start_time = time.time()
 
         self.logger.info(
@@ -295,9 +305,12 @@ class NetworkScanJob(BaseJob):
         # Track progress and metrics
         completed_chunks = 0
         total_discovered = 0
-        chunk_metrics = []
+        chunk_metrics: list[dict[str, Any]] = []
 
-        async def scan_chunk(chunk_network, chunk_index):
+        async def scan_chunk(
+            chunk_network: ipaddress.IPv4Network | ipaddress.IPv6Network,
+            chunk_index: int,
+        ) -> list[dict[str, Any]]:
             """Scan a single /24 chunk."""
             nonlocal completed_chunks, total_discovered
 
@@ -311,19 +324,19 @@ class NetworkScanJob(BaseJob):
                 },
             )
 
-            chunk_hosts = []
+            chunk_hosts: list[dict[str, Any]] = []
             hosts = list(chunk_network.hosts())
 
             # Create semaphore for this chunk
             sem = asyncio.Semaphore(max_concurrent)
 
-            async def scan_host(ip):
+            async def scan_host(ip: str) -> None:
                 async with sem:
-                    result = await self._scan_single_host(str(ip), timeout, ports)
+                    result = await self._scan_single_host(ip, timeout, ports)
                     if result:
                         chunk_hosts.append(result)
 
-            await asyncio.gather(*[scan_host(ip) for ip in hosts])
+            await asyncio.gather(*[scan_host(str(ip)) for ip in hosts])
 
             chunk_duration = time.time() - chunk_start
             completed_chunks += 1
@@ -533,7 +546,7 @@ class NetworkScanJob(BaseJob):
         """
         open_ports = []
 
-        async def check_port(port: int):
+        async def check_port(port: int) -> None:
             """Check if a single port is open."""
             try:
                 # Try to connect
