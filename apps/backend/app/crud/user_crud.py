@@ -15,6 +15,38 @@ from app.models.user_model import User
 class UserCRUD:
     """Database queries for users."""
 
+    # ── Writes (flushed; the session owner commits) ───────────────────────────
+
+    @staticmethod
+    async def add_user(db: AsyncSession, user: User) -> User:
+        """Insert a user inside a savepoint, so a duplicate (IntegrityError, raised
+        to the caller) rolls back only this insert; the refreshed row."""
+        async with db.begin_nested():
+            db.add(user)
+            await db.flush()
+        await db.refresh(user)
+        return user
+
+    @staticmethod
+    async def save_user_in_savepoint(db: AsyncSession, user: User) -> User:
+        """Write a user's changed fields inside a savepoint (a duplicate username
+        raises IntegrityError and rolls back only this write); the refreshed row."""
+        async with db.begin_nested():
+            await db.flush()
+        await db.refresh(user)
+        return user
+
+    @staticmethod
+    async def save_user(db: AsyncSession, user: User) -> User:
+        await db.flush()
+        await db.refresh(user)
+        return user
+
+    @staticmethod
+    async def delete_user(db: AsyncSession, user: User) -> None:
+        """Delete a user (their sessions cascade)."""
+        await db.delete(user)
+
     @staticmethod
     async def get_by_username(db: AsyncSession, username: str) -> User | None:
         result = await db.execute(select(User).where(User.username == username))

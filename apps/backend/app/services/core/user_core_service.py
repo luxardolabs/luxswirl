@@ -72,10 +72,7 @@ class UserCoreService:
             # A savepoint, so a duplicate rolls back only this insert: callers
             # turn the ValueError into a form error and the request's session
             # is still committed afterwards.
-            async with db.begin_nested():
-                db.add(user)
-                await db.flush()
-            await db.refresh(user)
+            user = await UserCRUD.add_user(db, user)
             logger.info(
                 "Created user",
                 extra={
@@ -231,9 +228,7 @@ class UserCoreService:
             )
 
         try:
-            async with db.begin_nested():
-                await db.flush()
-            await db.refresh(user)
+            user = await UserCRUD.save_user_in_savepoint(db, user)
             logger.info(
                 "Updated user",
                 extra={"username": user.username, "user_id": str(user_id)},
@@ -268,7 +263,7 @@ class UserCoreService:
                 raise ValueError("Cannot delete the last admin user")
 
         # Delete user (cascade will delete sessions)
-        await db.delete(user)
+        await UserCRUD.delete_user(db, user)
 
         logger.info(
             "Deleted user",
@@ -323,8 +318,7 @@ class UserCoreService:
         user.locked_until = None
         user.failed_login_attempts = 0
 
-        await db.flush()
-        await db.refresh(user)
+        user = await UserCRUD.save_user(db, user)
 
         logger.info(
             "Unlocked user",
