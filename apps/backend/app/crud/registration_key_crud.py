@@ -4,14 +4,47 @@ RegistrationKey CRUD - database queries for registration keys.
 
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.datetime_utils import utc_now
 from app.models.registration_key_model import RegistrationKey
 
 
 class RegistrationKeyCRUD:
     """Database queries for registration keys."""
+
+    # ── Writes (flushed; the session owner commits) ───────────────────────────
+
+    @staticmethod
+    async def add_key(db: AsyncSession, key: RegistrationKey) -> RegistrationKey:
+        db.add(key)
+        await db.flush()
+        await db.refresh(key)
+        return key
+
+    @staticmethod
+    async def save_key(db: AsyncSession, key: RegistrationKey) -> RegistrationKey:
+        """Write a key's changed fields; the refreshed row."""
+        await db.flush()
+        await db.refresh(key)
+        return key
+
+    @staticmethod
+    async def hard_delete_key(db: AsyncSession, key: RegistrationKey) -> None:
+        await db.delete(key)
+
+    @staticmethod
+    async def record_usage(db: AsyncSession, key_id: UUID) -> RegistrationKey | None:
+        """Count one use and stamp it, in one statement (no lost update under
+        concurrent registrations); the updated row."""
+        return await db.scalar(
+            update(RegistrationKey)
+            .where(RegistrationKey.id == key_id)
+            .values(usage_count=RegistrationKey.usage_count + 1, last_used_at=utc_now())
+            .returning(RegistrationKey)
+            .execution_options(populate_existing=True)
+        )
 
     @staticmethod
     async def get_by_id(db: AsyncSession, key_id: UUID) -> RegistrationKey | None:
