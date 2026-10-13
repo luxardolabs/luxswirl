@@ -93,14 +93,17 @@ class MaintenanceJobCRUD:
         return result.scalar_one_or_none()
 
     @staticmethod
-    async def mark_running(db: AsyncSession, job_id: UUID) -> None:
-        await db.execute(
+    async def mark_running(db: AsyncSession, job_id: UUID) -> MaintenanceJob | None:
+        """Mark the job running; the updated row (None if it is gone)."""
+        return await db.scalar(
             update(MaintenanceJob)
             .where(MaintenanceJob.id == job_id)
             .values(
                 status=MaintenanceJobStatus.RUNNING.value,
                 started_at=utc_now(),
             )
+            .returning(MaintenanceJob)
+            .execution_options(populate_existing=True)
         )
 
     @staticmethod

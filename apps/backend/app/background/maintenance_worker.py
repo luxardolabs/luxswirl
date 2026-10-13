@@ -55,9 +55,7 @@ async def _claim_one() -> MaintenanceJob | None:
         job = await MaintenanceJobCoreService.claim_next(db)
         if job is None:
             return None
-        await MaintenanceJobCoreService.mark_running(db, job.id)
-        await db.refresh(job)
-        return job
+        return await MaintenanceJobCoreService.mark_running(db, job.id)
 
 
 async def _run_handler(job: MaintenanceJob) -> None:
