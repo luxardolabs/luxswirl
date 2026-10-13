@@ -47,6 +47,8 @@ SESSION_ENDING = frozenset(
         ("POST", "/profile/change-password"),
         ("POST", "/api/v1/auth/change-password"),
         ("POST", "/api/v1/auth/logout-all"),
+        # Ends the caller's own session now (it used to leave it valid).
+        ("POST", "/api/v1/auth/logout"),
     }
 )
 
@@ -230,6 +232,16 @@ async def test_a_password_change_takes_and_ends_every_session(smoke_world, path,
     assert await _signed_out(client, headers)
     assert not await _logs_in(client, old_password)
     assert await _logs_in(client, NEW_PASSWORD)
+
+
+async def test_api_logout_ends_the_callers_session(smoke_world):
+    client = smoke_world["client"]
+    headers = smoke_world["web_headers"]
+
+    response = await client.post("/api/v1/auth/logout", headers=headers)
+
+    assert response.status_code == 200, response.text
+    assert await _signed_out(client, headers)
 
 
 async def test_logout_all_ends_the_callers_sessions(smoke_world):

@@ -128,28 +128,16 @@ async def logout(
     response: Response,
     user: CurrentUser,
     db: Annotated[AsyncSession, Depends(get_db)],
-    session_token: str | None = None,
+    session_token: Annotated[str, Cookie(alias=settings.security.session_cookie_name)],
 ) -> MessageResponse:
     """
     Logout current user and invalidate session.
 
-    Deletes session from database and clears cookie.
+    Deletes the session row the cookie names, so a copy of the cookie stops
+    working too, then clears the cookie. CurrentUser has already refused a
+    request without a valid session cookie.
     """
-    auth_service = AuthCoreService()
-
-    # Get session token from cookie (get_current_user already validated it)
-    # We need to extract it from the request
-
-    async def get_session_token(
-        session_token: Annotated[
-            str | None, Cookie(alias=settings.security.session_cookie_name)
-        ] = None,
-    ) -> str | None:
-        return session_token
-
-    # Logout (delete session)
-    if session_token:
-        await auth_service.logout(db, session_token)
+    await AuthCoreService().logout(db, session_token)
 
     # Clear cookie
     response.delete_cookie(
