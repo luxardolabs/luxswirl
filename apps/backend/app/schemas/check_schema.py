@@ -4,14 +4,25 @@ Pydantic schemas for Check domain.
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any
+from typing import Annotated, Any
 from uuid import UUID
 
-from pydantic import Field
+from pydantic import BeforeValidator, Field
 
-from app.models.enum_model import AssignmentMode, CheckType
+from app.models.enum_model import (
+    AssignmentMode,
+    BulkCheckOutcome,
+    CheckHealthStatus,
+    CheckType,
+    DnsRecordType,
+    HttpMethod,
+)
 from app.schemas.agent_schema import AgentOption
-from app.schemas.base_schema import BaseSchema, TimestampSchema
+from app.schemas.base_schema import BaseSchema, TimestampSchema, upper_or_none
+
+# Accept the case a client sent (`get`, `aaaa`) and an empty form value.
+HttpMethodField = Annotated[HttpMethod | None, BeforeValidator(upper_or_none)]
+DnsRecordTypeField = Annotated[DnsRecordType | None, BeforeValidator(upper_or_none)]
 
 
 class CheckBase(BaseSchema):
@@ -78,7 +89,7 @@ class CheckCreate(CheckBase):
 
     # Check-type-specific configuration (JSONB - accepts any fields)
     # These fields come from UI forms and get packed into check_config
-    http_method: str | None = Field(None, max_length=10, description="HTTP method")
+    http_method: HttpMethodField = Field(None, description="HTTP method")
     verify_ssl: bool | None = Field(None, description="Verify SSL certificates")
     expected_status: int | None = Field(
         None, ge=100, le=599, description="Expected HTTP status"
@@ -87,7 +98,7 @@ class CheckCreate(CheckBase):
     expected_value: str | None = Field(
         None, max_length=500, description="Expected value"
     )
-    record_type: str | None = Field(None, max_length=10, description="DNS record type")
+    record_type: DnsRecordTypeField = Field(None, description="DNS record type")
     nameserver: str | None = Field(None, max_length=255, description="DNS nameserver")
     port: int | None = Field(None, ge=1, le=65535, description="Port number")
     expect_value: str | None = Field(
@@ -144,12 +155,12 @@ class CheckUpdate(BaseSchema):
     script_code: str | None = None
 
     # Check-type-specific configuration (JSONB - accepts any fields)
-    http_method: str | None = Field(None, max_length=10)
+    http_method: HttpMethodField = None
     verify_ssl: bool | None = None
     expected_status: int | None = Field(None, ge=100, le=599)
     json_path: str | None = Field(None, max_length=500)
     expected_value: str | None = Field(None, max_length=500)
-    record_type: str | None = Field(None, max_length=10)
+    record_type: DnsRecordTypeField = None
     nameserver: str | None = Field(None, max_length=255)
     port: int | None = Field(None, ge=1, le=65535)
     expect_value: str | None = Field(None, max_length=500)
@@ -171,12 +182,12 @@ class CheckInDB(CheckBase, TimestampSchema):
     expected_status: int | None = None
     enabled: bool = True
     # HTTP/JSON check fields
-    http_method: str | None = None
+    http_method: HttpMethodField = None
     verify_ssl: bool | None = None
     json_path: str | None = None
     expected_value: str | None = None
     # DNS check fields
-    record_type: str | None = None
+    record_type: DnsRecordTypeField = None
     nameserver: str | None = None
     port: int | None = None
     expect_value: str | None = None
@@ -200,7 +211,7 @@ class CheckStatusInfo(BaseSchema):
 
     id: UUID
     display_name: str
-    check_type: str
+    check_type: CheckType
     target: str
     enabled: bool
     tags: list[str] | None = None
@@ -231,7 +242,9 @@ class CheckResponse(CheckInDB):
     fully_qualified_name: str = Field(
         ..., description="Fully qualified check name (agent:check)"
     )
-    latest_status: str | None = Field(None, description="Latest check status")
+    latest_status: CheckHealthStatus | None = Field(
+        None, description="Latest check status"
+    )
     latest_latency_ms: float | None = Field(
         None, description="Latest latency in milliseconds"
     )
@@ -296,8 +309,8 @@ class BulkCheckCreateRequest(BaseSchema):
     expected_status: int | None = Field(
         None, ge=100, le=599, description="Expected HTTP status code"
     )
-    http_method: str | None = Field(
-        None, max_length=10, description="HTTP method (GET, POST, etc.)"
+    http_method: HttpMethodField = Field(
+        None, description="HTTP method (GET, POST, etc.)"
     )
     verify_ssl: bool | None = Field(
         True, description="Verify SSL certificates for HTTPS"
@@ -320,11 +333,11 @@ class BulkCheckResult(BaseSchema):
     """Schema for individual bulk check result."""
 
     url: str = Field(..., description="The input URL")
-    status: str = Field(..., description="Result status: 'success' or 'failed'")
+    status: BulkCheckOutcome = Field(..., description="Result status")
     check_id: UUID | None = Field(None, description="Check UUID if successful")
     display_name: str | None = Field(None, description="Name assigned to the check")
-    check_type: str | None = Field(
-        None, description="Detected check type (http, https, tcp, etc.)"
+    check_type: CheckType | None = Field(
+        None, description="Detected check type (http or tcp)"
     )
     error: str | None = Field(None, description="Error message if failed")
 
@@ -407,13 +420,13 @@ class DashboardCheck:
 
     id: UUID
     display_name: str
-    check_type: str
+    check_type: CheckType
     target: str
     tags: list[str]
     enabled: bool
     agent: DashboardCheckAgent
     # Status, computed from results rather than columns on the check.
-    latest_status: str
+    latest_status: CheckHealthStatus
     latest_success: bool | None
     latency_ms: float | None
     uptime_24h: float

@@ -11,6 +11,14 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.core.datetime_utils import utc_now
 
 
+def upper_or_none(value: object) -> object:
+    """Normalize an uppercase-valued enum input: ``""`` is unset, any other
+    string is uppercased (``get`` -> ``GET``) before the enum validates it."""
+    if isinstance(value, str):
+        return value.strip().upper() or None
+    return value
+
+
 class BaseSchema(BaseModel):
     """Base schema with common configuration."""
 
