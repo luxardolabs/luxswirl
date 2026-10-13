@@ -1,25 +1,29 @@
-"""The maintenance worker's claim hands back the job as RUNNING, and it is durable.
+"""The maintenance worker's claim is committed before the handler runs.
 
-`_claim_one` claims the oldest queued job and marks it running in one worker
-transaction. Durability lock for moving its session work into crud
-(`fw.no_session_mutation_outside_crud`): the returned job must already show the
-claim, and a SEPARATE connection must see it committed.
+`process_next_job` claims the oldest queued job and marks it running in one
+worker transaction, then hands it to the handler. Durability lock for moving the
+claim's session work into crud (`fw.no_session_mutation_outside_crud`): while the
+handler runs, a SEPARATE connection must already see the job RUNNING.
 """
 
 from __future__ import annotations
 
+from datetime import datetime
 from uuid import uuid4
 
 import pytest
-from app.background.maintenance_worker import _claim_one
+from app.background.maintenance_worker import HANDLERS, process_next_job
 from app.models.enum_model import MaintenanceJobKind, MaintenanceJobStatus
 from app.models.maintenance_job_model import MaintenanceJob
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 pytestmark = pytest.mark.integration
 
 
-async def test_a_claimed_job_comes_back_running_and_is_committed(worker_db) -> None:
+async def test_the_claim_is_committed_before_the_handler_runs(
+    worker_db, monkeypatch: pytest.MonkeyPatch
+) -> None:
     job_id = uuid4()
     async with worker_db() as s:
         s.add(
@@ -33,17 +37,24 @@ async def test_a_claimed_job_comes_back_running_and_is_committed(worker_db) -> N
         )
         await s.commit()
 
-    claimed = await _claim_one()
+    seen: list[tuple[MaintenanceJobStatus, datetime | None]] = []
 
-    assert claimed is not None and claimed.id == job_id
-    assert claimed.status == MaintenanceJobStatus.RUNNING
-    assert claimed.started_at is not None
-    async with worker_db() as other:  # separate connection: only committed rows
-        stored = await other.scalar(
-            select(MaintenanceJob.status).where(MaintenanceJob.id == job_id)
-        )
-    assert stored == MaintenanceJobStatus.RUNNING
+    async def handler(db: AsyncSession, job: MaintenanceJob) -> None:
+        async with worker_db() as other:  # separate connection: only committed rows
+            stored = await other.scalar(
+                select(MaintenanceJob).where(MaintenanceJob.id == job.id)
+            )
+            assert stored is not None
+            seen.append((stored.status, stored.started_at))
+
+    monkeypatch.setitem(HANDLERS, MaintenanceJobKind.BULK_CHECK_DELETE, handler)
+
+    assert await process_next_job() is True
+
+    ((status, started_at),) = seen
+    assert status == MaintenanceJobStatus.RUNNING
+    assert started_at is not None
 
 
 async def test_an_empty_queue_claims_nothing(worker_db) -> None:
-    assert await _claim_one() is None
+    assert await process_next_job() is False
