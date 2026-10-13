@@ -41,6 +41,7 @@ _WORKER_TABLES = (
     "alert_notification_mappings",
     "alerts",
     "notification_providers",
+    "status_pages",
     "sessions",
     "users",
     "checks",
