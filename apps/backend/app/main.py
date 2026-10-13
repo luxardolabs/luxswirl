@@ -40,6 +40,7 @@ from app.core.exceptions import LuxSwirlException
 from app.core.logging_config import configure_logging
 from app.core.logging_options import logging_options
 from app.core.rate_limit import limiter
+from app.core.same_origin import SameOriginMiddleware
 from app.core.secrets import resolve_runtime_secrets
 from app.core.security_headers import SecurityHeadersMiddleware
 from app.core.trusted_host import AllowedHostsMiddleware
@@ -238,6 +239,16 @@ app.add_middleware(
 
 # Security headers middleware (SWIRL-43)
 app.add_middleware(SecurityHeadersMiddleware)
+
+# Cross-site guard (FLEET-AUTH-SESSION-STANDARD §5): a browser POST/PUT/PATCH/DELETE from
+# another site is refused before any route runs, so a hostile page cannot sign a visitor
+# into another account or sign them out. The app's own hosts are ALLOWED_HOSTS plus the
+# hosts the operator allowed as CORS origins (a web UI served from another domain).
+# Requests without browser headers (the agent, webhooks, the CLI) pass.
+app.add_middleware(
+    SameOriginMiddleware,
+    allowed_hosts=[*settings.allowed_hosts, *settings.server.cors_origin_hosts],
+)
 
 # Trusted hosts: added last, so it is the outermost layer and a forged Host is refused with
 # 400 before any other middleware or route sees the request (FLEET-BUILD-DEPLOY-STANDARD).
