@@ -310,3 +310,99 @@ class AlertCRUD:
             select(CheckResult).where(CheckResult.id == check_result_id).limit(1)
         )
         return result.scalar_one_or_none()
+
+    # ── Writes (flushed; the session owner commits) ───────────────────────────
+
+    @staticmethod
+    async def add_alert(
+        db: AsyncSession,
+        alert: Alert,
+        provider_ids: Sequence[UUID],
+        check_ids: Sequence[UUID],
+    ) -> Alert:
+        """Insert an alert with its provider and check mappings; the refreshed alert."""
+        db.add(alert)
+        await db.flush()  # the mappings need alert.id
+        db.add_all(
+            AlertNotificationMapping(
+                alert_id=alert.id, notification_provider_id=provider_id, is_enabled=True
+            )
+            for provider_id in provider_ids
+        )
+        db.add_all(
+            AlertCheckMapping(alert_id=alert.id, check_id=check_id, is_enabled=True)
+            for check_id in check_ids
+        )
+        await db.flush()
+        await db.refresh(alert)
+        return alert
+
+    @staticmethod
+    async def save_alert(db: AsyncSession, alert: Alert) -> Alert:
+        """Write an alert's changed fields; the refreshed alert."""
+        await db.flush()
+        await db.refresh(alert)
+        return alert
+
+    @staticmethod
+    async def hard_delete_alert(db: AsyncSession, alert: Alert) -> None:
+        """Delete an alert row (its mappings cascade)."""
+        await db.delete(alert)
+
+    @staticmethod
+    async def add_notif_mapping(
+        db: AsyncSession, alert_id: UUID, provider_id: UUID
+    ) -> AlertNotificationMapping:
+        mapping = AlertNotificationMapping(
+            alert_id=alert_id, notification_provider_id=provider_id, is_enabled=True
+        )
+        db.add(mapping)
+        await db.flush()
+        await db.refresh(mapping)
+        return mapping
+
+    @staticmethod
+    async def add_check_mapping(
+        db: AsyncSession, alert_id: UUID, check_id: UUID
+    ) -> AlertCheckMapping:
+        mapping = AlertCheckMapping(
+            alert_id=alert_id, check_id=check_id, is_enabled=True
+        )
+        db.add(mapping)
+        await db.flush()
+        await db.refresh(mapping)
+        return mapping
+
+    @staticmethod
+    async def add_check_mappings_for_alerts(
+        db: AsyncSession, check_id: UUID, alert_ids: Sequence[UUID]
+    ) -> None:
+        """Map one check to several alerts."""
+        db.add_all(
+            AlertCheckMapping(alert_id=alert_id, check_id=check_id, is_enabled=True)
+            for alert_id in alert_ids
+        )
+        await db.flush()
+
+    @staticmethod
+    async def save_check_mapping(
+        db: AsyncSession, mapping: AlertCheckMapping
+    ) -> AlertCheckMapping:
+        """Write a mapping's changed fields; the refreshed mapping."""
+        await db.flush()
+        await db.refresh(mapping)
+        return mapping
+
+    @staticmethod
+    async def load_result_check_and_agent(
+        db: AsyncSession, result: CheckResult
+    ) -> None:
+        """Load a check result's check and agent for alert evaluation."""
+        await db.refresh(result, ["check", "agent"])
+
+    @staticmethod
+    async def add_notification_logs(
+        db: AsyncSession, logs: Sequence[NotificationLog]
+    ) -> None:
+        db.add_all(logs)
+        await db.flush()

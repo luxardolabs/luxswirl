@@ -17,9 +17,7 @@ from app.core.datetime_utils import utc_now
 from app.core.exceptions import NotFoundException, ValidationException
 from app.crud.alert_crud import AlertCRUD
 from app.crud.check_result_crud import CheckResultCRUD
-from app.models.alert_check_mapping_model import AlertCheckMapping
 from app.models.alert_model import Alert
-from app.models.alert_notification_mapping_model import AlertNotificationMapping
 from app.models.check_model import Check
 from app.models.check_result_model import CheckResult
 from app.models.enum_model import NotificationStatus
@@ -263,31 +261,13 @@ class AlertCoreService:
             custom_message=data.custom_message,
         )
 
-        db.add(alert)
-        await db.flush()  # Get alert.id
-
-        # Add notification provider mappings
-        for provider_id in data.notification_provider_ids:
-            mapping = AlertNotificationMapping(
-                alert_id=alert.id,
-                notification_provider_id=provider_id,
-                is_enabled=True,
-            )
-            db.add(mapping)
-
-        # Add check mappings (if not global)
-        # Global alerts will be applied to NEW checks when they are created
-        if not data.is_global:
-            for check_id in data.check_ids:
-                check_mapping = AlertCheckMapping(
-                    alert_id=alert.id,
-                    check_id=check_id,
-                    is_enabled=True,
-                )
-                db.add(check_mapping)
-
-        await db.flush()
-        await db.refresh(alert)
+        # A global alert is mapped to checks as they are created, not here.
+        alert = await AlertCRUD.add_alert(
+            db,
+            alert,
+            provider_ids=data.notification_provider_ids,
+            check_ids=[] if data.is_global else data.check_ids,
+        )
 
         logger.info(
             "Created alert",
@@ -342,8 +322,7 @@ class AlertCoreService:
         if data.custom_message is not None:
             alert.custom_message = data.custom_message
 
-        await db.flush()
-        await db.refresh(alert)
+        alert = await AlertCRUD.save_alert(db, alert)
 
         logger.info("Updated alert", extra={"alert_id": str(alert_id)})
 
@@ -369,7 +348,7 @@ class AlertCoreService:
         alert = await AlertCoreService.get_alert_by_id(db, alert_id)
 
         if hard_delete:
-            await db.delete(alert)
+            await AlertCRUD.hard_delete_alert(db, alert)
         else:
             alert.deleted_at = utc_now()
 
@@ -393,16 +372,7 @@ class AlertCoreService:
         if existing:
             raise ValidationException("Provider already added to this alert")
 
-        mapping = AlertNotificationMapping(
-            alert_id=alert_id,
-            notification_provider_id=provider_id,
-            is_enabled=True,
-        )
-
-        db.add(mapping)
-        await db.flush()
-        await db.refresh(mapping)
-
+        mapping = await AlertCRUD.add_notif_mapping(db, alert_id, provider_id)
         return mapping.id
 
     @staticmethod
@@ -426,16 +396,7 @@ class AlertCoreService:
         if existing:
             raise ValidationException("Check already added to this alert")
 
-        mapping = AlertCheckMapping(
-            alert_id=alert_id,
-            check_id=check_id,
-            is_enabled=True,
-        )
-
-        db.add(mapping)
-        await db.flush()
-        await db.refresh(mapping)
-
+        mapping = await AlertCRUD.add_check_mapping(db, alert_id, check_id)
         return mapping.id
 
     @staticmethod
@@ -484,15 +445,15 @@ class AlertCoreService:
         # alert — this runs on every check create.
         already_mapped = await AlertCRUD.list_mapped_alert_ids_for_check(db, check_id)
 
-        for alert_id in global_alert_ids:
-            if alert_id not in already_mapped:
-                db.add(
-                    AlertCheckMapping(
-                        alert_id=alert_id,
-                        check_id=check_id,
-                        is_enabled=True,
-                    )
-                )
+        await AlertCRUD.add_check_mappings_for_alerts(
+            db,
+            check_id,
+            [
+                alert_id
+                for alert_id in global_alert_ids
+                if alert_id not in already_mapped
+            ],
+        )
 
         logger.info(
             "Assigned global alerts to check",
@@ -621,7 +582,7 @@ class AlertCoreService:
             check_result: Check result to evaluate
         """
         # Load the check with agent
-        await db.refresh(check_result, ["check", "agent"])
+        await AlertCRUD.load_result_check_and_agent(db, check_result)
         check = check_result.check
 
         # Find all applicable alerts (including global alerts via AlertCheckMapping)
@@ -1137,14 +1098,12 @@ class AlertCoreService:
                 db, alert.id
             )
             now = utc_now()
-            for mapping in mappings:
-                provider = mapping.notification_provider
-                if provider.deleted_at is not None:
-                    continue
-                db.add(
+            await AlertCRUD.add_notification_logs(
+                db,
+                [
                     NotificationLog(
                         alert_id=alert.id,
-                        notification_provider_id=provider.id,
+                        notification_provider_id=mapping.notification_provider.id,
                         check_result_id=check_result.id,
                         check_result_timestamp=check_result.timestamp,
                         check_id=check.id,
@@ -1155,7 +1114,10 @@ class AlertCoreService:
                         notification_hash=state_key,
                         sent_at=now,
                     )
-                )
+                    for mapping in mappings
+                    if mapping.notification_provider.deleted_at is None
+                ],
+            )
 
             logger.info(
                 "Notification suppressed - parent check is down (first occurrence)",
@@ -1387,8 +1349,7 @@ class AlertCoreService:
 
         # Update the mapping
         mapping.snoozed_until = new_snooze_time
-        await db.flush()
-        await db.refresh(mapping)
+        mapping = await AlertCRUD.save_check_mapping(db, mapping)
 
         logger.info(
             "Alert-check mapping snoozed",
