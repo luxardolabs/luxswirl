@@ -91,6 +91,44 @@ class CheckErrorType(StrEnum):
     UNKNOWN_ERROR = "unknown_error"
 
 
+class HttpMethod(StrEnum):
+    """Request method an HTTP or JSON check sends.
+
+    Uppercase, unlike the other enums here: the value is the method on the wire
+    and in stored check config, and the agent sends it as-is.
+    """
+
+    GET = "GET"
+    POST = "POST"
+    PUT = "PUT"
+    PATCH = "PATCH"
+    DELETE = "DELETE"
+    HEAD = "HEAD"
+
+
+class DnsRecordType(StrEnum):
+    """Record type a DNS check queries — the set the agent's DNS check accepts
+    (apps/agent/app/checks/dns.py VALID_RECORD_TYPES). Uppercase, as stored."""
+
+    A = "A"
+    AAAA = "AAAA"
+    CNAME = "CNAME"
+    MX = "MX"
+    TXT = "TXT"
+    NS = "NS"
+    PTR = "PTR"
+    SOA = "SOA"
+    SRV = "SRV"
+    CAA = "CAA"
+
+
+class BulkCheckOutcome(StrEnum):
+    """Outcome of one URL in a bulk check create."""
+
+    SUCCESS = "success"
+    FAILED = "failed"
+
+
 class CheckArtifactType(StrEnum):
     """Artifact captured during synthetic check execution."""
 

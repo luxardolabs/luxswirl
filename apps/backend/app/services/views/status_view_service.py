@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.datetime_utils import utc_now
 from app.core.query_params import split_csv
+from app.models.enum_model import CheckHealthStatus, CheckType
 from app.schemas.auth_schema import AuthedUser
 from app.schemas.check_schema import DashboardCheck, DashboardCheckAgent
 from app.schemas.pagination_schema import build_pagination
@@ -35,7 +36,7 @@ class StatusRow:
         check_id: UUID,
         agent_id: UUID,
         check_name: str,
-        check_type: str,
+        check_type: CheckType,
         target: str,
         agent_name: str,
         success: bool | None,
@@ -98,6 +99,13 @@ class StatusRow:
         return "success" if self.success else "error"
 
     @property
+    def health(self) -> CheckHealthStatus:
+        """Up, down, or unknown when there is no result yet."""
+        if self.success is None:
+            return CheckHealthStatus.UNKNOWN
+        return CheckHealthStatus.UP if self.success else CheckHealthStatus.DOWN
+
+    @property
     def status_text(self) -> str:
         """Get human-readable status text."""
         if self.success is None:
@@ -143,7 +151,7 @@ class StatusRow:
                 agent_name=self.agent_name,
                 tags=self.agent_tags,
             ),
-            latest_status=self.status_text.lower(),
+            latest_status=self.health,
             latest_success=self.success,
             latency_ms=self.latency_ms,
             uptime_24h=self.uptime_24h,

@@ -31,7 +31,7 @@ from app.core.synthetic_guard import (
 from app.crud.check_crud import CheckCRUD
 from app.crud.check_result_crud import CheckResultCRUD
 from app.models.check_model import Check
-from app.models.enum_model import AssignmentMode, CheckType
+from app.models.enum_model import AssignmentMode, BulkCheckOutcome, CheckType
 from app.schemas.agent_schema import AgentCreate
 from app.schemas.check_schema import (
     AgentCheckCounts,
@@ -1128,10 +1128,10 @@ class CheckCoreService:
                 results.append(
                     {
                         "url": url,
-                        "status": "success",
+                        "status": BulkCheckOutcome.SUCCESS,
                         "check_id": check.id,
                         "display_name": display_name,
-                        "check_type": check_type,
+                        "check_type": check_data.check_type,
                         "error": None,
                     }
                 )
@@ -1147,7 +1147,7 @@ class CheckCoreService:
                 results.append(
                     {
                         "url": req.url,
-                        "status": "failed",
+                        "status": BulkCheckOutcome.FAILED,
                         "check_id": None,
                         "display_name": req.display_name,
                         "check_type": None,
