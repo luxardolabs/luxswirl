@@ -73,3 +73,35 @@ class TestEncryptedJSON:
         assert stored is not None
         assert "hunter2" not in stored
         assert col.process_result_value(stored, None) == {"api_key": "hunter2"}
+
+
+class TestEncryptedJSONReads:
+    """What an EncryptedJSON column reads back: the object or array it holds."""
+
+    def test_a_configured_key_round_trips_an_object(self, monkeypatch, key):
+        col = EncryptedJSON()
+        monkeypatch.setattr(col, "_get_fernet", lambda: Fernet(key.encode()))
+
+        stored = col.process_bind_param({"api_key": "hunter2", "ports": [22]}, None)
+        assert stored is not None and "hunter2" not in stored
+        assert col.process_result_value(stored, None) == {
+            "api_key": "hunter2",
+            "ports": [22],
+        }
+
+    def test_a_legacy_plaintext_row_still_reads(self, monkeypatch, key):
+        col = EncryptedJSON()
+        monkeypatch.setattr(col, "_get_fernet", lambda: Fernet(key.encode()))
+
+        assert col.process_result_value('{"timeout": 5}', None) == {"timeout": 5}
+
+    @pytest.mark.parametrize("raw", ["not json", "42", '"text"'])
+    def test_a_row_that_is_not_an_object_or_array_reads_as_none(
+        self, monkeypatch, key, raw
+    ):
+        # The column's contract is a JSON object or array; a bare value was
+        # previously cast and handed to callers that index it like a dict.
+        col = EncryptedJSON()
+        monkeypatch.setattr(col, "_get_fernet", lambda: Fernet(key.encode()))
+
+        assert col.process_result_value(raw, None) is None

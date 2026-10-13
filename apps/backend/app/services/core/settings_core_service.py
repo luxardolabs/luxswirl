@@ -170,11 +170,14 @@ class SettingsCoreService:
         if not setting:
             raise NotFoundException(f"Setting with key '{key}' not found")
 
-        # Reset to default
-        if isinstance(setting.default_value, dict):
-            default_value = setting.default_value.get("value")
+        # Reset to default. The column is JSON, so a row written outside the app
+        # could hold a bare value rather than the {"value": ..., "type": ...} the
+        # app writes; read it as the JSON it is before taking the value out.
+        stored_default: object = setting.default_value
+        if isinstance(stored_default, dict):
+            default_value = stored_default.get("value")
         else:
-            default_value = setting.default_value
+            default_value = stored_default
         setting.set_typed_value(default_value)
         await db.flush()
         await db.refresh(setting)
@@ -261,7 +264,9 @@ class SettingsCoreService:
         logger.debug("Settings cache cleared")
 
     @staticmethod
-    def _validate_value(value: SettingScalar, validation: dict[str, Any]) -> None:
+    def _validate_value(
+        value: SettingScalar, validation: dict[str, Any] | None
+    ) -> None:
         """
         Validate a value against validation rules.
 
@@ -273,7 +278,7 @@ class SettingsCoreService:
             ValueError: If validation fails
         """
         if not isinstance(validation, dict):
-            return  # No validation to perform
+            return  # No rules (NULL, or the JSON null literal) - nothing to check
 
         # Min/max validation
         if "min" in validation and value < validation["min"]:

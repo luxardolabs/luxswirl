@@ -45,7 +45,7 @@ def sparkline_path(minute_bars: list[dict[str, Any]]) -> str:
 
     span = peak - floor or 1
 
-    points = []
+    points: list[str] = []
     for x, bar in enumerate(bars):
         if bar.get("success") is None:
             continue
