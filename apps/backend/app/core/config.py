@@ -280,7 +280,10 @@ class SecuritySettings(BaseSettings):
 
         return v
 
-    model_config = SettingsConfigDict(env_prefix="SECURITY_")
+    # Unknown keys are ignored, like the other settings groups: an env file that still
+    # sets a retired key (SECURITY__INITIAL_ADMIN_*, replaced by INITIAL_ADMIN_*) must
+    # not stop the server. main.py logs a warning naming any retired key it finds.
+    model_config = SettingsConfigDict(env_prefix="SECURITY_", extra="ignore")
 
 
 class LoggingSettings(BaseSettings):
@@ -350,6 +353,11 @@ class Settings(BaseSettings):
         env_nested_delimiter="__",
         case_sensitive=False,
     )
+
+    @property
+    def same_origin_hosts(self) -> list[str]:
+        """The hosts a browser request may come from: ALLOWED_HOSTS plus the CORS origins'."""
+        return [*self.allowed_hosts, *self.server.cors_origin_hosts]
 
     @property
     def is_production(self) -> bool:

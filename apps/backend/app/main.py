@@ -4,6 +4,7 @@ LuxSwirl Server API - Main application entry point.
 A production-quality SaaS observability monitoring platform for all types of metrics.
 """
 
+import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -114,6 +115,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # The first admin (FLEET-ADMIN-BOOTSTRAP-STANDARD): seeded from INITIAL_ADMIN_*
     # only while the users table is empty, otherwise /setup opens behind a one-time
     # token printed in this log. It owns its own transaction.
+    retired = sorted(
+        k for k in os.environ if k.upper().startswith("SECURITY__INITIAL_ADMIN_")
+    )
+    if retired:
+        logger.warning(
+            "Retired settings are set and ignored: the first admin now comes from "
+            "INITIAL_ADMIN_USERNAME / INITIAL_ADMIN_PASSWORD, and only on an empty users "
+            "table. Remove them from the env file.",
+            extra={"retired_keys": retired},
+        )
     await bootstrap_on_startup()
 
     # Startup runs outside the request lifecycle, so worker_session() owns this
@@ -242,7 +253,7 @@ app.add_middleware(SecurityHeadersMiddleware)
 # Requests without browser headers (the agent, webhooks, the CLI) pass.
 app.add_middleware(
     SameOriginMiddleware,
-    allowed_hosts=[*settings.allowed_hosts, *settings.server.cors_origin_hosts],
+    allowed_hosts=settings.same_origin_hosts,
 )
 
 # Trusted hosts: added last, so it is the outermost layer and a forged Host is refused with

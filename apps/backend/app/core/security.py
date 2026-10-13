@@ -286,8 +286,24 @@ async def get_current_user_web(
     if not session:
         raise await _unauthenticated_web_redirect(request, db)
 
+    # A seeded or reset password must be changed before any other page
+    # (FLEET-ADMIN-BOOTSTRAP-STANDARD §5): login sends the user to the form, and
+    # every other web route sends them back to it until they change it.
+    if (
+        session.user.must_change_password
+        and request.url.path not in _PASSWORD_CHANGE_PATHS
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_307_TEMPORARY_REDIRECT,
+            headers={"Location": "/change-password?required=true"},
+        )
+
     # Session is valid — convert to the DTO here, in session scope.
     return CurrentUserDTO.model_validate(session.user)
+
+
+# The pages a user who must change their password may still reach.
+_PASSWORD_CHANGE_PATHS = frozenset({"/change-password", "/logout"})
 
 
 async def require_admin_web(

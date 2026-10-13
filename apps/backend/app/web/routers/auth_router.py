@@ -15,6 +15,7 @@ from app.core.config import settings
 from app.core.rate_limit import limiter
 from app.core.request_helpers import client_ip_from_request
 from app.core.safe_redirect import safe_redirect_target
+from app.core.same_origin import is_cross_site
 from app.db import get_db
 from app.services.views.admin_bootstrap_view_service import AdminBootstrapViewService
 from app.services.views.web_auth_view_service import WebAuthViewService
@@ -169,7 +170,16 @@ async def logout(
     user: OptionalUserWeb,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> Response:
-    """Log out (GET or POST): end the session on the server, then go to /login."""
+    """Log out (GET or POST): end the session on the server, then go to /login.
+
+    The cross-site guard covers the POST; a GET from another site (a link or an
+    image there) is refused here, so a hostile page cannot sign the visitor out.
+    """
+    headers = {key.lower(): value for key, value in request.headers.items()}
+    if is_cross_site(headers, settings.same_origin_hosts):
+        return Response(
+            "Cross-site request refused", status_code=status.HTTP_403_FORBIDDEN
+        )
     return await WebAuthViewService().logout_response(db, request, user)
 
 
