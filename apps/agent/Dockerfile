@@ -1,6 +1,24 @@
 # LuxSwirl agent (health-check runner).
 # Build context = repo root: `docker build -f apps/agent/Dockerfile .`
 # Carries Playwright/Chromium (synthetic checks) + ping/iproute (network checks).
+# ---- deps: the locked dependencies, built without shipping the tools that built them ----
+# Poetry lives in its own venv here and never reaches the runtime image; the app's
+# dependencies go into /opt/venv, created without pip, which is all production copies.
+# Shipping pip/poetry put their vendored copies of urllib3, msgpack and setuptools in the
+# image, and the release scan refuses those (FLEET-BUILD-DEPLOY-STANDARD, image leg).
+FROM python:3.14-slim AS deps
+ENV POETRY_VERSION=2.5.1 \
+    POETRY_NO_INTERACTION=1 \
+    POETRY_VIRTUALENVS_CREATE=false \
+    POETRY_CACHE_DIR='/var/cache/pypoetry'
+RUN python -m venv /opt/poetry && \
+    /opt/poetry/bin/pip install --no-cache-dir "poetry==${POETRY_VERSION}" && \
+    python -m venv --without-pip /opt/venv
+WORKDIR /app
+COPY apps/agent/pyproject.toml apps/agent/poetry.lock* /app/
+RUN VIRTUAL_ENV=/opt/venv PATH=/opt/venv/bin:$PATH \
+    /opt/poetry/bin/poetry install --only main --no-root && rm -rf $POETRY_CACHE_DIR
+
 FROM python:3.14-slim AS production
 
 WORKDIR /app
@@ -27,19 +45,16 @@ RUN apt-get update && \
         libasound2 \
         libatspi2.0-0 \
         libwayland-client0 && \
+    apt-get upgrade -y && \
     rm -rf /var/lib/apt/lists/*
 
-ENV POETRY_VERSION=2.5.1 \
-    POETRY_NO_INTERACTION=1 \
-    POETRY_VIRTUALENVS_CREATE=false \
-    POETRY_CACHE_DIR='/var/cache/pypoetry'
-
-RUN pip install --no-cache-dir "poetry==${POETRY_VERSION}"
+# The base image's pip is a build tool the app never runs, and it vendors packages
+# the scan refuses; the app's dependencies come from the deps stage's venv.
+RUN python -m pip uninstall -y pip
+COPY --from=deps /opt/venv /opt/venv
+ENV PATH=/opt/venv/bin:$PATH
 
 RUN useradd -m -u 1000 -s /bin/bash luxswirl
-
-COPY apps/agent/pyproject.toml apps/agent/poetry.lock* /app/
-RUN poetry install --only main --no-root && rm -rf $POETRY_CACHE_DIR
 
 RUN chown -R luxswirl:luxswirl /app
 USER luxswirl
