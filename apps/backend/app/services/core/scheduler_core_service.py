@@ -376,8 +376,7 @@ class SchedulerCoreService:
                 raise ValueError(f"Job {job_key} not found")
 
             job.enabled = not job.enabled
-            await db.flush()
-            await db.refresh(job)
+            job = await JobConfigurationCRUD.save_job(db, job)
 
             logger.info(
                 "Toggled job", extra={"job_key": job_key, "enabled": job.enabled}
@@ -464,8 +463,7 @@ class SchedulerCoreService:
                     job.retry_count = 0
                     job.next_run_at = self._calculate_next_run(job)
 
-                    await db.flush()
-                    await db.refresh(job)
+                    job = await JobConfigurationCRUD.save_job(db, job)
                     return SchedulerRunResult(
                         status=final_status,
                         execution_id=execution.id,
@@ -482,8 +480,8 @@ class SchedulerCoreService:
             # the worker session, so the FAILED execution record and the failed
             # count vanished and the Run button answered a 500 instead of an
             # error toast. The savepoint's rollback expired both rows.
-            await db.refresh(execution)
-            await db.refresh(job)
+            await JobExecutionCRUD.reload(db, execution)
+            await JobConfigurationCRUD.reload(db, job)
             execution.status = SchedulerExecutionStatus.FAILED
             execution.error_message = error
             execution.completed_at = datetime.now(UTC)
@@ -495,8 +493,7 @@ class SchedulerCoreService:
             logger.warning(
                 "Manual job run failed", extra={"job_key": job_key, "error": error}
             )
-            await db.flush()
-            await db.refresh(job)
+            job = await JobConfigurationCRUD.save_job(db, job)
             return SchedulerRunResult(
                 status=SchedulerExecutionStatus.FAILED,
                 execution_id=execution.id,
@@ -534,8 +531,7 @@ class SchedulerCoreService:
             if not old_enabled:
                 job.next_run_at = self._calculate_next_run(job)
 
-            await db.flush()
-            await db.refresh(job)
+            job = await JobConfigurationCRUD.save_job(db, job)
 
             logger.info("Job reset", extra={"job_key": job_key})
             return SchedulerJobResponse.model_validate(job)

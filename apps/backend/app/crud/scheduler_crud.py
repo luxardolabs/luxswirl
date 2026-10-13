@@ -15,6 +15,11 @@ class JobExecutionCRUD:
     """CRUD operations for JobExecution model."""
 
     @staticmethod
+    async def reload(db: AsyncSession, execution: JobExecution) -> None:
+        """Re-read an execution a savepoint rollback expired."""
+        await db.refresh(execution)
+
+    @staticmethod
     async def create_execution(
         db: AsyncSession,
         *,
@@ -113,6 +118,18 @@ class JobConfigurationCRUD:
         """Insert job configurations (flushed; the session owner commits)."""
         db.add_all(configs)
         await db.flush()
+
+    @staticmethod
+    async def save_job(db: AsyncSession, job: JobConfiguration) -> JobConfiguration:
+        """Write the session's pending changes; the job, refreshed."""
+        await db.flush()
+        await db.refresh(job)
+        return job
+
+    @staticmethod
+    async def reload(db: AsyncSession, job: JobConfiguration) -> None:
+        """Re-read a job a savepoint rollback expired."""
+        await db.refresh(job)
 
     @staticmethod
     async def get_by_job_key(db: AsyncSession, job_key: str) -> JobConfiguration | None:
