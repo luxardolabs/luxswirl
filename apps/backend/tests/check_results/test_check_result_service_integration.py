@@ -22,6 +22,8 @@ if _tests_root not in sys.path:
 from app.core.datetime_utils import utc_now  # noqa: E402
 from app.core.exceptions import AgentNotFoundException  # noqa: E402
 from app.crud.check_result_crud import CheckResultCRUD  # noqa: E402
+from app.models.check_result_model import CheckResult  # noqa: E402
+from app.models.enum_model import CheckErrorType  # noqa: E402
 from app.schemas.check_result_schema import (  # noqa: E402
     AgentReportRequest,
     CheckResultCreate,
@@ -73,6 +75,40 @@ class TestReportBounds:
 # ---------------------------------------------------------------------------
 # process_agent_report — happy path + edge cases
 # ---------------------------------------------------------------------------
+
+
+class TestReportWireSet:
+    """The report's check and error types are the closed sets the agent emits
+    (`fw.enum_dto_fields_enum_typed`); a value outside them is refused."""
+
+    def test_an_unknown_check_type_is_refused(self):
+        with pytest.raises(ValidationError):
+            _result_payload(check_id=uuid4(), check_type="keyword")
+
+    def test_an_unknown_error_type_is_refused(self):
+        with pytest.raises(ValidationError):
+            _result_payload(check_id=uuid4(), success=False, error_type="dns_error")
+
+    def test_every_error_type_the_agent_emits_is_accepted(self):
+        for error_type in CheckErrorType:
+            assert (
+                _result_payload(
+                    check_id=uuid4(), success=False, error_type=error_type.value
+                ).error_type
+                is error_type
+            )
+
+
+@pytest.mark.parametrize(
+    ("success", "error_type", "status"),
+    [
+        (True, None, "success"),
+        (False, None, "failure"),
+        (False, CheckErrorType.TIMEOUT_ERROR, CheckErrorType.TIMEOUT_ERROR),
+    ],
+)
+def test_a_result_reports_its_outcome_or_error_type(success, error_type, status):
+    assert CheckResult(success=success, error_type=error_type).status == status
 
 
 class TestProcessAgentReport:

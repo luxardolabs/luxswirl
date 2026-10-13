@@ -3,11 +3,12 @@ Pydantic schemas for CheckResult domain.
 """
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import Field
 
+from app.models.enum_model import CheckErrorType, CheckResultStatus, CheckType
 from app.schemas.base_schema import BaseSchema
 
 
@@ -39,12 +40,12 @@ class CheckResultCreate(CheckResultBase):
     display_name: str = Field(..., max_length=255, description="Check display name")
 
     # Check metadata
-    check_type: str = Field(..., max_length=50, description="Check type")
+    # "internal" is an older agent's self-monitoring result: refused per result
+    # (counted failed) in processing, not by failing the whole report here.
+    check_type: CheckType | Literal["internal"] = Field(..., description="Check type")
     target: str = Field(..., max_length=512, description="Check target")
 
-    error_type: str | None = Field(
-        None, max_length=100, description="Error type/category"
-    )
+    error_type: CheckErrorType | None = Field(None, description="Error type/category")
     http_status_code: int | None = Field(
         None, ge=100, le=599, description="HTTP status code"
     )
@@ -80,7 +81,7 @@ class CheckResultInDB(CheckResultBase):
     id: UUID = Field(..., description="Result UUID")
     agent_id: UUID = Field(..., description="Foreign key to agent (UUID)")
     check_id: UUID = Field(..., description="Foreign key to check (UUID)")
-    error_type: str | None = None
+    error_type: CheckErrorType | None = None
     http_status_code: int | None = None
     http_response_time_ms: float | None = None
     metrics: dict[str, Any] | None = None
@@ -89,11 +90,11 @@ class CheckResultInDB(CheckResultBase):
 class CheckResultResponse(CheckResultInDB):
     """Schema for check result API responses."""
 
-    status: str = Field(..., description="Human-readable status")
+    status: CheckResultStatus = Field(..., description="Outcome, or the error type")
     latency_seconds: float | None = Field(None, description="Latency in seconds")
     agent_name: str | None = Field(None, description="Agent identifier")
     check_name: str | None = Field(None, description="Check name")
-    check_type: str | None = Field(None, description="Check type")
+    check_type: CheckType | None = Field(None, description="Check type")
     target: str | None = Field(None, description="Check target")
 
     model_config = {
@@ -165,7 +166,7 @@ class CheckHistoryResponse(BaseSchema):
 
     agent_id: UUID = Field(..., description="Agent identifier")
     check_name: str = Field(..., description="Check name")
-    check_type: str = Field(..., description="Check type")
+    check_type: CheckType = Field(..., description="Check type")
     target: str = Field(..., description="Check target")
     start_time: datetime = Field(..., description="Start of time range")
     end_time: datetime = Field(..., description="End of time range")
@@ -249,7 +250,7 @@ class AgentReportRequest(BaseSchema):
 class AgentReportResponse(BaseSchema):
     """Schema for agent report submission response."""
 
-    status: str = Field(..., description="Report processing status")
+    status: Literal["ok"] = Field("ok", description="Report processing status")
     agent_id: UUID = Field(..., description="Agent UUID")
     received_at: datetime = Field(..., description="When report was received")
     results_processed: int = Field(..., description="Number of check results processed")
