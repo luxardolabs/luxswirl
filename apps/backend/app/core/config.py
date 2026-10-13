@@ -6,6 +6,7 @@ This replaces the old config.py with a more structured approach.
 
 from functools import lru_cache
 from typing import Literal
+from urllib.parse import urlsplit
 
 from cryptography.fernet import Fernet
 from pydantic import Field, field_validator
@@ -145,6 +146,12 @@ class ServerSettings(BaseSettings):
         env_prefix="SERVER_",
         extra="ignore",  # Ignore extra fields
     )
+
+    @property
+    def cors_origin_hosts(self) -> list[str]:
+        """The hostnames of the configured CORS origins (`*` and malformed entries name none)."""
+        hosts = (urlsplit(origin.strip()).hostname for origin in self.cors_origins)
+        return [host for host in hosts if host]
 
 
 class SecuritySettings(BaseSettings):
