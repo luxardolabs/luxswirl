@@ -28,6 +28,15 @@ async def _delete_counted(db: AsyncSession, criteria: ColumnElement[bool]) -> in
 class ArtifactCRUD:
     """Database queries for check artifacts."""
 
+    # ── Writes (flushed; the session owner commits) ───────────────────────────
+
+    @staticmethod
+    async def add_artifact(db: AsyncSession, artifact: CheckArtifact) -> CheckArtifact:
+        db.add(artifact)
+        await db.flush()
+        await db.refresh(artifact)
+        return artifact
+
     @staticmethod
     async def delete_older_than(db: AsyncSession, cutoff: datetime) -> int:
         """Delete artifacts created before cutoff. Returns how many were deleted."""

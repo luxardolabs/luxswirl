@@ -54,9 +54,7 @@ class ArtifactCoreService:
             size_bytes=len(binary_data),
             data=binary_data,
         )
-        db.add(artifact)
-        await db.flush()
-        await db.refresh(artifact)
+        artifact = await ArtifactCRUD.add_artifact(db, artifact)
         logger.info(
             "Created artifact",
             extra={

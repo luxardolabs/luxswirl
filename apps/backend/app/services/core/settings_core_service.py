@@ -138,8 +138,7 @@ class SettingsCoreService:
 
         # Update value
         setting.set_typed_value(new_value)
-        await db.flush()
-        await db.refresh(setting)
+        setting = await SettingCRUD.save_setting(db, setting)
 
         logger.info(
             "Updated setting",
@@ -179,8 +178,7 @@ class SettingsCoreService:
         else:
             default_value = stored_default
         setting.set_typed_value(default_value)
-        await db.flush()
-        await db.refresh(setting)
+        setting = await SettingCRUD.save_setting(db, setting)
 
         logger.info(
             "Reset setting to default",
@@ -243,9 +241,7 @@ class SettingsCoreService:
             validation=validation,
         )
 
-        db.add(setting)
-        await db.flush()
-        await db.refresh(setting)
+        setting = await SettingCRUD.add_setting(db, setting)
 
         logger.info(
             "Created setting",

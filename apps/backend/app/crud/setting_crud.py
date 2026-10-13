@@ -13,6 +13,22 @@ from app.models.setting_model import Setting
 class SettingCRUD:
     """Database queries for settings."""
 
+    # ── Writes (flushed; the session owner commits) ───────────────────────────
+
+    @staticmethod
+    async def add_setting(db: AsyncSession, setting: Setting) -> Setting:
+        db.add(setting)
+        await db.flush()
+        await db.refresh(setting)
+        return setting
+
+    @staticmethod
+    async def save_setting(db: AsyncSession, setting: Setting) -> Setting:
+        """Write a setting's changed value; the refreshed row."""
+        await db.flush()
+        await db.refresh(setting)
+        return setting
+
     @staticmethod
     async def get_by_key(db: AsyncSession, key: str) -> Setting | None:
         result = await db.execute(select(Setting).where(Setting.key == key))

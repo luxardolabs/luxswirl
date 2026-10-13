@@ -345,9 +345,7 @@ class AuthCoreService:
             last_activity_at=utc_now(),
         )
 
-        db.add(session)
-        await db.flush()
-        await db.refresh(session)
+        session = await SessionCRUD.add_session(db, session)
 
         logger.info(
             "Created session for user",
@@ -412,7 +410,7 @@ class AuthCoreService:
 
         if session:
             user_id = session.user_id
-            await db.delete(session)
+            await SessionCRUD.delete_session(db, session)
             logger.info(
                 "User logged out",
                 extra={
@@ -483,7 +481,7 @@ class AuthCoreService:
         session = await SessionCRUD.get_for_user(db, session_id, user_id)
 
         if session:
-            await db.delete(session)
+            await SessionCRUD.delete_session(db, session)
             logger.info(
                 "User logged out specific session",
                 extra={

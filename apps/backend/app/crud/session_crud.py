@@ -15,6 +15,19 @@ from app.models.session_model import Session
 class SessionCRUD:
     """Database queries for user sessions."""
 
+    # ── Writes (flushed; the session owner commits) ───────────────────────────
+
+    @staticmethod
+    async def add_session(db: AsyncSession, session: Session) -> Session:
+        db.add(session)
+        await db.flush()
+        await db.refresh(session)
+        return session
+
+    @staticmethod
+    async def delete_session(db: AsyncSession, session: Session) -> None:
+        await db.delete(session)
+
     @staticmethod
     async def delete_expired_before(db: AsyncSession, cutoff: datetime) -> int:
         """Delete sessions with expires_at older than cutoff; the number deleted."""
