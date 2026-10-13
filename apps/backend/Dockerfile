@@ -23,6 +23,24 @@ COPY ${APP_DIR:-.}/ .
 RUN npm run build:css
 # ---- end css stage ----
 
+# ---- deps: the locked dependencies, built without shipping the tools that built them ----
+# Poetry lives in its own venv here and never reaches the runtime image; the app's
+# dependencies go into /opt/venv, created without pip, which is all production copies.
+# Shipping pip/poetry put their vendored copies of urllib3, msgpack and setuptools in the
+# image, and the release scan refuses those (FLEET-BUILD-DEPLOY-STANDARD, image leg).
+FROM python:3.14-slim AS deps
+ENV POETRY_VERSION=2.5.1 \
+    POETRY_NO_INTERACTION=1 \
+    POETRY_VIRTUALENVS_CREATE=false \
+    POETRY_CACHE_DIR='/var/cache/pypoetry'
+RUN python -m venv /opt/poetry && \
+    /opt/poetry/bin/pip install --no-cache-dir "poetry==${POETRY_VERSION}" && \
+    python -m venv --without-pip /opt/venv
+WORKDIR /app
+COPY apps/backend/pyproject.toml apps/backend/poetry.lock* /app/
+RUN VIRTUAL_ENV=/opt/venv PATH=/opt/venv/bin:$PATH \
+    /opt/poetry/bin/poetry install --only main --no-root && rm -rf $POETRY_CACHE_DIR
+
 FROM python:3.14-slim AS production
 
 WORKDIR /app
@@ -32,20 +50,16 @@ RUN apt-get update && \
         curl \
         iputils-ping \
         iproute2 && \
+    apt-get upgrade -y && \
     rm -rf /var/lib/apt/lists/*
 
-ENV POETRY_VERSION=2.5.1 \
-    POETRY_NO_INTERACTION=1 \
-    POETRY_VIRTUALENVS_CREATE=false \
-    POETRY_CACHE_DIR='/var/cache/pypoetry'
-
-RUN pip install --no-cache-dir "poetry==${POETRY_VERSION}"
+# The base image's pip is a build tool the app never runs, and it vendors packages
+# the scan refuses; the app's dependencies come from the deps stage's venv.
+RUN python -m pip uninstall -y pip
+COPY --from=deps /opt/venv /opt/venv
+ENV PATH=/opt/venv/bin:$PATH
 
 RUN useradd -m -u 1000 -s /bin/bash luxswirl
-
-# Dependency files first for layer caching (component-local pyproject/lock).
-COPY apps/backend/pyproject.toml apps/backend/poetry.lock* /app/
-RUN poetry install --only main --no-root && rm -rf $POETRY_CACHE_DIR
 
 EXPOSE 9000
 
@@ -84,12 +98,15 @@ CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "9000"]
 
 # ---- test: the production image plus the lock's dev group ----
 # The suite runs on the same app layers production ships (FLEET-BUILD-DEPLOY-STANDARD;
-# `make test-build` builds this stage as the image block's TEST_IMAGE). Production keeps
-# poetry, so the dev group installs on top of it. Root, because poetry writes the
-# system site-packages (POETRY_VIRTUALENVS_CREATE=false).
+# `make test-build` builds this stage as the image block's TEST_IMAGE). Production carries
+# no installer, so poetry is put back from the deps stage to add the dev group to the
+# same /opt/venv. Root, because that venv belongs to root.
 FROM production AS test
 USER root
-RUN poetry install --only dev --no-root && rm -rf $POETRY_CACHE_DIR
+COPY --from=deps /opt/poetry /opt/poetry
+COPY apps/backend/pyproject.toml apps/backend/poetry.lock* /app/
+RUN VIRTUAL_ENV=/opt/venv POETRY_VIRTUALENVS_CREATE=false \
+    /opt/poetry/bin/poetry install --only dev --no-root --no-cache
 # The emitted migration-chain verifier (`make db-verify`) and the suite itself.
 COPY apps/backend/scripts /app/scripts
 COPY apps/backend/tests /app/tests
