@@ -352,16 +352,3 @@ exempt_reason = "agent ships no traces or metrics — it reports results and sel
 paths = ["apps/shared"]
 
 
-[rules.deferred]
-# LOC reductions deferred — current oversize: checks_view_service.py 1560, check_core_service.py
-# 1442, alert_core_service.py 1266, agent_core_service.py 1041 (limit 1000). LOC splits remain
-# deferred; no dedicated open ticket (originally parked under the closed LUXSWIRL-170).
-"fw.service_size" = "Service LOC splits deferred — checks_view_service 1560, check_core_service 1442, alert_core_service 1266, agent_core_service 1041 (limit 1000)"
-
-# ── luxarch 0.2.1 adoption deferrals (parent LUXSWIRL-194) ──────────────────
-# Genuine larger refactors, recorded (XFAIL) not silenced. Each drains its child ticket.
-# ~140 db.add/flush/refresh/delete sites in alert/agent core services → move into crud.
-"fw.no_session_mutation_outside_crud" = "Session-mutation ops in alert/agent core services (~140 sites); crud-confinement is a multi-day refactor of two oversize services — LUXSWIRL-195"
-# 33 enum-ish DTO fields; mostly the free-text/response-envelope ones LUXSWIRL-177 deliberately left
-# as str (typing them to the lookalike enum breaks serialization on existing data). Per-field triage.
-"fw.enum_dto_fields_enum_typed" = "33 enum-ish DTO fields need per-field triage (Enum/Literal/enum_dto_freetext); mostly carries forward LUXSWIRL-177/186 decisions — footguns must NOT be blind-typed — LUXSWIRL-197"

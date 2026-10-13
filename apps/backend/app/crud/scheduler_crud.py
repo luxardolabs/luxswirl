@@ -109,6 +109,12 @@ class JobConfigurationCRUD:
         return list(result.scalars().all())
 
     @staticmethod
+    async def add_all(db: AsyncSession, configs: list[JobConfiguration]) -> None:
+        """Insert job configurations (flushed; the session owner commits)."""
+        db.add_all(configs)
+        await db.flush()
+
+    @staticmethod
     async def get_by_job_key(db: AsyncSession, job_key: str) -> JobConfiguration | None:
         """Get job config by job_key string."""
         result = await db.execute(

@@ -91,8 +91,8 @@ class MaintenanceJobCoreService:
         return await MaintenanceJobCRUD.claim_next(db)
 
     @staticmethod
-    async def mark_running(db: AsyncSession, job_id: UUID) -> None:
-        await MaintenanceJobCRUD.mark_running(db, job_id)
+    async def mark_running(db: AsyncSession, job_id: UUID) -> MaintenanceJob | None:
+        return await MaintenanceJobCRUD.mark_running(db, job_id)
 
     @staticmethod
     async def mark_done(db: AsyncSession, job_id: UUID) -> None:
