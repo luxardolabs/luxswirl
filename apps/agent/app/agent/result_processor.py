@@ -17,6 +17,7 @@ from typing import Any
 from shared.logger import get_logger
 
 from app.agent.http_client import server_client
+from app.agent.reporter import Reporter
 
 logger = get_logger("luxswirl.agent.result_processor")
 
@@ -26,9 +27,9 @@ class ResultProcessor:
 
     def __init__(
         self,
-        config: dict,
-        reporter,
-        result_queue: asyncio.Queue,
+        config: dict[str, Any],
+        reporter: Reporter,
+        result_queue: asyncio.Queue[dict[str, Any]],
         result_queue_timeout: float = 1.0,
         result_processor_retry_delay: float = 1.0,
     ):
@@ -70,7 +71,7 @@ class ResultProcessor:
                         )
                     except TimeoutError:
                         # No results available, check if we should continue
-                        if not self.running:
+                        if self._stopped():
                             break
 
                         # Periodically log stats (DEBUG — pure heartbeat noise at INFO)
@@ -126,7 +127,7 @@ class ResultProcessor:
                     break
                 except Exception:
                     self.logger.exception("Error processing result")
-                    if not self.running:
+                    if self._stopped():
                         break
                     await asyncio.sleep(self.result_processor_retry_delay)
         # swallowed-exceptions: one malformed result must not stop the processor draining the queue
@@ -258,3 +259,13 @@ class ResultProcessor:
     def stop(self) -> None:
         """Stop the result processor."""
         self.running = False
+
+    def _stopped(self) -> bool:
+        """True once stop() has run.
+
+        Re-read after every await: stop() runs on another task, so the flag can
+        change while this one is suspended. A method call, not the bare attribute,
+        so a type checker does not carry a `while self.running` narrowing across
+        the await and call the exit branch unreachable.
+        """
+        return not self.running
