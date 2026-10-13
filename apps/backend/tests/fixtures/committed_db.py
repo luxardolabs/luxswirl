@@ -42,6 +42,7 @@ _WORKER_TABLES = (
     "alerts",
     "notification_providers",
     "sessions",
+    "users",
     "checks",
     "agents",
 )
