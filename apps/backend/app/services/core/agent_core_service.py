@@ -372,9 +372,7 @@ class AgentCoreService:
             last_seen=utc_now(),
         )
 
-        db.add(agent)
-        await db.flush()
-        await db.refresh(agent)
+        agent = await AgentCRUD.add_agent(db, agent)
 
         logger.info(
             "Created agent",
@@ -418,9 +416,7 @@ class AgentCoreService:
             last_seen=utc_now(),
         )
 
-        db.add(agent)
-        await db.flush()
-        await db.refresh(agent)
+        agent = await AgentCRUD.add_agent(db, agent)
 
         logger.info(
             "Agent registered",
@@ -461,8 +457,7 @@ class AgentCoreService:
 
         agent.updated_at = utc_now()
 
-        await db.flush()
-        await db.refresh(agent)
+        agent = await AgentCRUD.save_and_reload_agent(db, agent)
 
         logger.info(
             "Updated agent",
@@ -499,8 +494,7 @@ class AgentCoreService:
             if agent_run_id:
                 agent.agent_run_id = agent_run_id
 
-        await db.flush()
-        await db.refresh(agent)
+        agent = await AgentCRUD.save_and_reload_agent(db, agent)
 
         return agent
 
@@ -712,7 +706,7 @@ class AgentCoreService:
         agent.fd_usage_percent = heartbeat.fd_usage_percent
         agent.subprocess_count = heartbeat.subprocess_count
 
-        await db.flush()
+        await AgentCRUD.save_agent(db, agent)
 
         # Create AgentMetric record for time-series storage
         metric = AgentMetric(
@@ -735,8 +729,7 @@ class AgentCoreService:
             fd_usage_percent=heartbeat.fd_usage_percent,
             subprocess_count=heartbeat.subprocess_count,
         )
-        db.add(metric)
-        await db.flush()
+        await AgentCRUD.add_metric(db, metric)
 
         # Update Prometheus metrics in-memory (instant update on ingestion)
 
@@ -830,8 +823,7 @@ class AgentCoreService:
         """
         agent = await AgentCoreService.get_agent_by_id(db, agent_id)
 
-        await db.delete(agent)
-        await db.flush()
+        await AgentCRUD.delete_agent(db, agent)
 
         logger.info(
             "Deleted agent",
@@ -906,7 +898,7 @@ class AgentCoreService:
         agent.api_key_created_at = utc_now()
         agent.api_key_last_used = None  # Reset last used
 
-        await db.flush()
+        await AgentCRUD.save_agent(db, agent)
         logger.info(
             "Regenerated API key for agent",
             extra={"agent_id": str(agent_id)},
@@ -938,7 +930,7 @@ class AgentCoreService:
         agent.api_key_created_at = None
         agent.api_key_last_used = None
 
-        await db.flush()
+        await AgentCRUD.save_agent(db, agent)
         logger.info(
             "Revoked API key for agent",
             extra={"agent_id": str(agent_id)},
@@ -985,7 +977,7 @@ class AgentCoreService:
         agent.approved_at = utc_now()
         agent.status_changed_at = utc_now()
 
-        await db.flush()
+        await AgentCRUD.save_agent(db, agent)
         logger.info("Approved agent", extra={"agent_id": str(agent_id)})
 
         return AgentOption.model_validate(agent), api_key
@@ -1014,7 +1006,7 @@ class AgentCoreService:
         agent.status_reason = reason
         agent.status_changed_at = utc_now()
 
-        await db.flush()
+        await AgentCRUD.save_agent(db, agent)
         logger.info("Rejected agent", extra={"agent_id": str(agent_id)})
 
         return AgentOption.model_validate(agent)
@@ -1043,7 +1035,7 @@ class AgentCoreService:
         agent.status_reason = reason
         agent.status_changed_at = utc_now()
 
-        await db.flush()
+        await AgentCRUD.save_agent(db, agent)
         logger.info("Paused agent", extra={"agent_id": str(agent_id)})
 
         return AgentOption.model_validate(agent)
@@ -1069,7 +1061,7 @@ class AgentCoreService:
         agent.status_reason = None
         agent.status_changed_at = utc_now()
 
-        await db.flush()
+        await AgentCRUD.save_agent(db, agent)
         logger.info("Resumed agent", extra={"agent_id": str(agent_id)})
 
         return AgentOption.model_validate(agent)
@@ -1098,7 +1090,7 @@ class AgentCoreService:
         agent.status_reason = reason
         agent.status_changed_at = utc_now()
 
-        await db.flush()
+        await AgentCRUD.save_agent(db, agent)
         logger.info("Disabled agent", extra={"agent_id": str(agent_id)})
 
         return AgentOption.model_validate(agent)
@@ -1124,7 +1116,7 @@ class AgentCoreService:
         agent.status_reason = None
         agent.status_changed_at = utc_now()
 
-        await db.flush()
+        await AgentCRUD.save_agent(db, agent)
         logger.info("Enabled agent", extra={"agent_id": str(agent_id)})
 
         return AgentOption.model_validate(agent)
@@ -1148,7 +1140,7 @@ class AgentCoreService:
 
         agent.checks_updated_at = utc_now()
 
-        await db.flush()
+        await AgentCRUD.save_agent(db, agent)
         logger.info(
             "Forced config reload for agent",
             extra={"agent_id": str(agent_id)},

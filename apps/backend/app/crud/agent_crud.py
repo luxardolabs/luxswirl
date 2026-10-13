@@ -19,6 +19,37 @@ from app.models.agent_model import Agent
 class AgentCRUD:
     """Database queries for agents."""
 
+    # ── Writes (flushed; the session owner commits) ───────────────────────────
+
+    @staticmethod
+    async def add_agent(db: AsyncSession, agent: Agent) -> Agent:
+        db.add(agent)
+        await db.flush()
+        await db.refresh(agent)
+        return agent
+
+    @staticmethod
+    async def save_agent(db: AsyncSession, agent: Agent) -> None:
+        """Write an agent's changed fields."""
+        await db.flush()
+
+    @staticmethod
+    async def save_and_reload_agent(db: AsyncSession, agent: Agent) -> Agent:
+        """Write an agent's changed fields; the refreshed row."""
+        await db.flush()
+        await db.refresh(agent)
+        return agent
+
+    @staticmethod
+    async def delete_agent(db: AsyncSession, agent: Agent) -> None:
+        await db.delete(agent)
+        await db.flush()
+
+    @staticmethod
+    async def add_metric(db: AsyncSession, metric: AgentMetric) -> None:
+        db.add(metric)
+        await db.flush()
+
     @staticmethod
     async def get_stale_agent_names(db: AsyncSession, cutoff: datetime) -> list[str]:
         """Return names of agents whose last_seen is older than cutoff."""
