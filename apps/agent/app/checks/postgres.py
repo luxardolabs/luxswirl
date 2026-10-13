@@ -47,6 +47,12 @@ class PostgreSQLCheck(BaseCheck):
 
         # Validate connection string format
         connection_string = config.get("connection_string") or config.get("target")
+        if not isinstance(connection_string, str):
+            raise ValueError(
+                f"PostgreSQL connection string must be text, not "
+                f"{type(connection_string).__name__}. "
+                "Expected format: postgres://username:password@host:port/database"
+            )
         try:
             parsed = urlparse(connection_string)
             if parsed.scheme not in ["postgres", "postgresql"]:
