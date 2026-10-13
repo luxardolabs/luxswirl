@@ -9,7 +9,7 @@ origin. It is now only the types the agent's synthetic check produces.
 from __future__ import annotations
 
 import base64
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import uuid4
 
 import pytest
@@ -70,7 +70,7 @@ def test_an_unknown_artifact_type_is_refused() -> None:
         ("GET", SettingValueType.STRING),
         ([22, 80], SettingValueType.LIST),
         ({"a": 1}, SettingValueType.DICT),
-        (datetime(2026, 1, 1), SettingValueType.STRING),
+        (datetime(2026, 1, 1, tzinfo=UTC), SettingValueType.STRING),
     ],
 )
 def test_a_setting_value_is_tagged_with_its_type(value, tag) -> None:
