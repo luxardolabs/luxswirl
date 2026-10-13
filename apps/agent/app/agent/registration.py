@@ -5,6 +5,7 @@ Handles agent registration with the server and API key recovery.
 """
 
 import os
+from typing import Any
 
 import httpx
 from shared.logger import get_logger
@@ -19,7 +20,7 @@ logger = get_logger("luxswirl.agent.registration")
 class AgentRegistration:
     """Handles agent registration and key management."""
 
-    def __init__(self, config: dict, credentials: AgentCredentials):
+    def __init__(self, config: dict[str, Any], credentials: AgentCredentials):
         """
         Initialize registration manager.
 

@@ -1,8 +1,9 @@
 import json
 import sys
+from typing import Any
 
 
-def generate_ping_tasks(hosts):
+def generate_ping_tasks(hosts: list[str]) -> list[dict[str, Any]]:
     tasks = []
     for host in hosts:
         tasks.append(

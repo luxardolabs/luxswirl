@@ -95,7 +95,7 @@ class DangerousOperationVisitor(ast.NodeVisitor):
         ]
     )
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize visitor."""
         self.errors: list[str] = []
         self.warnings: list[str] = []

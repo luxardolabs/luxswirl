@@ -13,7 +13,8 @@ doesn't sit queued forever.
 import asyncio
 import contextlib
 from collections.abc import Awaitable, Callable
-from datetime import timedelta
+from datetime import datetime, timedelta
+from uuid import UUID
 
 from shared.logger import get_logger
 from sqlalchemy import text
@@ -37,7 +38,7 @@ def register_handler(kind: str, handler: MaintenanceJobHandler) -> None:
     HANDLERS[kind] = handler
 
 
-_worker_task: asyncio.Task | None = None
+_worker_task: asyncio.Task[None] | None = None
 _POLL_IDLE_SECONDS = 2.0
 _POLL_ERROR_BACKOFF_SECONDS = 5.0
 _TERMINAL_RETENTION = timedelta(hours=6)
@@ -77,7 +78,7 @@ async def _run_handler(job: MaintenanceJob) -> None:
         await handler(db, job)
 
 
-async def _finalize(job_id, success: bool, error: str | None = None) -> None:
+async def _finalize(job_id: UUID, success: bool, error: str | None = None) -> None:
     async with worker_session() as db:
         if success:
             await MaintenanceJobCoreService.mark_done(db, job_id)
@@ -122,7 +123,7 @@ async def process_next_job() -> bool:
     return True
 
 
-async def _periodic_cleanup_if_due(last_cleanup_at: list) -> None:
+async def _periodic_cleanup_if_due(last_cleanup_at: list[datetime]) -> None:
     """Drop terminal rows older than _TERMINAL_RETENTION once per hour."""
     now = utc_now()
     if last_cleanup_at and (now - last_cleanup_at[0]) < timedelta(hours=1):
@@ -142,7 +143,7 @@ async def _periodic_cleanup_if_due(last_cleanup_at: list) -> None:
 async def _maintenance_worker_loop() -> None:
     """Main worker loop. Runs until cancelled."""
     logger.info("Maintenance worker started")
-    last_cleanup_at: list = []
+    last_cleanup_at: list[datetime] = []
 
     while True:
         try:

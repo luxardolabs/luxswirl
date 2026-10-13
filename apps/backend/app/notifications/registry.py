@@ -2,6 +2,8 @@
 Notification Provider Registry - Auto-discovery and registration of providers.
 """
 
+from typing import Any
+
 from shared.logger import get_logger
 
 from app.notifications.providers.base import BaseNotificationProvider
@@ -86,7 +88,7 @@ class NotificationRegistry:
         return list(cls._providers.keys())
 
     @classmethod
-    def get_provider_schemas(cls) -> dict[str, dict]:
+    def get_provider_schemas(cls) -> dict[str, dict[str, Any]]:
         """
         Get configuration schemas for all registered providers.
 
@@ -99,7 +101,7 @@ class NotificationRegistry:
         }
 
     @classmethod
-    def get_provider_info(cls) -> list[dict]:
+    def get_provider_info(cls) -> list[dict[str, Any]]:
         """
         Get information about all registered providers.
 
@@ -120,7 +122,7 @@ class NotificationRegistry:
     def create_provider(
         cls,
         provider_type: str,
-        config: dict,
+        config: dict[str, Any],
     ) -> BaseNotificationProvider:
         """
         Create a provider instance from configuration.

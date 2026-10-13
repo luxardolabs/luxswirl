@@ -6,6 +6,7 @@ direct database access in this service.
 """
 
 from datetime import timedelta
+from typing import Any
 
 from shared.logger import get_logger
 
@@ -20,7 +21,7 @@ from app.db import worker_session
 logger = get_logger("luxswirl.scheduler.cleanup")
 
 
-async def cleanup_old_job_executions(days_to_keep: int = 90) -> dict:
+async def cleanup_old_job_executions(days_to_keep: int = 90) -> dict[str, Any]:
     """Delete job execution records older than N days."""
     async with worker_session() as db:
         cutoff = utc_now() - timedelta(days=days_to_keep)
@@ -32,7 +33,7 @@ async def cleanup_old_job_executions(days_to_keep: int = 90) -> dict:
         return {"deleted": deleted, "days_to_keep": days_to_keep}
 
 
-async def cleanup_notification_logs(days_to_keep: int = 30) -> dict:
+async def cleanup_notification_logs(days_to_keep: int = 30) -> dict[str, Any]:
     """Delete notification log records older than N days."""
     async with worker_session() as db:
         cutoff = utc_now() - timedelta(days=days_to_keep)
@@ -44,7 +45,7 @@ async def cleanup_notification_logs(days_to_keep: int = 30) -> dict:
         return {"deleted": deleted, "days_to_keep": days_to_keep}
 
 
-async def cleanup_stale_agents(inactive_days: int = 30) -> dict:
+async def cleanup_stale_agents(inactive_days: int = 30) -> dict[str, Any]:
     """Remove agents that haven't reported in N days (cascades to checks/results)."""
     async with worker_session() as db:
         cutoff = utc_now() - timedelta(days=inactive_days)
@@ -68,7 +69,7 @@ async def cleanup_stale_agents(inactive_days: int = 30) -> dict:
         }
 
 
-async def cleanup_check_artifacts(days_to_keep: int = 30) -> dict:
+async def cleanup_check_artifacts(days_to_keep: int = 30) -> dict[str, Any]:
     """Delete check artifacts older than N days."""
     async with worker_session() as db:
         cutoff = utc_now() - timedelta(days=days_to_keep)
@@ -80,7 +81,7 @@ async def cleanup_check_artifacts(days_to_keep: int = 30) -> dict:
         return {"deleted": deleted, "days_to_keep": days_to_keep}
 
 
-async def cleanup_old_sessions(days_to_keep: int = 7) -> dict:
+async def cleanup_old_sessions(days_to_keep: int = 7) -> dict[str, Any]:
     """Delete expired user sessions older than N days."""
     async with worker_session() as db:
         cutoff = utc_now() - timedelta(days=days_to_keep)

@@ -10,6 +10,7 @@ Handles the execution of individual checks including:
 
 import asyncio
 import time
+from typing import Any
 
 from shared.logger import get_logger
 from uuid_extensions import uuid7
@@ -24,12 +25,12 @@ class CheckExecutor:
 
     def __init__(
         self,
-        config: dict,
-        metrics: dict,
-        check_stats: dict,
+        config: dict[str, Any],
+        metrics: dict[str, Any],
+        check_stats: dict[str, Any],
         semaphore: asyncio.Semaphore,
-        result_queue: asyncio.Queue,
-        last_state: dict,
+        result_queue: asyncio.Queue[dict[str, Any]],
+        last_state: dict[str, Any],
         run_id: str,
     ):
         """

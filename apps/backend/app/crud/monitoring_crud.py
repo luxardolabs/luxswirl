@@ -6,6 +6,8 @@ scheduler. Kept in crud/ so monitoring_core_service stays raw-SQL-free; the
 service owns the error handling + metric-dict assembly, this layer owns the SQL.
 """
 
+from typing import Any
+
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -30,7 +32,9 @@ class MonitoringCRUD:
         return result.scalar()
 
     @staticmethod
-    async def get_top_table_sizes(db: AsyncSession, limit: int = 10) -> list[tuple]:
+    async def get_top_table_sizes(
+        db: AsyncSession, limit: int = 10
+    ) -> list[tuple[Any, ...]]:
         """Largest user tables as (table_name, total_size_bytes), biggest first."""
         result = await db.execute(
             text(
@@ -47,7 +51,7 @@ class MonitoringCRUD:
         return [tuple(row) for row in result.all()]
 
     @staticmethod
-    async def get_hypertable_chunk_stats(db: AsyncSession) -> list[tuple]:
+    async def get_hypertable_chunk_stats(db: AsyncSession) -> list[tuple[Any, ...]]:
         """Per-hypertable (name, total_chunks, compressed_chunks, uncompressed_span)."""
         result = await db.execute(
             text(

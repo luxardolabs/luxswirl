@@ -1,7 +1,8 @@
 import json
+from typing import Any
 
 
-def generate_hostnames(start, end, domain):
+def generate_hostnames(start: int, end: int, domain: str) -> list[str]:
     hosts = []
     for i in range(start, end + 1):
         padded = str(i).zfill(2)
@@ -9,7 +10,7 @@ def generate_hostnames(start, end, domain):
     return hosts
 
 
-def generate_ping_tasks(hosts):
+def generate_ping_tasks(hosts: list[str]) -> list[dict[str, Any]]:
     tasks = []
     for host in hosts:
         name = host.split(".")[0]  # just 'esp01', 'esp02', etc.
