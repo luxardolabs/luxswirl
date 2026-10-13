@@ -40,7 +40,7 @@ The LuxSwirl server is a FastAPI-based REST API server that receives check resul
 
 ### 1. Create compose.yml
 
-The published server image is `ghcr.io/luxardolabs/luxswirl-backend` (tagged `:latest` / `:<version>`). To build it from source instead, run `make build` at the repo root. Compose v2 does not use a `version:` key.
+The published server image is `ghcr.io/luxardolabs/luxswirl-backend` (tagged `:<version>`). To build it from source instead, run `make build` at the repo root. Compose v2 does not use a `version:` key.
 
 ```yaml
 services:
@@ -73,7 +73,7 @@ services:
       retries: 5
 
   luxswirl_server:
-    image: ghcr.io/luxardolabs/luxswirl-backend:latest
+    image: ghcr.io/luxardolabs/luxswirl-backend:2026.09.0
     container_name: luxswirl_server
     restart: unless-stopped
 
@@ -274,7 +274,7 @@ services:
           memory: 512M
 
   luxswirl_server:
-    image: ghcr.io/luxardolabs/luxswirl-backend:latest
+    image: ghcr.io/luxardolabs/luxswirl-backend:2026.09.0
     container_name: luxswirl_server
     restart: unless-stopped
 

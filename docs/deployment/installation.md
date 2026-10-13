@@ -274,7 +274,7 @@ The repo ships ONE `compose.yml`; each environment is a `.env.<env>` file (`--en
 - `ghcr.io/luxardolabs/luxswirl-backend` — server (`uvicorn app.main:app`)
 - `ghcr.io/luxardolabs/luxswirl-agent` — agent (`python -m app.main`)
 
-Both are tagged `:latest` and `:<version>`. If you prefer not to pull, build both locally with the Makefile: `make build`.
+Each release is tagged `:<version>`. If you prefer not to pull, build both locally with the Makefile: `make build`.
 
 A trimmed view of the base `compose.yml` (no obsolete `version:` key — Compose v2 doesn't use one):
 
@@ -303,7 +303,7 @@ services:
       retries: 5
 
   luxswirl_server:
-    image: ghcr.io/luxardolabs/luxswirl-backend:latest
+    image: ghcr.io/luxardolabs/luxswirl-backend:2026.09.0
     container_name: luxswirl_server
     restart: unless-stopped
     # Runs DB migrations on boot, then starts uvicorn.
@@ -322,7 +322,7 @@ services:
       - ./data/server:/app/data  # Persists auto-generated secret + encryption key
 
   luxswirl_agent:
-    image: ghcr.io/luxardolabs/luxswirl-agent:latest
+    image: ghcr.io/luxardolabs/luxswirl-agent:2026.09.0
     container_name: luxswirl_agent
     hostname: luxswirl_agent  # Keep stable: used in credential encryption
     command: ["python", "-m", "app.main"]
@@ -767,7 +767,7 @@ services:
     restart: unless-stopped
 
   luxswirl_server:
-    image: ghcr.io/luxardolabs/luxswirl-backend:latest
+    image: ghcr.io/luxardolabs/luxswirl-backend:2026.09.0
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.luxswirl.rule=Host(`luxswirl.example.com`)"

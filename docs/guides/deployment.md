@@ -18,7 +18,7 @@ LuxSwirl ships one compose file. Environments differ by the environment file the
 docker compose --env-file .env.dev up -d     # or: make dev-up
 
 # What .env.dev sets:
-# - TAG=dev — runs the baked :dev images (build them first: make build-dev)
+# - SERVER_IMAGE / AGENT_IMAGE and TAG=sha-<commit> — the published commit (make dev-deploy writes TAG)
 # - DB_BIND=0.0.0.0 — PostgreSQL reachable on port 5432 for direct access
 # - LOG__LEVEL=DEBUG
 # - CORS and the TLS certificate directory for your dev domain

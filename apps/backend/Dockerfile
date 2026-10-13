@@ -23,7 +23,7 @@ COPY ${APP_DIR:-.}/ .
 RUN npm run build:css
 # ---- end css stage ----
 
-FROM python:3.14-slim
+FROM python:3.14-slim AS production
 
 WORKDIR /app
 
@@ -81,3 +81,21 @@ COPY --chown=luxswirl:luxswirl apps/shared /app/shared
 ENV PYTHONPATH=/app
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "9000"]
+
+# ---- test: the production image plus the lock's dev group ----
+# The suite runs on the same app layers production ships (FLEET-BUILD-DEPLOY-STANDARD;
+# `make test-build` builds this stage as the image block's TEST_IMAGE). Production keeps
+# poetry, so the dev group installs on top of it. Root, because poetry writes the
+# system site-packages (POETRY_VIRTUALENVS_CREATE=false).
+FROM production AS test
+USER root
+RUN poetry install --only dev --no-root && rm -rf $POETRY_CACHE_DIR
+# The emitted migration-chain verifier (`make db-verify`) and the suite itself.
+COPY apps/backend/scripts /app/scripts
+COPY apps/backend/tests /app/tests
+# /app resolves `app.*` and `shared.*`; /app/tests resolves `fixtures.*`. The canonical
+# pytest config carries no `pythonpath`, so the path is the image's job.
+ENV PYTHONPATH=/app:/app/tests
+# Never a bare `pytest`: the canonical config is emitted per run by `make test` and
+# mounted here; without it pytest exits rather than running unconfigured.
+CMD ["sh", "-c", "exec pytest -c /app/.luxlint.pytest.ini"]

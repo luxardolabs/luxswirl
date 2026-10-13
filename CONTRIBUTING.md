@@ -38,7 +38,7 @@ make dev-shell   # bash into the server container
 make dev-down    # stop (DB volume preserved)
 ```
 
-Dev runs **baked images** (no source mounts), so re-run `make dev-up` after code changes to rebuild and recreate. Other handy targets: `make dev-restart`, `make dev-rebuild`, `make dev-agent-shell`, `make status`, `make logs`.
+Dev runs **baked images** (no source mounts), so a code change reaches the stack through `make dev-deploy` (commit first: it publishes the commit, pins `.env.dev` to it and restarts). `make dev-up` only starts what `.env.dev` pins. Other handy targets: `make dev-restart`, `make dev-agent-shell`, `make status`, `make logs`.
 
 **Option 2: Run a component directly** (without the full stack) — from its dir, with Poetry on the host:
 

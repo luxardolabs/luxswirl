@@ -217,10 +217,10 @@ services:
 
   tests:
     profiles: ["test"]
-    # Compose never builds: the Makefile bakes `luxswirl:test` fresh from on-disk
-    # source on every `make test` (test-build → Dockerfile.test, self-contained —
-    # no :dev base, no registry dependency).
-    image: luxswirl:test
+    # Compose never builds: `make test-build` bakes `luxswirl-backend:test` fresh from
+    # on-disk source on every `make test` (the backend Dockerfile's `test` stage: the
+    # production image plus the dev group; no registry dependency).
+    image: luxswirl-backend:test
     container_name: luxswirl_tests
     depends_on:
       timescaledb-test:

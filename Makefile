@@ -10,41 +10,30 @@
 
 VERSION   := $(shell cat VERSION 2>/dev/null || git -c safe.directory=$(CURDIR) describe --tags --always 2>/dev/null || echo "0.0.0-dev")
 TIMESTAMP := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
-COMMIT    := $(shell git -c safe.directory=$(CURDIR) rev-parse --short HEAD 2>/dev/null || echo 'local')
+COMMIT    := $(shell git rev-parse --short=12 HEAD 2>/dev/null || echo unknown)
 
-# ── Images: the NAME declares what the image IS ──────────────────────────────
-# Two axes, both readable from the name alone (repo.image_name_declares_provenance;
-# see `luxarch --doc FLEET-BUILD-DEPLOY-STANDARD`):
-#
-#   Registry-qualified  ->  DEPLOY artifact  ->  built AND pushed
-#   Bare (no registry)  ->  LOCAL artifact   ->  built from source, NEVER pushed
-#
-#   Immutable tag (:$(VERSION), :sha-…)  ->  a stack MAY pin it
-#   Moving tag (:dev, :latest)           ->  a human alias; nothing pins it
-#
-# This repo publishes to a PUBLIC registry, so a local build must not wear a
-# registry name: `$(REGISTRY)/…:dev` promised a ghcr artifact that was never
-# pushed, and a `docker image prune` would have taken the dev stack down with
-# nothing to re-pull. Local builds are bare, and they carry the commit sha so a
-# stack pins something that cannot change under it.
-REGISTRY        ?= ghcr.io
-BACKEND_NAME    := luxardolabs/luxswirl-backend
-AGENT_NAME      := luxardolabs/luxswirl-agent
-# DEPLOY names — only build-backend/build-agent produce these, and both --push.
-BACKEND_IMAGE   := $(REGISTRY)/$(BACKEND_NAME)
-AGENT_IMAGE     := $(REGISTRY)/$(AGENT_NAME)
-# LOCAL names — bare, so they cannot be pushed by accident or mistaken for a
-# deployable. `$(notdir …)` strips the org: luxswirl-backend / luxswirl-agent.
-BACKEND_LOCAL   := $(notdir $(BACKEND_NAME))
-AGENT_LOCAL     := $(notdir $(AGENT_NAME))
-# The immutable tag every local build wears. The sha is already computed above
-# for BUILD_COMMIT, so this costs nothing and buys a deployment record: you can
-# always say which bits a stack is running, and roll back to them.
-SHA_TAG         := sha-$(COMMIT)
 
 # Site config (gitignored) is read BEFORE the guard pins below, so it can set the
 # registry host but never shadow a committed pin (repo.guard_pins_not_overridable).
 -include Makefile.local
+
+# ── Image block settings (luxarch --emit image-block v16, pasted below) ──────────
+# Two images, one VERSION, one release (`IMAGES`). Every commit's build goes to the
+# PRIVATE registry as :sha-<commit> (the host the guards come from, set in the
+# gitignored Makefile.local, so it never appears in this public repo); a cut release
+# goes to ghcr.io, which prod and the public pull from. Both images build from the
+# repo root, which vendors apps/shared into each.
+REGISTRY              ?= $(LUXARCH_REGISTRY)
+RELEASE_REGISTRY      ?= ghcr.io
+IMAGES                ?= backend agent
+backend_IMAGE_NAME    ?= luxardolabs/luxswirl-backend
+backend_DOCKERFILE    ?= apps/backend/Dockerfile
+backend_BUILD_CONTEXT ?= .
+agent_IMAGE_NAME      ?= luxardolabs/luxswirl-agent
+agent_DOCKERFILE      ?= apps/agent/Dockerfile
+agent_BUILD_CONTEXT   ?= .
+# The deploy waits this long for every HEALTHCHECK (the server runs migrations first).
+DEV_WAIT_TIMEOUT      ?= 180
 
 # Architecture guard (luxarch) — internal tooling on a private registry (not on ghcr,
 # not part of this repo's public surface). Supply the registry host out-of-tree via
@@ -66,8 +55,8 @@ LUXLINT_IMAGE    ?= $(LUXARCH_REGISTRY)/luxardolabs/luxlint:$(LUXLINT_VERSION)
 # The gitleaks asset reads the luxlint ref as $(LUXLINT).
 LUXLINT          = $(LUXLINT_IMAGE)
 
-# Multi-arch registry pushes (amd64 + arm64). Local build / build-dev stay single-
-# arch — you can't --load a multi-platform image. Override with e.g. PLATFORMS=linux/amd64.
+# Multi-arch pushes (amd64 + arm64): an OSS image others run on arm64. The block builds every
+# platform under a candidate tag, scans each, then promotes it. PLATFORMS= builds one arch.
 PLATFORMS       ?= linux/amd64,linux/arm64
 # ONE shared fleet builder — never a per-project `<repo>-builder`. Ten per-project builders = ten
 # un-shared caches (no base-layer/pip/npm dedup) = tens of GB idle; the shared builder dedups and
@@ -123,9 +112,9 @@ NC := \033[0m
 BOLD := \033[1m
 
 .PHONY: help version \
-        build build-backend build-agent build-dev push release \
+        build publish-sha release gh-release \
         backend-image agent-image \
-        dev dev-up dev-down dev-logs dev-shell dev-agent-shell dev-restart dev-rebuild \
+        dev dev-up dev-down dev-logs dev-shell dev-agent-shell dev-restart dev-deploy dev-pin sandbox-pin \
         prod prod-up prod-down prod-logs \
         db-shell db-backup \
         ps logs clean clean-all docker-clean \
@@ -151,8 +140,8 @@ version: ## Show version / build info
 	@echo "Version:    $(VERSION)"
 	@echo "Commit:     $(COMMIT)"
 	@echo "Timestamp:  $(TIMESTAMP)"
-	@echo "Backend:    $(BACKEND_IMAGE):$(VERSION)"
-	@echo "Agent:      $(AGENT_IMAGE):$(VERSION)"
+	@echo "Backend:    $(call img_version,backend)"
+	@echo "Agent:      $(call img_version,agent)"
 
 # =============================================================================
 # Docker — Build & Registry (one baked image per component; compose pulls)
@@ -160,13 +149,13 @@ version: ## Show version / build info
 
 ##@ Docker — Build & Registry
 
-backend-image: ## Build the backend LOCALLY as $(BACKEND_LOCAL):$(VERSION) (bare name — never pushed)
-	docker build $(NO_CACHE_FLAG) -f apps/backend/Dockerfile $(BUILD_ARGS) \
-		-t $(BACKEND_LOCAL):$(VERSION) .
+backend-image: ## Build the backend LOCALLY as luxswirl-backend:$(VERSION) (bare name — never pushed)
+	docker build $(NO_CACHE_FLAG) --target production -f $(backend_DOCKERFILE) $(BUILD_ARGS) \
+		-t $(notdir $(backend_IMAGE_NAME)):$(VERSION) .
 
-agent-image: ## Build the agent LOCALLY as $(AGENT_LOCAL):$(VERSION) (bare name — never pushed)
-	docker build $(NO_CACHE_FLAG) -f apps/agent/Dockerfile $(BUILD_ARGS) \
-		-t $(AGENT_LOCAL):$(VERSION) .
+agent-image: ## Build the agent LOCALLY as luxswirl-agent:$(VERSION) (bare name — never pushed)
+	docker build $(NO_CACHE_FLAG) --target production -f $(agent_DOCKERFILE) $(BUILD_ARGS) \
+		-t $(notdir $(agent_IMAGE_NAME)):$(VERSION) .
 
 build: backend-image agent-image ## Build both LOCALLY as :$(VERSION) (bare names, no push)
 
@@ -188,137 +177,588 @@ buildx-setup:
 	fi
 
 
-# A release push is gated three ways, each BEFORE anything reaches the registry under a
-# release name (repo.deploy_tag_is_immutable, repo.release_scans_candidate):
-#   1. a dirty tree is refused — the tag names HEAD but the build reads the working dir;
-#   2. an already-released :$(VERSION) is refused — prod pins it, so it is never re-pushed;
-#      fails CLOSED: only the registry's own "not found" reads as unreleased;
-#   3. the exact bits are scanned. Multi-arch can't --load, so the build pushes a
-#      `candidate-<commit>` tag nothing pins, that tag is pulled + saved + scanned by luxaudit
-#      (--image-archive), and only then are the release tags created FROM it, server-side.
-define refuse_dirty_tree
-	@if [ -n "$$(git status --porcelain 2>/dev/null)" ]; then \
-	  echo "REFUSING: the working tree is dirty, so $(VERSION) / $(COMMIT) would not describe these bits:"; \
-	  git status --short | sed 's/^/    /'; exit 1; \
-	fi
-endef
-
-# $(call refuse_released,<image base>)
-define refuse_released
-	@if docker manifest inspect $(1):$(VERSION) >/dev/null 2>&1; then \
-	  echo "REFUSING: $(1):$(VERSION) is already RELEASED. A released version is immutable: bump VERSION."; exit 1; \
-	fi
-	@out=$$(docker manifest inspect $(1):$(VERSION) 2>&1) || case "$$out" in \
-	  *[Nn]"o such manifest"*|*"manifest unknown"*) ;; \
-	  *) echo "REFUSING: cannot verify $(1):$(VERSION) is unreleased: $$out"; exit 1 ;; \
-	esac
-endef
-
-# $(call scan_candidate,<image ref>) — luxaudit >= 0.13.0 scans the saved image, mount-only.
-define scan_candidate
-	@set -e; T=$$(mktemp); trap 'rm -f "$$T"' EXIT INT TERM; \
-	docker save $(1) -o "$$T"; chmod 644 "$$T"; \
-	docker run --rm -v $(PWD):/repo -v luxaudit-cache:/root/.cache/trivy -v "$$T":/candidate.tar:ro \
-	  $(LUXAUDIT_IMAGE) --image-archive /candidate.tar --image-label $(1)
-endef
-
-# $(call publish_release,<image base>,<Dockerfile>)
-define publish_release
-	$(refuse_dirty_tree)
-	$(call refuse_released,$(1))
-	docker buildx build $(NO_CACHE_FLAG) --platform $(PLATFORMS) -f $(2) $(BUILD_ARGS) \
-		-t $(1):candidate-$(COMMIT) --push .
-	docker pull -q $(1):candidate-$(COMMIT)
-	$(call scan_candidate,$(1):candidate-$(COMMIT))
-	docker buildx imagetools create -t $(1):$(VERSION) -t $(1):latest $(1):candidate-$(COMMIT)
-endef
-
-build-backend: buildx-setup ## Build + scan + push backend :$(VERSION) AND :latest (multi-arch: $(PLATFORMS))
-	$(call publish_release,$(BACKEND_IMAGE),apps/backend/Dockerfile)
-
-build-agent: buildx-setup ## Build + scan + push agent :$(VERSION) AND :latest (multi-arch: $(PLATFORMS))
-	$(call publish_release,$(AGENT_IMAGE),apps/agent/Dockerfile)
-
-build-dev: ## Build both LOCALLY as :$(SHA_TAG) and pin .env.dev to it (bare names, no push)
-	docker build $(NO_CACHE_FLAG) -f apps/backend/Dockerfile $(BUILD_ARGS) -t $(BACKEND_LOCAL):$(SHA_TAG) .
-	docker build $(NO_CACHE_FLAG) -f apps/agent/Dockerfile $(BUILD_ARGS) -t $(AGENT_LOCAL):$(SHA_TAG) .
-	@$(MAKE) --no-print-directory dev-pin TAG=$(SHA_TAG)
-
-# An immutable tag moves a burden: a NEW tag per build has to actually REACH the
-# stack. Without this, `build-dev` would leave the operator to hand-edit a
-# gitignored file — advice beside a working button, and how a node ends up
-# serving last week's build while everyone believes otherwise.
+# luxarch:image-block asset v16 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit image-block`.
+# ── Images: ONE naming scheme, and the NAME declares what the image IS ──────────────────────────
+# Emitted by `luxarch --emit image-block`. Two axes, both readable from the name alone:
 #
-# Exactly ONE line of .env.<env> is rewritten in place; nothing else is read,
-# printed or reordered, because the file holds secrets. The tag is PERSISTED
-# rather than passed in the deploying shell, because the stack has to come back
-# after a reboot — compose reads ${TAG:?}, so a tag that lived only in one shell
-# leaves a plain `docker compose up` on that node unable to start at all.
-# Generalised from the canonical `pin_env_tag` to take a KEY, because which
-# images a LOCAL stack runs is a build-system fact, not an operator preference:
-# dev and sandbox run the bare names this Makefile builds, and leaving that to a
-# hand-edit is how a stack ends up silently pulling ghcr instead.
-define pin_env_kv
-	f='$(1)'; k='$(2)'; v='$(3)'; \
-	[ -f "$$f" ] || { echo "$$f is missing — copy .env.example and fill it in first"; exit 1; }; \
-	tmp=$$(mktemp); trap 'rm -f "$$tmp"' EXIT; \
-	if grep -qE "^[[:space:]]*$$k=" "$$f"; then \
-	  awk -v k="$$k" -v v="$$v" '$$0 ~ "^[[:space:]]*"k"=" && !d {print k "=" v; d=1; next} {print}' "$$f" > "$$tmp"; \
-	else \
-	  cp "$$f" "$$tmp" && printf '%s=%s\n' "$$k" "$$v" >> "$$tmp"; \
-	fi; \
-	[ -s "$$tmp" ] || { echo "refusing to write an empty $$f"; exit 1; }; \
-	o=$$(wc -l < "$$f"); n=$$(wc -l < "$$tmp"); \
-	[ "$$n" -ge "$$o" ] || { echo "refusing: rewriting $$f lost lines ($$o -> $$n)"; exit 1; }; \
-	cat "$$tmp" > "$$f"; \
-	echo "$$f: $$k=$$v"
+#   Registry-qualified  ->  DEPLOY artifact  ->  built AND PUSHED
+#   Bare (no registry)  ->  LOCAL artifact   ->  built from source every run, NEVER pushed
+#
+#   Immutable tag (:$(VERSION), :sha-…)  ->  a stack MAY pin it
+#   Moving tag (:dev, :latest)           ->  a human alias; NOTHING pins it, NOTHING builds FROM it
+#
+# **Immutable tags are the point.** "A deployable never rolls" is why `:latest` is banned as a
+# deploy tag — and `:dev` rolls identically. Every `docker push` of `:dev` silently changes what
+# every stack pinned to it will run on next restart, so a moving tag cannot be a deployment record:
+# you cannot say which bits are in dev, and you cannot roll back to them. One build -> one permanent
+# identifier -> environments reference THAT. The sha costs nothing: this repo already computes it
+# for BUILD_COMMIT.
+#
+# **A local-only image must not wear a registry name.** One repo's compose pulled
+# `$(REGISTRY)/luxardolabs/<app>:dev` with no `build:` fallback, its Makefile never pushed it,
+# the registry held ZERO tags, and a routine `docker image prune` took the service down with
+# nothing to re-pull. The name promised a registry artifact; only a local one existed.
+#
+# Enforced by `repo.image_name_declares_provenance`.
+
+# v14: the registry HOST is never written here. v1-v13 defaulted REGISTRY to the fleet's private host
+# in this do-not-edit text, so a PUBLIC repo could not commit the block at all: its own gitleaks
+# disclosure tier refuses that host in a committed file. Define it ABOVE the block: a private repo in
+# its Makefile (`REGISTRY := <host>:<port>`), a public one in its gitignored `Makefile.local`
+# (`-include Makefile.local` above the block). Left empty, every target that pushes or pins refuses.
+REGISTRY      ?=
+# v13: the registry the RELEASE goes to, the one prod pulls from. The fleet has more than one: dev
+# stacks pull from the local registry above, prod at a remote host pulls from a registry it can reach
+# (a public app: GHCR). v1-v12 pushed `:$(VERSION)` to REGISTRY, so a repo whose prod cannot reach it
+# had to override REGISTRY on the command line for every release, and a release cut without the
+# override landed where prod could not pull it. Set it above the block when prod pulls elsewhere,
+# e.g. `RELEASE_REGISTRY := registry.example.com`; one registry for both needs nothing.
+RELEASE_REGISTRY ?= $(REGISTRY)
+# v12: the repo's NAME, from its git remote, not the checkout directory. v11 used `$(notdir $(CURDIR))`, so a
+# repo cloned into another directory (checked out under a shorter name on a build host) built and
+# pushed an image nothing pulls, and the deploy reported success. With no remote it falls back to the
+# directory. A repo whose image is named otherwise sets `IMAGE_NAME := luxardolabs/<name>` above the block.
+REPO_SLUG     := $(basename $(notdir $(shell git config --get remote.origin.url 2>/dev/null)))
+IMAGE_NAME    ?= luxardolabs/$(or $(REPO_SLUG),$(notdir $(CURDIR)))
+
+# v16: one repo, one VERSION, one release, MORE THAN ONE image. v1-v15 published exactly one image per
+# makefile, so a repo shipping two (a server and its agent, both built from the root with different
+# Dockerfiles and both run by compose from one `TAG=`) could not adopt the block: two copies collide,
+# and one makefile per image splits the release and pins `.env.dev`'s TAG twice. EMPTY, the default,
+# is v15's one image (IMAGE_NAME, DOCKERFILE, BUILD_CONTEXT) and the same commands. Set, list the
+# images above the block and give each its settings there, as `?=`:
+#   IMAGES                 ?= backend agent
+#   backend_IMAGE_NAME     ?= luxardolabs/backend
+#   backend_DOCKERFILE     ?= Dockerfile
+#   backend_BUILD_CONTEXT  ?= .
+#   agent_IMAGE_NAME       ?= luxardolabs/agent
+#   agent_DOCKERFILE       ?= agent/Dockerfile
+#   agent_BUILD_CONTEXT    ?= .
+#   agent_TARGET           ?= production
+# `<name>_BUILD_CONTEXT` defaults to `.`, `<name>_DOCKERFILE` to `<context>/Dockerfile`, `<name>_TARGET`
+# to `production`; `<name>_IMAGE_NAME` is required. `release` and `publish-sha` build and scan EVERY
+# image before they push ANY: one failing scan and nothing is pushed, so a release ships whole or not
+# at all. Every image gets the same `:$(VERSION)` and `:sha-<commit>`, and `dev-pin` checks each is in
+# the registry before it writes the one shared `TAG=` once. The FIRST image is the one the single-image
+# names below (IMAGE, VERSION_IMAGE, SHA_IMAGE, TEST_IMAGE) mean, so the suite, smoke and prod-deploy
+# read it. A name is a shell word (letters, digits, `_`).
+IMAGES        ?=
+IMAGE_LIST    := $(strip $(IMAGES))
+IMAGE_PRIMARY := $(firstword $(IMAGE_LIST))
+# One image's settings and tags, `$(call img_<x>,<name>)`. An EMPTY name is the one image of IMAGES
+# empty, so each value is exactly the single-image variable it stands beside.
+img_name       = $(if $(1),$($(1)_IMAGE_NAME),$(IMAGE_NAME))
+img_context    = $(if $(1),$(or $($(1)_BUILD_CONTEXT),.),$(BUILD_CONTEXT))
+img_dockerfile = $(if $(1),$(or $($(1)_DOCKERFILE),$(call img_context,$(1))/Dockerfile),$(DOCKERFILE))
+img_target     = $(or $(if $(1),$($(1)_TARGET)),production)
+# With an EMPTY name each is the single-image VARIABLE itself, not a recomputation of it, so a value
+# set on the command line (`make publish-sha IMAGE=…`) is the one checked AND the one pushed, as in
+# v15 (an adversarial pass: v16 checked `$(SHA_IMAGE)` but pushed a recomputed ref, and re-pushed a
+# published `:sha`).
+img_base       = $(if $(1),$(REGISTRY)/$(call img_name,$(1)),$(IMAGE))
+img_release    = $(if $(1),$(RELEASE_REGISTRY)/$(call img_name,$(1)),$(RELEASE_IMAGE))
+img_version    = $(if $(1),$(call img_release,$(1)):$(VERSION),$(VERSION_IMAGE))
+img_sha        = $(if $(1),$(call img_base,$(1)):sha-$(COMMIT),$(SHA_IMAGE))
+img_alias      = $(if $(1),$(call img_base,$(1)):dev,$(DEV_ALIAS))
+img_candidate  = $(if $(1),$(call img_base,$(1)):candidate-$(COMMIT),$(CANDIDATE))
+img_public     = $(if $(1),$(PUBLIC_REGISTRY)/$(call img_name,$(1)):$(VERSION),$(PUBLIC_IMAGE))
+img_test       = $(if $(1),$(notdir $(call img_name,$(1))):test,$(TEST_IMAGE))
+# `$(call image_block_each,<macro>,<separator>)`: the macro once per image, in IMAGES order, joined by
+# the separator; with IMAGES empty, once for the one image. It is why `make -n` prints each image's
+# own commands.
+image_block_each = $(call $(1),$(firstword $(IMAGE_LIST)))$(foreach i,$(wordlist 2,$(words $(IMAGE_LIST)),$(IMAGE_LIST)),$(2) $(call $(1),$(i)))
+
+# BASE — no tag; every tag composes from it. The comment sits ABOVE the value, never after it:
+# GNU make keeps the whitespace between a value and an inline `#`, so `IMAGE := …/repo   # note`
+# defines IMAGE *with trailing spaces*, and every tag built from it — `…/repo   :0.1.0` — is an
+# invalid docker reference. This block shipped that way from 0.197.0 and `make release` could not
+# run at all; no repo had executed it, so three green rules stood over a recipe that was broken on
+# its first line. Locked by test_emitted_makefiles_have_no_inline_comment_on_an_assignment.
+IMAGE         := $(REGISTRY)/$(if $(IMAGE_PRIMARY),$($(IMAGE_PRIMARY)_IMAGE_NAME),$(IMAGE_NAME))
+RELEASE_IMAGE := $(RELEASE_REGISTRY)/$(if $(IMAGE_PRIMARY),$($(IMAGE_PRIMARY)_IMAGE_NAME),$(IMAGE_NAME))
+COMMIT        := $(shell git rev-parse --short=12 HEAD 2>/dev/null || echo unknown)
+
+# IMMUTABLE deploy tags — the ONLY tags a stack may pin (`TAG=` in .env.<env>).
+#   VERSION_IMAGE = cut releases, in the registry prod pulls from;  SHA_IMAGE = every other build,
+#   addressable, no ceremony, in the dev registry.
+VERSION_IMAGE := $(RELEASE_IMAGE):$(VERSION)
+SHA_IMAGE     := $(IMAGE):sha-$(COMMIT)
+
+# MOVING alias — for a human reading `docker images`. Never pinned by a stack, never a build input,
+# never a base. If you delete this line nothing breaks; that is the test of an alias.
+DEV_ALIAS     := $(IMAGE):dev
+
+# LOCAL verification image — BARE on purpose: it cannot be pushed by accident and cannot be
+# mistaken for a deployable. Rebuilt from source every run, so the suite never inherits a stale
+# interpreter or stale deps. It is NOT `:dev`; a repo that tested on `:dev` kept failing correct
+# code against a 13-day-old Python 3.13 image after the tree had moved to 3.14.
+TEST_IMAGE    := $(notdir $(if $(IMAGE_PRIMARY),$($(IMAGE_PRIMARY)_IMAGE_NAME),$(IMAGE_NAME))):test
+
+# Where the image is built from. v9: v1-v8 built `.` with `./Dockerfile`, so a monorepo whose app builds
+# from `apps/backend/` could only adopt the block by editing it. Set these above the block when the app
+# is not at the root, e.g. `BUILD_CONTEXT := apps/backend`. Keep the context as narrow as the app: in a
+# repo that holds data which must never ship, a narrow context is what keeps that data out of every
+# image, structurally, rather than one `.dockerignore` pattern away.
+BUILD_CONTEXT ?= .
+DOCKERFILE    ?= $(BUILD_CONTEXT)/Dockerfile
+
+# v14: the architectures a release builds. EMPTY, the default, builds the host's one architecture with
+# `docker build --load`, as v13 did: everything the fleet runs itself is x86 (amd64). Set it
+# only when this repo publishes an image someone ELSE runs on another architecture, as buildx's comma
+# list, above this block (it picks the recipe when make reads it): `PLATFORMS := linux/amd64,linux/arm64`.
+# Set, `release` and `publish-sha` build every platform once with `docker buildx build --push` on the
+# shared builder (`buildx-setup`, `luxarch --emit buildx-setup`, in the same Makefile) under a
+# `candidate-<commit>` tag nothing pins, scan EACH platform's image, and only then point the immutable
+# tag at that candidate with `imagetools create`. The immutable tag is never built directly.
+# --doc FLEET-BUILD-DEPLOY-STANDARD, "Architectures".
+PLATFORMS ?=
+IMAGE_BLOCK_COMMA := ,
+PLATFORM_LIST := $(subst $(IMAGE_BLOCK_COMMA), ,$(strip $(PLATFORMS)))
+# v14: where a multi-arch build pushes its candidate: REGISTRY, the private one, ALWAYS. A candidate
+# exists to be scanned, and a rejected one must never be public: a release whose prod pulls from a
+# public registry (RELEASE_REGISTRY := ghcr.io) would otherwise publish unscanned bits under a tag
+# anyone can pull. `imagetools create` copies the scanned digest into RELEASE_REGISTRY afterwards.
+CANDIDATE     := $(IMAGE):candidate-$(COMMIT)
+
+# ── Deploy: build AND push, always together ─────────────────────────────────────────────────────
+# Never split them. A `docker build` of a registry-qualified tag with no matching push is what
+# leaves a deployable name pointing at nothing.
+#
+# v14: every target that pushes or pins is ONE `set -e` shell: its refusals, its build, its scan and
+# its push are a single recipe line. v13 put each refusal and the scan on a line of its own, and make
+# carries on past a failing line under `make -i`, a `-i` in MAKEFLAGS or a `.IGNORE:`: an existing
+# `:$(VERSION)` was overwritten and a failing scan still pushed. The pieces below are shell text,
+# joined into that one line by each target; never give one of them a recipe line of its own.
+
+# Named `release`, not `publish`. An earlier cut of this block called it `publish` while
+# `--emit release-skill` step 11, `--doc FLEET-RELEASE-PROCESS` §8 and `repo.github_release_wired`
+# all said `release` — so a repo that correctly adopted THIS asset ended up with no `release` target
+# and the rule stopped looking. Adopting the newer asset was what made the older rule go quiet.
+# One name, and `release` is the one the skill, the standard, the rule and every
+# fleet Makefile already use.
+
+define require_registry
+[ -n '$(strip $(REGISTRY))' ] && [ -n '$(strip $(RELEASE_REGISTRY))' ] || { \
+  echo "REFUSING: REGISTRY is empty. Set it above the image block (a public repo: in Makefile.local)"; exit 1; }
 endef
 
-# Point one local stack's env file at a built image set. Exactly three lines are
-# rewritten in place; nothing else in the file is read, printed or reordered,
-# because it holds secrets.
-define pin_local_stack
-	$(call pin_env_kv,$(1),SERVER_IMAGE,$(BACKEND_LOCAL)); \
-	$(call pin_env_kv,$(1),AGENT_IMAGE,$(AGENT_LOCAL)); \
-	$(call pin_env_kv,$(1),TAG,$(2))
+# v5: the scanner every push is gated by (luxaudit >= 0.13.0 in LUXAUDIT_IMAGE or LUXAUDIT), checked
+# before anything is built.
+define require_scanner
+[ -n '$(or $(LUXAUDIT_IMAGE),$(LUXAUDIT))' ] || { \
+  echo "REFUSING: set LUXAUDIT_IMAGE to the pinned luxaudit; the candidate must be scanned before it is pushed"; exit 2; }
 endef
 
-TAG ?= $(SHA_TAG)
+# v16: every image IMAGES lists is named, by a shell word, and no two publish to one name.
+define require_images
+$(if $(IMAGE_LIST),for i in $(foreach i,$(IMAGE_LIST),'$(i)'); do case "$$i" in (''|[0-9]*|*[!A-Za-z0-9_]*) \
+  echo "REFUSING: IMAGES entry '$$i' is not a shell word ([A-Za-z_][A-Za-z0-9_]*)"; exit 1 ;; esac; done; \
+$(foreach i,$(IMAGE_LIST),[ -n '$(strip $($(i)_IMAGE_NAME))' ] || { \
+  echo "REFUSING: IMAGES lists $(i) but $(i)_IMAGE_NAME is empty: set it above the image block"; exit 1; }; )\
+[ $(words $(IMAGE_LIST) $(foreach i,$(IMAGE_LIST),$($(i)_IMAGE_NAME))) -eq $(words $(sort $(IMAGE_LIST)) $(sort $(foreach i,$(IMAGE_LIST),$($(i)_IMAGE_NAME)))) ] || { \
+  echo "REFUSING: IMAGES names one image twice or gives two images one IMAGE_NAME"; exit 1; }; )
+endef
 
-dev-pin: ## Point .env.dev at an ALREADY-BUILT local tag (TAG=sha-… ; the rollback path)
-	@docker image inspect $(BACKEND_LOCAL):$(TAG) >/dev/null 2>&1 || \
-	  { echo "$(BACKEND_LOCAL):$(TAG) is not on this host — build it before pinning a stack to it"; exit 1; }
-	@docker image inspect $(AGENT_LOCAL):$(TAG) >/dev/null 2>&1 || \
-	  { echo "$(AGENT_LOCAL):$(TAG) is not on this host — build it before pinning a stack to it"; exit 1; }
-	@$(call pin_local_stack,.env.dev,$(TAG))
+# A `sha-<commit>` tag is immutable only if the bits ARE that commit. `git rev-parse HEAD` says nothing
+# about the working tree: build with uncommitted changes and the registry holds an image named after
+# commit X that contains X plus whatever was dirty, which is indistinguishable afterwards from a
+# truthful one and worse than `:dev`, which is at least honestly ambiguous. One repo published
+# `sha-b55e9a7b25ed` carrying a lockfile that commit does not have: bump deps, `make dev-build` to see
+# it works, commit after. That is the routine order, and this recipe invited it. Untracked
+# files count, because they are in the build context. No escape hatch: every fleet repo builds and PUSHES,
+# and a stack runs what was pushed, so commit first. `make test-build` is for the TEST suite, not the stack.
+# v14: a FAILED `git status` refuses. v13 tested `[ -n "$$(git status --porcelain 2>/dev/null)" ]`,
+# and in a checkout git does not trust (owned by another user, no `safe.directory`) git exits 128 and
+# prints nothing, which read as a clean tree: the dirty tree was built, labelled HEAD and pushed.
+define refuse_dirty_tree
+set -e; s=$$(git status --porcelain) || { \
+  echo "REFUSING: git status failed, so nothing proves the working tree is clean (see git's error above)"; exit 1; }; \
+if [ -n "$$s" ]; then \
+  echo "REFUSING: the working tree is dirty, so sha-$(COMMIT) would not describe these bits:"; \
+  printf '%s\n' "$$s" | sed 's/^/    /'; \
+  echo "Commit first, then deploy what you pushed (make dev-deploy). make test-build is for the TEST suite only; it cannot run the stack."; \
+  exit 1; \
+fi
+endef
 
-sandbox-pin: ## Point .env.sandbox at an ALREADY-BUILT local tag (TAG=sha-…)
-	@$(call pin_local_stack,.env.sandbox,$(TAG))
+# Refuse $(1) when the registry already holds it; $(2) says what to do instead. Fails CLOSED:
+# `manifest inspect` exits 1 for "no such manifest" AND for an unreachable registry, so only the
+# registry's own not-found answer reads as unpublished (a DNS blip must not let a re-push through).
+define refuse_published
+if docker manifest inspect $(1) >/dev/null 2>&1; then \
+  echo "REFUSING: $(1) is already PUBLISHED. It is immutable: something pins it."; \
+  echo "$(2)"; \
+  exit 1; \
+fi; \
+out=$$(docker manifest inspect $(1) 2>&1) || case "$$out" in \
+  *[Nn]"o such manifest"*|*"manifest unknown"*) ;; \
+  *) echo "REFUSING: cannot verify $(1) is unpublished: $$out"; exit 1 ;; \
+esac
+endef
 
-push: build-backend build-agent ## Build + push both images (:$(VERSION) + :latest)
+# The candidate gate, used by every target that pushes: scan the exact bits just built, mount-only,
+# and refuse the push on any fixable HIGH/CRITICAL (luxaudit >= 0.13.0 in LUXAUDIT_IMAGE or LUXAUDIT).
+# `make audit`'s image leg reads what the registry already holds, so it can only clear AFTER a release;
+# as the gate it deadlocked. This is the gate. (v5)
+# v14: `/repo` is `$(CURDIR)`, this makefile's directory, never `$(PWD)`. luxaudit reads the repo's
+# `.luxaudit.toml` from `/repo`, and `$(PWD)` is the CALLER's shell directory: `make -C <repo> release`
+# run from another repo scanned with THAT repo's `[[ignore]]` list and passed what this one refuses.
+define scan_candidate
+set -e; ref='$(or $(LUXAUDIT_IMAGE),$(LUXAUDIT))'; \
+if [ -z "$$ref" ]; then echo "REFUSING: set LUXAUDIT_IMAGE to the pinned luxaudit; the candidate must be scanned before it is pushed"; exit 2; fi; \
+T=$$(mktemp); trap 'rm -f "$$T"' EXIT INT TERM; \
+docker save $(1) -o "$$T"; chmod 644 "$$T"; \
+docker run --rm -v "$(CURDIR)":/repo -v luxaudit-cache:/root/.cache/trivy -v "$$T":/candidate.tar:ro \
+  "$$ref" --image-archive /candidate.tar --image-label $(1)
+endef
 
-github-release: ## Publish the GitHub Release for $(VERSION) from its release notes
-	@notes=apps/backend/app/release_notes/$(VERSION).md; \
-	if [ ! -f $$notes ]; then \
-		echo "release notes missing: $$notes — write them before releasing (see luxarch --doc FLEET-RELEASE-PROCESS)"; exit 1; \
+# v14: promote a PUSHED image by the digest that was scanned, never by its tag. A tag can move
+# between the scan and the promotion (another push of the same name), and `imagetools create` from the
+# tag would then publish bits nothing scanned. So ONE shell reads the image's digest once, refuses an
+# empty or malformed one, pulls and scans EACH platform by `<repo>@sha256:<digest>`, and creates the
+# immutable tags from that same `<repo>@sha256:<digest>`. Any finding stops it before the promotion.
+#   $(1) the pushed ref  $(2) its repository (no tag)  $(3) the `-t <tag>` list to create
+# `pull --platform` fetches one platform's image (an arm64 image is pulled and saved on an x86 host,
+# never run) and `docker save --platform` (Docker >= 28) writes exactly that one. The local copy is
+# removed before each pull: the classic image store refuses a second platform under one digest.
+# v16: in two halves, so every image is scanned before any is promoted: `promote_pin_scan` pins and
+# scans ($(3) the shell variable holding the digest, `h` when empty), `promote_create` promotes.
+# With more than one image each pins its own digest variable (`h_<name>`) and, once scanned, drops
+# its local copy and its archive (the trap only cleans up after the last).
+#   promote_pin_scan: $(1) the pushed ref  $(2) its repository (no tag)  $(3) the digest variable
+#   promote_create:   $(1) the repository  $(2) the `-t <tag>` list to create  $(3) the digest variable
+define promote_pin_scan
+set -e; ref='$(or $(LUXAUDIT_IMAGE),$(LUXAUDIT))'; \
+if [ -z "$$ref" ]; then echo "REFUSING: set LUXAUDIT_IMAGE to the pinned luxaudit; the image must be scanned before it is promoted"; exit 2; fi; \
+$(or $(3),h)=$$(docker buildx imagetools inspect $(1) --format '{{.Manifest.Digest.Encoded}}'); \
+case "$$$(or $(3),h)" in ''|*[!0-9a-f]*) echo "REFUSING: could not read the digest of $(1); nothing is promoted"; exit 1 ;; esac; \
+T=$$(mktemp); trap 'rm -f "$$T"; docker image rm $(2)@sha256:$$$(or $(3),h) >/dev/null 2>&1 || true' EXIT INT TERM; \
+$(foreach p,$(or $(PLATFORM_LIST),host),docker image rm $(2)@sha256:$$$(or $(3),h) >/dev/null 2>&1 || true; docker pull -q $(if $(filter-out host,$(p)),--platform $(p) )$(2)@sha256:$$$(or $(3),h); docker save $(if $(filter-out host,$(p)),--platform $(p) )$(2)@sha256:$$$(or $(3),h) -o "$$T"; chmod 644 "$$T"; docker run --rm -v "$(CURDIR)":/repo -v luxaudit-cache:/root/.cache/trivy -v "$$T":/candidate.tar:ro "$$ref" --image-archive /candidate.tar --image-label '$(1) ($(p))'; )$(if $(3),rm -f "$$T"; docker image rm $(2)@sha256:$$$(3) >/dev/null 2>&1 || true; )
+endef
+
+define promote_create
+docker buildx imagetools create $(2) $(1)@sha256:$$$(or $(3),h)
+endef
+
+# v11: every build names its output (`--load`). On the fleet's shared builder (`buildx-setup`, driver
+# `docker-container`) a build with no output writes only to the build cache: it warns, exits 0, and
+# the tag the next line scans, pushes or runs does not exist. `--load` is a no-op on the `docker` driver.
+# Every commit's deployable: build, scan, push `:sha-<commit>` (what a dev/demo stack pins) and move the
+# `:dev` alias. NEVER the version tag. v6: v5's `dev-deploy` ran `release`, which pushed `:$(VERSION)`
+# on every run, so the first dev deploy after a version shipped overwrote that RELEASED tag with
+# unreleased code (in one repo, prod's `:2026.09.0` silently became another
+# commit's bits, caught by hand before the next prod pull).
+# v14, PLATFORMS set: the candidate is pushed, its digest pinned, every platform scanned by that digest,
+# then `:sha-<commit>` and the alias both point at that one scanned digest.
+# v14: `:sha-<commit>` is published ONCE. v13 rebuilt and re-pushed it on every run, and no two builds
+# are the same bytes (BUILD_TIMESTAMP, the runtime's package upgrade), so a second `dev-deploy` of one
+# commit replaced the image a running stack pins, and one after a multi-arch publish replaced its
+# scanned index with a single-arch rebuild. Already in the registry, it is deployed as it is.
+# One image ($(1) its name, empty for the one image of IMAGES empty): build + scan, then push.
+define publish_sha_build
+docker build --load --target $(call img_target,$(1)) $(BUILD_ARGS) -f $(call img_dockerfile,$(1)) -t $(call img_sha,$(1)) $(call img_context,$(1)); \
+$(call scan_candidate,$(call img_sha,$(1)))$(if $(1),; rm -f "$$T")
+endef
+
+define publish_sha_push
+docker push $(call img_sha,$(1)); \
+docker tag $(call img_sha,$(1)) $(call img_alias,$(1)); docker push $(call img_alias,$(1))
+endef
+
+define publish_sha_multi_build
+docker buildx build --platform $(PLATFORMS) --push --target $(call img_target,$(1)) $(BUILD_ARGS) -f $(call img_dockerfile,$(1)) -t $(call img_candidate,$(1)) $(call img_context,$(1)); \
+$(call promote_pin_scan,$(call img_candidate,$(1)),$(call img_base,$(1)),$(if $(1),h_$(1)))
+endef
+
+define publish_sha_multi_push
+$(call promote_create,$(call img_base,$(1)),-t $(call img_sha,$(1)) -t $(call img_alias,$(1)),$(if $(1),h_$(1)))
+endef
+
+define publish_sha_single
+$(call publish_sha_build,); \
+$(call publish_sha_push,)
+endef
+
+define publish_sha_multi
+$(call publish_sha_multi_build,)\
+$(call publish_sha_multi_push,)
+endef
+
+# IMAGES empty: the one image, and already published it is deployed as it is.
+define publish_sha_one
+if docker manifest inspect $(SHA_IMAGE) >/dev/null 2>&1; then \
+  echo "$(SHA_IMAGE) is already published: one commit is one image, deployed as it is (not rebuilt)"; \
+  exit 0; \
+fi; \
+out=$$(docker manifest inspect $(SHA_IMAGE) 2>&1) || case "$$out" in \
+  *[Nn]"o such manifest"*|*"manifest unknown"*) ;; \
+  *) echo "REFUSING: cannot verify $(SHA_IMAGE) is unpublished: $$out"; exit 1 ;; \
+esac; \
+$(if $(PLATFORM_LIST),$(publish_sha_multi),$(publish_sha_single))
+endef
+
+# v16, IMAGES set: an image whose `:sha-<commit>` is already published is skipped and deployed as it
+# is (a run interrupted between two pushes resumes, never re-pushes). Every other image is built and
+# scanned, and only when every scan has passed is any of them pushed.
+define publish_sha_todo
+if docker manifest inspect $(call img_sha,$(1)) >/dev/null 2>&1; then \
+  echo "$(call img_sha,$(1)) is already published: one commit is one image, deployed as it is (not rebuilt)"; \
+else \
+  out=$$(docker manifest inspect $(call img_sha,$(1)) 2>&1) || case "$$out" in \
+    *[Nn]"o such manifest"*|*"manifest unknown"*) ;; \
+    *) echo "REFUSING: cannot verify $(call img_sha,$(1)) is unpublished: $$out"; exit 1 ;; \
+  esac; \
+  todo="$$todo $(1)"; \
+fi
+endef
+
+image_block_todo = case " $$todo " in *" $(1) "*) $(call $(2),$(1)) ;; esac
+publish_sha_each_build = $(call image_block_todo,$(1),$(if $(PLATFORM_LIST),publish_sha_multi_build,publish_sha_build))
+publish_sha_each_push = $(call image_block_todo,$(1),$(if $(PLATFORM_LIST),publish_sha_multi_push,publish_sha_push))
+
+define publish_sha_images
+todo=; \
+$(call image_block_each,publish_sha_todo,;); \
+if [ -z "$$todo" ]; then echo "every image of sha-$(COMMIT) is already published: deployed as they are"; exit 0; fi; \
+$(call image_block_each,publish_sha_each_build,;); \
+$(call image_block_each,publish_sha_each_push,;)
+endef
+
+publish-sha: $(if $(PLATFORM_LIST),buildx-setup) ## Build + scan + PUSH this commit as :sha-<commit> (and move the :dev alias) — never the version
+	@set -e; $(require_registry); $(require_images)$(refuse_dirty_tree); $(require_scanner); \
+	$(if $(IMAGE_LIST),$(publish_sha_images),$(publish_sha_one)); \
+	echo "deploy it with:  make dev-deploy   (or: make dev-pin TAG=sha-$(COMMIT))"
+
+# The GitHub Release: this version's user-facing notes on the repo's /releases page (--doc
+# FLEET-RELEASE-PROCESS §9, `repo.github_release_wired`). v8: v1-v7 had no step for it, so an exact copy
+# of this DO-NOT-EDIT block was red on that rule and the only ways to green were editing the block or a
+# target outside `release` that nothing runs. `release` now runs it last, and checks everything it needs
+# BEFORE the first push, against the REMOTE: `gh release create --verify-tag` needs the tag on GitHub, so
+# a tag that exists only locally would let the image push and the Release fail. If the Release step
+# still fails, re-run `make gh-release` alone: it is idempotent, and it needs the pushed tag, not HEAD
+# (`release` refuses an already-released version, and HEAD moves on after the release commit).
+# RELEASE_NOTES is found, not assumed: `<app>/release_notes/$(VERSION).md` wherever the app lives, up to
+# three directories down (`app/`, `src/<pkg>/`, `apps/backend/app/`). Set it above this block only when
+# more than one app ships notes.
+RELEASE_NOTES ?= $(wildcard release_notes/$(VERSION).md */release_notes/$(VERSION).md */*/release_notes/$(VERSION).md */*/*/release_notes/$(VERSION).md)
+
+define gh_release_preflight
+command -v gh >/dev/null 2>&1 || { echo "REFUSING: the GitHub CLI (gh) is not installed; the release publishes its notes with it"; exit 1; }; \
+gh auth status >/dev/null 2>&1 || { echo "REFUSING: gh is not authenticated (gh auth login)"; exit 1; }; \
+set -- $(RELEASE_NOTES); if [ $$# -ne 1 ]; then \
+  echo "REFUSING: need exactly ONE release notes file for $(VERSION), found $$#: $(or $(RELEASE_NOTES),none)"; \
+  echo "Write <app>/release_notes/$(VERSION).md (luxarch --emit release-notes-guide), or set RELEASE_NOTES above this block."; \
+  exit 1; \
+fi; \
+git ls-remote --exit-code --tags origin "refs/tags/v$(VERSION)" >/dev/null 2>&1 || { \
+  echo "REFUSING: v$(VERSION) is not on origin; the GitHub Release hangs off the pushed tag:"; \
+  echo "    git tag -a v$(VERSION) -m v$(VERSION) && git push origin v$(VERSION)"; exit 1; }
+endef
+
+define gh_release_publish
+if gh release view "v$(VERSION)" >/dev/null 2>&1; then \
+  echo "GitHub Release v$(VERSION) already exists, skipped (a Release, like its tag, is immutable)"; \
+else \
+  gh release create "v$(VERSION)" --verify-tag --title "$(VERSION)" --notes-file $(RELEASE_NOTES); \
+fi
+endef
+
+gh-release: ## Publish the GitHub Release for v$(VERSION) from its release notes (idempotent; `release` runs it)
+	@set -e; $(gh_release_preflight); \
+	$(gh_release_publish)
+
+# Cut VERSION: the immutable release tag prod pins. Refuses when that version is ALREADY released, in
+# the registry or as a git tag at another commit: a released version is never re-pushed, not even from
+# its own commit (a rebuild is different bytes under a name prod already runs). Bump VERSION instead.
+# v14: a release pushes `:$(VERSION)` and nothing else. v13 also re-pushed `:sha-<commit>` and the
+# `:dev` alias, overwriting the sha a dev stack pins; those are publish-sha's.
+# v14, PLATFORMS set: the same refusals first, then the candidate is pushed to REGISTRY, its digest
+# pinned, every platform scanned by that digest, and `:$(VERSION)` created in RELEASE_REGISTRY from it.
+# v16, IMAGES set: every image's `:$(VERSION)` is refused if published, then every image is built and
+# scanned, and pushed only after the last scan passed (one `set -e` shell): a failing scan of any
+# image pushes none, so a release is refused whole.
+define release_build
+docker build --load --target $(call img_target,$(1)) $(BUILD_ARGS) -f $(call img_dockerfile,$(1)) -t $(call img_version,$(1)) $(call img_context,$(1)); \
+$(call scan_candidate,$(call img_version,$(1)))$(if $(1),; rm -f "$$T")
+endef
+
+define release_push
+docker push $(call img_version,$(1))
+endef
+
+define release_multi_build
+docker buildx build --platform $(PLATFORMS) --push --target $(call img_target,$(1)) $(BUILD_ARGS) -f $(call img_dockerfile,$(1)) -t $(call img_candidate,$(1)) $(call img_context,$(1)); \
+$(call promote_pin_scan,$(call img_candidate,$(1)),$(call img_base,$(1)),$(if $(1),h_$(1)))
+endef
+
+define release_multi_push
+$(call promote_create,$(call img_base,$(1)),-t $(call img_version,$(1)),$(if $(1),h_$(1)))
+endef
+
+define release_single
+$(call image_block_each,release_build,;); \
+$(call image_block_each,release_push,;)
+endef
+
+define release_multi
+$(call image_block_each,release_multi_build)\
+$(call image_block_each,release_multi_push,;)
+endef
+
+define release_refuse
+$(call refuse_published,$(call img_version,$(1)),Bump VERSION for a new release; deploy this commit to dev with make dev-deploy. If its GitHub Release is missing: make gh-release)
+endef
+
+release: $(if $(PLATFORM_LIST),buildx-setup) ## Cut VERSION: build + scan + PUSH :$(VERSION), then the GitHub Release (refuses an already-released VERSION)
+	@set -e; $(require_registry); $(require_images)$(refuse_dirty_tree); $(require_scanner); \
+	$(call image_block_each,release_refuse,;); \
+	t=$$(git rev-parse -q --verify "refs/tags/v$(VERSION)^{commit}" 2>/dev/null || true); \
+	if [ -n "$$t" ] && [ "$$t" != "$$(git rev-parse HEAD)" ]; then \
+	  echo "REFUSING: v$(VERSION) is already tagged at $$t, not HEAD: bump VERSION."; exit 1; \
 	fi; \
-	if ! command -v gh >/dev/null 2>&1; then \
-		echo "gh not installed — the GitHub Release carries this version's notes and is not optional"; exit 1; \
+	if [ "$$t" != "$$(git rev-parse HEAD)" ]; then \
+	  echo "REFUSING: v$(VERSION) is not tagged at HEAD. Tag and push it first:"; \
+	  echo "    git tag -a v$(VERSION) -m v$(VERSION) && git push origin v$(VERSION)"; exit 1; \
 	fi; \
-	if gh release view v$(VERSION) >/dev/null 2>&1; then \
-		echo ">> GitHub Release v$(VERSION) already exists — leaving it alone"; \
-	else \
-		gh release create v$(VERSION) --title "$(VERSION)" --notes-file $$notes; \
-	fi
+	$(gh_release_preflight); \
+	$(if $(PLATFORM_LIST),$(release_multi),$(release_single)); \
+	$(gh_release_publish); \
+	echo "released $(call image_block_each,img_version); pin prod to TAG=$(VERSION)"
 
-release: css push github-release ## Promote a release: CSS, push both images, publish the GitHub Release
-	@printf "$(GREEN)Released $(VERSION) → $(REGISTRY)$(NC)\n"
+# v14: a PUBLIC copy of the release, for an image other people pull (a public collector on GHCR). Set
+# `PUBLIC_REGISTRY := ghcr.io` above this block and the target exists; unset, there is none. It never
+# builds: it pins the RELEASED `:$(VERSION)` by digest, rescans that digest on every platform (a CVE
+# published since the release stops it) and copies it, so the public image is bit-identical to the
+# one prod pins. Like `release` it refuses a version already public there, and only the registry's
+# own not-found answer reads as unpublished.
+PUBLIC_REGISTRY ?=
+PUBLIC_IMAGE := $(PUBLIC_REGISTRY)/$(if $(IMAGE_PRIMARY),$($(IMAGE_PRIMARY)_IMAGE_NAME),$(IMAGE_NAME)):$(VERSION)
+
+# v16, IMAGES set: every image's checks first, every rescan next, the copies last.
+define public_refuse
+$(call refuse_published,$(call img_public,$(1)),A released version is immutable: bump VERSION.); \
+docker manifest inspect $(call img_version,$(1)) >/dev/null 2>&1 || { \
+  echo "REFUSING: $(call img_version,$(1)) is not released; run make release first (publish only what you released)"; exit 1; }
+endef
+
+define public_scan
+$(call promote_pin_scan,$(call img_version,$(1)),$(call img_release,$(1)),$(if $(1),h_$(1)))
+endef
+
+define public_copy
+$(call promote_create,$(call img_release,$(1)),-t $(call img_public,$(1)),$(if $(1),h_$(1)))
+endef
+
+public_said = $(call img_version,$(1)) as $(call img_public,$(1))
+
+ifneq ($(strip $(PUBLIC_REGISTRY)),)
+release-public: ## Copy the RELEASED :$(VERSION) to $(PUBLIC_REGISTRY) by digest after rescanning it (run `make release` first)
+	@set -e; $(require_registry); $(require_images)$(require_scanner); \
+	$(call image_block_each,public_refuse,;); \
+	$(call image_block_each,public_scan)\
+	$(call image_block_each,public_copy,;); \
+	echo "published $(call image_block_each,public_said,$(IMAGE_BLOCK_COMMA)), the same digest"
+endif
+
+# ── Point an environment at a build ─────────────────────────────────────────────────────────────
+# Immutable tags move a burden: a NEW tag per build has to actually reach the stack. This block used
+# to end by telling a human to go hand-edit a gitignored file — advice beside a working button, and
+# it is how a dev node ends up still serving last week's sha while everyone believes otherwise.
+#
+# The tag is PERSISTED into .env.<env>, not passed in the deploying shell, because the stack has to
+# come back after a reboot: compose reads `${TAG:?}`, so a tag that lived only in one shell leaves a
+# plain `docker compose up` on that node unable to start the stack at all. Exactly ONE line of that
+# file is rewritten in place; nothing else is read, printed or reordered, because it holds secrets.
+#
+# `.env.prod` takes the same call from whatever `prod-deploy` does over SSH — the pinning is shared,
+# the transport is node-specific and stays in the repo.
+
+TAG ?= sha-$(COMMIT)
+
+# Which compose profiles the dev stack runs. v8: v7 restarted with a bare `up -d`, and in a compose.yml
+# where every service carries `profiles:` (the fleet's one-file model) that selects NO service unless
+# something declares the stack: compose exits 0 and `dev-deploy` reported success over a stack it never
+# restarted. Declare it ONE of two ways (`repo.compose_up_selects_services` checks either):
+#   - COMPOSE_PROFILES=<profiles> in .env.dev, declared in the committed .env.example (leave this empty);
+#   - or set the profiles above this block: `DEV_PROFILES := dev`. A `--profile` REPLACES the
+#     env file's COMPOSE_PROFILES, so list every profile the dev stack needs.
+# A service with no `profiles:` starts either way.
+DEV_PROFILES ?=
+
+# v12: `dev-pin` waits for the stack: running, and healthy where a service has a healthcheck. v11 returned when the
+# containers STARTED, so `smoke` hit the proxy before the app listened: every first probe was a 502, and
+# the forged-Host probe "passed" because nothing answered at all. Seconds to wait before failing the deploy:
+DEV_WAIT_TIMEOUT ?= 120
+
+# v15: a file with more than one `TAG=` line refuses. v14 rewrote the first, and compose reads the
+# LAST, so the stack stayed on the old version under a pin that reported success.
+# v14: one awk pass writes the file, and the rewrite is refused unless every line but `TAG=` is
+# byte-for-byte what it was. v13 appended with `printf >>` after a `cp`, so a file whose last line had
+# no newline came out as `SECRET_KEY=abcTAG=sha-…`: a corrupted secret and no TAG, past a line-count
+# check the extra newline satisfied. awk ends every line it prints.
+define pin_env_tag
+f='$(1)'; t='$(2)'; \
+[ -f "$$f" ] || { echo "$$f is missing — copy .env.example and fill it in first"; exit 1; }; \
+[ "$$(grep -c '^[[:space:]]*TAG=' "$$f")" -le 1 ] || { echo "refusing: $$f has more than one TAG= line, and compose reads the last: keep one (nothing written)"; exit 1; }; \
+tmp=$$(mktemp); trap 'rm -f "$$tmp"' EXIT; \
+awk -v t="$$t" '/^[[:space:]]*TAG=/ && !d {print "TAG=" t; d=1; next} {print} END {if (!d) print "TAG=" t}' "$$f" > "$$tmp"; \
+[ -s "$$tmp" ] || { echo "refusing to write an empty $$f"; exit 1; }; \
+[ "$$(grep -v '^[[:space:]]*TAG=' "$$f")" = "$$(grep -v '^[[:space:]]*TAG=' "$$tmp")" ] || \
+  { echo "refusing: rewriting $$f would change a line other than TAG= (nothing written)"; exit 1; }; \
+grep -qxF "TAG=$$t" "$$tmp" || { echo "refusing: TAG=$$t did not land on a line of its own in $$f"; exit 1; }; \
+cat "$$tmp" > "$$f"; \
+echo "$$f: TAG=$$t"
+endef
+
+# v10: a deploy ends by probing what it deployed (`luxarch --emit smoke`, pasted below this block). A
+# deploy that restarted the stack is not one that works: the suite runs in-process and cannot see the
+# proxy, the server, the production image or a standalone entry point.
+dev-deploy: ## Build+push THIS commit (:sha-…, never the version), pin .env.dev to it, restart the dev stack, smoke it
+	@$(MAKE) --no-print-directory publish-sha
+	@$(MAKE) --no-print-directory dev-pin TAG=sha-$(COMMIT)
+	@$(MAKE) --no-print-directory smoke
+
+# The rollback path, and the only one that does not build: name a tag you already published.
+# The registry is checked FIRST because the alternative is the outage above — a stack pinned to a
+# name the registry never held, discovered at the next restart when there was nothing to re-pull.
+# v16: every image is checked before the one shared `TAG=` is written, once.
+define dev_pin_check
+docker manifest inspect $(call img_base,$(1)):$(TAG) >/dev/null 2>&1 || \
+  { echo "$(call img_base,$(1)):$(TAG) is not in the registry — publish it before pinning a stack to it"; exit 1; }
+endef
+
+dev-pin: ## Point the dev stack at an ALREADY-PUBLISHED tag and restart it (rollback path)
+	@set -e; $(require_registry); $(require_images)\
+	$(call image_block_each,dev_pin_check,;); \
+	$(call pin_env_tag,.env.dev,$(TAG)); \
+	docker compose --env-file .env.dev $(foreach p,$(DEV_PROFILES),--profile $(p)) up -d --wait \
+	  --wait-timeout $(DEV_WAIT_TIMEOUT)
+
+# ── Verify: build from source, locally, every run ───────────────────────────────────────────────
+# The test image must carry the SAME app layers production ships, plus the dev group. Two Dockerfile
+# shapes do that, and either is canonical:
+#   - `FROM production AS test`, putting back what production stripped (`python -m ensurepip`)
+#     before `poetry install --with dev`;
+#   - one shared `app` stage that both `test` and `production` build FROM, when production also
+#     strips poetry. v3 said only "FROM production", which a production stage hardened per
+#     FLEET-BUILD-DEPLOY-STANDARD (no pip/poetry in the runtime) cannot satisfy literally.
+# Either way the Dockerfile needs a stage named `test`: this target builds it. v16, IMAGES set: the
+# first image's, the one the suite runs in (TEST_IMAGE).
+
+test-build: ## Build the LOCAL test image from source (never pushed, never a deploy tag)
+	@docker build --load --target test $(BUILD_ARGS) -f $(call img_dockerfile,$(IMAGE_PRIMARY)) -t $(TEST_IMAGE) $(call img_context,$(IMAGE_PRIMARY)) >/dev/null
+
+# The sandbox is a second stack of the same published images: it pins its own env file
+# with the block's `pin_env_tag`, after checking every image is in the registry.
+sandbox-pin: ## Point .env.sandbox at an ALREADY-PUBLISHED tag (TAG=sha-…)
+	@set -e; $(require_registry); $(require_images)\
+	$(call image_block_each,dev_pin_check,;); \
+	$(call pin_env_tag,.env.sandbox,$(TAG))
 
 # Smoke settings for this repo (the block below reads them). The backend image
 # is the one whose entry points are imported; the agent is probed through its
 # container (build revision + its own HEALTHCHECK). SMOKE_URL is the dev
 # stack's address and belongs in Makefile.local (see Makefile.local.example).
-SHA_IMAGE          := $(BACKEND_LOCAL):$(SHA_TAG)
 SMOKE_CONTAINERS   ?= luxswirl_server luxswirl_agent
 SMOKE_SCRIPTS_DIR  := apps/backend/app/scripts
 SMOKE_IMPORT_ROOT  := apps/backend
@@ -494,7 +934,7 @@ smoke: ## Probe the deployed dev stack: build commit, static asset, forged Host 
 ##@ Dev stack (compose.yml + .env.dev — baked images, no source mounts)
 
 dev: dev-up ## Alias for dev-up
-dev-up: ## Start the dev stack (does NOT build — run `make build-dev` first to pick up code changes)
+dev-up: ## Start the dev stack (does NOT build or publish — `make dev-deploy` puts a commit on it)
 	$(DC_DEV) up -d
 	@echo "LuxSwirl $(VERSION) [dev] — server on :9000 (via nginx)"
 
@@ -503,19 +943,6 @@ dev-down: ## Stop the dev stack
 
 dev-restart: ## Restart the dev stack
 	$(DC_DEV) restart
-
-dev-rebuild: ## Rebuild dev images from scratch and restart
-	$(MAKE) build-dev NO_CACHE_FLAG=--no-cache
-	$(DC_DEV) up -d
-
-# A deploy ends by probing what it deployed (FLEET-BUILD-DEPLOY-STANDARD, "Stack
-# smoke"): `up --wait` holds until every service's HEALTHCHECK passes, so the
-# smoke's first probe reaches the app rather than a proxy still waiting on it.
-DEV_WAIT_TIMEOUT ?= 180
-dev-deploy: ## Build THIS commit (:sha-…), pin .env.dev to it, restart the dev stack, smoke it
-	@$(MAKE) --no-print-directory build-dev
-	$(DC_DEV) up -d --wait --wait-timeout $(DEV_WAIT_TIMEOUT)
-	@$(MAKE) --no-print-directory smoke
 
 dev-logs: ## Follow dev logs
 	$(DC_DEV) logs -f
@@ -543,8 +970,9 @@ prod-logs: ## Follow production logs
 ##@ Sandbox stack (disposable, fully isolated — for testing a new version; leaves dev alone)
 
 sandbox: sandbox-up ## Alias for sandbox-up
-sandbox-up: build-dev ## Build the local images from current source, then start the isolated sandbox
-	@$(MAKE) --no-print-directory sandbox-pin TAG=$(SHA_TAG)
+sandbox-up: ## Publish THIS commit (:sha-…), pin .env.sandbox to it, start the isolated sandbox
+	@$(MAKE) --no-print-directory publish-sha
+	@$(MAKE) --no-print-directory sandbox-pin TAG=sha-$(COMMIT)
 	@mkdir -p data/sandbox/server data/sandbox/agent
 	$(DC_SBX) up -d
 	@echo "LuxSwirl $(VERSION) [sandbox] — login at https://localhost:9001 (dev untouched, db on :5433)"
@@ -628,7 +1056,6 @@ poetry-install: ## Verify BOTH components resolve + install from lock (throwaway
 
 BACKEND_LINT := luxswirl-backend-lint
 AGENT_LINT   := luxswirl-agent-lint
-TEST_IMAGE   := luxswirl:test
 
 compileall: ## Byte-compile all Python (fast syntax check) — in docker
 	docker run --rm -u $(REPO_UID):$(REPO_GID) -v $(PWD):/repo -w /repo \
@@ -943,19 +1370,15 @@ gitleaks-message: ## secret + denylist scan of one commit message (MSG=<file>; r
 	  $(GITLEAKS_IMAGE) dir . -c /gl.toml --redact --no-banner --ignore-gitleaks-allow \
 	  --gitleaks-ignore-path /none
 
-docker-clean: ## Remove the locally built image tags (bare backend/agent + lint)
-	-docker rmi $(BACKEND_LOCAL):$(SHA_TAG) $(AGENT_LOCAL):$(SHA_TAG) \
-		$(BACKEND_LOCAL):$(VERSION) $(AGENT_LOCAL):$(VERSION) \
-		$(BACKEND_LINT) $(AGENT_LINT) 2>/dev/null || true
+docker-clean: ## Remove the locally built image tags (bare backend/agent, test + lint)
+	-docker rmi $(notdir $(backend_IMAGE_NAME)):$(VERSION) $(notdir $(agent_IMAGE_NAME)):$(VERSION) \
+		$(TEST_IMAGE) $(BACKEND_LINT) $(AGENT_LINT) 2>/dev/null || true
 
 # =============================================================================
 # Tests (isolated test DB on tmpfs — mirrors luxwx)
 # =============================================================================
 
 ##@ Tests
-
-test-build: ## Build the test image from current source (self-contained — no :dev dependency)
-	DOCKER_BUILDKIT=1 docker build $(NO_CACHE_FLAG) -f Dockerfile.test -t $(TEST_IMAGE) .
 
 # Settings for the emitted test block below (set here, above it — never inside it).
 TEST_SERVICES := timescaledb-test
