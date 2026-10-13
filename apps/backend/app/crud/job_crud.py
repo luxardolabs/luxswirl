@@ -18,6 +18,27 @@ from app.models.job_model import Job
 class JobCRUD:
     """Database queries for jobs."""
 
+    # ── Writes (flushed; the session owner commits) ───────────────────────────
+
+    @staticmethod
+    async def add_job(db: AsyncSession, job: Job) -> Job:
+        """Insert a job; the refreshed row."""
+        db.add(job)
+        await db.flush()
+        await db.refresh(job)
+        return job
+
+    @staticmethod
+    async def save_job(db: AsyncSession, job: Job) -> Job:
+        """Write a job's changed fields; the refreshed row."""
+        await db.flush()
+        await db.refresh(job)
+        return job
+
+    @staticmethod
+    async def delete_job(db: AsyncSession, job: Job) -> None:
+        await db.delete(job)
+
     @staticmethod
     async def agent_exists(db: AsyncSession, agent_id: UUID) -> bool:
         result = await db.execute(select(Agent.id).where(Agent.id == agent_id))

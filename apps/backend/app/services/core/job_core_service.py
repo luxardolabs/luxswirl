@@ -94,9 +94,7 @@ class JobCoreService:
         retention_days = settings.server.job_retention_days
         job.set_expiration(retention_days)
 
-        db.add(job)
-        await db.flush()
-        await db.refresh(job)
+        job = await JobCRUD.add_job(db, job)
 
         logger.info(
             "Created job",
@@ -246,8 +244,7 @@ class JobCoreService:
         elif status in ("completed", "failed", "cancelled") and not job.completed_at:
             job.completed_at = utc_now()
 
-        await db.flush()
-        await db.refresh(job)
+        job = await JobCRUD.save_job(db, job)
 
         logger.info(
             "Job status changed",
@@ -318,8 +315,7 @@ class JobCoreService:
                 extra={"job_id": str(job_id), "error_message": result_data.error},
             )
 
-        await db.flush()
-        await db.refresh(job)
+        job = await JobCRUD.save_job(db, job)
 
         return job
 
@@ -349,8 +345,7 @@ class JobCoreService:
             return None
 
         job.cancel()
-        await db.flush()
-        await db.refresh(job)
+        job = await JobCRUD.save_job(db, job)
 
         logger.info("Job cancelled", extra={"job_id": str(job_id)})
 
@@ -372,7 +367,7 @@ class JobCoreService:
         if not job:
             raise Exception(f"Job not found: {job_id}")
 
-        await db.delete(job)
+        await JobCRUD.delete_job(db, job)
 
         logger.info("Job deleted", extra={"job_id": str(job_id)})
 
