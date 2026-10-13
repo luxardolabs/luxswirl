@@ -61,7 +61,7 @@ File permissions: 0600 (owner read/write only)
 # compose.yml
 services:
   agent:
-    image: luxswirl-agent:latest
+    image: luxswirl-agent:2026.09.0
     network_mode: host
     volumes:
       - agent_data:/app/data
@@ -84,7 +84,7 @@ services:
 # compose.yml
 services:
   agent:
-    image: luxswirl-agent:latest
+    image: luxswirl-agent:2026.09.0
     container_name: luxswirl_agent_prod  # IMPORTANT: Use fixed name
     volumes:
       - agent_data:/app/data
@@ -219,7 +219,7 @@ LUXSWIRL_ALLOW_INSECURE_HTTP: "true"
 
 services:
   agent:
-    image: ghcr.io/luxardolabs/luxswirl-agent:latest
+    image: ghcr.io/luxardolabs/luxswirl-agent:2026.09.0
     container_name: luxswirl_agent_prod
     network_mode: host  # Recommended for stability
     restart: unless-stopped

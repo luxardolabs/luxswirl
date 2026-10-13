@@ -15,12 +15,12 @@ The LuxSwirl agent is a lightweight monitoring agent that executes health checks
 
 ### 1. Create compose.yml
 
-The published agent image is `ghcr.io/luxardolabs/luxswirl-agent` (tagged `:latest` / `:<version>`). To build it from source, run `make build` at the repo root. Compose v2 does not use a `version:` key.
+The published agent image is `ghcr.io/luxardolabs/luxswirl-agent` (tagged `:<version>`). To build it from source, run `make build` at the repo root. Compose v2 does not use a `version:` key.
 
 ```yaml
 services:
   luxswirl_agent:
-    image: ghcr.io/luxardolabs/luxswirl-agent:latest
+    image: ghcr.io/luxardolabs/luxswirl-agent:2026.09.0
     container_name: luxswirl_agent
     command: ["python", "-m", "app.main"]
     network_mode: host  # Recommended for stability
@@ -104,7 +104,7 @@ curl -X POST https://server.example.com:9000/api/v1/agents/{agent_id}/checks \
 ```yaml
 services:
   luxswirl_agent:
-    image: ghcr.io/luxardolabs/luxswirl-agent:latest
+    image: ghcr.io/luxardolabs/luxswirl-agent:2026.09.0
     container_name: luxswirl_agent
     network_mode: host
     restart: unless-stopped
@@ -136,7 +136,7 @@ services:
 ```yaml
 services:
   luxswirl_agent:
-    image: ghcr.io/luxardolabs/luxswirl-agent:latest
+    image: ghcr.io/luxardolabs/luxswirl-agent:2026.09.0
     container_name: luxswirl_agent_prod  # IMPORTANT: Use fixed name
     restart: unless-stopped
 
@@ -169,7 +169,7 @@ services:
 ```yaml
 services:
   luxswirl_agent:
-    image: ghcr.io/luxardolabs/luxswirl-agent:latest
+    image: ghcr.io/luxardolabs/luxswirl-agent:2026.09.0
     container_name: luxswirl_agent
     network_mode: host
     restart: unless-stopped
@@ -199,7 +199,7 @@ services:
 ```yaml
 services:
   luxswirl_agent_web:
-    image: ghcr.io/luxardolabs/luxswirl-agent:latest
+    image: ghcr.io/luxardolabs/luxswirl-agent:2026.09.0
     container_name: luxswirl_agent_web
     network_mode: bridge
     restart: unless-stopped
@@ -213,7 +213,7 @@ services:
       - agent_web_data:/app/data
 
   luxswirl_agent_db:
-    image: ghcr.io/luxardolabs/luxswirl-agent:latest
+    image: ghcr.io/luxardolabs/luxswirl-agent:2026.09.0
     container_name: luxswirl_agent_db
     network_mode: bridge
     restart: unless-stopped
@@ -271,7 +271,7 @@ volumes:
 ```yaml
 services:
   luxswirl_agent:
-    image: ghcr.io/luxardolabs/luxswirl-agent:latest
+    image: ghcr.io/luxardolabs/luxswirl-agent:2026.09.0
     container_name: luxswirl_agent
     network_mode: host
     restart: unless-stopped
@@ -340,7 +340,7 @@ environment:
 ```yaml
 services:
   luxswirl_agent:
-    image: ghcr.io/luxardolabs/luxswirl-agent:latest
+    image: ghcr.io/luxardolabs/luxswirl-agent:2026.09.0
     container_name: luxswirl_agent
     network_mode: host
     restart: unless-stopped
@@ -617,7 +617,7 @@ services:
 ```yaml
 services:
   luxswirl_agent:
-    image: ghcr.io/luxardolabs/luxswirl-agent:latest
+    image: ghcr.io/luxardolabs/luxswirl-agent:2026.09.0
     container_name: luxswirl_agent
 
     deploy:
@@ -637,7 +637,7 @@ services:
 ```yaml
 services:
   luxswirl_agent:
-    image: ghcr.io/luxardolabs/luxswirl-agent:latest
+    image: ghcr.io/luxardolabs/luxswirl-agent:2026.09.0
     container_name: luxswirl_agent
 
     dns:
@@ -658,7 +658,7 @@ networks:
 
 services:
   luxswirl_agent:
-    image: ghcr.io/luxardolabs/luxswirl-agent:latest
+    image: ghcr.io/luxardolabs/luxswirl-agent:2026.09.0
     container_name: luxswirl_agent
 
     networks:
@@ -687,7 +687,7 @@ environment:
 ```yaml
 services:
   luxswirl_agent:
-    image: ghcr.io/luxardolabs/luxswirl-agent:latest
+    image: ghcr.io/luxardolabs/luxswirl-agent:2026.09.0
 
     deploy:
       mode: global  # One agent per node

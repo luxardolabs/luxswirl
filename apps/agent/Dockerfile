@@ -1,7 +1,7 @@
 # LuxSwirl agent (health-check runner).
 # Build context = repo root: `docker build -f apps/agent/Dockerfile .`
 # Carries Playwright/Chromium (synthetic checks) + ping/iproute (network checks).
-FROM python:3.14-slim
+FROM python:3.14-slim AS production
 
 WORKDIR /app
 

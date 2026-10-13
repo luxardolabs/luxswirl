@@ -60,7 +60,7 @@ docker compose up -d timescaledb luxswirl_server
 **Build from source instead** (no published image): the repo ships a Makefile that builds both images locally.
 
 ```bash
-make build      # builds ghcr.io/luxardolabs/luxswirl-backend + -agent locally
+make build      # builds luxswirl-backend + luxswirl-agent locally (bare names, never pushed)
 ```
 
 **Expected output**:
@@ -421,7 +421,7 @@ docker run -d \
   -e LUXSWIRL_SERVER_URL=https://server.example.com:9000/api/v1/reports \
   -e LUXSWIRL_AUTH_KEY=your_registration_key_here \
   -v luxswirl_agent_data:/app/data \
-  ghcr.io/luxardolabs/luxswirl-agent:latest
+  ghcr.io/luxardolabs/luxswirl-agent:2026.09.0
 ```
 
 3. **Verify connection**:

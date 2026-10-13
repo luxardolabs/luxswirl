@@ -245,16 +245,15 @@ The agent includes several reliability features in `agent/core.py`:
 
 ### Dev stack
 
-`make dev-deploy` is the deploy: it builds this commit, pins `.env.dev` to it, brings the stack up and waits for every HEALTHCHECK, then runs `make smoke` against what it deployed. A smoke FAIL fails the deploy. The steps underneath stay separate, and `dev-up` does NOT build.
+`make dev-deploy` is the deploy: it publishes this commit (both images built, scanned and pushed to the private `REGISTRY` as `:sha-<commit>`), pins `.env.dev` to it, brings the stack up and waits for every HEALTHCHECK, then runs `make smoke` against what it deployed. A smoke FAIL fails the deploy. It refuses a dirty tree: commit first. The steps underneath stay separate, and `dev-up` does NOT build.
 
 ```bash
-make dev-deploy    # build-dev + up --wait + smoke: the way to put a commit on the dev stack
+make dev-deploy    # publish-sha + dev-pin + smoke: the way to put a commit on the dev stack
 make smoke         # probe the deployed stack: /health names the commit, CSS served, forged Host refused, auth, containers healthy, entry points import
-make build-dev     # BUILD ONLY: both images as :sha-<commit> from current source, and pin .env.dev to that tag
+make publish-sha   # PUBLISH ONLY: build + scan + push both images as :sha-<commit> (an already-published sha is reused, never rebuilt)
 make dev-up        # START ONLY: `compose up -d` — does NOT build; runs whatever tag .env.dev pins
-make dev-pin TAG=sha-…  # point .env.dev at an already-built tag (the rollback path)
+make dev-pin TAG=sha-…  # point .env.dev at an already-PUBLISHED tag and restart (the rollback path)
 make dev-restart   # restart the running containers ONLY — no rebuild, does NOT pick up code changes
-make dev-rebuild   # build-dev with --no-cache, then up
 make dev-logs      # follow logs
 make dev-shell     # bash into the server container
 make dev-down      # stop the stack (volume preserved)
@@ -266,13 +265,11 @@ Dev runs **baked images** (code COPYd in — no source bind-mounts), so a code c
 
 ```bash
 make version                # show VERSION + image tags
-make build                  # build both images as :$(VERSION) (no push)
-make build-dev              # build both as :dev (baked version) for the dev stack
-make push                   # build + push both :$(VERSION) AND :latest
-make release                # css + push (promote a release)
+make build                  # build both images LOCALLY as bare luxswirl-{backend,agent}:$(VERSION) (no push)
+make release                # cut VERSION: refuse a dirty tree / released version / untagged HEAD, build + scan + push both :$(VERSION) to ghcr, then the GitHub Release
 ```
 
-Version is **coded in the `VERSION` file** (not derived from the directory path) → baked via `--build-arg BUILD_VERSION` → `ENV APP_VERSION`/`LABEL version` → `settings.app_version` → `/health`. Registry: `ghcr.io/luxardolabs/luxswirl-{backend,agent}` (override `REGISTRY` to push elsewhere).
+Publishing is the luxarch **image block** (v16, `IMAGES = backend agent`): one `VERSION`, both images, every image scanned before any is pushed. Version is **coded in the `VERSION` file** (not derived from the directory path) → baked via `--build-arg BUILD_VERSION` → `ENV APP_VERSION`/`LABEL version` → `settings.app_version` → `/health`. Registries: each commit's `:sha-<commit>` goes to the private `REGISTRY` (from `Makefile.local`); a release goes to `RELEASE_REGISTRY` = `ghcr.io/luxardolabs/luxswirl-{backend,agent}`. The backend Dockerfile's `test` stage (production + the dev group) is the suite's image.
 
 ### Quality & tests (all dockerized)
 
