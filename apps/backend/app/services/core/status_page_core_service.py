@@ -110,9 +110,7 @@ class StatusPageCoreService:
             items=data.items,
         )
 
-        db.add(status_page)
-        await db.flush()
-        await db.refresh(status_page)
+        status_page = await StatusPageCRUD.add_page(db, status_page)
 
         logger.info(
             "Created status page",
@@ -157,8 +155,7 @@ class StatusPageCoreService:
             setattr(status_page, field, value)
 
         status_page.updated_at = utc_now()
-        await db.flush()
-        await db.refresh(status_page)
+        status_page = await StatusPageCRUD.save_page(db, status_page)
 
         logger.info(
             "Updated status page",
@@ -182,8 +179,7 @@ class StatusPageCoreService:
             db, status_page_id
         )
 
-        await db.delete(status_page)
-        await db.flush()
+        await StatusPageCRUD.delete_page(db, status_page)
 
         logger.info(
             "Deleted status page",
@@ -239,8 +235,7 @@ class StatusPageCoreService:
         status_page.add_check(check_id, order)
         status_page.updated_at = utc_now()
 
-        await db.flush()
-        await db.refresh(status_page)
+        status_page = await StatusPageCRUD.save_page(db, status_page)
 
         logger.info(
             "Added check to status page",
@@ -284,8 +279,7 @@ class StatusPageCoreService:
         status_page.add_group(name, filter, order, collapsed)
         status_page.updated_at = utc_now()
 
-        await db.flush()
-        await db.refresh(status_page)
+        status_page = await StatusPageCRUD.save_page(db, status_page)
 
         logger.info(
             "Added group to status page",
@@ -321,8 +315,7 @@ class StatusPageCoreService:
         status_page.remove_item(index)
         status_page.updated_at = utc_now()
 
-        await db.flush()
-        await db.refresh(status_page)
+        status_page = await StatusPageCRUD.save_page(db, status_page)
 
         logger.info(
             "Removed item from status page",
@@ -359,8 +352,7 @@ class StatusPageCoreService:
         status_page.reorder_item(from_index, to_index)
         status_page.updated_at = utc_now()
 
-        await db.flush()
-        await db.refresh(status_page)
+        status_page = await StatusPageCRUD.save_page(db, status_page)
 
         logger.info(
             "Reordered item in status page",
@@ -466,8 +458,7 @@ class StatusPageCoreService:
         status_page.updated_at = utc_now()
         attributes.flag_modified(status_page, "items")
 
-        await db.flush()
-        await db.refresh(status_page)
+        status_page = await StatusPageCRUD.save_page(db, status_page)
 
         logger.info(
             "Reordered all items in status page",
@@ -506,8 +497,7 @@ class StatusPageCoreService:
                 status_page.updated_at = utc_now()
                 attributes.flag_modified(status_page, "items")
 
-                await db.flush()
-                await db.refresh(status_page)
+                status_page = await StatusPageCRUD.save_page(db, status_page)
 
                 logger.info(
                     "Renamed group in status page",
@@ -551,8 +541,7 @@ class StatusPageCoreService:
                 status_page.updated_at = utc_now()
                 attributes.flag_modified(status_page, "items")
 
-                await db.flush()
-                await db.refresh(status_page)
+                status_page = await StatusPageCRUD.save_page(db, status_page)
 
                 logger.info(
                     "Updated filters for group in status page",
@@ -594,8 +583,7 @@ class StatusPageCoreService:
         status_page.update_group_sort(item_index, sort_by, sort_direction)
         status_page.updated_at = utc_now()
 
-        await db.flush()
-        await db.refresh(status_page)
+        status_page = await StatusPageCRUD.save_page(db, status_page)
 
         logger.info(
             "Updated sort for group in status page",

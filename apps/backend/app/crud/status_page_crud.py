@@ -13,6 +13,27 @@ from app.models.status_page_model import StatusPage
 class StatusPageCRUD:
     """Database queries for status pages."""
 
+    # ── Writes (flushed; the session owner commits) ───────────────────────────
+
+    @staticmethod
+    async def add_page(db: AsyncSession, status_page: StatusPage) -> StatusPage:
+        db.add(status_page)
+        await db.flush()
+        await db.refresh(status_page)
+        return status_page
+
+    @staticmethod
+    async def save_page(db: AsyncSession, status_page: StatusPage) -> StatusPage:
+        """Write a page's changed fields; the refreshed row."""
+        await db.flush()
+        await db.refresh(status_page)
+        return status_page
+
+    @staticmethod
+    async def delete_page(db: AsyncSession, status_page: StatusPage) -> None:
+        await db.delete(status_page)
+        await db.flush()
+
     @staticmethod
     async def get_by_id(db: AsyncSession, status_page_id: UUID) -> StatusPage | None:
         result = await db.execute(
