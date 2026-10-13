@@ -220,7 +220,7 @@ class NotificationProviderTestResponse(BaseSchema):
 class NotificationProviderSchemaResponse(BaseSchema):
     """Schema for provider configuration schema."""
 
-    provider_type: str
+    provider_type: NotificationProviderType
     provider_name: str
     provider_description: str
     config_schema: dict[str, Any]

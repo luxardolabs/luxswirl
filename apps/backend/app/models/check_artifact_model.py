@@ -19,7 +19,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from app.models.base_model import Base, SerializerMixin, TableNameMixin, str_enum
-from app.models.enum_model import CheckArtifactType
+from app.models.enum_model import ArtifactContentType, CheckArtifactType
 
 if TYPE_CHECKING:
     from app.models.check_model import Check
@@ -102,10 +102,10 @@ class CheckArtifact(Base, TableNameMixin, SerializerMixin):
         comment="Type: screenshot, trace, video, har",
     )
 
-    content_type: Mapped[str] = mapped_column(
-        String(50),
+    content_type: Mapped[ArtifactContentType] = mapped_column(
+        str_enum(ArtifactContentType, 50),
         nullable=False,
-        comment="MIME type: image/png, application/zip, etc",
+        comment="MIME type the artifact is served with",
     )
 
     filename: Mapped[str] = mapped_column(

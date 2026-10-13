@@ -15,7 +15,25 @@ from app.models.base_model import (
     UUIDPrimaryKeyMixin,
     str_enum,
 )
-from app.models.enum_model import SettingCategory
+from app.models.enum_model import SettingCategory, SettingValueType
+
+# bool before int: a bool is an int subclass, and a flag is not a number.
+_VALUE_TYPES: tuple[tuple[type, SettingValueType], ...] = (
+    (bool, SettingValueType.BOOL),
+    (int, SettingValueType.INT),
+    (float, SettingValueType.FLOAT),
+    (str, SettingValueType.STRING),
+    (list, SettingValueType.LIST),
+    (dict, SettingValueType.DICT),
+)
+
+
+def _value_type(value: Any) -> SettingValueType:
+    """The stored type tag for a setting value; anything else is a string."""
+    for python_type, value_type in _VALUE_TYPES:
+        if isinstance(value, python_type):
+            return value_type
+    return SettingValueType.STRING
 
 
 class Setting(
@@ -126,21 +144,4 @@ class Setting(
         Args:
             new_value: The new value to store
         """
-        # Infer type from value
-        value_type = type(new_value).__name__
-        if value_type == "int":
-            value_type = "int"
-        elif value_type == "float":
-            value_type = "float"
-        elif value_type == "bool":
-            value_type = "bool"
-        elif value_type == "str":
-            value_type = "string"
-        elif value_type == "list":
-            value_type = "list"
-        elif value_type == "dict":
-            value_type = "dict"
-        else:
-            value_type = "string"
-
-        self.value = {"value": new_value, "type": value_type}
+        self.value = {"value": new_value, "type": _value_type(new_value)}

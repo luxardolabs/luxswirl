@@ -8,6 +8,7 @@ from sqlalchemy import Index, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base_model import UUIDBaseModel
+from app.models.enum_model import RegistrationKeyStatus
 
 
 class RegistrationKey(UUIDBaseModel):
@@ -92,8 +93,8 @@ class RegistrationKey(UUIDBaseModel):
         return self.revoked_at is None
 
     @property
-    def status(self) -> str:
-        """Get human-readable status."""
+    def status(self) -> RegistrationKeyStatus:
+        """Revoked once revoked_at is set, otherwise active."""
         if self.revoked_at:
-            return "revoked"
-        return "active"
+            return RegistrationKeyStatus.REVOKED
+        return RegistrationKeyStatus.ACTIVE
