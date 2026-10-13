@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.rate_limit import limiter
 from app.core.request_helpers import client_ip_from_request
+from app.core.safe_redirect import safe_redirect_target
 from app.db import get_db
 from app.services.views.web_auth_view_service import WebAuthViewService
 from app.services.views.web_users_view_service import WebUsersViewService
@@ -43,17 +44,18 @@ async def login_page(
     if setup_redirect is not None:
         return setup_redirect
 
-    # If already logged in, redirect to home or specified redirect
+    # Already signed in: go to the requested page, if it is a page on this site.
     if user:
-        redirect_url = redirect or "/"
-        return RedirectResponse(url=redirect_url, status_code=status.HTTP_302_FOUND)
+        return RedirectResponse(
+            url=safe_redirect_target(redirect), status_code=status.HTTP_302_FOUND
+        )
 
     return templates.TemplateResponse(
         request,
         "pages/login.html",
         {
             "current_user": user,  # Will be None for anonymous users
-            "redirect": redirect or "/",
+            "redirect": safe_redirect_target(redirect),
             "error": None,
             # The form pre-fills this after a failed POST; the GET must name it
             # too, or the page it renders has no username field to fill.
@@ -97,7 +99,7 @@ async def login_submit(
             "pages/login.html",
             {
                 "current_user": None,  # Not authenticated
-                "redirect": redirect,
+                "redirect": safe_redirect_target(redirect),
                 "error": "Invalid username or password",
                 "username": username,  # Pre-fill username,
                 "page_title": "Sign In",
@@ -143,8 +145,10 @@ async def login_submit(
         )
         return response
 
-    # Successful login - set cookie and redirect
-    response = RedirectResponse(url=redirect, status_code=status.HTTP_302_FOUND)
+    # Successful login - set cookie and redirect (only ever to a page on this site)
+    response = RedirectResponse(
+        url=safe_redirect_target(redirect), status_code=status.HTTP_302_FOUND
+    )
     response.set_cookie(
         key=cookie_config.session_cookie_name,
         value=token,
