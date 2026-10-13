@@ -117,13 +117,14 @@ http://localhost:9000
 
 There are **no default credentials**. On first launch (no admin exists yet) the app sends you to a setup page to create your administrator account:
 
+1. Find the one-time setup token in the server log: `docker compose logs luxswirl_server | grep "setup"`.
 1. Open the URL above — you'll be redirected to **`/setup`**.
-1. Choose an admin **username** and **password**, then submit.
+1. Paste the token, choose an admin **username** and **password** (12+ characters), then submit.
 1. You're taken to the login page — sign in with the credentials you just set.
 
 Accounts are username + password only (no email).
 
-**Unattended / automation (optional)**: to skip the wizard for scripted deploys, set `SECURITY__INITIAL_ADMIN_PASSWORD` (and optionally `SECURITY__INITIAL_ADMIN_USERNAME`, default `admin`) in `.env` before first boot. The admin is then created automatically on boot and you log in with it — a password change is forced on first login.
+**Unattended / automation (optional)**: set `INITIAL_ADMIN_USERNAME` and `INITIAL_ADMIN_PASSWORD` in `.env` before first boot. The admin is created on that boot (only while there are no users) and a password change is forced at first sign-in. See [First admin and recovery](../reference/settings-reference.md#first-admin-and-recovery).
 
 ______________________________________________________________________
 

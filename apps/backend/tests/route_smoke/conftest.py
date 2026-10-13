@@ -185,12 +185,11 @@ async def _truncate_seeded(session_maker) -> None:
 async def empty_install(worker_db, monkeypatch):
     """The app on a FIRST-RUN install: no users, no session, no API token set.
 
-    /setup exists only for this state — with any user present it redirects to
-    /login, which is what the seeded sweep saw, so setup.html was never
+    /setup exists only for this state — with any user present it is 404,
+    which is what the seeded sweep saw, so setup.html was never
     rendered by anything. This fixture is the only place that state exists.
     """
     monkeypatch.setattr(settings.security, "rate_limit_enabled", False)
-    monkeypatch.setattr(settings.security, "initial_admin_password", None)
     await _truncate_seeded(worker_db)
 
     async def _override_get_db():

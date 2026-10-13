@@ -174,21 +174,6 @@ class SecuritySettings(BaseSettings):
         description="Access token expiration in minutes",
     )
 
-    # Initial admin user (created on first run if no admin exists)
-    initial_admin_username: str = Field(
-        default="admin",
-        description="Default admin username (created on first run)",
-    )
-    initial_admin_password: str = Field(
-        default="",
-        description=(
-            "Admin password for unattended/automation setup. If set, the admin is "
-            "seeded on first boot with must_change_password enforced. If empty, no "
-            "default admin is created and the first-run /setup wizard handles "
-            "interactive admin creation (no default credentials ship)."
-        ),
-    )
-
     # Rate Limiting
     rate_limit_enabled: bool = Field(
         default=True,

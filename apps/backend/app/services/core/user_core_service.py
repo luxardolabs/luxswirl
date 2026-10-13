@@ -8,9 +8,7 @@ from shared.logger import get_logger
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import settings
 from app.crud.user_crud import UserCRUD
-from app.models.enum_model import UserRole
 from app.models.user_model import User
 from app.schemas.pagination_schema import build_pagination
 from app.schemas.user_schema import (
@@ -333,80 +331,6 @@ class UserCoreService:
             extra={"username": user.username, "user_id": str(user_id)},
         )
         return UserResponse.model_validate(user)
-
-    async def needs_setup(self, db: AsyncSession) -> bool:
-        """
-        Whether the first-run setup wizard should be shown.
-
-        Setup is needed when there is no operator-provided admin password
-        (SECURITY__INITIAL_ADMIN_PASSWORD is unset) AND no admin user exists
-        yet. When an env password is configured, ``ensure_default_admin`` seeds
-        the admin on startup instead, so the wizard is not needed.
-
-        Args:
-            db: Database session
-
-        Returns:
-            True if the ``/setup`` wizard should handle first admin creation.
-        """
-        if settings.security.initial_admin_password:
-            return False
-        return await UserCRUD.get_first_admin(db) is None
-
-    async def ensure_default_admin(self, db: AsyncSession) -> UserResponse | None:
-        """
-        Seed the default admin from env config on startup, if configured.
-
-        Behavior:
-        - If an admin already exists, return it unchanged.
-        - If ``SECURITY__INITIAL_ADMIN_PASSWORD`` is set, create the admin from
-          the ``SECURITY__INITIAL_ADMIN_*`` env vars with ``must_change_password``
-          enforced (unattended/automation path).
-        - If it is empty, do nothing and return ``None`` — first-run admin
-          creation is handled interactively by the ``/setup`` wizard (see
-          ``needs_setup``). This never raises, so an empty password cannot crash
-          startup.
-
-        Args:
-            db: Database session
-
-        Returns:
-            The admin user, or ``None`` when first-run setup is deferred to the wizard.
-        """
-        existing_admin = await UserCRUD.get_first_admin(db)
-
-        if existing_admin:
-            logger.debug("Admin user already exists")
-            return UserResponse.model_validate(existing_admin)
-
-        if not settings.security.initial_admin_password:
-            logger.info(
-                "No admin user and no INITIAL_ADMIN_PASSWORD configured - "
-                "deferring first admin creation to the /setup wizard"
-            )
-            return None
-
-        logger.warning("No admin users found - seeding default admin from config")
-
-        default_admin = UserCreate(
-            username=settings.security.initial_admin_username,
-            password=settings.security.initial_admin_password,
-            role=UserRole.ADMIN,
-            full_name="System Administrator",
-            is_active=True,
-            must_change_password=True,
-        )
-
-        admin_user = await self.create_user(db, default_admin, created_by="system")
-        logger.warning(
-            "Created default admin user from config (MUST BE CHANGED ON FIRST LOGIN)",
-            extra={
-                "username": admin_user.username,
-                "user_id": str(admin_user.id),
-            },
-        )
-
-        return UserResponse.model_validate(admin_user)
 
     @staticmethod
     async def get_active_user_count(db: AsyncSession) -> int:

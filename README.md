@@ -122,7 +122,7 @@ cd luxswirl
 docker compose up -d timescaledb luxswirl_server
 ```
 
-Open `http://localhost:9000`. There are **no default credentials** — on first launch you're redirected to **`/setup`** to create your admin account (username + password). Then sign in.
+Open `http://localhost:9000`. There are **no default credentials** — on first launch you're redirected to **`/setup`** to create your admin account: paste the one-time setup token from the server log (`docker compose logs luxswirl_server | grep setup`), then choose a username and password. Then sign in.
 
 Next, create a registration key (**Settings → Registration Keys → Create Key**), hand it to the agent, and start it:
 

@@ -32,8 +32,7 @@ SKIP_PATHS = frozenset(
     }
 )
 
-# The first-run wizard closes once any user exists and sends the visitor to
-# /login, signed in or not; its form is rendered by
+# The first-admin /setup is 404 once any user exists, signed in or not; its form is rendered by
 # test_setup_wizard_renders_on_an_empty_install.
 SETUP_PATHS = frozenset({"/setup"})
 
@@ -175,7 +174,7 @@ async def test_login_page_renders_for_an_anonymous_visitor(smoke_world):
 
 
 async def test_setup_wizard_renders_on_an_empty_install(empty_install):
-    """/setup redirects the moment any user exists, which is every other test's
+    """/setup is 404 the moment any user exists, which is every other test's
     world — so its template had no test that ever rendered it."""
     response = await empty_install.get("/setup")
     assert response.status_code == 200, response.status_code

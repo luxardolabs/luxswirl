@@ -34,6 +34,9 @@ non_request_files = [
   "app/background/job_purge.py",
   "app/background/database_maintenance.py",
   "app/scripts/migrate_encrypt_checks.py",
+  # The admin-bootstrap CLI (luxarch --emit admin-bootstrap-cli): startup seed and
+  # `python -m app.cli reset-password` each own their transaction.
+  "app/cli.py",
 ]
 cascading_delete_calls = [
   "\\bbulk_delete_by_ids\\b",
@@ -56,7 +59,7 @@ tenant_cross = [
   { function = "get_by_token_hash", evidence = "the session token IS the credential — this is the pre-auth lookup that establishes who the caller is, so there is no user to scope by yet", token_source = "apps/backend/app/services/core/auth_core_service.py" },
 ]
 auth_public = [
-  { function = "create_first_admin", evidence = "first-run setup: re-checks needs_setup() and redirects to /login the moment any user exists, so it is only reachable on an empty install" },
+  { function = "submit_setup", evidence = "first-admin /setup (admin-bootstrap asset): there is no user to authenticate yet; it 404s once any user exists (re-checked under an advisory lock in the creating transaction), requires the one-time token printed in the server log (constant-time compare) and is rate-limited 5/minute" },
 ]
 js_network = [
   { file = "app.js", pattern = "window.location.reload(", evidence = "canonical refreshPage HX-Trigger handler" },

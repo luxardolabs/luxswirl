@@ -8,7 +8,6 @@ from __future__ import annotations
 from uuid import uuid4
 
 import pytest
-from app.core.config import settings
 from app.crud.user_crud import UserCRUD
 from app.schemas.user_schema import UserCreate, UserUpdate
 from app.services.core.user_core_service import UserCoreService
@@ -209,38 +208,3 @@ class TestStatsAndListing:
         rows, total = await svc.list_users(db, skip=0, limit=3)
         assert total == 7
         assert len(rows) == 3
-
-
-# ---------------------------------------------------------------------------
-# ensure_default_admin
-# ---------------------------------------------------------------------------
-
-
-class TestEnsureDefaultAdmin:
-    """`ensure_default_admin`: seed from INITIAL_ADMIN config when none exists,
-    defer to the /setup wizard when no password is configured, and no-op when an
-    admin already exists."""
-
-    async def test_creates_admin_from_config(self, db: AsyncSession, svc, monkeypatch):
-        monkeypatch.setattr(settings.security, "initial_admin_username", "admin")
-        monkeypatch.setattr(
-            settings.security, "initial_admin_password", "ComplexPass123!"
-        )
-        admin = await svc.ensure_default_admin(db)
-        assert admin is not None
-        assert admin.role == "admin"
-        assert admin.must_change_password is True
-
-    async def test_defers_to_setup_when_no_password(
-        self, db: AsyncSession, svc, monkeypatch
-    ):
-        monkeypatch.setattr(settings.security, "initial_admin_password", "")
-        assert await svc.ensure_default_admin(db) is None
-
-    async def test_no_op_when_admin_exists(self, db: AsyncSession, svc):
-        existing = make_user(role="admin")
-        db.add(existing)
-        await db.flush()
-        result = await svc.ensure_default_admin(db)
-        assert result is not None
-        assert result.id == existing.id
