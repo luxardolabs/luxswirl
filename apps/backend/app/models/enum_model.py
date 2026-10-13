@@ -22,7 +22,7 @@ Convention:
 """
 
 from enum import Enum, StrEnum
-from typing import Any
+from typing import Any, Literal
 
 # ============================================================================
 # Notifications
@@ -127,6 +127,11 @@ class BulkCheckOutcome(StrEnum):
 
     SUCCESS = "success"
     FAILED = "failed"
+
+
+# What a check result reports as its status: the outcome, or a failure's error
+# type (CheckResult.status).
+CheckResultStatus = Literal["success", "failure"] | CheckErrorType
 
 
 class CheckArtifactType(StrEnum):

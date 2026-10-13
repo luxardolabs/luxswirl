@@ -20,7 +20,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base_model import Base, str_enum
-from app.models.enum_model import CheckErrorType
+from app.models.enum_model import CheckErrorType, CheckResultStatus
 
 if TYPE_CHECKING:
     from app.models.agent_model import Agent
@@ -193,8 +193,8 @@ class CheckResult(Base):
         return self.latency_ms / 1000.0
 
     @property
-    def status(self) -> str:
-        """Get human-readable status."""
+    def status(self) -> CheckResultStatus:
+        """The outcome, or a failure's error type."""
         if self.success:
             return "success"
         elif self.error_type:
