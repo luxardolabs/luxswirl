@@ -91,7 +91,7 @@ def assert_ip_allowed(
         ip = ipaddress.ip_address(ip_str)
     except ValueError:
         return
-    ranges: list[tuple[list[ipaddress._BaseNetwork], str]] = []
+    ranges: list[tuple[list[ipaddress.IPv4Network | ipaddress.IPv6Network], str]] = []
     if block_cloud_metadata:
         ranges.append((CLOUD_METADATA_NETWORKS, "cloud metadata / link-local"))
     if block_private_networks:
