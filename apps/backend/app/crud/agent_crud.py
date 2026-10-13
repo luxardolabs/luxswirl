@@ -6,7 +6,7 @@ from collections.abc import Sequence
 from datetime import datetime, timedelta
 from uuid import UUID
 
-from sqlalchemy import delete, func, or_, select
+from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -26,6 +26,23 @@ class AgentCRUD:
             select(Agent.agent_name).where(Agent.last_seen < cutoff)
         )
         return [name for name in result.scalars().all() if name]
+
+    @staticmethod
+    async def claim_initial_api_key(
+        db: AsyncSession, agent_id: UUID, key_hash: str, created_at: datetime
+    ) -> Agent | None:
+        """Store an agent's FIRST key hash, only while it has none; the agent, or None.
+
+        One statement checks and writes, so two concurrent requests cannot both
+        claim it. None means the agent has a key already, or does not exist.
+        """
+        return await db.scalar(
+            update(Agent)
+            .where(Agent.id == agent_id, Agent.api_key_hash.is_(None))
+            .values(api_key_hash=key_hash, api_key_created_at=created_at)
+            .returning(Agent)
+            .execution_options(populate_existing=True)
+        )
 
     @staticmethod
     async def delete_stale_agents(db: AsyncSession, cutoff: datetime) -> int:

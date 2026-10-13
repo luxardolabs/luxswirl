@@ -857,21 +857,18 @@ class AgentCoreService:
             ValueError: If agent already has a key
         """
 
-        agent = await AgentCoreService.get_agent_by_id(db, agent_id)
+        # Raises AgentNotFoundException for an unknown agent.
+        await AgentCoreService.get_agent_by_id(db, agent_id)
 
-        # Check if agent already has a key
-        if agent.api_key_hash:
-            raise ValueError("Agent already has an API key. Use regenerate instead.")
-
-        # Generate new key
         new_key = f"luxswirl_ak_{secrets.token_hex(16)}"
         salt = bcrypt.gensalt()
         key_hash = bcrypt.hashpw(new_key.encode("utf-8"), salt).decode("utf-8")
 
-        agent.api_key_hash = key_hash
-        agent.api_key_created_at = utc_now()
-
-        await db.flush()
+        # Claimed in one statement that only matches an agent with no key, so two
+        # concurrent requests cannot both issue one (the loser's key would be dead).
+        agent = await AgentCRUD.claim_initial_api_key(db, agent_id, key_hash, utc_now())
+        if agent is None:
+            raise ValueError("Agent already has an API key. Use regenerate instead.")
         logger.info(
             "Generated initial API key for agent",
             extra={"agent_id": str(agent_id)},
