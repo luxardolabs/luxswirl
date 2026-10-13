@@ -1,6 +1,6 @@
 {
   "guard": "luxarch",
-  "guard_version": "0.281.0",
+  "guard_version": "0.289.3",
   "repo": "/repo",
   "targets": [
     {
@@ -1731,7 +1731,62 @@
           "deferred": false,
           "inert": false,
           "inert_reason": "",
-          "fix": "luxarch --doc FLEET-ADMIN-BOOTSTRAP-STANDARD is the standard; `luxarch --emit admin-bootstrap` (+ `-crud`, `-view`, `-router`, `-cli`, `-form`) is the implementation: no default password anywhere (the env-example key present but EMPTY), INITIAL_ADMIN_EMAIL / INITIAL_ADMIN_PASSWORD(_FILE) applied only while the users table is empty and with must_change_password set, otherwise /setup gated by a one-time token from the log, recovery via `python -m app.cli reset-password <user>`, and login sends a must_change_password user to the change form. A red here is aligned, not waived.",
+          "fix": "luxarch --doc FLEET-ADMIN-BOOTSTRAP-STANDARD is the standard; `luxarch --emit admin-bootstrap` (+ `-crud`, `-view`, `-router`, `-cli`, `-form`) is the implementation: no default password anywhere (the env-example key present but EMPTY), INITIAL_ADMIN_EMAIL (or _USERNAME) / INITIAL_ADMIN_PASSWORD(_FILE) applied only while the users table is empty and with must_change_password set, otherwise /setup gated by a one-time token from the log, recovery via `python -m app.cli reset-password <user>`, and login sends a must_change_password user to the change form. A red here is aligned, not waived.",
+          "example": ""
+        },
+        {
+          "rule": "fw.redirect_target_safe",
+          "status": "FAIL",
+          "since": "0.285.0",
+          "violations": 2,
+          "deferred": false,
+          "inert": false,
+          "inert_reason": "",
+          "fix": "send every redirect target the request supplies through ONE helper: `luxarch --emit safe-redirect > app/core/safe_redirect.py`, then `RedirectResponse(safe_redirect_target(next), \u2026)`. It keeps a same-origin path and falls back to `/` for anything else (`//x`, `https://x`, `/\\\\x`, encoded tricks). A fixed path built in front of the value (`f\"/items/{slug}\"`) is already safe. An OAuth `redirect_uri` is matched exactly against the registered list instead. See --doc FLEET-AUTH-SESSION-STANDARD \u00a76.",
+          "example": ""
+        },
+        {
+          "rule": "fw.sign_in_not_on_get",
+          "status": "PASS",
+          "since": "0.286.0",
+          "violations": 0,
+          "deferred": false,
+          "inert": false,
+          "inert_reason": "",
+          "fix": "",
+          "example": ""
+        },
+        {
+          "rule": "fw.single_use_claim_atomic",
+          "status": "FAIL",
+          "since": "0.287.0",
+          "violations": 1,
+          "deferred": false,
+          "inert": false,
+          "inert_reason": "",
+          "fix": "Claim it in one statement that only matches an available row: `update(Model).where(Model.token_hash == h, Model.used_at.is_(None), Model.expires_at > now).values(used_at=now).returning(Model)`, and refuse when it returns no row. Or load the row with `.with_for_update()` before checking and writing it. See --doc FLEET-AUTH-SESSION-STANDARD \u00a71.2.",
+          "example": ""
+        },
+        {
+          "rule": "fw.logout_revokes_server_side",
+          "status": "FAIL",
+          "since": "0.288.0",
+          "violations": 1,
+          "deferred": false,
+          "inert": false,
+          "inert_reason": "",
+          "fix": "Revoke on the server, not only in the browser: give the user a `sessions_valid_after` timestamp, set it to now at logout, and have the auth dependency (which already loads the user) refuse a token issued before it. That signs out everywhere with no extra I/O. Use a per-token denylist only if signing out one device alone is a product need. See --doc FLEET-AUTH-SESSION-STANDARD \u00a72.1.",
+          "example": ""
+        },
+        {
+          "rule": "fw.auth_posts_refuse_cross_site",
+          "status": "FAIL",
+          "since": "0.289.0",
+          "violations": 6,
+          "deferred": false,
+          "inert": false,
+          "inert_reason": "",
+          "fix": "Install the one cross-site guard: `luxarch --emit same-origin > app/core/same_origin.py`, then `app.add_middleware(SameOriginMiddleware, allowed_hosts=settings.ALLOWED_HOSTS)`. It refuses an unsafe-method request whose `Sec-Fetch-Site` is `cross-site` or whose `Origin` the app does not serve; a webhook (no browser headers) passes. An OAuth `form_post` callback goes in `cross_site_paths` and checks its `state` cookie. See --doc FLEET-AUTH-SESSION-STANDARD \u00a75.",
           "example": ""
         },
         {
@@ -1879,8 +1934,8 @@
         }
       ],
       "summary": {
-        "PASS": 150,
-        "FAIL": 1,
+        "PASS": 151,
+        "FAIL": 5,
         "XFAIL": 2,
         "XPASS": 0,
         "INERT": 17
@@ -2431,6 +2486,17 @@
         "example": ""
       },
       {
+        "rule": "repo.images_on_fleet_line",
+        "status": "FAIL",
+        "since": "0.282.0",
+        "violations": 2,
+        "deferred": false,
+        "inert": false,
+        "inert_reason": "",
+        "fix": "bound every image to a version line: `nginx:1.31-alpine`, not `nginx:alpine` or `:latest`. Where the fleet keeps a line (`luxarch --fleet-versions`), use that line; patches float under it, which is the point, and a move to the next line is a deliberate fleet bump the owner makes in ONE home. No digests, no exact freezes. A data-bearing image (postgres and its extension images) is judged only for being unbounded: its major is a dump-and-restore. See --doc FLEET-BUILD-DEPLOY-STANDARD, 'Image lines'.",
+        "example": ""
+      },
+      {
         "rule": "repo.otel_instrumentors_effective",
         "status": "PASS",
         "since": "0.275.0",
@@ -2581,7 +2647,7 @@
         "deferred": false,
         "inert": false,
         "inert_reason": "",
-        "fix": "Paste `luxarch --emit image-block` into the Makefile and delete the hand-written publish and deploy targets; set its settings ABOVE it (REGISTRY, and as needed RELEASE_REGISTRY, PLATFORMS for a multi-arch image, PUBLIC_REGISTRY for a public copy, IMAGE_NAME, BUILD_CONTEXT). Where the block cannot serve this repo, escalate to the luxarch maintainer and leave this red lit: a hand-written copy is the drift the block exists to end. See --doc FLEET-BUILD-DEPLOY-STANDARD.",
+        "fix": "Paste `luxarch --emit image-block` into the Makefile and delete the hand-written publish and deploy targets; set its settings ABOVE it (REGISTRY, and as needed RELEASE_REGISTRY, PLATFORMS for a multi-arch image, PUBLIC_REGISTRY for a public copy, IMAGE_NAME, BUILD_CONTEXT, IMAGES for more than one image). Where the block cannot serve this repo, escalate to the luxarch maintainer and leave this red lit: a hand-written copy is the drift the block exists to end. See --doc FLEET-BUILD-DEPLOY-STANDARD.",
         "example": ""
       },
       {
@@ -2741,19 +2807,19 @@
     ],
     "summary": {
       "PASS": 64,
-      "FAIL": 3,
+      "FAIL": 4,
       "XFAIL": 0,
       "XPASS": 0,
       "INERT": 1
     }
   },
   "summary": {
-    "PASS": 220,
-    "FAIL": 4,
+    "PASS": 221,
+    "FAIL": 9,
     "XFAIL": 2,
     "XPASS": 0,
     "INERT": 20
   },
-  "commit": "e7a6d83f0c65bb0eaa569c5934df39b69b56b678",
-  "generated_at": "2026-10-12T05:50:30Z"
+  "commit": "808408b62a635ed9764122d09ba6b1ccc9b88079",
+  "generated_at": "2026-10-13T00:44:09Z"
 }
