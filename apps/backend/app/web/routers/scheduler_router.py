@@ -10,7 +10,7 @@ Provides:
 """
 
 from fastapi import APIRouter, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, Response
 from shared.logger import get_logger
 
 from app.services.views.scheduler_view_service import SchedulerViewService
@@ -29,7 +29,7 @@ router = APIRouter(tags=["Web UI - Scheduler"], include_in_schema=False)
 async def scheduler_page(
     request: Request,
     current_user: AdminUserWeb,
-):
+) -> HTMLResponse:
     """
     Scheduler admin page - lists all job configurations with controls.
     """
@@ -52,7 +52,7 @@ async def toggle_job(
     job_key: str,
     request: Request,
     current_user: AdminUserWeb,
-):
+) -> Response:
     """
     Toggle job enabled/disabled state. Returns updated job row partial.
     """
@@ -84,7 +84,7 @@ async def run_job(
     job_key: str,
     request: Request,
     current_user: AdminUserWeb,
-):
+) -> Response:
     """
     Execute a job immediately. Returns updated job row partial.
     """
@@ -115,7 +115,7 @@ async def reset_job(
     job_key: str,
     request: Request,
     current_user: AdminUserWeb,
-):
+) -> Response:
     """
     Reset job retry state and re-enable. Returns updated job row partial.
     """
@@ -146,7 +146,7 @@ async def job_history(
     job_key: str,
     request: Request,
     current_user: AdminUserWeb,
-):
+) -> Response:
     """
     Get job execution history panel. Loaded into the side panel.
     """

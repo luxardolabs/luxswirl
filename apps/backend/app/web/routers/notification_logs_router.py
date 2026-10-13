@@ -41,7 +41,7 @@ async def notification_logs_page(
     search: Annotated[str | None, Query(description="Search logs")] = None,
     page: Annotated[int, Query(ge=1, description="Page number")] = 1,
     per_page: PerPageFilter = None,
-):
+) -> HTMLResponse:
     """Notification logs page - all notification attempts with pagination."""
     context = await NotificationLogsViewService.build_logs_page_context(
         db,

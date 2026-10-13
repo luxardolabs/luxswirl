@@ -6,7 +6,7 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, Response
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -46,7 +46,7 @@ async def jobs_page(
     ] = None,
     page: Annotated[int, Query(ge=1, description="Page number")] = 1,
     per_page: PerPageFilter = None,
-):
+) -> HTMLResponse:
     """Main jobs page — paginated list with filters."""
     context = await JobsViewService.build_jobs_page_context(
         db,
@@ -78,7 +78,7 @@ async def jobs_table_partial(
     created: Annotated[str | None, Query()] = None,
     page: Annotated[int, Query(ge=1)] = 1,
     per_page: Annotated[int, Query(ge=10, le=200)] = 25,
-):
+) -> HTMLResponse:
     """HTMX partial — jobs table for live updates (10s polling)."""
     context = await JobsViewService.build_jobs_table_partial_context(
         db,
@@ -104,7 +104,7 @@ async def job_detail_panel(
     request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: CurrentUserWeb,
-):
+) -> HTMLResponse:
     """Job detail panel for the side panel."""
     try:
         context = await JobsViewService.build_job_detail_context(
@@ -130,7 +130,7 @@ async def job_create_form(
     prefill_params: Annotated[
         str | None, Query(description="JSON-encoded params to prefill")
     ] = None,
-):
+) -> HTMLResponse:
     """Job creation form for the side panel."""
     context = await JobsViewService.build_job_create_form_context(
         db, request, current_user, job_type, agent_filter, priority, prefill_params
@@ -147,7 +147,7 @@ async def create_job_web(
     request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: EditorUserWeb,
-):
+) -> HTMLResponse:
     """Create a new job via web form (toast + close panel + refresh on success)."""
     job_type = await JobsViewService.handle_create_job_form(db, request)
     return hx_empty_with_toast(
@@ -162,7 +162,7 @@ async def delete_job_web(
     job_id: UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: EditorUserWeb,
-):
+) -> HTMLResponse:
     """Delete job via web UI."""
     await JobsViewService.handle_delete_job(db, job_id)
     return hx_empty_with_toast("Job deleted successfully", kind="success")
@@ -174,7 +174,7 @@ async def cancel_job_web(
     job_id: UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: EditorUserWeb,
-):
+) -> HTMLResponse:
     """Cancel a pending/running job."""
     await JobsViewService.handle_cancel_job(db, job_id)
     return hx_empty_with_toast(
@@ -196,7 +196,7 @@ async def bulk_create_ping_checks(
     request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: EditorUserWeb,
-):
+) -> Response:
     """Create ping checks for all discovered hosts from a network scan job."""
     form_data = await request.form()
     result, error = await JobBulkCheckViewService.create_ping_checks_from_job(
@@ -216,7 +216,7 @@ async def bulk_create_web_checks(
     request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: EditorUserWeb,
-):
+) -> Response:
     """Create HTTP checks for all web servers discovered in a network scan."""
     form_data = await request.form()
     result, error = await JobBulkCheckViewService.create_web_checks_from_job(
@@ -236,7 +236,7 @@ async def bulk_create_ssh_checks(
     request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: EditorUserWeb,
-):
+) -> Response:
     """Create TCP checks for all SSH servers discovered in a network scan."""
     form_data = await request.form()
     result, error = await JobBulkCheckViewService.create_ssh_checks_from_job(
@@ -256,7 +256,7 @@ async def bulk_create_database_checks(
     request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: EditorUserWeb,
-):
+) -> Response:
     """Create TCP checks for all database servers discovered in a network scan."""
     form_data = await request.form()
     result, error = await JobBulkCheckViewService.create_database_checks_from_job(
@@ -278,7 +278,7 @@ async def quick_create_check_from_host(
     request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: EditorUserWeb,
-):
+) -> HTMLResponse:
     """
     Create a single check from a per-host quick-action button on the network
     scan detail page. Returns a toast and no swap — the page refreshes the

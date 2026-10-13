@@ -7,7 +7,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
 from fastapi import status as http_status
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, Response
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -42,7 +42,7 @@ async def agents_list_page(
     ] = 4,
     page: Annotated[int, Query(ge=1, description="Page number")] = 1,
     per_page: PerPageFilter = None,
-):
+) -> HTMLResponse:
     """Agents list page — paginated."""
     context = await AgentsViewService.build_agents_list_context(
         db, request, current_user, active_only, search, hours, page, per_page
@@ -59,7 +59,7 @@ async def agent_edit_form(
     request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: CurrentUserWeb,
-):
+) -> HTMLResponse:
     """Get agent edit form for the side panel."""
     try:
         context = await AgentsViewService.build_edit_form_context(
@@ -103,7 +103,7 @@ async def update_agent_web(
     watchdog_interval: Annotated[str | None, Form()] = None,
     watchdog_stall_threshold: Annotated[str | None, Form()] = None,
     log_level: Annotated[str | None, Form()] = None,
-):
+) -> Response:
     """Update agent via web form."""
     kind, message, status = await AgentsViewService.handle_update_agent_form(
         db,
@@ -137,7 +137,7 @@ async def delete_agent_web(
     agent_id: UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: EditorUserWeb,
-):
+) -> HTMLResponse:
     """Enqueue an agent_delete maintenance job and return the polling partial.
 
     See LUXSWIRL-105. The actual cascade (checks → check_results across
@@ -181,7 +181,7 @@ async def force_reload_agent(
     agent_id: UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: EditorUserWeb,
-):
+) -> Response:
     """Force agent to reload checks by updating checks_updated_at timestamp."""
     return await AgentsViewService.force_reload(db, agent_id)
 
@@ -195,7 +195,7 @@ async def approve_agent_web(
     agent_id: UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: EditorUserWeb,
-):
+) -> Response:
     """Approve agent via web UI (auto-generates API key)."""
     return await AgentsViewService.approve_agent(db, agent_id)
 
@@ -207,7 +207,7 @@ async def reject_agent_web(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: EditorUserWeb,
     reason: Annotated[str | None, Query()] = None,
-):
+) -> Response:
     """Reject agent via web UI."""
     return await AgentsViewService.reject_agent(db, agent_id, reason)
 
@@ -219,7 +219,7 @@ async def pause_agent_web(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: EditorUserWeb,
     reason: Annotated[str | None, Query()] = None,
-):
+) -> Response:
     return await AgentsViewService.pause_agent(db, agent_id, reason)
 
 
@@ -229,7 +229,7 @@ async def resume_agent_web(
     agent_id: UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: EditorUserWeb,
-):
+) -> Response:
     return await AgentsViewService.resume_agent(db, agent_id)
 
 
@@ -240,7 +240,7 @@ async def disable_agent_web(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: EditorUserWeb,
     reason: Annotated[str | None, Query()] = None,
-):
+) -> Response:
     return await AgentsViewService.disable_agent(db, agent_id, reason)
 
 
@@ -250,7 +250,7 @@ async def enable_agent_web(
     agent_id: UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: EditorUserWeb,
-):
+) -> Response:
     return await AgentsViewService.enable_agent(db, agent_id)
 
 
@@ -268,7 +268,7 @@ async def get_key_management_panel(
     request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: CurrentUserWeb,
-):
+) -> HTMLResponse:
     """Get agent key management panel."""
     try:
         context = await AgentsViewService.build_key_management_panel_context(
@@ -299,7 +299,7 @@ async def generate_key_web(
     request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: EditorUserWeb,
-):
+) -> Response:
     """Generate initial API key for agent (if none exists)."""
     try:
         return await AgentsViewService.generate_agent_key(
@@ -322,7 +322,7 @@ async def regenerate_key_web(
     request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: EditorUserWeb,
-):
+) -> Response:
     """Regenerate API key (revokes old)."""
     try:
         return await AgentsViewService.regenerate_agent_key(
@@ -338,7 +338,7 @@ async def revoke_key_web(
     agent_id: UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: EditorUserWeb,
-):
+) -> Response:
     """Revoke agent API key."""
     try:
         return await AgentsViewService.revoke_agent_key(db, agent_id)

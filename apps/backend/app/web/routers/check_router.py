@@ -28,7 +28,7 @@ async def check_detail_panel(
     current_user: CurrentUserWeb,
     db: Annotated[AsyncSession, Depends(get_db)],
     hours: HistoryHoursFilter = None,
-):
+) -> HTMLResponse:
     """
     Check detail panel for split-screen layout - opened when clicking a check row on dashboard.
     """
@@ -67,7 +67,7 @@ async def check_detail_panel(
 async def check_detail_empty(
     request: Request,
     current_user: CurrentUserWeb,
-):
+) -> HTMLResponse:
     """
     Return empty state for check detail panel.
 
