@@ -20,6 +20,46 @@ from app.models.enum_model import AssignmentMode
 class CheckCRUD:
     """Database queries for checks."""
 
+    # ── Writes (flushed; the session owner commits) ───────────────────────────
+
+    @staticmethod
+    async def add_check(db: AsyncSession, check: Check) -> Check:
+        """Insert a check; the refreshed row with its agent loaded."""
+        db.add(check)
+        await db.flush()
+        await db.refresh(check, ["agent"])
+        return check
+
+    @staticmethod
+    async def save_check(db: AsyncSession, check: Check) -> Check:
+        """Write a check's changed fields; the refreshed row with its agent loaded."""
+        await db.flush()
+        await db.refresh(check, ["agent"])
+        return check
+
+    @staticmethod
+    async def set_parent(
+        db: AsyncSession,
+        parent_check_id: UUID,
+        attach: Sequence[Check],
+        detach: Sequence[Check],
+    ) -> None:
+        """Point ``attach`` at the parent and clear ``detach``'s parent."""
+        for check in attach:
+            check.depends_on_check_id = parent_check_id
+        for check in detach:
+            check.depends_on_check_id = None
+        await db.flush()
+
+    @staticmethod
+    async def load_agent(db: AsyncSession, check: Check) -> None:
+        await db.refresh(check, ["agent"])
+
+    @staticmethod
+    async def delete_check(db: AsyncSession, check: Check) -> None:
+        await db.delete(check)
+        await db.flush()
+
     @staticmethod
     async def get_by_id(
         db: AsyncSession, check_id: UUID, *, include_script_code: bool = False
