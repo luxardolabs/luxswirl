@@ -5,6 +5,7 @@ Pydantic models for the bulk import/export endpoints. Lives in schemas/ per
 the layered architecture standard (no BaseModel subclasses inside routers).
 """
 
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -35,7 +36,11 @@ class BulkImportRequest(BaseModel):
     """Bulk import request."""
 
     agent_id: UUID = Field(..., description="Agent ID to assign checks to")
-    checks: list[CheckExport] = Field(..., description="List of checks to import")
+    # Raw entries, each validated as a CheckExport on its own during the import:
+    # one invalid entry is that check's error, not a 422 for the whole file.
+    checks: list[dict[str, Any]] = Field(
+        ..., description="Checks to import, each in the CheckExport shape"
+    )
     overwrite: bool = Field(default=False, description="Overwrite existing checks")
 
 

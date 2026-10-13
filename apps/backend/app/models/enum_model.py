@@ -92,18 +92,22 @@ class CheckErrorType(StrEnum):
 
 
 class HttpMethod(StrEnum):
-    """Request method an HTTP or JSON check sends.
+    """Request method an HTTP or JSON check sends: the RFC 9110 methods and
+    PATCH, every one the agent can send (it passes the method through).
 
     Uppercase, unlike the other enums here: the value is the method on the wire
-    and in stored check config, and the agent sends it as-is.
+    and in stored check config.
     """
 
     GET = "GET"
+    HEAD = "HEAD"
     POST = "POST"
     PUT = "PUT"
     PATCH = "PATCH"
     DELETE = "DELETE"
-    HEAD = "HEAD"
+    OPTIONS = "OPTIONS"
+    TRACE = "TRACE"
+    CONNECT = "CONNECT"
 
 
 class DnsRecordType(StrEnum):
