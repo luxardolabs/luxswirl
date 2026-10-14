@@ -30,29 +30,29 @@ There are two surfaces with slightly different key names:
 
 **REST API (`POST /api/v1/agents/{agent_id}/checks`)** — uses `display_name`, `interval_seconds`, `timeout_seconds`:
 
-| Field               | Type     | Applies to      | Notes                                                                  |
-| ------------------- | -------- | --------------- | ---------------------------------------------------------------------- |
-| `display_name`      | string   | all             | Required                                                               |
-| `check_type`        | string   | all             | `ping`, `http`, `tcp`, `json`, `dns`, `mysql`, `postgres`, `synthetic` |
-| `target`            | string   | all             | Required                                                               |
-| `description`       | string   | all             | Optional                                                               |
-| `interval_seconds`  | int      | all             | 1–86400                                                                |
-| `timeout_seconds`   | int      | all             | 1–300, default 10                                                      |
-| `enabled`           | bool     | all             | Default true                                                           |
-| `retry_attempts`    | int      | all             | 0–10                                                                   |
-| `tags`              | string[] | all             | Optional                                                               |
-| `http_method`       | string   | http, json      | e.g. `GET`, `POST`                                                     |
-| `verify_ssl`        | bool     | http, json      |                                                                        |
-| `expected_status`   | int      | http, json      | 100–599                                                                |
-| `json_path`         | string   | json            | JSONata expression                                                     |
-| `expected_value`    | string   | json            | Compared against `json_path` result                                    |
-| `record_type`       | string   | dns             | `A`, `AAAA`, `CNAME`, `MX`, `TXT`, `NS`, `PTR`, `SOA`, `SRV`, `CAA`    |
-| `nameserver`        | string   | dns             | Default `1.1.1.1`                                                      |
-| `port`              | int      | dns, tcp        | DNS default 53; required for TCP                                       |
-| `expect_value`      | string   | dns             | DNS expected record value (note: `expect_value`, not `expected_value`) |
-| `connection_string` | string   | mysql, postgres | Optional; falls back to `target`                                       |
-| `query`             | string   | mysql, postgres | Default `SELECT 1`                                                     |
-| `script_code`       | string   | synthetic       | Python/Playwright script                                               |
+| Field               | Type     | Applies to      | Notes                                                                                     |
+| ------------------- | -------- | --------------- | ----------------------------------------------------------------------------------------- |
+| `display_name`      | string   | all             | Required                                                                                  |
+| `check_type`        | string   | all             | `ping`, `http`, `tcp`, `json`, `dns`, `mysql`, `postgres`, `synthetic`                    |
+| `target`            | string   | all             | Required                                                                                  |
+| `description`       | string   | all             | Optional                                                                                  |
+| `interval_seconds`  | int      | all             | 1–86400                                                                                   |
+| `timeout_seconds`   | int      | all             | 1–300, default 10                                                                         |
+| `enabled`           | bool     | all             | Default true                                                                              |
+| `retry_attempts`    | int      | all             | 0–10                                                                                      |
+| `tags`              | string[] | all             | Optional                                                                                  |
+| `http_method`       | string   | http, json      | `GET`, `HEAD`, `POST`, `PUT`, `PATCH`, `DELETE`, `OPTIONS`, `TRACE`, `CONNECT` (any case) |
+| `verify_ssl`        | bool     | http, json      |                                                                                           |
+| `expected_status`   | int      | http, json      | 100–599                                                                                   |
+| `json_path`         | string   | json            | JSONata expression                                                                        |
+| `expected_value`    | string   | json            | Compared against `json_path` result                                                       |
+| `record_type`       | string   | dns             | `A`, `AAAA`, `CNAME`, `MX`, `TXT`, `NS`, `PTR`, `SOA`, `SRV`, `CAA`                       |
+| `nameserver`        | string   | dns             | Default `1.1.1.1`                                                                         |
+| `port`              | int      | dns, tcp        | DNS default 53; required for TCP                                                          |
+| `expect_value`      | string   | dns             | DNS expected record value (note: `expect_value`, not `expected_value`)                    |
+| `connection_string` | string   | mysql, postgres | Optional; falls back to `target`                                                          |
+| `query`             | string   | mysql, postgres | Default `SELECT 1`                                                                        |
+| `script_code`       | string   | synthetic       | Python/Playwright script                                                                  |
 
 **Import/Export JSON** — uses `name` plus `interval`/`timeout` (instead of `display_name`/`interval_seconds`/`timeout_seconds`). Supported keys: `name`, `check_type`, `target`, `interval`, `timeout`, `retry_attempts`, `enabled`, `description`, `http_method`, `expected_status`, `json_path`, `expected_value`, `tags`.
 
