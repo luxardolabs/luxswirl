@@ -102,7 +102,7 @@ ______________________________________________________________________
 
 ## Importing
 
-Pick a mode, **drag and drop** a `.json` file onto the drop zone (or click it to browse — the file browser filters to `.json`), then click **Import Checks**. The result shows counts for **created**, **updated**, **skipped**, and any **errors** (with per-check error messages). If the whole import fails (invalid JSON, no checks, agent not found), an error card explains why.
+Pick a mode, **drag and drop** a `.json` file onto the drop zone (or click it to browse — the file browser filters to `.json`), then click **Import Checks**. The result shows counts for **created**, **updated**, **skipped**, and any **errors** (with per-check error messages). Each check is validated on its own, in the upload and the JSON API alike: an entry with an unknown `check_type` or `http_method` is reported in **errors** and the rest still import. If the whole import fails (invalid JSON, no checks, agent not found), an error card explains why.
 
 | Mode                | New checks | Existing checks (matched by `name`) |
 | ------------------- | ---------- | ----------------------------------- |

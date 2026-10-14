@@ -4,7 +4,7 @@ Schema reference for the `Check` model, which stores health-check definitions.
 
 - **Model:** `apps/backend/app/models/check_model.py` (`Check`, extends `UUIDBaseModel`)
 - **Pydantic schemas:** `apps/backend/app/schemas/check_schema.py`
-- **DB table:** `checks` (created in `apps/backend/alembic/versions/000_v1_0_baseline.py`)
+- **DB table:** `checks` (created in the baseline `apps/backend/alembic/versions/000_initial_schema.py`)
 
 Each check is uniquely identified by a UUID `id`. A check carries its target, type-specific configuration, retry/notification policy, and agent-assignment strategy. Sensitive fields (`target`, `check_config`, `connection_string_encrypted`) are encrypted at rest.
 

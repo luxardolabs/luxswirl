@@ -15,8 +15,8 @@ Web UI:    web/routers/*_router.py     →  services/views/*_view_service.py →
 - **Web routers** must go through a **view service**. They cannot import `services.core` or `crud` directly.
 - **API routers** must go through a **core service**. They cannot import `services.views` or `crud` directly.
 - **View services** assemble template context. They call core services and CRUD as needed but do not duplicate business logic. **View services do not import other view services** — except for underscore-prefixed helpers.
-- **Core services** own business logic, transactions (`db.commit/flush`), and orchestration. They never construct raw SQL — all data access goes through CRUD.
-- **CRUD** modules are the only place that calls `db.execute(...)`, `select()`, `update()`, `delete()`, or `text()`. They never import services or routers.
+- **Core services** own business logic, transactions (the commit belongs to the session owner), and orchestration. They never construct raw SQL or touch the session — all data access goes through CRUD.
+- **CRUD** modules are the only place that calls `db.execute(...)`, `select()`, `update()`, `delete()`, or `text()`, and the only place that writes through the session (`db.add/add_all/flush/refresh/delete`; `fw.no_session_mutation_outside_crud`). A CRUD write flushes; the session owner commits. They never import services or routers.
 - **Models** are SQLAlchemy ORM only. They may import other models for relationships.
 
 ## File naming (enforced)
@@ -50,6 +50,7 @@ Files starting with `_` (e.g. `_dashboard_render.py`) are **shared helpers** and
 | Permission/state-machine business rules               | Core service  |
 | Multi-table writes / transactions / commits           | Core service  |
 | Raw SQL, `select()`, `update()`, `delete()`, `text()` | CRUD          |
+| Session writes (`db.add/flush/refresh/delete`)        | CRUD          |
 | Hypertable DDL (`add_retention_policy`, etc.)         | CRUD          |
 
 ## Running the architecture checks

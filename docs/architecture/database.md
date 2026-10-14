@@ -2,7 +2,7 @@
 
 This document describes the PostgreSQL/TimescaleDB database schema for LuxSwirl.
 
-The schema is **owned by Alembic** — `apps/backend/alembic/versions/000_v1_0_baseline.py` is the authoritative definition, and `alembic upgrade head` runs from the container CMD on startup. The ORM models in `apps/backend/app/models/*_model.py` mirror it. The only thing created at runtime (by `app/db/database.py::init_db`) is TimescaleDB-specific state: hypertables, compression, retention policies, and continuous aggregates.
+The schema is **owned by Alembic** — the baseline `apps/backend/alembic/versions/000_initial_schema.py` plus the revisions after it are the authoritative definition, and `alembic upgrade head` runs from the container CMD on startup. The ORM models in `apps/backend/app/models/*_model.py` mirror it. The only thing created at runtime (by `app/db/database.py::init_db`) is TimescaleDB-specific state: hypertables, compression, retention policies, and continuous aggregates.
 
 ## Overview
 
@@ -124,7 +124,7 @@ Note: `notification_logs` and `check_artifacts` reference a result via `(check_r
 
 ### Other tables
 
-The baseline migration also defines `users` and `sessions` (auth), `alerts`, `alert_check_mappings`, `alert_notification_mappings`, `notification_providers`, `notification_logs` (alerting), `agent_metrics` (time-series agent health), `check_artifacts` (synthetic-check screenshots/traces/video/HAR), `jobs` / `job_configurations` / `job_executions` (background jobs), `registration_keys`, `agent_check_assignments`, `status_pages`, and `settings`. All use UUID PKs; the hypertables (`agent_metrics`, `notification_logs`, `check_artifacts`) use a composite PK with their time column.
+The baseline migration also defines `users` and `sessions` (auth), `alerts`, `alert_check_mappings`, `alert_notification_mappings`, `notification_providers`, `notification_logs` (alerting), `agent_metrics` (time-series agent health), `check_artifacts` (synthetic-check screenshots and traces; the content type is closed to the PNG and zip the agent uploads, because the console serves an artifact inline with it), `jobs` / `job_configurations` / `job_executions` (background jobs), `registration_keys`, `agent_check_assignments`, `status_pages`, and `settings`. All use UUID PKs; the hypertables (`agent_metrics`, `notification_logs`, `check_artifacts`) use a composite PK with their time column.
 
 ## TimescaleDB Features
 
