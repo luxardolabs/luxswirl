@@ -37,10 +37,15 @@ class RegistrationKeyCRUD:
     @staticmethod
     async def record_usage(db: AsyncSession, key_id: UUID) -> RegistrationKey | None:
         """Count one use and stamp it, in one statement (no lost update under
-        concurrent registrations); the updated row."""
+        concurrent registrations); the updated row, or None if the key was
+        revoked or deleted since it was read. Re-checking revoked_at here is what
+        refuses a key revoked while its bcrypt check ran."""
         return await db.scalar(
             update(RegistrationKey)
-            .where(RegistrationKey.id == key_id)
+            .where(
+                RegistrationKey.id == key_id,
+                RegistrationKey.revoked_at.is_(None),
+            )
             .values(usage_count=RegistrationKey.usage_count + 1, last_used_at=utc_now())
             .returning(RegistrationKey)
             .execution_options(populate_existing=True)

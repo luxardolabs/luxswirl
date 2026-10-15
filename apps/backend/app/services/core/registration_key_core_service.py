@@ -310,7 +310,7 @@ class RegistrationKeyCoreService:
 
         # Count the use atomically; the row is returned updated.
         used = await RegistrationKeyCRUD.record_usage(db, match.id)
-        if used is None:  # deleted between the read and the update
+        if used is None:  # revoked or deleted between the read and the update
             return None
         logger.debug(
             "Verified registration key",
