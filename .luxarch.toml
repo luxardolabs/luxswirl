@@ -51,9 +51,6 @@ uuid_typing = [
   { path = "core/exceptions.py", name = "agent_id", evidence = "raised not-found message arg, not the column" },
   { path = "schemas/import_export_schema.py", name = "agent_id", evidence = "AgentConfigExport mirrors the agent CONFIG FILE's `agent_id` key, which is an identifier STRING (\"docker-agent\") — not a registered agent's UUID. Typing it UUID is what made GET /export-agent-config fail response validation on every call" },
 ]
-enum_freetext_columns = [
-  { path = "app/models/check_artifact_model.py", column = "content_type", evidence = "MIME, open set" },
-]
 hypertable_unbounded = [
   { file = "artifact_crud", func = "get_stats_for_check", evidence = "check_artifacts is retention-scoped + filtered by check_id (indexed); a time bound prunes nothing (LUXSWIRL-180)" },
 ]

@@ -293,28 +293,31 @@ class RegistrationKeyCoreService:
         Returns:
             RegistrationKey model if valid, None if invalid
         """
-        # Get all active keys
+        # bcrypt hashes are salted, so the key cannot be looked up by its hash:
+        # each active key is checked in memory, and the first match is used.
         active_keys = await RegistrationKeyCRUD.list_active(db)
+        match = next(
+            (
+                key
+                for key in active_keys
+                if RegistrationKeyCoreService.verify_key(plaintext_key, key.key_hash)
+            ),
+            None,
+        )
+        if match is None:
+            logger.warning("Failed to verify registration key")
+            return None
 
-        # Check each key
-        for key in active_keys:
-            if RegistrationKeyCoreService.verify_key(plaintext_key, key.key_hash):
-                # Count the use atomically; the row is returned updated.
-                used = await RegistrationKeyCRUD.record_usage(db, key.id)
-                if used is None:  # deleted between the read and the update
-                    return None
-                key = used
-
-                logger.debug(
-                    "Verified registration key",
-                    extra={
-                        "key_name": key.name,
-                        "key_id": str(key.id),
-                        "usage_count": key.usage_count,
-                    },
-                )
-                return key
-
-        # No match found
-        logger.warning("Failed to verify registration key")
-        return None
+        # Count the use atomically; the row is returned updated.
+        used = await RegistrationKeyCRUD.record_usage(db, match.id)
+        if used is None:  # deleted between the read and the update
+            return None
+        logger.debug(
+            "Verified registration key",
+            extra={
+                "key_name": used.name,
+                "key_id": str(used.id),
+                "usage_count": used.usage_count,
+            },
+        )
+        return used
