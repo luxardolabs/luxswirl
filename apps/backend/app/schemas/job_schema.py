@@ -78,15 +78,6 @@ class JobCreate(JobBase):
     }
 
 
-class JobUpdate(BaseSchema):
-    """Schema for updating a job (primarily for status changes)."""
-
-    # JobStatus IS the validation.
-    status: JobStatus | None = Field(None, description="Job status")
-    priority: int | None = Field(None, ge=0, le=100, description="Job priority")
-    tags: list[str] | None = None
-
-
 class JobResultSubmit(BaseSchema):
     """Schema for agent submitting job results."""
 
