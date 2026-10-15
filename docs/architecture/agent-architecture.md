@@ -8,7 +8,7 @@ LuxSwirl supports three check assignment modes to handle different monitoring sc
 1. **REPLICATE** - Same check runs from every agent matching the selector (multi-region monitoring, redundancy).
 1. **DISTRIBUTE** - Checks are split across the agents matching the selector (load sharing, HA).
 
-The assignment logic lives in `apps/backend/app/services/core/agent_assignment_core_service.py` (`AgentAssignmentService`). Agents fetch their work via `GET /api/v1/checks?agent_id={agent_id}` (`apps/backend/app/api/v1/routers/check_router.py`), which calls `AgentAssignmentService.get_checks_for_agent(db, agent)`. (The `/api/v1/agents/{agent_id}/checks` paths are the separate check-management CRUD endpoints, not the agent sync endpoint.)
+The assignment logic lives in `apps/backend/app/services/core/agent_assignment_core_service.py` (`AgentAssignmentCoreService`). Agents fetch their work via `GET /api/v1/checks?agent_id={agent_id}` (`apps/backend/app/api/v1/routers/check_router.py`), which calls `AgentAssignmentCoreService.check_list_for_agent`, and that calls `get_checks_for_agent(db, agent)`. (The `/api/v1/agents/{agent_id}/checks` paths are the separate check-management CRUD endpoints, not the agent sync endpoint.)
 
 ## Use Cases
 
@@ -115,7 +115,7 @@ class Check(UUIDBaseModel):
 
 ### Rendezvous-Hash Distribution Algorithm (shipped)
 
-For **DISTRIBUTE** mode, `AgentAssignmentService.get_assigned_agent_for_check` picks the responsible agent using rendezvous (highest-random-weight / HRW) hashing:
+For **DISTRIBUTE** mode, `AgentAssignmentCoreService.get_assigned_agent_for_check` picks the responsible agent using rendezvous (highest-random-weight / HRW) hashing:
 
 ```python
 @staticmethod
@@ -141,12 +141,12 @@ def get_assigned_agent_for_check(check, available_agents):
 
 ### Agent Check Fetch Logic (shipped)
 
-`AgentAssignmentService.get_checks_for_agent(db, agent)` builds the per-agent list. Simplified:
+`AgentAssignmentCoreService.get_checks_for_agent(db, agent)` builds the per-agent list. It reads only the candidates the agent could run (`CheckCRUD.list_assignment_candidates`: its own manual checks plus every replicate/distribute check), never the whole table. Simplified:
 
 ```python
 async def get_checks_for_agent(db, agent):
     checks_to_run = []
-    all_checks = await CheckCRUD.list_all(db)
+    all_checks = await CheckCRUD.list_assignment_candidates(db, agent.id)
 
     for check in all_checks:
         if check.assignment_mode == "manual":
@@ -171,7 +171,7 @@ Note that all comparisons use UUID primary keys (`check.agent_id == agent.id`, `
 
 ### Selector Matching (shipped)
 
-`AgentAssignmentService.agent_matches_selector`:
+`AgentAssignmentCoreService.agent_matches_selector`:
 
 ```python
 @staticmethod
