@@ -2,18 +2,11 @@
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
 import pytest
+from app.models.enum_model import HttpMethod
+from app.schemas.setting_schema import AlertDefaults, CheckDefaults
+from app.services.core.settings_core_service import SettingsCoreService
 from sqlalchemy.ext.asyncio import AsyncSession
-
-_tests_root = str(Path(__file__).resolve().parent.parent)
-if _tests_root not in sys.path:
-    sys.path.insert(0, _tests_root)
-
-
-from app.services.core.settings_core_service import SettingsCoreService  # noqa: E402
 
 pytestmark = pytest.mark.integration
 
@@ -190,13 +183,25 @@ class TestSecuritySettings:
 
 
 class TestOtherDefaults:
-    async def test_get_check_defaults_is_dict(self, db: AsyncSession):
+    async def test_check_defaults_are_typed(self, db: AsyncSession):
         defaults = await SettingsCoreService.get_check_defaults(db)
-        assert isinstance(defaults, dict)
+        assert isinstance(defaults, CheckDefaults)
+        assert defaults.http_method is HttpMethod.GET
 
-    async def test_get_alert_defaults_is_dict(self, db: AsyncSession):
+    async def test_an_operator_default_method_arrives_typed(self, db: AsyncSession):
+        await SettingsCoreService.create_setting(
+            db,
+            key="check.default_http_method",
+            category="check",
+            value="POST",
+            display_name="Default HTTP method",
+        )
+        defaults = await SettingsCoreService.get_check_defaults(db)
+        assert defaults.http_method is HttpMethod.POST
+
+    async def test_alert_defaults_are_typed(self, db: AsyncSession):
         defaults = await SettingsCoreService.get_alert_defaults(db)
-        assert isinstance(defaults, dict)
+        assert isinstance(defaults, AlertDefaults)
 
     async def test_ensure_general_then_get(self, db: AsyncSession):
         await SettingsCoreService.ensure_default_settings(db)

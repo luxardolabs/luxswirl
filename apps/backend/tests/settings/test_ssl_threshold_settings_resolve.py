@@ -35,4 +35,4 @@ async def test_operator_value_reaches_the_reader(
     assert await SettingsCoreService.get_setting(db, key, default=999) == 3
 
     defaults = await SettingsCoreService.get_alert_defaults(db)
-    assert defaults[f"ssl_cert_{field}_days"] == 3
+    assert getattr(defaults, f"ssl_cert_{field}_days") == 3

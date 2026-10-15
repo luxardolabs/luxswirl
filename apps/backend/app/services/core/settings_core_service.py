@@ -13,7 +13,12 @@ from app.core.default_settings import DEFAULT_SETTINGS
 from app.core.exceptions import NotFoundException
 from app.crud.setting_crud import SettingCRUD
 from app.models.setting_model import Setting
-from app.schemas.setting_schema import SettingResponse, SettingScalar
+from app.schemas.setting_schema import (
+    AlertDefaults,
+    CheckDefaults,
+    SettingResponse,
+    SettingScalar,
+)
 
 logger = get_logger("luxswirl.services.settings")
 
@@ -295,62 +300,66 @@ class SettingsCoreService:
                 raise ValueError(f"Invalid timezone format: {str(e)}") from e
 
     @staticmethod
-    async def get_check_defaults(db: AsyncSession) -> dict[str, Any]:
+    async def get_check_defaults(db: AsyncSession) -> CheckDefaults:
         """
-        Get all check defaults as a convenient dict.
+        Get all check defaults as their typed bundle.
 
         Returns:
-            Dict with check default settings
+            The check defaults
         """
-        return {
-            "interval_seconds": await SettingsCoreService.get_setting(
-                db, "check.default_interval", 60
-            ),
-            "timeout_seconds": await SettingsCoreService.get_setting(
-                db, "check.default_timeout", 10
-            ),
-            "retry_attempts": await SettingsCoreService.get_setting(
-                db, "check.default_retry_attempts", 2
-            ),
-            "retry_interval_seconds": await SettingsCoreService.get_setting(
-                db, "check.default_retry_interval", 30
-            ),
-            "expected_status": await SettingsCoreService.get_setting(
-                db, "check.default_expected_status", 200
-            ),
-            "verify_ssl": await SettingsCoreService.get_setting(
-                db, "check.default_verify_ssl", False
-            ),
-            "http_method": await SettingsCoreService.get_setting(
-                db, "check.default_http_method", "GET"
-            ),
-        }
+        return CheckDefaults.model_validate(
+            {
+                "interval_seconds": await SettingsCoreService.get_setting(
+                    db, "check.default_interval", 60
+                ),
+                "timeout_seconds": await SettingsCoreService.get_setting(
+                    db, "check.default_timeout", 10
+                ),
+                "retry_attempts": await SettingsCoreService.get_setting(
+                    db, "check.default_retry_attempts", 2
+                ),
+                "retry_interval_seconds": await SettingsCoreService.get_setting(
+                    db, "check.default_retry_interval", 30
+                ),
+                "expected_status": await SettingsCoreService.get_setting(
+                    db, "check.default_expected_status", 200
+                ),
+                "verify_ssl": await SettingsCoreService.get_setting(
+                    db, "check.default_verify_ssl", False
+                ),
+                "http_method": await SettingsCoreService.get_setting(
+                    db, "check.default_http_method", "GET"
+                ),
+            }
+        )
 
     @staticmethod
-    async def get_alert_defaults(db: AsyncSession) -> dict[str, Any]:
+    async def get_alert_defaults(db: AsyncSession) -> AlertDefaults:
         """
-        Get all alert defaults as a convenient dict.
+        Get all alert defaults as their typed bundle.
 
         Returns:
-            Dict with alert default settings
+            The alert defaults
         """
-        return {
-            "consecutive_failures": await SettingsCoreService.get_setting(
-                db, "alert.default_consecutive_failures", 1
-            ),
-            "notify_on_recovery": await SettingsCoreService.get_setting(
-                db, "alert.default_notify_on_recovery", True
-            ),
-            "latency_threshold_ms": await SettingsCoreService.get_setting(
-                db, "alert.default_latency_threshold", 1000
-            ),
-            "ssl_cert_warning_days": await SettingsCoreService.get_setting(
-                db, "alert.ssl_cert_warning_days", 30
-            ),
-            "ssl_cert_critical_days": await SettingsCoreService.get_setting(
-                db, "alert.ssl_cert_critical_days", 14
-            ),
-        }
+        return AlertDefaults.model_validate(
+            {
+                "consecutive_failures": await SettingsCoreService.get_setting(
+                    db, "alert.default_consecutive_failures", 1
+                ),
+                "notify_on_recovery": await SettingsCoreService.get_setting(
+                    db, "alert.default_notify_on_recovery", True
+                ),
+                "latency_threshold_ms": await SettingsCoreService.get_setting(
+                    db, "alert.default_latency_threshold", 1000
+                ),
+                "ssl_cert_warning_days": await SettingsCoreService.get_setting(
+                    db, "alert.ssl_cert_warning_days", 30
+                ),
+                "ssl_cert_critical_days": await SettingsCoreService.get_setting(
+                    db, "alert.ssl_cert_critical_days", 14
+                ),
+            }
+        )
 
     @staticmethod
     async def ensure_default_settings(db: AsyncSession) -> None:
