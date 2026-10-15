@@ -146,8 +146,8 @@ class CheckDetailViewService:
         # The operator configures these; the panel must agree with the values
         # stored at ingest, so both read the same settings.
         alert_defaults = await SettingsCoreService.get_alert_defaults(db)
-        ssl_warning_days = alert_defaults["ssl_cert_warning_days"]
-        ssl_critical_days = alert_defaults["ssl_cert_critical_days"]
+        ssl_warning_days = alert_defaults.ssl_cert_warning_days
+        ssl_critical_days = alert_defaults.ssl_cert_critical_days
 
         # Convert history to dicts and process SSL certs
         history: list[dict[str, Any]] = []

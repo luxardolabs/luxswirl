@@ -34,10 +34,10 @@ class JobBulkCheckViewService:
         """
         check_defaults = await SettingsCoreService.get_check_defaults(db)
 
-        interval = int(form_data.get("interval") or check_defaults["interval_seconds"])
-        timeout = int(form_data.get("timeout") or check_defaults["timeout_seconds"])
+        interval = int(form_data.get("interval") or check_defaults.interval_seconds)
+        timeout = int(form_data.get("timeout") or check_defaults.timeout_seconds)
         retry_attempts = int(
-            form_data.get("retry_attempts") or check_defaults["retry_attempts"]
+            form_data.get("retry_attempts") or check_defaults.retry_attempts
         )
         agent_id = form_data.get("agent_id")
         tags_str = form_data.get("tags", "")
@@ -54,14 +54,14 @@ class JobBulkCheckViewService:
         verify_ssl = True
         if "expected_status" in form_data:
             expected_status = int(
-                form_data.get("expected_status") or check_defaults["expected_status"]
+                form_data.get("expected_status") or check_defaults.expected_status
             )
         if "verify_ssl" in form_data:
             verify_ssl_str = form_data.get("verify_ssl")
             verify_ssl = (
                 verify_ssl_str.lower() == "true"
                 if verify_ssl_str
-                else check_defaults["verify_ssl"]
+                else check_defaults.verify_ssl
             )
 
         params = BulkCheckParams(
@@ -164,13 +164,13 @@ class JobBulkCheckViewService:
         verify_ssl = True
         if check_type == "http":
             expected_status = int(
-                form_data.get("expected_status") or check_defaults["expected_status"]
+                form_data.get("expected_status") or check_defaults.expected_status
             )
             verify_ssl_str = form_data.get("verify_ssl")
             verify_ssl = (
                 verify_ssl_str.lower() == "true"
                 if verify_ssl_str
-                else check_defaults["verify_ssl"]
+                else check_defaults.verify_ssl
             )
 
         params = QuickCheckParams(
@@ -178,12 +178,10 @@ class JobBulkCheckViewService:
             check_type=check_type,
             target=target,
             display_name=display_name,
-            interval=int(
-                form_data.get("interval") or check_defaults["interval_seconds"]
-            ),
-            timeout=int(form_data.get("timeout") or check_defaults["timeout_seconds"]),
+            interval=int(form_data.get("interval") or check_defaults.interval_seconds),
+            timeout=int(form_data.get("timeout") or check_defaults.timeout_seconds),
             retry_attempts=int(
-                form_data.get("retry_attempts") or check_defaults["retry_attempts"]
+                form_data.get("retry_attempts") or check_defaults.retry_attempts
             ),
             tags=tags,
             expected_status=expected_status,
