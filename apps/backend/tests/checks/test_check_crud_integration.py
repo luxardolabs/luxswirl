@@ -461,8 +461,3 @@ class TestGetAllTagsCombined:
 
         tags = await CheckCRUD.get_all_tags_combined(db)
         assert tags == ["alpha", "ops", "prod"]
-
-
-# ---------------------------------------------------------------------------
-# list_all — sanity check
-# ---------------------------------------------------------------------------
