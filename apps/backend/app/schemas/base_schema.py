@@ -69,35 +69,6 @@ class MappingCreatedResponse(MessageResponse):
     mapping_id: UUID = Field(..., description="Id of the mapping that was created")
 
 
-class PaginationParams(BaseSchema):
-    """Query parameters for pagination."""
-
-    page: int = Field(1, ge=1, description="Page number (1-indexed)")
-    page_size: int = Field(50, ge=1, le=1000, description="Number of items per page")
-
-    @property
-    def offset(self) -> int:
-        """Calculate offset from page number."""
-        return (self.page - 1) * self.page_size
-
-    @property
-    def limit(self) -> int:
-        """Get limit (alias for page_size)."""
-        return self.page_size
-
-
-class PaginatedResponse(BaseSchema):
-    """Response schema for paginated data."""
-
-    items: list[Any] = Field(..., description="List of items")
-    total: int = Field(..., description="Total number of items")
-    page: int = Field(..., description="Current page number")
-    page_size: int = Field(..., description="Number of items per page")
-    total_pages: int = Field(..., description="Total number of pages")
-    has_next: bool = Field(..., description="Whether there is a next page")
-    has_prev: bool = Field(..., description="Whether there is a previous page")
-
-
 class ErrorResponse(BaseSchema):
     """Schema for error responses."""
 

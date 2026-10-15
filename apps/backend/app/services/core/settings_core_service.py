@@ -3,7 +3,7 @@ Settings service - business logic for configurable system defaults.
 """
 
 import secrets
-from typing import Any, ClassVar, TypeVar, cast, overload
+from typing import Any, TypeVar, cast, overload
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from shared.logger import get_logger
@@ -22,8 +22,6 @@ _T = TypeVar("_T")
 
 class SettingsCoreService:
     """Service for settings operations."""
-
-    _cache: ClassVar[dict[str, Any]] = {}
 
     @overload
     @staticmethod
@@ -250,16 +248,6 @@ class SettingsCoreService:
         return setting
 
     @staticmethod
-    def clear_cache() -> None:
-        """
-        Clear the settings cache.
-
-        Useful after bulk updates or during testing.
-        """
-        SettingsCoreService._cache.clear()
-        logger.debug("Settings cache cleared")
-
-    @staticmethod
     def _validate_value(
         value: SettingScalar, validation: dict[str, Any] | None
     ) -> None:
@@ -419,30 +407,6 @@ class SettingsCoreService:
                 db, "security.registration_rate_limit", "5/hour"
             ),
         }
-
-    @staticmethod
-    async def reset_security_settings(db: AsyncSession) -> dict[str, Any]:
-        """
-        Reset all security settings to defaults.
-
-        Args:
-            db: Database session
-
-        Returns:
-            Reset security settings dict
-        """
-        await SettingsCoreService.reset_setting(db, "security.session_lifetime_days")
-        await SettingsCoreService.reset_setting(db, "security.max_failed_attempts")
-        await SettingsCoreService.reset_setting(
-            db, "security.account_lock_duration_minutes"
-        )
-        await SettingsCoreService.reset_setting(db, "security.rate_limit_enabled")
-        await SettingsCoreService.reset_setting(db, "security.login_rate_limit")
-        await SettingsCoreService.reset_setting(db, "security.api_rate_limit")
-        await SettingsCoreService.reset_setting(db, "security.registration_rate_limit")
-
-        logger.info("Reset all security settings to defaults")
-        return await SettingsCoreService.get_security_settings(db)
 
     @staticmethod
     async def get_general_settings(db: AsyncSession) -> dict[str, Any]:
