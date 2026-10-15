@@ -153,14 +153,6 @@ class CheckResultListResponse(BaseSchema):
     )
 
 
-class TimeSeriesDataPoint(BaseSchema):
-    """Schema for a single time-series data point."""
-
-    timestamp: datetime = Field(..., description="Data point timestamp")
-    value: float = Field(..., description="Data point value")
-    success: bool | None = Field(None, description="Whether check succeeded")
-
-
 class CheckHistoryResponse(BaseSchema):
     """Schema for check history (time-series data)."""
 

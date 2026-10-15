@@ -31,8 +31,6 @@ from app.schemas.auth_schema import (
 from app.schemas.base_schema import (
     BaseSchema,
     ErrorResponse,
-    PaginatedResponse,
-    PaginationParams,
     ResponseSchema,
     TimestampSchema,
 )
@@ -75,8 +73,6 @@ __all__ = [
     "BaseSchema",
     "TimestampSchema",
     "ResponseSchema",
-    "PaginationParams",
-    "PaginatedResponse",
     "ErrorResponse",
     # Auth
     "LoginRequest",

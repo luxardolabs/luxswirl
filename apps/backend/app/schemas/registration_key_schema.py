@@ -159,20 +159,6 @@ class RegistrationKeyListResponse(BaseSchema):
     }
 
 
-class AgentKeyRecoveryRequest(BaseSchema):
-    """Request to recover agent-specific key using registration token."""
-
-    agent_id: UUID = Field(..., description="Agent UUID requesting recovery")
-
-    model_config = {
-        "json_schema_extra": {
-            "example": {
-                "agent_id": "550e8400-e29b-41d4-a716-446655440000",
-            }
-        }
-    }
-
-
 class AgentKeyRecoveryResponse(BaseSchema):
     """Response for agent key recovery (includes new plaintext key)."""
 

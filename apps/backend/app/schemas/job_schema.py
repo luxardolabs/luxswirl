@@ -252,20 +252,6 @@ class JobStatsResponse(BaseSchema):
     terminal: int = Field(0, description="completed + failed + cancelled")
 
 
-class JobQueueStats(BaseSchema):
-    """Agent job queue statistics (included in heartbeat)."""
-
-    jobs_pending: int = Field(0, description="Jobs in queue waiting to run")
-    jobs_running: int = Field(0, description="Jobs currently executing")
-    jobs_completed_since_last: int = Field(
-        0, description="Jobs completed since last heartbeat"
-    )
-    jobs_failed_since_last: int = Field(
-        0, description="Jobs failed since last heartbeat"
-    )
-    queue_capacity: int = Field(5, description="Max concurrent jobs")
-
-
 class JobDispatch(BaseSchema):
     """Job dispatch info sent to agent in heartbeat response."""
 

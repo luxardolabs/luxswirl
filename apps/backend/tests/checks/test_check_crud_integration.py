@@ -466,16 +466,3 @@ class TestGetAllTagsCombined:
 # ---------------------------------------------------------------------------
 # list_all — sanity check
 # ---------------------------------------------------------------------------
-
-
-class TestListAll:
-    async def test_returns_every_check_unfiltered(self, db: AsyncSession):
-        agent = make_agent()
-        db.add(agent)
-        await db.flush()
-        for enabled in (True, False, True):
-            db.add(make_check(agent_id=agent.id, enabled=enabled))
-        await db.flush()
-
-        rows = await CheckCRUD.list_all(db)
-        assert len(rows) == 3

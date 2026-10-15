@@ -6,68 +6,14 @@ from dataclasses import dataclass
 from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 
-from app.models.enum_model import HttpMethod, SettingCategory, SettingValueType
+from app.models.enum_model import HttpMethod, SettingCategory
 
 # A setting's stored value. The closed set the storage format documents ("int, float,
 # bool, string, list, dict") — written as a real union so mypy can see it, rather than
 # `Any`, which is the type-check dodge fw.no_any_typed_service_boundary exists to catch.
 type SettingScalar = str | int | float | bool | list[Any] | dict[str, Any] | None
-
-
-class SettingValue(BaseModel):
-    """Schema for setting value storage."""
-
-    value: Any = Field(..., description="The actual value")
-    type: SettingValueType = Field(..., description="Value type")
-
-    model_config = ConfigDict(
-        json_schema_extra={
-            "example": {
-                "value": 60,
-                "type": "int",
-            }
-        }
-    )
-
-
-class SettingUpdate(BaseModel):
-    """Schema for updating a setting value."""
-
-    value: Any = Field(..., description="New value for the setting")
-
-    model_config = ConfigDict(
-        json_schema_extra={
-            "example": {
-                "value": 120,
-            }
-        }
-    )
-
-
-class SettingCreate(BaseModel):
-    """Schema for creating a new setting."""
-
-    key: str = Field(..., max_length=100, description="Unique setting key")
-    category: SettingCategory = Field(..., description="Setting category")
-    value: Any = Field(..., description="Initial value")
-    display_name: str = Field(..., max_length=255, description="Human-readable name")
-    description: str | None = Field(None, description="Detailed description")
-    validation: dict[str, Any] | None = Field(None, description="Validation rules")
-
-    model_config = ConfigDict(
-        json_schema_extra={
-            "example": {
-                "key": "check.custom_setting",
-                "category": "check",
-                "value": 100,
-                "display_name": "Custom Setting",
-                "description": "A custom configurable setting",
-                "validation": {"min": 1, "max": 1000},
-            }
-        }
-    )
 
 
 class SettingResponse(BaseModel):
@@ -101,28 +47,6 @@ class SettingResponse(BaseModel):
                 "updated_at": "2025-11-07T10:00:00Z",
             }
         },
-    )
-
-
-class SettingSimpleResponse(BaseModel):
-    """Simplified setting response for UI forms."""
-
-    key: str
-    value: Any  # The actual typed value (not JSONB)
-    display_name: str
-    description: str | None
-    validation: dict[str, Any] | None
-
-    model_config = ConfigDict(
-        json_schema_extra={
-            "example": {
-                "key": "check.default_interval",
-                "value": 60,
-                "display_name": "Default Check Interval",
-                "description": "Default interval in seconds between check executions",
-                "validation": {"min": 10, "max": 86400},
-            }
-        }
     )
 
 

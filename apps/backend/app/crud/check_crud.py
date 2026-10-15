@@ -235,12 +235,6 @@ class CheckCRUD:
         return {parent_id for parent_id in result.scalars() if parent_id is not None}
 
     @staticmethod
-    async def list_all(db: AsyncSession) -> list[Check]:
-        """Return all checks (unfiltered, unsorted)."""
-        result = await db.execute(select(Check))
-        return list(result.scalars().all())
-
-    @staticmethod
     async def list_dependents(
         db: AsyncSession, parent_check_id: UUID
     ) -> Sequence[Check]:

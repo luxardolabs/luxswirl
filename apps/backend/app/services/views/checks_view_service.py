@@ -54,29 +54,6 @@ _SYNTHETIC_ADMIN_DENIED_UPDATE_SCRIPT = (
 )
 
 
-class CheckRow:
-    """Data structure for check display.
-
-    NOTE: nothing constructs this today — the checks list is rendered from
-    StatusRow/DashboardCheck. Kept rather than deleted because removal is the
-    owner's call; raised for that decision alongside the dead-code sweep.
-    """
-
-    def __init__(self, check: CheckInDB):
-        self.id = check.id
-        # The agent NAME is not on CheckInDB — it lives on the agent row, and
-        # carrying the relationship would lazy-load outside the session. A
-        # caller that needs the name joins it in, as the dashboard row does.
-        self.agent_id = check.agent_id
-        self.display_name = check.display_name
-        self.check_type = check.check_type
-        self.target = check.target
-        self.enabled = check.enabled
-        self.interval = check.interval_seconds
-        self.created_at = check.created_at
-        self.updated_at = check.updated_at
-
-
 def build_alerts_page_url(request: Request) -> str:
     """Where the check form sends someone with no alerts configured yet.
 
