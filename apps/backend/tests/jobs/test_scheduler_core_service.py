@@ -104,6 +104,37 @@ class TestScheduledRunPersists:
         assert job.total_runs == 1
         assert job.lease_token is None, "lease was not released"
 
+    async def test_a_lease_taken_over_during_the_run_is_left_to_its_new_holder(
+        self, worker_db
+    ):
+        # A run that outlives its lease: another worker leases the job while this
+        # one is still running. Releasing by primary key cleared the NEW holder's
+        # lease; the release must only match while this run still holds it.
+        lease, takeover = uuid4(), uuid4()
+        key = await _seed_job(
+            worker_db,
+            lease_token=lease,
+            lease_expires_at=datetime.now(UTC) + timedelta(minutes=5),
+        )
+        svc = SchedulerCoreService()
+
+        async def _overrun(**_kwargs):
+            async with worker_db() as s:
+                job = (
+                    await s.execute(
+                        select(JobConfiguration).where(JobConfiguration.job_key == key)
+                    )
+                ).scalar_one()
+                job.lease_token = takeover
+                await s.commit()
+            return {"ok": True}
+
+        svc.job_functions["test_noop"] = _overrun
+        await svc._execute_job(key, lease)
+
+        job = await _get_job(worker_db, key)
+        assert job.lease_token == takeover, "the new holder's lease was cleared"
+
     async def test_execute_job_with_errors_in_result_is_warning(self, worker_db):
         lease = uuid4()
         key = await _seed_job(
