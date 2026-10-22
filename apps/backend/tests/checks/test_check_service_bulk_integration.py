@@ -207,6 +207,24 @@ class TestCloneCheck:
         assert cloned.check_type == source.check_type
         assert cloned.target == source.target
 
+    async def test_a_check_stored_without_a_timeout_clones_with_the_default(
+        self, db: AsyncSession
+    ):
+        # timeout_seconds is nullable in the table but required by CheckCreate:
+        # cloning such a check failed validation (a 500) instead of cloning it.
+        agent = make_agent()
+        db.add(agent)
+        await db.flush()
+        source = make_check(agent_id=agent.id, check_type="tcp", timeout_seconds=None)
+        db.add(source)
+        await db.flush()
+
+        cloned = await CheckCoreService.clone_check(
+            db, source.id, agent.id, skip_config_update=True
+        )
+
+        assert cloned.timeout_seconds == 10  # check.default_timeout's default
+
     async def test_clone_overrides_win_and_unset_fields_keep_the_source(
         self, db: AsyncSession
     ):

@@ -37,6 +37,7 @@ from app.schemas.check_schema import (
     AgentCheckCounts,
     BulkCheckCreateRequest,
     BulkCheckCreateResponse,
+    BulkCheckResult,
     CheckCreate,
     CheckInDB,
     CheckUpdate,
@@ -416,6 +417,15 @@ class CheckCoreService:
             },
         )
 
+        # The column is nullable, CheckCreate's field is not: a check stored without
+        # a timeout clones with the configured default rather than failing validation.
+        timeout_seconds: int | None = override_fields.get(
+            "timeout_seconds", source.timeout_seconds
+        )
+        if timeout_seconds is None:
+            defaults = await SettingsCoreService.get_check_defaults(db)
+            timeout_seconds = defaults.timeout_seconds
+
         clone_data = CheckCreate(
             display_name=override_fields.get("display_name", source.display_name),
             check_type=override_fields.get("check_type", source.check_type),
@@ -424,9 +434,7 @@ class CheckCoreService:
             interval_seconds=override_fields.get(
                 "interval_seconds", source.interval_seconds
             ),
-            timeout_seconds=override_fields.get(
-                "timeout_seconds", source.timeout_seconds
-            ),
+            timeout_seconds=timeout_seconds,
             expected_status=override_fields.get(
                 "expected_status", source.expected_status
             ),
@@ -1066,7 +1074,7 @@ class CheckCoreService:
             }
         """
 
-        results = []
+        results: list[BulkCheckResult] = []
         succeeded = 0
         failed = 0
 
@@ -1127,14 +1135,13 @@ class CheckCoreService:
 
                 # Record success
                 results.append(
-                    {
-                        "url": url,
-                        "status": BulkCheckOutcome.SUCCESS,
-                        "check_id": check.id,
-                        "display_name": display_name,
-                        "check_type": check_data.check_type,
-                        "error": None,
-                    }
+                    BulkCheckResult(
+                        url=url,
+                        status=BulkCheckOutcome.SUCCESS,
+                        check_id=check.id,
+                        display_name=display_name,
+                        check_type=check_data.check_type,
+                    )
                 )
                 succeeded += 1
 
@@ -1146,14 +1153,12 @@ class CheckCoreService:
                     exc_info=True,
                 )
                 results.append(
-                    {
-                        "url": req.url,
-                        "status": BulkCheckOutcome.FAILED,
-                        "check_id": None,
-                        "display_name": req.display_name,
-                        "check_type": None,
-                        "error": str(e),
-                    }
+                    BulkCheckResult(
+                        url=req.url,
+                        status=BulkCheckOutcome.FAILED,
+                        display_name=req.display_name,
+                        error=str(e),
+                    )
                 )
                 failed += 1
 
