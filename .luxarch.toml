@@ -351,3 +351,8 @@ exempt_reason = "agent ships no traces or metrics — it reports results and sel
 paths = ["apps/shared"]
 
 
+
+# Who pushes: the agent pushes its commits when the work lands. A release is cut only
+# when the owner asks for one.
+[agents]
+push = "agent"
