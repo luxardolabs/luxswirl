@@ -586,49 +586,9 @@ class ChecksViewService:
 
         try:
             if check_type == "http-bulk":
-                form_data = await request.form()
-                bulk_item_urls = [str(i) for i in form_data.getlist("bulk_item_url")]
-                bulk_item_names = [str(i) for i in form_data.getlist("bulk_item_name")]
-                if not bulk_item_urls:
-                    return ChecksViewService.error_response(
-                        request, current_user, "No URLs provided for bulk import", 400
-                    )
-                bulk_requests = ChecksViewService.build_bulk_requests(
-                    bulk_item_urls,
-                    bulk_item_names,
-                    form_kwargs["interval"],
-                    form_kwargs["enabled"],
-                    form_kwargs.get("tags", ""),
-                    form_kwargs.get("expected_status"),
-                    form_kwargs.get("http_method"),
-                    form_kwargs.get("verify_ssl", True),
-                    form_kwargs.get("timeout_seconds", ""),
-                    form_kwargs.get("retry_attempts", ""),
-                    form_kwargs.get("retry_interval_seconds", ""),
-                    form_kwargs.get("resend_notification_after", ""),
+                return await ChecksViewService._enqueue_bulk_create(
+                    db, request, current_user, form_kwargs
                 )
-                # Enqueue background job — bulk URL creates can be 100+ inserts;
-                # web route commits the intent + returns polling partial. See LUXSWIRL-105.
-                job = await MaintenanceJobCoreService.enqueue(
-                    db,
-                    kind=MaintenanceJobKind.BULK_CHECK_CREATE,
-                    target_id=form_kwargs["agent_id"],
-                    params={
-                        "agent_id": str(form_kwargs["agent_id"]),
-                        "requests": [r.model_dump(mode="json") for r in bulk_requests],
-                        "alert_ids": [str(a) for a in form_kwargs.get("alert_ids", [])],
-                    },
-                    owner_id=current_user.id,
-                )
-                logger.info(
-                    "Enqueued bulk_check_create maintenance job",
-                    extra={
-                        "agent_id": str(form_kwargs["agent_id"]),
-                        "count": len(bulk_requests),
-                        "job_id": str(job.id),
-                    },
-                )
-                return ChecksViewService.job_status_response(request, current_user, job)
 
             # Single check
             resolved = await AgentCoreService.resolve_for_assignment(
@@ -694,6 +654,60 @@ class ChecksViewService:
             )
         except AgentNotFoundException as e:
             return ChecksViewService.error_response(request, current_user, str(e), 404)
+
+    @staticmethod
+    async def _enqueue_bulk_create(
+        db: AsyncSession,
+        request: Request,
+        current_user: AuthedUser,
+        form_kwargs: dict[str, Any],
+    ) -> Response:
+        """The create form's bulk-URL mode: one check per URL, made in the background.
+
+        Bulk URL creates can be 100+ inserts, so the request only commits the
+        intent and returns the job's polling partial. See LUXSWIRL-105.
+        """
+        form_data = await request.form()
+        bulk_item_urls = [str(i) for i in form_data.getlist("bulk_item_url")]
+        bulk_item_names = [str(i) for i in form_data.getlist("bulk_item_name")]
+        if not bulk_item_urls:
+            return ChecksViewService.error_response(
+                request, current_user, "No URLs provided for bulk import", 400
+            )
+        bulk_requests = ChecksViewService.build_bulk_requests(
+            bulk_item_urls,
+            bulk_item_names,
+            form_kwargs["interval"],
+            form_kwargs["enabled"],
+            form_kwargs.get("tags", ""),
+            form_kwargs.get("expected_status"),
+            form_kwargs.get("http_method"),
+            form_kwargs.get("verify_ssl", True),
+            form_kwargs.get("timeout_seconds", ""),
+            form_kwargs.get("retry_attempts", ""),
+            form_kwargs.get("retry_interval_seconds", ""),
+            form_kwargs.get("resend_notification_after", ""),
+        )
+        job = await MaintenanceJobCoreService.enqueue(
+            db,
+            kind=MaintenanceJobKind.BULK_CHECK_CREATE,
+            target_id=form_kwargs["agent_id"],
+            params={
+                "agent_id": str(form_kwargs["agent_id"]),
+                "requests": [r.model_dump(mode="json") for r in bulk_requests],
+                "alert_ids": [str(a) for a in form_kwargs.get("alert_ids", [])],
+            },
+            owner_id=current_user.id,
+        )
+        logger.info(
+            "Enqueued bulk_check_create maintenance job",
+            extra={
+                "agent_id": str(form_kwargs["agent_id"]),
+                "count": len(bulk_requests),
+                "job_id": str(job.id),
+            },
+        )
+        return ChecksViewService.job_status_response(request, current_user, job)
 
     @staticmethod
     async def handle_update_check_form(
@@ -1311,58 +1325,39 @@ class ChecksViewService:
         )
         port_int = ChecksViewService.parse_optional_int(port)
 
-        # Build dict with only provided fields
-        update_data: dict[str, Any] = {}
-        if display_name is not None:
-            update_data["display_name"] = display_name
-        if target is not None:
-            update_data["target"] = target
-        if enabled is not None:
-            update_data["enabled"] = enabled
-        if interval is not None:
-            update_data["interval_seconds"] = interval
-        if http_method is not None:
-            update_data["http_method"] = http_method
-        if expected_status is not None:
-            update_data["expected_status"] = expected_status
-        if json_path is not None:
-            update_data["json_path"] = json_path
-        if expected_value is not None:
-            update_data["expected_value"] = expected_value
+        # Only the fields the form provided are set: CheckUpdate is a partial
+        # update, and a field left unset keeps the check's current value.
+        provided: dict[str, Any] = {
+            "display_name": display_name,
+            "target": target,
+            "enabled": enabled,
+            "interval_seconds": interval,
+            "http_method": http_method,
+            "expected_status": expected_status,
+            "json_path": json_path,
+            "expected_value": expected_value,
+            "tags": tags_list,
+            "assignment_mode": assignment_mode,
+            "agent_selector": agent_selector_dict,
+            "record_type": record_type,
+            "nameserver": nameserver,
+            "port": port_int,
+            "expect_value": expect_value,
+            "connection_string": connection_string,
+            "query": query,
+            "timeout_seconds": timeout_seconds_int,
+            "verify_ssl": verify_ssl,
+            "retry_attempts": retry_attempts_int,
+            "retry_interval_seconds": retry_interval_seconds_int,
+            "resend_notification_after": resend_notification_after_int,
+            "depends_on_check_id": depends_on_check_id,
+        }
+        update_data = {k: v for k, v in provided.items() if v is not None}
+        # A submitted-but-empty script or description clears the field.
         if script_code is not None:
-            update_data["script_code"] = script_code if script_code else None
-        if tags_list is not None:
-            update_data["tags"] = tags_list
-        if assignment_mode is not None:
-            update_data["assignment_mode"] = assignment_mode
-        if agent_selector_dict is not None:
-            update_data["agent_selector"] = agent_selector_dict
-        if record_type is not None:
-            update_data["record_type"] = record_type
-        if nameserver is not None:
-            update_data["nameserver"] = nameserver
-        if port_int is not None:
-            update_data["port"] = port_int
-        if expect_value is not None:
-            update_data["expect_value"] = expect_value
-        if connection_string is not None:
-            update_data["connection_string"] = connection_string
-        if query is not None:
-            update_data["query"] = query
+            update_data["script_code"] = script_code or None
         if description is not None:
-            update_data["description"] = description if description else None
-        if timeout_seconds_int is not None:
-            update_data["timeout_seconds"] = timeout_seconds_int
-        if verify_ssl is not None:
-            update_data["verify_ssl"] = verify_ssl
-        if retry_attempts_int is not None:
-            update_data["retry_attempts"] = retry_attempts_int
-        if retry_interval_seconds_int is not None:
-            update_data["retry_interval_seconds"] = retry_interval_seconds_int
-        if resend_notification_after_int is not None:
-            update_data["resend_notification_after"] = resend_notification_after_int
-        if depends_on_check_id is not None:
-            update_data["depends_on_check_id"] = depends_on_check_id
+            update_data["description"] = description or None
 
         return CheckUpdate(**update_data)
 
