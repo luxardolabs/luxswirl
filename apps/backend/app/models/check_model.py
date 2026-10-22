@@ -11,7 +11,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.encrypted_types import EncryptedJSON, EncryptedString
 from app.models.base_model import UUIDBaseModel, str_enum
-from app.models.enum_model import AssignmentMode, CheckType
+from app.models.enum_model import AssignmentMode, CheckType, DnsRecordType, HttpMethod
 
 if TYPE_CHECKING:
     from app.models.agent_model import Agent
@@ -225,6 +225,16 @@ class Check(UUIDBaseModel):
         value = self.get_config(key)
         return value if isinstance(value, bool) else None
 
+    # Uppercased as the request schemas do (`get` is GET); a value outside the
+    # set reads as None.
+    def _config_http_method(self) -> HttpMethod | None:
+        value = (self._config_str("http_method") or "").strip().upper()
+        return HttpMethod(value) if value in set(HttpMethod) else None
+
+    def _config_record_type(self) -> DnsRecordType | None:
+        value = (self._config_str("record_type") or "").strip().upper()
+        return DnsRecordType(value) if value in set(DnsRecordType) else None
+
     @property
     def fully_qualified_name(self) -> str:
         """Get fully qualified check name (agent_name:display_name)."""
@@ -234,8 +244,8 @@ class Check(UUIDBaseModel):
 
     # Convenience properties - declared but NOT as mapped columns
     @property
-    def http_method(self) -> str | None:
-        return self._config_str("http_method")
+    def http_method(self) -> HttpMethod | None:
+        return self._config_http_method()
 
     @property
     def verify_ssl(self) -> bool | None:
@@ -254,8 +264,8 @@ class Check(UUIDBaseModel):
         return self._config_str("expected_value")
 
     @property
-    def record_type(self) -> str | None:
-        return self._config_str("record_type")
+    def record_type(self) -> DnsRecordType | None:
+        return self._config_record_type()
 
     @property
     def nameserver(self) -> str | None:

@@ -20,7 +20,7 @@ from app.core.exceptions import (
     CheckNotFoundException,
 )
 from app.core.synthetic_security import SyntheticSecurityError
-from app.models.enum_model import CheckType, MaintenanceJobKind, options_for
+from app.models.enum_model import CheckType, HttpMethod, MaintenanceJobKind, options_for
 from app.schemas.auth_schema import AuthedUser
 from app.schemas.check_schema import (
     BulkCheckCreateRequest,
@@ -1404,6 +1404,11 @@ class ChecksViewService:
         ChecksViewService.parse_optional_int(retry_interval_seconds)
         ChecksViewService.parse_optional_int(resend_notification_after)
 
+        # The form posts the method as text; an unknown one is refused here (ValueError),
+        # as the request schema would refuse it.
+        method = http_method.strip().upper() if http_method else ""
+        http_method_enum = HttpMethod(method) if method else None
+
         # Build requests
         bulk_requests = []
         for url, display_name in zip(bulk_item_urls, bulk_item_names, strict=False):
@@ -1415,7 +1420,7 @@ class ChecksViewService:
                 enabled=enabled,
                 tags=tags_list,
                 expected_status=expected_status if expected_status else None,
-                http_method=http_method if http_method else None,
+                http_method=http_method_enum,
                 verify_ssl=verify_ssl,
             )
             bulk_requests.append(req)
