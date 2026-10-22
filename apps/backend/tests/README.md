@@ -73,7 +73,7 @@ Previous LLM-generated tests in other projects were fabricated: mocked all depen
 1. **Mutmut mutation testing** changes the source code one line at a time (flips `+` to `-`, changes `>` to `>=`, drops a `return`, etc.) and reruns the tests. If no test fails, that mutation survived — meaning we have a test gap. Target: ≥85% kill rate per module under test. Run with:
 
    ```
-   make mutmut-alerts          # mutate alert_core_service.py
+   make mutmut-alerts          # mutate alert_evaluation_core_service.py
    make mutmut-results         # see surviving mutants
    ```
 

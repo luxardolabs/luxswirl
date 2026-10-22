@@ -29,7 +29,7 @@ from app.schemas.check_result_schema import (
 )
 from app.schemas.check_schema import CheckStatusInfo
 from app.services.core.agent_core_service import AgentCoreService
-from app.services.core.alert_core_service import AlertCoreService
+from app.services.core.alert_evaluation_core_service import AlertEvaluationCoreService
 from app.services.core.check_core_service import CheckCoreService
 from app.services.core.metrics_collector_core_service import MetricsCollectorCoreService
 from app.services.core.settings_core_service import SettingsCoreService
@@ -388,7 +388,7 @@ class CheckResultCoreService:
         alerts_evaluated = 0
         for check_result in inserted_results:
             try:
-                await AlertCoreService.evaluate_check_result(db, check_result)
+                await AlertEvaluationCoreService.evaluate_check_result(db, check_result)
                 alerts_evaluated += 1
             # swallowed-exceptions: per-result alert evaluation runs after the
             # batch commits — one bad alert must not stop the others firing.
