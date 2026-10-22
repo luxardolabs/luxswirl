@@ -678,20 +678,20 @@ class CheckResultCRUD:
         cutoff = utc_now() - timedelta(hours=hours)
 
         if hours <= 4:
-            interval = "1 minute"
+            bucket = timedelta(minutes=1)
         elif hours <= 8:
-            interval = "2 minutes"
+            bucket = timedelta(minutes=2)
         elif hours <= 24:
-            interval = "5 minutes"
+            bucket = timedelta(minutes=5)
         elif hours <= 72:
-            interval = "30 minutes"
+            bucket = timedelta(minutes=30)
         else:
-            interval = "1 hour"
+            bucket = timedelta(hours=1)
 
         history_query = text(
-            f"""
+            """
             SELECT
-                time_bucket('{interval}', timestamp) as bucket_time,
+                time_bucket(CAST(:bucket AS interval), timestamp) as bucket_time,
                 check_id,
                 BOOL_AND(success) as success,
                 AVG(latency_ms) as latency_ms,
@@ -706,7 +706,7 @@ class CheckResultCRUD:
             """
         )
         result = await db.execute(
-            history_query, {"check_id": check_id, "cutoff": cutoff}
+            history_query, {"check_id": check_id, "cutoff": cutoff, "bucket": bucket}
         )
         return list(result.all())
 
