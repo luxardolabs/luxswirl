@@ -669,6 +669,41 @@ class AgentCoreService:
         if not agent:
             raise AgentNotFoundException(str(agent_id))
 
+        AgentCoreService._apply_heartbeat(agent, heartbeat)
+        await AgentCRUD.save_agent(db, agent)
+
+        metric = AgentCoreService._heartbeat_metric(agent, heartbeat)
+        await AgentCRUD.add_metric(db, metric)
+
+        # Update Prometheus metrics in-memory (instant update on ingestion)
+
+        try:
+            MetricsCollectorCoreService.update_agent_status(agent)
+            MetricsCollectorCoreService.update_agent_metrics(metric, agent)
+        # swallowed-exceptions: metrics are downstream of ingestion — a
+        # Prometheus update must not reject the agent's heartbeat.
+        except Exception:
+            logger.exception("Error updating Prometheus metrics")
+
+        logger.info(
+            "Updated agent from heartbeat",
+            extra={
+                "agent_name": agent.agent_name,
+                "agent_id": str(agent.id),
+                "status": heartbeat.status,
+                "checks_total": heartbeat.checks_total,
+            },
+        )
+
+        return agent
+
+    @staticmethod
+    def _apply_heartbeat(agent: Agent, heartbeat: AgentHeartbeat) -> None:
+        """Copy what a heartbeat reports about the agent onto its row.
+
+        Identity fields (hostname, ip, version, tags) change only when the
+        heartbeat sends a value; health fields always take the latest report.
+        """
         # Update last_seen
         agent.last_seen = heartbeat.timestamp
 
@@ -706,10 +741,10 @@ class AgentCoreService:
         agent.fd_usage_percent = heartbeat.fd_usage_percent
         agent.subprocess_count = heartbeat.subprocess_count
 
-        await AgentCRUD.save_agent(db, agent)
-
-        # Create AgentMetric record for time-series storage
-        metric = AgentMetric(
+    @staticmethod
+    def _heartbeat_metric(agent: Agent, heartbeat: AgentHeartbeat) -> AgentMetric:
+        """The heartbeat as an AgentMetric row, for time-series storage."""
+        return AgentMetric(
             agent_id=agent.id,
             timestamp=heartbeat.timestamp,
             cpu_percent=heartbeat.cpu_percent,
@@ -729,29 +764,6 @@ class AgentCoreService:
             fd_usage_percent=heartbeat.fd_usage_percent,
             subprocess_count=heartbeat.subprocess_count,
         )
-        await AgentCRUD.add_metric(db, metric)
-
-        # Update Prometheus metrics in-memory (instant update on ingestion)
-
-        try:
-            MetricsCollectorCoreService.update_agent_status(agent)
-            MetricsCollectorCoreService.update_agent_metrics(metric, agent)
-        # swallowed-exceptions: metrics are downstream of ingestion — a
-        # Prometheus update must not reject the agent's heartbeat.
-        except Exception:
-            logger.exception("Error updating Prometheus metrics")
-
-        logger.info(
-            "Updated agent from heartbeat",
-            extra={
-                "agent_name": agent.agent_name,
-                "agent_id": str(agent.id),
-                "status": heartbeat.status,
-                "checks_total": heartbeat.checks_total,
-            },
-        )
-
-        return agent
 
     @staticmethod
     async def process_heartbeat(
