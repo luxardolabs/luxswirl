@@ -37,10 +37,11 @@ router = APIRouter(prefix="/registration-keys", tags=["Registration Keys"])
         201: {"description": "Registration key created successfully"},
         401: {"model": ErrorResponse, "description": "Authentication failed"},
     },
+    name="create_registration_key",
 )
 async def create_registration_key(
     data: RegistrationKeyCreate,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     token: ApiAdmin,
 ) -> RegistrationKeyCreateResponse:
     """
@@ -72,9 +73,10 @@ async def create_registration_key(
         200: {"description": "List of registration keys"},
         401: {"model": ErrorResponse, "description": "Authentication failed"},
     },
+    name="list_registration_keys",
 )
 async def list_registration_keys(
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     token: ApiAdmin,
     skip: Annotated[int, Query(ge=0, description="Number of records to skip")] = 0,
     limit: Annotated[
@@ -110,10 +112,11 @@ async def list_registration_keys(
         401: {"model": ErrorResponse, "description": "Authentication failed"},
         404: {"model": ErrorResponse, "description": "Registration key not found"},
     },
+    name="get_registration_key",
 )
 async def get_registration_key(
     key_id: UUID,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     token: ApiAdmin,
 ) -> RegistrationKeyResponse:
     """
@@ -142,11 +145,12 @@ async def get_registration_key(
         401: {"model": ErrorResponse, "description": "Authentication failed"},
         404: {"model": ErrorResponse, "description": "Registration key not found"},
     },
+    name="update_registration_key",
 )
 async def update_registration_key(
     key_id: UUID,
     data: RegistrationKeyUpdate,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     token: ApiAdmin,
 ) -> RegistrationKeyResponse:
     """
@@ -170,11 +174,12 @@ async def update_registration_key(
         401: {"model": ErrorResponse, "description": "Authentication failed"},
         404: {"model": ErrorResponse, "description": "Registration key not found"},
     },
+    name="revoke_registration_key",
 )
 async def revoke_registration_key(
     key_id: UUID,
     data: RegistrationKeyRevoke,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     token: ApiAdmin,
 ) -> RegistrationKeyResponse:
     """
@@ -203,10 +208,11 @@ async def revoke_registration_key(
         401: {"model": ErrorResponse, "description": "Authentication failed"},
         404: {"model": ErrorResponse, "description": "Registration key not found"},
     },
+    name="delete_registration_key",
 )
 async def delete_registration_key(
     key_id: UUID,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     token: ApiAdmin,
     hard_delete: Annotated[
         bool, Query(description="Permanently delete (dangerous)")

@@ -25,10 +25,11 @@ router = APIRouter(tags=["Web UI - Artifacts"])
     "/artifacts/{artifact_id}/view",
     response_class=Response,
     include_in_schema=False,
+    name="view_artifact",
 )
 async def view_artifact(
     artifact_id: Annotated[UUID, Path(description="Artifact UUID")],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> Response:
     """View/download artifact binary data from web UI."""
     return await ArtifactsViewService.build_artifact_download_response(db, artifact_id)
@@ -39,12 +40,13 @@ async def view_artifact(
     "/artifacts/{artifact_id}/viewer",
     response_class=HTMLResponse,
     include_in_schema=False,
+    name="trace_viewer",
 )
 async def trace_viewer(
     request: Request,
     artifact_id: Annotated[UUID, Path(description="Artifact UUID")],
     current_user: CurrentUserWeb,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> Response:
     """Serve the Playwright trace viewer page."""
     context, error = await ArtifactsViewService.build_trace_viewer_context(

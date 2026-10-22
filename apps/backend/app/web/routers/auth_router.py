@@ -27,11 +27,13 @@ logger = get_logger("luxswirl.web.routers.auth")
 router = APIRouter(tags=["Web UI - Auth"])
 
 
-@router.get("/login", response_class=HTMLResponse, include_in_schema=False)
+@router.get(
+    "/login", response_class=HTMLResponse, include_in_schema=False, name="login_page"
+)
 async def login_page(
     request: Request,
     user: OptionalUserWeb,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     redirect: str | None = None,
 ) -> Response:
     """
@@ -66,14 +68,16 @@ async def login_page(
     )
 
 
-@router.post("/login", response_class=HTMLResponse, include_in_schema=False)
+@router.post(
+    "/login", response_class=HTMLResponse, include_in_schema=False, name="login_submit"
+)
 @limiter.limit(settings.security.login_rate_limit)
 async def login_submit(
     request: Request,
     response: Response,
     username: Annotated[str, Form()],
     password: Annotated[str, Form()],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     redirect: Annotated[str, Form()] = "/",
 ) -> Response:
     """
@@ -168,7 +172,7 @@ async def login_submit(
 async def logout(
     request: Request,
     user: OptionalUserWeb,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> Response:
     """Log out (GET or POST): end the session on the server, then go to /login.
 
@@ -183,7 +187,12 @@ async def logout(
     return await WebAuthViewService().logout_response(db, request, user)
 
 
-@router.get("/change-password", response_class=HTMLResponse, include_in_schema=False)
+@router.get(
+    "/change-password",
+    response_class=HTMLResponse,
+    include_in_schema=False,
+    name="change_password_page",
+)
 async def change_password_page(
     request: Request,
     user: OptionalUserWeb,
@@ -211,7 +220,12 @@ async def change_password_page(
     )
 
 
-@router.post("/change-password", response_class=HTMLResponse, include_in_schema=False)
+@router.post(
+    "/change-password",
+    response_class=HTMLResponse,
+    include_in_schema=False,
+    name="change_password_submit",
+)
 # Same limit as /login, because it does the same thing: it verifies
 # `current_password`. Unlimited attempts here is unlimited guessing of a
 # logged-in user's password, from one address.
@@ -222,7 +236,7 @@ async def change_password_submit(
     new_password: Annotated[str, Form()],
     confirm_password: Annotated[str, Form()],
     user: OptionalUserWeb,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     required: Annotated[bool, Form()] = False,
 ) -> Response:
     """

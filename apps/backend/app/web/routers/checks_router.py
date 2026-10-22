@@ -38,10 +38,11 @@ router = APIRouter(tags=["Web UI - Checks"])
     "/checks/assignment-mode-selector",
     response_class=HTMLResponse,
     include_in_schema=False,
+    name="assignment_mode_selector",
 )
 async def assignment_mode_selector(
     request: Request,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: CurrentUserWeb,
     assignment_mode: Annotated[str, Query()] = "manual",
 ) -> HTMLResponse:
@@ -65,7 +66,7 @@ async def assignment_mode_selector(
 )
 async def create_form(
     request: Request,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: CurrentUserWeb,
 ) -> HTMLResponse:
     """Get the create form for a new check."""
@@ -87,7 +88,7 @@ async def edit_form(
     request: Request,
     check_id: Annotated[UUID, Path(description="Check UUID")],
     current_user: CurrentUserWeb,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> Response:
     """Get the edit form for an existing check."""
     try:
@@ -106,12 +107,13 @@ async def edit_form(
     "/checks/{check_id}/clone-form",
     response_class=HTMLResponse,
     include_in_schema=False,
+    name="clone_form",
 )
 async def clone_form(
     request: Request,
     check_id: Annotated[UUID, Path(description="Check UUID to clone")],
     current_user: CurrentUserWeb,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> Response:
     """Get the clone form for an existing check."""
     try:
@@ -130,13 +132,16 @@ async def clone_form(
 
 
 @router.post(
-    "/checks/{check_id}/clone", response_class=HTMLResponse, include_in_schema=False
+    "/checks/{check_id}/clone",
+    response_class=HTMLResponse,
+    include_in_schema=False,
+    name="clone_check_handler",
 )
 async def clone_check_handler(
     request: Request,
     check_id: Annotated[UUID, Path(description="Check UUID to clone")],
     current_user: EditorUserWeb,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     fields: Annotated[CheckCloneFields, Depends()],
 ) -> Response:
     """Create a clone of an existing check."""
@@ -146,10 +151,15 @@ async def clone_check_handler(
 
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
-@router.post("/checks/create", response_class=HTMLResponse, include_in_schema=False)
+@router.post(
+    "/checks/create",
+    response_class=HTMLResponse,
+    include_in_schema=False,
+    name="create_check_assignment",
+)
 async def create_check_assignment(
     request: Request,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: EditorUserWeb,
     fields: Annotated[CheckCreateFields, Depends()],
 ) -> Response:
@@ -170,7 +180,7 @@ async def update_check(
     request: Request,
     check_id: Annotated[UUID, Path(description="Check UUID")],
     current_user: EditorUserWeb,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     fields: Annotated[CheckUpdateFields, Depends()],
 ) -> Response:
     """Update an existing check."""
@@ -181,13 +191,16 @@ async def update_check(
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post(
-    "/checks/{check_id}/toggle", response_class=HTMLResponse, include_in_schema=False
+    "/checks/{check_id}/toggle",
+    response_class=HTMLResponse,
+    include_in_schema=False,
+    name="toggle_check",
 )
 async def toggle_check(
     request: Request,
     check_id: Annotated[UUID, Path(description="Check UUID")],
     current_user: EditorUserWeb,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> HTMLResponse:
     """Toggle check enabled/disabled status."""
     context = await ChecksViewService.toggle_check_handler(db, request, check_id)
@@ -206,7 +219,7 @@ async def delete_check(
     request: Request,
     check_id: Annotated[UUID, Path(description="Check UUID")],
     current_user: EditorUserWeb,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> Response:
     """Delete a check (enqueues a background cascade — see LUXSWIRL-105)."""
     return await ChecksViewService.enqueue_check_delete(
@@ -221,12 +234,13 @@ async def delete_check(
     "/checks/{check_id}/dependents",
     response_class=HTMLResponse,
     include_in_schema=False,
+    name="dependents_panel",
 )
 async def dependents_panel(
     request: Request,
     check_id: Annotated[UUID, Path(description="Parent check UUID")],
     current_user: EditorUserWeb,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     check_type: CheckTypeFilter = None,
     agent_name: Annotated[str, Query()] = "",
     tags: Annotated[str, Query()] = "",
@@ -255,12 +269,13 @@ async def dependents_panel(
     "/checks/{check_id}/dependents",
     response_class=HTMLResponse,
     include_in_schema=False,
+    name="update_dependents",
 )
 async def update_dependents(
     request: Request,
     check_id: Annotated[UUID, Path(description="Parent check UUID")],
     current_user: EditorUserWeb,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     dependent_ids: Annotated[list[str], Form()] = [],  # noqa: B006
 ) -> HTMLResponse:
     added, removed = await ChecksViewService.set_dependents(db, check_id, dependent_ids)
@@ -275,11 +290,14 @@ async def update_dependents(
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post(
-    "/checks/bulk-action", response_class=HTMLResponse, include_in_schema=False
+    "/checks/bulk-action",
+    response_class=HTMLResponse,
+    include_in_schema=False,
+    name="bulk_action",
 )
 async def bulk_action(
     request: Request,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: EditorUserWeb,
     action: Annotated[str, Form()],
     select_all: Annotated[str, Form()],
@@ -326,11 +344,14 @@ async def bulk_action(
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post(
-    "/checks/bulk-modify", response_class=HTMLResponse, include_in_schema=False
+    "/checks/bulk-modify",
+    response_class=HTMLResponse,
+    include_in_schema=False,
+    name="bulk_modify",
 )
 async def bulk_modify(
     request: Request,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: EditorUserWeb,
     select_all: Annotated[str, Form()],
     agent: OptionalIdForm = None,
@@ -369,11 +390,14 @@ async def bulk_modify(
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post(
-    "/checks/bulk-preview", response_class=HTMLResponse, include_in_schema=False
+    "/checks/bulk-preview",
+    response_class=HTMLResponse,
+    include_in_schema=False,
+    name="bulk_check_preview",
 )
 async def bulk_check_preview(
     request: Request,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: EditorUserWeb,
     bulk_urls: Annotated[str, Form()] = "",
 ) -> HTMLResponse:

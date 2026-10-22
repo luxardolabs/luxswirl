@@ -30,12 +30,13 @@ router = APIRouter(tags=["Web UI - Maintenance"])
     "/maintenance/{job_id}/status",
     response_class=HTMLResponse,
     include_in_schema=False,
+    name="maintenance_job_status",
 )
 async def maintenance_job_status(
     request: Request,
     job_id: Annotated[UUID, Path(description="Maintenance job UUID")],
     current_user: CurrentUserWeb,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> HTMLResponse:
     """Render the polling partial. Returns 404 if the row was reaped."""
     try:

@@ -37,7 +37,7 @@ logger = get_logger("luxswirl.security")
 
 
 async def get_current_user(
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     session_token: Annotated[
         str | None, Cookie(alias=settings.security.session_cookie_name)
     ] = None,
@@ -198,7 +198,7 @@ async def require_editor(
 
 
 async def get_optional_user(
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     session_token: Annotated[
         str | None, Cookie(alias=settings.security.session_cookie_name)
     ] = None,
@@ -255,7 +255,7 @@ async def _unauthenticated_web_redirect(
 
 async def get_current_user_web(
     request: Request,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     session_token: Annotated[
         str | None, Cookie(alias=settings.security.session_cookie_name)
     ] = None,

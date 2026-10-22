@@ -28,10 +28,12 @@ router = APIRouter(tags=["Web UI - Jobs"])
 
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
-@router.get("/jobs", response_class=HTMLResponse, include_in_schema=False)
+@router.get(
+    "/jobs", response_class=HTMLResponse, include_in_schema=False, name="jobs_page"
+)
 async def jobs_page(
     request: Request,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: CurrentUserWeb,
     status: JobStatusFilter = None,
     job_type: JobTypeFilter = None,
@@ -65,11 +67,14 @@ async def jobs_page(
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.get(
-    "/jobs/partials/table", response_class=HTMLResponse, include_in_schema=False
+    "/jobs/partials/table",
+    response_class=HTMLResponse,
+    include_in_schema=False,
+    name="jobs_table_partial",
 )
 async def jobs_table_partial(
     request: Request,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: CurrentUserWeb,
     status: JobStatusFilter = None,
     job_type: JobTypeFilter = None,
@@ -97,12 +102,15 @@ async def jobs_table_partial(
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.get(
-    "/jobs/{job_id}/detail", response_class=HTMLResponse, include_in_schema=False
+    "/jobs/{job_id}/detail",
+    response_class=HTMLResponse,
+    include_in_schema=False,
+    name="job_detail_panel",
 )
 async def job_detail_panel(
     job_id: UUID,
     request: Request,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: CurrentUserWeb,
 ) -> HTMLResponse:
     """Job detail panel for the side panel."""
@@ -117,10 +125,15 @@ async def job_detail_panel(
         raise
 
 
-@router.get("/jobs/create-form", response_class=HTMLResponse, include_in_schema=False)
+@router.get(
+    "/jobs/create-form",
+    response_class=HTMLResponse,
+    include_in_schema=False,
+    name="job_create_form",
+)
 async def job_create_form(
     request: Request,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: CurrentUserWeb,
     job_type: JobTypeFilter = None,
     agent_filter: Annotated[
@@ -142,10 +155,15 @@ async def job_create_form(
 
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
-@router.post("/jobs/create", response_class=HTMLResponse, include_in_schema=False)
+@router.post(
+    "/jobs/create",
+    response_class=HTMLResponse,
+    include_in_schema=False,
+    name="create_job_web",
+)
 async def create_job_web(
     request: Request,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: EditorUserWeb,
 ) -> HTMLResponse:
     """Create a new job via web form (toast + close panel + refresh on success)."""
@@ -157,10 +175,10 @@ async def create_job_web(
     )
 
 
-@router.delete("/jobs/{job_id}", include_in_schema=False)
+@router.delete("/jobs/{job_id}", include_in_schema=False, name="delete_job_web")
 async def delete_job_web(
     job_id: UUID,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: EditorUserWeb,
 ) -> HTMLResponse:
     """Delete job via web UI."""
@@ -169,10 +187,10 @@ async def delete_job_web(
 
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
-@router.post("/jobs/{job_id}/cancel", include_in_schema=False)
+@router.post("/jobs/{job_id}/cancel", include_in_schema=False, name="cancel_job_web")
 async def cancel_job_web(
     job_id: UUID,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: EditorUserWeb,
 ) -> HTMLResponse:
     """Cancel a pending/running job."""
@@ -190,11 +208,12 @@ async def cancel_job_web(
     "/jobs/{job_id}/create-checks/bulk-ping",
     response_class=HTMLResponse,
     include_in_schema=False,
+    name="bulk_create_ping_checks",
 )
 async def bulk_create_ping_checks(
     job_id: UUID,
     request: Request,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: EditorUserWeb,
 ) -> Response:
     """Create ping checks for all discovered hosts from a network scan job."""
@@ -210,11 +229,12 @@ async def bulk_create_ping_checks(
     "/jobs/{job_id}/create-checks/bulk-web",
     response_class=HTMLResponse,
     include_in_schema=False,
+    name="bulk_create_web_checks",
 )
 async def bulk_create_web_checks(
     job_id: UUID,
     request: Request,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: EditorUserWeb,
 ) -> Response:
     """Create HTTP checks for all web servers discovered in a network scan."""
@@ -230,11 +250,12 @@ async def bulk_create_web_checks(
     "/jobs/{job_id}/create-checks/bulk-ssh",
     response_class=HTMLResponse,
     include_in_schema=False,
+    name="bulk_create_ssh_checks",
 )
 async def bulk_create_ssh_checks(
     job_id: UUID,
     request: Request,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: EditorUserWeb,
 ) -> Response:
     """Create TCP checks for all SSH servers discovered in a network scan."""
@@ -250,11 +271,12 @@ async def bulk_create_ssh_checks(
     "/jobs/{job_id}/create-checks/bulk-database",
     response_class=HTMLResponse,
     include_in_schema=False,
+    name="bulk_create_database_checks",
 )
 async def bulk_create_database_checks(
     job_id: UUID,
     request: Request,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: EditorUserWeb,
 ) -> Response:
     """Create TCP checks for all database servers discovered in a network scan."""
@@ -272,11 +294,12 @@ async def bulk_create_database_checks(
     "/jobs/{job_id}/quick-create-check",
     response_class=HTMLResponse,
     include_in_schema=False,
+    name="quick_create_check_from_host",
 )
 async def quick_create_check_from_host(
     job_id: UUID,
     request: Request,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: EditorUserWeb,
 ) -> HTMLResponse:
     """

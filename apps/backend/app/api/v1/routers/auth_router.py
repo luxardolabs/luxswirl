@@ -29,13 +29,15 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 logger = get_logger("luxswirl.api.routers.auth")
 
 
-@router.post("/login", response_model=LoginResponse, status_code=status.HTTP_200_OK)
+@router.post(
+    "/login", response_model=LoginResponse, status_code=status.HTTP_200_OK, name="login"
+)
 @limiter.limit(settings.security.login_rate_limit)
 async def login(
     login_data: LoginRequest,
     request: Request,
     response: Response,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> LoginResponse:
     """
     Login with username and password.
@@ -123,11 +125,12 @@ async def login(
     "/logout",
     status_code=status.HTTP_200_OK,
     response_model=MessageResponse,
+    name="logout",
 )
 async def logout(
     response: Response,
     user: CurrentUser,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     session_token: Annotated[str, Cookie(alias=settings.security.session_cookie_name)],
 ) -> MessageResponse:
     """
@@ -157,10 +160,10 @@ async def logout(
     return MessageResponse(message="Logged out successfully")
 
 
-@router.get("/me", response_model=CurrentUserResponse)
+@router.get("/me", response_model=CurrentUserResponse, name="get_current_user_info")
 async def get_current_user_info(
     user: CurrentUser,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> CurrentUserResponse:
     """
     Get current authenticated user information.
@@ -174,13 +177,14 @@ async def get_current_user_info(
     "/change-password",
     status_code=status.HTTP_200_OK,
     response_model=MessageResponse,
+    name="change_password",
 )
 @limiter.limit(settings.security.login_rate_limit)
 async def change_password(
     request: Request,
     password_data: ChangePasswordRequest,
     user: CurrentUser,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> MessageResponse:
     """
     Change current user's password.
@@ -216,10 +220,10 @@ async def change_password(
 
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
-@router.get("/sessions", response_model=SessionListResponse)
+@router.get("/sessions", response_model=SessionListResponse, name="list_my_sessions")
 async def list_my_sessions(
     user: CurrentUser,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> SessionListResponse:
     """
     List all active sessions for current user.
@@ -242,11 +246,12 @@ async def list_my_sessions(
     "/sessions/{session_id}",
     status_code=status.HTTP_200_OK,
     response_model=MessageResponse,
+    name="logout_session",
 )
 async def logout_session(
     session_id: str,
     user: CurrentUser,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> MessageResponse:
     """
     Logout a specific session (revoke access).
@@ -291,11 +296,12 @@ async def logout_session(
     "/logout-all",
     status_code=status.HTTP_200_OK,
     response_model=SessionsTerminatedResponse,
+    name="logout_all_sessions",
 )
 async def logout_all_sessions(
     response: Response,
     user: CurrentUser,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> SessionsTerminatedResponse:
     """
     Logout all sessions for current user.
@@ -337,11 +343,15 @@ async def logout_all_sessions(
 
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
-@router.get("/sessions/user/{user_id}", response_model=SessionListResponse)
+@router.get(
+    "/sessions/user/{user_id}",
+    response_model=SessionListResponse,
+    name="list_user_sessions_admin",
+)
 async def list_user_sessions_admin(
     user_id: UUID,
     admin: AdminUser,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> SessionListResponse:
     """
     List all sessions for a specific user (admin only).
@@ -368,11 +378,12 @@ async def list_user_sessions_admin(
     "/sessions/user/{user_id}/logout-all",
     status_code=status.HTTP_200_OK,
     response_model=SessionsTerminatedResponse,
+    name="logout_user_sessions_admin",
 )
 async def logout_user_sessions_admin(
     user_id: UUID,
     admin: AdminUser,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> SessionsTerminatedResponse:
     """
     Force logout all sessions for a user (admin only).

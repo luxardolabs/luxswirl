@@ -40,6 +40,7 @@ router = APIRouter(prefix="/notification-providers", tags=["Notification Provide
     response_model=NotificationProviderTypesResponse,
     summary="Get available provider types",
     description="Get list of all available notification provider types with their configuration schemas",
+    name="get_provider_types",
 )
 async def get_provider_types(
     _: Annotated[str, Depends(verify_api_token)],
@@ -65,9 +66,10 @@ async def get_provider_types(
     response_model=NotificationProviderListResponse,
     summary="List all notification providers",
     description="Get a list of all notification providers with optional filtering",
+    name="list_providers",
 )
 async def list_providers(
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _: Annotated[str, Depends(verify_api_token)],
     provider_type: ProviderTypeFilter = None,
     page: Annotated[int, Query(ge=1, description="Page number")] = 1,
@@ -84,10 +86,11 @@ async def list_providers(
     response_model=NotificationProviderResponse,
     summary="Get notification provider by UUID",
     description="Get a specific notification provider by its UUID",
+    name="get_provider",
 )
 async def get_provider(
     provider_id: Annotated[UUID, Path(description="Provider UUID")],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _: Annotated[str, Depends(verify_api_token)],
 ) -> NotificationProviderResponse:
     """Get a specific notification provider."""
@@ -105,10 +108,11 @@ async def get_provider(
     status_code=status.HTTP_201_CREATED,
     summary="Create a new notification provider",
     description="Create a new notification provider with the specified configuration",
+    name="create_provider",
 )
 async def create_provider(
     data: NotificationProviderCreate,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _: Annotated[str, Depends(verify_api_token)],
 ) -> NotificationProviderResponse:
     """Create a new notification provider."""
@@ -140,11 +144,12 @@ async def create_provider(
     response_model=NotificationProviderResponse,
     summary="Update a notification provider",
     description="Update an existing notification provider",
+    name="update_provider",
 )
 async def update_provider(
     data: NotificationProviderUpdate,
     provider_id: Annotated[UUID, Path(description="Provider UUID")],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _: Annotated[str, Depends(verify_api_token)],
 ) -> NotificationProviderResponse:
     """Update a notification provider."""
@@ -176,10 +181,11 @@ async def update_provider(
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Delete a notification provider",
     description="Delete a notification provider (soft delete by default)",
+    name="delete_provider",
 )
 async def delete_provider(
     provider_id: Annotated[UUID, Path(description="Provider UUID")],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _: Annotated[str, Depends(verify_api_token)],
     hard_delete: Annotated[
         bool, Query(description="Permanently delete (not recommended)")
@@ -202,10 +208,11 @@ async def delete_provider(
     response_model=NotificationProviderTestResponse,
     summary="Test a notification provider",
     description="Send a test notification through the specified provider",
+    name="test_provider",
 )
 async def test_provider(
     provider_id: Annotated[UUID, Path(description="Provider UUID")],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _: Annotated[str, Depends(verify_api_token)],
     data: NotificationProviderTestRequest = NotificationProviderTestRequest(),
 ) -> NotificationProviderTestResponse:

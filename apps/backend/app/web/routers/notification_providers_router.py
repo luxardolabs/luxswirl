@@ -24,7 +24,11 @@ logger = get_logger("luxswirl.web.notification_providers")
 router = APIRouter(tags=["Web UI - Notification Providers"], include_in_schema=False)
 
 
-@router.get("/notification-providers/create-form", response_class=HTMLResponse)
+@router.get(
+    "/notification-providers/create-form",
+    response_class=HTMLResponse,
+    name="create_provider_form",
+)
 async def create_provider_form(
     request: Request,
     current_user: CurrentUserWeb,
@@ -42,12 +46,14 @@ async def create_provider_form(
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.get(
-    "/notification-providers/{provider_id}/edit-form", response_class=HTMLResponse
+    "/notification-providers/{provider_id}/edit-form",
+    response_class=HTMLResponse,
+    name="edit_provider_form",
 )
 async def edit_provider_form(
     request: Request,
     provider_id: UUID,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: CurrentUserWeb,
 ) -> HTMLResponse:
     """HTMX partial — populated edit form."""
@@ -68,7 +74,7 @@ async def edit_provider_form(
 )
 async def create_provider(
     request: Request,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: EditorUserWeb,
 ) -> HTMLResponse:
     """Create a new notification provider."""
@@ -86,7 +92,7 @@ async def create_provider(
 async def update_provider(
     request: Request,
     provider_id: UUID,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: EditorUserWeb,
 ) -> HTMLResponse:
     """Update an existing notification provider."""
@@ -103,7 +109,7 @@ async def update_provider(
 async def delete_provider(
     request: Request,
     provider_id: UUID,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: EditorUserWeb,
 ) -> HTMLResponse:
     """Delete a notification provider (soft delete)."""
@@ -113,12 +119,14 @@ async def delete_provider(
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post(
-    "/notification-providers/{provider_id}/toggle", response_class=HTMLResponse
+    "/notification-providers/{provider_id}/toggle",
+    response_class=HTMLResponse,
+    name="toggle_provider",
 )
 async def toggle_provider(
     request: Request,
     provider_id: UUID,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: EditorUserWeb,
 ) -> HTMLResponse:
     """Toggle notification provider enabled/disabled status."""
@@ -137,7 +145,7 @@ async def toggle_provider(
 async def test_provider(
     request: Request,
     provider_id: UUID,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: EditorUserWeb,
 ) -> HTMLResponse:
     """Send a test notification through this provider (toast feedback)."""

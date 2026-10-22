@@ -36,9 +36,10 @@ router = APIRouter(prefix="/alerts", tags=["Alerts"])
     response_model=AlertListResponse,
     summary="List all alerts",
     description="Get a list of all alerts with optional filtering",
+    name="list_alerts",
 )
 async def list_alerts(
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _: Annotated[str, Depends(verify_api_token)],
     is_enabled: EnabledFilter = None,
     is_global: GlobalFilter = None,
@@ -56,10 +57,11 @@ async def list_alerts(
     response_model=AlertResponse,
     summary="Get alert by UUID",
     description="Get a specific alert by its UUID",
+    name="get_alert",
 )
 async def get_alert(
     alert_id: Annotated[UUID, Path(description="Alert UUID")],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _: Annotated[str, Depends(verify_api_token)],
 ) -> AlertResponse:
     """Get a specific alert."""
@@ -75,10 +77,11 @@ async def get_alert(
     status_code=status.HTTP_201_CREATED,
     summary="Create a new alert",
     description="Create a new alert with the specified configuration",
+    name="create_alert",
 )
 async def create_alert(
     data: AlertCreate,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _: Annotated[str, Depends(verify_api_token)],
 ) -> AlertResponse:
     """Create a new alert."""
@@ -97,11 +100,12 @@ async def create_alert(
     response_model=AlertResponse,
     summary="Update an alert",
     description="Update an existing alert",
+    name="update_alert",
 )
 async def update_alert(
     data: AlertUpdate,
     alert_id: Annotated[UUID, Path(description="Alert UUID")],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _: Annotated[str, Depends(verify_api_token)],
 ) -> AlertResponse:
     """Update an alert."""
@@ -120,10 +124,11 @@ async def update_alert(
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Delete an alert",
     description="Delete an alert (soft delete by default)",
+    name="delete_alert",
 )
 async def delete_alert(
     alert_id: Annotated[UUID, Path(description="Alert UUID")],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _: Annotated[str, Depends(verify_api_token)],
     hard_delete: Annotated[
         bool, Query(description="Permanently delete (not recommended)")
@@ -148,11 +153,12 @@ async def delete_alert(
     summary="Add notification provider to alert",
     description="Add a notification provider to an alert",
     response_model=MappingCreatedResponse,
+    name="add_notification_provider",
 )
 async def add_notification_provider(
     alert_id: Annotated[UUID, Path(description="Alert UUID")],
     provider_id: Annotated[UUID, Query(description="Notification provider UUID")],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _: Annotated[str, Depends(verify_api_token)],
 ) -> MappingCreatedResponse:
     """Add a notification provider to an alert."""
@@ -178,11 +184,12 @@ async def add_notification_provider(
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Remove notification provider from alert",
     description="Remove a notification provider from an alert",
+    name="remove_notification_provider",
 )
 async def remove_notification_provider(
     alert_id: Annotated[UUID, Path(description="Alert UUID")],
     provider_id: Annotated[UUID, Path(description="Provider UUID")],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _: Annotated[str, Depends(verify_api_token)],
 ) -> None:
     """Remove a notification provider from an alert."""
@@ -204,11 +211,12 @@ async def remove_notification_provider(
     summary="Add check to alert",
     description="Add a check to an alert",
     response_model=MappingCreatedResponse,
+    name="add_check",
 )
 async def add_check(
     alert_id: Annotated[UUID, Path(description="Alert UUID")],
     check_id: Annotated[UUID, Query(description="Check UUID")],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _: Annotated[str, Depends(verify_api_token)],
 ) -> MappingCreatedResponse:
     """Add a check to an alert."""
@@ -232,11 +240,12 @@ async def add_check(
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Remove check from alert",
     description="Remove a check from an alert",
+    name="remove_check",
 )
 async def remove_check(
     alert_id: Annotated[UUID, Path(description="Alert UUID")],
     check_id: Annotated[UUID, Path(description="Check UUID")],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _: Annotated[str, Depends(verify_api_token)],
 ) -> None:
     """Remove a check from an alert."""

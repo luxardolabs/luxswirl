@@ -28,11 +28,13 @@ logger = get_logger("luxswirl.web.routers.users")
 router = APIRouter(prefix="/settings", tags=["Web UI - Users"])
 
 
-@router.get("/users", response_class=HTMLResponse, include_in_schema=False)
+@router.get(
+    "/users", response_class=HTMLResponse, include_in_schema=False, name="users_page"
+)
 async def users_page(
     request: Request,
     user: AdminUserWeb,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     page: Annotated[int, Query(ge=1)] = 1,
     per_page: PerPageFilter = None,
     role: Annotated[str | None, Query()] = None,
@@ -55,12 +57,15 @@ async def users_page(
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.get(
-    "/users/partials/table", response_class=HTMLResponse, include_in_schema=False
+    "/users/partials/table",
+    response_class=HTMLResponse,
+    include_in_schema=False,
+    name="users_table_partial",
 )
 async def users_table_partial(
     request: Request,
     user: AdminUserWeb,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     page: Annotated[int, Query(ge=1)] = 1,
     per_page: PerPageFilter = None,
     role: Annotated[str | None, Query()] = None,
@@ -84,7 +89,12 @@ async def users_table_partial(
 
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
-@router.get("/users/create-form", response_class=HTMLResponse, include_in_schema=False)
+@router.get(
+    "/users/create-form",
+    response_class=HTMLResponse,
+    include_in_schema=False,
+    name="create_user_form",
+)
 async def create_user_form(
     request: Request,
     user: AdminUserWeb,
@@ -101,13 +111,18 @@ async def create_user_form(
 
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
-@router.post("/users/create", response_class=HTMLResponse, include_in_schema=False)
+@router.post(
+    "/users/create",
+    response_class=HTMLResponse,
+    include_in_schema=False,
+    name="create_user_submit",
+)
 async def create_user_submit(
     request: Request,
     username: Annotated[str, Form()],
     password: Annotated[str, Form()],
     admin: AdminUserWeb,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     role: Annotated[str, Form()] = "viewer",
     full_name: Annotated[str | None, Form()] = None,
     is_active: Annotated[bool, Form()] = True,
@@ -155,13 +170,16 @@ async def create_user_submit(
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.get(
-    "/users/{user_id}/edit-form", response_class=HTMLResponse, include_in_schema=False
+    "/users/{user_id}/edit-form",
+    response_class=HTMLResponse,
+    include_in_schema=False,
+    name="edit_user_form",
 )
 async def edit_user_form(
     request: Request,
     user_id: UUID,
     admin: AdminUserWeb,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> Response:
     """
     HTMX partial - returns form for editing a user.
@@ -193,14 +211,17 @@ async def edit_user_form(
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post(
-    "/users/{user_id}/update", response_class=HTMLResponse, include_in_schema=False
+    "/users/{user_id}/update",
+    response_class=HTMLResponse,
+    include_in_schema=False,
+    name="update_user_submit",
 )
 async def update_user_submit(
     request: Request,
     user_id: UUID,
     role: Annotated[str, Form()],
     admin: AdminUserWeb,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     full_name: Annotated[str | None, Form()] = None,
     is_active: Annotated[bool, Form()] = False,
     must_change_password: Annotated[bool, Form()] = False,
@@ -249,7 +270,7 @@ async def update_user_submit(
 async def delete_user(
     user_id: UUID,
     admin: AdminUserWeb,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> HTMLResponse:
     """
     Delete user (admin only).
@@ -291,7 +312,7 @@ async def reset_user_password(
     user_id: UUID,
     new_password: Annotated[str, Form()],
     admin: AdminUserWeb,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     must_change: Annotated[bool, Form()] = True,
 ) -> RedirectResponse:
     """
@@ -329,7 +350,7 @@ async def reset_user_password(
 async def unlock_user(
     user_id: UUID,
     admin: AdminUserWeb,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> HTMLResponse:
     """
     Unlock locked user account (admin only).

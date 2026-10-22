@@ -48,7 +48,7 @@ ApiAdmin = Annotated[str, Depends(require_api_admin)]
 
 async def require_job_owner(
     job_id: UUID,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     authorization: Annotated[str | None, Header()] = None,
 ) -> UUID:
     """`job_id`, once the job's assigned agent has proved its own key.
@@ -87,7 +87,7 @@ AgentOwnedJobId = Annotated[UUID, Depends(require_job_owner)]
 
 async def require_agent(
     agent_id: UUID,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     authorization: Annotated[str | None, Header()] = None,
 ) -> UUID:
     """`agent_id`, once that agent has authenticated with its key and is approved.
@@ -120,7 +120,7 @@ class HeartbeatSender:
 
 async def require_heartbeat_sender(
     heartbeat: AgentHeartbeat,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     authorization: Annotated[str | None, Header()] = None,
 ) -> HeartbeatSender:
     """The heartbeat's agent, authenticated by its own key or the registration key.
@@ -138,7 +138,7 @@ AuthenticatedHeartbeat = Annotated[HeartbeatSender, Depends(require_heartbeat_se
 
 async def require_reporting_agent(
     report: AgentReportRequest,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     authorization: Annotated[str | None, Header()] = None,
 ) -> UUID:
     """The report's agent, authenticated by its OWN key.

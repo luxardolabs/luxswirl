@@ -34,10 +34,15 @@ router = APIRouter(tags=["Web UI - Status Pages"])
 # ---- list / forms ---------------------------------------------------------
 
 
-@router.get("/status-pages", response_class=HTMLResponse, include_in_schema=False)
+@router.get(
+    "/status-pages",
+    response_class=HTMLResponse,
+    include_in_schema=False,
+    name="status_pages_list",
+)
 async def status_pages_list(
     request: Request,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: CurrentUserWeb,
     is_public: Annotated[
         str, Query(description="Filter by public/private status")
@@ -61,7 +66,7 @@ async def status_pages_list(
 )
 async def create_form(
     request: Request,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: CurrentUserWeb,
 ) -> HTMLResponse:
     """Get the create form for a new status page."""
@@ -83,7 +88,7 @@ async def edit_form(
     request: Request,
     status_page_id: Annotated[UUID, Path(description="Status page UUID")],
     current_user: CurrentUserWeb,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> Response:
     """Get the edit form for an existing status page."""
     try:
@@ -103,11 +108,14 @@ async def edit_form(
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post(
-    "/status-pages/create", response_class=HTMLResponse, include_in_schema=False
+    "/status-pages/create",
+    response_class=HTMLResponse,
+    include_in_schema=False,
+    name="create_status_page",
 )
 async def create_status_page(
     request: Request,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: EditorUserWeb,
     name: Annotated[str, Form()],
     slug: Annotated[str, Form()],
@@ -127,12 +135,13 @@ async def create_status_page(
     "/status-pages/{status_page_id}/update",
     response_class=HTMLResponse,
     include_in_schema=False,
+    name="update_status_page",
 )
 async def update_status_page(
     request: Request,
     status_page_id: Annotated[UUID, Path(description="Status page UUID")],
     current_user: EditorUserWeb,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     name: Annotated[str, Form()],
     slug: Annotated[str, Form()],
     description: Annotated[str, Form()] = "",
@@ -151,12 +160,13 @@ async def update_status_page(
     "/status-pages/{status_page_id}",
     response_class=HTMLResponse,
     include_in_schema=False,
+    name="delete_status_page",
 )
 async def delete_status_page(
     request: Request,
     status_page_id: Annotated[UUID, Path(description="Status page UUID")],
     current_user: EditorUserWeb,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> HTMLResponse:
     """Enqueue a status_page_delete maintenance job; return the polling partial.
 
@@ -181,12 +191,13 @@ async def delete_status_page(
     "/status-pages/{status_page_id}/manage",
     response_class=HTMLResponse,
     include_in_schema=False,
+    name="manage_status_page",
 )
 async def manage_status_page(
     request: Request,
     status_page_id: Annotated[UUID, Path(description="Status page UUID")],
     current_user: CurrentUserWeb,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> Response:
     """Management page for editing status page items (checks and groups)."""
     try:
@@ -206,12 +217,13 @@ async def manage_status_page(
     "/status-pages/{status_page_id}/available-checks",
     response_class=HTMLResponse,
     include_in_schema=False,
+    name="get_available_checks",
 )
 async def get_available_checks(
     request: Request,
     status_page_id: Annotated[UUID, Path(description="Status page UUID")],
     current_user: CurrentUserWeb,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     agent_id: AgentIdFilter = None,
     check_type: CheckTypeFilter = None,
     status: HealthStatusFilter = None,
@@ -240,13 +252,14 @@ async def get_available_checks(
     "/status-pages/{status_page_id}/add-check",
     response_class=HTMLResponse,
     include_in_schema=False,
+    name="add_check_to_dashboard",
 )
 async def add_check_to_dashboard(
     request: Request,
     status_page_id: Annotated[UUID, Path(description="Status page UUID")],
     check_id: Annotated[UUID, Form()],
     current_user: EditorUserWeb,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> HTMLResponse:
     """Add a check to the dashboard. Returns refreshed dashboard_items partial."""
     context, error = await StatusPagesViewService.add_check_to_dashboard(
@@ -267,13 +280,14 @@ async def add_check_to_dashboard(
     "/status-pages/{status_page_id}/remove-item/{item_index}",
     response_class=HTMLResponse,
     include_in_schema=False,
+    name="remove_item_from_dashboard",
 )
 async def remove_item_from_dashboard(
     request: Request,
     status_page_id: Annotated[UUID, Path(description="Status page UUID")],
     item_index: Annotated[int, Path(description="Item index")],
     current_user: EditorUserWeb,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> HTMLResponse:
     """Remove an item from the dashboard."""
     context = await StatusPagesViewService.remove_item_from_dashboard(
@@ -292,13 +306,14 @@ async def remove_item_from_dashboard(
     "/status-pages/{status_page_id}/reorder",
     response_class=HTMLResponse,
     include_in_schema=False,
+    name="reorder_dashboard_items",
 )
 async def reorder_dashboard_items(
     request: Request,
     status_page_id: Annotated[UUID, Path(description="Status page UUID")],
     items_json: Annotated[str, Form()],
     current_user: EditorUserWeb,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> HTMLResponse:
     """Reorder items in the dashboard. Returns refreshed dashboard_items partial."""
     context = await StatusPagesViewService.reorder_dashboard_items(
@@ -312,13 +327,14 @@ async def reorder_dashboard_items(
     "/status-pages/{status_page_id}/add-group",
     response_class=HTMLResponse,
     include_in_schema=False,
+    name="add_group_to_dashboard",
 )
 async def add_group_to_dashboard(
     request: Request,
     status_page_id: Annotated[UUID, Path(description="Status page UUID")],
     name: Annotated[str, Form()],
     current_user: EditorUserWeb,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     filter_json: Annotated[str | None, Form()] = None,
 ) -> HTMLResponse:
     """Add a group to the dashboard. Returns refreshed dashboard_items partial."""
@@ -340,6 +356,7 @@ async def add_group_to_dashboard(
     "/status-pages/{status_page_id}/rename-group/{item_index}",
     response_class=HTMLResponse,
     include_in_schema=False,
+    name="rename_group_in_dashboard",
 )
 async def rename_group_in_dashboard(
     request: Request,
@@ -347,7 +364,7 @@ async def rename_group_in_dashboard(
     item_index: Annotated[int, Path(description="Item index")],
     name: Annotated[str, Form()],
     current_user: EditorUserWeb,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> HTMLResponse:
     """Rename a group. Returns refreshed dashboard_items partial."""
     if not name.strip():
@@ -363,6 +380,7 @@ async def rename_group_in_dashboard(
     "/status-pages/{status_page_id}/update-group-filters/{item_index}",
     response_class=HTMLResponse,
     include_in_schema=False,
+    name="update_group_filters_in_dashboard",
 )
 async def update_group_filters_in_dashboard(
     request: Request,
@@ -370,7 +388,7 @@ async def update_group_filters_in_dashboard(
     item_index: Annotated[int, Path(description="Item index")],
     filter_json: Annotated[str, Form()],
     current_user: EditorUserWeb,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> HTMLResponse:
     """Update filters for a dynamic filter group. Returns dashboard_items partial."""
     context = await StatusPagesViewService.update_group_filters(
@@ -384,13 +402,14 @@ async def update_group_filters_in_dashboard(
     "/status-pages/{status_page_id}/group/{item_index}/sort",
     response_class=HTMLResponse,
     include_in_schema=False,
+    name="update_group_sort_in_dashboard",
 )
 async def update_group_sort_in_dashboard(
     request: Request,
     status_page_id: Annotated[UUID, Path(description="Status page UUID")],
     item_index: Annotated[int, Path(description="Item index")],
     current_user: EditorUserWeb,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     sort_by: Annotated[str, Form()] = "manual",
     sort_direction: Annotated[str, Form()] = "asc",
 ) -> HTMLResponse:
@@ -406,12 +425,13 @@ async def update_group_sort_in_dashboard(
     "/status-pages/{status_page_id}/dashboard-items",
     response_class=HTMLResponse,
     include_in_schema=False,
+    name="get_dashboard_items",
 )
 async def get_dashboard_items(
     request: Request,
     status_page_id: Annotated[UUID, Path(description="Status page UUID")],
     current_user: CurrentUserWeb,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> HTMLResponse:
     """Get dashboard items HTML (used for refreshing after filter changes)."""
     context = await StatusPagesViewService.build_dashboard_items_context(
@@ -423,12 +443,17 @@ async def get_dashboard_items(
 # ---- public view ----------------------------------------------------------
 
 
-@router.get("/status/{slug}", response_class=HTMLResponse, include_in_schema=False)
+@router.get(
+    "/status/{slug}",
+    response_class=HTMLResponse,
+    include_in_schema=False,
+    name="view_public_status_page",
+)
 async def view_public_status_page(
     request: Request,
     slug: Annotated[str, Path(description="Status page slug")],
     current_user: OptionalUserWeb,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     time_range: TimeRangeFilter = None,
 ) -> Response:
     """Public view of a status page by slug at /status/{slug}."""
@@ -462,13 +487,16 @@ async def view_public_status_page(
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.get(
-    "/status/{slug}/partial", response_class=HTMLResponse, include_in_schema=False
+    "/status/{slug}/partial",
+    response_class=HTMLResponse,
+    include_in_schema=False,
+    name="view_public_status_page_partial",
 )
 async def view_public_status_page_partial(
     request: Request,
     slug: Annotated[str, Path(description="Status page slug")],
     current_user: OptionalUserWeb,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     time_range: TimeRangeFilter = None,
 ) -> HTMLResponse:
     """Partial refresh endpoint for public status page (HTMX polling)."""

@@ -5,7 +5,7 @@ CRUD operations for scheduler models.
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.scheduler_model import JobConfiguration, JobExecution
@@ -151,6 +151,24 @@ class JobConfigurationCRUD:
             )
         )
         return result.scalar_one_or_none()
+
+    @staticmethod
+    async def release_lease(db: AsyncSession, job_key: str, lease_token: UUID) -> bool:
+        """Clear the lease only while `lease_token` still holds it, in one statement.
+
+        A run that outlived its lease may find the job leased again by another worker;
+        clearing it by primary key would hand that worker's run to a third. False when
+        the lease was no longer this run's."""
+        result = await db.execute(
+            update(JobConfiguration)
+            .where(
+                JobConfiguration.job_key == job_key,
+                JobConfiguration.lease_token == lease_token,
+            )
+            .values(lease_token=None, lease_expires_at=None)
+            .returning(JobConfiguration.id)
+        )
+        return result.first() is not None
 
     @staticmethod
     async def get_all_ordered(db: AsyncSession) -> list[JobConfiguration]:

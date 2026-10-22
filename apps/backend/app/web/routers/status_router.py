@@ -28,7 +28,9 @@ logger = get_logger("luxswirl.web.routers.status")
 router = APIRouter(tags=["Web UI - Status"])
 
 
-@router.get("/", response_class=RedirectResponse, include_in_schema=False)
+@router.get(
+    "/", response_class=RedirectResponse, include_in_schema=False, name="root_redirect"
+)
 async def root_redirect(request: Request) -> Response:
     qs = request.url.query
     target = "/dashboard" + (f"?{qs}" if qs else "")
@@ -36,10 +38,15 @@ async def root_redirect(request: Request) -> Response:
 
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
-@router.get("/internal/summary", response_class=HTMLResponse, include_in_schema=False)
+@router.get(
+    "/internal/summary",
+    response_class=HTMLResponse,
+    include_in_schema=False,
+    name="status_summary_partial",
+)
 async def status_summary_partial(
     request: Request,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: CurrentUserWeb,
 ) -> HTMLResponse:
     """HTMX partial - summary stats header (polled ~10s)."""
@@ -51,10 +58,15 @@ async def status_summary_partial(
     return templates.TemplateResponse(request, "partials/status_summary.html", context)
 
 
-@router.get("/dashboard", response_class=HTMLResponse, include_in_schema=False)
+@router.get(
+    "/dashboard",
+    response_class=HTMLResponse,
+    include_in_schema=False,
+    name="status_page",
+)
 async def status_page(
     request: Request,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: CurrentUserWeb,
     agent_id: AgentIdFilter = None,
     check_type: CheckTypeFilter = None,

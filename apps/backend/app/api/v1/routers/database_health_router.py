@@ -23,9 +23,13 @@ router = APIRouter(tags=["Database Health"])
 
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
-@router.get("/database-health/chart-data", response_model=DatabaseGrowthResponse)
+@router.get(
+    "/database-health/chart-data",
+    response_model=DatabaseGrowthResponse,
+    name="database_growth_chart_data",
+)
 async def database_growth_chart_data(
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: AdminUser,
     hours: Annotated[
         int, Query(ge=1, le=8760, description="Hours of data to fetch")

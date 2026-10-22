@@ -42,10 +42,11 @@ router = APIRouter(prefix="/jobs", tags=["Jobs"])
     responses={
         404: {"model": ErrorResponse, "description": "Agent not found"},
     },
+    name="create_job",
 )
 async def create_job(
     data: JobCreate,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     token: Annotated[str, Depends(verify_api_token)],
 ) -> JobResponse:
     """Create a new job."""
@@ -72,9 +73,10 @@ async def create_job(
     response_model=JobListResponse,
     summary="List jobs",
     description="Get a list of jobs with optional filtering",
+    name="list_jobs",
 )
 async def list_jobs(
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _: Annotated[str, Depends(verify_api_token)],
     agent_filter: Annotated[
         str | None, Query(alias="agent_id", description="Filter by agent ID")
@@ -103,10 +105,11 @@ async def list_jobs(
     responses={
         404: {"model": ErrorResponse, "description": "Job not found"},
     },
+    name="get_job",
 )
 async def get_job(
     job_id: UUID,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _: Annotated[str, Depends(verify_api_token)],
 ) -> JobResponse:
     """Get a specific job by ID."""
@@ -127,13 +130,14 @@ async def get_job(
     responses={
         404: {"model": ErrorResponse, "description": "Job not found"},
     },
+    name="submit_job_results",
 )
 @limiter.limit(settings.security.agent_api_rate_limit)
 async def submit_job_results(
     request: Request,
     owned_job_id: AgentOwnedJobId,
     result_data: JobResultSubmit,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> JobResponse:
     """Submit job results from the agent the job is assigned to."""
     job = await JobApiCoreService.submit_job_result(db, owned_job_id, result_data)
@@ -153,10 +157,11 @@ async def submit_job_results(
     responses={
         404: {"model": ErrorResponse, "description": "Job not found"},
     },
+    name="cancel_job",
 )
 async def cancel_job(
     job_id: UUID,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _: Annotated[str, Depends(verify_api_token)],
 ) -> None:
     """Cancel or delete a job."""
@@ -172,9 +177,10 @@ async def cancel_job(
     response_model=JobStatsResponse,
     summary="Get job statistics",
     description="Get aggregated job statistics",
+    name="get_job_stats",
 )
 async def get_job_stats(
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _: Annotated[str, Depends(verify_api_token)],
     agent_filter: Annotated[
         str | None, Query(alias="agent_id", description="Filter by agent ID")

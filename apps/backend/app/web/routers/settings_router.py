@@ -26,10 +26,10 @@ router = APIRouter(tags=["Web UI - Settings"], include_in_schema=False)
 
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
-@router.get("/settings", response_class=HTMLResponse)
+@router.get("/settings", response_class=HTMLResponse, name="settings_landing")
 async def settings_landing(
     request: Request,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: AdminUserWeb,
 ) -> HTMLResponse:
     """Settings landing page."""
@@ -38,10 +38,14 @@ async def settings_landing(
 
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
-@router.get("/settings/notifications", response_class=HTMLResponse)
+@router.get(
+    "/settings/notifications",
+    response_class=HTMLResponse,
+    name="settings_notifications",
+)
 async def settings_notifications(
     request: Request,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: AdminUserWeb,
 ) -> HTMLResponse:
     """Notification providers settings page."""
@@ -54,10 +58,10 @@ async def settings_notifications(
 
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
-@router.get("/settings/alerts", response_class=HTMLResponse)
+@router.get("/settings/alerts", response_class=HTMLResponse, name="settings_alerts")
 async def settings_alerts(
     request: Request,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: AdminUserWeb,
     is_enabled: EnabledFilter = None,
     is_global: GlobalFilter = None,
@@ -72,10 +76,14 @@ async def settings_alerts(
 
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
-@router.get("/settings/registration-keys", response_class=HTMLResponse)
+@router.get(
+    "/settings/registration-keys",
+    response_class=HTMLResponse,
+    name="settings_registration_keys",
+)
 async def settings_registration_keys(
     request: Request,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: AdminUserWeb,
     is_enabled: EnabledFilter = None,
 ) -> HTMLResponse:
@@ -88,7 +96,9 @@ async def settings_registration_keys(
     )
 
 
-@router.get("/settings/components", response_class=HTMLResponse)
+@router.get(
+    "/settings/components", response_class=HTMLResponse, name="settings_components"
+)
 async def settings_components(
     request: Request,
     current_user: AdminUserWeb,
@@ -102,7 +112,9 @@ async def settings_components(
 
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
-@router.get("/settings/logo-demo", response_class=HTMLResponse)
+@router.get(
+    "/settings/logo-demo", response_class=HTMLResponse, name="settings_logo_demo"
+)
 async def settings_logo_demo(
     request: Request,
     current_user: AdminUserWeb,
@@ -116,10 +128,10 @@ async def settings_logo_demo(
 
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
-@router.get("/settings/defaults", response_class=HTMLResponse)
+@router.get("/settings/defaults", response_class=HTMLResponse, name="settings_defaults")
 async def settings_defaults(
     request: Request,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: AdminUserWeb,
 ) -> HTMLResponse:
     """System defaults settings page — all configurable defaults."""
@@ -132,12 +144,14 @@ async def settings_defaults(
 # ---- HTMX setting card mutations ----------------------------------------
 
 
-@router.post("/settings/{key}/update", response_class=HTMLResponse)
+@router.post(
+    "/settings/{key}/update", response_class=HTMLResponse, name="update_setting"
+)
 async def update_setting(
     request: Request,
     key: str,
     value: Annotated[str, Form()],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: AdminUserWeb,
 ) -> Response:
     """Update a setting value; returns the refreshed setting card."""
@@ -175,11 +189,11 @@ async def update_setting(
         )
 
 
-@router.post("/settings/{key}/reset", response_class=HTMLResponse)
+@router.post("/settings/{key}/reset", response_class=HTMLResponse, name="reset_setting")
 async def reset_setting(
     request: Request,
     key: str,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: AdminUserWeb,
 ) -> Response:
     """Reset a setting to its default; returns the refreshed setting card."""
@@ -201,10 +215,14 @@ async def reset_setting(
 
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
-@router.post("/settings/metrics/generate-token", response_class=HTMLResponse)
+@router.post(
+    "/settings/metrics/generate-token",
+    response_class=HTMLResponse,
+    name="generate_metrics_token",
+)
 async def generate_metrics_token(
     request: Request,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: AdminUserWeb,
 ) -> Response:
     """Generate new Prometheus metrics bearer token (shown once)."""
@@ -212,10 +230,14 @@ async def generate_metrics_token(
 
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
-@router.post("/settings/metrics/toggle-enabled", response_class=HTMLResponse)
+@router.post(
+    "/settings/metrics/toggle-enabled",
+    response_class=HTMLResponse,
+    name="toggle_metrics_enabled",
+)
 async def toggle_metrics_enabled(
     request: Request,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: AdminUserWeb,
 ) -> HTMLResponse:
     """Toggle Prometheus metrics endpoint on/off."""
@@ -230,10 +252,14 @@ async def toggle_metrics_enabled(
 
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
-@router.post("/settings/metrics/toggle-auth", response_class=HTMLResponse)
+@router.post(
+    "/settings/metrics/toggle-auth",
+    response_class=HTMLResponse,
+    name="toggle_metrics_auth",
+)
 async def toggle_metrics_auth(
     request: Request,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: AdminUserWeb,
 ) -> HTMLResponse:
     """Toggle Prometheus metrics authentication on/off."""
@@ -248,10 +274,14 @@ async def toggle_metrics_auth(
 
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
-@router.post("/settings/metrics/update-timeout", response_class=HTMLResponse)
+@router.post(
+    "/settings/metrics/update-timeout",
+    response_class=HTMLResponse,
+    name="update_metrics_timeout",
+)
 async def update_metrics_timeout(
     request: Request,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: AdminUserWeb,
 ) -> Response:
     """Update agent timeout threshold."""

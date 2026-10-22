@@ -20,10 +20,12 @@ router = APIRouter(tags=["Web UI - Database Health"], include_in_schema=False)
 
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
-@router.get("/database-health", response_class=HTMLResponse)
+@router.get(
+    "/database-health", response_class=HTMLResponse, name="database_health_page"
+)
 async def database_health_page(
     request: Request,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: AdminUserWeb,
 ) -> HTMLResponse:
     """Database health page — comprehensive database metrics and monitoring."""
@@ -36,10 +38,14 @@ async def database_health_page(
 
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
-@router.get("/database-health/refresh", response_class=HTMLResponse)
+@router.get(
+    "/database-health/refresh",
+    response_class=HTMLResponse,
+    name="database_health_refresh",
+)
 async def database_health_refresh(
     request: Request,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: AdminUserWeb,
 ) -> HTMLResponse:
     """HTMX endpoint — refresh database health metrics."""

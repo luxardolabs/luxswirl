@@ -92,7 +92,7 @@ async def get_db() -> AsyncGenerator[AsyncSession]:
 
     Example:
         @router.get("/agents")
-        async def list_agents(db: AsyncSession = Depends(get_db)):
+        async def list_agents(db: AsyncSession = Depends(get_db, scope="function")):
             ...
     """
     session_maker = get_session_maker()

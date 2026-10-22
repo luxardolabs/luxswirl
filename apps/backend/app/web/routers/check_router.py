@@ -21,12 +21,17 @@ logger = get_logger("luxswirl.web.routers.check")
 router = APIRouter(tags=["Web UI - Checks"])
 
 
-@router.get("/check/{check_id}", response_class=HTMLResponse, include_in_schema=False)
+@router.get(
+    "/check/{check_id}",
+    response_class=HTMLResponse,
+    include_in_schema=False,
+    name="check_detail_panel",
+)
 async def check_detail_panel(
     request: Request,
     check_id: Annotated[UUID, Path(description="Check UUID")],
     current_user: CurrentUserWeb,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     hours: HistoryHoursFilter = None,
 ) -> HTMLResponse:
     """
@@ -62,7 +67,10 @@ async def check_detail_panel(
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.get(
-    "/checks/detail/empty", response_class=HTMLResponse, include_in_schema=False
+    "/checks/detail/empty",
+    response_class=HTMLResponse,
+    include_in_schema=False,
+    name="check_detail_empty",
 )
 async def check_detail_empty(
     request: Request,
