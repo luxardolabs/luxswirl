@@ -8,6 +8,7 @@ import hmac
 from collections.abc import Awaitable, Callable
 from datetime import timedelta
 from typing import TYPE_CHECKING, Annotated, Any
+from urllib.parse import urlencode
 
 import bcrypt
 import jwt
@@ -17,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.datetime_utils import utc_now
+from app.core.safe_redirect import safe_redirect_target
 from app.crud import admin_bootstrap_crud
 from app.db import get_db
 from app.schemas.auth_schema import CurrentUserDTO
@@ -240,16 +242,20 @@ async def _unauthenticated_web_redirect(
 
     First run (no user at all, FLEET-ADMIN-BOOTSTRAP-STANDARD) -> /setup, since no
     credentials exist yet. Otherwise -> /login, preserving the originally
-    requested path.
+    requested path. Both targets are resolved by route name.
     """
     if await admin_bootstrap_crud.count_users(db) == 0:
         return HTTPException(
             status_code=status.HTTP_307_TEMPORARY_REDIRECT,
-            headers={"Location": "/setup"},
+            headers={"Location": request.app.url_path_for("setup_page")},
         )
+    # The requested path rides as an encoded query value; the whole target still
+    # goes through the one safe-redirect helper, since part of it is the request's.
+    login = request.app.url_path_for("login_page")
+    target = f"{login}?{urlencode({'redirect': request.url.path})}"
     return HTTPException(
         status_code=status.HTTP_307_TEMPORARY_REDIRECT,
-        headers={"Location": f"/login?redirect={request.url.path}"},
+        headers={"Location": safe_redirect_target(target, default=login)},
     )
 
 
@@ -289,21 +295,18 @@ async def get_current_user_web(
     # A seeded or reset password must be changed before any other page
     # (FLEET-ADMIN-BOOTSTRAP-STANDARD §5): login sends the user to the form, and
     # every other web route sends them back to it until they change it.
-    if (
-        session.user.must_change_password
-        and request.url.path not in _PASSWORD_CHANGE_PATHS
-    ):
+    change_password = request.app.url_path_for("change_password_page")
+    if session.user.must_change_password and request.url.path not in {
+        change_password,
+        request.app.url_path_for("web_logout"),
+    }:
         raise HTTPException(
             status_code=status.HTTP_307_TEMPORARY_REDIRECT,
-            headers={"Location": "/change-password?required=true"},
+            headers={"Location": f"{change_password}?required=true"},
         )
 
     # Session is valid — convert to the DTO here, in session scope.
     return CurrentUserDTO.model_validate(session.user)
-
-
-# The pages a user who must change their password may still reach.
-_PASSWORD_CHANGE_PATHS = frozenset({"/change-password", "/logout"})
 
 
 async def require_admin_web(
@@ -313,9 +316,10 @@ async def require_admin_web(
     """Require admin role for web routes (redirects non-admins to home)."""
     if current_user.role != "admin":
         # Redirect to home page with error message
+        home = request.app.url_path_for("root_redirect")
         raise HTTPException(
             status_code=status.HTTP_307_TEMPORARY_REDIRECT,
-            headers={"Location": "/?error=admin_required"},
+            headers={"Location": f"{home}?error=admin_required"},
         )
     return current_user
 
@@ -327,9 +331,10 @@ async def require_editor_web(
     """Require editor role or higher for web routes (redirects viewers to home)."""
     if current_user.role not in ("admin", "editor"):
         # Redirect to home page with error message
+        home = request.app.url_path_for("root_redirect")
         raise HTTPException(
             status_code=status.HTTP_307_TEMPORARY_REDIRECT,
-            headers={"Location": "/?error=editor_required"},
+            headers={"Location": f"{home}?error=editor_required"},
         )
     return current_user
 

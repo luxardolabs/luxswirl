@@ -102,7 +102,10 @@ class WebAuthViewService:
                     "user_id": str(user.id),
                 },
             )
-        response = RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
+        response = RedirectResponse(
+            url=request.app.url_path_for("login_page"),
+            status_code=status.HTTP_302_FOUND,
+        )
         response.delete_cookie(key=cookie, path=settings.security.session_cookie_path)
         return response
 
