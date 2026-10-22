@@ -15,7 +15,6 @@ import pytest
 import pytest_asyncio
 from app.core.config import settings
 from app.core.rate_limit import limiter
-from app.db.database import get_db
 from app.main import app
 from httpx import ASGITransport, AsyncClient
 from limits import parse
@@ -26,10 +25,6 @@ pytestmark = pytest.mark.integration
 
 @pytest_asyncio.fixture
 async def client(db: AsyncSession) -> AsyncIterator[AsyncClient]:
-    async def _override_get_db() -> AsyncIterator[AsyncSession]:
-        yield db
-
-    app.dependency_overrides[get_db] = _override_get_db
     limiter.reset()
     try:
         async with AsyncClient(
@@ -37,7 +32,6 @@ async def client(db: AsyncSession) -> AsyncIterator[AsyncClient]:
         ) as c:
             yield c
     finally:
-        app.dependency_overrides.pop(get_db, None)
         # The limiter's store outlives the test: leave it empty for the next one.
         limiter.reset()
 

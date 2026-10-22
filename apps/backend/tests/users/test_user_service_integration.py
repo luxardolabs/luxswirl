@@ -148,6 +148,8 @@ class TestDeleteAndUnlock:
         u = await svc.create_user(db, _create_data())
         ok = await svc.delete_user(db, u.id)
         assert ok is True
+        # The request's commit flushes; the app's sessions do not autoflush.
+        await db.flush()
         assert await svc.get_user_by_id(db, u.id) is None
 
     async def test_delete_missing_raises(self, db: AsyncSession, svc):

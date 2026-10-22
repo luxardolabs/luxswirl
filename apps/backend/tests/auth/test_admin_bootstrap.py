@@ -18,7 +18,6 @@ from pathlib import Path
 import pytest
 import pytest_asyncio
 from app.core.rate_limit import limiter
-from app.db.database import get_db
 from app.main import app
 from app.models.session_model import Session
 from app.models.user_model import User
@@ -51,10 +50,6 @@ def token_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 @pytest_asyncio.fixture
 async def client(db: AsyncSession) -> AsyncIterator[AsyncClient]:
-    async def _override_get_db() -> AsyncIterator[AsyncSession]:
-        yield db
-
-    app.dependency_overrides[get_db] = _override_get_db
     limiter.reset()
     try:
         async with AsyncClient(
@@ -62,7 +57,6 @@ async def client(db: AsyncSession) -> AsyncIterator[AsyncClient]:
         ) as c:
             yield c
     finally:
-        app.dependency_overrides.pop(get_db, None)
         limiter.reset()
 
 
@@ -183,9 +177,9 @@ async def test_setup_with_the_logged_token_creates_the_admin_and_closes(
     admin = await db.scalar(select(User).where(User.username == "owner"))
     assert admin is not None and admin.role == "admin"
     assert admin.must_change_password is False
-    # The token outlives the request until its transaction commits (this test's never does), so a
-    # failed commit leaves /setup usable; once users are seen to exist, /setup discards it.
-    assert _on_disk(token_file) == token
+    # The token outlives the request only until its transaction commits (a failed commit leaves
+    # /setup usable). The request's real get_db committed, so it is gone, and /setup is closed.
+    assert _on_disk(token_file) is None
     assert (await client.get("/setup")).status_code == 404
     assert _on_disk(token_file) is None
 

@@ -1,101 +1,33 @@
-"""Committed-session fixture for self-committing background workers.
+"""Really-committing sessions, for durability locks and self-committing workers.
 
-The `db` fixture (fixtures/db.py) wraps each test in a transaction that is rolled
-back at the end — ideal for code that takes an injected session, but useless for
-the scheduler / cleanup / monitoring job bodies, which open their OWN session via
-the global ``worker_session()`` / ``get_session_maker()`` and COMMIT for real.
+Every other test runs inside one rolled-back transaction (the test-db-bound
+block in `apps/backend/conftest.py`). That cannot prove a write was COMMITTED:
+inside the transaction nothing ever is, and a read on the same connection sees
+uncommitted rows. The scheduler / cleanup / monitoring job bodies, and every
+"writes are durable" lock, have to show the opposite — the exact axis a job
+once failed on, where it "ran" but every write rolled back on session close.
 
-The only way to prove those functions actually persisted anything — the exact
-axis LUXSWIRL-191 failed on, where the job "ran" but every write rolled back on
-session close — is to let them commit against the test DB and then read it back
-from a FRESH session. A rollback fixture cannot do that.
+``worker_db`` requests the block's ``real_commits`` fixture, so this test's
+sessions commit for real on the test database, and the block empties every
+table after it. It yields the app's own session maker — the same object
+``worker_session()`` and ``get_db()`` use — so a test seeds through it, drives
+the worker, and reads back from a FRESH session.
 
-``worker_db`` binds ``app.db.database.async_session_maker`` to a test-engine maker
-so ``worker_session()`` hits the test DB, and cleans up by TRUNCATE (there is no
-outer transaction to roll back). Do NOT combine it with the `db` fixture in one
-test — they manage isolation differently.
+Nothing may be seeded for the whole run: the block's emptying would remove it.
 """
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+
 import pytest_asyncio
-from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-
-import app.db.database as _database
-import fixtures.db as _dbfix
-
-# Candidate tables worker-job tests touch. Only those that actually exist are
-# truncated, so the list can stay generous without breaking on schema changes.
-_WORKER_TABLES = (
-    "maintenance_jobs",
-    "jobs",
-    "registration_keys",
-    "job_executions",
-    "job_configurations",
-    "agent_metrics",
-    "check_results",
-    "check_artifacts",
-    "notification_logs",
-    "alert_check_mappings",
-    "alert_notification_mappings",
-    "alerts",
-    "notification_providers",
-    "status_pages",
-    "sessions",
-    "users",
-    "checks",
-    "agents",
-)
-
-
-async def _truncate(engine) -> None:
-    async with engine.begin() as conn:
-        existing = (
-            (
-                await conn.execute(
-                    text(
-                        "SELECT tablename FROM pg_tables "
-                        "WHERE schemaname = 'public' AND tablename = ANY(:t)"
-                    ),
-                    {"t": list(_WORKER_TABLES)},
-                )
-            )
-            .scalars()
-            .all()
-        )
-        if existing:
-            await conn.execute(text(f"TRUNCATE {', '.join(existing)} RESTART IDENTITY CASCADE"))
+from app.db.database import AsyncSessionLocal
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 
 @pytest_asyncio.fixture
-async def worker_db():
-    """Test-bound session maker; ``worker_session()`` commits to the test DB.
-
-    Yields the maker so a test can open FRESH sessions both to seed committed
-    setup data and to read results back after driving a worker. Truncates worker
-    tables before and after the test for isolation (commits are real here — there
-    is no transaction to roll back).
-    """
-    engine = create_async_engine(_dbfix.TEST_DATABASE_URL, echo=False, pool_size=5, max_overflow=5)
-
-    if not _dbfix._schema_created:
-        await _dbfix._create_schema(engine)
-        _dbfix._schema_created = True
-
-    test_maker = async_sessionmaker(
-        engine,
-        class_=AsyncSession,
-        expire_on_commit=False,
-        autocommit=False,
-        autoflush=False,
-    )
-    saved = _database.async_session_maker
-    _database.async_session_maker = test_maker
-    await _truncate(engine)
-    try:
-        yield test_maker
-    finally:
-        _database.async_session_maker = saved
-        await _truncate(engine)
-        await engine.dispose()
+async def worker_db(
+    real_commits: None,
+) -> AsyncIterator[async_sessionmaker[AsyncSession]]:
+    """The app's session maker, committing for real for this test."""
+    yield AsyncSessionLocal

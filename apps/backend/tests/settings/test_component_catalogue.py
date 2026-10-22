@@ -12,7 +12,6 @@ from collections.abc import AsyncIterator
 import pytest
 import pytest_asyncio
 from app.core.config import settings
-from app.db.database import get_db
 from app.main import app
 from app.services.core.auth_core_service import AuthCoreService
 from fixtures.factories import make_user
@@ -24,22 +23,15 @@ pytestmark = pytest.mark.integration
 
 @pytest_asyncio.fixture
 async def client(db: AsyncSession) -> AsyncIterator[AsyncClient]:
-    async def _override_get_db() -> AsyncIterator[AsyncSession]:
-        yield db
-
-    app.dependency_overrides[get_db] = _override_get_db
     user = make_user(role="admin")
     db.add(user)
     await db.flush()
     _, token = await AuthCoreService().create_session(db, user.id)
-    try:
-        async with AsyncClient(
-            transport=ASGITransport(app=app), base_url="https://test"
-        ) as c:
-            c.cookies.set(settings.security.session_cookie_name, token)
-            yield c
-    finally:
-        app.dependency_overrides.pop(get_db, None)
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="https://test"
+    ) as c:
+        c.cookies.set(settings.security.session_cookie_name, token)
+        yield c
 
 
 @pytest.mark.parametrize(
