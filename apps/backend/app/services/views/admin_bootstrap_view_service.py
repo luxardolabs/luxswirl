@@ -1,4 +1,4 @@
-# luxarch:admin-bootstrap-view asset v2 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit admin-bootstrap-view`.
+# luxarch:admin-bootstrap-view asset v3 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit admin-bootstrap-view`.
 """The web seam of the admin bootstrap. `luxarch --emit admin-bootstrap-view`.
 
 Drop this in at `app/services/views/admin_bootstrap_view_service.py`. It turns the `/setup` form into
@@ -29,6 +29,11 @@ from app.services.core.admin_bootstrap_core_service import (
 SETUP_PATH = "/setup"
 LOGIN_PATH = "/login"
 CHANGE_PASSWORD_PATH = "/change-password?required=true"
+
+
+# --- EDIT THIS: the logout path, which a user who must change their password may still reach
+# (v3: its own region, so a copy whose paths above were edited keeps them on `--update`).
+LOGOUT_PATH = "/logout"
 
 
 @dataclass(frozen=True)
@@ -84,10 +89,24 @@ class AdminBootstrapViewService:
         self, db: AsyncSession, login: str, next_path: str
     ) -> str:
         """Where a user goes straight after signing in. A seeded or reset account goes to the change
-        form first: `must_change_password` is enforced AT LOGIN, before any other page."""
+        form first."""
         if await self.core.needs_password_change(db, login):
             return CHANGE_PASSWORD_PATH
         return next_path
+
+    async def forced_change_redirect(
+        self, db: AsyncSession, login: str, path: str
+    ) -> str:
+        """Where an authenticated request goes instead, "" to let it through. The app's
+        authentication (the dependency or middleware that loads the signed-in user) calls this on
+        EVERY request: a seeded or reset account reaches only the change form and logout until it
+        changes the password. v3: v2 enforced it only in `login_destination`, so a flagged user who
+        ignored that redirect, or called the API with the same session, was in everywhere."""
+        if path in (CHANGE_PASSWORD_PATH, LOGOUT_PATH):
+            return ""
+        if await self.core.needs_password_change(db, login):
+            return CHANGE_PASSWORD_PATH
+        return ""
 
     @staticmethod
     def _again(login: str, error: str, status_code: int) -> SetupOutcome:

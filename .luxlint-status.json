@@ -1,6 +1,6 @@
 {
   "guard": "luxlint",
-  "guard_version": "0.66.2",
+  "guard_version": "0.68.0",
   "repo": "/repo",
   "source": [
     "apps/backend/app",
@@ -36,10 +36,16 @@
     },
     {
       "rule": "test.pytest_config_wired",
-      "status": "PASS",
+      "status": "FAIL",
       "since": "0.35.0",
-      "violations": 0,
-      "sites": [],
+      "violations": 1,
+      "sites": [
+        {
+          "path": "apps/backend/Dockerfile",
+          "line": null,
+          "detail": "runs pytest with `-c /app/.luxlint.pytest.ini`, a file nothing in the runner files writes (`--emit-config pytest > <path>`) or mounts there, so pytest fails on the missing config file unless something outside the runner files puts it there. Write the emitted config to that path in the same runner set, or mount the file you emit to it"
+        }
+      ],
       "deferred": false
     },
     {
@@ -68,10 +74,21 @@
     },
     {
       "rule": "lint.ruff",
-      "status": "PASS",
+      "status": "FAIL",
       "since": "0.1.0",
-      "violations": 0,
-      "sites": [],
+      "violations": 2,
+      "sites": [
+        {
+          "path": "apps/backend/app/crud/admin_bootstrap_crud.py",
+          "line": 26,
+          "detail": "F401 `datetime.UTC` imported but unused"
+        },
+        {
+          "path": "apps/backend/app/crud/admin_bootstrap_crud.py",
+          "line": 26,
+          "detail": "F401 `datetime.datetime` imported but unused"
+        }
+      ],
       "deferred": false
     },
     {
@@ -188,13 +205,13 @@
     }
   ],
   "summary": {
-    "PASS": 22,
-    "FAIL": 0,
+    "PASS": 20,
+    "FAIL": 2,
     "XFAIL": 0,
     "XPASS": 0,
     "INERT": 0
   },
   "mypy": "separate: `luxlint --mypy` ([mypy].baseline ratchet)",
-  "commit": "1cffcc72ee70386b2a4d4cc27b974ccce0e9fe1f",
-  "generated_at": "2026-10-13T10:37:29Z"
+  "commit": "9cf7972f9c69b65963b836e410239d3c43934fc7",
+  "generated_at": "2026-10-22T13:45:49Z"
 }
