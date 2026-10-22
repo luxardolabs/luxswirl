@@ -1,4 +1,4 @@
-# luxarch:safe-redirect asset v1 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit safe-redirect`.
+# luxarch:safe-redirect asset v2 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit safe-redirect`.
 """The one safe-redirect helper (FLEET-AUTH-SESSION-STANDARD §6).
 
 Every user-supplied redirect target (`next`, `return_to`, a `Referer` fallback) goes through
@@ -25,12 +25,18 @@ def safe_redirect_target(value: object, default: str = DEFAULT_TARGET) -> str:
     """``value`` when it is a path on this site (``/account``, ``/items?page=2``), else ``default``.
 
     Refused: anything that is not a string; a scheme or host (``https://x``, ``//x``); a backslash,
-    which browsers read as a slash (``/\\x``); control characters; and the same tricks once
+    which browsers read as a slash (``/\\x``); control characters and anything outside printable ASCII (the value goes into a header); and the same tricks once
     percent-decoded (``/%2F%2Fx``).
     """
     if not isinstance(value, str):
         return default
     v = value.strip()
+    # v2: what is returned goes into a header (`Location`, HTMX `HX-Redirect`), which must be latin-1:
+    # a raw path holding U+2028 LINE SEPARATOR passed every check below and 500'd the HX-Redirect. A path a browser sends is
+    # percent-encoded ASCII, so anything outside printable ASCII (space included) is refused; an
+    # encoded non-ASCII path (`/caf%C3%A9`) is still a path.
+    if any(not 0x21 <= ord(c) <= 0x7E for c in v):
+        return default
     for candidate in (v, unquote(v)):
         if not candidate.startswith("/") or candidate.startswith("//"):
             return default

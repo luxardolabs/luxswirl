@@ -1,6 +1,6 @@
 {
   "guard": "luxarch",
-  "guard_version": "0.289.3",
+  "guard_version": "0.310.2",
   "repo": "/repo",
   "targets": [
     {
@@ -779,13 +779,13 @@
         },
         {
           "rule": "fw.no_hand_rolled_components_in_pages",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.9.1",
-          "violations": 5,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
-          "fix": "USE THE MACRO \u2014 call your field macro (button/select/input/textarea); the fleet has one for each (buttons.html, forms.html). The `<form>` wrapper itself stays raw (page-specific action/method) \u2014 compose raw `<form>` + field macros, the fleet standard. Fixing this red means finding and calling the field macro, not exempting: even a showcase page renders its macros. Scans ALL templates (pages, partials, flat) except macros/ \u2014 a raw component is wrong wherever it composes. [templates].exempt is a LAST resort for a single deliberate raw-vs-macro comparison line (with evidence). A single DELIBERATE counter-example (e.g. a component showcase demonstrating the wrong pattern next to the macro) may carry an inline `{# no_hand_rolled_components_in_pages: <reason> #}` waiver on, or in the comment block directly above, the line \u2014 reason REQUIRED. That is the per-LINE carve-out; do NOT stand the rule down on the whole page with [templates].exempt.",
+          "fix": "",
           "example": ""
         },
         {
@@ -878,13 +878,13 @@
         },
         {
           "rule": "fw.no_dynamic_column_sort",
-          "status": "PASS",
+          "status": "FAIL",
           "since": "0.29.0",
-          "violations": 0,
+          "violations": 2,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
-          "fix": "",
+          "fix": "Map sort keys to columns via an allowlist (dict/enum; unknown key \u2192 safe default) \u2014 never a bare getattr(Model, sort_by), and never a key spliced into `text()` / `literal_column()`. For a GENERIC field accessor (a base-crud get_by_field(field_name=\u2026)), the fleet's answer is a named method per field on the concrete crud \u2014 `select(Model).where(Model.code == code)`, which mypy type-checks and which 12 of 13 fleet base_cruds do instead of a dynamic accessor. If a generic primitive is genuinely wanted, narrow the key's domain before resolving it (membership-test it against `sqlalchemy.inspect(self.model).columns`, `Model.__table__.c`, or a container of string literals; unknown key \u2192 raise) \u2014 that shape is recognised and passes. 'Every caller passes a literal today' is not a fix: the primitive still accepts any string, so the next caller is the defect. See --playbook pagination \u00a7'Safe sort in the crud' and \u00a7'A generic field accessor'.",
           "example": ""
         },
         {
@@ -988,12 +988,12 @@
         },
         {
           "rule": "fw.no_orphan_pages",
-          "status": "INERT",
+          "status": "PASS",
           "since": "0.54.0",
           "violations": 0,
           "deferred": false,
-          "inert": true,
-          "inert_reason": "this app renders a page by a computed name (a non-literal TemplateResponse), so an unreferenced page can't be proven dead. Orphan detection runs only when every render uses a literal template name.",
+          "inert": false,
+          "inert_reason": "",
           "fix": "",
           "example": ""
         },
@@ -1076,24 +1076,24 @@
         },
         {
           "rule": "fw.enums_in_enum_model",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.68.0",
-          "violations": 1,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
-          "fix": "Move the Enum class to app/models/enum_model.py (or enums.py), or to its domain submodule of the package app/models/enum_model/ (import from the submodule, no re-export), and import it where used \u2014 enums cross every layer by design (ADR-001) so they have one home, and a stray enum is caught only by ricochet off another rule (or not at all, if only a core/service imports it). If it's genuinely NOT a model enum (error-infrastructure core owns, not DB-persisted, and moving it makes an import cycle), exempt it: [allowlist].enum_placement = [{ enum, evidence }]. See --playbook enum-typing.",
+          "fix": "",
           "example": ""
         },
         {
           "rule": "fw.enums_declared",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.69.0",
-          "violations": 1,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
-          "fix": "Add each enum to `[enums].declared` in .luxarch.toml. Placement (enums_in_enum_model) gives it one home; declaration is what makes the value/column rules examine it \u2014 without it the enum is invisible to enforcement, so a move without a declaration only relocates the problem. Declaring a column-less enum is harmless (those rules stay inert for it). See --playbook enum-typing.",
+          "fix": "",
           "example": ""
         },
         {
@@ -1131,12 +1131,12 @@
         },
         {
           "rule": "fw.no_orphan_partials",
-          "status": "INERT",
+          "status": "PASS",
           "since": "0.79.0",
           "violations": 0,
           "deferred": false,
-          "inert": true,
-          "inert_reason": "this app renders a template by a non-literal TemplateResponse, or includes one by a computed name with no pinnable literal prefix ({% include some_var %}), so an unreferenced partial can't be proven dead. (A computed include WITH a literal prefix \u2014 {% include 'x/' ~ v %}, or a var set to one \u2014 is scoped to that subtree, not a global stand-down.) Run `--sweep orphan-templates` to LIST the no-static-reference partials for review (NOT a clearance).",
+          "inert": false,
+          "inert_reason": "",
           "fix": "",
           "example": ""
         },
@@ -1450,13 +1450,13 @@
         },
         {
           "rule": "fw.dto_in_schemas",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.155.0",
-          "violations": 2,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
-          "fix": "Move the DTO to `app/schemas/<domain>_schema.py` and import it where it's built. A DTO defined inside a service is invisible to the schema-scanning rules \u2014 most importantly fw.enum_dto_fields_enum_typed \u2014 so its closed-set fields go unchecked and the enum family reads green over untyped data. Relocation is mechanical: the type moves, the boundary stays typed. Do this BEFORE fw.no_inline_imports \u2014 a lazy import usually exists to dodge the circular dependency a misplaced DTO created, and lifts on its own once the DTO moves. Internal value types never returned outward are not flagged. See --playbook burn-down-order \u00a72.",
+          "fix": "",
           "example": ""
         },
         {
@@ -1637,13 +1637,13 @@
         },
         {
           "rule": "fw.module_homes",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.233.0",
-          "violations": 1,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
-          "fix": "Move each to its home and import it from there at every call site \u2014 no re-export shim left behind (fw.no_threaded_aliasing): `app/core/config.py` (settings), `app/db/database.py` (the engine and session maker), `app/web/deps` / `app/api/deps` (FastAPI dependency aliases, by surface), `app/web/templates.py` (the one `Jinja2Templates`). A router-local `CurrentUser = Annotated[\u2026]` is a duplicate dependency: import the shared one. See --doc FLEET-LAYOUT-STANDARD \u00a72.",
+          "fix": "",
           "example": ""
         },
         {
@@ -1758,13 +1758,13 @@
         },
         {
           "rule": "fw.single_use_claim_atomic",
-          "status": "INERT",
+          "status": "FAIL",
           "since": "0.287.0",
-          "violations": 0,
+          "violations": 1,
           "deferred": false,
-          "inert": true,
-          "inert_reason": "no code claims a single-use record (no check-then-write on a row, no marker write) \u2014 nothing to judge",
-          "fix": "",
+          "inert": false,
+          "inert_reason": "",
+          "fix": "Claim it in one statement that only matches an available row: `update(Model).where(Model.token_hash == h, Model.used_at.is_(None), Model.expires_at > now).values(used_at=now).returning(Model)`, and refuse when it returns no row. When a side effect (a payment call) must sit between the check and the write, serialize the claimers first: load the row with `.with_for_update()` (a crud method that always locks counts), or take `pg_advisory_xact_lock(<key>)` before the load, the lock to use where the app also writes that row from a separate session (a row lock deadlocks there). See --doc FLEET-AUTH-SESSION-STANDARD \u00a71.2.",
           "example": ""
         },
         {
@@ -1775,7 +1775,7 @@
           "deferred": false,
           "inert": false,
           "inert_reason": "",
-          "fix": "Revoke on the server, not only in the browser: give the user a `sessions_valid_after` timestamp, set it to now at logout, and have the auth dependency (which already loads the user) refuse a token issued before it. That signs out everywhere with no extra I/O. Use a per-token denylist only if signing out one device alone is a product need. See --doc FLEET-AUTH-SESSION-STANDARD \u00a72.1.",
+          "fix": "Revoke on the server, not only in the browser: give the user a `sessions_valid_after` timestamp, set it to now at logout, and have the auth dependency (which already loads the user) refuse a token issued before it. That signs out everywhere with no extra I/O. Use a per-token denylist only if signing out one device alone is a product need. Prove it with the shipped replay test, which this rule then credits whatever the revocation's shape: `luxarch --emit logout-revokes > tests/test_logout_revokes.py`, listing the path in LOGOUT_PATHS. See --doc FLEET-AUTH-SESSION-STANDARD \u00a72.1.",
           "example": ""
         },
         {
@@ -1787,6 +1787,61 @@
           "inert": false,
           "inert_reason": "",
           "fix": "",
+          "example": ""
+        },
+        {
+          "rule": "fw.request_owner_commits_before_response",
+          "status": "FAIL",
+          "since": "0.290.0",
+          "violations": 207,
+          "deferred": false,
+          "inert": false,
+          "inert_reason": "",
+          "fix": "declare the request owner as `Depends(get_db, scope=\"function\")` at every site, written exactly that way: the route parameter default, the `Annotated` alias (`DbSession = Annotated[AsyncSession, Depends(get_db, scope=\"function\")]`), and a router's or app's `dependencies=[...]`. Without `scope=\"function\"` a `yield` dependency is \"request\"-scoped and FastAPI runs its commit only after the response is sent, so the client can read past its own write and a failed commit follows a 200. Every site must use the same scope: the dependency cache keys on it, so a mix opens two sessions in one request. A `yield` dependency that itself takes this session must declare `scope=\"function\"` too \u2014 FastAPI refuses a request-scoped dependency over a function-scoped one when the route is declared (DependencyScopeError names it). `Security(...)` takes no scope, so a `Security(<owner>)` becomes the `Depends` form above. A BackgroundTask or StreamingResponse body runs after the session closes: give it its own `get_db_context()`. See --playbook db-mutations \u00a71.",
+          "example": ""
+        },
+        {
+          "rule": "fw.route_names_unique",
+          "status": "FAIL",
+          "since": "0.297.0",
+          "violations": 199,
+          "deferred": false,
+          "inert": false,
+          "inert_reason": "",
+          "fix": "Give every route an explicit, unique, literal `name=\"<area>.<entity>.<action>\"` (e.g. `name=\"admin.users.list\"` and `name=\"api.users.list\"`: the web page and the API endpoint are two names). One name may serve several methods of ONE path. Without this, `url_path_for` resolves a shared handler name to the first route registered: in one app, `login` returned `/api/v1/auth/login` for the web login link, silently. See --playbook url-in-view.",
+          "example": ""
+        },
+        {
+          "rule": "fw.urls_from_route_names",
+          "status": "FAIL",
+          "since": "0.297.0",
+          "violations": 108,
+          "deferred": false,
+          "inert": false,
+          "inert_reason": "",
+          "fix": "Build every link to an app route from the route's NAME, in the view service: `request.app.url_path_for(\"<area>.<entity>.<action>\", **params)` (a relative path; `request.url_for` is absolute and carries the internal scheme and host behind a proxy). Put the finished string on the view model and render `{{ item.urls.detail }}`. A redirect, an `HX-Redirect` header and a path comparison resolve the name the same way. JavaScript cannot resolve a name: render the URL into the markup (an `hx-*` attribute, or `data-url` read as `el.dataset.url`); a nav or config file lists route NAMES, resolved in the view. Code with no request (a job's email, a device payload built in core) resolves the name through `luxarch --emit route-urls`: `absolute_url(settings.base_url, <name>, **params)`. Name the routes first (fw.route_names_unique). While the literals burn down, `luxarch --emit route-links` is the runtime net: it fails on any template link the live route table does not serve. See --playbook url-in-view.",
+          "example": ""
+        },
+        {
+          "rule": "fw.adversarial_wired",
+          "status": "INERT",
+          "since": "0.302.0",
+          "violations": 0,
+          "deferred": false,
+          "inert": true,
+          "inert_reason": "a read/derive app proves its reads hold against dirty data only through the adversarial sweep, and it is off here. To turn it ON: set [adversarial].enabled = true, then emit `adversarial`, `adversarial-invariants` and `adversarial-sweep` (this rule then enforces they are wired). See --doc FLEET-ADVERSARIAL-TESTING-STANDARD.",
+          "fix": "",
+          "example": ""
+        },
+        {
+          "rule": "fw.test_sessions_isolated",
+          "status": "FAIL",
+          "since": "0.304.0",
+          "violations": 3,
+          "deferred": false,
+          "inert": false,
+          "inert_reason": "",
+          "fix": "Adopt the shipped harness, `luxarch --emit test-db-bound`, in its own conftest.py one directory above the tests, with TEST_DB_SESSION_FACTORY naming the app's sessionmaker. It runs every test in one rolled-back transaction that every session the app opens joins (routes, background jobs, importers of the factory), so delete the overrides and patches: the repo's own `db` fixture is `async with AsyncSessionLocal() as s: yield s`, its `client` uses the app as it is, and a test that must really commit requests `real_commits`. See --playbook test-isolation",
           "example": ""
         },
         {
@@ -1934,11 +1989,11 @@
         }
       ],
       "summary": {
-        "PASS": 149,
-        "FAIL": 6,
+        "PASS": 155,
+        "FAIL": 7,
         "XFAIL": 0,
         "XPASS": 0,
-        "INERT": 20
+        "INERT": 18
       }
     },
     {
@@ -2113,13 +2168,13 @@
       },
       {
         "rule": "repo.makefile_canonical",
-        "status": "PASS",
+        "status": "FAIL",
         "since": "0.96.0",
-        "violations": 0,
+        "violations": 1,
         "deferred": false,
         "inert": false,
         "inert_reason": "",
-        "fix": "",
+        "fix": "`luxarch --emit check-gate` for `check` (every leg runs, then it fails naming each red one); the `honest` step runs `luxarch --assert-scans` (+ `luxlint --preflight`) so a green board can't hide a rule family that scanned zero files; a `test` target; guard-version-check FATAL; guard images pinned (not :latest). See --doc FLEET-MAKEFILE-STANDARD.",
         "example": ""
       },
       {
@@ -2153,6 +2208,17 @@
         "inert": false,
         "inert_reason": "",
         "fix": "",
+        "example": ""
+      },
+      {
+        "rule": "repo.agent_push_declared",
+        "status": "FAIL",
+        "since": "0.296.0",
+        "violations": 1,
+        "deferred": false,
+        "inert": false,
+        "inert_reason": "",
+        "fix": "Add to .luxarch.toml: `[agents]` then `push = \"agent\"` (a private repo: the agent pushes when its work lands) or `push = \"owner\"` (a public or airgapped repo: the agent stops at the commit and the owner pushes). The owner decides which; an agent asks once and writes the answer down. `unpushed-stop-guard` and `/wrap-up` read it. See --doc FLEET-AGENT-CONDUCT-STANDARD.",
         "example": ""
       },
       {
@@ -2377,13 +2443,13 @@
       },
       {
         "rule": "repo.migrations_build_schema",
-        "status": "PASS",
+        "status": "FAIL",
         "since": "0.120.0",
-        "violations": 0,
+        "violations": 1,
         "deferred": false,
         "inert": false,
         "inert_reason": "",
-        "fix": "",
+        "fix": "Emit the verifier (`luxarch --emit migration-chain`), commit it, and add a `db-verify` target that creates a FRESH EMPTY DB, runs `alembic upgrade head`, then runs the verifier (fail on ANY structural diff vs the models) \u2014 and add `db-verify` to `check`. `make test` builds its schema from create_all and can NEVER catch a broken chain. See --doc FLEET-MAKEFILE-STANDARD.",
         "example": ""
       },
       {
@@ -2487,13 +2553,13 @@
       },
       {
         "rule": "repo.images_on_fleet_line",
-        "status": "FAIL",
+        "status": "PASS",
         "since": "0.282.0",
-        "violations": 1,
+        "violations": 0,
         "deferred": false,
         "inert": false,
         "inert_reason": "",
-        "fix": "bound every image to a version line: `nginx:1.31-alpine`, not `nginx:alpine` or `:latest`. Where the fleet keeps a line (`luxarch --fleet-versions`), use that line; patches float under it, which is the point, and a move to the next line is a deliberate fleet bump the owner makes in ONE home. No digests, no exact freezes. A data-bearing image (postgres and its extension images) is judged only for being unbounded: its major is a dump-and-restore. See --doc FLEET-BUILD-DEPLOY-STANDARD, 'Image lines'.",
+        "fix": "",
         "example": ""
       },
       {
@@ -2806,20 +2872,20 @@
       }
     ],
     "summary": {
-      "PASS": 67,
-      "FAIL": 1,
+      "PASS": 66,
+      "FAIL": 3,
       "XFAIL": 0,
       "XPASS": 0,
       "INERT": 1
     }
   },
   "summary": {
-    "PASS": 222,
-    "FAIL": 7,
+    "PASS": 227,
+    "FAIL": 10,
     "XFAIL": 0,
     "XPASS": 0,
-    "INERT": 23
+    "INERT": 21
   },
-  "commit": "1cffcc72ee70386b2a4d4cc27b974ccce0e9fe1f",
-  "generated_at": "2026-10-13T10:37:29Z"
+  "commit": "9cf7972f9c69b65963b836e410239d3c43934fc7",
+  "generated_at": "2026-10-22T13:45:49Z"
 }

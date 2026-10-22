@@ -20,6 +20,7 @@ import pytest_asyncio
 from app.core.rate_limit import limiter
 from app.db.database import get_db
 from app.main import app
+from app.models.session_model import Session
 from app.models.user_model import User
 from app.services.core import admin_bootstrap_core_service as bootstrap_module
 from app.services.core.admin_bootstrap_core_service import (
@@ -35,7 +36,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 pytestmark = pytest.mark.integration
 
-GOOD_PASSWORD = "a-long-enough-passphrase"
+GOOD_PASSWORD = "A long enough passphrase 7"
 
 
 @pytest.fixture(autouse=True)
@@ -182,8 +183,11 @@ async def test_setup_with_the_logged_token_creates_the_admin_and_closes(
     admin = await db.scalar(select(User).where(User.username == "owner"))
     assert admin is not None and admin.role == "admin"
     assert admin.must_change_password is False
-    assert _on_disk(token_file) is None
+    # The token outlives the request until its transaction commits (this test's never does), so a
+    # failed commit leaves /setup usable; once users are seen to exist, /setup discards it.
+    assert _on_disk(token_file) == token
     assert (await client.get("/setup")).status_code == 404
+    assert _on_disk(token_file) is None
 
 
 @pytest.mark.parametrize("method", ["GET", "POST"])
@@ -227,6 +231,46 @@ async def test_reset_password_gives_a_temporary_password_to_change(
     assert AuthCoreService.verify_password(temporary, user.password_hash)
     assert not AuthCoreService.verify_password("TestPass123!", user.password_hash)
     assert user.must_change_password is True
+
+
+async def test_reset_password_ends_every_session_the_user_holds(
+    db: AsyncSession,
+) -> None:
+    # An owner resets because someone else got in: that someone must not stay signed in.
+    user, other = make_user(username="owner"), make_user(username="other")
+    db.add_all([user, other])
+    await db.flush()
+    for holder in (user, user, other):
+        await AuthCoreService().create_session(db, holder.id)
+
+    await AdminBootstrapCoreService().reset_password(db, "owner")
+
+    held = select(func.count()).select_from(Session).where(Session.user_id == user.id)
+    kept = select(func.count()).select_from(Session).where(Session.user_id == other.id)
+    assert await db.scalar(held) == 0
+    assert await db.scalar(kept) == 1
+
+
+async def test_setup_refuses_a_password_the_app_policy_refuses(
+    client: AsyncClient, db: AsyncSession
+) -> None:
+    # Long enough for the bootstrap's own floor, but no uppercase or digit: the app's policy
+    # (validate_password_complexity) refuses it, so the most privileged account cannot use it.
+    token = (await AdminBootstrapCoreService().bootstrap(db)).setup_token
+    weak = "a-long-enough-passphrase"
+
+    r = await client.post(
+        "/setup",
+        data={
+            "token": token,
+            "login": "owner",
+            "password": weak,
+            "password_confirm": weak,
+        },
+    )
+
+    assert r.status_code == 400
+    assert await _users(db) == 0
 
 
 async def test_reset_password_for_an_unknown_user_changes_nothing(

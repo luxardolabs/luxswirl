@@ -12,6 +12,13 @@
 #
 # LUXARCH_REGISTRY := your.registry.example:5000
 
+# `make publish-sha` / `make dev-deploy` push each commit's images to the private
+# registry. The image block requires a literal here (not `$(LUXARCH_REGISTRY)`): a
+# value built from another variable takes whatever the shell gives that variable.
+# Left unset, every target that pushes or pins refuses.
+#
+# REGISTRY := your.registry.example:5000
+
 # `make smoke` (run by `make dev-deploy`) probes the deployed dev stack from
 # outside. Point it at the address the dev stack answers on, and export
 # SMOKE_AUTH_TOKEN (one of the stack's SECURITY__AUTH_TOKENS) in your shell for

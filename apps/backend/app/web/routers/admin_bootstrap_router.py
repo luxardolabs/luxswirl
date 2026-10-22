@@ -1,4 +1,4 @@
-# luxarch:admin-bootstrap-router asset v2 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit admin-bootstrap-router`.
+# luxarch:admin-bootstrap-router asset v3 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit admin-bootstrap-router`.
 """`/setup`: the first admin, claimed with the token from the server log.
 
 `luxarch --emit admin-bootstrap-router`. Drop this in at `app/web/routers/admin_bootstrap_router.py`
@@ -48,7 +48,7 @@ router = APIRouter(tags=["setup"])
 
 @router.get("/setup", response_class=HTMLResponse, include_in_schema=False)
 async def setup_page(
-    request: Request, db: Annotated[AsyncSession, Depends(get_db)]
+    request: Request, db: Annotated[AsyncSession, Depends(get_db, scope="function")]
 ) -> Response:
     context = await AdminBootstrapViewService().setup_page(db)
     if context is None:
@@ -65,7 +65,7 @@ async def submit_setup(
     login: Annotated[str, Form()],
     password: Annotated[str, Form()],
     password_confirm: Annotated[str, Form()],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> Response:
     outcome = await AdminBootstrapViewService().submit_setup(
         db, SetupForm(token, login, password, password_confirm)

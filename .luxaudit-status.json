@@ -5,19 +5,12 @@
   "packages": 99,
   "source": "apps/backend/poetry.lock, apps/agent/poetry.lock",
   "summary": {
-    "PASS": 98,
-    "FAIL": 1,
+    "PASS": 99,
+    "FAIL": 0,
     "XFAIL": 0,
     "INERT": 1
   },
-  "vulnerable": [
-    {
-      "package": "mako",
-      "version": "1.4.1",
-      "vuln_id": "CVE-2026-102991",
-      "fix": "1.4.2"
-    }
-  ],
+  "vulnerable": [],
   "deferred": [],
   "banned": [],
   "not_audited": [],
@@ -33,6 +26,6 @@
     "vulnerable": [],
     "deferred": []
   },
-  "commit": "1cffcc72ee70386b2a4d4cc27b974ccce0e9fe1f",
-  "generated_at": "2026-10-13T10:37:29Z"
+  "commit": "9cf7972f9c69b65963b836e410239d3c43934fc7",
+  "generated_at": "2026-10-22T13:45:49Z"
 }
