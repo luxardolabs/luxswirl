@@ -17,7 +17,7 @@
         {% if not provider %}
         <div>
             <label class="label" for="provider-type-select">Notification Type</label>
-            {% call select(name="provider_type", id="provider-type-select", required=true, hx_get="/notification-providers/create-form", hx_target="#panel-container", hx_include="[name='friendly_name']", hx_swap="innerHTML", class="input") %}
+            {% call select(name="provider_type", id="provider-type-select", required=true, hx_get=create_form_url, hx_target="#panel-container", hx_include="[name='friendly_name']", hx_swap="innerHTML", class="input") %}
                 <option value="">Select a provider type...</option>
                 {% for ptype in available_types %}
                 <option value="{{ ptype.type }}" {% if selected_type == ptype.type %}selected{% endif %}>

@@ -4,7 +4,7 @@
 
 {% call panel_wrapper(max_width='max-w-3xl') %}
     {{ panel_header('New Registration Key') }}
-    <form hx-post="/registration-keys/create" hx-target="#panel-container" hx-swap="innerHTML" class="contents">
+    <form hx-post="{{ create_url }}" hx-target="#panel-container" hx-swap="innerHTML" class="contents">
     {% call panel_content() %}
     <div class="space-y-6">
         <!-- Info Alert -->

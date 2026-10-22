@@ -24,6 +24,7 @@ from app.schemas.registration_key_schema import (
     RegistrationKeyUrls,
 )
 from app.schemas.setting_schema import (
+    MetricsCardUrls,
     SettingResponse,
     SettingRow,
     SettingScalar,
@@ -46,6 +47,20 @@ def build_setting_urls(request: Request, key: str) -> SettingUrls:
     return SettingUrls(
         update=str(request.url_for("update_setting", key=key).path),
         reset=str(request.url_for("reset_setting", key=key).path),
+    )
+
+
+def build_metrics_card_urls(request: Request) -> MetricsCardUrls:
+    """Resolve the metrics card's control hrefs by route name."""
+
+    def u(name: str) -> str:
+        return str(request.app.url_path_for(name))
+
+    return MetricsCardUrls(
+        toggle_enabled=u("toggle_metrics_enabled"),
+        toggle_auth=u("toggle_metrics_auth"),
+        update_timeout=u("update_metrics_timeout"),
+        generate_token=u("generate_metrics_token"),
     )
 
 
@@ -434,6 +449,8 @@ class SettingsViewService:
             ],
             "total_keys": total,
             "metrics_settings": await SettingsCoreService.get_metrics_settings(db),
+            "metrics_urls": build_metrics_card_urls(request),
+            "create_key_form_url": str(request.app.url_path_for("create_key_form")),
             "page_title": "Settings - API Keys",
         }
 
@@ -451,6 +468,8 @@ class SettingsViewService:
             "current_user": current_user,
             "page_title": "Settings - Components",
             "sample_pagination": build_pagination(page=2, per_page=10, total=42),
+            # The sample filter/pagination swatches link back to this page.
+            "list_url": str(request.app.url_path_for("settings_components")),
             "sample_status_row": {
                 "check_id": "00000000-0000-0000-0000-000000000000",
                 "check_name": "api-health",
@@ -550,6 +569,7 @@ class SettingsViewService:
             "request": request,
             "current_user": current_user,
             "metrics_settings": metrics_settings,
+            "metrics_urls": build_metrics_card_urls(request),
         }
 
     @staticmethod

@@ -128,6 +128,17 @@ class SettingUrls:
     reset: str
 
 
+@dataclass(frozen=True)
+class MetricsCardUrls:
+    """Finished hrefs for the Prometheus metrics card's controls
+    (fw.urls_from_route_names)."""
+
+    toggle_enabled: str
+    toggle_auth: str
+    update_timeout: str
+    generate_token: str
+
+
 class SettingRow(SettingResponse):
     """A setting as its card renders it, with its update/reset links."""
 

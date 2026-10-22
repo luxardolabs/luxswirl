@@ -6,6 +6,7 @@ calling core user service and formatting responses for templates.
 """
 
 from typing import Any
+from urllib.parse import urlencode
 from uuid import UUID
 
 from fastapi import Request
@@ -293,10 +294,15 @@ class WebUsersViewService:
             ],
             "filters": filters,
             "page_title": "Settings - Users",
+            # The page's own path: filters and pagination re-request it.
+            "list_url": str(request.app.url_path_for("users_page")),
+            "create_form_url": str(request.app.url_path_for("create_user_form")),
         }
 
     @staticmethod
-    def build_user_create_form_context(*, current_user: AuthedUser) -> dict[str, Any]:
+    def build_user_create_form_context(
+        *, request: Request, current_user: AuthedUser
+    ) -> dict[str, Any]:
         """Build context for the user create form panel.
 
         Form dropdown gets the longer descriptive labels from enum_model.
@@ -304,7 +310,15 @@ class WebUsersViewService:
         return {
             "current_user": current_user,
             "role_options": options_for(UserRole),
+            "create_url": str(request.app.url_path_for("create_user_submit")),
         }
+
+    @staticmethod
+    def users_page_url(request: Request, **params: str) -> str:
+        """The users page, resolved by route name, with `params` as its query
+        (the page shows `error` / `success` as a banner)."""
+        path = str(request.app.url_path_for("users_page"))
+        return f"{path}?{urlencode(params)}" if params else path
 
     @staticmethod
     def build_user_edit_form_context(
@@ -372,4 +386,5 @@ class WebUsersViewService:
             "current_user": current_user,
             "users": users,
             "pagination": pagination,
+            "list_url": str(request.app.url_path_for("users_page")),
         }

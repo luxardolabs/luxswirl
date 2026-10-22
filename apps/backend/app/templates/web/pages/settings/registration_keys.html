@@ -12,7 +12,7 @@
     description='Manage registration keys and Prometheus metrics authentication'
 ) }}
 
-{{ settings_nav('registration_keys', current_user) }}
+{{ settings_nav('registration_keys', current_user, nav) }}
 
 <!-- API Keys Content -->
 <div class="space-y-6">
@@ -30,7 +30,7 @@
         <div>
             {{ section_header('Registration Keys', 'Shared tokens for agent registration and recovery • ' ~ total_keys ~ ' total keys') }}
         </div>
-        {{ btn_create(label='New Registration Key', hx_get='/registration-keys/create-form', hx_target='#panel-container', hx_swap='innerHTML') }}
+        {{ btn_create(label='New Registration Key', hx_get=create_key_form_url, hx_target='#panel-container', hx_swap='innerHTML') }}
     </div>
 
     <!-- Info box -->
@@ -142,7 +142,7 @@
             Create your first registration key to allow agents to register and authenticate
         </p>
         {% set key_svg %}<span class="w-4 h-4 mr-1.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/key.svg" %}</span>{% endset %}
-        {{ text_btn(key_svg, 'Create Your First Key', style='primary', hx_get='/registration-keys/create-form', hx_target='#panel-container', hx_swap='innerHTML') }}
+        {{ text_btn(key_svg, 'Create Your First Key', style='primary', hx_get=create_key_form_url, hx_target='#panel-container', hx_swap='innerHTML') }}
     </div>
     {% endif %}
 </div>

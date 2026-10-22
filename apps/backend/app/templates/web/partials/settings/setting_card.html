@@ -57,9 +57,13 @@
            operator's configured value and every /settings route is AdminUserWeb,
            so the control needs the role check too. #}
         {% if current_value != default_value and current_user.role == 'admin' %}
+        {# data-setting-reset marks the button for settings.js's two-click
+           confirm; the key rides in the markup, not parsed out of the URL. #}
+        {%- set reset_attrs %}data-setting-reset data-setting-key="{{ setting.key }}"{% endset %}
         {{ icon_reset(title='Reset to default',
                       hx_post=setting.urls.reset,
                       hx_target='#setting-' ~ setting.key|replace('.', '-'),
+                      extra_attrs=reset_attrs,
                       extra_classes='flex-shrink-0') }}
         {% endif %}
     </div>

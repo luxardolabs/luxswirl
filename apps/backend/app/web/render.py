@@ -113,7 +113,8 @@ def render_error_response(
     an empty body with HX-Reswap=none so the failed action's target is left
     intact and the user just sees an error toast.
     """
-    wants_json = request.url.path.startswith("/api/") or (
+    api_root = request.app.url_path_for("api_root")
+    wants_json = request.url.path.startswith(f"{api_root}/") or (
         "application/json" in request.headers.get("accept", "")
     )
     if wants_json:
@@ -254,7 +255,7 @@ async def render_log_row(
     request: Request, db: AsyncSession, log_id: UUID, message: str
 ) -> HTMLResponse:
     """Re-render a single notification log row partial with an HX-Trigger toast."""
-    log = await NotificationLogsViewService.get_log_row_by_id(db, log_id)
+    log = await NotificationLogsViewService.get_log_row_by_id(db, request, log_id)
     if log is None:
         raise HTTPException(status_code=404, detail="Notification log not found")
     return templates.TemplateResponse(

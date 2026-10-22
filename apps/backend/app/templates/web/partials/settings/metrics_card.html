@@ -32,7 +32,7 @@
         <div class="flex flex-col">
             <label class="text-sm font-medium text-dark-text-primary mb-2">Enable Endpoint</label>
             {{ toggle_switch(metrics_settings.enabled, size='md',
-                             hx_post='/settings/metrics/toggle-enabled',
+                             hx_post=metrics_urls.toggle_enabled,
                              hx_target='#metrics-card', hx_swap='outerHTML',
                              title='Enable or disable /metrics endpoint') }}
             <p class="text-xs text-dark-text-muted mt-1">Enable or disable /metrics</p>
@@ -43,7 +43,7 @@
         <div class="flex flex-col">
             <label class="text-sm font-medium text-dark-text-primary mb-2">Require Authentication</label>
             {{ toggle_switch(metrics_settings.auth_required, size='md',
-                             hx_post='/settings/metrics/toggle-auth',
+                             hx_post=metrics_urls.toggle_auth,
                              hx_target='#metrics-card', hx_swap='outerHTML',
                              title='Toggle bearer token requirement on /metrics') }}
             <p class="text-xs text-dark-text-muted mt-1">Public or bearer token required</p>
@@ -54,8 +54,8 @@
             <label for="agent-timeout-input" class="text-sm font-medium text-dark-text-primary mb-2">Agent Timeout Threshold</label>
             <div class="flex gap-2">
                 {{ input(name="timeout", type="number", value=metrics_settings.agent_timeout_seconds, id="agent-timeout-input", min="30", max="3600", class="flex-1 px-3 py-2 bg-dark-bg-tertiary border border-dark-border rounded-lg text-dark-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-brand-500", extra_attrs='step="30"') }}
-                {{ btn_save(label='Save', size='sm',
-                            extra_attrs='hx-post="/settings/metrics/update-timeout" hx-target="#metrics-card" hx-swap="outerHTML" hx-include="#agent-timeout-input"') }}
+                {%- set save_attrs %}hx-post="{{ metrics_urls.update_timeout }}" hx-target="#metrics-card" hx-swap="outerHTML" hx-include="#agent-timeout-input"{% endset %}
+                {{ btn_save(label='Save', size='sm', extra_attrs=save_attrs) }}
             </div>
             <p class="text-xs text-dark-text-muted mt-1">Seconds without heartbeat before agent marked as down</p>
         </div>
@@ -81,7 +81,7 @@
     <!-- Generate Token Button -->
     <div class="pt-3 border-t border-dark-border">
         {% set key_svg %}<span class="w-4 h-4 mr-1.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/key.svg" %}</span>{% endset %}
-        {{ text_btn(key_svg, 'Generate Bearer Token', hx_post='/settings/metrics/generate-token', hx_target='#token-display', hx_swap='innerHTML', extra_classes='w-full text-sm py-2') }}
+        {{ text_btn(key_svg, 'Generate Bearer Token', hx_post=metrics_urls.generate_token, hx_target='#token-display', hx_swap='innerHTML', extra_classes='w-full text-sm py-2') }}
     </div>
 
     <!-- Prometheus Config Example -->

@@ -62,7 +62,6 @@ function initializeSortable() {
  */
 function saveItemOrder() {
     const dashboardItems = document.getElementById('dashboard-items');
-    const statusPageId = dashboardItems.dataset.statusPageId;
 
     const items = [];
     const topLevelItems = dashboardItems.querySelectorAll(':scope > .dashboard-item');
@@ -90,7 +89,7 @@ function saveItemOrder() {
         }
     });
 
-    htmx.ajax('POST', `/status-pages/${statusPageId}/reorder`, {
+    htmx.ajax('POST', dashboardItems.dataset.reorderUrl, {
         target: '#dashboard-items',
         swap: 'innerHTML',
         values: { items_json: JSON.stringify(items) },
@@ -195,10 +194,9 @@ function initializeCheckActions() {
  */
 function addCheckToDashboard(checkEl) {
     const dashboardItems = document.getElementById('dashboard-items');
-    const statusPageId = dashboardItems.dataset.statusPageId;
     const checkId = checkEl.dataset.checkId;
 
-    htmx.ajax('POST', `/status-pages/${statusPageId}/add-check`, {
+    htmx.ajax('POST', dashboardItems.dataset.addCheckUrl, {
         target: '#dashboard-items',
         swap: 'innerHTML',
         values: { check_id: checkId },
@@ -281,10 +279,7 @@ function renameGroup(itemIndex) {
             revertToSpan();
             return;
         }
-        const dashboardItems = document.getElementById('dashboard-items');
-        const statusPageId = dashboardItems.dataset.statusPageId;
-
-        htmx.ajax('PATCH', `/status-pages/${statusPageId}/rename-group/${itemIndex}`, {
+        htmx.ajax('PATCH', groupElement.dataset.renameUrl, {
             target: '#dashboard-items',
             swap: 'innerHTML',
             values: { name: newName },
@@ -343,8 +338,8 @@ function initializeFilterInputs() {
 }
 
 function updateGroupFilters(itemIndex) {
-    const dashboardItems = document.getElementById('dashboard-items');
-    const statusPageId = dashboardItems.dataset.statusPageId;
+    const groupElement = document.querySelector(`.dashboard-item[data-item-index="${itemIndex}"]`);
+    if (!groupElement) return;
 
     const agentSelect = document.querySelector(`.filter-agent-select[data-item-index="${itemIndex}"]`);
     const typeSelect = document.querySelector(`.filter-type-select[data-item-index="${itemIndex}"]`);
@@ -359,7 +354,7 @@ function updateGroupFilters(itemIndex) {
     }
     if (searchInput && searchInput.value.trim()) filterConfig.search = searchInput.value.trim();
 
-    htmx.ajax('PATCH', `/status-pages/${statusPageId}/update-group-filters/${itemIndex}`, {
+    htmx.ajax('PATCH', groupElement.dataset.filtersUrl, {
         target: '#dashboard-items',
         swap: 'innerHTML',
         values: { filter_json: JSON.stringify(filterConfig) },
@@ -368,7 +363,6 @@ function updateGroupFilters(itemIndex) {
 
 function addGroup(type) {
     const dashboardItems = document.getElementById('dashboard-items');
-    const statusPageId = dashboardItems.dataset.statusPageId;
 
     const values = {
         name: `New ${type === 'container' ? 'Container' : 'Dynamic'} Group`,
@@ -379,7 +373,7 @@ function addGroup(type) {
         values.filter_json = '{}';
     }
 
-    htmx.ajax('POST', `/status-pages/${statusPageId}/add-group`, {
+    htmx.ajax('POST', dashboardItems.dataset.addGroupUrl, {
         target: '#dashboard-items',
         swap: 'innerHTML',
         values,
@@ -402,10 +396,10 @@ function updateItemsCount() {
 }
 
 function updateGroupSort(groupIndex, sortBy, sortDirection) {
-    const dashboardItems = document.getElementById('dashboard-items');
-    const statusPageId = dashboardItems.dataset.statusPageId;
+    const groupElement = document.querySelector(`.dashboard-item[data-item-index="${groupIndex}"]`);
+    if (!groupElement) return;
 
-    htmx.ajax('PATCH', `/status-pages/${statusPageId}/group/${groupIndex}/sort`, {
+    htmx.ajax('PATCH', groupElement.dataset.sortUrl, {
         target: '#dashboard-items',
         swap: 'innerHTML',
         values: { sort_by: sortBy, sort_direction: sortDirection },

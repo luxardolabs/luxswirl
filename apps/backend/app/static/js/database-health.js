@@ -49,7 +49,10 @@ async function updateGrowthChart(hours) {
 
     try {
         // Fetch data from API
-        const response = await fetch(`/api/v1/database-health/chart-data?hours=${hours}`);
+        // The endpoint comes from the markup (data-url), resolved by route name.
+        const url = new URL(chartEl.dataset.url, window.location.origin);
+        url.searchParams.set('hours', hours);
+        const response = await fetch(url);
         const result = await response.json();
 
         if (result.error) {

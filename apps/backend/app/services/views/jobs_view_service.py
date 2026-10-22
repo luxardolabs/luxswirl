@@ -559,6 +559,10 @@ class JobsViewService:
             "prefill_agent_id": agent_filter,
             "prefill_priority": priority,
             "prefill_params": final_defaults,
+            # The form posts to create and re-renders itself when the type
+            # changes; both resolved by route name.
+            "create_url": str(request.app.url_path_for("create_job_web")),
+            "create_form_url": str(request.app.url_path_for("job_create_form")),
         }
 
     @staticmethod

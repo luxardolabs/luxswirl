@@ -31,6 +31,8 @@ class ProfileViewService:
         return {
             "request": request,
             "current_user": current_user,
+            "update_url": str(request.app.url_path_for("update_profile")),
+            "change_password_url": str(request.app.url_path_for("web_change_password")),
         }
 
     @staticmethod

@@ -5,7 +5,7 @@
 {% call panel_wrapper() %}
     {{ panel_header('Create New User', subtitle='Configure user account and permissions') }}
     <form
-        hx-post="/settings/users/create"
+        hx-post="{{ create_url }}"
         hx-target="#user-create-result"
         hx-swap="innerHTML"
         class="contents">

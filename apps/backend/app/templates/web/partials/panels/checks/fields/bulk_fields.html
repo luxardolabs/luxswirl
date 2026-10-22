@@ -8,7 +8,7 @@
         {%- set bulk_urls_placeholder %}https://example.com&#10;https://api.github.com&#10;https://httpbin.org/status/200{% endset -%}
         {{ textarea(name='bulk_urls', id='bulk-urls-textarea', rows=8,
                     class='input font-mono text-sm', placeholder=bulk_urls_placeholder,
-                    hx_post='/checks/bulk-preview', hx_trigger='input changed delay:500ms',
+                    hx_post=create_urls.bulk_preview, hx_trigger='input changed delay:500ms',
                     hx_target='#bulk-preview-container', hx_swap='innerHTML',
                     hx_include='this') }}
         <p class="text-xs text-dark-text-muted mt-1">

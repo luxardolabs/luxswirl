@@ -14,7 +14,7 @@
         {% elif check %}
             hx-post="{{ form_urls.update }}"
         {% else %}
-            hx-post="/checks/create"
+            hx-post="{{ create_urls.create }}"
         {% endif %}
         hx-target="#panel-container"
         hx-swap="innerHTML"
@@ -69,7 +69,7 @@
 
             <div>
                 <label class="label" for="assignment-mode-select">Assignment Mode</label>
-                {% call select(name="assignment_mode", id="assignment-mode-select", hx_get="/checks/assignment-mode-selector", hx_target="#assignment-selector-container", hx_trigger="change", hx_include="this", hx_swap="innerHTML", class="input") %}
+                {% call select(name="assignment_mode", id="assignment-mode-select", hx_get=create_urls.assignment_mode_selector, hx_target="#assignment-selector-container", hx_trigger="change", hx_include="this", hx_swap="innerHTML", class="input") %}
                     <option value="manual" {% if check and check.assignment_mode == 'manual' or not check %}selected{% endif %}>
                         Manual - Assign to specific agent
                     </option>
