@@ -4,6 +4,7 @@ Database session management and connection pooling.
 
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from datetime import timedelta
 
 from shared.logger import get_logger
 from sqlalchemy import text
@@ -444,13 +445,14 @@ async def init_timescale(engine: AsyncEngine) -> None:
                 retention_days = settings.server.default_retention_days
                 await conn.execute(
                     text(
-                        f"""
+                        """
                         SELECT add_retention_policy('check_results',
-                            INTERVAL '{retention_days} days',
+                            CAST(:keep AS interval),
                             if_not_exists => TRUE
                         )
                         """
-                    )
+                    ),
+                    {"keep": timedelta(days=retention_days)},
                 )
                 logger.info(
                     "Added retention policy for check_results",
