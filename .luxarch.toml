@@ -57,9 +57,6 @@ hypertable_unbounded = [
 tenant_cross = [
   { function = "get_by_token_hash", evidence = "the session token IS the credential — this is the pre-auth lookup that establishes who the caller is, so there is no user to scope by yet", token_source = "apps/backend/app/services/core/auth_core_service.py" },
 ]
-auth_public = [
-  { function = "submit_setup", evidence = "first-admin /setup (admin-bootstrap asset): there is no user to authenticate yet; it 404s once any user exists (re-checked under an advisory lock in the creating transaction), requires the one-time token printed in the server log (constant-time compare) and is rate-limited 5/minute" },
-]
 js_network = [
   { file = "app.js", pattern = "window.location.reload(", evidence = "canonical refreshPage HX-Trigger handler" },
   { file = "database-health.js", pattern = "fetch(", evidence = "Chart.js data refresh — Section B carve-out" },
