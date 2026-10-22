@@ -36,16 +36,10 @@
     },
     {
       "rule": "test.pytest_config_wired",
-      "status": "FAIL",
+      "status": "PASS",
       "since": "0.35.0",
-      "violations": 1,
-      "sites": [
-        {
-          "path": "apps/backend/Dockerfile",
-          "line": null,
-          "detail": "runs pytest with `-c /app/.luxlint.pytest.ini`, a file nothing in the runner files writes (`--emit-config pytest > <path>`) or mounts there, so pytest fails on the missing config file unless something outside the runner files puts it there. Write the emitted config to that path in the same runner set, or mount the file you emit to it"
-        }
-      ],
+      "violations": 0,
+      "sites": [],
       "deferred": false
     },
     {
@@ -205,13 +199,13 @@
     }
   ],
   "summary": {
-    "PASS": 20,
-    "FAIL": 2,
+    "PASS": 21,
+    "FAIL": 1,
     "XFAIL": 0,
     "XPASS": 0,
     "INERT": 0
   },
   "mypy": "separate: `luxlint --mypy` ([mypy].baseline ratchet)",
-  "commit": "8ffb8d9972f5e1adbcbe150ff008a6300da931ca",
-  "generated_at": "2026-10-22T13:51:13Z"
+  "commit": "a88d3cc87c9585f585e8026bc052234d2e333e5b",
+  "generated_at": "2026-10-22T14:57:03Z"
 }
