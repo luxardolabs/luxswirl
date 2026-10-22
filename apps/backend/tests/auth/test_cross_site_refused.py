@@ -14,7 +14,6 @@ import pytest
 import pytest_asyncio
 from app.core.config import ServerSettings, settings
 from app.core.rate_limit import limiter
-from app.db.database import get_db
 from app.main import app
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -33,17 +32,12 @@ def _client() -> AsyncClient:
 async def routed(db: AsyncSession) -> AsyncIterator[AsyncClient]:
     """A client whose requests reach a route, on the test database."""
 
-    async def _override_get_db() -> AsyncIterator[AsyncSession]:
-        yield db
-
     # Each test logs in for real: start from an empty login budget, and leave one.
     limiter.reset()
-    app.dependency_overrides[get_db] = _override_get_db
     try:
         async with _client() as c:
             yield c
     finally:
-        app.dependency_overrides.pop(get_db, None)
         limiter.reset()
 
 

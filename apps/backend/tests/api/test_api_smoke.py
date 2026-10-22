@@ -14,7 +14,6 @@ from uuid import uuid4
 import pytest
 from app.core.config import settings
 from app.core.datetime_utils import utc_now
-from app.db.database import get_db
 from app.main import app
 from app.services.core.agent_core_service import AgentCoreService
 from fixtures.factories import make_agent, make_check
@@ -24,13 +23,13 @@ pytestmark = pytest.mark.integration
 
 
 # ---------------------------------------------------------------------------
-# Fixtures: bring up the FastAPI app with the test DB overridden in
+# Fixtures: the FastAPI app as it is (its sessions join the test's transaction)
 # ---------------------------------------------------------------------------
 
 
 @pytest.fixture
 async def client(db, monkeypatch):
-    """Boot the FastAPI app, override get_db to yield the test session, and
+    """Boot the FastAPI app as it is, and
     disable the API-token check so smoke tests don't need to thread tokens
     through every call.
 
@@ -41,16 +40,9 @@ async def client(db, monkeypatch):
     # Disable auth so we don't have to thread bearer tokens through smoke tests
     monkeypatch.setattr(settings.security, "auth_enabled", False)
 
-    async def _override_get_db():
-        yield db
-
-    app.dependency_overrides[get_db] = _override_get_db
-
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
-
-    app.dependency_overrides.clear()
 
 
 @pytest.fixture
@@ -59,16 +51,9 @@ async def authed_client(db, monkeypatch):
 
     monkeypatch.setattr(settings.security, "auth_enabled", True)
 
-    async def _override_get_db():
-        yield db
-
-    app.dependency_overrides[get_db] = _override_get_db
-
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
-
-    app.dependency_overrides.clear()
 
 
 @pytest.fixture

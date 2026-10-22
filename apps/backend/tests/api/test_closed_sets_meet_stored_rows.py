@@ -17,7 +17,6 @@ import pytest
 import pytest_asyncio
 from app.core.config import settings
 from app.core.rate_limit import limiter
-from app.db.database import get_db
 from app.main import app
 from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.check_core_service import CheckCoreService
@@ -34,18 +33,11 @@ async def client(db: AsyncSession, monkeypatch) -> AsyncIterator[AsyncClient]:
     monkeypatch.setattr(settings.security, "auth_enabled", True)
     limiter.reset()
 
-    async def _override_get_db() -> AsyncIterator[AsyncSession]:
-        yield db
-
-    app.dependency_overrides[get_db] = _override_get_db
-    try:
-        async with AsyncClient(
-            transport=ASGITransport(app=app, raise_app_exceptions=False),
-            base_url="http://test",
-        ) as c:
-            yield c
-    finally:
-        app.dependency_overrides.pop(get_db, None)
+    async with AsyncClient(
+        transport=ASGITransport(app=app, raise_app_exceptions=False),
+        base_url="http://test",
+    ) as c:
+        yield c
 
 
 async def _agent_with_stored_method(db: AsyncSession, method: str):

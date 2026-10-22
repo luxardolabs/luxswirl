@@ -14,6 +14,9 @@ paths = [
   # on every deploy, so they are held to the same set as the app.
   "apps/backend/alembic",
   "apps/backend/scripts",
+  # The shipped test-db-bound block (`luxarch --emit test-db-bound`), which must
+  # sit one directory ABOVE the tests, so the tests/ dir rule does not reach it.
+  "apps/backend/conftest.py",
 ]
 
 [js]

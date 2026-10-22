@@ -21,7 +21,7 @@ import pytest
 import pytest_asyncio
 from app.core.config import settings
 from app.core.datetime_utils import utc_now
-from app.db.database import get_db
+from app.db.database import AsyncSessionLocal
 from app.main import app
 from app.models.check_artifact_model import CheckArtifact
 from app.models.job_model import Job
@@ -39,7 +39,6 @@ from fixtures.factories import (
     make_user,
 )
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import text
 
 ADMIN_PASSWORD = "RouteSmoke123!"
 
@@ -143,101 +142,40 @@ async def _seed(session_maker) -> dict[str, Any]:
         }
 
 
-# Tables this fixture seeds that worker_db does not already truncate. Cleaned up
-# here so a committed route-smoke world cannot leak into another test's counts.
-_SEEDED_TABLES = (
-    "settings",
-    "alert_check_mappings",
-    "alert_notification_mappings",
-    "alerts",
-    "notification_providers",
-    "status_pages",
-    "registration_keys",
-    "jobs",
-    "users",
-)
-
-
-async def _truncate_seeded(session_maker) -> None:
-    async with session_maker() as db:
-        existing = (
-            (
-                await db.execute(
-                    text(
-                        "SELECT tablename FROM pg_tables "
-                        "WHERE schemaname = 'public' AND tablename = ANY(:t)"
-                    ),
-                    {"t": list(_SEEDED_TABLES)},
-                )
-            )
-            .scalars()
-            .all()
-        )
-        if existing:
-            await db.execute(
-                text(f"TRUNCATE {', '.join(existing)} RESTART IDENTITY CASCADE")
-            )
-            await db.commit()
-
-
 @pytest_asyncio.fixture
-async def empty_install(worker_db, monkeypatch):
+async def empty_install(monkeypatch):
     """The app on a FIRST-RUN install: no users, no session, no API token set.
 
     /setup exists only for this state — with any user present it is 404,
     which is what the seeded sweep saw, so setup.html was never
     rendered by anything. This fixture is the only place that state exists.
+    Every test starts on an empty database (its own rolled-back transaction),
+    so there is nothing to clear first.
     """
     monkeypatch.setattr(settings.security, "rate_limit_enabled", False)
-    await _truncate_seeded(worker_db)
-
-    async def _override_get_db():
-        async with worker_db() as session:
-            try:
-                yield session
-                await session.commit()
-            except Exception:
-                await session.rollback()
-                raise
-
-    app.dependency_overrides[get_db] = _override_get_db
     async with AsyncClient(
         transport=ASGITransport(app=app),
         base_url="http://route-smoke",
         follow_redirects=False,
     ) as client:
         yield client
-    app.dependency_overrides.clear()
-    await _truncate_seeded(worker_db)
 
 
 @pytest_asyncio.fixture
-async def smoke_world(worker_db, monkeypatch):
-    """The app with a seeded DB and an admin session cookie."""
+async def smoke_world(monkeypatch):
+    """The app with a seeded DB and an admin session cookie.
+
+    The seed, the session row /login inserts and every route's writes all go
+    through the app's own session maker, so they share this test's transaction
+    and are rolled back with it.
+    """
     monkeypatch.setattr(settings.security, "auth_enabled", True)
     # The limiter is deliberately outside RATE_LIMIT_ENABLED for login; this
     # suite logs in once, so reset rather than disable it.
     monkeypatch.setattr(settings.security, "rate_limit_enabled", False)
 
-    await _truncate_seeded(worker_db)
-    ids = await _seed(worker_db)
+    ids = await _seed(AsyncSessionLocal)
 
-    async def _override_get_db():
-        # MUST mirror the real get_db, which commits on a clean return. Without
-        # the commit this session only ever closed, so every write a route made
-        # was rolled back — including the session row that /login inserts. The
-        # sweep then ran UNAUTHENTICATED: 47 web GETs bounced 307 to /login,
-        # which is < 500, so the old asserter counted them as covered while no
-        # handler had run. v16's EXPECT_3XX net is what surfaced it.
-        async with worker_db() as session:
-            try:
-                yield session
-                await session.commit()
-            except Exception:
-                await session.rollback()
-                raise
-
-    app.dependency_overrides[get_db] = _override_get_db
     transport = ASGITransport(app=app)
     async with AsyncClient(
         transport=transport, base_url="http://route-smoke", follow_redirects=False
@@ -258,8 +196,6 @@ async def smoke_world(worker_db, monkeypatch):
             "web_headers": {"Cookie": f"luxswirl_session={session_token}"},
             "admin_password": ADMIN_PASSWORD,
         }
-    app.dependency_overrides.clear()
-    await _truncate_seeded(worker_db)
 
 
 def pytest_configure(config: pytest.Config) -> None:

@@ -191,6 +191,9 @@ class TestDispatch:
         # a1 polls → gets ONLY its own job
         first = await svc.get_jobs_for_dispatch(db, a1.id)
         assert len(first) == 1
+        # Each poll is its own request, whose commit flushes the assignment; the
+        # app's sessions do not autoflush.
+        await db.flush()
         # side effect: dispatched jobs are marked assigned → a re-poll yields nothing
         # (this is what prevents the same job being handed out twice)
         assert await svc.get_jobs_for_dispatch(db, a1.id) == []

@@ -17,7 +17,6 @@ import pytest
 import pytest_asyncio
 from app.core.config import Settings, settings
 from app.core.datetime_utils import utc_now
-from app.db.database import get_db
 from app.main import app
 from app.services.core.admin_bootstrap_core_service import AdminBootstrapCoreService
 from app.services.core.auth_core_service import AuthCoreService
@@ -30,18 +29,11 @@ pytestmark = pytest.mark.integration
 
 @pytest_asyncio.fixture
 async def client(db: AsyncSession) -> AsyncIterator[AsyncClient]:
-    async def _override_get_db() -> AsyncIterator[AsyncSession]:
-        yield db
-
-    app.dependency_overrides[get_db] = _override_get_db
-    try:
-        async with AsyncClient(
-            transport=ASGITransport(app=app),
-            base_url=f"https://{settings.allowed_hosts[0]}",
-        ) as c:
-            yield c
-    finally:
-        app.dependency_overrides.pop(get_db, None)
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url=f"https://{settings.allowed_hosts[0]}",
+    ) as c:
+        yield c
 
 
 def test_a_retired_initial_admin_key_does_not_stop_startup(

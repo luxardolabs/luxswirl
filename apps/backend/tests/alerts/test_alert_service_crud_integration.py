@@ -160,6 +160,8 @@ class TestDeleteAlert:
     async def test_soft_delete_excludes_from_list(self, db: AsyncSession):
         alert = await AlertCoreService.create_alert(db, _create_data())
         await AlertCoreService.delete_alert(db, alert.id)
+        # The request's commit flushes; the app's sessions do not autoflush.
+        await db.flush()
         with pytest.raises(NotFoundException):
             await AlertCoreService.get_alert_by_id(db, alert.id)
 

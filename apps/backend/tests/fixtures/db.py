@@ -1,11 +1,17 @@
 """Database fixtures for integration tests.
 
-All fixtures are function-scoped to avoid event loop conflicts with
-pytest-asyncio auto mode. The test DB runs on tmpfs (RAM) so first-call
-schema setup is fast (~200ms) and subsequent tests reuse the schema with
-per-test transactional rollback.
+Isolation is not this file's job any more. `apps/backend/conftest.py` carries
+the fleet's test-db-bound block: for every test it opens one connection from the
+app's own engine, begins a transaction, and binds the app's own session maker
+(`app.db.database.AsyncSessionLocal`) to it with savepoints. Every session the
+app opens joins that transaction (a route's `get_db`, `worker_session()`, a job,
+anything that took the maker), an app `commit()` releases a savepoint, and the
+whole lot is rolled back when the test ends. See `luxarch --playbook
+test-isolation`.
 
-Pattern mirrors luxwx/apps/backend/tests/fixtures/db.py.
+So the `db` fixture is just a session from the app's maker, the same thing a
+route gets. What a test writes through it is visible to a route the test calls,
+and the reverse, because both run on the test's one connection.
 
 Usage:
     @pytest.mark.integration
@@ -13,25 +19,23 @@ Usage:
         agent = make_agent()
         db.add(agent)
         await db.flush()
-        # Automatic rollback after test
+        # Rolled back after the test
 """
 
 from __future__ import annotations
 
 import asyncio
+from collections.abc import AsyncIterator, Iterator
 
+import pytest
 import pytest_asyncio
 from alembic import command
 from alembic.config import Config
+from app.db.database import AsyncSessionLocal, init_timescale
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 
-from app.db.database import init_timescale
 from fixtures._db_url import TEST_DATABASE_URL
-
-# Module-level flag so we only create the schema once per pytest session.
-_schema_created = False
-
 
 def _migrate_to_head(url: str) -> None:
     """`alembic upgrade head` against the given database. Sync, so it runs in a
@@ -44,18 +48,13 @@ def _migrate_to_head(url: str) -> None:
     command.upgrade(cfg, "head")
 
 
-async def _create_schema(engine):
-    """First-call schema setup — the SAME two steps a container performs.
+async def _create_schema(engine: AsyncEngine) -> None:
+    """The schema, built the SAME two ways a container builds it.
 
     `alembic upgrade head` builds the tables and `init_timescale` converts the
     hypertables, which is exactly what the backend image does on boot (the CMD
     migrates, then main.py's lifespan calls init_db). Neither half is restated
-    here: a second description of the schema is the thing that drifts, and this
-    file used to carry one — `Base.metadata.create_all` plus a hand-maintained
-    hypertable list. create_all builds from the MODELS while a deploy builds
-    from the CHAIN, so the suite could pass on a schema no deploy would ever
-    produce; and the hypertable list had drifted to name a table init_db
-    deliberately leaves alone.
+    here: a second description of the schema is the thing that drifts.
 
     The engine is disposed between the drop and the CREATE EXTENSION on purpose.
     `DROP SCHEMA public CASCADE` takes the timescaledb extension with it, and
@@ -65,9 +64,7 @@ async def _create_schema(engine):
         HINT: Start a new session and execute CREATE EXTENSION as the first command.
 
     Disposing closes every pooled connection, so the next `begin()` gets a fresh
-    backend and CREATE EXTENSION really is its first command. Without it the
-    extension is never installed and `create_hypertable` does not exist as a
-    function.
+    backend and CREATE EXTENSION really is its first command.
     """
     async with engine.begin() as conn:
         await conn.execute(text("DROP SCHEMA IF EXISTS public CASCADE"))
@@ -83,35 +80,30 @@ async def _create_schema(engine):
     await init_timescale(engine)
 
 
-@pytest_asyncio.fixture
-async def db():
-    """Provide an isolated AsyncSession for each test.
-
-    The schema is created on first use of the fixture in a pytest session.
-    Each test runs inside a transaction that is rolled back at the end, so
-    tests are isolated without paying the schema cost per-test.
-    """
-    global _schema_created  # noqa: PLW0603
-
-    engine = create_async_engine(
-        TEST_DATABASE_URL,
-        echo=False,
-        pool_size=5,
-        max_overflow=5,
-    )
-
-    if not _schema_created:
+async def _build_schema() -> None:
+    # Its own engine, disposed before any test runs: no connection of it can
+    # outlive this loop, and it is not the app's engine the block watches.
+    engine = create_async_engine(TEST_DATABASE_URL, echo=False)
+    try:
         await _create_schema(engine)
-        _schema_created = True
+    finally:
+        await engine.dispose()
 
-    async with engine.connect() as conn:
-        trans = await conn.begin()
-        session = AsyncSession(bind=conn, expire_on_commit=False)
 
+@pytest.fixture(scope="session", autouse=True)
+def _schema() -> Iterator[None]:
+    """Build the schema once per run, before the first test's transaction opens.
+
+    DDL only: nothing a test needs is seeded here (the block empties every table
+    after a `real_commits` test, and refuses a write outside a test's
+    transaction), so every test seeds its own rows.
+    """
+    asyncio.run(_build_schema())
+    yield
+
+
+@pytest_asyncio.fixture
+async def db() -> AsyncIterator[AsyncSession]:
+    """A session from the app's own maker: it joins the test's transaction."""
+    async with AsyncSessionLocal() as session:
         yield session
-
-        await session.close()
-        if trans.is_active:
-            await trans.rollback()
-
-    await engine.dispose()

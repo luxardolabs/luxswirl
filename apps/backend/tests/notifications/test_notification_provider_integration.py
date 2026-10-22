@@ -229,6 +229,8 @@ class TestDeleteProvider:
         p = await NotificationCoreService.create_provider(db, _create_data())
 
         await NotificationCoreService.delete_provider(db, p.id)
+        # The request's commit flushes; the app's sessions do not autoflush.
+        await db.flush()
 
         # Soft-deleted: still in DB but excluded from default queries
         with pytest.raises(NotFoundException):

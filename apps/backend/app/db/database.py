@@ -20,68 +20,58 @@ from app.core.config import settings
 logger = get_logger("luxswirl.database")
 
 
-# Global engine and session maker
-engine: AsyncEngine | None = None
-async_session_maker: async_sessionmaker[AsyncSession] | None = None
+# The engine and the ONE session maker every session in the app comes from, built
+# at import. Building them opens no connection: the pool connects on first use.
+# Every importer holds this same maker object, which is what lets the test harness
+# (luxarch's test-db-bound block) bind it to each test's rolled-back transaction.
+#
+# statement_timeout + idle_in_transaction_session_timeout are belt-and-suspenders
+# for the "web routes commit fast" rule. Any web handler that accidentally holds a
+# transaction longer than 5s gets killed before it can block other UI requests.
+# The maintenance worker borrows from this same pool but issues
+# `SET LOCAL ... = 0` per transaction to lift the limits for cascading mutations.
+engine: AsyncEngine = create_async_engine(
+    str(settings.database.url),
+    echo=settings.database.echo,
+    pool_size=settings.database.pool_size,
+    max_overflow=settings.database.max_overflow,
+    pool_pre_ping=settings.database.pool_pre_ping,
+    pool_recycle=3600,
+    connect_args={
+        "server_settings": {
+            "statement_timeout": "5000",
+            "idle_in_transaction_session_timeout": "30000",
+        },
+    },
+)
+
+AsyncSessionLocal: async_sessionmaker[AsyncSession] = async_sessionmaker(
+    engine,
+    class_=AsyncSession,
+    expire_on_commit=False,
+    autocommit=False,
+    autoflush=False,
+)
 
 
 def get_engine() -> AsyncEngine:
     """
-    Get or create the global database engine.
+    The global database engine.
 
     Returns:
         AsyncEngine instance
     """
-    global engine
-
-    if engine is None:
-        logger.info("Creating database engine")
-        # statement_timeout + idle_in_transaction_session_timeout are belt-and-
-        # suspenders for the "web routes commit fast" rule (LUXSWIRL-105).
-        # Any web handler that accidentally holds a transaction longer than 5s
-        # gets killed before it can block other UI requests. The maintenance
-        # worker borrows from this same pool but issues `SET LOCAL ... = 0` per
-        # transaction to lift the limits for cascading mutations.
-        engine = create_async_engine(
-            str(settings.database.url),
-            echo=settings.database.echo,
-            pool_size=settings.database.pool_size,
-            max_overflow=settings.database.max_overflow,
-            pool_pre_ping=settings.database.pool_pre_ping,
-            pool_recycle=3600,
-            connect_args={
-                "server_settings": {
-                    "statement_timeout": "5000",
-                    "idle_in_transaction_session_timeout": "30000",
-                },
-            },
-        )
-        logger.info("Database engine created successfully")
-
     return engine
 
 
 def get_session_maker() -> async_sessionmaker[AsyncSession]:
     """
-    Get or create the global session maker.
+    The global session maker.
 
     Returns:
         async_sessionmaker instance
     """
-    global async_session_maker
-
-    if async_session_maker is None:
-        logger.info("Creating session maker")
-        async_session_maker = async_sessionmaker(
-            get_engine(),
-            class_=AsyncSession,
-            expire_on_commit=False,
-            autocommit=False,
-            autoflush=False,
-        )
-        logger.info("Session maker created successfully")
-
-    return async_session_maker
+    return AsyncSessionLocal
 
 
 async def get_db() -> AsyncGenerator[AsyncSession]:
@@ -503,13 +493,9 @@ async def close_db() -> None:
 
     This should be called on application shutdown.
     """
-    global engine
-
-    if engine:
-        logger.info("Closing database connections")
-        await engine.dispose()
-        engine = None
-        logger.info("Database connections closed")
+    logger.info("Closing database connections")
+    await engine.dispose()
+    logger.info("Database connections closed")
 
 
 async def check_db_health() -> bool:

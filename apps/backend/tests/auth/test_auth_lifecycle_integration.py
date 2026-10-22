@@ -193,6 +193,8 @@ class TestSessionLifecycle:
 
         ok = await auth.logout(db, token)
         assert ok is True
+        # The request's commit flushes; the app's sessions do not autoflush.
+        await db.flush()
         # Session is gone — verify returns None
         assert await auth.verify_session(db, token) is None
 
@@ -279,6 +281,9 @@ class TestChangePassword:
         original_hash = user.password_hash
 
         await auth.change_password(db, user.id, "TestPass123!", "NewPassword456!")
+        # Flush before refresh: refresh reloads from the database, and the app's
+        # sessions do not autoflush, so an unflushed change would be discarded.
+        await db.flush()
         await db.refresh(user)
         assert user.password_hash != original_hash
         # New password works
