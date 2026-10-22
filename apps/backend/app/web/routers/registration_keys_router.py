@@ -24,7 +24,11 @@ router = APIRouter(tags=["Web UI - Registration Keys"], include_in_schema=False)
 
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
-@router.get("/registration-keys/create-form", response_class=HTMLResponse)
+@router.get(
+    "/registration-keys/create-form",
+    response_class=HTMLResponse,
+    name="create_key_form",
+)
 async def create_key_form(
     request: Request,
     current_user: AdminUserWeb,
@@ -38,12 +42,14 @@ async def create_key_form(
 
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
-@router.post("/registration-keys/create", response_class=HTMLResponse)
+@router.post(
+    "/registration-keys/create", response_class=HTMLResponse, name="create_key"
+)
 async def create_key(
     request: Request,
     name: Annotated[str, Form()],
     current_user: AdminUserWeb,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     description: Annotated[str | None, Form()] = None,
 ) -> HTMLResponse:
     """Create a new registration key and show it once in a modal."""
@@ -58,12 +64,14 @@ async def create_key(
 
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
-@router.post("/registration-keys/{key_id}/revoke", response_class=HTMLResponse)
+@router.post(
+    "/registration-keys/{key_id}/revoke", response_class=HTMLResponse, name="revoke_key"
+)
 async def revoke_key(
     request: Request,
     key_id: UUID,
     current_user: AdminUserWeb,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     reason: Annotated[str | None, Form()] = None,
 ) -> HTMLResponse:
     """Revoke a registration key."""
@@ -73,11 +81,13 @@ async def revoke_key(
     )
 
 
-@router.delete("/registration-keys/{key_id}", response_class=HTMLResponse)
+@router.delete(
+    "/registration-keys/{key_id}", response_class=HTMLResponse, name="delete_key"
+)
 async def delete_key(
     request: Request,
     key_id: UUID,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: AdminUserWeb,
 ) -> HTMLResponse:
     """Delete a registration key (soft delete)."""

@@ -65,12 +65,13 @@ _NOT_FOUND: dict[int | str, dict[str, Any]] = {
     status_code=status.HTTP_201_CREATED,
     summary="Register new agent",
     description="Register a new agent for approval using registration key. Returns agent UUID to store locally.",
+    name="register_agent",
 )
 @limiter.limit(settings.security.registration_rate_limit)
 async def register_agent(
     request: Request,
     data: AgentRegisterRequest,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     authorization: Annotated[str | None, Header()] = None,
 ) -> AgentRegisterResponse:
     await verify_registration_token(authorization, db)
@@ -93,9 +94,10 @@ async def register_agent(
     response_model=AgentListResponse,
     summary="List all agents",
     description="Get a list of all agents with optional filtering by active status",
+    name="list_agents",
 )
 async def list_agents(
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _: Annotated[str, Depends(verify_api_token)],
     active_only: Annotated[
         bool, Query(description="Only return active agents")
@@ -116,10 +118,11 @@ async def list_agents(
     response_model=AgentResponse,
     summary="Get agent by name",
     responses=_NOT_FOUND,
+    name="get_agent",
 )
 async def get_agent(
     agent_name: str,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _: Annotated[str, Depends(verify_api_token)],
 ) -> AgentResponse:
     return await AgentCoreService.get_agent_response_by_name(db, agent_name)
@@ -131,10 +134,11 @@ async def get_agent(
     status_code=status.HTTP_201_CREATED,
     summary="Create a new agent",
     responses={409: {"model": ErrorResponse, "description": "Agent already exists"}},
+    name="create_agent",
 )
 async def create_agent(
     data: AgentCreate,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _: Annotated[str, Depends(verify_api_token)],
 ) -> AgentResponse:
     return await AgentCoreService.create_agent_response(db, data)
@@ -145,11 +149,12 @@ async def create_agent(
     response_model=AgentResponse,
     summary="Update an agent",
     responses=_NOT_FOUND,
+    name="update_agent",
 )
 async def update_agent(
     agent_id: UUID,
     data: AgentUpdate,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _: Annotated[str, Depends(verify_api_token)],
 ) -> AgentResponse:
     return await AgentCoreService.update_agent_response(db, agent_id, data)
@@ -161,10 +166,11 @@ async def update_agent(
     summary="Enqueue agent delete (async — runs in maintenance worker)",
     responses=_NOT_FOUND,
     response_model=MaintenanceJobEnqueuedResponse,
+    name="delete_agent",
 )
 async def delete_agent(
     agent_id: UUID,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _: Annotated[str, Depends(verify_api_token)],
 ) -> MaintenanceJobEnqueuedResponse:
     """Enqueue an agent_delete maintenance job and return the job id.
@@ -189,10 +195,11 @@ async def delete_agent(
     response_model=AgentKeyIssuedResponse,
     summary="Approve pending agent",
     responses=_NOT_FOUND,
+    name="approve_agent",
 )
 async def approve_agent(
     agent_name: str,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _: Annotated[str, Depends(verify_api_token)],
 ) -> AgentKeyIssuedResponse:
     agent_id = await AgentCoreService.agent_id_by_name(db, agent_name)
@@ -210,10 +217,11 @@ async def approve_agent(
     response_model=AgentLifecycleResponse,
     summary="Reject pending agent",
     responses=_NOT_FOUND,
+    name="reject_agent",
 )
 async def reject_agent(
     agent_name: str,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _: Annotated[str, Depends(verify_api_token)],
     reason: Annotated[str | None, Query(description="Reason for rejection")] = None,
 ) -> AgentLifecycleResponse:
@@ -232,10 +240,11 @@ async def reject_agent(
     response_model=AgentLifecycleResponse,
     summary="Pause active agent",
     responses=_NOT_FOUND,
+    name="pause_agent",
 )
 async def pause_agent(
     agent_name: str,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _: Annotated[str, Depends(verify_api_token)],
     reason: Annotated[str | None, Query(description="Reason for pausing")] = None,
 ) -> AgentLifecycleResponse:
@@ -252,10 +261,11 @@ async def pause_agent(
     response_model=AgentLifecycleResponse,
     summary="Resume paused agent",
     responses=_NOT_FOUND,
+    name="resume_agent",
 )
 async def resume_agent(
     agent_name: str,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _: Annotated[str, Depends(verify_api_token)],
 ) -> AgentLifecycleResponse:
     agent_id = await AgentCoreService.agent_id_by_name(db, agent_name)
@@ -273,10 +283,11 @@ async def resume_agent(
     response_model=AgentLifecycleResponse,
     summary="Disable agent",
     responses=_NOT_FOUND,
+    name="disable_agent",
 )
 async def disable_agent(
     agent_name: str,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _: Annotated[str, Depends(verify_api_token)],
     reason: Annotated[str | None, Query(description="Reason for disabling")] = None,
 ) -> AgentLifecycleResponse:
@@ -295,10 +306,11 @@ async def disable_agent(
     response_model=AgentLifecycleResponse,
     summary="Re-enable disabled agent",
     responses=_NOT_FOUND,
+    name="enable_agent",
 )
 async def enable_agent(
     agent_name: str,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _: Annotated[str, Depends(verify_api_token)],
 ) -> AgentLifecycleResponse:
     agent_id = await AgentCoreService.agent_id_by_name(db, agent_name)
@@ -315,10 +327,11 @@ async def enable_agent(
     response_model=AgentKeyIssuedResponse,
     summary="Regenerate agent API key (by name)",
     responses=_NOT_FOUND,
+    name="regenerate_agent_key_by_name",
 )
 async def regenerate_agent_key_by_name(
     agent_name: str,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _: Annotated[str, Depends(verify_api_token)],
 ) -> AgentKeyIssuedResponse:
     agent_id = await AgentCoreService.agent_id_by_name(db, agent_name)
@@ -337,10 +350,11 @@ async def regenerate_agent_key_by_name(
     response_model=AgentStatsResponse,
     summary="Get agent statistics",
     responses=_NOT_FOUND,
+    name="get_agent_stats",
 )
 async def get_agent_stats(
     agent_id: UUID,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _: Annotated[str, Depends(verify_api_token)],
     hours: Annotated[
         int, Query(ge=1, le=720, description="Hours to include in stats")
@@ -353,13 +367,14 @@ async def get_agent_stats(
     "/heartbeat",
     response_model=AgentHeartbeatResponse,
     summary="Agent heartbeat",
+    name="agent_heartbeat",
 )
 @limiter.limit(settings.security.agent_api_rate_limit)
 async def agent_heartbeat(
     request: Request,
     heartbeat: AgentHeartbeat,
     sender: AuthenticatedHeartbeat,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> AgentHeartbeatResponse:
     """Process agent heartbeat. Auth accepts agent-specific key OR registration token."""
     return await AgentCoreService.process_heartbeat(
@@ -375,12 +390,13 @@ async def agent_heartbeat(
     summary="Recover agent API key",
     description="Agent calls this with registration token to get new agent-specific key",
     response_model=AgentKeyRecoveryResponse,
+    name="recover_agent_key",
 )
 @limiter.limit(settings.security.registration_rate_limit)
 async def recover_agent_key(
     request: Request,
     agent_id: UUID,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     authorization: Annotated[str | None, Header()] = None,
 ) -> AgentKeyRecoveryResponse:
     await verify_registration_token(authorization, db)
@@ -403,12 +419,13 @@ async def recover_agent_key(
     "/agents/{agent_id}/api-key",
     summary="Get agent API key",
     description="Agent retrieves its agent-specific key after approval",
+    name="get_agent_api_key",
 )
 @limiter.limit(settings.security.registration_rate_limit)
 async def get_agent_api_key(
     request: Request,
     agent_id: UUID,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     authorization: Annotated[str | None, Header()] = None,
 ) -> None:
     await verify_registration_token(authorization, db)
@@ -438,10 +455,11 @@ async def get_agent_api_key(
     summary="Regenerate agent API key",
     description="Admin regenerates agent-specific key (revokes old key)",
     response_model=AgentKeyRegenerateResponse,
+    name="regenerate_agent_key",
 )
 async def regenerate_agent_key(
     agent_id: UUID,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _: Annotated[str, Depends(verify_api_token)],
 ) -> AgentKeyRegenerateResponse:
     agent, new_key = await AgentCoreService.regenerate_agent_key(db, agent_id)
@@ -462,10 +480,11 @@ async def regenerate_agent_key(
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Revoke agent API key",
     description="Admin revokes agent-specific key (blocks agent access)",
+    name="revoke_agent_key",
 )
 async def revoke_agent_key(
     agent_id: UUID,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _: Annotated[str, Depends(verify_api_token)],
 ) -> None:
     await AgentCoreService.revoke_agent_key(db, agent_id)

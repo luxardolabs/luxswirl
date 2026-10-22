@@ -28,10 +28,15 @@ router = APIRouter(tags=["Web UI - Agents"])
 # ---- Page / partials ----------------------------------------------------
 
 
-@router.get("/agents", response_class=HTMLResponse, include_in_schema=False)
+@router.get(
+    "/agents",
+    response_class=HTMLResponse,
+    include_in_schema=False,
+    name="agents_list_page",
+)
 async def agents_list_page(
     request: Request,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: CurrentUserWeb,
     active_only: Annotated[bool, Query(description="Show only active agents")] = False,
     search: Annotated[
@@ -52,12 +57,15 @@ async def agents_list_page(
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.get(
-    "/agents/{agent_id}/edit-form", response_class=HTMLResponse, include_in_schema=False
+    "/agents/{agent_id}/edit-form",
+    response_class=HTMLResponse,
+    include_in_schema=False,
+    name="agent_edit_form",
 )
 async def agent_edit_form(
     agent_id: UUID,
     request: Request,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: CurrentUserWeb,
 ) -> HTMLResponse:
     """Get agent edit form for the side panel."""
@@ -81,12 +89,15 @@ async def agent_edit_form(
 
 
 @router.patch(
-    "/agents/{agent_id}", response_class=HTMLResponse, include_in_schema=False
+    "/agents/{agent_id}",
+    response_class=HTMLResponse,
+    include_in_schema=False,
+    name="update_agent_web",
 )
 async def update_agent_web(
     agent_id: UUID,
     request: Request,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: EditorUserWeb,
     agent_name: Annotated[str | None, Form()] = None,
     hostname: Annotated[str | None, Form()] = None,
@@ -130,12 +141,15 @@ async def update_agent_web(
 
 
 @router.delete(
-    "/agents/{agent_id}", response_class=HTMLResponse, include_in_schema=False
+    "/agents/{agent_id}",
+    response_class=HTMLResponse,
+    include_in_schema=False,
+    name="delete_agent_web",
 )
 async def delete_agent_web(
     request: Request,
     agent_id: UUID,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: EditorUserWeb,
 ) -> HTMLResponse:
     """Enqueue an agent_delete maintenance job and return the polling partial.
@@ -176,10 +190,14 @@ async def delete_agent_web(
 
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
-@router.post("/agents/{agent_id}/force-reload", include_in_schema=False)
+@router.post(
+    "/agents/{agent_id}/force-reload",
+    include_in_schema=False,
+    name="force_reload_agent",
+)
 async def force_reload_agent(
     agent_id: UUID,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: EditorUserWeb,
 ) -> Response:
     """Force agent to reload checks by updating checks_updated_at timestamp."""
@@ -190,10 +208,12 @@ async def force_reload_agent(
 
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
-@router.post("/agents/{agent_id}/approve-web", include_in_schema=False)
+@router.post(
+    "/agents/{agent_id}/approve-web", include_in_schema=False, name="approve_agent_web"
+)
 async def approve_agent_web(
     agent_id: UUID,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: EditorUserWeb,
 ) -> Response:
     """Approve agent via web UI (auto-generates API key)."""
@@ -201,10 +221,12 @@ async def approve_agent_web(
 
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
-@router.post("/agents/{agent_id}/reject-web", include_in_schema=False)
+@router.post(
+    "/agents/{agent_id}/reject-web", include_in_schema=False, name="reject_agent_web"
+)
 async def reject_agent_web(
     agent_id: UUID,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: EditorUserWeb,
     reason: Annotated[str | None, Query()] = None,
 ) -> Response:
@@ -213,10 +235,12 @@ async def reject_agent_web(
 
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
-@router.post("/agents/{agent_id}/pause-web", include_in_schema=False)
+@router.post(
+    "/agents/{agent_id}/pause-web", include_in_schema=False, name="pause_agent_web"
+)
 async def pause_agent_web(
     agent_id: UUID,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: EditorUserWeb,
     reason: Annotated[str | None, Query()] = None,
 ) -> Response:
@@ -224,20 +248,24 @@ async def pause_agent_web(
 
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
-@router.post("/agents/{agent_id}/resume-web", include_in_schema=False)
+@router.post(
+    "/agents/{agent_id}/resume-web", include_in_schema=False, name="resume_agent_web"
+)
 async def resume_agent_web(
     agent_id: UUID,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: EditorUserWeb,
 ) -> Response:
     return await AgentsViewService.resume_agent(db, agent_id)
 
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
-@router.post("/agents/{agent_id}/disable-web", include_in_schema=False)
+@router.post(
+    "/agents/{agent_id}/disable-web", include_in_schema=False, name="disable_agent_web"
+)
 async def disable_agent_web(
     agent_id: UUID,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: EditorUserWeb,
     reason: Annotated[str | None, Query()] = None,
 ) -> Response:
@@ -245,10 +273,12 @@ async def disable_agent_web(
 
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
-@router.post("/agents/{agent_id}/enable-web", include_in_schema=False)
+@router.post(
+    "/agents/{agent_id}/enable-web", include_in_schema=False, name="enable_agent_web"
+)
 async def enable_agent_web(
     agent_id: UUID,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: EditorUserWeb,
 ) -> Response:
     return await AgentsViewService.enable_agent(db, agent_id)
@@ -262,11 +292,12 @@ async def enable_agent_web(
     "/agents/{agent_id}/key-management-panel",
     response_class=HTMLResponse,
     include_in_schema=False,
+    name="get_key_management_panel",
 )
 async def get_key_management_panel(
     agent_id: UUID,
     request: Request,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: CurrentUserWeb,
 ) -> HTMLResponse:
     """Get agent key management panel."""
@@ -293,11 +324,12 @@ async def get_key_management_panel(
     "/agents/{agent_id}/generate-key-web",
     response_class=HTMLResponse,
     include_in_schema=False,
+    name="generate_key_web",
 )
 async def generate_key_web(
     agent_id: UUID,
     request: Request,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: EditorUserWeb,
 ) -> Response:
     """Generate initial API key for agent (if none exists)."""
@@ -316,11 +348,12 @@ async def generate_key_web(
     "/agents/{agent_id}/regenerate-key-web",
     response_class=HTMLResponse,
     include_in_schema=False,
+    name="regenerate_key_web",
 )
 async def regenerate_key_web(
     agent_id: UUID,
     request: Request,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: EditorUserWeb,
 ) -> Response:
     """Regenerate API key (revokes old)."""
@@ -333,10 +366,12 @@ async def regenerate_key_web(
 
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
-@router.delete("/agents/{agent_id}/revoke-key-web", include_in_schema=False)
+@router.delete(
+    "/agents/{agent_id}/revoke-key-web", include_in_schema=False, name="revoke_key_web"
+)
 async def revoke_key_web(
     agent_id: UUID,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: EditorUserWeb,
 ) -> Response:
     """Revoke agent API key."""

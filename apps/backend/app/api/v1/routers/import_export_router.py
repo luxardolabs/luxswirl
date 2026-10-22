@@ -30,10 +30,11 @@ router = APIRouter(prefix="/import-export", tags=["Import/Export"])
 @router.get(
     "/export/{agent_id}",
     response_model=AgentChecksExport,
+    name="export_checks",
 )
 async def export_checks(
     agent_id: UUID,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _: Annotated[str, Depends(verify_api_token)],
 ) -> AgentChecksExport:
     """
@@ -49,10 +50,10 @@ async def export_checks(
     return await ImportExportCoreService.export_agent_checks(db, agent_id)
 
 
-@router.post("/import", response_model=BulkImportResponse)
+@router.post("/import", response_model=BulkImportResponse, name="import_checks")
 async def import_checks(
     request: Annotated[BulkImportRequest, Body()],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _: Annotated[str, Depends(verify_api_token)],
 ) -> BulkImportResponse:
     """
@@ -102,6 +103,7 @@ async def import_checks(
 @router.get(
     "/export-agent-config",
     response_model=AgentConfigExport,
+    name="export_agent_config",
 )
 async def export_agent_config(
     _: Annotated[str, Depends(verify_api_token)],

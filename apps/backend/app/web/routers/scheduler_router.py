@@ -25,7 +25,7 @@ router = APIRouter(tags=["Web UI - Scheduler"], include_in_schema=False)
 
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
-@router.get("/scheduler", response_class=HTMLResponse)
+@router.get("/scheduler", response_class=HTMLResponse, name="scheduler_page")
 async def scheduler_page(
     request: Request,
     current_user: AdminUserWeb,
@@ -47,7 +47,9 @@ async def scheduler_page(
 
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
-@router.post("/scheduler/jobs/{job_key}/toggle", response_class=HTMLResponse)
+@router.post(
+    "/scheduler/jobs/{job_key}/toggle", response_class=HTMLResponse, name="toggle_job"
+)
 async def toggle_job(
     job_key: str,
     request: Request,
@@ -79,7 +81,9 @@ async def toggle_job(
 
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
-@router.post("/scheduler/jobs/{job_key}/run", response_class=HTMLResponse)
+@router.post(
+    "/scheduler/jobs/{job_key}/run", response_class=HTMLResponse, name="run_job"
+)
 async def run_job(
     job_key: str,
     request: Request,
@@ -110,7 +114,9 @@ async def run_job(
 
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
-@router.post("/scheduler/jobs/{job_key}/reset", response_class=HTMLResponse)
+@router.post(
+    "/scheduler/jobs/{job_key}/reset", response_class=HTMLResponse, name="reset_job"
+)
 async def reset_job(
     job_key: str,
     request: Request,
@@ -141,7 +147,9 @@ async def reset_job(
 
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
-@router.get("/scheduler/jobs/{job_key}/history", response_class=HTMLResponse)
+@router.get(
+    "/scheduler/jobs/{job_key}/history", response_class=HTMLResponse, name="job_history"
+)
 async def job_history(
     job_key: str,
     request: Request,

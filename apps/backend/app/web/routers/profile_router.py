@@ -23,11 +23,16 @@ router = APIRouter(tags=["Web UI - Profile"])
 
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
-@router.get("/profile", response_class=HTMLResponse, include_in_schema=False)
+@router.get(
+    "/profile",
+    response_class=HTMLResponse,
+    include_in_schema=False,
+    name="profile_panel",
+)
 async def profile_panel(
     request: Request,
     user: CurrentUserWeb,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> HTMLResponse:
     """User profile panel (HTMX)."""
     return templates.TemplateResponse(
@@ -38,11 +43,16 @@ async def profile_panel(
 
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
-@router.post("/profile/update", response_class=HTMLResponse, include_in_schema=False)
+@router.post(
+    "/profile/update",
+    response_class=HTMLResponse,
+    include_in_schema=False,
+    name="update_profile",
+)
 async def update_profile(
     request: Request,
     user: CurrentUserWeb,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     full_name: Annotated[str | None, Form()] = None,
 ) -> Response:
     """Update user profile information."""
@@ -68,7 +78,7 @@ async def change_password(
     new_password: Annotated[str, Form()],
     confirm_password: Annotated[str, Form()],
     user: CurrentUserWeb,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> Response:
     """Change user password."""
     kind, message = await ProfileViewService.change_password(

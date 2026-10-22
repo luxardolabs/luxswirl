@@ -224,9 +224,14 @@ class SchedulerCoreService:
                 )
 
             finally:
-                # Clear lease — worker_session commits the whole unit on exit.
-                job.lease_token = None
-                job.lease_expires_at = None
+                # Release the lease only if this run still holds it — worker_session
+                # commits the whole unit on exit.
+                if not await JobConfigurationCRUD.release_lease(
+                    db, job_key, lease_token
+                ):
+                    logger.warning(
+                        "Lease taken over during the run", extra={"job_key": job_key}
+                    )
 
     async def _handle_job_failure(
         self, db: AsyncSession, job: JobConfiguration, error: str

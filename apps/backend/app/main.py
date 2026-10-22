@@ -391,7 +391,7 @@ app.include_router(scheduler_router)  # Web UI - scheduler admin
 
 
 # Health check endpoint
-@app.get("/health", tags=["Health"], response_model=HealthResponse)
+@app.get("/health", tags=["Health"], response_model=HealthResponse, name="health_check")
 async def health_check() -> HealthResponse:
     """
     Health check endpoint.
@@ -407,7 +407,7 @@ async def health_check() -> HealthResponse:
 
 
 # Root API endpoint (only for /api prefix)
-@app.get("/api", tags=["Root"], response_model=ApiInfoResponse)
+@app.get("/api", tags=["Root"], response_model=ApiInfoResponse, name="api_root")
 async def api_root() -> ApiInfoResponse:
     """
     API root endpoint.

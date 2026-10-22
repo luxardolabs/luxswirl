@@ -29,11 +29,12 @@ router = APIRouter(tags=["Metrics"])
     summary="Prometheus metrics endpoint",
     description="Export metrics in Prometheus text format (optional auth)",
     response_class=Response,
+    name="get_metrics",
 )
 @limiter.limit(settings.security.api_rate_limit)
 async def get_metrics(
     request: Request,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     authorization: Annotated[str | None, Header()] = None,
 ) -> Response:
     """

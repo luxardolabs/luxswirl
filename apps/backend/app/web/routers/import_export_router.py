@@ -26,12 +26,13 @@ router = APIRouter(tags=["Web UI - Import/Export"])
     "/agents/{agent_id}/import-export-form",
     response_class=HTMLResponse,
     include_in_schema=False,
+    name="import_export_form",
 )
 async def import_export_form(
     request: Request,
     agent_id: Annotated[UUID, Path(description="Agent ID")],
     current_user: AdminUserWeb,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> HTMLResponse:
     """
     Get the import/export form for an agent.
@@ -63,7 +64,7 @@ async def import_export_form(
 )
 async def export_checks(
     agent_id: Annotated[UUID, Path(description="Agent ID")],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> Response:
     """
     Export all checks for an agent as JSON download.
@@ -87,7 +88,7 @@ async def import_checks(
     file: Annotated[UploadFile, File()],
     mode: Annotated[str, Form()],  # "merge" or "replace"
     current_user: AdminUserWeb,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> Response:
     """Enqueue a bulk_check_import maintenance job; return the polling partial.
 

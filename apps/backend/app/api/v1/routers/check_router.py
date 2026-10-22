@@ -49,12 +49,13 @@ logger = get_logger("luxswirl.api.checks")
     responses={
         404: {"model": ErrorResponse, "description": "Agent not found"},
     },
+    name="list_checks",
 )
 @limiter.limit(settings.security.agent_api_rate_limit)
 async def list_checks(
     request: Request,
     agent_id: AuthenticatedAgentId,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> CheckListResponse:
     """
     List all checks for an agent.
@@ -78,11 +79,12 @@ async def list_checks(
     responses={
         404: {"model": ErrorResponse, "description": "Check not found"},
     },
+    name="get_check",
 )
 async def get_check(
     agent_id: UUID,
     check_id: UUID,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _: Annotated[str, Depends(verify_api_token)],
 ) -> CheckResponse:
     """Get a specific check."""
@@ -98,11 +100,12 @@ async def get_check(
     responses={
         404: {"model": ErrorResponse, "description": "Agent not found"},
     },
+    name="create_check",
 )
 async def create_check(
     agent_id: UUID,
     data: CheckCreate,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _: Annotated[str, Depends(verify_api_token)],
 ) -> CheckResponse:
     """
@@ -127,12 +130,13 @@ async def create_check(
     responses={
         404: {"model": ErrorResponse, "description": "Check not found"},
     },
+    name="update_check",
 )
 async def update_check(
     agent_id: UUID,
     check_id: UUID,
     data: CheckUpdate,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _: Annotated[str, Depends(verify_api_token)],
 ) -> CheckResponse:
     """Update a check."""
@@ -152,11 +156,12 @@ async def update_check(
     responses={
         404: {"model": ErrorResponse, "description": "Check not found"},
     },
+    name="delete_check",
 )
 async def delete_check(
     agent_id: UUID,
     check_id: UUID,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _: Annotated[str, Depends(verify_api_token)],
 ) -> None:
     """Delete a check."""
@@ -172,12 +177,13 @@ async def delete_check(
     responses={
         404: {"model": ErrorResponse, "description": "Check or agent not found"},
     },
+    name="clone_check",
 )
 async def clone_check(
     agent_id: UUID,
     check_id: UUID,
     data: CheckUpdate,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _: Annotated[str, Depends(verify_api_token)],
 ) -> CheckResponse:
     """
@@ -211,11 +217,12 @@ async def clone_check(
     responses={
         404: {"model": ErrorResponse, "description": "Agent not found"},
     },
+    name="bulk_create_checks",
 )
 async def bulk_create_checks(
     agent_id: UUID,
     requests: list[BulkCheckCreateRequest],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _: Annotated[str, Depends(verify_api_token)],
 ) -> BulkCheckCreateResponse:
     """

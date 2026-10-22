@@ -28,10 +28,12 @@ router = APIRouter(tags=["Web UI - Alerts"], include_in_schema=False)
 
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
-@router.get("/alerts/create-form", response_class=HTMLResponse)
+@router.get(
+    "/alerts/create-form", response_class=HTMLResponse, name="create_alert_form"
+)
 async def create_alert_form(
     request: Request,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: CurrentUserWeb,
 ) -> HTMLResponse:
     """HTMX partial - returns form for creating a new alert."""
@@ -53,11 +55,13 @@ async def create_alert_form(
 
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
-@router.get("/alerts/{alert_id}/edit-form", response_class=HTMLResponse)
+@router.get(
+    "/alerts/{alert_id}/edit-form", response_class=HTMLResponse, name="edit_alert_form"
+)
 async def edit_alert_form(
     request: Request,
     alert_id: UUID,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: CurrentUserWeb,
 ) -> HTMLResponse:
     """HTMX partial - returns form for editing an existing alert."""
@@ -82,7 +86,7 @@ async def edit_alert_form(
 @router.post("/alerts/create", response_class=HTMLResponse, name="web_create_alert")
 async def create_alert(
     request: Request,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: EditorUserWeb,
 ) -> HTMLResponse:
     """Create a new alert rule."""
@@ -196,7 +200,7 @@ async def create_alert(
 # delete_alert with alert_id="snooze" and 422ing, which made unsnooze
 # unreachable.
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
-@router.post("/alerts/snooze", response_class=HTMLResponse)
+@router.post("/alerts/snooze", response_class=HTMLResponse, name="snooze_alert_check")
 async def snooze_alert_check(
     request: Request,
     alert_id: Annotated[UUID, Query(description="Alert UUID")],
@@ -204,7 +208,7 @@ async def snooze_alert_check(
     log_id: Annotated[
         UUID, Query(description="Notification log UUID for the row to refresh")
     ],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: CurrentUserWeb,
 ) -> HTMLResponse:
     """
@@ -220,7 +224,9 @@ async def snooze_alert_check(
 
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
-@router.delete("/alerts/snooze", response_class=HTMLResponse)
+@router.delete(
+    "/alerts/snooze", response_class=HTMLResponse, name="unsnooze_alert_check"
+)
 async def unsnooze_alert_check(
     request: Request,
     alert_id: Annotated[UUID, Query(description="Alert UUID")],
@@ -228,7 +234,7 @@ async def unsnooze_alert_check(
     log_id: Annotated[
         UUID, Query(description="Notification log UUID for the row to refresh")
     ],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: CurrentUserWeb,
 ) -> HTMLResponse:
     """Un-snooze an alert-check relationship — resume notifications immediately."""
@@ -245,7 +251,7 @@ async def unsnooze_alert_check(
 async def update_alert(
     request: Request,
     alert_id: UUID,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: EditorUserWeb,
 ) -> HTMLResponse:
     """Update an existing alert rule."""
@@ -336,7 +342,7 @@ async def update_alert(
 async def delete_alert(
     request: Request,
     alert_id: UUID,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: EditorUserWeb,
 ) -> HTMLResponse:
     """Delete an alert rule (soft delete)."""
@@ -348,11 +354,13 @@ async def delete_alert(
 
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
-@router.post("/alerts/{alert_id}/toggle", response_class=HTMLResponse)
+@router.post(
+    "/alerts/{alert_id}/toggle", response_class=HTMLResponse, name="toggle_alert"
+)
 async def toggle_alert(
     request: Request,
     alert_id: UUID,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: EditorUserWeb,
 ) -> HTMLResponse:
     """Toggle alert enabled/disabled status."""

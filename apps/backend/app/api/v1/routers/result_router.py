@@ -46,6 +46,7 @@ router = APIRouter(tags=["Check Results"])
     status_code=status.HTTP_202_ACCEPTED,
     summary="Submit agent report",
     description="Submit check results from an agent",
+    name="submit_report",
 )
 @limiter.limit(settings.security.agent_api_rate_limit)
 async def submit_report(
@@ -53,7 +54,7 @@ async def submit_report(
     report: AgentReportRequest,
     _agent_id: ReportingAgentId,
     background_tasks: BackgroundTasks,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> AgentReportResponse:
     """
     Submit a report from an agent containing multiple check results.
@@ -83,10 +84,11 @@ async def submit_report(
     responses={
         404: {"model": ErrorResponse, "description": "Agent not found"},
     },
+    name="get_latest_results",
 )
 async def get_latest_results(
     agent_name: str,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _: Annotated[str, Depends(verify_api_token)],
     minutes: Annotated[int, Query(ge=1, le=60, description="Minutes to look back")] = 5,
 ) -> CheckResultListResponse:
@@ -110,11 +112,12 @@ async def get_latest_results(
     responses={
         404: {"model": ErrorResponse, "description": "Check not found"},
     },
+    name="get_check_history",
 )
 async def get_check_history(
     agent_name: str,
     check_id: UUID,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _: Annotated[str, Depends(verify_api_token)],
     hours: Annotated[int, Query(ge=1, le=720, description="Hours of history")] = 24,
     limit: Annotated[int, Query(ge=1, le=10000, description="Max results")] = 1000,
@@ -140,11 +143,12 @@ async def get_check_history(
     responses={
         404: {"model": ErrorResponse, "description": "Check not found"},
     },
+    name="get_check_summary",
 )
 async def get_check_summary(
     agent_name: str,
     check_id: UUID,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _: Annotated[str, Depends(verify_api_token)],
     hours: Annotated[int, Query(ge=1, le=720, description="Hours to include")] = 24,
 ) -> CheckSummary:
@@ -169,9 +173,10 @@ async def get_check_summary(
     summary="Get global statistics",
     description="Get aggregated statistics across all agents and checks",
     response_model=GlobalStatsResponse,
+    name="get_global_stats",
 )
 async def get_global_stats(
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _: Annotated[str, Depends(verify_api_token)],
     hours: Annotated[int, Query(ge=1, le=720, description="Hours to include")] = 24,
 ) -> GlobalStatsResponse:

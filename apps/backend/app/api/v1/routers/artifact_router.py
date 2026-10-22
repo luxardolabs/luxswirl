@@ -37,10 +37,11 @@ router = APIRouter(tags=["Artifacts"])
     responses={
         404: {"model": ErrorResponse, "description": "Check not found"},
     },
+    name="create_artifact",
 )
 async def create_artifact(
     artifact: CheckArtifactCreate,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _: Annotated[str, Depends(verify_api_token)],
 ) -> CheckArtifactResponse:
     """
@@ -61,10 +62,11 @@ async def create_artifact(
     responses={
         404: {"model": ErrorResponse, "description": "Artifact not found"},
     },
+    name="get_artifact_metadata",
 )
 async def get_artifact_metadata(
     artifact_id: Annotated[UUID, Path(description="Artifact UUID")],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _: Annotated[str, Depends(verify_api_token)],
 ) -> CheckArtifactResponse:
     """Get artifact metadata without binary data."""
@@ -86,10 +88,11 @@ async def get_artifact_metadata(
         200: {"description": "Artifact binary data"},
         404: {"model": ErrorResponse, "description": "Artifact not found"},
     },
+    name="download_artifact",
 )
 async def download_artifact(
     artifact_id: Annotated[UUID, Path(description="Artifact UUID")],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _: Annotated[str, Depends(verify_api_token)],
 ) -> Response:
     """Download artifact binary data."""
@@ -117,10 +120,11 @@ async def download_artifact(
     responses={
         404: {"model": ErrorResponse, "description": "Check not found"},
     },
+    name="list_check_artifacts",
 )
 async def list_check_artifacts(
     check_id: Annotated[UUID, Path(description="Check UUID")],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _: Annotated[str, Depends(verify_api_token)],
     limit: Annotated[
         int, Query(ge=1, le=500, description="Maximum number of artifacts to return")
@@ -138,11 +142,12 @@ async def list_check_artifacts(
     responses={
         404: {"model": ErrorResponse, "description": "Check not found"},
     },
+    name="list_check_result_artifacts",
 )
 async def list_check_result_artifacts(
     check_id: Annotated[UUID, Path(description="Check UUID")],
     check_result_id: Annotated[UUID, Path(description="Check result UUID")],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _: Annotated[str, Depends(verify_api_token)],
 ) -> CheckArtifactListResponse:
     """List artifacts for a specific check result."""
@@ -160,10 +165,11 @@ async def list_check_result_artifacts(
     responses={
         404: {"model": ErrorResponse, "description": "Artifact not found"},
     },
+    name="delete_artifact",
 )
 async def delete_artifact(
     artifact_id: Annotated[UUID, Path(description="Artifact UUID")],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _: Annotated[str, Depends(verify_api_token)],
 ) -> Response:
     """Delete an artifact."""
@@ -185,10 +191,11 @@ async def delete_artifact(
     responses={
         404: {"model": ErrorResponse, "description": "Check not found"},
     },
+    name="get_artifact_stats",
 )
 async def get_artifact_stats(
     check_id: Annotated[UUID, Path(description="Check UUID")],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _: Annotated[str, Depends(verify_api_token)],
 ) -> CheckArtifactStatsResponse:
     """Get artifact statistics for a check."""

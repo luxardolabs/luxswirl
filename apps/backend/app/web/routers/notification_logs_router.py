@@ -30,10 +30,15 @@ router = APIRouter(tags=["Web UI - Notification Logs"])
 
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
-@router.get("/notification-logs", response_class=HTMLResponse, include_in_schema=False)
+@router.get(
+    "/notification-logs",
+    response_class=HTMLResponse,
+    include_in_schema=False,
+    name="notification_logs_page",
+)
 async def notification_logs_page(
     request: Request,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: CurrentUserWeb,
     status: NotifStatusFilter = None,
     alert_id: AlertIdFilter = None,

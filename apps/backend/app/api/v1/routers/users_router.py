@@ -30,10 +30,10 @@ router = APIRouter(prefix="/users", tags=["User Management"])
 logger = get_logger("luxswirl.api.routers.users")
 
 
-@router.get("", response_model=UserListResponse)
+@router.get("", response_model=UserListResponse, name="list_users")
 async def list_users(
     admin: AdminUser,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     page: Annotated[int, Query(ge=1, description="Page number")] = 1,
     per_page: Annotated[int, Query(ge=1, le=200, description="Users per page")] = 50,
     role: Annotated[str | None, Query(description="Filter by role")] = None,
@@ -58,10 +58,10 @@ async def list_users(
 
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
-@router.get("/stats", response_model=UserStatsResponse)
+@router.get("/stats", response_model=UserStatsResponse, name="get_user_stats")
 async def get_user_stats(
     admin: AdminUser,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> UserStatsResponse:
     """
     Get user statistics.
@@ -74,11 +74,11 @@ async def get_user_stats(
     return await user_service.get_user_stats(db)
 
 
-@router.get("/{user_id}", response_model=UserResponse)
+@router.get("/{user_id}", response_model=UserResponse, name="get_user")
 async def get_user(
     user_id: UUID,
     admin: AdminUser,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> UserResponse:
     """
     Get user by ID.
@@ -102,11 +102,16 @@ async def get_user(
     return user
 
 
-@router.post("", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    response_model=UserResponse,
+    status_code=status.HTTP_201_CREATED,
+    name="create_user",
+)
 async def create_user(
     user_data: UserCreate,
     admin: AdminUser,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> UserResponse:
     """
     Create a new user.
@@ -141,12 +146,12 @@ async def create_user(
         ) from e
 
 
-@router.patch("/{user_id}", response_model=UserResponse)
+@router.patch("/{user_id}", response_model=UserResponse, name="update_user")
 async def update_user(
     user_id: UUID,
     user_data: UserUpdate,
     admin: AdminUser,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> UserResponse:
     """
     Update user information.
@@ -194,11 +199,12 @@ async def update_user(
     "/{user_id}",
     status_code=status.HTTP_200_OK,
     response_model=MessageResponse,
+    name="delete_user",
 )
 async def delete_user(
     user_id: UUID,
     admin: AdminUser,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> MessageResponse:
     """
     Delete a user.
@@ -262,6 +268,7 @@ async def delete_user(
     "/{user_id}/reset-password",
     status_code=status.HTTP_200_OK,
     response_model=MessageResponse,
+    name="reset_user_password",
 )
 @limiter.limit(settings.security.password_reset_rate_limit)
 async def reset_user_password(
@@ -272,7 +279,7 @@ async def reset_user_password(
     user_id: UUID,
     password_data: UserPasswordReset,
     admin: AdminUser,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> MessageResponse:
     """
     Reset a user's password (admin only).
@@ -332,11 +339,11 @@ async def reset_user_password(
 
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
-@router.post("/{user_id}/unlock", response_model=UserResponse)
+@router.post("/{user_id}/unlock", response_model=UserResponse, name="unlock_user")
 async def unlock_user(
     user_id: UUID,
     admin: AdminUser,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> UserResponse:
     """
     Unlock a locked user account.
