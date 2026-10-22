@@ -25,7 +25,7 @@
         title='Notifications',
         description='Configure notification providers and how LuxSwirl sends alerts',
         icon=ICO_BELL,
-        href='/settings/notifications'
+        href=nav.settings_notifications
     ) }}
 
     <!-- Alerts -->
@@ -33,7 +33,7 @@
         title='Alerts',
         description='Configure when and how notifications are triggered',
         icon=ICO_WARN,
-        href='/settings/alerts'
+        href=nav.settings_alerts
     ) }}
 
     <!-- API Keys -->
@@ -41,7 +41,7 @@
         title='API Keys & Metrics',
         description='Manage registration keys and Prometheus metrics authentication',
         icon=ICO_KEY,
-        href='/settings/registration-keys'
+        href=nav.settings_registration_keys
     ) }}
 
     <!-- Defaults -->
@@ -49,7 +49,7 @@
         title='System Defaults',
         description='Configure default values for checks, alerts, and system behavior',
         icon=ICO_COG,
-        href='/settings/defaults'
+        href=nav.settings_defaults
     ) }}
 
     <!-- Users (Admin only) -->
@@ -58,14 +58,14 @@
         title='User Management',
         description='Manage user accounts, roles, and permissions',
         icon=ICO_USERS,
-        href='/settings/users'
+        href=nav.settings_users
     ) }}
 
     {{ settings_category_card(
         title='Component Library',
         description='Brand colors, macros, badges, buttons, and design token reference',
         icon=ICO_PAINT,
-        href='/settings/components'
+        href=nav.settings_components
     ) }}
     {% endif %}
 </div>

@@ -49,36 +49,36 @@
     <!-- Main navigation -->
     <div class="flex-1 space-y-1">
         <!-- Primary monitoring view -->
-        {{ nav_link('/dashboard', 'Dashboard', 'squares-2x2') }}
+        {{ nav_link(nav.dashboard, 'Dashboard', 'squares-2x2') }}
 
         <div class="my-4 border-t border-dark-border"></div>
 
         <!-- Operations/scans -->
-        {{ nav_link('/jobs', 'Jobs', 'briefcase') }}
+        {{ nav_link(nav.jobs, 'Jobs', 'briefcase') }}
 
-        {{ nav_link('/status-pages', 'Public Pages', 'globe-alt') }}
+        {{ nav_link(nav.status_pages, 'Public Pages', 'globe-alt') }}
 
-        {{ nav_link('/notification-logs', 'Notification Logs', 'document-text') }}
+        {{ nav_link(nav.notification_logs, 'Notification Logs', 'document-text') }}
 
         <div class="my-4 border-t border-dark-border"></div>
 
         <!-- Infrastructure -->
-        {{ nav_link('/agents', 'Agents', 'server-stack') }}
+        {{ nav_link(nav.agents, 'Agents', 'server-stack') }}
 
         <div class="my-4 border-t border-dark-border"></div>
 
         <!-- System -->
-        <a href="/settings" class="nav-item">
+        <a href="{{ nav.settings }}" class="nav-item">
             <span class="w-5 h-5 flex-shrink-0 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/cog-6-tooth.svg" %}</span>
             <span class="sidebar-text">Settings</span>
         </a>
 
         {{ nav_item_btn('My Account', 'user-circle',
-                        hx_get='/profile', hx_target='#panel-container', hx_swap='innerHTML') }}
+                        hx_get=nav.profile, hx_target='#panel-container', hx_swap='innerHTML') }}
 
-        {{ nav_link('/scheduler', 'Scheduler', 'clock') }}
+        {{ nav_link(nav.scheduler, 'Scheduler', 'clock') }}
 
-        {{ nav_link('/database-health', 'Database Health', 'circle-stack') }}
+        {{ nav_link(nav.database_health, 'Database Health', 'circle-stack') }}
     </div>
 
     <!-- User info and actions -->
@@ -101,7 +101,7 @@
         {% endif %}
 
         <!-- Logout button -->
-        <form method="POST" action="/logout">
+        <form method="POST" action="{{ nav.logout }}">
             {{ nav_item_btn('Logout', 'arrow-right-on-rectangle',
                             type='submit',
                             extra_classes='text-red-400 hover:text-red-300 hover:bg-red-600/10') }}

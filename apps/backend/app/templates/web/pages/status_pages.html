@@ -6,7 +6,7 @@
 
 {% block content %}
 {% set actions_html %}
-{{ btn_create(label='New Status Page', hx_get='/status-pages/create-form', hx_target='#panel-container', hx_swap='innerHTML') }}
+{{ btn_create(label='New Status Page', hx_get=create_form_url, hx_target='#panel-container', hx_swap='innerHTML') }}
 {% endset %}
 
 {{ page_header(
@@ -16,7 +16,7 @@
 ) }}
 
 <!-- Filters -->
-{% call filter_card('/status-pages', layout='grid', grid_classes='grid-cols-1 md:grid-cols-3') %}
+{% call filter_card(list_url, layout='grid', grid_classes='grid-cols-1 md:grid-cols-3') %}
     {% call filter_select('is_public', 'Visibility') %}
         <option value="all" {% if filters.is_public == 'all' %}selected{% endif %}>All</option>
         <option value="true" {% if filters.is_public == 'true' %}selected{% endif %}>Public ({{ public_count }})</option>
@@ -25,7 +25,7 @@
     {{ filter_per_page(pagination.per_page) }}
 {% endcall %}
 
-{{ pagination_controls(pagination, '/status-pages') }}
+{{ pagination_controls(pagination, list_url) }}
 
 <!-- Table -->
 <div class="card overflow-hidden">
@@ -111,11 +111,11 @@
     <span class="w-16 h-16 mx-auto mb-4 text-dark-text-muted opacity-50 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/rectangle-stack.svg" %}</span>
     <p class="text-lg font-medium text-dark-text-primary mb-2">No status pages yet</p>
     <p class="text-sm text-dark-text-muted mb-4">Create custom public status dashboards for your services</p>
-    {{ btn_create(label='Create Your First Status Page', hx_get='/status-pages/create-form', hx_target='#panel-container', hx_swap='innerHTML') }}
+    {{ btn_create(label='Create Your First Status Page', hx_get=create_form_url, hx_target='#panel-container', hx_swap='innerHTML') }}
 </div>
 {% endif %}
 
 <!-- Pagination -->
-{{ pagination_controls(pagination, '/status-pages') }}
+{{ pagination_controls(pagination, list_url) }}
 
 {% endblock %}

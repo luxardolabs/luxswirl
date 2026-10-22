@@ -55,7 +55,7 @@
     </div>
 
 <!-- Filters -->
-{% call filter_card('/notification-logs') %}
+{% call filter_card(list_url) %}
     {{ filter_search('search', 'Search', 'Search logs...', filters.search or '') }}
 
     {% call filter_select('status', 'Status') %}
@@ -82,7 +82,7 @@
     {{ filter_per_page(pagination.per_page) }}
 {% endcall %}
 
-{{ pagination_controls(pagination, '/notification-logs') }}
+{{ pagination_controls(pagination, list_url) }}
 
 <!-- Logs Table -->
 <div class="card overflow-hidden">
@@ -114,5 +114,5 @@
 </div>
 
 <!-- Pagination -->
-{{ pagination_controls(pagination, '/notification-logs') }}
+{{ pagination_controls(pagination, list_url) }}
 {% endblock %}

@@ -37,7 +37,8 @@ def test_route_names_are_unique() -> None:
 
 
 def test_every_referenced_route_name_exists() -> None:
-    """A url_for() name that no route defines only fails when that page renders.
+    """A url_for()/url_path_for() name that no route defines only fails when
+    that page renders.
 
     Several of these live on partials that a test suite never opens, so catch a
     rename here instead of in production.
@@ -46,7 +47,7 @@ def test_every_referenced_route_name_exists() -> None:
         name for r, _ in iter_routes(app.routes) if (name := getattr(r, "name", None))
     }
     app_dir = pathlib.Path(__file__).resolve().parents[1] / "app"
-    pattern = re.compile(r'(?:url_for|\bu)\(\s*"([a-z_]+)"')
+    pattern = re.compile(r'(?:url_for|url_path_for|\bu)\(\s*"([a-z_]+)"')
 
     missing: dict[str, list[str]] = {}
     for path in app_dir.rglob("*.py"):

@@ -28,16 +28,15 @@ function clearPendingReset() {
  * Handle reset button clicks with two-click confirmation
  */
 function handleResetClick(evt) {
-    const resetBtn = evt.target.closest('button[hx-post*="/reset"]');
+    const resetBtn = evt.target.closest('button[data-setting-reset]');
 
     if (!resetBtn) return;
 
-    // Extract setting key from hx-post URL
+    // The setting key and the reset URL both come from the markup: the URL is
+    // resolved by route name server-side, so it is never parsed here.
     const postUrl = resetBtn.getAttribute('hx-post');
-    if (!postUrl || !postUrl.includes('/settings/')) return;
-
-    const settingKey = postUrl.split('/settings/')[1].split('/reset')[0];
-    resetBtn.setAttribute('data-setting-key', settingKey);
+    const settingKey = resetBtn.dataset.settingKey;
+    if (!postUrl || !settingKey) return;
 
     // Prevent HTMX from handling this
     evt.preventDefault();
@@ -137,7 +136,7 @@ export function init() {
         if (!target) return;
 
         // Handle reset button clicks (use capture phase to intercept before HTMX)
-        if (target.hasAttribute('hx-post') && target.getAttribute('hx-post').includes('/reset')) {
+        if (target.hasAttribute('data-setting-reset')) {
             handleResetClick(e);
             return;
         }

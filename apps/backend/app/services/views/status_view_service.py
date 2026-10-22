@@ -18,7 +18,7 @@ from app.core.datetime_utils import utc_now
 from app.core.query_params import split_csv
 from app.models.enum_model import CheckHealthStatus, CheckType
 from app.schemas.auth_schema import AuthedUser
-from app.schemas.check_schema import DashboardCheck, DashboardCheckAgent
+from app.schemas.check_schema import DashboardCheck, DashboardCheckAgent, DashboardUrls
 from app.schemas.pagination_schema import build_pagination
 from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.check_core_service import CheckCoreService
@@ -338,6 +338,21 @@ class StatusViewService:
         return status_rows, total
 
     @staticmethod
+    def build_dashboard_urls(request: Request) -> DashboardUrls:
+        """The dashboard's own actions, resolved by route name."""
+
+        def u(name: str) -> str:
+            return str(request.app.url_path_for(name))
+
+        return DashboardUrls(
+            page=u("status_page"),
+            create_form=u("check_create_form"),
+            summary=u("status_summary_partial"),
+            bulk_action=u("bulk_action"),
+            bulk_modify=u("bulk_modify"),
+        )
+
+    @staticmethod
     def attach_row_urls(
         request: Request, rows: list[StatusRow], *, hours: int = 4
     ) -> list[StatusRow]:
@@ -499,6 +514,7 @@ class StatusViewService:
             "pagination": pagination,
             "refresh_interval": refresh_interval,
             "page_title": page_title,
+            "dashboard_urls": StatusViewService.build_dashboard_urls(request),
         }
 
     @staticmethod

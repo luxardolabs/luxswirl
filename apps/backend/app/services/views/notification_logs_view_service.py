@@ -4,6 +4,7 @@ Notification Logs Service - web-specific business logic for notification logs pa
 
 from datetime import UTC, datetime
 from typing import Any
+from urllib.parse import urlencode
 from uuid import UUID
 
 from fastapi import Request
@@ -39,6 +40,8 @@ class NotificationLogRow:
         check_success: bool,
         check_latency_ms: float | None,
         check_id: UUID | None,
+        check_detail_url: str | None = None,
+        snooze_url: str | None = None,
     ):
         self.id = log_id
         self.sent_at = sent_at
@@ -55,23 +58,15 @@ class NotificationLogRow:
         self.check_success = check_success
         self.check_latency_ms = check_latency_ms
         self.check_id = check_id
+        # Finished hrefs, resolved by route name in _log_row; None when the
+        # check is gone (no detail panel to open, nothing to snooze).
+        self.check_detail_url = check_detail_url
+        self.snooze_url = snooze_url
 
     @property
     def row_target(self) -> str:
         """HTMX target selector for re-rendering this row in place."""
         return f"#notification-log-row-{self.id}"
-
-    @property
-    def check_detail_url(self) -> str | None:
-        """Link to the check detail panel, or None if the check is gone."""
-        return f"/check/{self.check_id}" if self.check_id else None
-
-    @property
-    def snooze_url(self) -> str | None:
-        """Snooze add/clear endpoint for this alert+check, or None if no check."""
-        if not self.check_id:
-            return None
-        return f"/alerts/snooze?alert_id={self.alert_id}&check_id={self.check_id}&log_id={self.id}"
 
     @property
     def snooze_duration(self) -> str | None:
@@ -105,8 +100,22 @@ class NotificationLogRow:
         return f"{hours}h {minutes}m"
 
 
-def _log_row(entry: NotificationLogEntry) -> NotificationLogRow:
-    """A log entry as its table row; a log with no check result reads as failed."""
+def _log_row(request: Request, entry: NotificationLogEntry) -> NotificationLogRow:
+    """A log entry as its table row; a log with no check result reads as failed.
+
+    The row's check-detail and snooze hrefs are resolved by route name here, so
+    the paths have one home (the routers).
+    """
+    check_detail_url: str | None = None
+    snooze_url: str | None = None
+    if entry.check_id:
+        check_detail_url = str(
+            request.app.url_path_for("check_detail_panel", check_id=entry.check_id)
+        )
+        query = urlencode(
+            {"alert_id": entry.alert_id, "check_id": entry.check_id, "log_id": entry.id}
+        )
+        snooze_url = f"{request.app.url_path_for('snooze_alert_check')}?{query}"
     return NotificationLogRow(
         log_id=entry.id,
         sent_at=entry.sent_at,
@@ -122,6 +131,8 @@ def _log_row(entry: NotificationLogEntry) -> NotificationLogRow:
         check_success=entry.success if entry.success is not None else False,
         check_latency_ms=entry.latency_ms,
         check_id=entry.check_id,
+        check_detail_url=check_detail_url,
+        snooze_url=snooze_url,
     )
 
 
@@ -131,6 +142,7 @@ class NotificationLogsViewService:
     @staticmethod
     async def get_notification_logs(
         db: AsyncSession,
+        request: Request,
         status: str | None = None,
         alert_id: UUID | None = None,
         notification_provider_id: UUID | None = None,
@@ -143,6 +155,7 @@ class NotificationLogsViewService:
 
         Args:
             db: Database session
+            request: The request being rendered (resolves each row's hrefs)
             status: Filter by status (sent, failed, etc.)
             alert_id: Filter by alert ID
             notification_provider_id: Filter by provider ID
@@ -164,19 +177,19 @@ class NotificationLogsViewService:
         )
 
         # Convert to view models
-        log_rows = [_log_row(entry) for entry in rows]
+        log_rows = [_log_row(request, entry) for entry in rows]
 
         return log_rows, total
 
     @staticmethod
     async def get_log_row_by_id(
-        db: AsyncSession, log_id: UUID
+        db: AsyncSession, request: Request, log_id: UUID
     ) -> NotificationLogRow | None:
         """Fetch a single notification log row as a view model for partial re-render."""
         row = await NotificationLogCoreService.get_log_by_id(db, log_id)
         if row is None:
             return None
-        return _log_row(row)
+        return _log_row(request, row)
 
     @staticmethod
     async def build_logs_page_context(
@@ -208,6 +221,7 @@ class NotificationLogsViewService:
         status_counts = await NotificationLogCoreService.get_status_counts(db)
         log_rows, total = await NotificationLogsViewService.get_notification_logs(
             db=db,
+            request=request,
             status=status,
             alert_id=alert_id,
             notification_provider_id=notification_provider_id,
@@ -246,5 +260,7 @@ class NotificationLogsViewService:
             "all_alerts": all_alerts,
             "all_providers": all_providers,
             "pagination": pagination,
+            # The page's own path: filters and pagination re-request it.
+            "list_url": str(request.app.url_path_for("notification_logs_page")),
             "page_title": "Notification Logs",
         }

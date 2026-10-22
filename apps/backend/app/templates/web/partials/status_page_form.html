@@ -12,7 +12,7 @@
         {% if status_page %}
         hx-post="{{ sp_urls.update }}"
         {% else %}
-        hx-post="/status-pages/create"
+        hx-post="{{ create_url }}"
         {% endif %}
         hx-target="#panel-container"
         hx-swap="innerHTML"

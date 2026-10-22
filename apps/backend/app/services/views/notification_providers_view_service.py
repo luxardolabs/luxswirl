@@ -139,6 +139,8 @@ class NotificationProvidersViewService:
             # request's scheme/host, which behind TLS-terminating nginx can emit
             # http:// into an https:// page.
             "form_action": request.url_for("web_create_provider").path,
+            # Picking a type re-renders this form for that type.
+            "create_form_url": str(request.app.url_path_for("create_provider_form")),
         }
 
     @staticmethod
