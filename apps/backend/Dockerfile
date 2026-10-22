@@ -114,5 +114,6 @@ COPY apps/backend/tests /app/tests
 # pytest config carries no `pythonpath`, so the path is the image's job.
 ENV PYTHONPATH=/app:/app/tests
 # Never a bare `pytest`: the canonical config is emitted per run by `make test` and
-# mounted here; without it pytest exits rather than running unconfigured.
-CMD ["sh", "-c", "exec pytest -c /app/.luxlint.pytest.ini"]
+# mounted at /cfg/pytest.ini (the test block's mount); without it pytest exits rather
+# than running unconfigured.
+CMD ["sh", "-c", "exec pytest -c /cfg/pytest.ini"]
