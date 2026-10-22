@@ -1,4 +1,4 @@
-"""Unit tests for AlertCoreService._should_send_notification and SendDecision.
+"""Unit tests for AlertEvaluationCoreService._should_send_notification and SendDecision.
 
 Covers the dedup state machine that gates notification delivery:
 - Snooze short-circuit
@@ -20,7 +20,10 @@ from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
 import pytest
-from app.services.core.alert_core_service import AlertCoreService, SendDecision
+from app.services.core.alert_evaluation_core_service import (
+    AlertEvaluationCoreService,
+    SendDecision,
+)
 
 pytestmark = pytest.mark.unit  # all tests in this module are pure-logic
 
@@ -75,10 +78,10 @@ async def test_snoozed_returns_skip():
     db = AsyncMock()
     mapping = SimpleNamespace(snoozed_until=datetime.now(UTC) + timedelta(hours=1))
     with patch(
-        "app.services.core.alert_core_service.AlertCRUD.get_check_mapping",
+        "app.services.core.alert_evaluation_core_service.AlertCRUD.get_check_mapping",
         AsyncMock(return_value=mapping),
     ):
-        d = await AlertCoreService._should_send_notification(
+        d = await AlertEvaluationCoreService._should_send_notification(
             db, _alert(), _check(), _result()
         )
     assert d == SendDecision(send=False, is_resend=False, resend_count=0)
@@ -90,15 +93,15 @@ async def test_expired_snooze_proceeds_to_dedup():
     mapping = SimpleNamespace(snoozed_until=datetime.now(UTC) - timedelta(hours=1))
     with (
         patch(
-            "app.services.core.alert_core_service.AlertCRUD.get_check_mapping",
+            "app.services.core.alert_evaluation_core_service.AlertCRUD.get_check_mapping",
             AsyncMock(return_value=mapping),
         ),
         patch(
-            "app.services.core.alert_core_service.AlertCRUD.get_last_notification_for_dedup",
+            "app.services.core.alert_evaluation_core_service.AlertCRUD.get_last_notification_for_dedup",
             AsyncMock(return_value=None),
         ),
     ):
-        d = await AlertCoreService._should_send_notification(
+        d = await AlertEvaluationCoreService._should_send_notification(
             db, _alert(), _check(), _result()
         )
     # Expired snooze + no prior → fresh fire
@@ -115,15 +118,15 @@ async def test_no_prior_notification_sends_fresh():
     db = AsyncMock()
     with (
         patch(
-            "app.services.core.alert_core_service.AlertCRUD.get_check_mapping",
+            "app.services.core.alert_evaluation_core_service.AlertCRUD.get_check_mapping",
             AsyncMock(return_value=None),
         ),
         patch(
-            "app.services.core.alert_core_service.AlertCRUD.get_last_notification_for_dedup",
+            "app.services.core.alert_evaluation_core_service.AlertCRUD.get_last_notification_for_dedup",
             AsyncMock(return_value=None),
         ),
     ):
-        d = await AlertCoreService._should_send_notification(
+        d = await AlertEvaluationCoreService._should_send_notification(
             db, _alert(), _check(), _result()
         )
     assert d == SendDecision(send=True, is_resend=False, resend_count=0)
@@ -141,15 +144,15 @@ async def test_state_transition_resets_resend_counter():
     prior = _prior(hash="status:up", resend_count=5)
     with (
         patch(
-            "app.services.core.alert_core_service.AlertCRUD.get_check_mapping",
+            "app.services.core.alert_evaluation_core_service.AlertCRUD.get_check_mapping",
             AsyncMock(return_value=None),
         ),
         patch(
-            "app.services.core.alert_core_service.AlertCRUD.get_last_notification_for_dedup",
+            "app.services.core.alert_evaluation_core_service.AlertCRUD.get_last_notification_for_dedup",
             AsyncMock(return_value=prior),
         ),
     ):
-        d = await AlertCoreService._should_send_notification(
+        d = await AlertEvaluationCoreService._should_send_notification(
             db,
             _alert(resend_interval_minutes=5),
             _check(),
@@ -164,15 +167,15 @@ async def test_same_state_no_resend_configured_skips():
     prior = _prior(hash="status:down")
     with (
         patch(
-            "app.services.core.alert_core_service.AlertCRUD.get_check_mapping",
+            "app.services.core.alert_evaluation_core_service.AlertCRUD.get_check_mapping",
             AsyncMock(return_value=None),
         ),
         patch(
-            "app.services.core.alert_core_service.AlertCRUD.get_last_notification_for_dedup",
+            "app.services.core.alert_evaluation_core_service.AlertCRUD.get_last_notification_for_dedup",
             AsyncMock(return_value=prior),
         ),
     ):
-        d = await AlertCoreService._should_send_notification(
+        d = await AlertEvaluationCoreService._should_send_notification(
             db,
             _alert(resend_interval_minutes=None),
             _check(),
@@ -191,15 +194,15 @@ async def test_same_state_within_resend_interval_skips():
     )
     with (
         patch(
-            "app.services.core.alert_core_service.AlertCRUD.get_check_mapping",
+            "app.services.core.alert_evaluation_core_service.AlertCRUD.get_check_mapping",
             AsyncMock(return_value=None),
         ),
         patch(
-            "app.services.core.alert_core_service.AlertCRUD.get_last_notification_for_dedup",
+            "app.services.core.alert_evaluation_core_service.AlertCRUD.get_last_notification_for_dedup",
             AsyncMock(return_value=prior),
         ),
     ):
-        d = await AlertCoreService._should_send_notification(
+        d = await AlertEvaluationCoreService._should_send_notification(
             db,
             _alert(resend_interval_minutes=5),
             _check(),
@@ -218,15 +221,15 @@ async def test_same_state_resend_interval_elapsed_increments_counter():
     )
     with (
         patch(
-            "app.services.core.alert_core_service.AlertCRUD.get_check_mapping",
+            "app.services.core.alert_evaluation_core_service.AlertCRUD.get_check_mapping",
             AsyncMock(return_value=None),
         ),
         patch(
-            "app.services.core.alert_core_service.AlertCRUD.get_last_notification_for_dedup",
+            "app.services.core.alert_evaluation_core_service.AlertCRUD.get_last_notification_for_dedup",
             AsyncMock(return_value=prior),
         ),
     ):
-        d = await AlertCoreService._should_send_notification(
+        d = await AlertEvaluationCoreService._should_send_notification(
             db,
             _alert(resend_interval_minutes=5),
             _check(),
@@ -246,15 +249,15 @@ async def test_max_resends_reached_skips_but_marks_is_resend():
     )
     with (
         patch(
-            "app.services.core.alert_core_service.AlertCRUD.get_check_mapping",
+            "app.services.core.alert_evaluation_core_service.AlertCRUD.get_check_mapping",
             AsyncMock(return_value=None),
         ),
         patch(
-            "app.services.core.alert_core_service.AlertCRUD.get_last_notification_for_dedup",
+            "app.services.core.alert_evaluation_core_service.AlertCRUD.get_last_notification_for_dedup",
             AsyncMock(return_value=prior),
         ),
     ):
-        d = await AlertCoreService._should_send_notification(
+        d = await AlertEvaluationCoreService._should_send_notification(
             db,
             _alert(resend_interval_minutes=5, max_resends=3),
             _check(),
@@ -273,15 +276,15 @@ async def test_max_resends_not_yet_reached_proceeds():
     )
     with (
         patch(
-            "app.services.core.alert_core_service.AlertCRUD.get_check_mapping",
+            "app.services.core.alert_evaluation_core_service.AlertCRUD.get_check_mapping",
             AsyncMock(return_value=None),
         ),
         patch(
-            "app.services.core.alert_core_service.AlertCRUD.get_last_notification_for_dedup",
+            "app.services.core.alert_evaluation_core_service.AlertCRUD.get_last_notification_for_dedup",
             AsyncMock(return_value=prior),
         ),
     ):
-        d = await AlertCoreService._should_send_notification(
+        d = await AlertEvaluationCoreService._should_send_notification(
             db,
             _alert(resend_interval_minutes=5, max_resends=5),
             _check(),
@@ -303,20 +306,20 @@ async def test_legacy_prior_without_hash_falls_back_to_success_comparison():
     prior = _prior(hash=None)
     with (
         patch(
-            "app.services.core.alert_core_service.AlertCRUD.get_check_mapping",
+            "app.services.core.alert_evaluation_core_service.AlertCRUD.get_check_mapping",
             AsyncMock(return_value=None),
         ),
         patch(
-            "app.services.core.alert_core_service.AlertCRUD.get_last_notification_for_dedup",
+            "app.services.core.alert_evaluation_core_service.AlertCRUD.get_last_notification_for_dedup",
             AsyncMock(return_value=prior),
         ),
         patch(
-            "app.services.core.alert_core_service.AlertCRUD.get_check_result_by_id",
+            "app.services.core.alert_evaluation_core_service.AlertCRUD.get_check_result_by_id",
             AsyncMock(return_value=prior_check_result),
         ),
     ):
         # Current is down → success changed → fresh fire
-        d = await AlertCoreService._should_send_notification(
+        d = await AlertEvaluationCoreService._should_send_notification(
             db,
             _alert(),
             _check(),
@@ -332,19 +335,19 @@ async def test_legacy_prior_without_hash_same_success_no_resend_skips():
     prior = _prior(hash=None)
     with (
         patch(
-            "app.services.core.alert_core_service.AlertCRUD.get_check_mapping",
+            "app.services.core.alert_evaluation_core_service.AlertCRUD.get_check_mapping",
             AsyncMock(return_value=None),
         ),
         patch(
-            "app.services.core.alert_core_service.AlertCRUD.get_last_notification_for_dedup",
+            "app.services.core.alert_evaluation_core_service.AlertCRUD.get_last_notification_for_dedup",
             AsyncMock(return_value=prior),
         ),
         patch(
-            "app.services.core.alert_core_service.AlertCRUD.get_check_result_by_id",
+            "app.services.core.alert_evaluation_core_service.AlertCRUD.get_check_result_by_id",
             AsyncMock(return_value=prior_check_result),
         ),
     ):
-        d = await AlertCoreService._should_send_notification(
+        d = await AlertEvaluationCoreService._should_send_notification(
             db,
             _alert(resend_interval_minutes=None),
             _check(),
@@ -360,19 +363,19 @@ async def test_legacy_prior_check_result_missing_treats_as_fresh():
     prior = _prior(hash=None)
     with (
         patch(
-            "app.services.core.alert_core_service.AlertCRUD.get_check_mapping",
+            "app.services.core.alert_evaluation_core_service.AlertCRUD.get_check_mapping",
             AsyncMock(return_value=None),
         ),
         patch(
-            "app.services.core.alert_core_service.AlertCRUD.get_last_notification_for_dedup",
+            "app.services.core.alert_evaluation_core_service.AlertCRUD.get_last_notification_for_dedup",
             AsyncMock(return_value=prior),
         ),
         patch(
-            "app.services.core.alert_core_service.AlertCRUD.get_check_result_by_id",
+            "app.services.core.alert_evaluation_core_service.AlertCRUD.get_check_result_by_id",
             AsyncMock(return_value=None),
         ),
     ):
-        d = await AlertCoreService._should_send_notification(
+        d = await AlertEvaluationCoreService._should_send_notification(
             db,
             _alert(),
             _check(),

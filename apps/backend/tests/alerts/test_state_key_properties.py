@@ -1,4 +1,4 @@
-"""Property-based tests for AlertCoreService._compute_alert_state_key.
+"""Property-based tests for AlertEvaluationCoreService._compute_alert_state_key.
 
 Hypothesis tests assert invariants the function must hold for ALL inputs
 in a domain, not just the cases we thought to write down. These are
@@ -19,7 +19,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
-from app.services.core.alert_core_service import AlertCoreService
+from app.services.core.alert_evaluation_core_service import AlertEvaluationCoreService
 from hypothesis import given
 from hypothesis import strategies as st
 
@@ -51,9 +51,9 @@ def _status_result(success: bool):
 def test_status_change_is_deterministic(success):
     alert = _alert("status_change")
     result = _status_result(success)
-    assert AlertCoreService._compute_alert_state_key(
+    assert AlertEvaluationCoreService._compute_alert_state_key(
         alert, result
-    ) == AlertCoreService._compute_alert_state_key(alert, result)
+    ) == AlertEvaluationCoreService._compute_alert_state_key(alert, result)
 
 
 @given(
@@ -66,8 +66,8 @@ def test_threshold_key_is_deterministic(metric, operator, value):
         "threshold", {"metric": metric, "operator": operator, "value": value}
     )
     result = _status_result(False)
-    k1 = AlertCoreService._compute_alert_state_key(alert, result)
-    k2 = AlertCoreService._compute_alert_state_key(alert, result)
+    k1 = AlertEvaluationCoreService._compute_alert_state_key(alert, result)
+    k2 = AlertEvaluationCoreService._compute_alert_state_key(alert, result)
     assert k1 == k2
 
 
@@ -75,9 +75,9 @@ def test_threshold_key_is_deterministic(metric, operator, value):
 def test_ssl_key_is_deterministic(days_until):
     alert = _alert("ssl_cert_expiry", {"days_thresholds": [7, 14, 30]})
     r = _ssl_result(days_until)
-    assert AlertCoreService._compute_alert_state_key(
+    assert AlertEvaluationCoreService._compute_alert_state_key(
         alert, r
-    ) == AlertCoreService._compute_alert_state_key(alert, r)
+    ) == AlertEvaluationCoreService._compute_alert_state_key(alert, r)
 
 
 # ---------------------------------------------------------------------------
@@ -112,8 +112,12 @@ def test_ssl_band_monotonic_in_days(days_a, days_b):
     than the same cert with 30 days left.
     """
     alert = _alert("ssl_cert_expiry", {"days_thresholds": [7, 14, 30]})
-    key_a = AlertCoreService._compute_alert_state_key(alert, _ssl_result(days_a))
-    key_b = AlertCoreService._compute_alert_state_key(alert, _ssl_result(days_b))
+    key_a = AlertEvaluationCoreService._compute_alert_state_key(
+        alert, _ssl_result(days_a)
+    )
+    key_b = AlertEvaluationCoreService._compute_alert_state_key(
+        alert, _ssl_result(days_b)
+    )
     sev_a = _ssl_severity(key_a)
     sev_b = _ssl_severity(key_b)
     # Skip unknown (negative-1 sentinel) — that's not a band-comparison case
@@ -136,7 +140,9 @@ def test_ssl_key_is_always_in_known_set(days_until):
     """The SSL key must always be one of the documented values, never
     something exotic the dedup logic doesn't know how to compare."""
     alert = _alert("ssl_cert_expiry", {"days_thresholds": [7, 14, 30]})
-    key = AlertCoreService._compute_alert_state_key(alert, _ssl_result(days_until))
+    key = AlertEvaluationCoreService._compute_alert_state_key(
+        alert, _ssl_result(days_until)
+    )
     assert key in {"ssl:ok", "ssl:lte:7", "ssl:lte:14", "ssl:lte:30"}
 
 
@@ -162,9 +168,9 @@ def test_ssl_threshold_order_invariant(thresholds, days_until):
         "ssl_cert_expiry", {"days_thresholds": sorted(thresholds, reverse=True)}
     )
     r = _ssl_result(days_until)
-    assert AlertCoreService._compute_alert_state_key(
+    assert AlertEvaluationCoreService._compute_alert_state_key(
         sorted_alert, r
-    ) == AlertCoreService._compute_alert_state_key(reversed_alert, r)
+    ) == AlertEvaluationCoreService._compute_alert_state_key(reversed_alert, r)
 
 
 # ---------------------------------------------------------------------------
@@ -190,7 +196,9 @@ def test_parent_down_overrides_all_triggers(trigger, success):
     suppression dedup correctly across mixed alert configurations."""
     alert = _alert(trigger)
     result = _status_result(success)
-    key = AlertCoreService._compute_alert_state_key(alert, result, parent_down=True)
+    key = AlertEvaluationCoreService._compute_alert_state_key(
+        alert, result, parent_down=True
+    )
     assert key == "parent_down"
 
 
@@ -203,6 +211,10 @@ def test_status_up_and_down_are_distinct():
     """Trivial but load-bearing: if status:up == status:down then dedup
     can't tell a recovery from a continued outage. Pinned forever."""
     alert = _alert("status_change")
-    up = AlertCoreService._compute_alert_state_key(alert, _status_result(True))
-    down = AlertCoreService._compute_alert_state_key(alert, _status_result(False))
+    up = AlertEvaluationCoreService._compute_alert_state_key(
+        alert, _status_result(True)
+    )
+    down = AlertEvaluationCoreService._compute_alert_state_key(
+        alert, _status_result(False)
+    )
     assert up != down

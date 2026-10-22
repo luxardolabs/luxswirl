@@ -1,7 +1,7 @@
 """Unit tests for parent-check dependency suppression.
 
 Covers:
-- AlertCoreService._handle_parent_suppression (cascade gate)
+- AlertEvaluationCoreService._handle_parent_suppression (cascade gate)
 - CheckCoreService._validate_dependency (single-level + self-ref rules)
 
 CRUD calls are mocked; no database fixture required.
@@ -15,7 +15,7 @@ from uuid import uuid4
 
 import pytest
 from app.core.exceptions import ValidationException
-from app.services.core.alert_core_service import AlertCoreService
+from app.services.core.alert_evaluation_core_service import AlertEvaluationCoreService
 from app.services.core.check_core_service import CheckCoreService
 
 pytestmark = pytest.mark.unit  # all tests in this module are pure-logic
@@ -56,7 +56,7 @@ def _provider_mapping(provider_id=None, deleted=False):
 def written():
     """The suppression rows handed to the crud write (the row is the behaviour)."""
     with patch(
-        "app.services.core.alert_core_service.AlertCRUD.add_notification_logs",
+        "app.services.core.alert_evaluation_core_service.AlertCRUD.add_notification_logs",
         AsyncMock(),
     ) as add_logs:
         yield add_logs
@@ -71,7 +71,7 @@ def _logs(written: AsyncMock) -> list:
 async def test_suppression_no_parent_returns_false(written):
     db = AsyncMock()
     check = _check(parent_id=None)
-    result = await AlertCoreService._handle_parent_suppression(
+    result = await AlertEvaluationCoreService._handle_parent_suppression(
         db, _alert(), check, _check_result()
     )
     assert result is False
@@ -84,10 +84,10 @@ async def test_suppression_parent_no_results_fails_open(written):
     parent_id = uuid4()
     check = _check(parent_id=parent_id)
     with patch(
-        "app.services.core.alert_core_service.CheckResultCRUD.get_latest_result_for_check",
+        "app.services.core.alert_evaluation_core_service.CheckResultCRUD.get_latest_result_for_check",
         AsyncMock(return_value=None),
     ):
-        result = await AlertCoreService._handle_parent_suppression(
+        result = await AlertEvaluationCoreService._handle_parent_suppression(
             db, _alert(), check, _check_result()
         )
     assert result is False
@@ -100,10 +100,10 @@ async def test_suppression_parent_up_returns_false(written):
     parent_id = uuid4()
     check = _check(parent_id=parent_id)
     with patch(
-        "app.services.core.alert_core_service.CheckResultCRUD.get_latest_result_for_check",
+        "app.services.core.alert_evaluation_core_service.CheckResultCRUD.get_latest_result_for_check",
         AsyncMock(return_value=SimpleNamespace(success=True)),
     ):
-        result = await AlertCoreService._handle_parent_suppression(
+        result = await AlertEvaluationCoreService._handle_parent_suppression(
             db, _alert(), check, _check_result()
         )
     assert result is False
@@ -127,19 +127,19 @@ async def test_suppression_parent_down_first_occurrence_writes_log_per_provider(
 
     with (
         patch(
-            "app.services.core.alert_core_service.CheckResultCRUD.get_latest_result_for_check",
+            "app.services.core.alert_evaluation_core_service.CheckResultCRUD.get_latest_result_for_check",
             AsyncMock(return_value=SimpleNamespace(success=False)),
         ),
         patch(
-            "app.services.core.alert_core_service.AlertCRUD.list_active_notif_mappings_for_alert",
+            "app.services.core.alert_evaluation_core_service.AlertCRUD.list_active_notif_mappings_for_alert",
             AsyncMock(return_value=mappings),
         ),
         patch(
-            "app.services.core.alert_core_service.AlertCRUD.get_last_notification_for_dedup",
+            "app.services.core.alert_evaluation_core_service.AlertCRUD.get_last_notification_for_dedup",
             AsyncMock(return_value=None),  # no prior notification — first occurrence
         ),
     ):
-        result = await AlertCoreService._handle_parent_suppression(
+        result = await AlertEvaluationCoreService._handle_parent_suppression(
             db, _alert(), check, _check_result()
         )
 
@@ -164,15 +164,15 @@ async def test_suppression_parent_down_steady_state_dedups(monkeypatch, written)
 
     with (
         patch(
-            "app.services.core.alert_core_service.CheckResultCRUD.get_latest_result_for_check",
+            "app.services.core.alert_evaluation_core_service.CheckResultCRUD.get_latest_result_for_check",
             AsyncMock(return_value=SimpleNamespace(success=False)),
         ),
         patch(
-            "app.services.core.alert_core_service.AlertCRUD.get_last_notification_for_dedup",
+            "app.services.core.alert_evaluation_core_service.AlertCRUD.get_last_notification_for_dedup",
             AsyncMock(return_value=last_row),
         ),
     ):
-        result = await AlertCoreService._handle_parent_suppression(
+        result = await AlertEvaluationCoreService._handle_parent_suppression(
             db, _alert(), check, _check_result()
         )
 
@@ -193,19 +193,19 @@ async def test_suppression_transition_from_other_state_writes_log(written):
 
     with (
         patch(
-            "app.services.core.alert_core_service.CheckResultCRUD.get_latest_result_for_check",
+            "app.services.core.alert_evaluation_core_service.CheckResultCRUD.get_latest_result_for_check",
             AsyncMock(return_value=SimpleNamespace(success=False)),
         ),
         patch(
-            "app.services.core.alert_core_service.AlertCRUD.list_active_notif_mappings_for_alert",
+            "app.services.core.alert_evaluation_core_service.AlertCRUD.list_active_notif_mappings_for_alert",
             AsyncMock(return_value=mappings),
         ),
         patch(
-            "app.services.core.alert_core_service.AlertCRUD.get_last_notification_for_dedup",
+            "app.services.core.alert_evaluation_core_service.AlertCRUD.get_last_notification_for_dedup",
             AsyncMock(return_value=last_row),
         ),
     ):
-        result = await AlertCoreService._handle_parent_suppression(
+        result = await AlertEvaluationCoreService._handle_parent_suppression(
             db, _alert(), check, _check_result()
         )
 

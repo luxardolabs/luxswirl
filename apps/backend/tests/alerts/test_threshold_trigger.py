@@ -13,7 +13,7 @@ from uuid import uuid4
 import pytest
 from app.models.alert_model import Alert
 from app.models.check_result_model import CheckResult
-from app.services.core.alert_core_service import AlertCoreService
+from app.services.core.alert_evaluation_core_service import AlertEvaluationCoreService
 
 pytestmark = pytest.mark.unit
 
@@ -21,7 +21,7 @@ pytestmark = pytest.mark.unit
 async def _fires(latency_ms: float | None, config: dict[str, Any]) -> bool:
     result = CheckResult(latency_ms=latency_ms)
     # The threshold trigger reads only the alert's id, the result and its config.
-    return await AlertCoreService._evaluate_threshold(
+    return await AlertEvaluationCoreService._evaluate_threshold(
         None, Alert(id=uuid4()), None, result, config
     )
 

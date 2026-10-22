@@ -22,6 +22,7 @@ from app.models.enum_model import NotificationStatus
 from app.models.notification_log_model import NotificationLog
 from app.schemas.alert_schema import AlertCreate, AlertUpdate
 from app.services.core.alert_core_service import AlertCoreService
+from app.services.core.alert_evaluation_core_service import AlertEvaluationCoreService
 from fixtures.factories import (
     make_agent,
     make_alert,
@@ -208,7 +209,7 @@ async def test_parent_down_suppression_log_is_committed(worker_db) -> None:
             select(CheckResult).where(CheckResult.id == child_result.id)
         )
         assert loaded_child and loaded_alert and loaded_result
-        suppressed = await AlertCoreService._handle_parent_suppression(
+        suppressed = await AlertEvaluationCoreService._handle_parent_suppression(
             s, loaded_alert, loaded_child, loaded_result
         )
         assert suppressed is True

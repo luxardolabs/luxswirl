@@ -1,4 +1,4 @@
-"""Unit tests for AlertCoreService._compute_alert_state_key.
+"""Unit tests for AlertEvaluationCoreService._compute_alert_state_key.
 
 The state key is the dedup primitive — it must be stable for the same logical
 state and distinct across transitions. See LUXSWIRL-147.
@@ -9,7 +9,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
-from app.services.core.alert_core_service import AlertCoreService
+from app.services.core.alert_evaluation_core_service import AlertEvaluationCoreService
 
 pytestmark = pytest.mark.unit  # all tests in this module are pure-logic
 
@@ -31,13 +31,13 @@ def _ssl_result(days_until: int | None):
 
 class TestStatusChange:
     def test_down(self):
-        key = AlertCoreService._compute_alert_state_key(
+        key = AlertEvaluationCoreService._compute_alert_state_key(
             _alert("status_change"), _result(success=False)
         )
         assert key == "status:down"
 
     def test_up(self):
-        key = AlertCoreService._compute_alert_state_key(
+        key = AlertEvaluationCoreService._compute_alert_state_key(
             _alert("status_change"), _result(success=True)
         )
         assert key == "status:up"
@@ -49,7 +49,7 @@ class TestThreshold:
             "threshold", {"metric": "latency_ms", "operator": ">", "value": 5000}
         )
         assert (
-            AlertCoreService._compute_alert_state_key(alert, _result())
+            AlertEvaluationCoreService._compute_alert_state_key(alert, _result())
             == "threshold:latency_ms:>:5000"
         )
 
@@ -57,7 +57,7 @@ class TestThreshold:
         # operator defaults to ">", metric defaults to latency_ms
         alert = _alert("threshold", {"value": 1000})
         assert (
-            AlertCoreService._compute_alert_state_key(alert, _result())
+            AlertEvaluationCoreService._compute_alert_state_key(alert, _result())
             == "threshold:latency_ms:>:1000"
         )
 
@@ -65,7 +65,7 @@ class TestThreshold:
 class TestRepeatedFailure:
     def test_active(self):
         assert (
-            AlertCoreService._compute_alert_state_key(
+            AlertEvaluationCoreService._compute_alert_state_key(
                 _alert("repeated_failure"), _result(success=False)
             )
             == "repeated_failure:active"
@@ -81,43 +81,45 @@ class TestSSLCertExpiry:
 
     def test_safe(self, alert):
         assert (
-            AlertCoreService._compute_alert_state_key(alert, _ssl_result(60))
+            AlertEvaluationCoreService._compute_alert_state_key(alert, _ssl_result(60))
             == "ssl:ok"
         )
 
     def test_in_30_day_band(self, alert):
         assert (
-            AlertCoreService._compute_alert_state_key(alert, _ssl_result(25))
+            AlertEvaluationCoreService._compute_alert_state_key(alert, _ssl_result(25))
             == "ssl:lte:30"
         )
 
     def test_in_14_day_band(self, alert):
         assert (
-            AlertCoreService._compute_alert_state_key(alert, _ssl_result(12))
+            AlertEvaluationCoreService._compute_alert_state_key(alert, _ssl_result(12))
             == "ssl:lte:14"
         )
 
     def test_in_7_day_band(self, alert):
         assert (
-            AlertCoreService._compute_alert_state_key(alert, _ssl_result(5))
+            AlertEvaluationCoreService._compute_alert_state_key(alert, _ssl_result(5))
             == "ssl:lte:7"
         )
 
     def test_expired_uses_tightest_band(self, alert):
         # Negative days (already expired) still classified into the tightest band
         assert (
-            AlertCoreService._compute_alert_state_key(alert, _ssl_result(-252))
+            AlertEvaluationCoreService._compute_alert_state_key(
+                alert, _ssl_result(-252)
+            )
             == "ssl:lte:7"
         )
 
     def test_exactly_at_boundary_uses_inclusive_band(self, alert):
         # 14 days exactly → in the 14-day band (tightest <=)
         assert (
-            AlertCoreService._compute_alert_state_key(alert, _ssl_result(14))
+            AlertEvaluationCoreService._compute_alert_state_key(alert, _ssl_result(14))
             == "ssl:lte:14"
         )
         assert (
-            AlertCoreService._compute_alert_state_key(alert, _ssl_result(7))
+            AlertEvaluationCoreService._compute_alert_state_key(alert, _ssl_result(7))
             == "ssl:lte:7"
         )
 
@@ -125,12 +127,15 @@ class TestSSLCertExpiry:
         # No SSL cert at all in metrics
         no_cert = _result(metrics={"response": {}})
         assert (
-            AlertCoreService._compute_alert_state_key(alert, no_cert) == "ssl:unknown"
+            AlertEvaluationCoreService._compute_alert_state_key(alert, no_cert)
+            == "ssl:unknown"
         )
 
     def test_missing_days_until(self, alert):
         assert (
-            AlertCoreService._compute_alert_state_key(alert, _ssl_result(None))
+            AlertEvaluationCoreService._compute_alert_state_key(
+                alert, _ssl_result(None)
+            )
             == "ssl:unknown"
         )
 
@@ -138,7 +143,7 @@ class TestSSLCertExpiry:
         # Falls back to days_threshold (singleton) when days_thresholds is empty
         alert = _alert("ssl_cert_expiry", {"days_threshold": 30})
         assert (
-            AlertCoreService._compute_alert_state_key(alert, _ssl_result(25))
+            AlertEvaluationCoreService._compute_alert_state_key(alert, _ssl_result(25))
             == "ssl:lte:30"
         )
 
@@ -148,7 +153,7 @@ class TestParentDown:
         # parent_down=True short-circuits regardless of trigger_type
         for trigger in ("status_change", "threshold", "ssl_cert_expiry"):
             assert (
-                AlertCoreService._compute_alert_state_key(
+                AlertEvaluationCoreService._compute_alert_state_key(
                     _alert(trigger), _result(), parent_down=True
                 )
                 == "parent_down"
@@ -159,7 +164,7 @@ class TestUnknownTrigger:
     def test_falls_through_to_active(self):
         # Unknown trigger types still produce a key so dedup doesn't crash
         assert (
-            AlertCoreService._compute_alert_state_key(
+            AlertEvaluationCoreService._compute_alert_state_key(
                 _alert("some_future_type"), _result()
             )
             == "some_future_type:active"
@@ -172,8 +177,8 @@ class TestStability:
     def test_same_state_same_key(self):
         alert = _alert("ssl_cert_expiry", {"days_thresholds": [7, 14, 30]})
         result = _ssl_result(12)
-        key1 = AlertCoreService._compute_alert_state_key(alert, result)
-        key2 = AlertCoreService._compute_alert_state_key(alert, result)
+        key1 = AlertEvaluationCoreService._compute_alert_state_key(alert, result)
+        key2 = AlertEvaluationCoreService._compute_alert_state_key(alert, result)
         assert key1 == key2 == "ssl:lte:14"
 
     def test_threshold_order_independent(self):
@@ -181,8 +186,8 @@ class TestStability:
         sorted_alert = _alert("ssl_cert_expiry", {"days_thresholds": [7, 14, 30]})
         unsorted_alert = _alert("ssl_cert_expiry", {"days_thresholds": [30, 7, 14]})
         for days in (5, 12, 25, 60):
-            assert AlertCoreService._compute_alert_state_key(
+            assert AlertEvaluationCoreService._compute_alert_state_key(
                 sorted_alert, _ssl_result(days)
-            ) == AlertCoreService._compute_alert_state_key(
+            ) == AlertEvaluationCoreService._compute_alert_state_key(
                 unsorted_alert, _ssl_result(days)
             )
