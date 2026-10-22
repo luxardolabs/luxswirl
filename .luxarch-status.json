@@ -878,13 +878,13 @@
         },
         {
           "rule": "fw.no_dynamic_column_sort",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.29.0",
-          "violations": 2,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
-          "fix": "Map sort keys to columns via an allowlist (dict/enum; unknown key \u2192 safe default) \u2014 never a bare getattr(Model, sort_by), and never a key spliced into `text()` / `literal_column()`. For a GENERIC field accessor (a base-crud get_by_field(field_name=\u2026)), the fleet's answer is a named method per field on the concrete crud \u2014 `select(Model).where(Model.code == code)`, which mypy type-checks and which 12 of 13 fleet base_cruds do instead of a dynamic accessor. If a generic primitive is genuinely wanted, narrow the key's domain before resolving it (membership-test it against `sqlalchemy.inspect(self.model).columns`, `Model.__table__.c`, or a container of string literals; unknown key \u2192 raise) \u2014 that shape is recognised and passes. 'Every caller passes a literal today' is not a fix: the primitive still accepts any string, so the next caller is the defect. See --playbook pagination \u00a7'Safe sort in the crud' and \u00a7'A generic field accessor'.",
+          "fix": "",
           "example": ""
         },
         {
@@ -1758,13 +1758,13 @@
         },
         {
           "rule": "fw.single_use_claim_atomic",
-          "status": "FAIL",
+          "status": "INERT",
           "since": "0.287.0",
-          "violations": 1,
+          "violations": 0,
           "deferred": false,
-          "inert": false,
-          "inert_reason": "",
-          "fix": "Claim it in one statement that only matches an available row: `update(Model).where(Model.token_hash == h, Model.used_at.is_(None), Model.expires_at > now).values(used_at=now).returning(Model)`, and refuse when it returns no row. When a side effect (a payment call) must sit between the check and the write, serialize the claimers first: load the row with `.with_for_update()` (a crud method that always locks counts), or take `pg_advisory_xact_lock(<key>)` before the load, the lock to use where the app also writes that row from a separate session (a row lock deadlocks there). See --doc FLEET-AUTH-SESSION-STANDARD \u00a71.2.",
+          "inert": true,
+          "inert_reason": "no code claims a single-use record (no check-then-write on a row, no marker write) \u2014 nothing to judge",
+          "fix": "",
           "example": ""
         },
         {
@@ -1791,20 +1791,20 @@
         },
         {
           "rule": "fw.request_owner_commits_before_response",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.290.0",
-          "violations": 207,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
-          "fix": "declare the request owner as `Depends(get_db, scope=\"function\")` at every site, written exactly that way: the route parameter default, the `Annotated` alias (`DbSession = Annotated[AsyncSession, Depends(get_db, scope=\"function\")]`), and a router's or app's `dependencies=[...]`. Without `scope=\"function\"` a `yield` dependency is \"request\"-scoped and FastAPI runs its commit only after the response is sent, so the client can read past its own write and a failed commit follows a 200. Every site must use the same scope: the dependency cache keys on it, so a mix opens two sessions in one request. A `yield` dependency that itself takes this session must declare `scope=\"function\"` too \u2014 FastAPI refuses a request-scoped dependency over a function-scoped one when the route is declared (DependencyScopeError names it). `Security(...)` takes no scope, so a `Security(<owner>)` becomes the `Depends` form above. A BackgroundTask or StreamingResponse body runs after the session closes: give it its own `get_db_context()`. See --playbook db-mutations \u00a71.",
+          "fix": "",
           "example": ""
         },
         {
           "rule": "fw.route_names_unique",
           "status": "FAIL",
           "since": "0.297.0",
-          "violations": 199,
+          "violations": 2,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
@@ -1815,7 +1815,7 @@
           "rule": "fw.urls_from_route_names",
           "status": "FAIL",
           "since": "0.297.0",
-          "violations": 108,
+          "violations": 5,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
@@ -1989,11 +1989,11 @@
         }
       ],
       "summary": {
-        "PASS": 155,
-        "FAIL": 7,
+        "PASS": 157,
+        "FAIL": 4,
         "XFAIL": 0,
         "XPASS": 0,
-        "INERT": 18
+        "INERT": 19
       }
     },
     {
@@ -2880,12 +2880,12 @@
     }
   },
   "summary": {
-    "PASS": 228,
-    "FAIL": 9,
+    "PASS": 230,
+    "FAIL": 6,
     "XFAIL": 0,
     "XPASS": 0,
-    "INERT": 21
+    "INERT": 22
   },
-  "commit": "8ffb8d9972f5e1adbcbe150ff008a6300da931ca",
-  "generated_at": "2026-10-22T13:51:13Z"
+  "commit": "a88d3cc87c9585f585e8026bc052234d2e333e5b",
+  "generated_at": "2026-10-22T14:57:03Z"
 }
