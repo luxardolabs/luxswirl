@@ -25,6 +25,7 @@ from app.schemas.auth_schema import AuthedUser
 from app.schemas.check_schema import (
     BulkCheckCreateRequest,
     CheckCreate,
+    CheckCreateUrls,
     CheckFormUrls,
     CheckInDB,
     CheckUpdate,
@@ -62,6 +63,23 @@ def build_alerts_page_url(request: Request) -> str:
     made /checks/create-form raise UndefinedError on `form_urls`.
     """
     return str(request.url_for("settings_alerts").path)
+
+
+def build_check_create_urls(request: Request) -> CheckCreateUrls:
+    """The check form panel's check-independent actions, resolved by route name.
+
+    Every mode of the panel (create, edit, clone) renders the assignment-mode
+    selector and the bulk-import preview, so every mode's context carries these.
+    """
+
+    def u(name: str) -> str:
+        return str(request.app.url_path_for(name))
+
+    return CheckCreateUrls(
+        create=u("create_check_assignment"),
+        assignment_mode_selector=u("assignment_mode_selector"),
+        bulk_preview=u("bulk_check_preview"),
+    )
 
 
 def build_check_form_urls(request: Request, check_id: UUID) -> CheckFormUrls:
@@ -350,6 +368,7 @@ class ChecksViewService:
             "request": request,
             "alerts_page_url": build_alerts_page_url(request),
             "current_user": current_user,
+            "create_urls": build_check_create_urls(request),
             "check": None,
             # The panel is one template in three modes; it branches on this, so
             # every context must name its mode (fw.jinja_strict_undefined).
@@ -381,6 +400,7 @@ class ChecksViewService:
             "request": request,
             "alerts_page_url": build_alerts_page_url(request),
             "current_user": current_user,
+            "create_urls": build_check_create_urls(request),
             "check": check,
             "mode": "edit",
             "agents": form_data["agents"],
@@ -409,6 +429,7 @@ class ChecksViewService:
             "request": request,
             "alerts_page_url": build_alerts_page_url(request),
             "current_user": current_user,
+            "create_urls": build_check_create_urls(request),
             "check": check,
             "agents": form_data["agents"],
             "alerts": form_data["alerts"],

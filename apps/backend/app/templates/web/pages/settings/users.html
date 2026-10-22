@@ -12,7 +12,7 @@
     description='Manage user accounts, roles, and permissions'
 ) }}
 
-{{ settings_nav('users', current_user) }}
+{{ settings_nav('users', current_user, nav) }}
 
 <!-- Users Content -->
 <div class="mb-6 flex items-center justify-between">
@@ -20,7 +20,7 @@
         <h2 class="text-lg font-semibold">User Management</h2>
         <p class="text-sm text-dark-text-muted mt-1">{{ pagination.total }} total users</p>
     </div>
-    {{ btn_create(label='Create User', hx_get='/settings/users/create-form', hx_target='#panel-container', hx_swap='innerHTML') }}
+    {{ btn_create(label='Create User', hx_get=create_form_url, hx_target='#panel-container', hx_swap='innerHTML') }}
 </div>
 
 <!-- Stats Cards -->
@@ -77,7 +77,7 @@
 </div>
 
 <!-- Filters -->
-{% call filter_card('/settings/users') %}
+{% call filter_card(list_url) %}
     {{ filter_search('search', 'Search', 'Username or name...', filters.search or '', extra_classes='flex-1 min-w-[200px]') }}
 
     {% call filter_select('role', 'Role', extra_classes='w-40') %}
@@ -94,7 +94,7 @@
     {% endcall %}
 {% endcall %}
 
-{{ pagination_controls(pagination, '/settings/users') }}
+{{ pagination_controls(pagination, list_url) }}
 
 <!-- Users Table -->
 <div class="card overflow-hidden">
@@ -177,5 +177,5 @@
 </div>
 
 <!-- Pagination -->
-{{ pagination_controls(pagination, '/settings/users') }}
+{{ pagination_controls(pagination, list_url) }}
 {% endblock %}

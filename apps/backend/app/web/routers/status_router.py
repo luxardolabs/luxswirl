@@ -18,6 +18,7 @@ from app.core.query_params import (
     HealthStatusFilter,
     PerPageFilter,
 )
+from app.core.safe_redirect import safe_redirect_target
 from app.db import get_db
 from app.services.views.status_view_service import StatusViewService
 from app.web.deps import CurrentUserWeb
@@ -33,8 +34,11 @@ router = APIRouter(tags=["Web UI - Status"])
 )
 async def root_redirect(request: Request) -> Response:
     qs = request.url.query
-    target = "/dashboard" + (f"?{qs}" if qs else "")
-    return RedirectResponse(url=target, status_code=302)
+    dashboard = request.app.url_path_for("status_page")
+    target = dashboard + (f"?{qs}" if qs else "")
+    return RedirectResponse(
+        url=safe_redirect_target(target, default=dashboard), status_code=302
+    )
 
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)

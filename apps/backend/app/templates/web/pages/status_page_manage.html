@@ -27,7 +27,7 @@
     {% endset %}
 
     {% set actions_html %}
-    {{ btn_back(href='/status-pages') }}
+    {{ btn_back(href=nav.status_pages) }}
     {% if status_page.is_public %}
     {{ btn_view_text(label='View', href=sp_urls.public, extra_attrs='target="_blank"') }}
     {% endif %}
@@ -64,7 +64,7 @@
                     </div>
                 </div>
                 <div class="p-4">
-                    <div class="space-y-2" id="dashboard-items" data-status-page-id="{{ status_page.id }}">
+                    <div class="space-y-2" id="dashboard-items" data-reorder-url="{{ sp_urls.reorder }}" data-add-check-url="{{ sp_urls.add_check }}" data-add-group-url="{{ sp_urls.add_group }}">
                         {% include 'partials/dashboard_items.html' %}
                     </div>
 

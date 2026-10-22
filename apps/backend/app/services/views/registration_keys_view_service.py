@@ -32,6 +32,7 @@ class RegistrationKeysViewService:
             "request": request,
             "current_user": current_user,
             "key": None,  # None signals "create mode" to the template
+            "create_url": str(request.app.url_path_for("create_key")),
         }
 
     @staticmethod

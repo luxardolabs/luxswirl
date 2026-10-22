@@ -4,7 +4,7 @@
 
 {% block content %}
 {% set actions_html %}
-{{ btn_refresh(hx_get='/database-health/refresh', hx_target='#health-metrics', hx_swap='innerHTML') }}
+{{ btn_refresh(hx_get=refresh_url, hx_target='#health-metrics', hx_swap='innerHTML') }}
 {% endset %}
 
 {{ page_header(
