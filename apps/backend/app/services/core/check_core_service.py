@@ -6,7 +6,7 @@ import asyncio
 import ssl
 from collections.abc import Mapping, Sequence
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import ParseResult, urlparse
 from uuid import UUID
 
 import httpx
@@ -30,6 +30,7 @@ from app.core.synthetic_guard import (
 )
 from app.crud.check_crud import CheckCRUD
 from app.crud.check_result_crud import CheckResultCRUD
+from app.models.agent_model import Agent
 from app.models.check_model import Check
 from app.models.enum_model import AssignmentMode, BulkCheckOutcome, CheckType
 from app.schemas.agent_schema import AgentCreate
@@ -396,9 +397,54 @@ class CheckCoreService:
             raise AgentNotFoundException(str(agent_id))
 
         # 3. Build clone data - merge source with overrides
-        # Only the fields the caller actually SET override the source; a schema
-        # default the caller never sent (timeout_seconds=10, enabled=True, ...)
-        # must not silently replace the source's value. None also keeps the source.
+        clone_data = await CheckCoreService._merge_clone_data(db, source, overrides)
+
+        # 4. Create new check using existing create_check method
+        cloned_check = await CheckCoreService.create_check(
+            db,
+            agent_id,
+            clone_data,
+            skip_config_update=skip_config_update,
+            actor_is_admin=actor_is_admin,
+        )
+
+        # 5. Copy alert assignments from source check
+
+        # A clone that silently loses its alert wiring is a monitoring gap the
+        # operator cannot see: the check exists, it runs, and nothing is ever
+        # notified about it. Both swallows are gone — a failure rolls the clone
+        # back rather than producing a half-wired one. The target is a check
+        # created moments ago, so there is no duplicate mapping to hit.
+        source_alert_ids = await AlertCoreService.get_alert_ids_for_check(db, check_id)
+        for alert_id in source_alert_ids:
+            await AlertCoreService.add_check(db, alert_id, cloned_check.id)
+
+        logger.info(
+            "Cloned check",
+            extra={
+                "source_check_name": source.fully_qualified_name,
+                "check_id": str(source.id),
+                "target_agent_name": target_agent.agent_name,
+                "agent_id": str(target_agent.id),
+                "cloned_check_name": cloned_check.display_name,
+                "cloned_check_id": str(cloned_check.id),
+            },
+        )
+
+        return cloned_check
+
+    @staticmethod
+    async def _merge_clone_data(
+        db: AsyncSession,
+        source: Check,
+        overrides: CheckCreate | CheckUpdate | None,
+    ) -> CheckCreate:
+        """The clone's create payload: the source check, with the caller's overrides.
+
+        Only the fields the caller actually SET override the source; a schema
+        default the caller never sent (timeout_seconds=10, enabled=True, ...)
+        must not silently replace the source's value. None also keeps the source.
+        """
         override_fields = (
             overrides.model_dump(exclude_unset=True, exclude_none=True)
             if overrides
@@ -426,7 +472,7 @@ class CheckCoreService:
             defaults = await SettingsCoreService.get_check_defaults(db)
             timeout_seconds = defaults.timeout_seconds
 
-        clone_data = CheckCreate(
+        return CheckCreate(
             display_name=override_fields.get("display_name", source.display_name),
             check_type=override_fields.get("check_type", source.check_type),
             target=override_fields.get("target", source.target),
@@ -469,40 +515,6 @@ class CheckCoreService:
             agent_selector=override_fields.get("agent_selector", source.agent_selector),
             script_code=override_fields.get("script_code", source.script_code),
         )
-
-        # 4. Create new check using existing create_check method
-        cloned_check = await CheckCoreService.create_check(
-            db,
-            agent_id,
-            clone_data,
-            skip_config_update=skip_config_update,
-            actor_is_admin=actor_is_admin,
-        )
-
-        # 5. Copy alert assignments from source check
-
-        # A clone that silently loses its alert wiring is a monitoring gap the
-        # operator cannot see: the check exists, it runs, and nothing is ever
-        # notified about it. Both swallows are gone — a failure rolls the clone
-        # back rather than producing a half-wired one. The target is a check
-        # created moments ago, so there is no duplicate mapping to hit.
-        source_alert_ids = await AlertCoreService.get_alert_ids_for_check(db, check_id)
-        for alert_id in source_alert_ids:
-            await AlertCoreService.add_check(db, alert_id, cloned_check.id)
-
-        logger.info(
-            "Cloned check",
-            extra={
-                "source_check_name": source.fully_qualified_name,
-                "check_id": str(source.id),
-                "target_agent_name": target_agent.agent_name,
-                "agent_id": str(target_agent.id),
-                "cloned_check_name": cloned_check.display_name,
-                "cloned_check_id": str(cloned_check.id),
-            },
-        )
-
-        return cloned_check
 
     @staticmethod
     async def update_check(
@@ -989,26 +1001,9 @@ class CheckCoreService:
                         raise ValueError(new_agent_error or "Target agent not found")
 
                     # Track both old and new agents for config sync
-                    old_agent = check.agent
-                    affected_agents.add(old_agent)
+                    affected_agents.add(check.agent)
                     affected_agents.add(new_agent)
-
-                    # Update agent_id while preserving all historical data
-                    check.agent_id = new_agent.id
-
-                    # Also apply any other updates from update_data
-                    if update_data.interval_seconds is not None:
-                        check.interval_seconds = update_data.interval_seconds
-                    if update_data.timeout_seconds is not None:
-                        check.timeout_seconds = update_data.timeout_seconds
-                    if update_data.retry_attempts is not None:
-                        check.retry_attempts = update_data.retry_attempts
-                    if update_data.enabled is not None:
-                        check.enabled = update_data.enabled
-                    if update_data.tags is not None:
-                        check.tags = update_data.tags
-                    if update_data.description is not None:
-                        check.description = update_data.description
+                    CheckCoreService._move_check_to_agent(check, new_agent, update_data)
                 else:
                     # Just update in place (update_check handles checks_updated_at)
                     await CheckCoreService.update_check(db, check.id, update_data)
@@ -1051,6 +1046,31 @@ class CheckCoreService:
         }
 
     @staticmethod
+    def _move_check_to_agent(
+        check: Check, new_agent: Agent, update_data: CheckUpdate
+    ) -> None:
+        """Reassign `check` to `new_agent`, applying the bulk-modify fields with it.
+
+        The agent_id changes in place, so the check keeps its id and with it all
+        of its historical results.
+        """
+        check.agent_id = new_agent.id
+
+        # Also apply any other updates from update_data
+        if update_data.interval_seconds is not None:
+            check.interval_seconds = update_data.interval_seconds
+        if update_data.timeout_seconds is not None:
+            check.timeout_seconds = update_data.timeout_seconds
+        if update_data.retry_attempts is not None:
+            check.retry_attempts = update_data.retry_attempts
+        if update_data.enabled is not None:
+            check.enabled = update_data.enabled
+        if update_data.tags is not None:
+            check.tags = update_data.tags
+        if update_data.description is not None:
+            check.description = update_data.description
+
+    @staticmethod
     async def bulk_create_checks(
         db: AsyncSession,
         agent_id: UUID,
@@ -1080,41 +1100,12 @@ class CheckCoreService:
 
         for req in requests:
             try:
-                # Parse URL to detect check type
-                url = req.url.strip()
-                parsed = urlparse(url)
-
-                # Detect check type from scheme
-                if parsed.scheme in ("http", "https"):
-                    check_type = (
-                        "http"  # Check type is "http" for both http:// and https://
-                    )
-                elif parsed.scheme == "tcp":
-                    check_type = "tcp"
-                elif not parsed.scheme:
-                    # No scheme provided, assume HTTP/HTTPS
-                    check_type = "http"
-                    url = f"https://{url}"
-                    parsed = urlparse(url)
-                else:
-                    check_type = parsed.scheme
-
-                # Generate display name if not provided
-                if req.display_name:
-                    display_name = req.display_name
-                else:
-                    # Generate from hostname and path
-                    hostname = parsed.hostname or "unknown"
-                    # Replace dots and slashes with hyphens
-                    display_name = hostname.replace(".", "-")
-                    if parsed.path and parsed.path != "/":
-                        path_part = parsed.path.strip("/").replace("/", "-")
-                        display_name = f"{display_name}-{path_part}"
-                    if parsed.port and parsed.port not in (80, 443):
-                        display_name = f"{display_name}-{parsed.port}"
-                    # Truncate if too long
-                    if len(display_name) > 255:
-                        display_name = display_name[:255]
+                check_type, url, parsed = CheckCoreService._classify_bulk_url(
+                    req.url.strip()
+                )
+                display_name = req.display_name or CheckCoreService._bulk_display_name(
+                    parsed
+                )
 
                 # Build CheckCreate object
                 check_data = CheckCreate(
@@ -1188,104 +1179,112 @@ class CheckCoreService:
         Returns:
             List of dicts with url, generated_name, check_type, validation_status, etc.
         """
-
-        async def validate_url(url_str: str) -> dict[str, Any]:
-            """Validate a single URL by fetching it."""
-            try:
-                # Parse URL to detect check type
-                parsed = urlparse(url_str)
-
-                # Detect check type from scheme
-                if parsed.scheme in ("http", "https"):
-                    check_type = (
-                        "http"  # Check type is "http" for both http:// and https://
-                    )
-                    full_url = url_str
-                elif not parsed.scheme:
-                    # Default to https if no scheme
-                    check_type = "http"
-                    full_url = f"https://{url_str}"
-                    parsed = urlparse(full_url)
-                else:
-                    check_type = parsed.scheme  # tcp, etc.
-                    full_url = url_str
-
-                # Generate display name (same logic as bulk_create_checks)
-                hostname = parsed.hostname or "unknown"
-                display_name = hostname.replace(".", "-")
-                if parsed.path and parsed.path != "/":
-                    path_part = parsed.path.strip("/").replace("/", "-")
-                    display_name = f"{display_name}-{path_part}"
-                if parsed.port and parsed.port not in (80, 443):
-                    display_name = f"{display_name}-{parsed.port}"
-                # Truncate if too long
-                if len(display_name) > 255:
-                    display_name = display_name[:255]
-
-                # Validate by fetching (for HTTP/HTTPS only)
-                validation_status = "unknown"
-                validation_message = ""
-                status_code = None
-
-                if check_type == "http":
-                    # Certificates ARE verified here, because the agent's http
-                    # check defaults to verify_ssl=True. The preview used to pass
-                    # verify=False, so a self-signed target previewed as
-                    # "success" and then failed on its first real run — the
-                    # preview was answering a different question from the check
-                    # it previews. A cert problem is reported as its own warning
-                    # so the operator can set verify_ssl=False deliberately.
-                    try:
-                        async with httpx.AsyncClient(timeout=5.0) as client:
-                            response = await client.get(full_url)
-                            status_code = response.status_code
-                            if 200 <= status_code < 400:
-                                validation_status = "success"
-                                validation_message = f"HTTP {status_code}"
-                            else:
-                                validation_status = "warning"
-                                validation_message = f"HTTP {status_code}"
-                    except httpx.TimeoutException:
-                        validation_status = "error"
-                        validation_message = "Timeout (5s)"
-                    except httpx.ConnectError as e:
-                        # httpx wraps a TLS handshake failure in ConnectError, so
-                        # this has to be distinguished by the cause, not the type.
-                        if isinstance(e.__cause__, ssl.SSLError):
-                            validation_status = "warning"
-                            validation_message = (
-                                "TLS certificate not trusted — set verify_ssl=False "
-                                "on the check to monitor it anyway"
-                            )
-                        else:
-                            validation_status = "error"
-                            validation_message = "Connection refused"
-                    except Exception as e:
-                        validation_status = "error"
-                        validation_message = str(e)[:100]
-
-                return {
-                    "url": full_url,
-                    "generated_name": display_name,
-                    "check_type": check_type,
-                    "validation_status": validation_status,
-                    "validation_message": validation_message,
-                    "status_code": status_code,
-                }
-            # swallowed-exceptions: per-URL bulk preview — the failure IS the
-            # result, returned as an error row the operator sees before importing.
-            except Exception as e:
-                return {
-                    "url": url_str,
-                    "generated_name": url_str.replace(".", "-")[:255],
-                    "check_type": "http",
-                    "validation_status": "error",
-                    "validation_message": f"Parse error: {str(e)[:100]}",
-                }
-
         # Validate all URLs in parallel
-        previews = await asyncio.gather(*[validate_url(url) for url in urls])
+        previews = await asyncio.gather(
+            *[CheckCoreService._preview_bulk_url(url) for url in urls]
+        )
         return previews
+
+    @staticmethod
+    def _classify_bulk_url(url: str) -> tuple[str, str, ParseResult]:
+        """A bulk-import URL's check type, the URL to monitor, and its parts.
+
+        The check type comes from the scheme ("http" for both http:// and
+        https://); a URL with no scheme is taken as https.
+        """
+        parsed = urlparse(url)
+        if parsed.scheme in ("http", "https"):
+            return "http", url, parsed
+        if not parsed.scheme:
+            full_url = f"https://{url}"
+            return "http", full_url, urlparse(full_url)
+        return parsed.scheme, url, parsed  # tcp, etc.
+
+    @staticmethod
+    def _bulk_display_name(parsed: ParseResult) -> str:
+        """The name a bulk-imported check gets when none is given: its host, path
+        and any non-default port, joined by hyphens, at most 255 characters."""
+        hostname = parsed.hostname or "unknown"
+        display_name = hostname.replace(".", "-")
+        if parsed.path and parsed.path != "/":
+            path_part = parsed.path.strip("/").replace("/", "-")
+            display_name = f"{display_name}-{path_part}"
+        if parsed.port and parsed.port not in (80, 443):
+            display_name = f"{display_name}-{parsed.port}"
+        return display_name[:255]
+
+    @staticmethod
+    async def _preview_bulk_url(url_str: str) -> dict[str, Any]:
+        """One bulk-import preview row: the check the URL would become and, for
+        an http check, whether the target answers."""
+        try:
+            check_type, full_url, parsed = CheckCoreService._classify_bulk_url(url_str)
+            display_name = CheckCoreService._bulk_display_name(parsed)
+
+            validation_status = "unknown"
+            validation_message = ""
+            status_code = None
+            if check_type == "http":
+                (
+                    validation_status,
+                    validation_message,
+                    status_code,
+                ) = await CheckCoreService._probe_http_target(full_url)
+
+            return {
+                "url": full_url,
+                "generated_name": display_name,
+                "check_type": check_type,
+                "validation_status": validation_status,
+                "validation_message": validation_message,
+                "status_code": status_code,
+            }
+        # swallowed-exceptions: per-URL bulk preview — the failure IS the
+        # result, returned as an error row the operator sees before importing.
+        except Exception as e:
+            return {
+                "url": url_str,
+                "generated_name": url_str.replace(".", "-")[:255],
+                "check_type": "http",
+                "validation_status": "error",
+                "validation_message": f"Parse error: {str(e)[:100]}",
+            }
+
+    @staticmethod
+    async def _probe_http_target(full_url: str) -> tuple[str, str, int | None]:
+        """Fetch `full_url` once: (validation_status, validation_message, status_code).
+
+        Certificates ARE verified here, because the agent's http check defaults
+        to verify_ssl=True. The preview used to pass verify=False, so a
+        self-signed target previewed as "success" and then failed on its first
+        real run — the preview was answering a different question from the check
+        it previews. A cert problem is reported as its own warning so the
+        operator can set verify_ssl=False deliberately.
+        """
+        # swallowed-exceptions: every failure here is the probe's answer, shown
+        # to the operator as the preview row's status.
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                response = await client.get(full_url)
+        except httpx.TimeoutException:
+            return "error", "Timeout (5s)", None
+        except httpx.ConnectError as e:
+            # httpx wraps a TLS handshake failure in ConnectError, so this has
+            # to be distinguished by the cause, not the type.
+            if isinstance(e.__cause__, ssl.SSLError):
+                return (
+                    "warning",
+                    "TLS certificate not trusted — set verify_ssl=False "
+                    "on the check to monitor it anyway",
+                    None,
+                )
+            return "error", "Connection refused", None
+        except Exception as e:
+            return "error", str(e)[:100], None
+
+        status_code = response.status_code
+        status = "success" if 200 <= status_code < 400 else "warning"
+        return status, f"HTTP {status_code}", status_code
 
     @staticmethod
     async def assign_alerts(
