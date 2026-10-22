@@ -444,6 +444,26 @@ class DashboardCheck:
 
 
 @dataclass(frozen=True)
+class DashboardUrls:
+    """Finished hrefs for the status dashboard's own actions (fw.urls_from_route_names)."""
+
+    page: str
+    create_form: str
+    summary: str
+    bulk_action: str
+    bulk_modify: str
+
+
+@dataclass(frozen=True)
+class CheckCreateUrls:
+    """Finished hrefs for the new-check form panel (fw.urls_from_route_names)."""
+
+    create: str
+    assignment_mode_selector: str
+    bulk_preview: str
+
+
+@dataclass(frozen=True)
 class CheckFormUrls:
     """Finished hrefs for the check form / dependents panels.
 

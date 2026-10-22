@@ -463,7 +463,8 @@ async def view_public_status_page(
         )
         if signal == "redirect_login":
             return RedirectResponse(
-                url=f"/login?redirect=/status/{slug}", status_code=307
+                url=StatusPagesViewService.public_login_redirect_url(request, slug),
+                status_code=307,
             )
         if signal == "not_found":
             return public_error_page(

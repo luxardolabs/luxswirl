@@ -8,7 +8,7 @@
 
 {% block content %}
 {% set actions_html %}
-{{ btn_create(label='New Check', hx_get='/checks/create-form', hx_target='#panel-container', hx_swap='innerHTML') }}
+{{ btn_create(label='New Check', hx_get=dashboard_urls.create_form, hx_target='#panel-container', hx_swap='innerHTML') }}
 {% endset %}
 
 {{ page_header(
@@ -18,13 +18,13 @@
 ) }}
 
 <!-- Summary Stats (auto-updates based on settings) -->
-<div id="status-summary" hx-get="/internal/summary" hx-trigger="every {{ refresh_interval }}s" hx-swap="outerHTML">
+<div id="status-summary" hx-get="{{ dashboard_urls.summary }}" hx-trigger="every {{ refresh_interval }}s" hx-swap="outerHTML">
     {% include 'partials/status_summary.html' %}
 </div>
 
 <div id="status-content">
 <!-- Filters -->
-{% call filter_card('/dashboard') %}
+{% call filter_card(dashboard_urls.page) %}
     {{ filter_search('search', 'Search', 'Search checks by name or target...', filters.search or '') }}
 
     {% call filter_select('status', 'Status') %}
@@ -64,7 +64,7 @@
 <div class="grid grid-cols-12 gap-6 items-start">
     <!-- Left: Check List (40% - 5 columns) -->
     <div class="col-span-5">
-        {{ pagination_controls(pagination, '/dashboard') }}
+        {{ pagination_controls(pagination, dashboard_urls.page) }}
         <div class="card">
             <div class="border-b border-dark-bg-tertiary">
                 <div class="p-4 flex items-center justify-between">
@@ -125,7 +125,7 @@
                    its first click arms (2s window in status-bulk.js), second click
                    submits this hidden form. No browser confirm. #}
                 <form id="bulk-action-form" class="hidden"
-                    hx-post="/checks/bulk-action"
+                    hx-post="{{ dashboard_urls.bulk_action }}"
                     hx-swap="none"
                 >
                     <input type="hidden" name="action" id="bulk-action-type">
@@ -138,7 +138,7 @@
 
                 <div id="modify-panel" class="hidden px-4 pb-4 pt-4 border-t border-brand-600/20">
                     <form id="bulk-modify-form"
-                        hx-post="/checks/bulk-modify"
+                        hx-post="{{ dashboard_urls.bulk_modify }}"
                         hx-swap="none"
                     >
                         <input type="hidden" name="select_all" id="modify-select-all">
@@ -194,7 +194,7 @@
         </div>
 
         <!-- Pagination -->
-        {{ pagination_controls(pagination, '/dashboard') }}
+        {{ pagination_controls(pagination, dashboard_urls.page) }}
     </div>
 
     <!-- Right: Detail Panel (60% - 7 columns, sticky) -->

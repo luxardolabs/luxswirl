@@ -174,7 +174,7 @@
     <h2 class="text-lg font-semibold text-dark-text-primary mb-1">Filters</h2>
     <p class="text-sm text-dark-text-muted mb-4"><code class="text-brand-400">filter_card</code> wraps a list page's filters and re-queries on change, resetting to page 1. The fields inside are <code class="text-brand-400">filter_search</code>, <code class="text-brand-400">filter_select</code> and <code class="text-brand-400">filter_per_page</code>.</p>
 
-    {% call filter_card('/settings/components') %}
+    {% call filter_card(list_url) %}
         {{ filter_search('search', 'Search', 'Name or target…', '') }}
         {% call filter_select('status', 'Status') %}
             <option value="">All</option>
@@ -193,7 +193,7 @@
     <p class="text-sm text-dark-text-muted mb-4"><code class="text-brand-400">pagination_controls</code> renders the page navigation for a <code class="text-brand-400">build_pagination()</code> result (here: page 2 of 42 rows, 10 per page).</p>
 
     <div class="card p-4">
-        {{ pagination_controls(sample_pagination, '/settings/components') }}
+        {{ pagination_controls(sample_pagination, list_url) }}
     </div>
 </section>
 
@@ -224,7 +224,7 @@
     <p class="text-sm text-dark-text-muted mb-4">The settings tab bar (<code class="text-brand-400">settings_nav</code>, also at the top of this page), section headers and the settings index cards.</p>
 
     <div class="card p-6 space-y-6">
-        {{ settings_nav('components', current_user) }}
+        {{ settings_nav('components', current_user, nav) }}
         {{ section_header('Notifications', 'Where alerts are delivered', icon_svg=ICO_BELL) }}
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             {{ settings_category_card('Notifications', 'Email, webhook and Home Assistant providers', ICO_BELL, '#') }}

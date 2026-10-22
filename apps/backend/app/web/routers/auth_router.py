@@ -47,18 +47,22 @@ async def login_page(
     if setup_path:
         return RedirectResponse(url=setup_path, status_code=status.HTTP_302_FOUND)
 
-    # Already signed in: go to the requested page, if it is a page on this site.
+    # Where to land after sign-in: the requested page when it is on this site,
+    # else home (resolved by name).
+    target = safe_redirect_target(
+        redirect, default=request.app.url_path_for("root_redirect")
+    )
+
+    # Already signed in: go there now.
     if user:
-        return RedirectResponse(
-            url=safe_redirect_target(redirect), status_code=status.HTTP_302_FOUND
-        )
+        return RedirectResponse(url=target, status_code=status.HTTP_302_FOUND)
 
     return templates.TemplateResponse(
         request,
         "pages/login.html",
         {
             "current_user": user,  # Will be None for anonymous users
-            "redirect": safe_redirect_target(redirect),
+            "redirect": target,
             "error": None,
             # The form pre-fills this after a failed POST; the GET must name it
             # too, or the page it renders has no username field to fill.
@@ -78,7 +82,7 @@ async def login_submit(
     username: Annotated[str, Form()],
     password: Annotated[str, Form()],
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
-    redirect: Annotated[str, Form()] = "/",
+    redirect: Annotated[str | None, Form()] = None,
 ) -> Response:
     """
     Handle login form submission.
@@ -87,6 +91,11 @@ async def login_submit(
     Rate limited to prevent brute-force attacks.
     """
     web_auth = WebAuthViewService()
+    # Where to land after sign-in: the requested page when it is on this site,
+    # else home (resolved by name).
+    target = safe_redirect_target(
+        redirect, default=request.app.url_path_for("root_redirect")
+    )
 
     # Capture request context up-front for both success and failure paths.
     client_ip = client_ip_from_request(request)
@@ -104,7 +113,7 @@ async def login_submit(
             "pages/login.html",
             {
                 "current_user": None,  # Not authenticated
-                "redirect": safe_redirect_target(redirect),
+                "redirect": target,
                 "error": "Invalid username or password",
                 "username": username,  # Pre-fill username,
                 "page_title": "Sign In",
@@ -136,8 +145,9 @@ async def login_submit(
     # Check if password must be changed
     if user.must_change_password:
         # Set cookie first
+        change_password = request.app.url_path_for("change_password_page")
         response = RedirectResponse(
-            url="/change-password?required=true", status_code=status.HTTP_302_FOUND
+            url=f"{change_password}?required=true", status_code=status.HTTP_302_FOUND
         )
         response.set_cookie(
             key=cookie_config.session_cookie_name,
@@ -151,9 +161,7 @@ async def login_submit(
         return response
 
     # Successful login - set cookie and redirect (only ever to a page on this site)
-    response = RedirectResponse(
-        url=safe_redirect_target(redirect), status_code=status.HTTP_302_FOUND
-    )
+    response = RedirectResponse(url=target, status_code=status.HTTP_302_FOUND)
     response.set_cookie(
         key=cookie_config.session_cookie_name,
         value=token,
@@ -204,7 +212,10 @@ async def change_password_page(
     If required=true, user must change password before accessing system.
     """
     if not user:
-        return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
+        return RedirectResponse(
+            url=request.app.url_path_for("login_page"),
+            status_code=status.HTTP_302_FOUND,
+        )
 
     return templates.TemplateResponse(
         request,
@@ -243,7 +254,10 @@ async def change_password_submit(
     Handle change password form submission.
     """
     if not user:
-        return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
+        return RedirectResponse(
+            url=request.app.url_path_for("login_page"),
+            status_code=status.HTTP_302_FOUND,
+        )
 
     # Validate passwords match
     if new_password != confirm_password:
@@ -283,8 +297,10 @@ async def change_password_submit(
 
         # If password change was required, redirect to home
         if required or user.must_change_password:
-            response = RedirectResponse(url="/", status_code=status.HTTP_302_FOUND)
-            return response
+            return RedirectResponse(
+                url=request.app.url_path_for("root_redirect"),
+                status_code=status.HTTP_302_FOUND,
+            )
 
         # Otherwise show success message
         return templates.TemplateResponse(

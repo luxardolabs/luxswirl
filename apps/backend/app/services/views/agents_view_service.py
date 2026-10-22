@@ -467,6 +467,8 @@ class AgentsViewService:
             "search": search,
             "hours": hours,
             "pagination": pagination,
+            # The page's own path: filters and pagination re-request it.
+            "list_url": str(request.app.url_path_for("agents_list_page")),
             "page_title": "Agents",
             "default_heartbeat": settings.server.default_heartbeat_interval,
             "default_check_sync": settings.server.default_check_sync_interval,

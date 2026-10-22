@@ -102,7 +102,9 @@ async def create_user_form(
     """
     HTMX partial - returns form for creating a new user.
     """
-    context = WebUsersViewService().build_user_create_form_context(current_user=user)
+    context = WebUsersViewService().build_user_create_form_context(
+        request=request, current_user=user
+    )
     return templates.TemplateResponse(
         request,
         "partials/settings/user_create_panel.html",
@@ -327,7 +329,7 @@ async def reset_user_password(
 
     if error or target_user is None:
         return RedirectResponse(
-            url=f"/settings/users?error={error or 'User not found'}",
+            url=web_users.users_page_url(request, error=error or "User not found"),
             status_code=302,
         )
 
@@ -341,7 +343,9 @@ async def reset_user_password(
     )
 
     return RedirectResponse(
-        url=f"/settings/users?success=Password reset for {target_user.username}",
+        url=web_users.users_page_url(
+            request, success=f"Password reset for {target_user.username}"
+        ),
         status_code=302,
     )
 

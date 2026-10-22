@@ -149,6 +149,20 @@ class StatusPageUrls:
     update: str
     available_checks: str
     public: str
+    reorder: str
+    add_check: str
+    add_group: str
+
+
+@dataclass(frozen=True)
+class DashboardItemUrls:
+    """Finished hrefs for one dashboard item. The item routes address an item by
+    its position, so each href is built for the index the item renders at."""
+
+    remove: str
+    rename_group: str
+    update_group_filters: str
+    sort: str
 
 
 class StatusPageRow(StatusPageInDB):

@@ -8,6 +8,7 @@ the dashboard rendering view-model assembly via DashboardRender.
 
 import json
 from typing import Any
+from urllib.parse import urlencode
 from uuid import UUID
 
 from fastapi import Request
@@ -20,6 +21,7 @@ from app.schemas.auth_schema import AuthedUser
 from app.schemas.maintenance_job_schema import MaintenanceJobResponse
 from app.schemas.pagination_schema import build_pagination
 from app.schemas.status_page_schema import (
+    DashboardItemUrls,
     StatusPageCreate,
     StatusPageInDB,
     StatusPageRow,
@@ -104,31 +106,39 @@ def build_status_page_urls(
         update=u("update_status_page", status_page_id=page_id),
         available_checks=u("get_available_checks", status_page_id=page_id),
         public=u("view_public_status_page", slug=slug),
+        reorder=u("reorder_dashboard_items", status_page_id=page_id),
+        add_check=u("add_check_to_dashboard", status_page_id=page_id),
+        add_group=u("add_group_to_dashboard", status_page_id=page_id),
+    )
+
+
+def _dashboard_item_urls(
+    request: Request, status_page_id: UUID, index: int
+) -> DashboardItemUrls:
+    """The item routes for the item at `index`, resolved by route name."""
+
+    def u(name: str, **kw: object) -> str:
+        return str(request.app.url_path_for(name, status_page_id=status_page_id, **kw))
+
+    return DashboardItemUrls(
+        remove=u("remove_item_from_dashboard", item_index=index),
+        rename_group=u("rename_group_in_dashboard", item_index=index),
+        update_group_filters=u("update_group_filters_in_dashboard", item_index=index),
+        sort=u("update_group_sort_in_dashboard", item_index=index),
     )
 
 
 def _dashboard_items(
     request: Request, status_page: StatusPageInDB
-) -> list[tuple[dict[str, Any], str]]:
-    """Each dashboard item paired with its finished remove href.
+) -> list[tuple[dict[str, Any], DashboardItemUrls]]:
+    """Each dashboard item paired with its finished hrefs.
 
-    The remove route addresses an item by its position, so the pairing is
-    built here, in `status_page.items` order, rather than looked up by loop
-    index in the template.
-
-    .path, not str(): url_for returns an absolute url from the request's
-    scheme/host, which behind TLS-terminating nginx can emit http:// into an
-    https:// page.
+    The item routes address an item by its position, so the pairing is built
+    here, in `status_page.items` order, rather than looked up by loop index in
+    the template (or spelled into the manage page's script).
     """
     return [
-        (
-            item,
-            request.url_for(
-                "remove_item_from_dashboard",
-                status_page_id=status_page.id,
-                item_index=index,
-            ).path,
-        )
+        (item, _dashboard_item_urls(request, status_page.id, index))
         for index, item in enumerate(status_page.items or [])
     ]
 
@@ -184,6 +194,9 @@ class StatusPagesViewService:
             "filters": filters,
             "pagination": pagination,
             "page_title": "Status Pages",
+            # The page's own path: filters and pagination re-request it.
+            "list_url": str(request.app.url_path_for("status_pages_list")),
+            "create_form_url": str(request.app.url_path_for("status_page_create_form")),
         }
 
     @staticmethod
@@ -195,6 +208,7 @@ class StatusPagesViewService:
             "request": request,
             "current_user": current_user,
             "status_page": None,
+            "create_url": str(request.app.url_path_for("create_status_page")),
         }
 
     @staticmethod
@@ -612,6 +626,17 @@ class StatusPagesViewService:
         }
 
     # ---- public view (GET /status/{slug} and partial) ----------------------
+
+    @staticmethod
+    def public_login_redirect_url(request: Request, slug: str) -> str:
+        """Sign-in href for a private status page, returning to that page after.
+
+        Both paths come from the route table by name, so neither the login page
+        nor the public page's path has a second home here.
+        """
+        login = request.app.url_path_for("login_page")
+        page = request.app.url_path_for("view_public_status_page", slug=slug)
+        return f"{login}?{urlencode({'redirect': page})}"
 
     @staticmethod
     async def build_public_view(

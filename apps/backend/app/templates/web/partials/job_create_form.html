@@ -7,7 +7,7 @@
     {% call panel_content() %}
         <form
             id="job-create-form"
-            hx-post="/jobs/create"
+            hx-post="{{ create_url }}"
             hx-target="#form-feedback"
             hx-swap="innerHTML"
         >
@@ -19,7 +19,7 @@
                         <label for="job_type" class="block text-sm font-medium text-dark-text-primary mb-2">
                             Job Type <span class="text-red-400">*</span>
                         </label>
-                        {% call select(name="job_type", id="job_type", required=true, hx_get="/jobs/create-form", hx_target="#panel-container", hx_trigger="change", hx_include="[name='agent_id'],[name='priority']", hx_swap="innerHTML", class="input w-full") %}
+                        {% call select(name="job_type", id="job_type", required=true, hx_get=create_form_url, hx_target="#panel-container", hx_trigger="change", hx_include="[name='agent_id'],[name='priority']", hx_swap="innerHTML", class="input w-full") %}
                             <option value="">Select job type...</option>
                             <option value="network_discover" {% if prefill_job_type == 'network_discover' %}selected{% endif %}>Network Discover</option>
                             <option value="network_scan" {% if prefill_job_type == 'network_scan' %}selected{% endif %}>Network Scan</option>

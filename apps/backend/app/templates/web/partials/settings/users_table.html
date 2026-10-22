@@ -2,7 +2,7 @@
 {% from 'macros/buttons.html' import icon_edit, icon_btn, confirm_action_btn %}
 {% from 'macros/tables.html' import pagination_controls, data_table %}
 <!-- HTMX Partial: Users Table -->
-{{ pagination_controls(pagination, '/settings/users') }}
+{{ pagination_controls(pagination, list_url) }}
 
 <div class="card overflow-hidden">
     {% call data_table([
@@ -85,4 +85,4 @@
 </div>
 
 <!-- Pagination -->
-{{ pagination_controls(pagination, '/settings/users') }}
+{{ pagination_controls(pagination, list_url) }}

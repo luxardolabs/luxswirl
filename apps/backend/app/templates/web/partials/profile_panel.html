@@ -37,7 +37,7 @@
 
         <!-- Update Profile Form -->
         <form
-            hx-post="/profile/update"
+            hx-post="{{ update_url }}"
             hx-target="#profile-update-result"
             hx-swap="innerHTML"
             class="space-y-4">
@@ -63,7 +63,7 @@
             <h3 class="text-sm font-medium text-dark-text-secondary mb-3">Change Password</h3>
 
             <form
-                hx-post="/profile/change-password"
+                hx-post="{{ change_password_url }}"
                 hx-target="#password-change-result"
                 hx-swap="innerHTML"
                 hx-on::after-request="if(event.detail.successful) this.reset()"
