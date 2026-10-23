@@ -238,3 +238,40 @@ class AgentAssignmentCoreService:
         )
 
         return checks_to_run
+
+    @staticmethod
+    async def assigned_agents_by_check(
+        db: AsyncSession,
+    ) -> list[tuple[Check, list[Agent]]]:
+        """Every enabled check with the active agents that are to run it.
+
+        The same rules as `get_checks_for_agent`, read the other way round and
+        limited to active agents: a check whose agents are all pending, paused,
+        disabled or rejected has an empty list, since nothing is to run it.
+        """
+        checks = await CheckCRUD.list_enabled(db)
+        active_agents = await AgentCRUD.list_active(db)
+        by_id = {agent.id: agent for agent in active_agents}
+
+        assigned: list[tuple[Check, list[Agent]]] = []
+        for check in checks:
+            agents: list[Agent] = []
+            if check.assignment_mode == "manual":
+                owner = by_id.get(check.agent_id)
+                agents = [owner] if owner else []
+            elif check.assignment_mode == "replicate":
+                agents = list(
+                    AgentAssignmentCoreService.filter_agents_by_selector(
+                        active_agents, check.agent_selector
+                    )
+                )
+            elif check.assignment_mode == "distribute":
+                chosen = AgentAssignmentCoreService.get_assigned_agent_for_check(
+                    check,
+                    AgentAssignmentCoreService.filter_agents_by_selector(
+                        active_agents, check.agent_selector
+                    ),
+                )
+                agents = [chosen] if chosen else []
+            assigned.append((check, agents))
+        return assigned

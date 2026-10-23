@@ -57,6 +57,7 @@ class NotificationLog(Base, TimestampMixin, TableNameMixin, SerializerMixin):
             "check_result_timestamp",
         ),
         Index("idx_notification_logs_status", "status"),
+        Index("idx_notification_logs_alert_agent", "alert_id", "agent_id"),
         Index("idx_notification_logs_sent_at", "sent_at"),
         # Composite index for rate limiting queries
         Index(
@@ -88,17 +89,25 @@ class NotificationLog(Base, TimestampMixin, TableNameMixin, SerializerMixin):
         comment="Foreign key to notification_providers table",
     )
 
-    # Reference to check_results (no FK - both tables are hypertables with retention)
-    check_result_id: Mapped[UUID] = mapped_column(
+    # Reference to check_results (no FK - both tables are hypertables with retention).
+    # NULL for a notification about missing data (no_data, agent_offline): no
+    # result triggered it.
+    check_result_id: Mapped[UUID | None] = mapped_column(
         Uuid,
-        nullable=False,
+        nullable=True,
         comment="Check result ID (reference only, no FK for TimescaleDB compression)",
     )
 
-    check_result_timestamp: Mapped[datetime] = mapped_column(
+    check_result_timestamp: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
-        nullable=False,
+        nullable=True,
         comment="Check result timestamp (reference only, no FK for TimescaleDB compression)",
+    )
+
+    agent_id: Mapped[UUID | None] = mapped_column(
+        Uuid,
+        nullable=True,
+        comment="Agent an agent_offline notification is about (NULL for check notifications)",
     )
 
     # Denormalized fields (avoids LATERAL join against check_results)

@@ -7,7 +7,20 @@ from datetime import datetime, timedelta
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import Integer, Row, and_, cast, desc, func, or_, select, text
+from sqlalchemy import (
+    DateTime,
+    Integer,
+    Row,
+    and_,
+    cast,
+    desc,
+    func,
+    literal,
+    or_,
+    select,
+    text,
+    true,
+)
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,6 +28,11 @@ from sqlalchemy.orm import defer, selectinload
 from sqlalchemy.sql import ColumnElement
 
 from app.core.datetime_utils import utc_now
+from app.core.liveness import (
+    DEFAULT_CHECK_INTERVAL_SECONDS,
+    DEFAULT_MISSED_INTERVALS,
+    GRACE_SECONDS,
+)
 from app.models.agent_model import Agent
 from app.models.check_artifact_model import CheckArtifact
 from app.models.check_model import Check
@@ -23,6 +41,15 @@ from app.models.check_result_model import CheckResult
 # A row of labelled aggregates (count/sum/avg/percentile over results): SQLAlchemy
 # 2.1 cannot type `func.*` columns, so the row is typed by its arity only.
 type AggregateRow = Row[*tuple[Any, ...]]
+
+
+def _silent_after_seconds() -> ColumnElement[int]:
+    """`app.core.liveness.silent_after(Check.interval_seconds)`, in SQL."""
+    return (
+        func.coalesce(Check.interval_seconds, DEFAULT_CHECK_INTERVAL_SECONDS)
+        * DEFAULT_MISSED_INTERVALS
+        + GRACE_SECONDS
+    )
 
 
 class CheckResultCRUD:
@@ -229,43 +256,30 @@ class CheckResultCRUD:
                 )
             )
 
-        # Status filter via latest results CTE
+        # Status filter: each check's newest result within its silence
+        # threshold (app.core.liveness), one index probe per check. A check
+        # with none is silent and counts as unknown (no data).
         if status:
-            cutoff_status = utc_now() - timedelta(minutes=32)
-            latest_result_subquery = (
-                select(
-                    CheckResult.check_id,
-                    CheckResult.success,
-                    func.row_number()
-                    .over(
-                        partition_by=CheckResult.check_id,
-                        order_by=desc(CheckResult.timestamp),
-                    )
-                    .label("rn"),
+            current = (
+                select(CheckResult.success)
+                .where(
+                    CheckResult.check_id == Check.id,
+                    CheckResult.timestamp
+                    >= literal(utc_now(), DateTime(timezone=True))
+                    - func.make_interval(0, 0, 0, 0, 0, 0, _silent_after_seconds()),
                 )
-                .where(CheckResult.timestamp >= cutoff_status)
-                .subquery()
+                .order_by(desc(CheckResult.timestamp))
+                .limit(1)
+                .lateral("current_result")
             )
-
-            latest_result_cte = (
-                select(
-                    latest_result_subquery.c.check_id,
-                    latest_result_subquery.c.success,
-                )
-                .where(latest_result_subquery.c.rn == 1)
-                .subquery()
-            )
-
-            query = query.outerjoin(
-                latest_result_cte, Check.id == latest_result_cte.c.check_id
-            )
+            query = query.outerjoin(current, true())
 
             if status == "up":
-                conditions.append(latest_result_cte.c.success.is_(True))
+                conditions.append(current.c.success.is_(True))
             elif status == "down":
-                conditions.append(latest_result_cte.c.success.is_(False))
+                conditions.append(current.c.success.is_(False))
             elif status == "unknown":
-                conditions.append(latest_result_cte.c.success.is_(None))
+                conditions.append(current.c.success.is_(None))
 
         if conditions:
             query = query.where(and_(*conditions))
@@ -289,38 +303,63 @@ class CheckResultCRUD:
         """
         Batch query latest results for multiple checks.
 
+        Each check's newest result within its silence threshold
+        (app.core.liveness) or `cutoff_minutes`, whichever is longer: one
+        index probe per check, so a long-interval check is not cut off by a
+        window sized for short ones.
+
         Returns:
             Map of check_id to latest result row
         """
         if not check_ids:
             return {}
 
-        cutoff = utc_now() - timedelta(minutes=cutoff_minutes)
-        subquery = (
-            select(
-                CheckResult.check_id,
-                CheckResult.success,
-                CheckResult.latency_ms,
-                CheckResult.timestamp,
-                func.row_number()
-                .over(
-                    partition_by=CheckResult.check_id,
-                    order_by=desc(CheckResult.timestamp),
-                )
-                .label("rn"),
+        lookback = func.greatest(_silent_after_seconds(), cutoff_minutes * 60)
+        latest = (
+            select(CheckResult.success, CheckResult.latency_ms, CheckResult.timestamp)
+            .where(
+                CheckResult.check_id == Check.id,
+                CheckResult.timestamp
+                >= literal(utc_now(), DateTime(timezone=True))
+                - func.make_interval(0, 0, 0, 0, 0, 0, lookback),
             )
+            .order_by(desc(CheckResult.timestamp))
+            .limit(1)
+            .lateral("latest_result")
+        )
+        query = (
+            select(
+                Check.id.label("check_id"),
+                latest.c.success,
+                latest.c.latency_ms,
+                latest.c.timestamp,
+            )
+            .select_from(Check)
+            .join(latest, true())
+            .where(Check.id.in_(check_ids))
+        )
+        result = await db.execute(query)
+        return {row.check_id: row for row in result.all()}
+
+    @staticmethod
+    async def latest_result_times(
+        db: AsyncSession, check_ids: Sequence[UUID], since: datetime
+    ) -> dict[UUID, datetime]:
+        """Each check's newest result time at or after `since`; a check with
+        none in that window is absent."""
+        if not check_ids:
+            return {}
+        result = await db.execute(
+            select(CheckResult.check_id, func.max(CheckResult.timestamp))
             .where(
                 and_(
                     CheckResult.check_id.in_(check_ids),
-                    CheckResult.timestamp >= cutoff,
+                    CheckResult.timestamp >= since,
                 )
             )
-            .subquery()
+            .group_by(CheckResult.check_id)
         )
-
-        query = select(subquery).where(subquery.c.rn == 1)
-        result = await db.execute(query)
-        return {row.check_id: row for row in result.all()}
+        return dict(result.all())
 
     @staticmethod
     async def get_24h_stats_batch(

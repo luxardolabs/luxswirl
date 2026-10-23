@@ -31,7 +31,7 @@
         <option value="" {% if not filters.status %}selected{% endif %}>All</option>
         <option value="up" {% if filters.status == 'up' %}selected{% endif %}>Up</option>
         <option value="down" {% if filters.status == 'down' %}selected{% endif %}>Down</option>
-        <option value="unknown" {% if filters.status == 'unknown' %}selected{% endif %}>Unknown</option>
+        <option value="unknown" {% if filters.status == 'unknown' %}selected{% endif %}>No data</option>
     {% endcall %}
 
     {% call filter_select('agent_id', 'Agent') %}

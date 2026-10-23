@@ -199,6 +199,13 @@ class CheckCRUD:
         return list(result.scalars().all())
 
     @staticmethod
+    async def list_enabled(db: AsyncSession) -> list[Check]:
+        """Every enabled check."""
+        # unbounded-reads: the silence pass resolves every enabled check's assigned agents; all are the input
+        result = await db.execute(select(Check).where(Check.enabled.is_(True)))
+        return list(result.scalars().all())
+
+    @staticmethod
     async def list_without_parent(
         db: AsyncSession, exclude_check_id: UUID | None = None
     ) -> list[Check]:

@@ -10,8 +10,9 @@ it reads the configured alerts, writes the notification audit trail
 
 import asyncio
 import fnmatch
-from dataclasses import dataclass
+from datetime import datetime
 from typing import Any, cast
+from uuid import UUID
 
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,27 +23,17 @@ from app.crud.check_result_crud import CheckResultCRUD
 from app.models.alert_model import Alert
 from app.models.check_model import Check
 from app.models.check_result_model import CheckResult
-from app.models.enum_model import NotificationStatus
+from app.models.enum_model import AlertTriggerType, NotificationStatus
 from app.models.notification_log_model import NotificationLog
 from app.notifications.providers.base import NotificationContext
+from app.schemas.alert_schema import SendDecision
 from app.services.core.notification_core_service import NotificationCoreService
 
 logger = get_logger("luxswirl.services.alert")
 
-
-@dataclass(frozen=True, slots=True)
-class SendDecision:
-    """Result of `_should_send_notification`.
-
-    `send` gates whether `_fire_alert` proceeds to call the provider; `is_resend`
-    and `resend_count` are written through to `notification_logs.is_resend` and
-    `notification_logs.resend_count` so the audit trail shows "this notification
-    was a resend (Nth) of an ongoing incident" vs "first contact." LUXSWIRL-149.
-    """
-
-    send: bool
-    is_resend: bool
-    resend_count: int
+SILENCE_TRIGGER_TYPES = frozenset(
+    {AlertTriggerType.NO_DATA, AlertTriggerType.AGENT_OFFLINE}
+)
 
 
 class AlertEvaluationCoreService:
@@ -80,8 +71,12 @@ class AlertEvaluationCoreService:
             },
         )
 
-        # Evaluate each alert
+        # Evaluate each alert. The silence triggers fire on the absence of
+        # results, so a result is not theirs to evaluate: the scheduled
+        # SilenceAlertCoreService pass owns them, recoveries included.
         for alert in all_alerts:
+            if alert.trigger_type in SILENCE_TRIGGER_TYPES:
+                continue
             should_fire = await AlertEvaluationCoreService._should_fire_alert(
                 db, alert, check, check_result
             )
@@ -470,8 +465,19 @@ class AlertEvaluationCoreService:
         context = AlertEvaluationCoreService._build_notification_context(
             alert, check, check_result, is_recovery=is_recovery
         )
-        await AlertEvaluationCoreService._send_to_providers(
-            db, alert, check, check_result, context, decision
+        # State key recorded on every NotificationLog row so dedup can detect
+        # transitions (LUXSWIRL-147). Computed once per fire.
+        await AlertEvaluationCoreService.send_to_providers(
+            db,
+            alert,
+            context,
+            decision,
+            state_key=AlertEvaluationCoreService._compute_alert_state_key(
+                alert, check_result
+            ),
+            check_id=check.id,
+            check_result_id=check_result.id,
+            check_result_timestamp=check_result.timestamp,
         )
 
     @staticmethod
@@ -508,26 +514,26 @@ class AlertEvaluationCoreService:
         )
 
     @staticmethod
-    async def _send_to_providers(
+    async def send_to_providers(
         db: AsyncSession,
         alert: Alert,
-        check: Check,
-        check_result: CheckResult,
         context: NotificationContext,
         decision: SendDecision,
+        *,
+        state_key: str,
+        check_id: UUID | None,
+        agent_id: UUID | None = None,
+        check_result_id: UUID | None = None,
+        check_result_timestamp: datetime | None = None,
     ) -> None:
         """Send `context` through each of the alert's live providers, in parallel.
 
-        A provider that fails is logged; it never stops the others.
+        Every provider's NotificationLog row records `state_key`, the subject
+        (`check_id`, or `agent_id` for an agent_offline alert) and the result
+        that triggered it, when one did. A provider that fails is logged; it
+        never stops the others.
         """
-        # Get active notification providers for this alert
         mappings = await AlertCRUD.list_active_notif_mappings_for_alert(db, alert.id)
-
-        # State key recorded on every NotificationLog row so dedup can detect transitions
-        # (LUXSWIRL-147). Computed once per fire — same value reaches every provider.
-        state_key = AlertEvaluationCoreService._compute_alert_state_key(
-            alert, check_result
-        )
 
         # Send notifications through each provider IN PARALLEL
         notification_tasks = []
@@ -542,9 +548,10 @@ class AlertEvaluationCoreService:
                 provider_id=provider.id,
                 context=context,
                 alert_id=alert.id,
-                check_result_id=check_result.id,
-                check_result_timestamp=check_result.timestamp,
-                check_id=check.id,
+                check_result_id=check_result_id,
+                check_result_timestamp=check_result_timestamp,
+                check_id=check_id,
+                agent_id=agent_id,
                 notification_hash=state_key,
                 is_resend=decision.is_resend,
                 resend_count=decision.resend_count,
@@ -717,7 +724,7 @@ class AlertEvaluationCoreService:
             # State changed — not a resend, restart the resend counter
             return SendDecision(send=True, is_resend=False, resend_count=0)
 
-        return AlertEvaluationCoreService._resend_decision(alert, last_notification)
+        return AlertEvaluationCoreService.resend_decision(alert, last_notification)
 
     @staticmethod
     async def _is_snoozed(db: AsyncSession, alert: Alert, check: Check) -> bool:
@@ -780,8 +787,12 @@ class AlertEvaluationCoreService:
         # Legacy fallback for rows written before LUXSWIRL-147 (no hash recorded):
         # compare check_result.success. Imprecise for metric-based triggers but
         # better than nothing while the backlog ages out under retention.
-        last_check_result = await AlertCRUD.get_check_result_by_id(
-            db, last_notification.check_result_id
+        last_check_result = (
+            await AlertCRUD.get_check_result_by_id(
+                db, last_notification.check_result_id
+            )
+            if last_notification.check_result_id is not None
+            else None
         )
         if not last_check_result:
             logger.debug(
@@ -800,7 +811,7 @@ class AlertEvaluationCoreService:
         return False
 
     @staticmethod
-    def _resend_decision(
+    def resend_decision(
         alert: Alert, last_notification: NotificationLog
     ) -> SendDecision:
         """Same state as last time: resend only once the alert's interval has

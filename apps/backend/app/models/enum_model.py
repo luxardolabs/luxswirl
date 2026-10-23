@@ -263,6 +263,9 @@ class AlertTriggerType(StrEnum):
     THRESHOLD = "threshold"
     REPEATED_FAILURE = "repeated_failure"
     SSL_CERT_EXPIRY = "ssl_cert_expiry"
+    # Evaluated on a schedule, not per result: they fire on the ABSENCE of data.
+    NO_DATA = "no_data"
+    AGENT_OFFLINE = "agent_offline"
 
 
 # ============================================================================

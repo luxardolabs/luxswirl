@@ -42,6 +42,8 @@
                     <option value="status_change">Status Change (Check Down)</option>
                     <option value="threshold">Latency Threshold</option>
                     <option value="ssl_cert_expiry">SSL Certificate Expiry</option>
+                    <option value="no_data">No Data (Check Stopped Reporting)</option>
+                    <option value="agent_offline">Agent Offline</option>
                 {% endcall %}
             </div>
             {% else %}
@@ -84,6 +86,12 @@
                             </div>
                         </div>
                         <p class="text-xs text-dark-text-muted mt-2">Example: "&gt; 1000" alerts when response time exceeds 1 second</p>
+                    </div>
+                    {% elif alert.trigger_type in ('no_data', 'agent_offline') %}
+                    <div>
+                        <label class="label">Missed Intervals <span class="text-red-400">*</span></label>
+                        {{ input(id=false, name="trigger_missed_intervals", type="number", value=alert.trigger_config.missed_intervals if alert.trigger_config.missed_intervals else 3, min="1", max="100", required=true, class="input") }}
+                        <p class="text-xs text-dark-text-muted mt-1">{% if alert.trigger_type == 'no_data' %}Alert when a check has reported nothing for this many of its intervals (plus a minute's grace){% else %}Alert when an agent has sent no heartbeat for this many of its heartbeat intervals (plus a minute's grace){% endif %}</p>
                     </div>
                     {% elif alert.trigger_type == 'ssl_cert_expiry' %}
                     <div>

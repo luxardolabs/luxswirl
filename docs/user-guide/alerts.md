@@ -1,8 +1,8 @@
 # Alerts
 
-Alerts define when and how notifications are triggered based on check results. When a check fails, exceeds a threshold, or an SSL certificate is expiring, alerts automatically evaluate the condition and send notifications through configured providers.
+Alerts define when and how notifications are triggered. When a check fails, exceeds a threshold, has an SSL certificate expiring, or stops reporting, or when an agent goes offline, alerts evaluate the condition and send notifications through configured providers.
 
-Alerts provide trigger conditions (status changes, latency thresholds, SSL-expiry warnings), intelligent de-duplication, recovery notifications, global or per-check scope, custom message templates, and snooze.
+Alerts provide trigger conditions (status changes, latency thresholds, SSL-expiry warnings, missing data, offline agents), intelligent de-duplication, recovery notifications, global or per-check scope, custom message templates, and snooze.
 
 **Access:** **Alerts** in the sidebar, or `/alerts`. Each alert shows as a card with a status badge, trigger-type badge, scope indicator, provider count, and toggle/edit/delete actions.
 
@@ -17,6 +17,8 @@ A trigger type is **immutable** after creation — to use a different one, creat
 | **Status Change**          | A check fails N times in a row             | `consecutive_failures` (1–100, default 3)                |
 | **Latency Threshold**      | A result's latency meets the comparison    | `operator` (`>`, `>=`, `<`, `<=`, `==`) + threshold (ms) |
 | **SSL Certificate Expiry** | An HTTPS cert falls within a day-threshold | One or more of 7, 14, 21, 30, 60, 90 days                |
+| **No Data**                | A check stops reporting                    | `missed_intervals` (1–100, default 3)                    |
+| **Agent Offline**          | An agent stops sending heartbeats          | `missed_intervals` (1–100, default 3)                    |
 
 ### Status Change (check down)
 
@@ -75,6 +77,30 @@ Thresholds: [7, 14, 30] days   Resend Interval: 1440 minutes
   with a daily reminder in the current band, and one recovery notice on renewal
 ```
 
+### No Data (check stopped reporting)
+
+Triggers when a check that should be running has reported nothing for a while. The other triggers evaluate each incoming result, so none of them can notice that results stopped arriving. This one is evaluated by the server every minute (the **Evaluate Silence Alerts** scheduler job).
+
+- **Missed Intervals** (1–100, default 3): a check is silent once its newest result is older than this many of its intervals plus one minute's grace for the agent's report batching. A 60-second check with the default is silent after 4 minutes; a check that has never reported counts from when it was created.
+- **Which checks:** only a check that is enabled and that an active agent is to run. A check whose agents are all paused, disabled, pending or rejected is not expected to report and never fires. A replicate check is silent only when no agent reports it.
+- **Behavior:** one notification per silence, then the resend settings apply; a recovery notification fires when results arrive again (if enabled). Snoozing the alert for a check silences it like any other trigger.
+- **Agent offline:** when every agent that runs the check is offline, the silence belongs to the agent. The check's notification is recorded as **suppressed** (visible in the notification log) instead of sent, so an agent with a hundred checks produces one Agent Offline notification, not a hundred No Data ones. Once the agent is back, a check that still reports nothing notifies as its own silence.
+
+### Agent Offline
+
+Triggers when an active agent stops sending heartbeats. Evaluated every minute alongside No Data.
+
+- **Missed Intervals** (1–100, default 3): an agent is offline once its newest heartbeat is older than this many of its heartbeat intervals plus one minute's grace. With the default 5-second heartbeat that is 75 seconds.
+- **Which agents:** the active agents that run any of the alert's checks. A global alert therefore covers every active agent that has checks.
+- **Behavior:** one notification per outage (status **OFFLINE**), the resend settings while it lasts, and a recovery notification on the next heartbeat (if enabled). The notification log lists it under the agent's name.
+
+```
+Global: "Agent Offline"  · Agent Offline, 3 missed  · Email
+Global: "Check Silent"   · No Data, 3 missed        · Email
+→ an agent that dies sends one OFFLINE notification; its checks' silences are suppressed
+→ a check whose target hangs the agent, while the agent heartbeats, sends NO DATA
+```
+
 ______________________________________________________________________
 
 ## Scope: global vs specific
@@ -115,7 +141,7 @@ Click **New Alert** to open the creation panel.
 
 **Basic information:** **Name** (required, 3–255 chars) and **Description** (optional, ≤500 — document intent and team ownership).
 
-**Trigger configuration:** pick the **Trigger Type** (immutable) and its fields — Consecutive Failures (Status Change), Operator + Threshold (Latency), or Day Thresholds (SSL).
+**Trigger configuration:** pick the **Trigger Type** (immutable) and its fields — Consecutive Failures (Status Change), Operator + Threshold (Latency), Day Thresholds (SSL), or Missed Intervals (No Data, Agent Offline).
 
 **Scope:** **Global** (default, all checks) or **Specific** + a **Select Checks** list (checkboxes, format `{agent_id}:{check_display_name}`). A specific alert with no checks is allowed.
 

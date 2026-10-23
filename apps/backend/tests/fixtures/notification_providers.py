@@ -1,8 +1,8 @@
-"""Notifications domain conftest.
+"""Registers the built-in notification providers for every test.
 
-Registers built-in providers at session scope. Production code does this
-in `main.py`'s lifespan; tests skip the FastAPI startup, so we register
-here instead. Idempotent — `NotificationRegistry.register` raises if a
+Production code does this in `main.py`'s lifespan; tests skip the FastAPI
+startup, so this plugin (in tests/conftest.py's `pytest_plugins`) registers
+them instead: any test that sends a notification needs them. Idempotent — `NotificationRegistry.register` raises if a
 type is re-registered, so we guard.
 """
 

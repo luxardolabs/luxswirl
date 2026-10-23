@@ -15,6 +15,7 @@ from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.datetime_utils import utc_now
+from app.core.liveness import silent_after
 from app.core.query_params import split_csv
 from app.models.enum_model import CheckHealthStatus, CheckType
 from app.schemas.auth_schema import AuthedUser
@@ -100,7 +101,8 @@ class StatusRow:
 
     @property
     def health(self) -> CheckHealthStatus:
-        """Up, down, or unknown when there is no result yet."""
+        """Up, down, or unknown when there is no current result (none yet, or
+        the check has gone silent)."""
         if self.success is None:
             return CheckHealthStatus.UNKNOWN
         return CheckHealthStatus.UP if self.success else CheckHealthStatus.DOWN
@@ -109,7 +111,7 @@ class StatusRow:
     def status_text(self) -> str:
         """Get human-readable status text."""
         if self.success is None:
-            return "Unknown"
+            return "No data"
         return "Up" if self.success else "Down"
 
     @property
@@ -289,9 +291,19 @@ class StatusViewService:
 
         # Build status rows (data shaping stays in view service)
         status_rows = []
+        now = utc_now()
 
         for check, agent in checks_and_agents:
             latest_result = latest_results_map.get(check.id)
+            # A check that has gone silent shows no data, not its last state
+            # (the same rule as the no_data alert's default).
+            current = (
+                latest_result
+                if latest_result
+                and latest_result.timestamp
+                >= now - silent_after(check.interval_seconds)
+                else None
+            )
             stats = stats_map.get(check.id)
 
             uptime_24h = None
@@ -320,8 +332,8 @@ class StatusViewService:
                 target=check.target,
                 agent_name=agent.agent_name
                 or str(agent.id),  # Use agent_name for display, fallback to ID
-                success=latest_result.success if latest_result else None,
-                latency_ms=latest_result.latency_ms if latest_result else None,
+                success=current.success if current else None,
+                latency_ms=current.latency_ms if current else None,
                 last_check=latest_result.timestamp if latest_result else None,
                 uptime_24h=uptime_24h,
                 enabled=check.enabled,

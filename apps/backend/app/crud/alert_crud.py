@@ -13,7 +13,7 @@ from app.models.alert_check_mapping_model import AlertCheckMapping
 from app.models.alert_model import Alert
 from app.models.alert_notification_mapping_model import AlertNotificationMapping
 from app.models.check_result_model import CheckResult
-from app.models.enum_model import NotificationStatus
+from app.models.enum_model import AlertTriggerType, NotificationStatus
 from app.models.notification_log_model import NotificationLog
 
 # Statuses that represent "alert evaluation already produced an audit row for this state."
@@ -273,6 +273,70 @@ class AlertCRUD:
             .limit(1)
         )
         return result.scalar_one_or_none()
+
+    @staticmethod
+    async def list_enabled_alerts_by_trigger(
+        db: AsyncSession, trigger_types: Sequence[AlertTriggerType]
+    ) -> Sequence[Alert]:
+        """Enabled, non-deleted alerts of these trigger types, with their check
+        mappings loaded."""
+        result = await db.execute(
+            select(Alert)
+            .where(
+                and_(
+                    Alert.trigger_type.in_(trigger_types),
+                    Alert.is_enabled.is_(True),
+                    Alert.deleted_at.is_(None),
+                )
+            )
+            .options(selectinload(Alert.check_mappings))
+        )
+        return result.scalars().all()
+
+    @staticmethod
+    async def last_notifications_by_subject(
+        db: AsyncSession,
+        alert_id: UUID,
+        *,
+        check_ids: Sequence[UUID] = (),
+        agent_ids: Sequence[UUID] = (),
+    ) -> dict[UUID, NotificationLog]:
+        """The newest dedup-relevant notification row per check (or per agent)
+        for one alert, in one round-trip: the bulk form of
+        `get_last_notification_for_dedup`.
+
+        Pass `check_ids` for a check alert or `agent_ids` for an agent alert;
+        the result is keyed by that id.
+        """
+        subject = NotificationLog.agent_id if agent_ids else NotificationLog.check_id
+        ids = agent_ids or check_ids
+        if not ids:
+            return {}
+        ranked = (
+            select(
+                NotificationLog.id,
+                func.row_number()
+                .over(partition_by=subject, order_by=NotificationLog.sent_at.desc())
+                .label("rn"),
+            )
+            .where(
+                and_(
+                    NotificationLog.alert_id == alert_id,
+                    subject.in_(ids),
+                    NotificationLog.status.in_(DEDUP_RELEVANT_STATUSES),
+                )
+            )
+            .subquery()
+        )
+        result = await db.execute(
+            select(NotificationLog).join(
+                ranked, and_(ranked.c.id == NotificationLog.id, ranked.c.rn == 1)
+            )
+        )
+        rows = result.scalars().all()
+        if agent_ids:
+            return {row.agent_id: row for row in rows if row.agent_id is not None}
+        return {row.check_id: row for row in rows if row.check_id is not None}
 
     @staticmethod
     async def get_check_result_by_id(

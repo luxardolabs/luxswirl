@@ -56,7 +56,12 @@ if "test" not in _TEST_DB_NAME:
 # Register shared fixtures as a plugin so every test gets them by name. Without
 # this, each test file does `from fixtures.db import db`, which the test method's
 # own `db` parameter then shadows — tripping ruff F811 ~147× across the suite.
-pytest_plugins = ["fixtures.db", "fixtures.committed_db", "fixtures.logs"]
+pytest_plugins = [
+    "fixtures.db",
+    "fixtures.committed_db",
+    "fixtures.logs",
+    "fixtures.notification_providers",
+]
 
 
 # No `pytest_configure` registering markers here. The canonical pytest config

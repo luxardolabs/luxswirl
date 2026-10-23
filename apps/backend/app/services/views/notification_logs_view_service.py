@@ -123,7 +123,11 @@ def _log_row(request: Request, entry: NotificationLogEntry) -> NotificationLogRo
         alert_id=entry.alert_id,
         snoozed_until=entry.snoozed_until,
         provider_name=entry.provider_name,
-        check_name=entry.display_name,
+        check_name=(
+            entry.display_name
+            if entry.display_name or not entry.agent_name
+            else f"Agent {entry.agent_name}"
+        ),
         check_type=entry.check_type,
         check_target=entry.target,
         status=entry.status,

@@ -188,7 +188,7 @@ class EmailNotificationProvider(BaseNotificationProvider):
         if context.success:
             status_color, status_text = "#10b981", "✓ UP"  # green
         else:
-            status_color, status_text = "#ef4444", "✗ DOWN"  # red
+            status_color, status_text = "#ef4444", f"✗ {context.status_label}"  # red
         latency = (
             f"{context.latency_ms:.2f}ms" if context.latency_ms is not None else "N/A"
         )

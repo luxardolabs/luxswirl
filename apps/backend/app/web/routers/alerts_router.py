@@ -146,6 +146,9 @@ async def create_alert(
             "operator": threshold_operator,
             "value": int(str(threshold_value)),
         }
+    elif trigger_type in ("no_data", "agent_offline"):
+        missed_intervals = form.get("trigger_missed_intervals", "3")
+        trigger_config = {"missed_intervals": int(str(missed_intervals))}
     elif trigger_type == "ssl_cert_expiry":
         # Use parsed thresholds or default to 30 days
         days_thresholds = form_data.days_thresholds or [30]
@@ -296,6 +299,9 @@ async def update_alert(
             "operator": threshold_operator,
             "value": int(str(threshold_value)),
         }
+    elif "trigger_missed_intervals" in form:
+        missed_intervals = form.get("trigger_missed_intervals", "3")
+        trigger_config = {"missed_intervals": int(str(missed_intervals))}
     elif any(key.startswith("trigger_days_threshold_") for key in form):
         # Collect all selected threshold checkboxes
         days_thresholds = []

@@ -21,7 +21,7 @@ class NotificationContext:
     check_type: str
     target: str
     agent_id: UUID | None
-    status: str  # "success", "error", "warning"
+    status: str  # "success", "error", "no_data" (a silent check), "offline" (an agent)
 
     # Optional fields
     agent_name: str | None = None
@@ -39,6 +39,13 @@ class NotificationContext:
     custom_subject: str | None = None
     custom_message: str | None = None
     metadata: dict[str, Any] | None = None
+
+    @property
+    def status_label(self) -> str:
+        """The status a person reads: UP, DOWN, NO DATA or OFFLINE."""
+        if self.success:
+            return "UP"
+        return {"no_data": "NO DATA", "offline": "OFFLINE"}.get(self.status, "DOWN")
 
 
 class BaseNotificationProvider(ABC):
@@ -188,7 +195,7 @@ class BaseNotificationProvider(ABC):
         Supports the following variables:
         - {{NAME}} - Check name
         - {{HOSTNAME_OR_URL}} - Target
-        - {{STATUS}} - Status (up/down)
+        - {{STATUS}} - Status (UP, DOWN, NO DATA, OFFLINE)
         - {{LATENCY}} - Response time
         - {{AGENT}} - Agent name/ID
         - {{TIMESTAMP}} - When check ran
@@ -206,7 +213,7 @@ class BaseNotificationProvider(ABC):
         replacements = {
             "{{NAME}}": context.check_name,
             "{{HOSTNAME_OR_URL}}": context.target,
-            "{{STATUS}}": "UP" if context.success else "DOWN",
+            "{{STATUS}}": context.status_label,
             "{{LATENCY}}": (
                 f"{context.latency_ms:.2f}ms" if context.latency_ms else "N/A"
             ),
