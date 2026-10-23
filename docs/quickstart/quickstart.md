@@ -166,7 +166,7 @@ ______________________________________________________________________
 
 Let's create a simple HTTP check to monitor a public API.
 
-### Option A: Via Web UI (Recommended)
+### Via the Web UI
 
 1. **Navigate to Checks** (sidebar → Checks)
 1. Click **"Create Check"** button
@@ -198,30 +198,7 @@ Let's create a simple HTTP check to monitor a public API.
 - Redirected to check detail page
 - First result appears within 60 seconds
 
-### Option B: Via API (Advanced)
-
-```bash
-# The server generates an API token on first boot, logs it once in a
-# "GENERATED INITIAL API TOKEN" banner and stores it in /app/data/api_token.
-# Set your own with SECURITY__AUTH_TOKENS (see .env.example).
-export API_TOKEN="$(docker exec luxswirl_server cat /app/data/api_token)"
-
-# Create check via API. The check fields are FLAT (no nested "config").
-# agent_id is the agent's UUID — copy it from the Agents page.
-curl -X POST http://localhost:9000/api/v1/agents/<agent-uuid>/checks \
-  -H "Authorization: Bearer $API_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "display_name": "GitHub API Health",
-    "check_type": "http",
-    "target": "https://api.github.com/zen",
-    "interval_seconds": 60,
-    "timeout_seconds": 30,
-    "http_method": "GET",
-    "expected_status": 200,
-    "verify_ssl": true
-  }'
-```
+To add many checks at once, upload a JSON file with the agent card's **Import / Export** button on the **Agents** page (see [Import / Export](../user-guide/import-export.md)).
 
 ______________________________________________________________________
 
@@ -562,7 +539,7 @@ This quick start uses Docker Compose on a single machine. For production deploym
 **Key differences** (quick start vs production):
 
 - **HTTPS**: Use reverse proxy (nginx, Traefik) with Let's Encrypt SSL
-- **Authentication**: Strong passwords, API key rotation, 2FA (not currently supported)
+- **Authentication**: Strong passwords, agent and registration key rotation, 2FA (not currently supported)
 - **Database**: Separate database server with backups
 - **Monitoring**: Monitor LuxSwirl itself (Prometheus metrics)
 - **High availability**: Load balancer + multiple servers
@@ -575,7 +552,7 @@ ______________________________________________________________________
 
 - [User Guide](../user-guide/) - Complete feature documentation
 - [FAQ](../user-guide/faq.md) - Frequently asked questions
-- API documentation is auto-generated and available at `/docs` on a running server (Swagger UI)
+- The agent protocol is documented at `/docs` on a running server (Swagger UI, outside production)
 
 **Community**:
 

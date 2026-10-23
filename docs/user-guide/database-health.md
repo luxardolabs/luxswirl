@@ -192,7 +192,7 @@ ______________________________________________________________________
 
 ## Table row counts and sizes
 
-Not shown in the UI but available via the API or direct queries, for key tables (`check_results`, `checks`, `agents`, `check_artifacts`): row count, oldest record, newest record, raw size (bytes), and a human-readable size.
+Not shown in the UI but available through direct database queries, for key tables (`check_results`, `checks`, `agents`, `check_artifacts`): row count, oldest record, newest record, raw size (bytes), and a human-readable size.
 
 ```
 check_results:
@@ -273,46 +273,6 @@ Spinner forever or an error. Causes: no data (fresh install), the range too larg
 1. Try a shorter range (24 Hours / 7 Days).
 1. Verify data exists — the breakdown should show non-zero `check_results` size.
 1. Check the network tab for the `/database-health/chart-data` request and its response.
-
-______________________________________________________________________
-
-## API
-
-`Authorization: Bearer {token}`; full schemas at `/docs`.
-
-**Health summary** — `GET /api/v1/database-health`
-
-```json
-{
-  "database_size": { "total_size_bytes": 481689600, "total_size_pretty": "459 MB" },
-  "hypertables": [
-    { "name": "check_results", "compression_enabled": true, "chunk_count": 4, "total_size": "420 MB" }
-  ],
-  "compression": { "total_chunks": 100, "compressed_chunks": 85,
-                   "uncompressed_chunks": 15, "compression_ratio": 85.0 },
-  "retention_policies": [ { "hypertable": "check_results", "drop_after": "90 days" } ],
-  "row_counts": {
-    "check_results": { "row_count": 97092, "oldest_record": "2025-11-07T10:00:00Z",
-                       "newest_record": "2025-11-11T15:32:01Z",
-                       "size_bytes": 481689600, "size_pretty": "459 MB" }
-  },
-  "daily_growth": [ { "date": "2025-11-11", "row_count": 15234 },
-                    { "date": "2025-11-10", "row_count": 14876 } ]
-}
-```
-
-**Growth chart data** — `GET /api/v1/database-health/chart-data?hours=168` (`hours`: 24, 168, 720, 2160, 8760)
-
-```json
-{
-  "data": [
-    { "timestamp": "2025-11-04T00:00:00Z", "results_mb": 350.5, "artifacts_mb": 12.3,
-      "checks_mb": 0.5, "agent_metrics_mb": 5.2, "total_mb": 368.5 },
-    { "timestamp": "2025-11-05T00:00:00Z", "results_mb": 375.2, "artifacts_mb": 13.1,
-      "checks_mb": 0.5, "agent_metrics_mb": 5.8, "total_mb": 394.6 }
-  ]
-}
-```
 
 ______________________________________________________________________
 

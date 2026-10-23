@@ -76,18 +76,15 @@ Point these at your own TLS certificate and key (e.g. from Let's Encrypt or your
 
 All endpoints are accessible via `https://luxswirl.example.com`:
 
-### API Endpoints
+### Agent Endpoints
 
-- `GET /api/v1/agents` - List agents
-- `POST /api/v1/reports` - Submit check results
-- `GET /api/v1/agents/{agent_id}/results` - Get results
-- Full API documentation at `/docs`
+Agents reach the server under `/api/v1` (registration, heartbeats, their check list, result reports). Point each agent's `LUXSWIRL_SERVER_URL` at `https://luxswirl.example.com/api/v1/reports`.
 
 ### Monitoring Endpoints
 
 - `GET /metrics` - Prometheus metrics
 - `GET /health` - Health check
-- `GET /` - API information
+- `GET /api` - API information
 
 ## Security Features
 

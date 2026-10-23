@@ -53,7 +53,7 @@ ______________________________________________________________________
                     │     Server            │
                     │  ┌─────────────────────┐ │
                     │  │   FastAPI           │ │
-                    │  │   REST API (v1)     │ │
+                    │  │   Agent API (v1)    │ │
                     │  ├─────────────────────┤ │
                     │  │   Web UI            │ │
                     │  │   (Jinja2 + HTMX)   │ │
@@ -503,49 +503,29 @@ ______________________________________________________________________
 
 ## API Architecture
 
-### REST API Design Principles
+### Agent Protocol
 
-**Versioning**: All endpoints under `/api/v1` **Authentication**: Bearer token (HTTP header: `Authorization: Bearer <token>`) **Response format**: JSON (consistent envelope structure) **Pagination**: Offset-based (`offset`, `limit` query params) **Filtering**: Query params (`agent`, `type`, `status`) **Sorting**: Query params (`sort_by`, `order`)
+The JSON API under `/api/v1` is the agent protocol: it carries agents' registration, heartbeats, check lists, results and artifacts. Operators manage agents, checks, alerts, notification providers, registration keys, users and status pages through the web UI.
+
+**Versioning**: every agent endpoint lives under `/api/v1`. **Authentication**: `Authorization: Bearer <key>` — a registration key to register or recover, the agent's own key for its check list, reports and job results. **Response format**: JSON.
 
 ### API Endpoint Structure
 
 ```
 /api/v1
-├── Agent-facing (Bearer token)
-│   ├── GET    /checks?agent_id={id}                   Fetch this agent's checks
-│   ├── POST   /agents/heartbeat                             Agent heartbeat
-│   └── POST   /reports                                Submit batch of results
-│
-├── /agents
-│   ├── GET    /                    List agents
-│   ├── POST   /                    Create agent
-│   ├── GET    /{agent_id}          Get agent
-│   ├── PATCH  /{agent_id}          Update agent
-│   ├── DELETE /{agent_id}          Delete agent
-│   ├── GET    /{agent_id}/stats    Get stats
-│   └── POST   /{agent_id}/approve  Approve agent
-│
-├── Check management (UI/admin)
-│   ├── GET    /agents/{agent_id}/checks              List checks
-│   ├── POST   /agents/{agent_id}/checks              Create check
-│   ├── GET    /agents/{agent_id}/checks/{check_id}  Get check
-│   ├── PATCH  /agents/{agent_id}/checks/{check_id}  Update check
-│   ├── DELETE /agents/{agent_id}/checks/{check_id}  Delete check
-│   └── POST   /agents/{agent_id}/checks/{check_id}/clone  Clone check
-│
-├── Results
-│   ├── GET    /agents/{agent_name}/results            Get latest
-│   ├── GET    /agents/{agent_name}/checks/{check_id}/history   Get history
-│   └── GET    /agents/{agent_name}/checks/{check_id}/summary   Get summary
-│
-└── /metrics + /health (root level, not under /api/v1)
-    ├── GET    /metrics               Prometheus format (auth configurable)
-    └── GET    /health                Health check
+├── POST   /agents/register                 Register (registration key)
+├── POST   /agents/{agent_id}/recover-key   Recover the agent key (registration key)
+├── POST   /heartbeat                       Heartbeat (agent key or registration key)
+├── GET    /checks?agent_id={id}            Fetch this agent's checks (agent key)
+├── POST   /reports                         Submit a batch of results (agent key)
+├── POST   /jobs/{job_id}/results           Submit a job's results (the job's agent key)
+└── POST   /artifacts                       Upload a synthetic-check artifact
+
+Root level
+├── GET    /metrics                         Prometheus format (auth configurable)
+├── GET    /health                          Health check
+└── GET    /api                             API information
 ```
-
-> **Status pages are web-only.** There is no `/api/v1/status-pages` endpoint group; status pages are managed entirely through the Web UI (`status_pages_router` in the web layer), not the JSON API.
-
-> **Note on the check fetch path**: the agent fetches its assigned checks via `GET /api/v1/checks?agent_id={id}` (agent UUID passed as a *query parameter*). The `/agents/{agent_id}/checks` paths are the separate **management** endpoints used by the UI/admin, not by the agent runtime.
 
 **HTTP Status Codes**:
 
@@ -568,7 +548,7 @@ ______________________________________________________________________
 
 ```
 ┌─────────────┐
-│   CREATED   │  (Configured via UI/API)
+│   CREATED   │  (Configured via the web UI)
 └──────┬──────┘
        │
        │ Agent fetches config
@@ -739,7 +719,7 @@ ______________________________________________________________________
 2. Server → Generate unique API key for agent
 3. Agent → Stores API key (encrypted at rest)
 4. Subsequent requests → Authorization: Bearer {api_key}
-5. Server → Validates token (global token OR agent-specific key)
+5. Server → Validates the agent-specific key
 6. Server → Checks approval_status (must be "active")
 ```
 
@@ -761,7 +741,7 @@ ______________________________________________________________________
 **Layer 3: Authentication**
 
 - Session validation (Web UI)
-- Bearer token validation (API)
+- Bearer key validation (agent API)
 - Role-based access control (Admin/Editor/Viewer)
 
 **Layer 4: Authorization**

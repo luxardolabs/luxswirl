@@ -173,58 +173,6 @@ ______________________________________________________________________
 
 ______________________________________________________________________
 
-## API
-
-`Authorization: Bearer {token}` (except a public page by slug); full schemas at `/docs`.
-
-| Method   | Path                               | Purpose                                               |
-| -------- | ---------------------------------- | ----------------------------------------------------- |
-| `GET`    | `/api/v1/status-pages`             | List (`skip`, `limit`, `is_public`, `search`)         |
-| `GET`    | `/api/v1/status-pages/slug/{slug}` | Get one (no auth if public) — checks/groups populated |
-| `POST`   | `/api/v1/status-pages`             | Create                                                |
-| `PATCH`  | `/api/v1/status-pages/{id}`        | Update metadata or `items` layout                     |
-| `DELETE` | `/api/v1/status-pages/{id}`        | Delete (204)                                          |
-
-**List response:**
-
-```json
-{
-  "items": [
-    {
-      "id": "uuid",
-      "name": "Production Services",
-      "slug": "production",
-      "description": "Production infrastructure status",
-      "is_public": true,
-      "config": {},
-      "items": [],
-      "created_at": "2024-01-15T10:30:00Z",
-      "updated_at": "2024-01-20T14:22:00Z"
-    }
-  ],
-  "total": 5, "skip": 0, "limit": 50
-}
-```
-
-**Create body:**
-
-```json
-{ "name": "Production Services", "slug": "production",
-  "description": "Production infrastructure status", "is_public": true,
-  "config": {}, "items": [] }
-```
-
-**Update the layout** (`PATCH`) with an ordered `items` list of checks and groups:
-
-```json
-{ "items": [
-    { "type": "check", "check_id": "uuid-1", "order": 0 },
-    { "type": "group", "name": "API Services", "order": 1, "checks": ["uuid-2", "uuid-3"] }
-] }
-```
-
-______________________________________________________________________
-
 ## Related
 
 - [Dashboard](dashboard.md) — the full internal monitoring view

@@ -79,7 +79,7 @@ Monitor web endpoints, APIs, and HTTP services with advanced validation. **Use f
 **Fields:**
 
 - **Target** (required): full URL including protocol (✅ `https://api.example.com/health`; ❌ `example.com`).
-- **Method** (optional, default GET): the form offers GET, POST, PUT and HEAD; the API also accepts PATCH, DELETE, OPTIONS, TRACE and CONNECT, in any case. Anything else is refused.
+- **Method** (optional, default GET): the form offers GET, POST, PUT and HEAD; an import file also accepts PATCH, DELETE, OPTIONS, TRACE and CONNECT, in any case. Anything else is refused.
 - **Expected Status** (optional, default 200).
 - **Verify SSL** (optional): the create form pre-checks this, so new HTTP/JSON checks verify SSL by default. The global `check.default_verify_ssl` setting (Settings → Checks) ships seeded **false** — it's the form that defaults a new check to on, not the global setting. Uncheck to allow self-signed certs (not recommended for production).
 - **Follow Redirects** (optional, default true): follow 301/302.

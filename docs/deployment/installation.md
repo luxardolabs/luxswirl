@@ -1050,12 +1050,12 @@ Query: SELECT COUNT(*) FROM check_results WHERE timestamp > NOW() - INTERVAL '5 
 Interval: 300 seconds
 ```
 
-### Check 3: Agent Connectivity
+### Check 3: Server Reachability
 
 ```
 Check Type: http
-Target: http://localhost:9000/api/v1/agents
-Expected: 200 status (validates API is responding)
+Target: http://localhost:9000/health
+Expected: 200 status (validates the server is responding)
 Interval: 120 seconds
 ```
 

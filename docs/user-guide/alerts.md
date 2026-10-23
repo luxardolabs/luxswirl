@@ -296,64 +296,9 @@ Every check result evaluates all applicable alerts, and consecutive-failure trig
 
 ______________________________________________________________________
 
-## API
+## Permissions
 
-All endpoints require `Authorization: Bearer {token}`; full schemas at `/docs`.
-
-| Method   | Path                                        | Purpose                                           |
-| -------- | ------------------------------------------- | ------------------------------------------------- |
-| `GET`    | `/api/v1/alerts`                            | List (`skip`, `limit`, `is_enabled`, `is_global`) |
-| `GET`    | `/api/v1/alerts/{id}`                       | Get one (relationships loaded)                    |
-| `POST`   | `/api/v1/alerts`                            | Create (201)                                      |
-| `PATCH`  | `/api/v1/alerts/{id}`                       | Update (200)                                      |
-| `DELETE` | `/api/v1/alerts/{id}`                       | Delete (204)                                      |
-| `POST`   | `/api/v1/alerts/snooze?alert_id=&check_id=` | Snooze a relationship (15 min)                    |
-| `DELETE` | `/api/v1/alerts/snooze?alert_id=&check_id=` | Un-snooze                                         |
-
-**List response:**
-
-```json
-{
-  "items": [
-    {
-      "id": "uuid", "name": "Critical Services Down",
-      "description": "Alerts on-call team for failures",
-      "trigger_type": "status_change",
-      "trigger_config": { "on_status": ["error"], "consecutive_failures": 3 },
-      "is_enabled": true, "is_global": false, "notify_on_recovery": true,
-      "resend_interval_minutes": 30, "max_resends": 5,
-      "custom_subject": null, "custom_message": null,
-      "created_at": "2024-01-15T10:30:00Z", "updated_at": "2024-01-20T14:22:00Z"
-    }
-  ],
-  "total": 12, "skip": 0, "limit": 100
-}
-```
-
-**Create body** (`trigger_config` shape depends on `trigger_type`):
-
-```json
-{
-  "name": "API Slow Response", "description": "Alert when APIs are slow",
-  "trigger_type": "threshold",
-  "trigger_config": { "metric": "latency_ms", "operator": ">", "value": 1000 },
-  "is_enabled": true, "is_global": false, "notify_on_recovery": true,
-  "resend_interval_minutes": 60, "max_resends": null,
-  "custom_subject": "[{{STATUS}}] {{NAME}}", "custom_message": null,
-  "notification_provider_ids": ["uuid1", "uuid2"],
-  "check_ids": ["uuid3", "uuid4"]
-}
-```
-
-```json
-// status_change trigger_config         // ssl expiry trigger_config
-{ "on_status": ["error"],               { "thresholds": [7, 14, 30] }
-  "consecutive_failures": 3 }
-```
-
-**Snooze response:** `{ "success": true, "message": "Alert-check relationship snoozed for 15 minutes", "snoozed_until": "2024-01-15T15:45:00Z" }`
-
-Creating, editing, deleting, and snoozing alerts require an **Editor** or **Admin** account; **Viewers** have read-only access.
+Creating, editing, and deleting alerts require an **Editor** or **Admin** account; **Viewers** have read-only access.
 
 ______________________________________________________________________
 

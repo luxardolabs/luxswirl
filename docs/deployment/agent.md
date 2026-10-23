@@ -73,27 +73,12 @@ The agent connects to the server using `LUXSWIRL_AUTH_KEY`, then fetches its ass
 
 ### 5. Add Checks
 
-Via server UI:
+In the server's web UI:
 
 1. Navigate to agent detail page
 1. Click **Add Check**
 1. Configure check type (HTTP, TCP, Ping, etc.)
 1. Save
-
-Via API (optional):
-
-```bash
-curl -X POST https://server.example.com:9000/api/v1/agents/{agent_id}/checks \
-  -H "Authorization: Bearer YOUR_API_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "check_type": "http",
-    "display_name": "Website Health",
-    "target": "https://example.com",
-    "interval_seconds": 60,
-    "enabled": true
-  }'
-```
 
 ## Deployment Scenarios
 
@@ -716,7 +701,7 @@ See separate Kubernetes deployment guide (coming soon).
 LuxSwirl is compatible with Uptime Kuma check configurations:
 
 1. **Export checks** from Uptime Kuma
-1. **Import** via LuxSwirl server API or UI
+1. **Import** them on the **Agents** page (the agent card's **Import / Export** button)
 1. **Deploy agent** with Docker Compose
 1. **Approve agent** in server
 1. **Verify checks** running
@@ -727,7 +712,7 @@ LuxSwirl is compatible with Uptime Kuma check configurations:
 - [Check Types Reference](../user-guide/checks.md)
 - [Troubleshooting Guide](../guides/troubleshooting.md)
 - [Security Policy](../../SECURITY.md)
-- API documentation is auto-generated and available at `/docs` on a running server (Swagger UI)
+- The agent protocol is documented at `/docs` on a running server (Swagger UI, outside production)
 
 ## Support
 

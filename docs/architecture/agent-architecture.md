@@ -8,7 +8,7 @@ LuxSwirl supports three check assignment modes to handle different monitoring sc
 1. **REPLICATE** - Same check runs from every agent matching the selector (multi-region monitoring, redundancy).
 1. **DISTRIBUTE** - Checks are split across the agents matching the selector (load sharing, HA).
 
-The assignment logic lives in `apps/backend/app/services/core/agent_assignment_core_service.py` (`AgentAssignmentCoreService`). Agents fetch their work via `GET /api/v1/checks?agent_id={agent_id}` (`apps/backend/app/api/v1/routers/check_router.py`), which calls `AgentAssignmentCoreService.check_list_for_agent`, and that calls `get_checks_for_agent(db, agent)`. (The `/api/v1/agents/{agent_id}/checks` paths are the separate check-management CRUD endpoints, not the agent sync endpoint.)
+The assignment logic lives in `apps/backend/app/services/core/agent_assignment_core_service.py` (`AgentAssignmentCoreService`). Agents fetch their work via `GET /api/v1/checks?agent_id={agent_id}` (`apps/backend/app/api/v1/routers/check_router.py`), which calls `AgentAssignmentCoreService.check_list_for_agent`, and that calls `get_checks_for_agent(db, agent)`.
 
 ## Use Cases
 
@@ -235,18 +235,11 @@ class Agent(UUIDBaseModel):
 
 ## Authentication
 
-Two distinct mechanisms exist and are both shipped:
-
-1. **Server/admin API tokens** — used for management endpoints (e.g. creating registration keys). Validated by `verify_api_token` (`app/core/security.py`) against `SecuritySettings.auth_tokens` (`app/core/config.py`), populated from the `SECURITY__AUTH_TOKENS` env var. When unset, a token is resolved/generated at startup (`app/core/secrets.py`) — do not hard-code tokens in docs or config.
-
-   ```
-   # Example only — provide your own value, never commit a real token.
-   SECURITY__AUTH_TOKENS=["<your-admin-api-token>"]
-   ```
+Agents authenticate with keys, never a user session:
 
 1. **Per-agent API keys** — each agent has its own key, stored as a bcrypt hash in `Agent.api_key_hash` (with `api_key_created_at` / `api_key_last_used`). Agent-facing endpoints (e.g. `GET /api/v1/checks?agent_id={agent_id}`) authenticate the agent via `verify_agent_token`, which also enforces the agent's `approval_status`. This enables per-agent revocation and isolation.
 
-Agents bootstrap onto the platform using **shared registration keys** (`app/api/v1/routers/registration_key_router.py`, `RegistrationKeyService`): the plaintext key is shown once at creation and stored only as a hash. Used for initial registration and recovery.
+1. **Shared registration keys** — created by an admin under **Settings → API Keys & Metrics** (`RegistrationKeyCoreService`); the plaintext key is shown once at creation and stored only as a hash. An agent presents one to register (`POST /api/v1/agents/register`) and to recover its own key (`POST /api/v1/agents/{agent_id}/recover-key`).
 
 ## UI Surface
 

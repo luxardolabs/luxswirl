@@ -330,67 +330,6 @@ ______________________________________________________________________
 
 ______________________________________________________________________
 
-## API
-
-All endpoints require `Authorization: Bearer {token}`; full schemas are at `/docs`.
-
-**List providers** — `GET /api/v1/notification-providers`
-
-```json
-{
-  "items": [
-    {
-      "id": "uuid",
-      "provider_type": "email",
-      "friendly_name": "Team Email",
-      "config": { "hostname": "smtp.gmail.com", "port": 587,
-                  "from_email": "alerts@example.com", "to_email": "team@example.com" },
-      "is_enabled": true,
-      "is_default_enabled": true,
-      "rate_limit_count": 10,
-      "rate_limit_window_minutes": 60,
-      "created_at": "2024-01-15T10:00:00Z"
-    }
-  ],
-  "total": 3
-}
-```
-
-**Create provider** — `POST /api/v1/notification-providers`
-
-```json
-{
-  "provider_type": "webhook",
-  "friendly_name": "Slack #alerts",
-  "config": { "post_url": "https://hooks.slack.com/services/YOUR/WEBHOOK",
-              "request_body_preset": "json", "timeout": 10 },
-  "is_enabled": true,
-  "is_default_enabled": false,
-  "rate_limit_count": 60,
-  "rate_limit_window_minutes": 60
-}
-```
-
-**Test provider** — `POST /api/v1/notification-providers/{id}/test` → `{ "success": true, "message": "Test notification sent successfully" }`
-
-**List logs** — `GET /api/v1/notification-logs` (query: `skip`, `limit`, `status`, `alert_id`, `provider_id`)
-
-```json
-{
-  "items": [
-    {
-      "id": "uuid", "alert_id": "uuid", "notification_provider_id": "uuid",
-      "check_result_id": "uuid", "check_result_timestamp": "2024-01-15T14:32:01Z",
-      "status": "sent", "error_message": null, "sent_at": "2024-01-15T14:32:05Z",
-      "is_resend": false, "resend_count": 0
-    }
-  ],
-  "total": 1250, "skip": 0, "limit": 50
-}
-```
-
-______________________________________________________________________
-
 ## Security
 
 **Credential storage.** Provider credentials — SMTP passwords and webhook auth tokens — are stored in the provider's `config` (JSONB) and are **not currently encrypted at rest** (unlike agent credentials and check database credentials, which are). Keep database access controlled, use app-specific passwords and short-lived webhook tokens, and rotate them regularly.

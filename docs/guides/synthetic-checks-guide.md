@@ -67,29 +67,15 @@ ______________________________________________________________________
 
 ## Creating Synthetic Checks
 
-Create synthetic checks through the **REST API** or the **Checks UI** — these are the only supported paths, and both enforce the security controls: only an **admin** can create a synthetic check, the script is **AST-validated** before it's saved, and the attempt is audit-logged. The admin check is enforced in the core service, so neither path can bypass it. Note that the REST API has no role model — **any API Bearer token is treated as an administrator**, so scope your API tokens accordingly.
-
-```bash
-curl -X POST https://server.example.com:9000/api/v1/agents/{agent_id}/checks \
-  -H "Authorization: Bearer YOUR_ADMIN_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "display_name": "my-synthetic-check",
-    "check_type": "synthetic",
-    "target": "https://example.com",
-    "interval_seconds": 60,
-    "timeout_seconds": 60,
-    "script_code": "async def run_check(page):\n    ..."
-  }'
-```
+Create synthetic checks on the **Checks** page (**Create Check**, check type **Synthetic**). The security controls apply there: only an **admin** can create a synthetic check, the script is **AST-validated** before it's saved, and the attempt is audit-logged. The admin check is enforced in the core service, not only in the form.
 
 **Fields:**
 
-- `display_name` — unique name (kebab-case)
-- `target` — the start URL
-- `interval_seconds` — how often to run (60 = every minute)
-- `timeout_seconds` — script execution timeout (per-check default 30s)
-- `script_code` — your Playwright script (must define `async def run_check(page)`)
+- **Display name** (`display_name`) — unique name (kebab-case)
+- **Target** (`target`) — the start URL
+- **Interval** — how often to run (60 = every minute)
+- **Timeout** — script execution timeout (per-check default 30s)
+- **Script** (`script_code`) — your Playwright script (must define `async def run_check(page)`)
 
 ______________________________________________________________________
 

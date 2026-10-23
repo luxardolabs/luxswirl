@@ -186,9 +186,7 @@ ______________________________________________________________________
 # Check memory usage
 docker stats luxswirl_agent
 
-# Check number of checks assigned
-curl -H "Authorization: Bearer YOUR_TOKEN" \
-  http://localhost:9000/api/v1/agents/AGENT_ID/checks | jq '. | length'
+# Number of checks assigned: the Agents page shows each agent's check count
 ```
 
 **Solutions**:
@@ -396,9 +394,7 @@ docker stats luxswirl_agent
 #### 2. Agent overloaded (too many concurrent checks)
 
 ```bash
-# Check number of checks
-curl -H "Authorization: Bearer TOKEN" \
-  http://localhost:9000/api/v1/agents/AGENT_ID/checks | jq '. | length'
+# Number of checks: the Agents page shows each agent's check count
 
 # If >500: Deploy additional agent, distribute checks
 # OR reduce concurrency:

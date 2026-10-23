@@ -102,7 +102,7 @@ ______________________________________________________________________
 
 ## Importing
 
-Pick a mode, **drag and drop** a `.json` file onto the drop zone (or click it to browse — the file browser filters to `.json`), then click **Import Checks**. The result shows counts for **created**, **updated**, **skipped**, and any **errors** (with per-check error messages). Each check is validated on its own, in the upload and the JSON API alike: an entry with an unknown `check_type` or `http_method` is reported in **errors** and the rest still import. If the whole import fails (invalid JSON, no checks, agent not found), an error card explains why.
+Pick a mode, **drag and drop** a `.json` file onto the drop zone (or click it to browse — the file browser filters to `.json`), then click **Import Checks**. The result shows counts for **created**, **updated**, **skipped**, and any **errors** (with per-check error messages). Each check is validated on its own: an entry with an unknown `check_type` or `http_method` is reported in **errors** and the rest still import. If the whole import fails (invalid JSON, no checks, agent not found), an error card explains why.
 
 | Mode                | New checks | Existing checks (matched by `name`) |
 | ------------------- | ---------- | ----------------------------------- |
@@ -156,27 +156,13 @@ Targets can contain secrets — database connection strings carry passwords, and
 - **Access control:** restrict import/export to admins; keep dev/staging/prod on separate agents so their secrets stay separate.
 - **Audit:** import/export operations are logged; review periodically for unusual bulk operations.
 
-The web form is CSRF-protected and session-authenticated, so you **can't** automate it with `curl`/`wget` — use the REST API (`POST /api/v1/agents/{agent_id}/checks`) for automation.
+The upload form is session-authenticated and refuses cross-site requests, so it is driven from the browser rather than scripted with `curl`/`wget`.
 
 ______________________________________________________________________
 
-## Automation (REST API + jq)
+## Bulk edits with jq
 
-The check API is the automation path; full schemas are at `/docs`.
-
-```bash
-# Export an agent's checks
-curl -H "Authorization: Bearer $TOKEN" \
-  "$BASE/api/v1/agents/$AGENT_ID/checks" > checks.json
-
-# Create checks from a file (one object per check)
-cat checks.json | jq -c '.checks[]' | while read -r check; do
-  curl -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-    -d "$check" "$BASE/api/v1/agents/$AGENT_ID/checks"
-done
-```
-
-`jq` makes bulk edits easy on an exported file before re-importing:
+An exported file is plain JSON, so `jq` makes bulk edits easy before re-importing it through the **Import / Export** panel:
 
 ```bash
 jq '.checks[].interval = 120' export.json > slower.json                 # change every interval

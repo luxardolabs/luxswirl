@@ -54,7 +54,7 @@ When you do ask: **one decision per message**, the evidence that makes it answer
 **LuxSwirl** is a production-quality SaaS observability monitoring platform for all types of metrics developed by Luxardo Labs. It consists of three main components:
 
 - **Agent**: Executes health checks (ping, HTTP, TCP, JSON) and reports results to the server
-- **Server**: FastAPI REST API server with production-grade architecture (models, schemas, services, routers)
+- **Server**: FastAPI server (agent API + web UI) with production-grade architecture (models, schemas, services, routers)
 - **TimescaleDB**: PostgreSQL extension providing time-series storage with automatic partitioning and retention
 
 The system is designed as a professional SaaS platform with:
@@ -64,7 +64,7 @@ The system is designed as a professional SaaS platform with:
 - Pydantic Settings for type-safe configuration
 - SQLAlchemy 2.0 with async support
 - TimescaleDB hypertables for efficient time-series storage
-- API versioning (/api/v1) for future compatibility
+- A versioned agent protocol under `/api/v1`
 - Proper error handling and validation
 - Prometheus metrics export
 
@@ -133,7 +133,7 @@ Web UI:    web/routers/     →  services/views/ →  services/core/  →  crud/
 ### Three-component runtime
 
 1. **luxswirl_agent** (`apps/agent/`) — Runs health checks. Entry: `apps/agent/app/main.py` (`python -m app.main`). Pushes results to server via HTTP. Built as its own image.
-1. **luxswirl_server** (`apps/backend/`) — FastAPI app: REST API at `/api/v1`, web dashboard at `/dashboard`, Prometheus at `/metrics`. Entry: `apps/backend/app/main.py` (`uvicorn app.main:app`). Built as its own image.
+1. **luxswirl_server** (`apps/backend/`) — FastAPI app: agent protocol at `/api/v1`, web dashboard at `/dashboard`, Prometheus at `/metrics`. Entry: `apps/backend/app/main.py` (`uvicorn app.main:app`). Built as its own image.
 1. **TimescaleDB** — PostgreSQL extension. Automatic partitioning, configurable retention, continuous aggregates. Schema lives in `apps/backend/app/models/*_model.py`; DDL helpers live in `apps/backend/app/crud/timescale_crud.py`.
 
 ### Web UI
@@ -180,7 +180,7 @@ Available check types (in `apps/agent/app/checks/`):
 
 **Synthetic Check Security (IMPORTANT):**
 
-- **Admin Role Required**: Only admins create/modify synthetic checks — enforced in the core service (`CheckCoreService.create_check/update_check/clone_check`), not just the web layer, so the JSON API can't bypass it. Web users are gated by RBAC role; the JSON API has no role model, so any API Bearer token is admin-equivalent.
+- **Admin Role Required**: Only admins create/modify synthetic checks, through the web UI — enforced in the core service (`CheckCoreService.create_check/update_check/clone_check`), not just the web layer.
 - **Arbitrary Code Execution**: Runs user-provided Python scripts using `exec()` with Playwright
 - **AST Validation**: Scripts validated to block obvious attacks (eval, exec, os, subprocess, etc.)
 - **Security Audit Logging**: All operations logged with `SECURITY AUDIT` prefix
@@ -265,7 +265,7 @@ make dev-shell     # bash into the server container
 make dev-down      # stop the stack (volume preserved)
 ```
 
-Dev runs **baked images** (code COPYd in — no source bind-mounts), so a code change reaches the stack only through a build: use `make dev-deploy`. `make dev-up` alone recreates the containers onto the tag `.env.dev` already pins, and `make dev-restart` just bounces them; both run the old code. `make smoke` needs `SMOKE_URL` in `Makefile.local` (see `Makefile.local.example`) and `SMOKE_AUTH_TOKEN` in the environment. The `luxswirl_db_data` volume persists across `down`/`up`; only `make clean-all` (`down -v`) drops it.
+Dev runs **baked images** (code COPYd in — no source bind-mounts), so a code change reaches the stack only through a build: use `make dev-deploy`. `make dev-up` alone recreates the containers onto the tag `.env.dev` already pins, and `make dev-restart` just bounces them; both run the old code. `make smoke` needs `SMOKE_URL` in `Makefile.local` (see `Makefile.local.example`); its authenticated probe runs when `Makefile.local` sets `SMOKE_AUTH_PATH` (e.g. `/metrics` on a stack that requires the metrics token) and `SMOKE_AUTH_TOKEN` is in the environment. The `luxswirl_db_data` volume persists across `down`/`up`; only `make clean-all` (`down -v`) drops it.
 
 ### Build & release
 
@@ -306,48 +306,29 @@ See `docs/architecture/backend.md` for the full layering rules and naming conven
 - `port`: Server listen port (default: 9000)
 - `metrics_ttl_seconds`: How long to keep check results (default: 300)
 - `max_history_points`: Historical data points per check (default: 1000)
-- `auth_tokens`: List of valid Bearer tokens for authentication
 
 ## API Endpoints
 
-### Server REST API (v1)
+The JSON API is the agent protocol. Operators manage agents, checks, alerts, notification providers, registration keys, users and jobs through the web UI.
 
-**Agents**
+### Agent protocol (`/api/v1`)
 
-- `GET /api/v1/agents` - List all agents with pagination and filtering
-- `GET /api/v1/agents/{agent_id}` - Get specific agent details
-- `POST /api/v1/agents` - Create a new agent
-- `PATCH /api/v1/agents/{agent_id}` - Update agent metadata
-- `DELETE /api/v1/agents/{agent_id}` - Delete agent and all data
-- `GET /api/v1/agents/{agent_id}/stats` - Get agent statistics
+| Method | Path                                    | Auth                          | Purpose                                  |
+| ------ | --------------------------------------- | ----------------------------- | ---------------------------------------- |
+| `POST` | `/api/v1/agents/register`               | Registration key              | Register a new agent (pending approval)  |
+| `POST` | `/api/v1/agents/{agent_id}/recover-key` | Registration key              | Issue a fresh agent key to a known agent |
+| `POST` | `/api/v1/heartbeat`                     | Agent key or registration key | Report liveness and self-metrics         |
+| `GET`  | `/api/v1/checks?agent_id={id}`          | Agent key                     | The checks this agent should run         |
+| `POST` | `/api/v1/reports`                       | Agent key                     | Submit a batch of check results          |
+| `POST` | `/api/v1/jobs/{job_id}/results`         | Key of the job's own agent    | Submit a job's results                   |
+| `POST` | `/api/v1/artifacts`                     | API token                     | Upload a synthetic-check artifact        |
 
-**Checks**
+### Infrastructure
 
-- `GET /api/v1/agents/{agent_id}/checks` - List checks for an agent
-- `GET /api/v1/agents/{agent_id}/checks/{check_name}` - Get specific check
-- `POST /api/v1/agents/{agent_id}/checks` - Create a new check
-- `POST /api/v1/agents/{agent_id}/checks/{check_id}/clone` - Clone an existing check with optional field overrides
-- `PATCH /api/v1/agents/{agent_id}/checks/{check_name}` - Update check config
-- `DELETE /api/v1/agents/{agent_id}/checks/{check_name}` - Delete check
-
-**Check Results**
-
-- `POST /api/v1/reports` - Submit agent report (bulk check results)
-- `GET /api/v1/agents/{agent_id}/results` - Get latest results for agent
-- `GET /api/v1/agents/{agent_id}/checks/{check_name}/history` - Get check history
-- `GET /api/v1/agents/{agent_id}/checks/{check_name}/summary` - Get check statistics
-- `GET /api/v1/stats` - Get global aggregated statistics
-
-**Metrics & Health**
-
-- `GET /metrics` - Prometheus-format metrics export
-- `GET /metrics/summary` - Metrics summary (JSON)
-- `GET /health` - Server health check
-- `GET /` - API information
-- `GET /docs` - Auto-generated OpenAPI documentation (Swagger UI)
-- `GET /redoc` - Auto-generated ReDoc documentation
-
-All endpoints require Bearer token authentication via the `Authorization` header.
+- `GET /metrics` - Prometheus exposition (optional bearer token from Settings > API Keys)
+- `GET /health` - Server health check (status, version, commit)
+- `GET /api` - API information
+- `GET /docs`, `GET /redoc` - OpenAPI documentation (outside production)
 
 ### Prometheus Metrics
 
