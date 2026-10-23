@@ -62,7 +62,7 @@ async def test_create_update_and_delete_are_committed(worker_db) -> None:
 
 async def test_a_registered_agent_is_committed_pending(worker_db) -> None:
     async with worker_db() as s:
-        registered = await AgentCoreService.register_agent(s, hostname="new.test")
+        registered, _ = await AgentCoreService.register_agent(s, hostname="new.test")
         await s.commit()
 
     stored = await _stored(worker_db, registered.id)

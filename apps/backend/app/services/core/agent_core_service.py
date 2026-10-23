@@ -2,6 +2,8 @@
 Agent service - business logic for agent operations.
 """
 
+import hashlib
+import hmac
 import secrets
 from collections.abc import Sequence
 from datetime import datetime
@@ -16,6 +18,7 @@ from app.core.config import settings
 from app.core.datetime_utils import utc_now
 from app.core.exceptions import (
     AgentNotFoundException,
+    AuthenticationException,
     AuthorizationException,
     DuplicateResourceException,
     ValidationException,
@@ -38,6 +41,19 @@ from app.services.core.job_core_service import JobCoreService
 from app.services.core.metrics_collector_core_service import MetricsCollectorCoreService
 
 logger = get_logger("luxswirl.services.agent")
+
+
+def _recovery_secret_digest(secret: str) -> str:
+    """The stored form of a recovery secret: its SHA-256 hex digest.
+
+    A fast hash is right here: the secret is 256 random bits, not a password,
+    so there is nothing for a slow hash to stretch.
+    """
+    return hashlib.sha256(secret.encode()).hexdigest()
+
+
+# Compared against when no digest is on record, so a refusal does the same work.
+_NO_SECRET_DIGEST = "0" * 64
 
 
 class AgentCoreService:
@@ -213,20 +229,59 @@ class AgentCoreService:
         return await AgentCRUD.get_by_name_with_checks(db, agent_name)
 
     @staticmethod
-    async def recover_agent_key(db: AsyncSession, agent_id: UUID) -> str:
-        """Issue an active agent a fresh key, for an agent that lost its own.
+    async def recover_agent_key(
+        db: AsyncSession, agent_id: UUID, recovery_secret: str | None
+    ) -> str:
+        """Issue an active agent a fresh key, once it proves its recovery secret.
+
+        The caller has already proved the registration key, which every agent
+        install shares; the secret, issued to this agent alone at registration,
+        is what binds the recovery to it. An unknown agent, an agent registered
+        before secrets existed (no hash), a missing secret and a wrong one are
+        all refused the same way, after the same digest comparison.
 
         Raises:
-            AgentNotFoundException: If the agent does not exist
+            AuthenticationException: If the agent and secret do not match
             AuthorizationException: If the agent is not active
         """
-        agent = await AgentCoreService.get_agent_by_id(db, agent_id)
+        agent = await AgentCRUD.get_by_id_with_checks(db, agent_id)
+        stored = agent.recovery_secret_hash if agent is not None else None
+        presented = _recovery_secret_digest(recovery_secret or "")
+        # Always one constant-time comparison, against a digest no secret has
+        # when there is nothing stored, so the refusal takes the same path.
+        matches = hmac.compare_digest(
+            presented.encode(), (stored or _NO_SECRET_DIGEST).encode()
+        )
+        if agent is None or not stored or not recovery_secret or not matches:
+            logger.warning(
+                "SECURITY AUDIT: Agent key recovery refused",
+                extra={
+                    "event": "agent_key_recovery_refused",
+                    "agent_id": str(agent_id),
+                    "agent_known": agent is not None,
+                    "secret_presented": bool(recovery_secret),
+                    "secret_on_record": bool(stored),
+                },
+            )
+            raise AuthenticationException("Invalid agent recovery credentials")
         if agent.approval_status != "active":
+            logger.warning(
+                "SECURITY AUDIT: Agent key recovery refused",
+                extra={
+                    "event": "agent_key_recovery_refused",
+                    "agent_id": str(agent_id),
+                    "approval_status": agent.approval_status,
+                },
+            )
             raise AuthorizationException(
                 "Agent must be active to recover key. "
                 f"Current status: {agent.approval_status}"
             )
         _, new_key = await AgentCoreService.regenerate_agent_key(db, agent_id)
+        logger.warning(
+            "SECURITY AUDIT: Agent key recovered",
+            extra={"event": "agent_key_recovered", "agent_id": str(agent_id)},
+        )
         return new_key
 
     @staticmethod
@@ -331,13 +386,17 @@ class AgentCoreService:
         ip_address: str | None = None,
         version: str | None = None,
         tags: list[str] | None = None,
-    ) -> AgentOption:
+    ) -> tuple[AgentOption, str]:
         """
         Register a new agent with pending approval status.
 
         This is used during agent self-registration process. Agent is created
         with approval_status='pending' and no agent_name. Admin must approve
         the agent before it can operate.
+
+        The agent is issued a random recovery secret, kept only as its digest:
+        key recovery needs it, so the shared registration key alone can never
+        mint a key for an agent.
 
         Args:
             db: Database session
@@ -347,8 +406,10 @@ class AgentCoreService:
             tags: Agent tags
 
         Returns:
-            Created agent with pending status
+            Created agent with pending status, and its plaintext recovery
+            secret (returned once; not stored)
         """
+        recovery_secret = f"luxswirl_rs_{secrets.token_hex(32)}"
         agent = Agent(
             agent_name=None,  # Will be set during approval
             hostname=hostname,
@@ -358,6 +419,7 @@ class AgentCoreService:
             approval_status="pending",
             first_seen=utc_now(),
             last_seen=utc_now(),
+            recovery_secret_hash=_recovery_secret_digest(recovery_secret),
         )
 
         agent = await AgentCRUD.add_agent(db, agent)
@@ -370,7 +432,7 @@ class AgentCoreService:
                 "ip_address": ip_address,
             },
         )
-        return AgentOption.model_validate(agent)
+        return AgentOption.model_validate(agent), recovery_secret
 
     @staticmethod
     async def update_agent(

@@ -241,6 +241,8 @@ Agents authenticate with keys, never a user session:
 
 1. **Shared registration keys** — created by an admin under **Settings → API Keys & Metrics** (`RegistrationKeyCoreService`); the plaintext key is shown once at creation and stored only as a hash. An agent presents one to register (`POST /api/v1/agents/register`) and to recover its own key (`POST /api/v1/agents/{agent_id}/recover-key`).
 
+1. **Per-agent recovery secrets** — registration returns each agent a random recovery secret once; the server stores only its SHA-256 digest (`Agent.recovery_secret_hash`). recover-key needs the registration key **and** that agent's secret (header `X-Agent-Recovery-Secret`), compared in constant time, so one install holding the shared registration key cannot take over another agent by its id. An unknown agent, a missing secret and a wrong one are refused identically (401); every recovery, granted or refused, is logged as a `SECURITY AUDIT` event without the secret. Agents registered before recovery secrets existed have no digest and cannot recover: they register again and are approved again.
+
 ## UI Surface
 
 ### Agent Management

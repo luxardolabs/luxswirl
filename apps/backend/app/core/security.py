@@ -8,6 +8,7 @@ from collections.abc import Awaitable, Callable
 from datetime import timedelta
 from typing import TYPE_CHECKING, Annotated, Any
 from urllib.parse import urlencode
+from uuid import UUID
 
 import bcrypt
 import jwt
@@ -469,6 +470,36 @@ async def verify_registration_token(
         detail="Invalid registration token",
         headers={"WWW-Authenticate": "Bearer"},
     )
+
+
+async def verify_recovery_registration_key(
+    agent_id: UUID, authorization: str | None, db: AsyncSession
+) -> None:
+    """The registration-key half of an agent's key recovery, audited.
+
+    Called in the recover-key route BODY, not as a dependency: the route's rate
+    limit wraps the body, so a refusal raised from a dependency would never be
+    counted and the key could be guessed without limit. The other half, the
+    agent's own recovery secret, is checked in core. A refusal here is a failed
+    recovery, so it is a SECURITY AUDIT line like the ones core writes.
+    """
+    try:
+        await verify_registration_token(authorization, db)
+    except HTTPException as refused:
+        logger.warning(
+            "SECURITY AUDIT: Agent key recovery refused",
+            extra={
+                "event": "agent_key_recovery_refused",
+                "agent_id": str(agent_id),
+                "reason": "registration_key",
+            },
+        )
+        # verify_registration_token refuses only with 401; say so here.
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=refused.detail,
+            headers=refused.headers,
+        ) from None
 
 
 async def verify_agent_token(

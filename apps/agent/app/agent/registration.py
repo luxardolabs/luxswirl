@@ -6,6 +6,7 @@ Handles agent registration with the server and API key recovery.
 
 import os
 from typing import Any
+from uuid import UUID
 
 import httpx
 from shared.logger import get_logger
@@ -85,7 +86,8 @@ class AgentRegistration:
             response.raise_for_status()
 
             data = response.json()
-            agent_id = data.get("agent_id")
+            agent_id = UUID(data["agent_id"])
+            recovery_secret = data.get("recovery_secret")
             status = data.get("status")
             message = data.get("message")
 
@@ -94,8 +96,9 @@ class AgentRegistration:
                 extra={"server_message": message, "status": status},
             )
 
-            # Save credentials (without agent-specific key yet - will get it after approval)
-            if self.credentials.save(agent_id):
+            # Save credentials (without agent-specific key yet - will get it
+            # after approval) and the recovery secret that key recovery needs.
+            if self.credentials.save(agent_id, recovery_secret=recovery_secret):
                 self.config["agent_id"] = agent_id
                 self.logger.info(
                     "Saved agent credentials",
@@ -120,16 +123,53 @@ class AgentRegistration:
             self.logger.exception("Registration failed")
             return False
 
+    async def ensure_recoverable(self) -> bool:
+        """Re-register credentials that could never be completed.
+
+        Credentials with no agent key yet must recover one after approval, and
+        that needs the recovery secret. Without one (saved before it existed)
+        the agent registers afresh now, so the operator approves an agent that
+        can finish. Credentials that hold their key are left alone.
+
+        Returns:
+            False only if a needed re-registration failed
+        """
+        if self.credentials.api_key or self.credentials.recovery_secret:
+            return True
+        self.logger.warning(
+            "Stored credentials have neither an agent key nor a recovery secret: "
+            "registering again; approve the new agent"
+        )
+        return await self._register_afresh()
+
+    async def _register_afresh(self) -> bool:
+        """Drop the stored credentials and register as a new agent."""
+        self.credentials.clear()
+        self.config.pop("agent_id", None)
+        return await self.register_with_server()
+
     async def recover_agent_key(self) -> bool:
         """
         Recover/retrieve agent-specific API key from server.
 
         Called after agent approval to get unique agent-specific key.
-        Uses registration key to authenticate the recovery request.
+        Authenticates with the registration key AND this agent's recovery
+        secret (header X-Agent-Recovery-Secret). Credentials saved before the
+        secret existed cannot recover: the agent registers afresh instead, and
+        an operator approves the new registration.
 
         Returns:
             True if key retrieved and saved successfully
         """
+        recovery_secret = self.credentials.recovery_secret
+        if not recovery_secret:
+            self.logger.warning(
+                "No recovery secret stored (registered before recovery secrets "
+                "existed): registering again; approve the new agent"
+            )
+            await self._register_afresh()
+            return False
+
         push_url = self.config.get("push_url", "http://localhost:9000")
         agent_id = self.config.get("agent_id")
         registration_key = self.config.get(
@@ -152,7 +192,10 @@ class AgentRegistration:
 
         recovery_url = f"{base_url}/api/v1/agents/{agent_id}/recover-key"
 
-        headers = {"Authorization": f"Bearer {registration_key}"}
+        headers = {
+            "Authorization": f"Bearer {registration_key}",
+            "X-Agent-Recovery-Secret": recovery_secret,
+        }
 
         try:
             client = server_client()

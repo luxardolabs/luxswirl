@@ -1,7 +1,8 @@
 """
 Agent credentials manager.
 
-Handles saving/loading agent UUID and API key to persistent storage.
+Handles saving/loading the agent UUID, its API key and its recovery secret to
+persistent storage.
 
 Credentials are encrypted using Fernet (AES-128-CBC + HMAC) with a key derived
 from container-specific data (hostname + machine-id). This provides protection
@@ -45,6 +46,9 @@ class AgentCredentials:
         self.credentials_file = Path(credentials_file)
         self.agent_id: UUID | None = None
         self.api_key: str | None = None
+        # Issued once at registration; recover-key needs it with the
+        # registration key. None for credentials saved before it existed.
+        self.recovery_secret: str | None = None
         self._encryption_enabled = True  # Can be disabled via env var for debugging
 
         # Check if encryption should be disabled (for testing/migration)
@@ -130,7 +134,7 @@ class AgentCredentials:
                     logger.info("Migrating to encrypted format...")
                     agent_id = UUID(data["agent_id"])
                     api_key = data.get("api_key")
-                    self.save(agent_id, api_key)
+                    self.save(agent_id, api_key, data.get("recovery_secret"))
                     logger.info("✅ Migration complete - credentials now encrypted")
 
             except json.JSONDecodeError, UnicodeDecodeError:
@@ -157,6 +161,7 @@ class AgentCredentials:
             # Parse credentials
             self.agent_id = UUID(data["agent_id"])
             self.api_key = data.get("api_key")  # Optional - may not be set yet
+            self.recovery_secret = data.get("recovery_secret")  # Optional (legacy)
 
             logger.info(
                 "Loaded agent credentials",
@@ -172,13 +177,22 @@ class AgentCredentials:
             )
             return False
 
-    def save(self, agent_id: UUID, api_key: str | None = None) -> bool:
+    def save(
+        self,
+        agent_id: UUID,
+        api_key: str | None = None,
+        recovery_secret: str | None = None,
+    ) -> bool:
         """
         Save credentials to file (encrypted by default).
+
+        A save for the agent already held keeps its recovery secret when none
+        is passed: saving the key after approval must not drop it.
 
         Args:
             agent_id: Agent UUID from registration
             api_key: Optional API key from approval
+            recovery_secret: The recovery secret registration returned
 
         Returns:
             True if saved successfully
@@ -194,6 +208,11 @@ class AgentCredentials:
 
             if api_key:
                 data["api_key"] = api_key
+
+            if recovery_secret is None and str(agent_id) == str(self.agent_id):
+                recovery_secret = self.recovery_secret
+            if recovery_secret:
+                data["recovery_secret"] = recovery_secret
 
             if self._encryption_enabled:
                 # Encrypt credentials with Fernet
@@ -223,6 +242,7 @@ class AgentCredentials:
             # Update in-memory state
             self.agent_id = agent_id
             self.api_key = api_key
+            self.recovery_secret = recovery_secret
 
             logger.info(
                 "Saved agent credentials",
@@ -256,6 +276,7 @@ class AgentCredentials:
             # Clear in-memory credentials
             self.agent_id = None
             self.api_key = None
+            self.recovery_secret = None
 
             # Delete credentials file if it exists
             if self.credentials_file.exists():
