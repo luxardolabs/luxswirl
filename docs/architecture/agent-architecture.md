@@ -217,15 +217,19 @@ Examples:
 
 ## Result Reporting
 
-The agent's reporter (`apps/agent/app/agent/reporter.py`) batches check results and POSTs them to `/api/v1/reports`. Each response is classified (`classify_status` in `apps/agent/app/agent/dead_letter.py`):
+The agent's reporter (`apps/agent/app/agent/reporter.py`) batches check results and POSTs them to `/api/v1/reports`. Before a result is queued it is fitted to the server's per-result limits (`apps/agent/app/agent/result_limits.py`): an `error` over 4,000 characters or a `response_data` over 65,535 is truncated with a `... [truncated]` marker, and an `http_status_code` outside 100-599 (a real server can answer 999) is sent as `null`, with the code itself in `metrics.http_status_code_raw`.
 
-| Outcome       | Statuses                                              | What happens to the batch                                                         |
-| ------------- | ----------------------------------------------------- | --------------------------------------------------------------------------------- |
-| **Sent**      | 2xx                                                   | Done                                                                              |
-| **Permanent** | 400, 413, 422                                         | Not retried, not stored: moved to the `dead_letters` table with an ERROR log line |
-| **Transient** | network errors, 5xx, 408, 429, 401/403, anything else | Retried `report_max_retries` times, then stored in `pending_batches` for replay   |
+The server validates each result in a report on its own. One it still cannot store is counted in `results_failed` and logged (the result and the failing fields, never the values), like a result for a check the agent was not assigned; the rest of the report is stored. Only a bad envelope (an invalid `agent_id`, more than 10,000 results, a result that is not a JSON object) refuses the whole report with 422.
 
-Auth failures (401/403) stay transient: the agent's key-recovery path can fix them, so they are never dead-lettered.
+Each response is classified (`classify_response` in `apps/agent/app/agent/dead_letter.py`):
+
+| Outcome       | Response                                                                                        | What happens to the batch                                                         |
+| ------------- | ----------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| **Sent**      | 2xx                                                                                             | Done                                                                              |
+| **Permanent** | 400 or 422 with the server's JSON error envelope, `error` = `VALIDATION_ERROR` or `BAD_REQUEST` | Not retried, not stored: moved to the `dead_letters` table with an ERROR log line |
+| **Transient** | everything else: network errors, 5xx, 408, 429, 401/403, any 4xx without that envelope          | Retried `report_max_retries` times, then stored in `pending_batches` for replay   |
+
+Only the server itself can say a payload is invalid. The server's trusted-host middleware answers a request whose `Host` is not in `allowed_hosts` with a plain-text `400 Invalid host header`, and a proxy such as nginx answers with its own HTML 400 or 413 (the app never sends 413). Those mean the agent is misaddressed or the route is misconfigured, so the batches stay pending and are delivered once it is fixed, instead of being dead-lettered and pruned by the cap. Auth failures (401/403) stay transient too: the agent's key-recovery path can fix them.
 
 Both tables live in one SQLite file, `reports/pending_reports.db` (WAL, gzip-compressed payloads, every query through `asyncio.to_thread`):
 

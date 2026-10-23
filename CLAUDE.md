@@ -233,9 +233,10 @@ The agent uses a sophisticated batching reporter (`apps/agent/app/agent/reporter
   - Disk cap: `report_max_stored_batches` (default 10,000) prunes oldest batches when exceeded
   - Uses `asyncio.to_thread()` for non-blocking I/O (stdlib `sqlite3`, zero new dependencies)
 - Background task processes stored reports when server becomes available, combined up to `report_batch_size` per POST
+- **Per-result limits** (`apps/agent/app/agent/result_limits.py`): before a result is queued, an over-long `error`/`response_data` is truncated and an `http_status_code` outside 100-599 is sent as null (the code goes to `metrics.http_status_code_raw`). The server validates each result on its own, so one it cannot store is counted in `results_failed` and the rest of the report is kept
 - **Dead letters for permanent refusals** (`apps/agent/app/agent/dead_letter.py`)
-  - A 400, 413 or 422 means the server refuses that payload and will again: the batch is not retried or stored, it goes to the `dead_letters` table in the same database (original `created_at`, `failed_at`, status, the server's error detail scrubbed by `shared/log_redaction.py` and cut to 2 KB, and the gzip payload), with an ERROR log line
-  - Everything else is transient and stored for replay: network errors, 5xx, 408, 429, and 401/403 (key recovery can fix auth; it is never dead-lettered)
+  - Only the server's own word is permanent: a 400 or 422 whose body is the app's JSON error envelope with `error` = `VALIDATION_ERROR` or `BAD_REQUEST`. That batch is not retried or stored, it goes to the `dead_letters` table in the same database (original `created_at`, `failed_at`, status, the server's error detail scrubbed by `shared/log_redaction.py` and cut to 2 KB, and the gzip payload), with an ERROR log line
+  - Everything else is transient and stored for replay: network errors, 5xx, 408, 429, 401/403 (key recovery can fix auth), and any 4xx without the app's envelope, such as the trusted-host middleware's plain-text `400 Invalid host header` or a proxy's own 400/413 (the app never sends 413). A misaddressed agent keeps its queue
   - Replay never stops at a refused batch: a combined POST refused permanently is retried batch by batch; each one the server takes is deleted, each one it refuses moves to `dead_letters`, and a transient failure ends the pass
   - Cap: `report_max_dead_letters` (default 1,000) prunes the oldest
   - The count rides each heartbeat as `dead_letter_count`, is stored on the agent row, and shows as a yellow "N dead-lettered" badge on the agent's card when above zero
