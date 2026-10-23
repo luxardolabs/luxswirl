@@ -182,7 +182,7 @@ async def test_my_secret_cannot_recover_another_agent(
 async def test_no_secret_is_refused(
     client: AsyncClient, db: AsyncSession, reg_key: str
 ) -> None:
-    """The registration key alone is what used to be enough: it is not."""
+    """The registration key alone is refused: recovery needs the agent's secret too."""
     agent_id, _ = await _register(client, reg_key)
     await _approve(db, agent_id)
 

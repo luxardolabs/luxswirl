@@ -109,5 +109,5 @@ async def test_the_scrape_is_open_when_auth_is_not_required(
 
 
 def test_there_is_no_shared_admin_api_token_setting() -> None:
-    """SECURITY__AUTH_TOKENS is gone: no field reads it, so nothing accepts it."""
+    """No setting holds a shared API token, so nothing can accept one."""
     assert "auth_tokens" not in type(settings.security).model_fields

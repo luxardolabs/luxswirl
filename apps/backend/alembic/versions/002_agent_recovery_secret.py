@@ -1,8 +1,7 @@
 """agent_recovery_secret — bind key recovery to a per-agent secret.
 
-Key recovery used to need only the registration key, which every agent install
-shares, so any one host could rotate (and take) any agent's key by its id.
-Registration now issues each agent a random recovery secret, returned once and
+The registration key is shared by every agent install, so on its own it cannot
+prove which agent is recovering. Registration issues each agent a random recovery secret, returned once and
 stored here as its SHA-256 hex digest; recover-key needs it.
 
 Agents registered before this revision have no hash (NULL) and cannot recover:
