@@ -385,24 +385,53 @@ class CheckResultCRUD:
         return dict(result.all())
 
     @staticmethod
-    async def count_deleted_with_agent(
-        db: AsyncSession, agent_id: UUID, since: datetime
-    ) -> int:
-        """Results since `since` that deleting the agent removes: those it
-        reported, and those of the checks it owns (both cascade)."""
-        owned = select(Check.id).where(Check.agent_id == agent_id)
-        result = await db.execute(
+    async def count_deleted_with_agent(db: AsyncSession, agent_id: UUID) -> int:
+        """Stored results that deleting the agent removes: those of the checks
+        it owns and those it reported for other checks (both cascade).
+
+        Every stored row counts, however old: retention drops whole chunks, so
+        rows past its window can still be there, and the cascade removes them.
+        The time bound is the oldest chunk's start, which no stored row
+        precedes. Two counts, each on its own index (check_id, then agent_id),
+        rather than one OR that no index serves.
+        """
+        oldest: datetime | None = (
+            await db.execute(
+                text(
+                    "SELECT min(range_start) FROM timescaledb_information.chunks"
+                    " WHERE hypertable_name = 'check_results'"
+                )
+            )
+        ).scalar_one()
+        if oldest is None:
+            return 0
+        owned = list(
+            (await db.execute(select(Check.id).where(Check.agent_id == agent_id)))
+            .scalars()
+            .all()
+        )
+        of_owned = 0
+        if owned:
+            of_owned = int(
+                (
+                    await db.execute(
+                        select(func.count())
+                        .select_from(CheckResult)
+                        .where(
+                            CheckResult.check_id.in_(owned),
+                            CheckResult.timestamp >= oldest,
+                        )
+                    )
+                ).scalar_one()
+            )
+        reported = (
             select(func.count())
             .select_from(CheckResult)
-            .where(
-                or_(
-                    CheckResult.agent_id == agent_id,
-                    CheckResult.check_id.in_(owned),
-                ),
-                CheckResult.timestamp >= since,
-            )
+            .where(CheckResult.agent_id == agent_id, CheckResult.timestamp >= oldest)
         )
-        return int(result.scalar_one())
+        if owned:
+            reported = reported.where(CheckResult.check_id.not_in(owned))
+        return of_owned + int((await db.execute(reported)).scalar_one())
 
     @staticmethod
     async def newest_result_after(
