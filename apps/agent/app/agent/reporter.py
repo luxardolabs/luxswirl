@@ -485,13 +485,14 @@ class Reporter:
         A transient failure stores the batch for replay; a permanent refusal
         (the server's own 400/422 envelope saying the payload is invalid, see
         `dead_letter.classify_response`) dead-letters it, since sending it
-        again cannot succeed.
+        again cannot succeed; a batch over the request size limit (413) is
+        sent in halves (`_send_in_parts`).
 
         Args:
             batch: List of check results to send
 
         Returns:
-            True if the batch was sent successfully, False otherwise
+            True if the whole batch was sent, False otherwise
         """
         if not batch:
             return True
@@ -500,23 +501,95 @@ class Reporter:
             self.logger.warning("No push URL configured, not sending results")
             return False
 
+        return await self._deliver(batch) is Delivery.SENT
+
+    async def _deliver(self, batch: list[dict[str, Any]]) -> Delivery:
+        """POST a batch; whatever the server does not take is stored for replay
+        or dead-lettered, never dropped.
+
+        Returns:
+            SENT when all of it was taken, PERMANENT when some was dead-lettered
+            and the rest taken, otherwise what stopped delivery (TRANSIENT or
+            TOO_LARGE), with what was not sent stored.
+        """
         outcome, status_code, detail = await self._post_batch(batch)
-
         if outcome is Delivery.SENT:
-            return True
-
+            return Delivery.SENT
         if outcome is Delivery.PERMANENT and status_code is not None:
             await self._dead_letter_batch(batch, status_code, detail)
-        else:
-            await self._store_batch_to_db(batch)
-        return False
+            return Delivery.PERMANENT
+        unsent = [batch]
+        if outcome is Delivery.TOO_LARGE:
+            outcome, unsent = await self._send_in_parts(batch)
+        await self._store_unsent(batch, unsent)
+        return outcome
+
+    async def _send_in_parts(
+        self, batch: list[dict[str, Any]]
+    ) -> tuple[Delivery, list[list[dict[str, Any]]]]:
+        """Send a batch the request size limit refused (413) in halves, each
+        split again while still refused. Nothing is stored here.
+
+        Splitting stops at a single result with TOO_LARGE, as it stops at a
+        transient failure, and the result is kept, never dead-lettered on a
+        proxy's word: `fit_result` caps a result's long text fields far below
+        the body limit a deployment sets, so a 413 on one result usually says
+        the route is wrong (a misrouted request, a misconfigured proxy), and
+        dead-lettering would empty a misaddressed agent's queue. Replay passes
+        such a row by, so it never blocks the rows behind it.
+
+        Returns:
+            SENT or PERMANENT (some halves dead-lettered by the server) when
+            every part was dealt with, else TRANSIENT or TOO_LARGE; and the
+            parts not sent (empty unless the outcome is one of those two).
+        """
+        if len(batch) == 1:
+            return Delivery.TOO_LARGE, [batch]
+        mid = len(batch) // 2
+        halves = (batch[:mid], batch[mid:])
+        self.logger.warning(
+            "Batch over the request size limit, sending it in halves",
+            extra={"result_count": len(batch)},
+        )
+        overall = Delivery.SENT
+        for i, half in enumerate(halves):
+            outcome, status_code, detail = await self._post_batch(half)
+            if outcome is Delivery.SENT:
+                continue
+            if outcome is Delivery.PERMANENT and status_code is not None:
+                await self._dead_letter_batch(half, status_code, detail)
+                overall = Delivery.PERMANENT
+                continue
+            unsent = [half]
+            if outcome is Delivery.TOO_LARGE:
+                outcome, unsent = await self._send_in_parts(half)
+                if outcome is Delivery.PERMANENT:
+                    overall = outcome
+                if outcome in (Delivery.SENT, Delivery.PERMANENT):
+                    continue
+            return outcome, [*unsent, *halves[i + 1 :]]
+        return overall, []
+
+    async def _store_unsent(
+        self, batch: list[dict[str, Any]], unsent: list[list[dict[str, Any]]]
+    ) -> None:
+        """Store what of `batch` was not sent: as the one batch it was when
+        none of it went, so a route that refuses everything never multiplies
+        the stored rows (and the stored-batch cap never prunes them for it)."""
+        if sum(len(part) for part in unsent) == len(batch):
+            if unsent:
+                await self._store_batch_to_db(batch)
+            return
+        for part in unsent:
+            await self._store_batch_to_db(part)
 
     async def _post_batch(
         self, batch: list[dict[str, Any]]
     ) -> tuple[Delivery, int | None, str]:
         """POST a batch, retrying transient failures up to `max_retries`.
 
-        A permanent refusal returns at once: retrying it cannot succeed.
+        A permanent refusal or a 413 returns at once: resending the same
+        body cannot succeed.
 
         Returns:
             The outcome, the last HTTP status (None for a network error), and
@@ -579,8 +652,8 @@ class Reporter:
 
                 detail = error_detail(resp.text)
                 self.metrics["send_failures"] += 1
-                if outcome is Delivery.PERMANENT:
-                    return Delivery.PERMANENT, status_code, detail
+                if outcome in (Delivery.PERMANENT, Delivery.TOO_LARGE):
+                    return outcome, status_code, detail
                 self.logger.warning(
                     "Failed to send results",
                     extra={"status_code": status_code, "response_text": detail},
@@ -798,7 +871,9 @@ class Reporter:
 
         On a permanent refusal one of them is bad, so each is retried alone:
         those the server takes are deleted, those it refuses for good move to
-        dead_letters. Replay never stops at a refused batch.
+        dead_letters. A combined POST over the request size limit (413) is
+        retried batch by batch too, and a single stored batch over it is sent
+        in halves. Replay never stops at a refused or oversized batch.
 
         Returns:
             False when a transient failure should end this pass (the batches
@@ -816,6 +891,21 @@ class Reporter:
             )
             return True
 
+        if outcome is Delivery.TOO_LARGE and len(group) == 1:
+            [stored] = group
+            got, unsent = await self._send_in_parts(stored.checks)
+            if sum(len(part) for part in unsent) == len(stored.checks):
+                # Nothing went: the row stays as it is. Past a size refusal the
+                # pass goes on, so one row never blocks the queue behind it.
+                return got is Delivery.TOO_LARGE
+            # The rest is stored as new rows, then the original row goes. A
+            # crash between the two resends parts the server already has, which
+            # its (check, timestamp) key ignores.
+            for part in unsent:
+                await self._store_batch_to_db(part)
+            await asyncio.to_thread(self._delete_stored_batch_sync, stored.row_id)
+            return got is not Delivery.TRANSIENT
+
         if outcome is Delivery.TRANSIENT or status_code is None:
             self.logger.warning(
                 "Failed replay POST",
@@ -825,7 +915,7 @@ class Reporter:
 
         if len(group) > 1:
             self.logger.warning(
-                "Replay POST refused permanently, retrying its batches one by one",
+                "Replay POST refused, retrying its batches one by one",
                 extra={"batch_count": len(group), "status_code": status_code},
             )
             for stored in group:

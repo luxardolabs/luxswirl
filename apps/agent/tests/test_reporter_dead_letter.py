@@ -8,8 +8,11 @@ the pending queue, and replay of the pending queue never stops at it.
 Everything else stays transient and is stored and retried: network errors,
 5xx, 408, 429, 401/403 (which key recovery can fix), and any 4xx without the
 app's envelope, such as the trusted-host middleware's plain-text
-`400 Invalid host header` or a proxy's own 400/413 page. Those describe the
+`400 Invalid host header` or a proxy's own 400 page. Those describe the
 route to the server, not the payload, so a misaddressed agent keeps its queue.
+
+A 413 is a proxy refusing the body's size: the batch is sent in halves, and a
+single result it still refuses is kept pending, never dead-lettered.
 """
 
 from __future__ import annotations
@@ -104,8 +107,8 @@ def _app_response(status: int, code: str, message: str = "refused") -> httpx.Res
         # Not the app saying the payload is invalid: the route, a proxy, auth.
         (400, "Invalid host header", Delivery.TRANSIENT),
         (400, "<html>400 Bad Request</html>", Delivery.TRANSIENT),
-        (413, _HTML_413, Delivery.TRANSIENT),
-        (413, _app_error("VALIDATION_ERROR"), Delivery.TRANSIENT),
+        (413, _HTML_413, Delivery.TOO_LARGE),
+        (413, _app_error("VALIDATION_ERROR"), Delivery.TOO_LARGE),
         (422, "", Delivery.TRANSIENT),
         (422, '{"detail": "not the app envelope"}', Delivery.TRANSIENT),
         (422, "[1, 2]", Delivery.TRANSIENT),
@@ -389,3 +392,140 @@ async def test_a_host_header_400_does_not_destroy_the_pending_queue(
         "a misrouted request deleted the rest"
     )
     assert _pending(tmp_path) == 10
+
+
+def _size_limited(limit: int, received: list[str]) -> Handler:
+    """A proxy in front of the server: 413 for a body over `limit` bytes."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if len(request.content) > limit:
+            return httpx.Response(413, text=_HTML_413)
+        received.extend(c["check_id"] for c in json.loads(request.content)["checks"])
+        return httpx.Response(200, json={})
+
+    return handler
+
+
+def _sized(name: str) -> dict[str, Any]:
+    return {**_result(name), "response_data": "x" * 1000}
+
+
+def _one_result_body() -> int:
+    payload = {"agent_id": "a1", "timestamp": time.time(), "checks": [_sized("c0")]}
+    return len(json.dumps(payload))
+
+
+async def test_a_batch_over_the_body_limit_is_delivered_in_parts(
+    tmp_path: Path,
+) -> None:
+    received: list[str] = []
+    limit = _one_result_body() * 3  # three results fit, eight do not
+    reporter = await _reporter(tmp_path, _size_limited(limit, received))
+    batch = [_sized(f"c{i}") for i in range(8)]
+
+    assert await reporter.send_batch(batch) is True
+
+    assert sorted(received) == sorted(r["check_id"] for r in batch)
+    assert _pending(tmp_path) == 0
+    assert _dead_payloads(tmp_path) == []
+
+
+async def test_a_route_that_refuses_every_size_keeps_the_batch_as_one_row(
+    tmp_path: Path,
+) -> None:
+    """A misrouted request or a misconfigured proxy answers 413 to anything:
+    the batch is kept whole, as one row, and nothing is dead-lettered."""
+    calls: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(request)
+        return httpx.Response(413, text=_HTML_413)
+
+    reporter = await _reporter(tmp_path, handler)
+    batch = [_result(f"c{i}") for i in range(8)]
+
+    assert await reporter.send_batch(batch) is False
+
+    assert _pending(tmp_path) == 1
+    [(payload,)] = _rows(tmp_path, "SELECT payload FROM pending_batches")
+    assert json.loads(gzip.decompress(payload)) == batch
+    assert _dead_payloads(tmp_path) == []
+    assert len(calls) <= 4, "the split walks one path down, not the whole tree"
+
+
+async def test_a_transient_failure_mid_split_stores_only_what_was_not_sent(
+    tmp_path: Path,
+) -> None:
+    received: list[str] = []
+    limit = _one_result_body() * 5
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        checks = json.loads(request.content)["checks"]
+        if len(request.content) > limit:
+            return httpx.Response(413, text=_HTML_413)
+        if any(c["check_id"] == "c6" for c in checks):
+            return httpx.Response(503, text="down")
+        received.extend(c["check_id"] for c in checks)
+        return httpx.Response(200, json={})
+
+    reporter = await _reporter(tmp_path, handler)
+    batch = [_sized(f"c{i}") for i in range(8)]
+
+    assert await reporter.send_batch(batch) is False
+
+    stored = [
+        c["check_id"]
+        for (payload,) in _rows(tmp_path, "SELECT payload FROM pending_batches")
+        for c in json.loads(gzip.decompress(payload))
+    ]
+    assert sorted(received + stored) == sorted(r["check_id"] for r in batch)
+    assert set(received).isdisjoint(stored)
+    assert "c6" in stored
+    assert received, "the first half went before the failure"
+
+
+async def test_replay_sends_an_oversized_stored_batch_in_parts_and_drains_the_rest(
+    tmp_path: Path,
+) -> None:
+    received: list[str] = []
+    limit = _one_result_body() * 3
+    reporter = await _reporter(
+        tmp_path, _size_limited(limit, received), report_batch_size=8
+    )
+    reporter._store_batch_to_db_sync([_sized(f"big{i}") for i in range(8)])
+    await asyncio.sleep(0.01)
+    for name in ("after-1", "after-2"):
+        reporter._store_batch_to_db_sync([_sized(name)])
+        await asyncio.sleep(0.01)
+
+    await _replay_passes(reporter, 3)
+
+    assert _pending(tmp_path) == 0
+    assert _dead_payloads(tmp_path) == []
+    assert sorted(received) == sorted(
+        [f"big{i}" for i in range(8)] + ["after-1", "after-2"]
+    )
+
+
+async def test_a_single_result_the_route_refuses_never_blocks_the_rows_behind_it(
+    tmp_path: Path,
+) -> None:
+    received: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        checks = json.loads(request.content)["checks"]
+        if any(c["check_id"] == "huge" for c in checks):
+            return httpx.Response(413, text=_HTML_413)
+        received.extend(c["check_id"] for c in checks)
+        return httpx.Response(200, json={})
+
+    reporter = await _reporter(tmp_path, handler)
+    for name in ("huge", "next-1", "next-2"):
+        reporter._store_batch_to_db_sync([_result(name)])
+        await asyncio.sleep(0.01)
+
+    await _replay_passes(reporter, 2)
+
+    assert sorted(received) == ["next-1", "next-2"]
+    assert _pending(tmp_path) == 1  # kept, not dead-lettered
+    assert _dead_payloads(tmp_path) == []
