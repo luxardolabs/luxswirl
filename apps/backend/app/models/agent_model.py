@@ -186,6 +186,12 @@ class Agent(UUIDBaseModel):
         comment="Timestamp of oldest stored report",
     )
 
+    dead_letter_count: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+        comment="Report batches the agent dead-lettered after a permanent refusal",
+    )
+
     # Resource monitoring (SWIRL-57: detect subprocess/FD leaks)
     open_file_descriptors: Mapped[int | None] = mapped_column(
         Integer,

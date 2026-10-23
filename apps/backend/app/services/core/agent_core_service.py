@@ -105,6 +105,7 @@ class AgentCoreService:
             checks_executed_total=agent.checks_executed_total,
             stored_reports_count=agent.stored_reports_count,
             stored_reports_oldest_timestamp=agent.stored_reports_oldest_timestamp,
+            dead_letter_count=agent.dead_letter_count,
             status_reason=agent.status_reason,
             api_key_last_used=agent.api_key_last_used,
             success_rate=agent.success_rate,
@@ -637,6 +638,7 @@ class AgentCoreService:
         agent.stored_reports_oldest_timestamp = (
             heartbeat.stored_reports_oldest_timestamp
         )
+        agent.dead_letter_count = heartbeat.dead_letter_count
 
         # Update resource monitoring fields (SWIRL-57)
         agent.open_file_descriptors = heartbeat.open_file_descriptors

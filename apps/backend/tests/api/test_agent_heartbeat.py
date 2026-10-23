@@ -8,7 +8,7 @@ refused before the heartbeat is applied.
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 import pytest_asyncio
@@ -17,6 +17,7 @@ from app.core.datetime_utils import utc_now
 from app.core.rate_limit import limiter
 from app.db.database import get_db
 from app.main import app
+from app.models.agent_model import Agent
 from app.schemas.registration_key_schema import RegistrationKeyCreate
 from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.registration_key_core_service import RegistrationKeyCoreService
@@ -126,3 +127,23 @@ async def test_an_unknown_agent_is_not_found(
     )
 
     assert resp.status_code == 404
+
+
+async def test_dead_letter_count_is_stored_on_the_agent(
+    client: AsyncClient, approved: tuple[str, str], db: AsyncSession
+) -> None:
+    """The agent reports how many batches the server refused for good; the
+    field must land on the agent row, not be dropped as an unknown key."""
+    agent_id, key = approved
+
+    resp = await client.post(
+        "/api/v1/heartbeat",
+        json={**_beat(agent_id), "dead_letter_count": 4},
+        headers={"Authorization": f"Bearer {key}"},
+    )
+
+    assert resp.status_code == 200, resp.text
+    agent = await db.get(Agent, UUID(agent_id))
+    assert agent is not None
+    await db.refresh(agent)
+    assert agent.dead_letter_count == 4
