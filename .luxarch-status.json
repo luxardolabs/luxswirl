@@ -1,6 +1,6 @@
 {
   "guard": "luxarch",
-  "guard_version": "0.310.2",
+  "guard_version": "0.313.0",
   "repo": "/repo",
   "targets": [
     {
@@ -1521,7 +1521,7 @@
           "violations": 0,
           "deferred": false,
           "inert": true,
-          "inert_reason": "0 mutating core methods take a user (actor, current_user, requesting_user, user or a `*User` type), so no permission check was judged. 5 mutating method(s) take a `user_id` instead, which this rule cannot read as an actor (it is as often an owner filter). NOT a clearance: an id-only actor is checked nowhere here.",
+          "inert_reason": "0 mutating core methods take a user (actor, current_user, requesting_user, user or a `*User` type), so no permission check was judged. 4 mutating method(s) take a `user_id` instead, which this rule cannot read as an actor (it is as often an owner filter). NOT a clearance: an id-only actor is checked nowhere here.",
           "fix": "",
           "example": ""
         },
@@ -1771,7 +1771,7 @@
           "rule": "fw.logout_revokes_server_side",
           "status": "FAIL",
           "since": "0.288.0",
-          "violations": 3,
+          "violations": 1,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
@@ -1802,24 +1802,24 @@
         },
         {
           "rule": "fw.route_names_unique",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.297.0",
-          "violations": 2,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
-          "fix": "Give every route an explicit, unique, literal `name=\"<area>.<entity>.<action>\"` (e.g. `name=\"admin.users.list\"` and `name=\"api.users.list\"`: the web page and the API endpoint are two names). One name may serve several methods of ONE path. Without this, `url_path_for` resolves a shared handler name to the first route registered: in one app, `login` returned `/api/v1/auth/login` for the web login link, silently. See --playbook url-in-view.",
+          "fix": "",
           "example": ""
         },
         {
           "rule": "fw.urls_from_route_names",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.297.0",
-          "violations": 5,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
-          "fix": "Build every link to an app route from the route's NAME, in the view service: `request.app.url_path_for(\"<area>.<entity>.<action>\", **params)` (a relative path; `request.url_for` is absolute and carries the internal scheme and host behind a proxy). Put the finished string on the view model and render `{{ item.urls.detail }}`. A redirect, an `HX-Redirect` header and a path comparison resolve the name the same way. JavaScript cannot resolve a name: render the URL into the markup (an `hx-*` attribute, or `data-url` read as `el.dataset.url`); a nav or config file lists route NAMES, resolved in the view. Code with no request (a job's email, a device payload built in core) resolves the name through `luxarch --emit route-urls`: `absolute_url(settings.base_url, <name>, **params)`. Name the routes first (fw.route_names_unique). While the literals burn down, `luxarch --emit route-links` is the runtime net: it fails on any template link the live route table does not serve. See --playbook url-in-view.",
+          "fix": "",
           "example": ""
         },
         {
@@ -1989,8 +1989,8 @@
         }
       ],
       "summary": {
-        "PASS": 157,
-        "FAIL": 4,
+        "PASS": 159,
+        "FAIL": 2,
         "XFAIL": 0,
         "XPASS": 0,
         "INERT": 19
@@ -2168,13 +2168,13 @@
       },
       {
         "rule": "repo.makefile_canonical",
-        "status": "FAIL",
+        "status": "PASS",
         "since": "0.96.0",
-        "violations": 1,
+        "violations": 0,
         "deferred": false,
         "inert": false,
         "inert_reason": "",
-        "fix": "`luxarch --emit check-gate` for `check` (every leg runs, then it fails naming each red one); the `honest` step runs `luxarch --assert-scans` (+ `luxlint --preflight`) so a green board can't hide a rule family that scanned zero files; a `test` target; guard-version-check FATAL; guard images pinned (not :latest). See --doc FLEET-MAKEFILE-STANDARD.",
+        "fix": "",
         "example": ""
       },
       {
@@ -2443,13 +2443,13 @@
       },
       {
         "rule": "repo.migrations_build_schema",
-        "status": "FAIL",
+        "status": "PASS",
         "since": "0.120.0",
-        "violations": 1,
+        "violations": 0,
         "deferred": false,
         "inert": false,
         "inert_reason": "",
-        "fix": "Emit the verifier (`luxarch --emit migration-chain`), commit it, and add a `db-verify` target that creates a FRESH EMPTY DB, runs `alembic upgrade head`, then runs the verifier (fail on ANY structural diff vs the models) \u2014 and add `db-verify` to `check`. `make test` builds its schema from create_all and can NEVER catch a broken chain. See --doc FLEET-MAKEFILE-STANDARD.",
+        "fix": "",
         "example": ""
       },
       {
@@ -2872,20 +2872,20 @@
       }
     ],
     "summary": {
-      "PASS": 67,
-      "FAIL": 2,
+      "PASS": 69,
+      "FAIL": 0,
       "XFAIL": 0,
       "XPASS": 0,
       "INERT": 1
     }
   },
   "summary": {
-    "PASS": 230,
-    "FAIL": 6,
+    "PASS": 234,
+    "FAIL": 2,
     "XFAIL": 0,
     "XPASS": 0,
     "INERT": 22
   },
-  "commit": "b29f661dd4a4879e0ab8116b7fcdce6c6c5e6633",
-  "generated_at": "2026-10-22T15:24:52Z"
+  "commit": "4799f20e4dbd5dadc97dbe2c0161d1c73cd97669",
+  "generated_at": "2026-10-23T03:17:29Z"
 }

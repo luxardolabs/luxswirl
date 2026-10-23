@@ -3,7 +3,7 @@ name: wrap-up
 description: Close out a piece of work the fleet way before calling it done — tests written and run for what changed, every red in touched files fixed, docs updated (stale advice removed), make check green, committed in the issue's worktree, LuxPM fully closed out (issues, checklists, activities, commit links, sync receipt), then landed on the base branch, the worktree removed, and pushed as the repo declares. Every step reports evidence, not a tick.
 ---
 
-<!-- luxarch:wrap-up-skill asset v12 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit wrap-up-skill`. -->
+<!-- luxarch:wrap-up-skill asset v13 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit wrap-up-skill`. -->
 
 # Wrap up
 
@@ -48,8 +48,9 @@ A red can also be moved instead of fixed: the code goes to another layer, helper
 
 - Update the doc that is the ONE home for what you changed (a `--doc`/`--playbook`, the repo's own docs, the changelog if the repo keeps one). Point, don't restate.
 - **Search for advice your change made wrong, and delete it.** Stale instructions are how agents keep doing the old thing: grep the docs for the old command, flag, file or name.
+- **Current state only.** Reread every comment, docstring, test name and doc line the diff adds (`git diff <base> -U0 | grep '^+'`). Each states what the code does now and why. Rewrite any that tells history ("used to", "no longer", "instead of", "the old…", "was green", a version that introduced it, an incident, an issue key): that goes in the commit message, the LuxPM issue and the change log (`luxarch --doc FLEET-AGENT-CONDUCT-STANDARD`, first principles).
 
-**Evidence:** the doc lines changed, and the grep you ran for the old advice.
+**Evidence:** the doc lines changed, the grep you ran for the old advice, and the added lines you rewrote to current state (or "none tell history").
 
 ## 5. The gate, committed in the issue's worktree
 
@@ -73,12 +74,12 @@ A red can also be moved instead of fixed: the code goes to another layer, helper
 
 ## 7. Land, remove the worktree, push
 
-- In the worktree: `python3 .claude/hooks/worktree.py land`. If it rebased onto new commits, it stops: re-run the touched tests and `make check` on the rebased code, then `land` again. A conflict stops it with nothing changed: resolve it in the worktree, re-run the gate, land.
+- In the worktree: `python3 .claude/hooks/worktree.py land`. If it rebased onto new commits (this machine's, or under `"agent"` another machine's, fetched from origin), it stops: re-run the touched tests and `make check` on the rebased code, then `land` again. A conflict stops it with nothing changed: resolve it in the worktree, re-run the gate, land.
+- Pushing follows `.luxarch.toml`. `[agents] push = "agent"`: `land` pushes the tested HEAD to origin as it lands. If origin rejected it, origin moved: run `land` again, never `git pull --rebase` on the base. `push = "owner"`: `land` stays local; say the work is landed and ready. A repo with no declaration reds `repo.agent_push_declared`: ask the owner which it is, once, and write the answer there.
 - `ExitWorktree` with `action: "remove"`. The session is back in the main checkout and the worktree and its branch are gone.
-- Push as `.luxarch.toml` declares: `[agents] push = "agent"`: `git push` the base branch. `push = "owner"`: do not push; say the work is landed and ready. A repo with no declaration reds `repo.agent_push_declared`: ask the owner which it is, once, and write the answer there.
 - `python3 .claude/hooks/worktree.py list`: no worktree left for this issue.
 
-**Evidence:** `land`'s `Landed N commit(s) on <base> at <sha>` line, the `list` output, and `git status -sb` (nothing ahead under `"agent"`; the commits ahead named under `"owner"`).
+**Evidence:** `land`'s `Landed and pushed N commit(s) on <base> at <sha>` line (`Landed N commit(s)` under `"owner"`), the `list` output, and `git status -sb` (nothing ahead under `"agent"`; the commits ahead named under `"owner"`).
 
 ## 8. Report
 
