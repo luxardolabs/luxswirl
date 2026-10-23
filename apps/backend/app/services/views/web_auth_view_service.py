@@ -10,13 +10,13 @@ from uuid import UUID
 
 from fastapi import Request, status
 from fastapi.responses import RedirectResponse
-from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.schemas.auth_schema import AuthedUser, ChangePasswordRequest, CurrentUserDTO
 from app.services.core.auth_core_service import AuthCoreService
 from app.services.core.settings_core_service import SettingsCoreService
+from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.web.services.web_auth")
 

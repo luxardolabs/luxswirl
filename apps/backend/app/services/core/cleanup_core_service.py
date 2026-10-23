@@ -8,8 +8,6 @@ direct database access in this service.
 from datetime import timedelta
 from typing import Any
 
-from shared.logger import get_logger
-
 from app.core.datetime_utils import utc_now
 from app.crud.agent_crud import AgentCRUD
 from app.crud.artifact_crud import ArtifactCRUD
@@ -17,6 +15,7 @@ from app.crud.notification_log_crud import NotificationLogCRUD
 from app.crud.scheduler_crud import JobExecutionCRUD
 from app.crud.session_crud import SessionCRUD
 from app.db import worker_session
+from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.scheduler.cleanup")
 

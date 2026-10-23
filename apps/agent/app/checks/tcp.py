@@ -6,9 +6,8 @@ import asyncio
 import socket
 from typing import Any
 
-from shared.ssrf import assert_ip_allowed
-
 from app.checks.base import BaseCheck
+from app.shared.ssrf import assert_ip_allowed
 
 
 class TCPCheck(BaseCheck):

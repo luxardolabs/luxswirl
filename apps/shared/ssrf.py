@@ -22,7 +22,7 @@ import ipaddress
 import socket
 from urllib.parse import urlparse
 
-from shared.logger import get_logger
+from .logger import get_logger
 
 logger = get_logger("luxswirl.security.ssrf")
 

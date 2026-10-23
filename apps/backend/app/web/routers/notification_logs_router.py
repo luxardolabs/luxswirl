@@ -8,7 +8,6 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse
-from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.query_params import (
@@ -21,6 +20,7 @@ from app.db import get_db
 from app.services.views.notification_logs_view_service import (
     NotificationLogsViewService,
 )
+from app.shared.logger import get_logger
 from app.web.deps import CurrentUserWeb
 from app.web.templates import templates
 

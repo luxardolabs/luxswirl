@@ -5,12 +5,12 @@ job.params expects {"agent_id": str, "mode": "merge"|"replace", "checks": [...]}
 
 from uuid import UUID
 
-from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.maintenance_job_model import MaintenanceJob
 from app.services.core.check_core_service import CheckCoreService
 from app.services.core.maintenance_job_core_service import MaintenanceJobCoreService
+from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.maintenance.bulk_check_import")
 

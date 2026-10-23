@@ -4,7 +4,6 @@ User Service - handles user CRUD operations and management.
 
 from uuid import UUID
 
-from shared.logger import get_logger
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,6 +16,7 @@ from app.schemas.user_schema import (
     UserUpdate,
 )
 from app.services.core.auth_core_service import AuthCoreService
+from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.services.user")
 

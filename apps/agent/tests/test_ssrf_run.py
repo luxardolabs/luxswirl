@@ -18,7 +18,7 @@ from app.checks.mysql import MySQLCheck
 from app.checks.ping import PingCheck
 from app.checks.postgres import PostgreSQLCheck
 from app.checks.tcp import TCPCheck
-from shared.ssrf import SsrfBlockedError
+from app.shared.ssrf import SsrfBlockedError
 
 pytestmark = pytest.mark.unit
 

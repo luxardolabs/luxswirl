@@ -13,11 +13,11 @@ import httpx
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
 from cryptography.utils import CryptographyDeprecationWarning
-from shared.logger import get_logger
 
 from app.agent.http_client import check_client
 from app.checks._ssrf_http import ssrf_guarded_send
 from app.checks.base import BaseCheck
+from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.agent.checks.http")
 

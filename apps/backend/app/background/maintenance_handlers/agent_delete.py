@@ -7,12 +7,12 @@ logic stays in one place.
 
 from uuid import UUID
 
-from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import NotFoundException
 from app.models.maintenance_job_model import MaintenanceJob
 from app.services.core.agent_core_service import AgentCoreService
+from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.maintenance.agent_delete")
 

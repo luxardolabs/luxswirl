@@ -21,9 +21,9 @@ from typing import TYPE_CHECKING, Any
 
 import httpx
 import psutil
-from shared.logger import get_logger
 
 from app.agent.http_client import server_client
+from app.shared.logger import get_logger
 
 if TYPE_CHECKING:
     from app.agent.credentials import AgentCredentials

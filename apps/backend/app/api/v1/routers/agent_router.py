@@ -11,7 +11,6 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, Request, status
-from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import AuthenticatedHeartbeat
@@ -31,6 +30,7 @@ from app.schemas.agent_schema import (
 )
 from app.schemas.registration_key_schema import AgentKeyRecoveryResponse
 from app.services.core.agent_core_service import AgentCoreService
+from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.agent_router")
 

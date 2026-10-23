@@ -18,12 +18,6 @@ from importlib.metadata import version as package_version
 from pathlib import Path
 from typing import Any
 
-from shared.config import get_config, load_config_file
-from shared.jobs.network_discover import NetworkDiscoverJob
-from shared.jobs.network_scan import NetworkScanJob
-from shared.log_redaction import scrub
-from shared.logger import THIRD_PARTY_LEVELS, get_logger
-
 from app.agent.core import LuxSwirlAgent
 from app.checks.dns import DNSCheck
 from app.checks.http import HTTPCheck
@@ -34,6 +28,11 @@ from app.checks.postgres import PostgreSQLCheck
 from app.checks.synthetic import SyntheticCheck
 from app.checks.tcp import TCPCheck
 from app.core.logging_config import configure_logging
+from app.shared.config import get_config, load_config_file
+from app.shared.jobs.network_discover import NetworkDiscoverJob
+from app.shared.jobs.network_scan import NetworkScanJob
+from app.shared.log_redaction import scrub
+from app.shared.logger import THIRD_PARTY_LEVELS, get_logger
 
 
 def _resolve_version() -> str:

@@ -8,9 +8,8 @@ including checkbox collection and threshold extraction.
 from typing import Any
 from uuid import UUID
 
-from shared.logger import get_logger
-
 from app.schemas.alert_schema import AlertFormData
+from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.web.services.alert_form")
 

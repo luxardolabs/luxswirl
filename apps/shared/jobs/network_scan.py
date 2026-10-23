@@ -17,8 +17,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
-from shared.jobs.base import BaseJob
-from shared.subprocess_safe import get_subprocess_config, run_subprocess_no_output
+from ..subprocess_safe import get_subprocess_config, run_subprocess_no_output
+from .base import BaseJob
 
 
 def _subnets_of(

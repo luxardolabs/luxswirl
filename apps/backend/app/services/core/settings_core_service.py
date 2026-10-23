@@ -6,7 +6,6 @@ import secrets
 from typing import Any, TypeVar, cast, overload
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.default_settings import DEFAULT_SETTINGS
@@ -19,6 +18,7 @@ from app.schemas.setting_schema import (
     SettingResponse,
     SettingScalar,
 )
+from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.services.settings")
 

@@ -6,10 +6,9 @@ import platform
 import re
 from typing import Any
 
-from shared.ssrf import assert_target_allowed
-from shared.subprocess_safe import get_subprocess_config, run_subprocess_safely
-
 from app.checks.base import BaseCheck
+from app.shared.ssrf import assert_target_allowed
+from app.shared.subprocess_safe import get_subprocess_config, run_subprocess_safely
 
 
 class PingCheck(BaseCheck):

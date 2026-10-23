@@ -13,7 +13,7 @@ SWIRL-57: Subprocess resource leak fix
 import asyncio
 from typing import Any
 
-from shared.logger import get_logger
+from .logger import get_logger
 
 logger = get_logger("luxswirl.subprocess_safe")
 

@@ -14,7 +14,6 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from shared.logger import get_logger
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from sqlalchemy.exc import SQLAlchemyError
@@ -57,6 +56,7 @@ from app.schemas.health_schema import ApiInfoResponse, HealthResponse
 from app.services.core.metrics_collector_core_service import MetricsCollectorCoreService
 from app.services.core.scheduler_core_service import scheduler_service
 from app.services.core.settings_core_service import SettingsCoreService
+from app.shared.logger import get_logger
 from app.web.render import render_error_response
 from app.web.routers.admin_bootstrap_router import router as admin_bootstrap_router
 from app.web.routers.agents_router import router as agents_router

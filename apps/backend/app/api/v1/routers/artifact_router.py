@@ -8,7 +8,6 @@ This router only handles HTTP concerns.
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, status
-from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import UploadingAgentId
@@ -19,6 +18,7 @@ from app.schemas.check_artifact_schema import (
     CheckArtifactResponse,
 )
 from app.services.core.artifact_core_service import ArtifactCoreService
+from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.api.artifact")
 

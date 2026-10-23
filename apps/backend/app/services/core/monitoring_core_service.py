@@ -8,8 +8,6 @@ into the in-memory Prometheus metrics collector.
 from datetime import timedelta
 from typing import Any
 
-from shared.logger import get_logger
-
 from app.core.datetime_utils import utc_now
 from app.crud.agent_crud import AgentCRUD
 from app.crud.alert_crud import AlertCRUD
@@ -20,6 +18,7 @@ from app.crud.notification_log_crud import NotificationLogCRUD
 from app.db import worker_session
 from app.models.enum_model import JobStatus, NotificationStatus
 from app.services.core.metrics_collector_core_service import MetricsCollectorCoreService
+from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.scheduler.monitoring")
 

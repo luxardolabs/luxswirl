@@ -9,10 +9,10 @@ from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import Request
-from shared.logger import get_logger
 
 from app.schemas.scheduler_schema import SchedulerJobResponse, SchedulerJobUrls
 from app.services.core.scheduler_core_service import scheduler_service
+from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.web.services.scheduler_view")
 

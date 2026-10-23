@@ -8,7 +8,6 @@ from datetime import datetime, timedelta
 from typing import Any
 from uuid import UUID
 
-from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.datetime_utils import utc_now
@@ -25,6 +24,7 @@ from app.schemas.notification_provider_schema import (
     NotificationProviderInDB,
     NotificationProviderUpdate,
 )
+from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.services.notification")
 

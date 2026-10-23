@@ -10,7 +10,6 @@ from uuid import UUID
 
 from fastapi import Request
 from fastapi.responses import HTMLResponse
-from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.enum_model import AlertTriggerType
@@ -19,6 +18,7 @@ from app.schemas.auth_schema import AuthedUser
 from app.services.core.alert_core_service import AlertCoreService
 from app.services.core.check_api_core_service import CheckApiCoreService
 from app.services.core.notification_core_service import NotificationCoreService
+from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.web.services.alerts")
 

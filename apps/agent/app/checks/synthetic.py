@@ -12,9 +12,9 @@ from pathlib import Path
 from typing import Any
 
 from playwright.async_api import Page, async_playwright
-from shared.logger import get_logger
 
 from app.checks.base import BaseCheck
+from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.agent.checks.synthetic")
 

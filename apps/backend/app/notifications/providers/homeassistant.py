@@ -8,12 +8,12 @@ from typing import Any
 
 import httpx
 from fastapi.encoders import jsonable_encoder
-from shared.logger import get_logger
 
 from app.notifications.providers.base import (
     BaseNotificationProvider,
     NotificationContext,
 )
+from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.notifications.homeassistant")
 

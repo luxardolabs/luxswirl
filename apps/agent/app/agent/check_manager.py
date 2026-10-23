@@ -22,11 +22,11 @@ from typing import Any
 
 import httpx
 from cryptography.fernet import Fernet, InvalidToken
-from shared.logger import get_logger
 
 from app.agent.credentials import AgentCredentials
 from app.agent.http_client import server_client
 from app.checks.base import BaseCheck
+from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.agent.check_manager")
 

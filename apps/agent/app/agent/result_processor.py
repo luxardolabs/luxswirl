@@ -14,10 +14,9 @@ import time
 from datetime import UTC, datetime
 from typing import Any
 
-from shared.logger import get_logger
-
 from app.agent.http_client import server_client
 from app.agent.reporter import Reporter
+from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.agent.result_processor")
 

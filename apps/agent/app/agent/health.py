@@ -14,10 +14,10 @@ import time
 from typing import Any
 
 import psutil
-from shared.logger import get_logger
 
 from app.agent.reporter import Reporter
 from app.checks.base import BaseCheck
+from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.agent.health")
 

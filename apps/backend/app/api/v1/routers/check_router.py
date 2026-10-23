@@ -8,7 +8,6 @@ This router only handles HTTP concerns.
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request
-from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import AuthenticatedAgentId
@@ -18,6 +17,7 @@ from app.db import get_db
 from app.schemas.base_schema import ErrorResponse
 from app.schemas.check_schema import CheckListResponse
 from app.services.core.agent_assignment_core_service import AgentAssignmentCoreService
+from app.shared.logger import get_logger
 
 # Agent-facing router (agents call these)
 router = APIRouter(tags=["Checks"])

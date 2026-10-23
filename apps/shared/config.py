@@ -14,8 +14,8 @@ from typing import Any, cast
 
 import yaml
 
-from shared.logger import get_logger
-from shared.url_security import validate_server_url
+from .logger import get_logger
+from .url_security import validate_server_url
 
 # Default agent configuration
 DEFAULT_AGENT_CONFIG = {

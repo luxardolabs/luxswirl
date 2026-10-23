@@ -7,7 +7,6 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Form, Path, Query, Request
 from fastapi.responses import HTMLResponse, Response
-from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import CheckNotFoundException
@@ -15,6 +14,7 @@ from app.core.query_params import CheckTypeFilter
 from app.db import get_db
 from app.services.views.checks_view_service import ChecksViewService
 from app.services.views.status_view_service import StatusViewService
+from app.shared.logger import get_logger
 from app.web.check_form import (
     CheckCloneFields,
     CheckCreateFields,

@@ -8,7 +8,6 @@ from typing import Any
 from uuid import UUID
 
 from pydantic import ValidationError
-from shared.logger import get_logger
 from sqlalchemy import Row
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid_extensions import uuid7
@@ -33,6 +32,7 @@ from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.alert_evaluation_core_service import AlertEvaluationCoreService
 from app.services.core.metrics_collector_core_service import MetricsCollectorCoreService
 from app.services.core.settings_core_service import SettingsCoreService
+from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.services.check_result")
 

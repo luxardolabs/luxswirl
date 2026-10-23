@@ -9,10 +9,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from shared.log_redaction import scrub
-from shared.logger import THIRD_PARTY_LEVELS
-
 from app.core.config import settings
+from app.shared.log_redaction import scrub
+from app.shared.logger import THIRD_PARTY_LEVELS
 
 
 def logging_options() -> dict[str, Any]:

@@ -8,7 +8,6 @@ from datetime import timedelta
 from uuid import UUID
 
 import bcrypt
-from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.common_passwords import is_common_password
@@ -19,6 +18,7 @@ from app.crud.user_crud import UserCRUD
 from app.models.session_model import Session
 from app.schemas.auth_schema import CurrentUserResponse, SessionResponse
 from app.services.core.settings_core_service import SettingsCoreService
+from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.services.auth")
 

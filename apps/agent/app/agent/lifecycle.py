@@ -14,9 +14,8 @@ import asyncio
 import signal as signals
 from typing import TYPE_CHECKING, Any
 
-from shared.logger import get_logger
-
 from app.agent.http_client import aclose_all
+from app.shared.logger import get_logger
 
 if TYPE_CHECKING:
     from app.agent.health import HealthMonitor

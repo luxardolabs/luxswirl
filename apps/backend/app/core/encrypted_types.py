@@ -8,12 +8,12 @@ import json
 from typing import Any
 
 from cryptography.fernet import Fernet, InvalidToken
-from shared.logger import get_logger
 from sqlalchemy import String, Text, TypeDecorator
 from sqlalchemy.engine import Dialect
 
 from app.core.config import settings
 from app.core.exceptions import DatabaseException
+from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.models.encrypted")
 

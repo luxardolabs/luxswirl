@@ -7,7 +7,6 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Form, Path, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
-from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import StatusPageNotFoundException
@@ -21,6 +20,7 @@ from app.core.query_params import (
 from app.db import get_db
 from app.services.views.maintenance_job_view_service import MaintenanceJobViewService
 from app.services.views.status_pages_view_service import StatusPagesViewService
+from app.shared.logger import get_logger
 from app.web.deps import CurrentUserWeb, EditorUserWeb, OptionalUserWeb
 from app.web.hx_responses import hx_close_panel_and_refresh, hx_toast_trigger
 from app.web.render import error_page, error_partial, public_error_page

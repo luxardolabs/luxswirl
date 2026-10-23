@@ -8,7 +8,6 @@ from urllib.parse import urlencode
 from uuid import UUID
 
 from fastapi import Request
-from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.enum_model import CheckType, NotificationStatus
@@ -17,6 +16,7 @@ from app.schemas.notification_log_schema import NotificationLogEntry
 from app.schemas.pagination_schema import build_pagination
 from app.services.core.notification_log_core_service import NotificationLogCoreService
 from app.services.core.settings_core_service import SettingsCoreService
+from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.services.notification_logs_view")
 

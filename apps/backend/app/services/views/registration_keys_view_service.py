@@ -7,7 +7,6 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import Request
-from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.schemas.auth_schema import AuthedUser
@@ -16,6 +15,7 @@ from app.schemas.registration_key_schema import (
     RegistrationKeyRevoke,
 )
 from app.services.core.registration_key_core_service import RegistrationKeyCoreService
+from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.web.services.registration_keys")
 

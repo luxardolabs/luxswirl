@@ -11,11 +11,11 @@ still executing on the agent until an unrelated config change.
 
 from uuid import UUID
 
-from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.maintenance_job_model import MaintenanceJob
 from app.services.core.check_core_service import CheckCoreService
+from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.maintenance.bulk_check_delete")
 

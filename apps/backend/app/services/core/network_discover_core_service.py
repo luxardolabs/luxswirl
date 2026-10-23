@@ -10,7 +10,7 @@ Handles server-side business logic for network_discover jobs:
 import ipaddress
 from typing import Any
 
-from shared.logger import get_logger
+from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.services.jobs.network_discover")
 

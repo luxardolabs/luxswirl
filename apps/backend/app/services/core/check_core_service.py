@@ -10,7 +10,6 @@ from urllib.parse import ParseResult, urlparse
 from uuid import UUID
 
 import httpx
-from shared.logger import get_logger
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import attributes
@@ -48,6 +47,7 @@ from app.schemas.import_export_schema import CheckExport
 from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.alert_core_service import AlertCoreService
 from app.services.core.settings_core_service import SettingsCoreService
+from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.services.check")
 

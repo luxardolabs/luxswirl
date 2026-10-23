@@ -2,12 +2,12 @@
 Scheduler initialization - seed default job configurations.
 """
 
-from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.scheduler_crud import JobConfigurationCRUD
 from app.db.defaults.scheduler_templates import DEFAULT_JOB_CONFIGURATIONS
 from app.models.scheduler_model import JobConfiguration
+from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.db.scheduler_init")
 

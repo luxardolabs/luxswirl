@@ -9,13 +9,13 @@ job.params expects {
 
 from uuid import UUID
 
-from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.maintenance_job_model import MaintenanceJob
 from app.schemas.check_schema import BulkCheckCreateRequest
 from app.services.core.alert_core_service import AlertCoreService
 from app.services.core.check_core_service import CheckCoreService
+from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.maintenance.bulk_check_create")
 

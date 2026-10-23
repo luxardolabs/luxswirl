@@ -9,7 +9,6 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import NotFoundException
@@ -17,6 +16,7 @@ from app.crud.maintenance_job_crud import MaintenanceJobCRUD
 from app.models.enum_model import MaintenanceJobKind
 from app.models.maintenance_job_model import MaintenanceJob
 from app.schemas.maintenance_job_schema import MaintenanceJobResponse
+from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.services.maintenance_job")
 

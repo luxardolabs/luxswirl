@@ -10,9 +10,8 @@ Handles server-side business logic for network_scan jobs:
 
 from typing import Any
 
-from shared.logger import get_logger
-
 from app.core.scan_check_names import PORT_CATEGORIES
+from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.services.jobs.network_scan")
 

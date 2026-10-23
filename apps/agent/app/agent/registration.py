@@ -9,11 +9,11 @@ from typing import Any
 from uuid import UUID
 
 import httpx
-from shared.logger import get_logger
-from shared.url_security import validate_server_url
 
 from app.agent.credentials import AgentCredentials
 from app.agent.http_client import server_client
+from app.shared.logger import get_logger
+from app.shared.url_security import validate_server_url
 
 logger = get_logger("luxswirl.agent.registration")
 

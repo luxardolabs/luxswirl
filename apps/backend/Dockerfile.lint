@@ -12,8 +12,8 @@ RUN pip install --no-cache-dir "poetry==${POETRY_VERSION}" && poetry config virt
 COPY apps/backend/pyproject.toml apps/backend/poetry.lock* /app/
 RUN poetry install --no-root --with dev
 
-# Source. shared/ is vendored alongside app/ so `import shared.*` resolves.
+# Source. The shared SSOT is baked over the placeholder package app/shared (`app.shared.*`).
 COPY apps/backend/app /app/app
-COPY apps/shared /app/shared
+COPY apps/shared /app/app/shared
 COPY apps/backend/tests /app/tests
 ENV PYTHONPATH=/app

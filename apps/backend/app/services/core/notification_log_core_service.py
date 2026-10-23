@@ -4,12 +4,12 @@ NotificationLog service - business logic for notification log operations.
 
 from uuid import UUID
 
-from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.notification_log_crud import NotificationLogCRUD
 from app.models.enum_model import NotificationStatus
 from app.schemas.notification_log_schema import NotificationLogEntry
+from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.services.notification_log")
 

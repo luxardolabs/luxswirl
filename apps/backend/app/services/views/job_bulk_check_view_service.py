@@ -5,7 +5,6 @@ Job bulk check view service — bulk check creation from job results.
 from typing import Any
 from uuid import UUID
 
-from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.schemas.check_schema import BulkCheckCreateSummary
@@ -15,6 +14,7 @@ from app.services.core.job_to_check_core_service import (
     QuickCheckParams,
 )
 from app.services.core.settings_core_service import SettingsCoreService
+from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.web.services.job_bulk_check")
 

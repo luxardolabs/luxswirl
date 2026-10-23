@@ -6,7 +6,6 @@ from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
-from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.datetime_utils import utc_now
@@ -18,6 +17,7 @@ from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.check_core_service import CheckCoreService
 from app.services.core.check_result_core_service import CheckResultCoreService
 from app.services.views.status_view_service import StatusViewService
+from app.shared.logger import get_logger
 
 if TYPE_CHECKING:
     pass

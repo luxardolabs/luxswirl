@@ -103,14 +103,14 @@ apps/                                # one self-contained component per dir (lux
 │   ├── pyproject.toml + poetry.lock # Agent deps only (playwright, db drivers, …)
 │   └── Dockerfile + Dockerfile.lint
 └── shared/                          # config, logger, url_security, subprocess_safe, jobs/
-                                     # — vendored into BOTH images at build (COPY apps/shared)
+                                     # — the SSOT, overlaid on each leg's placeholder app/shared
 
 VERSION                              # version source of truth (NOT derived from path)
 Makefile                             # build/dev/prod/lint/test — everything runs in docker
 compose*.yaml                        # base + dev/prod/agent/test overlays
 ```
 
-Each component is its own deployable: `apps/backend/app/` and `apps/agent/app/` are both the **`app` package**, so imports are **`app.`-prefixed** (`from app.models.foo import ...`). `shared.*` stays a flat top-level import (vendored into each image). Because both components use the name `app`, they have separate pyprojects/pytest configs and **cannot** share one test run. One Dockerfile per component; `pyproject.toml` `pythonpath` wires pytest (`["." , ".." ]` → resolves `app.*` and `shared.*`).
+Each component is its own deployable: `apps/backend/app/` and `apps/agent/app/` are both the **`app` package**, so imports are **`app.`-prefixed** (`from app.models.foo import ...`). Shared code is imported as **`app.shared.*`**: each leg carries the 0-byte placeholder package `app/shared/` (its `__init__.py`), and the real `apps/shared` (the `[shared]` SSOT in `.luxarch.toml` and `.luxlint.toml`) is overlaid on it, baked by both images (`COPY apps/shared /app/app/shared`) and mounted by `make lint`'s mypy run and `make test` (the Makefile's `shared_overlay`). Modules inside `apps/shared` import each other relatively. Because both components use the name `app`, they have separate pyprojects/pytest configs and **cannot** share one test run. One Dockerfile per component.
 
 ### Layering chain (enforced)
 
@@ -212,7 +212,7 @@ To add a new check type:
 
 ### Configuration System
 
-Configuration is handled by `shared/config.py` (top-level shared module on `sys.path`):
+Configuration is handled by `apps/shared/config.py` (imported as `app.shared.config`):
 
 - Default configurations are embedded in the code (see `DEFAULT_AGENT_CONFIG` and `DEFAULT_SERVER_CONFIG`)
 - Environment variables override defaults (e.g., `LUXSWIRL_AGENT_ID`, `LUXSWIRL_AUTH_KEY`, `LUXSWIRL_SERVER_URL`)
@@ -559,9 +559,9 @@ export DATABASE__URL=postgresql+asyncpg://luxswirl:luxswirl@localhost:5432/luxsw
   - JSON router: `app/api/v1/routers/{name}_router.py`
   - Web router: `app/web/routers/{name}_router.py`
   - Files prefixed with `_` are shared helpers (exempt from naming rule, use only when genuinely multi-consumer)
-- **Imports**: `app.`-prefixed within each component (`from app.models.foo import ...`) — `apps/backend/app/` and `apps/agent/app/` are both the `app` package. `shared.*` is a flat top-level import (vendored into each image at build). Imports go at the top of the file, enforced by `make arch` (`fw.no_inline_imports`, `shared.no_inline_imports`) — use `TYPE_CHECKING` for circular deps.
+- **Imports**: `app.`-prefixed within each component (`from app.models.foo import ...`) — `apps/backend/app/` and `apps/agent/app/` are both the `app` package. Shared code is `app.shared.*` (the `apps/shared` SSOT overlaid on each leg's placeholder package). Imports go at the top of the file, enforced by `make arch` (`fw.no_inline_imports`, `shared.no_inline_imports`) — use `TYPE_CHECKING` for circular deps.
 - **Docstrings**: Google style format with Args, Returns, Raises sections
-- **Logging**: Structured logging via `shared.logger.get_logger()`
+- **Logging**: Structured logging via `app.shared.logger.get_logger()`
 - **Error handling**:
   - Custom exceptions in `core/exceptions.py`
   - Exception handlers in `apps/backend/app/main.py`

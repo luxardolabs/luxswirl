@@ -14,7 +14,6 @@ from typing import Any
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
-from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.scheduler_crud import JobConfigurationCRUD, JobExecutionCRUD
@@ -40,6 +39,7 @@ from app.services.core.monitoring_core_service import (
     collect_operational_metrics,
 )
 from app.services.core.silence_alert_core_service import evaluate_silence_alerts
+from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.scheduler")
 

@@ -11,9 +11,9 @@ Provides:
 
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, Response
-from shared.logger import get_logger
 
 from app.services.views.scheduler_view_service import SchedulerViewService
+from app.shared.logger import get_logger
 from app.web.deps import AdminUserWeb
 from app.web.hx_responses import hx_empty_with_toast, hx_toast_trigger
 from app.web.render import settings_error_partial

@@ -11,8 +11,9 @@ import itertools
 from typing import Any
 
 import httpx
-from shared.jobs.base import BaseJob
-from shared.logger import get_logger
+
+from app.shared.jobs.base import BaseJob
+from app.shared.logger import get_logger
 
 
 class JobProcessor:

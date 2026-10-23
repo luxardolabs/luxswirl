@@ -4,7 +4,6 @@ Artifact service - business logic for check artifact operations.
 
 from uuid import UUID
 
-from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import AuthorizationException, CheckNotFoundException
@@ -17,6 +16,7 @@ from app.schemas.check_artifact_schema import (
 )
 from app.services.core.agent_assignment_core_service import AgentAssignmentCoreService
 from app.services.core.check_core_service import CheckCoreService
+from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.services.artifact")
 

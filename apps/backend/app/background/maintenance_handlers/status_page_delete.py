@@ -1,11 +1,11 @@
 """Handler for status_page_delete maintenance jobs."""
 
-from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import NotFoundException
 from app.models.maintenance_job_model import MaintenanceJob
 from app.services.core.status_page_core_service import StatusPageCoreService
+from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.maintenance.status_page_delete")
 
