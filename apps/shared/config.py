@@ -82,7 +82,6 @@ DEFAULT_SERVER_CONFIG = {
     "host": "0.0.0.0",
     "port": 9000,
     "log_level": os.environ.get("LOG_LEVEL", "INFO"),
-    "auth_tokens": [os.environ.get("LUXSWIRL_AUTH_KEY", "")],
     "max_history_points": 1000,
     "enable_file_log": True,
     "log_dir": "logs",
@@ -301,7 +300,7 @@ def _validate_server_config(config: dict[str, Any]) -> None:
     Raises:
         ValueError: If the configuration is invalid
     """
-    required_fields = ["host", "port", "auth_tokens"]
+    required_fields = ["host", "port"]
     for field in required_fields:
         if field not in config:
             raise ValueError(f"Missing required field: {field}")
@@ -310,7 +309,3 @@ def _validate_server_config(config: dict[str, Any]) -> None:
     port = config["port"]
     if not isinstance(port, int) or port < 1 or port > 65535:
         raise ValueError(f"Port must be an integer between 1 and 65535: {port}")
-
-    # Validate auth tokens
-    if not isinstance(config["auth_tokens"], list) or not config["auth_tokens"]:
-        raise ValueError("'auth_tokens' must be a non-empty list")
