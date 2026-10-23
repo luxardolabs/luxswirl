@@ -100,8 +100,10 @@ class HeartbeatSender:
         self.watchdog_interval = config.get("watchdog_interval", 30)
         self.watchdog_stall_threshold = config.get("watchdog_stall_threshold", 3)
 
-        # Config version tracking
+        # Config version tracking: the first heartbeat response sets the
+        # baseline, and every change after it (to or from None too) reloads.
         self.config_version: str | None = None
+        self.config_version_known = False
 
         # Agent state (updated by parent)
         self.hostname: str | None = None
@@ -533,40 +535,44 @@ class HeartbeatSender:
                     )
 
     async def _handle_config_version(self, response_data: dict[str, Any]) -> None:
-        """Handle config version changes and trigger reload if needed."""
-        config_version = response_data.get("config_version")
-        if config_version:
-            if self.config_version is None:
-                # First time getting config version, just store it
-                self.config_version = config_version
-                self.logger.debug(
-                    "Initial config version set",
-                    extra={"config_version": config_version},
-                )
-            elif config_version != self.config_version:
-                # Version changed, reload needed
+        """Reload the checks when the server's version of this agent's check
+        list changes.
+
+        The first response sets the baseline (the checks were just loaded at
+        startup); any later change reloads, None included, since a None from
+        a server means the agent's list changed as surely as a new digest.
+        """
+        if "config_version" not in response_data:
+            return
+        config_version = response_data["config_version"]
+        if not self.config_version_known:
+            self.config_version = config_version
+            self.config_version_known = True
+            self.logger.debug(
+                "Initial config version set",
+                extra={"config_version": config_version},
+            )
+        elif config_version != self.config_version:
+            self.logger.info(
+                "Config version changed - reloading checks",
+                extra={
+                    "from_version": self.config_version,
+                    "to_version": config_version,
+                },
+            )
+            # Store the new version before reloading so load_checks saves with correct version
+            self.config_version = config_version
+            if self.on_config_reload:
+                await self.on_config_reload()
                 self.logger.info(
-                    "Config version changed - reloading checks",
-                    extra={
-                        "from_version": self.config_version,
-                        "to_version": config_version,
-                    },
+                    "Reloaded checks from server",
+                    extra={"check_count": len(self.checks)},
                 )
-                # Store the new version before reloading so load_checks saves with correct version
-                self.config_version = config_version
-                # Call the callback to reload checks
-                if self.on_config_reload:
-                    await self.on_config_reload()
-                    self.logger.info(
-                        "Reloaded checks from server",
-                        extra={"check_count": len(self.checks)},
-                    )
-            else:
-                # Same version, no reload needed
-                self.logger.debug(
-                    "Config version unchanged",
-                    extra={"config_version": config_version},
-                )
+        else:
+            self.logger.debug(
+                "Config version unchanged",
+                extra={"config_version": config_version},
+            )
 
     async def _handle_agent_approval(self, response_data: dict[str, Any]) -> None:
         """Handle agent approval status and retrieve agent-specific key if needed."""

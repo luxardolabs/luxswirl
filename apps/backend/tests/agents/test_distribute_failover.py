@@ -166,12 +166,17 @@ async def test_with_every_agent_offline_the_check_stays_with_its_first_choice(
 # ── the survivor learns of it ────────────────────────────────────────────────
 
 
-async def _heartbeat_version(db: AsyncSession, agent: Agent) -> str | None:
+async def _heartbeat_version(
+    db: AsyncSession, agent: Agent, *, shutdown: bool = False
+) -> str | None:
     response = await AgentCoreService.process_heartbeat(
         db,
         agent.id,
         AgentHeartbeat(
-            agent_id=agent.id, timestamp=utc_now(), status=AgentStatus.ONLINE
+            agent_id=agent.id,
+            timestamp=utc_now(),
+            status=AgentStatus.OFFLINE if shutdown else AgentStatus.ONLINE,
+            is_shutdown=shutdown,
         ),
         using_agent_key=True,
     )
@@ -200,6 +205,43 @@ async def test_the_heartbeat_tells_the_survivor_its_checks_changed(
     assert after == before
 
 
+async def test_an_agent_with_no_checks_still_has_a_version(
+    db: AsyncSession,
+) -> None:
+    """The agent takes its first version as the baseline and reloads on every
+    change after it, so an empty list needs a version of its own: otherwise
+    the check moving to it, and back, changes nothing it sees."""
+    pool = await _pool(db)
+    (check,) = await _distributed(db, pool[0])
+    owner, survivor = _first_choice(check, pool)
+    survivor.checks_updated_at = None
+    await db.flush()
+
+    before = await _heartbeat_version(db, survivor)
+    await _go_offline(db, owner, timedelta(minutes=10))
+    during = await _heartbeat_version(db, survivor)
+
+    assert check.id in _ids(await checks_for(db, survivor))  # control
+    assert before is not None
+    assert during is not None and during != before
+
+
+async def test_a_shutdown_hands_over_at_once(db: AsyncSession) -> None:
+    """An agent that says it is shutting down runs nothing more: its checks
+    move now, not 3 heartbeats later, and come back at its next heartbeat."""
+    pool = await _pool(db)
+    (check,) = await _distributed(db, pool[0])
+    owner, survivor = _first_choice(check, pool)
+
+    await _heartbeat_version(db, owner, shutdown=True)
+    moved = _ids(await checks_for(db, survivor))
+    await _heartbeat_version(db, owner)
+
+    assert check.id in moved
+    assert check.id in _ids(await checks_for(db, owner))
+    assert check.id not in _ids(await checks_for(db, survivor))
+
+
 async def test_the_version_is_stable_while_nothing_moves(db: AsyncSession) -> None:
     pool = await _pool(db)
     await _distributed(db, pool[0], 5)
@@ -208,7 +250,7 @@ async def test_the_version_is_stable_while_nothing_moves(db: AsyncSession) -> No
     second = await _heartbeat_version(db, pool[1])
 
     assert first == second
-    assert first is None or len(first) <= 50  # fits agents.config_version
+    assert first is not None and len(first) <= 50  # fits agents.config_version
 
 
 # ── who may report it ────────────────────────────────────────────────────────
@@ -381,3 +423,40 @@ async def test_an_offline_agent_is_watched_after_its_checks_moved(
     await SilenceAlertCoreService.evaluate(db)
 
     assert [(c.status_label, c.agent_id) for c in sent] == [("OFFLINE", owner.id)]
+
+
+async def _moved_before_the_stand_in_heard(
+    db: AsyncSession, check_interval: int
+) -> Check:
+    """The check moved 100 s ago; the stand-in heartbeats every 300 s and last
+    did 200 s ago, so it is online but cannot know it runs the check yet."""
+    pool = await _pool(db)
+    (check,) = await _distributed(db, pool[0])
+    check.interval_seconds = check_interval
+    owner, survivor = _first_choice(check, pool)
+    survivor.heartbeat_interval = 300
+    survivor.last_seen = utc_now() - timedelta(seconds=200)
+    db.add(
+        make_check_result(
+            check_id=check.id,
+            agent_id=owner.id,
+            timestamp=utc_now() - timedelta(seconds=345),
+        )
+    )
+    await _go_offline(db, owner, OFFLINE_AFTER + timedelta(seconds=100))
+    assert check.id in _ids(await checks_for(db, survivor))  # it moved
+    return check
+
+
+async def test_a_moved_check_is_not_silent_before_its_agent_can_know(
+    db: AsyncSession, sent
+) -> None:
+    """A 10 s check is silent after 90 s, but the stand-in learns of it only
+    at its next heartbeat after the move: the threshold runs from then."""
+    check = await _moved_before_the_stand_in_heard(db, check_interval=10)
+    alert = await _alert(db, "no_data", check)
+
+    await SilenceAlertCoreService.evaluate(db)
+
+    assert sent == []
+    assert await _rows(db, alert) == []

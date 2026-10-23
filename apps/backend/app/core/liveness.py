@@ -12,6 +12,7 @@ from datetime import datetime, timedelta
 
 from app.core.config import settings
 from app.models.agent_model import Agent
+from app.models.enum_model import AgentStatus
 
 # The agent runs a check with no interval of its own every 60 s.
 DEFAULT_CHECK_INTERVAL_SECONDS = 60
@@ -56,3 +57,21 @@ def agent_offline(
 ) -> bool:
     """Whether `agent` has missed `missed_intervals` heartbeats by `now`."""
     return now > offline_at(agent, missed_intervals)
+
+
+def handed_off(agent: Agent, now: datetime) -> bool:
+    """Whether `agent`'s distributed checks belong to another agent of their
+    pool: it is offline, or its latest heartbeat said it was shutting down.
+
+    A shutdown hands over at once, since nothing will run its checks; the
+    silence alerts still wait for `agent_offline`, so a restart does not page.
+    """
+    return agent.status == AgentStatus.OFFLINE or agent_offline(agent, now)
+
+
+def handed_off_at(agent: Agent) -> datetime:
+    """When `agent`'s distributed checks went to another agent (see
+    `handed_off`)."""
+    if agent.status == AgentStatus.OFFLINE:
+        return agent.last_seen or agent.created_at
+    return offline_at(agent)

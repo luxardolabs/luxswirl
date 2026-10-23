@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.datetime_utils import utc_now
 from app.core.exceptions import AgentNotFoundException
-from app.core.liveness import agent_offline, offline_at
+from app.core.liveness import handed_off, handed_off_at
 from app.crud.agent_crud import AgentCRUD
 from app.crud.check_crud import CheckCRUD
 from app.models.agent_model import Agent
@@ -121,12 +121,12 @@ class AgentAssignmentCoreService:
         selector) that runs a distributed check.
 
         The highest-weighted agent that is online (`app.core.liveness`), so an
-        agent that misses its heartbeats hands its checks to the others and
-        takes them back at its next heartbeat. When the whole pool is offline
+        agent that misses its heartbeats or shuts down hands its checks to the
+        others and takes them back at its next heartbeat. When the whole pool is offline
         the check stays with its first choice: nothing is running it, and the
         silence alerts name that agent's outage.
         """
-        online = [agent for agent in pool if not agent_offline(agent, now)]
+        online = [agent for agent in pool if not handed_off(agent, now)]
         return AgentAssignmentCoreService.get_assigned_agent_for_check(
             check, online or pool
         )
@@ -138,8 +138,8 @@ class AgentAssignmentCoreService:
         """When a distributed check moved to the agent now running it, or None
         when it runs on its first choice.
 
-        Every agent weighted above the current owner is offline; the check
-        moved when the last of them went offline.
+        Every agent weighted above the current owner is handed off; the check
+        moved when the last of them was.
         """
         owner = AgentAssignmentCoreService.distribute_owner(check, pool, now)
         if owner is None:
@@ -152,7 +152,7 @@ class AgentAssignmentCoreService:
         ]
         if not above:
             return None
-        return max(offline_at(agent) for agent in above)
+        return max(handed_off_at(agent) for agent in above)
 
     @staticmethod
     def filter_agents_by_selector(
@@ -296,16 +296,15 @@ class AgentAssignmentCoreService:
         return checks_to_run
 
     @staticmethod
-    async def config_version(db: AsyncSession, agent: Agent) -> str | None:
+    async def config_version(db: AsyncSession, agent: Agent) -> str:
         """The version of `agent`'s check list, sent on every heartbeat.
 
         The agent fetches its checks again whenever this changes, so it covers
         both an edit to its checks (`checks_updated_at`) and a distributed
-        check moving to or from it. None until the agent has checks.
+        check moving to or from it. An empty list has a version too, so a
+        check moving to an agent that had none changes it.
         """
         checks = await AgentAssignmentCoreService.get_checks_for_agent(db, agent)
-        if agent.checks_updated_at is None and not checks:
-            return None
         stamp = agent.checks_updated_at.isoformat() if agent.checks_updated_at else ""
         ids = ",".join(sorted(str(check.id) for check in checks))
         return hashlib.sha256(f"{stamp}|{ids}".encode()).hexdigest()[:32]

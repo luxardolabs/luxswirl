@@ -251,13 +251,13 @@ class SilenceAlertCoreService:
             last_row = last_rows.get(check.id)
             threshold = silent_after(check.interval_seconds, missed)
             # A distributed check that moved off an offline agent is the new
-            # agent's from the moment it moved, not from the old agent's last
-            # result.
-            expected_from = max(
-                last_result or check.created_at,
-                AgentAssignmentCoreService.handed_over_at(check, pool, now)
-                or check.created_at,
-            )
+            # agent's once it can know: it learns at its next heartbeat after
+            # the move, so it gets a full threshold from then.
+            expected_from = last_result or check.created_at
+            moved_at = AgentAssignmentCoreService.handed_over_at(check, pool, now)
+            if moved_at is not None:
+                learned_by = moved_at + timedelta(seconds=heartbeat_interval(agents[0]))
+                expected_from = max(expected_from, learned_by)
             if expected_from >= now - threshold:
                 if (
                     alert.notify_on_recovery
