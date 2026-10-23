@@ -144,3 +144,26 @@ async def test_an_agent_with_no_heartbeat_stats_yet_renders(
     assert resp.status_code == 200, resp.text[:500]
     assert "just-registered" in resp.text
     assert "fresh-pending" in resp.text
+
+
+async def test_dead_lettered_batches_show_as_a_warning_on_the_card(
+    client: AsyncClient, db: AsyncSession
+) -> None:
+    """A count above zero is shown as a warning badge; zero or never reported
+    (an agent older than the field) shows nothing."""
+    db.add_all(
+        [
+            make_agent(agent_name="refused-some", dead_letter_count=3),
+            make_agent(agent_name="refused-none", dead_letter_count=0),
+            make_agent(agent_name="never-reported", dead_letter_count=None),
+        ]
+    )
+    await db.flush()
+
+    resp = await client.get("/agents")
+
+    assert resp.status_code == 200, resp.text[:500]
+    assert resp.text.count("dead-lettered") == 1
+    assert "3 dead-lettered" in resp.text
+    badge = resp.text[: resp.text.index("3 dead-lettered")]
+    assert "bg-yellow-600/20" in badge[badge.rindex("<span") :]

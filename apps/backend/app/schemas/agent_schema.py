@@ -202,6 +202,7 @@ class AgentInDB(AgentBase, TimestampSchema):
     checks_executed_total: int | None = None
     stored_reports_count: int | None = None
     stored_reports_oldest_timestamp: float | None = None
+    dead_letter_count: int | None = None
     status_reason: str | None = None
     api_key_last_used: datetime | None = None
 
@@ -335,6 +336,11 @@ class AgentHeartbeat(BaseSchema):
     )
     stored_reports_oldest_timestamp: float | None = Field(
         None, description="Timestamp of oldest stored report"
+    )
+    dead_letter_count: int | None = Field(
+        None,
+        ge=0,
+        description="Report batches the agent dead-lettered after a permanent refusal",
     )
 
     # Resource monitoring (SWIRL-57: detect subprocess/FD leaks)
