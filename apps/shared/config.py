@@ -166,6 +166,9 @@ def load_config_file(path: str | Path) -> dict[str, Any]:
     return cast(dict[str, Any], config)
 
 
+_ENV_VAR = re.compile(r"\$\{([a-zA-Z0-9_]+)\}|\$([a-zA-Z0-9_]+)")
+
+
 def _expand_env_vars(config_item: Any) -> Any:
     """Recursively expand environment variables in string values.
 
@@ -178,23 +181,11 @@ def _expand_env_vars(config_item: Any) -> Any:
         The configuration with environment variables expanded
     """
     if isinstance(config_item, str):
-        # Replace ${VAR} or $VAR with environment variable
-        # First, handle ${VAR} format
-        pattern = r"\${([a-zA-Z0-9_]+)}"
-        matches = re.findall(pattern, config_item)
-        result = config_item
-        for var_name in matches:
-            env_value = os.environ.get(var_name, "")
-            result = result.replace(f"${{{var_name}}}", env_value)
-
-        # Then, handle $VAR format
-        pattern = r"\$([a-zA-Z0-9_]+)"
-        matches = re.findall(pattern, result)
-        for var_name in matches:
-            env_value = os.environ.get(var_name, "")
-            result = result.replace(f"${var_name}", env_value)
-
-        return result
+        # One pass over the string as written: a value taken from the environment
+        # is never scanned again, so a secret containing `$` stays as it is.
+        return _ENV_VAR.sub(
+            lambda m: os.environ.get(m.group(1) or m.group(2), ""), config_item
+        )
     elif isinstance(config_item, dict):
         return {k: _expand_env_vars(v) for k, v in config_item.items()}
     elif isinstance(config_item, list):
