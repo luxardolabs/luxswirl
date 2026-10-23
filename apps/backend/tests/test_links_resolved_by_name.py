@@ -19,7 +19,6 @@ import pytest_asyncio
 from _route_table import iter_routes
 from app.core.config import settings
 from app.core.rate_limit import limiter
-from app.db.database import get_db
 from app.main import app
 from app.services.core.auth_core_service import AuthCoreService
 from app.services.views.nav_view_service import NavViewService
@@ -61,11 +60,7 @@ def test_every_nav_link_is_served_by_a_route() -> None:
 
 @pytest_asyncio.fixture
 async def client(db: AsyncSession) -> AsyncIterator[AsyncClient]:
-    async def _override_get_db() -> AsyncIterator[AsyncSession]:
-        yield db
-
     limiter.reset()
-    app.dependency_overrides[get_db] = _override_get_db
     try:
         async with AsyncClient(
             transport=ASGITransport(app=app),
@@ -73,7 +68,6 @@ async def client(db: AsyncSession) -> AsyncIterator[AsyncClient]:
         ) as c:
             yield c
     finally:
-        app.dependency_overrides.pop(get_db, None)
         limiter.reset()
 
 

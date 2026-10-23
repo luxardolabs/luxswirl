@@ -117,6 +117,9 @@ async def test_vacuum_outlasts_the_web_timeout_then_restores_it(worker_db) -> No
         check = make_check(agent_id=agent.id)
         s.add(check)
         await s.flush()
+        # The seed runs on the app's own sessions, whose 5 s statement timeout
+        # a 200k-row insert outlasts; it is setup, not what is under test.
+        await s.execute(text("SET LOCAL statement_timeout = 0"))
         await s.execute(
             text(
                 "INSERT INTO check_results "

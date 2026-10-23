@@ -1,4 +1,4 @@
-# luxarch:test-db-bound asserter v2 — DO NOT edit the marker line above (repo.makefile_test_db_harness finds it).
+# luxarch:test-db-bound asserter v3 — DO NOT edit the marker line above (repo.makefile_test_db_harness finds it).
 #
 # WHY THIS FILE EXISTS
 # A suite whose only database is a SQLite file must run on a file it makes for the run, never the dev
@@ -40,9 +40,14 @@
 #   connection instead of a session from the factory) escapes the rollback, and fails the run.
 # - A test that must REALLY commit (a durability lock: write, then read from a separate connection)
 #   requests the block's `real_commits` fixture. Its sessions commit for real on the test database,
-#   and after it the block empties every table but `alembic_version` (Postgres: TRUNCATE ... RESTART
-#   IDENTITY CASCADE; SQLite: DELETE), as Django's TransactionTestCase does. So nothing a test needs
-#   may be seeded once for the whole run: seed it per test.
+#   and after it the block empties the app's tables, every one but `alembic_version`, as Django's
+#   TransactionTestCase does. So nothing a test needs may be seeded once for the whole run: seed it
+#   per test. SQLite: DELETE. Postgres: TRUNCATE ... RESTART IDENTITY CASCADE of the tables no
+#   extension owns (an extension's own tables, PostGIS's `spatial_ref_sys` and TimescaleDB's catalog
+#   and chunks among them, and everything in a schema an extension created, are left as they are),
+#   each TimescaleDB continuous aggregate first, as TimescaleDB requires. It waits at most 10 seconds
+#   for its locks, then fails naming the sessions that hold them (a transaction a test or the app
+#   left open), where it would otherwise hang the run.
 # - It refuses to run unless the factory's engine is on TEST_DATABASE_URL's database (the host,
 #   port and database read from the URL and its query; an unresolvable host matches only the same
 #   URL), and has no `binds=` mapping. The tests run on function-scoped event loops (the canonical
@@ -68,6 +73,10 @@
 # registered as a plugin from the first test, so it adds no `pytest_sessionfinish` of its own.
 #
 # WHAT IT DOES NOT CLAIM
+# - A write an isolated test can read back may still be lost in production: every session in the test
+#   shares one transaction, so a write on a session its owner closed (a background task on the
+#   request's session) and nobody committed is visible to the test. A test that locks in a write
+#   across a session boundary requests `real_commits`, where only a committed write is read back.
 # - It checks WHERE the suite connects, not what it reads. A test that copies the dev database into
 #   `tmp_path` and runs on the copy passes: nothing writes to the dev file (it reads dev data).
 # - The drivers' `connect` is wrapped when this block runs: a `from sqlite3 import connect` bound
@@ -648,12 +657,105 @@ def _luxarch_test_db_empty_sql(dialect: str, rows: list[tuple[str, str]]) -> lis
 
 
 _LUXARCH_TEST_DB_TABLES = {
+    # the app's tables: no extension owns them (`pg_depend` deptype 'e': PostGIS's spatial_ref_sys,
+    # TimescaleDB's catalog) or the schema they are in (TimescaleDB's chunks and materializations),
+    # and none is another session's temporary table
     "postgresql": (
-        "SELECT schemaname, tablename FROM pg_tables WHERE schemaname NOT IN "
-        "('pg_catalog', 'information_schema') AND schemaname NOT LIKE 'pg_toast%'"
+        "SELECT n.nspname, c.relname FROM pg_class c "
+        "JOIN pg_namespace n ON n.oid = c.relnamespace "
+        "WHERE c.relkind IN ('r', 'p') AND c.relpersistence <> 't' "
+        "AND n.nspname NOT IN ('pg_catalog', 'information_schema') "
+        "AND n.nspname NOT LIKE 'pg\\_toast%' "
+        "AND NOT EXISTS (SELECT 1 FROM pg_depend d WHERE d.deptype = 'e' AND ("
+        "(d.classid = 'pg_class'::regclass AND d.objid = c.oid) OR "
+        "(d.classid = 'pg_namespace'::regclass AND d.objid = n.oid)))"
     ),
     "sqlite": "SELECT '', name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'",
 }
+# TimescaleDB refuses to TRUNCATE a hypertable a continuous aggregate reads from; truncating the
+# aggregates first (their materializations live in TimescaleDB's own schema) is what it accepts
+_LUXARCH_TEST_DB_CAGGS = (
+    "SELECT view_schema, view_name FROM timescaledb_information.continuous_aggregates"
+)
+_LUXARCH_TEST_DB_LOCK_TIMEOUT = "10s"
+_LUXARCH_TEST_DB_LOCK_HOLDERS = (
+    "SELECT pid, state, app, query, clock_timestamp() - xact_start FROM ("
+    "SELECT DISTINCT a.pid, a.state, coalesce(a.application_name, '') AS app, "
+    "left(coalesce(a.query, ''), 80) AS query, a.xact_start "
+    "FROM pg_locks l JOIN pg_stat_activity a ON a.pid = l.pid "
+    "WHERE l.granted AND l.relation IS NOT NULL AND a.pid <> pg_backend_pid() "
+    "AND l.database = (SELECT oid FROM pg_database WHERE datname = current_database())"
+    ") h ORDER BY xact_start"
+)
+
+
+def _luxarch_test_db_empty_server(c: object) -> None:
+    """Empty the app's tables on a server database, in the transaction `c` (a SQLAlchemy Connection)
+    is in. On Postgres it waits for its locks at most `_LUXARCH_TEST_DB_LOCK_TIMEOUT`, then fails
+    naming the sessions holding them, where an idle transaction would otherwise hang the run."""
+    from sqlalchemy import text
+    from sqlalchemy.exc import DBAPIError
+
+    run = getattr(c, "execute")  # noqa: B009  # a SQLAlchemy Connection, untyped in this block
+    name = getattr(getattr(c, "dialect", None), "name", "")
+    if name not in _LUXARCH_TEST_DB_TABLES:
+        raise AssertionError(
+            f"luxarch test-db-bound: real_commits empties Postgres and SQLite databases, not {name}: "
+            "its committed rows would reach every later test"
+        )
+    if name != "postgresql":
+        rows = [(r[0], r[1]) for r in run(text(_LUXARCH_TEST_DB_TABLES[name]))]
+        for sql in _luxarch_test_db_empty_sql(name, rows):
+            run(text(sql))
+        return
+    run(text(f"SET LOCAL lock_timeout = '{_LUXARCH_TEST_DB_LOCK_TIMEOUT}'"))
+    # an app engine's shorter statement_timeout would cancel the wait first, naming nobody
+    run(text("SET LOCAL statement_timeout = 0"))
+    rows = [(r[0], r[1]) for r in run(text(_LUXARCH_TEST_DB_TABLES["postgresql"]))]
+    has_tsdb = run(
+        text("SELECT 1 FROM pg_extension WHERE extname = 'timescaledb'")
+    ).first()
+    caggs = (
+        [(r[0], r[1]) for r in run(text(_LUXARCH_TEST_DB_CAGGS))] if has_tsdb else []
+    )
+    statements = (
+        [
+            "TRUNCATE "
+            + ", ".join(
+                ".".join('"' + p.replace('"', '""') + '"' for p in pair)
+                for pair in caggs
+            )
+        ]
+        if caggs
+        else []
+    )
+    statements += _luxarch_test_db_empty_sql("postgresql", rows)
+    try:
+        with getattr(c, "begin_nested")():  # noqa: B009  # a SQLAlchemy Connection, untyped here
+            for sql in statements:
+                run(text(sql))
+    except DBAPIError as e:
+        orig = getattr(e, "orig", None)
+        # psycopg and asyncpg: `sqlstate`; psycopg2: `pgcode`; pg8000: the server's fields, `C`
+        fields = (getattr(orig, "args", None) or [None])[0]
+        code = (
+            getattr(orig, "sqlstate", None)
+            or getattr(orig, "pgcode", None)
+            or (fields.get("C") if isinstance(fields, dict) else None)
+        )
+        if code != "55P03":  # lock_not_available
+            raise
+        holders = [
+            f"pid {r[0]} ({r[1]}, {r[2] or 'no application_name'}, open {r[4]}): {r[3]!r}"
+            for r in run(text(_LUXARCH_TEST_DB_LOCK_HOLDERS))
+        ]
+        what = (
+            f"real_commits could not empty the tables within {_LUXARCH_TEST_DB_LOCK_TIMEOUT}: "
+            "another session holds a lock on them, a transaction a test or the app opened and "
+            "never ended (an idle session, a connection a fixture kept). Holding: "
+            + ("; ".join(holders) or "none still listed")
+        )
+        _luxarch_test_db_fail_teardown(what)
 
 
 _LUXARCH_TEST_DB_SQLITE_RECIPE = (
@@ -703,6 +805,14 @@ def _luxarch_test_db_check_held(dialect: str, dbapi: object, database: object) -
         what = f"the app's engine connected to database {database!r}, not {want[3]!r}"
         _LUXARCH_TEST_DB_REFUSED.append(_luxarch_test_db_in_test(what))
         raise AssertionError(f"luxarch test-db-bound: refused {what}")
+
+
+def _luxarch_test_db_fail_teardown(what: str) -> None:
+    """Fail the test whose teardown found `what`, and the run, reported once (not again at the next
+    test's setup)."""
+    _LUXARCH_TEST_DB_REFUSED.append(_luxarch_test_db_in_test(what))
+    _LUXARCH_TEST_DB_REPORTED[0] = len(_LUXARCH_TEST_DB_REFUSED)
+    raise AssertionError(f"luxarch test-db-bound: {what}")
 
 
 def _luxarch_test_db_fixtures() -> tuple[object, object, object]:
@@ -775,28 +885,19 @@ def _luxarch_test_db_fixtures() -> tuple[object, object, object]:
                     if commits:
                         # emptied on a fresh connection, after the test's own are gone
                         _LUXARCH_TEST_DB_MODE[:] = ["commits"]
-                        if bind.dialect.name == "sqlite":
-                            raw = bind.raw_connection()
-                            try:
-                                _luxarch_test_db_empty_sqlite(raw.dbapi_connection)
-                            finally:
-                                raw.close()
-                        else:
-                            with bind.begin() as c:
-                                name = bind.dialect.name
-                                rows = [
-                                    (r[0], r[1])
-                                    for r in c.execute(
-                                        text(
-                                            _LUXARCH_TEST_DB_TABLES.get(
-                                                name, "SELECT 1, 1 WHERE 1 = 0"
-                                            )
-                                        )
-                                    )
-                                ]
-                                for sql in _luxarch_test_db_empty_sql(name, rows):
-                                    c.execute(text(sql))
-                        bind.dispose()
+                        try:
+                            if bind.dialect.name == "sqlite":
+                                raw = bind.raw_connection()
+                                try:
+                                    _luxarch_test_db_empty_sqlite(raw.dbapi_connection)
+                                finally:
+                                    raw.close()
+                            else:
+                                with bind.begin() as c:
+                                    _luxarch_test_db_empty_server(c)
+                        finally:
+                            # a failed emptying too: a pooled connection outlives the test
+                            bind.dispose()
                 finally:
                     _LUXARCH_TEST_DB_MODE.clear()
             if escaped:
@@ -811,13 +912,6 @@ def _luxarch_test_db_fixtures() -> tuple[object, object, object]:
     except ImportError:
         return real_commits, _luxarch_test_db_isolated_sync, None
 
-    try:
-        # the connection belongs to the loop that opened it: the test's own, function-scoped one
-        isolated_fixture = pytest_asyncio.fixture(autouse=True, loop_scope="function")
-    except TypeError:  # pytest-asyncio before loop_scope
-        isolated_fixture = pytest_asyncio.fixture(autouse=True)
-
-    @isolated_fixture
     async def _luxarch_test_db_isolated_async(request: object) -> AsyncIterator[None]:
         from sqlalchemy import text
         from sqlalchemy.ext.asyncio import AsyncEngine
@@ -887,27 +981,20 @@ def _luxarch_test_db_fixtures() -> tuple[object, object, object]:
                     if commits:
                         # emptied on a fresh connection, after the test's own are gone
                         _LUXARCH_TEST_DB_MODE[:] = ["commits"]
-                        if bind.dialect.name == "sqlite":
-                            async with bind.connect() as c:
-                                await c.run_sync(
-                                    lambda sc: _luxarch_test_db_empty_sqlite(
-                                        sc.connection.dbapi_connection
-                                    )
-                                )
-                        else:
-                            async with bind.begin() as c:
-                                name = bind.dialect.name
-                                result = await c.execute(
-                                    text(
-                                        _LUXARCH_TEST_DB_TABLES.get(
-                                            name, "SELECT 1, 1 WHERE 1 = 0"
+                        try:
+                            if bind.dialect.name == "sqlite":
+                                async with bind.connect() as c:
+                                    await c.run_sync(
+                                        lambda sc: _luxarch_test_db_empty_sqlite(
+                                            sc.connection.dbapi_connection
                                         )
                                     )
-                                )
-                                rows = [(r[0], r[1]) for r in result]
-                                for sql in _luxarch_test_db_empty_sql(name, rows):
-                                    await c.execute(text(sql))
-                        await bind.dispose()
+                            else:
+                                async with bind.begin() as c:
+                                    await c.run_sync(_luxarch_test_db_empty_server)
+                        finally:
+                            # a failed emptying too: a pooled connection outlives the test's loop
+                            await bind.dispose()
                 finally:
                     _LUXARCH_TEST_DB_MODE.clear()
             if escaped:
@@ -917,7 +1004,18 @@ def _luxarch_test_db_fixtures() -> tuple[object, object, object]:
                 )
                 _LUXARCH_TEST_DB_REFUSED.append(_luxarch_test_db_in_test(what))
 
-    return real_commits, _luxarch_test_db_isolated_sync, _luxarch_test_db_isolated_async
+    try:
+        # the connection belongs to the loop that opened it: the test's own, function-scoped one
+        isolated_async = pytest_asyncio.fixture(autouse=True, loop_scope="function")(
+            _luxarch_test_db_isolated_async
+        )
+    except (
+        TypeError
+    ):  # pytest-asyncio before loop_scope (0.24): it refuses the keyword when applied
+        isolated_async = pytest_asyncio.fixture(autouse=True)(
+            _luxarch_test_db_isolated_async
+        )
+    return real_commits, _luxarch_test_db_isolated_sync, isolated_async
 
 
 def _luxarch_test_db_problems() -> list[str]:
@@ -977,13 +1075,15 @@ class _LuxarchTestDbFinish:
                 f"the run's database is {want}"
             )
         # every engine still alive at the end: one on another database is code that writes there
-        # the moment it is used (a lifespan's SessionLocal, a module-level engine)
+        # the moment it is used (a lifespan's SessionLocal, a module-level engine). Judged by its
+        # type alone: `isinstance` also reads an object's `__class__`, which can run code (torch's
+        # deprecated `reduce_op` warns there, an error under `filterwarnings = error`)
         problems += sorted(
             {
                 f"an engine this process built is on {_luxarch_test_db_key(e.url)}, not the "
                 f"TEST_DATABASE_URL database {want}"
                 for e in gc.get_objects()
-                if isinstance(e, Engine)
+                if issubclass(type(e), Engine)
                 and not _luxarch_test_db_ok(_luxarch_test_db_key(e.url))
             }
         )
@@ -1005,8 +1105,17 @@ def _luxarch_test_db_bound(item: object, teardown: bool = False) -> None:
     if config is not None and not _LUXARCH_TEST_DB_CONFIG:
         _LUXARCH_TEST_DB_CONFIG.append(config)
     manager = getattr(config, "pluginmanager", None)
-    if manager is not None and not manager.has_plugin("luxarch-test-db-bound"):
-        manager.register(_LuxarchTestDbFinish(), "luxarch-test-db-bound")
+    # `-p no:luxarch-test-db-bound` blocks the name, and `register` then returns None: it would
+    # switch off the end-of-run check
+    if (
+        manager is not None
+        and not manager.has_plugin("luxarch-test-db-bound")
+        and manager.register(_LuxarchTestDbFinish(), "luxarch-test-db-bound") is None
+    ):
+        raise AssertionError(
+            "luxarch test-db-bound: its plugin `luxarch-test-db-bound` is blocked (`-p no:…`): "
+            "the run cannot be judged; remove the option"
+        )
     if teardown:
         # a refusal raised during this test already failed it: not reported again at the next one
         # (a refusal recorded later, in a fixture's teardown, still is, named by this test)
