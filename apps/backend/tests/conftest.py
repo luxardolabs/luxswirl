@@ -23,13 +23,11 @@ from pathlib import Path
 # Layout: this file is apps/backend/tests/conftest.py.
 _TESTS_DIR = Path(__file__).resolve().parent  # apps/backend/tests
 _COMPONENT_ROOT = _TESTS_DIR.parent  # apps/backend  → resolves `import app.*`
-_APPS_ROOT = _COMPONENT_ROOT.parent  # apps/         → resolves `import shared.*`
 
 # Prepend in reverse priority so the highest-priority entry ends at index 0.
-# `app.*` namespacing means there is no longer any agent/backend module
-# collision to defend against — the agent tree is a separate component and is
-# never on this path.
-for candidate in (_APPS_ROOT, _COMPONENT_ROOT, _TESTS_DIR):
+# Shared code is `app.shared` (apps/shared overlaid on the placeholder package),
+# so apps/ itself is never on the path: a top-level `shared` must not resolve.
+for candidate in (_COMPONENT_ROOT, _TESTS_DIR):
     if candidate.exists() and str(candidate) not in sys.path:
         sys.path.insert(0, str(candidate))
 

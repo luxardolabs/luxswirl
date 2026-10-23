@@ -46,15 +46,21 @@ Dev runs **baked images** (no source mounts), so a code change reaches the stack
 # Start the database only
 docker compose --env-file .env.dev up -d timescaledb
 
+# Shared code is imported as app.shared: copy apps/shared over each leg's
+# placeholder package first, as the images do. Restore the placeholders before
+# you commit: git checkout -- apps/backend/app/shared apps/agent/app/shared
+cp -r apps/shared/. apps/backend/app/shared/
+cp -r apps/shared/. apps/agent/app/shared/
+
 # Server (from apps/backend)
 cd apps/backend && poetry install
 DATABASE__URL=postgresql+asyncpg://luxswirl:luxswirl@localhost:5432/luxswirl \
-  PYTHONPATH=.:.. poetry run uvicorn app.main:app --reload --host 0.0.0.0 --port 9000
+  PYTHONPATH=. poetry run uvicorn app.main:app --reload --host 0.0.0.0 --port 9000
 
 # Agent (separate terminal, from apps/agent)
 cd apps/agent && poetry install
 LUXSWIRL_SERVER_URL=http://localhost:9000/api/v1/reports \
-  PYTHONPATH=.:.. poetry run python -m app.main
+  PYTHONPATH=. poetry run python -m app.main
 ```
 
 **Access:**
@@ -85,11 +91,11 @@ Schema is managed by Alembic. Migrations live in `apps/backend/alembic/versions/
 1. Restart the server. The container CMD chain runs `alembic upgrade head` before uvicorn, so the migration applies automatically. Failure exits the container loudly.
 1. Test downgrade: `alembic downgrade -1` then `alembic upgrade head` should round-trip cleanly.
 
-**Local CLI access (without docker exec):** runs from `apps/backend/` (where `alembic.ini` lives; `PYTHONPATH=.` so alembic's `env.py` can import `app.*`; `app.shared` is the 0-byte placeholder, so a host run needs `apps/shared` copied or linked over `apps/backend/app/shared` first, as the images do):
+**Local CLI access (without docker exec):** runs from `apps/backend/` (where `alembic.ini` lives; `PYTHONPATH=.` so alembic's `env.py` can import `app.*`, with `apps/shared` copied over `apps/backend/app/shared` as in "Run a component directly" above):
 
 ```bash
 cd apps/backend
-PYTHONPATH=.:.. DATABASE__URL=postgresql+asyncpg://luxswirl:luxswirl@localhost:5432/luxswirl poetry run alembic upgrade head
+PYTHONPATH=. DATABASE__URL=postgresql+asyncpg://luxswirl:luxswirl@localhost:5432/luxswirl poetry run alembic upgrade head
 ```
 
 ### Tests, lint, and the full check
