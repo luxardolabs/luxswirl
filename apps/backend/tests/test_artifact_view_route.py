@@ -15,7 +15,6 @@ import pytest
 import pytest_asyncio
 from app.core.config import settings
 from app.core.datetime_utils import utc_now
-from app.db.database import get_db
 from app.main import app
 from app.models.check_artifact_model import CheckArtifact
 from app.models.enum_model import CheckArtifactType
@@ -31,17 +30,10 @@ HOSTILE = 'shot.png"; filename="evil.html'
 
 @pytest_asyncio.fixture
 async def client(db: AsyncSession) -> AsyncIterator[AsyncClient]:
-    async def _override_get_db() -> AsyncIterator[AsyncSession]:
-        yield db
-
-    app.dependency_overrides[get_db] = _override_get_db
-    try:
-        async with AsyncClient(
-            transport=ASGITransport(app=app), base_url="https://test"
-        ) as c:
-            yield c
-    finally:
-        app.dependency_overrides.pop(get_db, None)
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="https://test"
+    ) as c:
+        yield c
 
 
 async def _artifact(db: AsyncSession) -> CheckArtifact:
