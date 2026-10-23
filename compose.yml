@@ -57,7 +57,7 @@ services:
     expose:
       - "9000"
     volumes:
-      # Persists the generated SECRET_KEY + api_token. ${DATA_DIR} keeps a
+      # Persists the generated SECRET_KEY + field encryption key. ${DATA_DIR} keeps a
       # sandbox's secrets out of dev's directory.
       - ./data/${DATA_DIR:-.}/server:/app/data
     # Every app setting — log level, CORS, database URL, secrets, retention —

@@ -105,7 +105,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     logger.info("Database", extra={"database_url": settings.database.url})
     logger.info("CORS origins", extra={"cors_origins": settings.server.cors_origins})
 
-    # Resolve runtime secrets (SECRET_KEY, auth_tokens) before any code reads them.
+    # Resolve runtime secrets (SECRET_KEY, field_encryption_key) before any code reads them.
     resolve_runtime_secrets(settings)
 
     # Initialize database

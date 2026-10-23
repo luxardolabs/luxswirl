@@ -143,7 +143,7 @@ Prometheus `/metrics` endpoint configuration. Editable at **Settings → API Key
 | ------------------------------- | ------- | ------ | -------------------- | ------------------------------------------------------------------------------------------ |
 | `metrics.enabled`               | true    | bool   | —                    | Enable or disable the /metrics endpoint entirely                                           |
 | `metrics.auth_required`         | false   | bool   | —                    | Require bearer token authentication for /metrics endpoint (default: public for Prometheus) |
-| `metrics.bearer_token`          | (empty) | string | —                    | Dedicated bearer token for Prometheus scraping                                             |
+| `metrics.bearer_token`          | (empty) | string | —                    | The only bearer token /metrics accepts when authentication is required                     |
 | `metrics.agent_timeout_seconds` | 300     | int    | 30–3600              | Seconds without heartbeat before agent is marked as down in luxswirl_agent_up metric       |
 
 ______________________________________________________________________
@@ -211,13 +211,14 @@ CORS credentials/methods/headers are also configurable (`SERVER__CORS_CREDENTIAL
 
 ### Security (`SECURITY__`)
 
-Secrets (`SECURITY__SECRET_KEY`, `SECURITY__AUTH_TOKENS`, `SECURITY__FIELD_ENCRYPTION_KEY`) are auto-generated on first boot and persisted under `/app/data` if not provided. Set them only when injecting from a secrets manager or for multi-host deployments.
+Secrets (`SECURITY__SECRET_KEY`, `SECURITY__FIELD_ENCRYPTION_KEY`) are auto-generated on first boot and persisted under `/app/data` if not provided. Set them only when injecting from a secrets manager or for multi-host deployments.
+
+There is no shared API token. Agents authenticate with a registration key and then their own agent key; `/metrics` takes its own optional bearer token (`metrics.bearer_token`, Settings > API Keys). `SECURITY__AUTH_TOKENS` and the `/app/data/api_token` file earlier versions generated are no longer read, and both can be removed.
 
 | Env Variable                            | Default                                                                   | Purpose                                                                                                                                                                                                             |
 | --------------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `SECURITY__SECRET_KEY`                  | `""` (auto-generated)                                                     | JWT signing secret. Resolved at startup: env → `/app/data/secret_key` → generate.                                                                                                                                   |
 | `SECURITY__FIELD_ENCRYPTION_KEY`        | `""` (auto-generated)                                                     | Fernet key for encrypting sensitive DB fields (check targets, check_config, connection strings). Auto-generated and persisted to `/app/data/field_encryption_key` if unset; must be a valid Fernet key if provided. |
-| `SECURITY__AUTH_TOKENS`                 | `[]` (auto-generated)                                                     | JSON list of bearer tokens accepted by the artifact upload endpoint (`POST /api/v1/artifacts`). Resolved: env → `/app/data/api_token` → generate.                                                                   |
 | `SECURITY__AUTH_ENABLED`                | `true`                                                                    | Enable authentication                                                                                                                                                                                               |
 | `SECURITY__ALGORITHM`                   | `HS256`                                                                   | JWT algorithm                                                                                                                                                                                                       |
 | `SECURITY__ACCESS_TOKEN_EXPIRE_MINUTES` | `30`                                                                      | Access token expiry in minutes (5–43200)                                                                                                                                                                            |

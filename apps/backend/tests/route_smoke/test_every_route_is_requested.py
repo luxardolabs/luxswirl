@@ -111,7 +111,7 @@ def _fill(path: str, ids: dict[str, str]) -> str:
 async def test_every_route_answers_without_blowing_up(smoke_world):
     client = smoke_world["client"]
     ids = smoke_world["ids"]
-    headers = {**smoke_world["web_headers"], **smoke_world["api_headers"]}
+    headers = smoke_world["web_headers"]
 
     failures = []
     attempted = []

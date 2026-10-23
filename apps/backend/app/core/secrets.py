@@ -5,8 +5,8 @@ Three-tier resolution for system secrets the operator should never have to type:
 
     env var (explicit override)  →  /app/data/<name>  →  generate + persist
 
-Used for SECRET_KEY (JWT signing) and the short-term auth_tokens fallback. The
-admin password follows a different path (random + log-once banner) handled in
+Used for SECRET_KEY (JWT signing) and the field-encryption key. The admin
+password follows a different path (random + log-once banner) handled in
 `services/core/user_core_service.py`.
 
 Files are written mode 0600 in a directory that must be operator-mounted as a
@@ -85,12 +85,11 @@ def _generate_fernet_key() -> str:
 
 
 def resolve_runtime_secrets(settings: Settings) -> None:
-    """Resolve SECRET_KEY, auth_tokens, and field_encryption_key.
+    """Resolve SECRET_KEY and field_encryption_key.
 
     Mutates `settings.security` in place. Must run during lifespan startup,
-    before any request handler or DB query reads these values. SECRET_KEY and
-    field_encryption_key are silent. auth_tokens prints a one-time banner when
-    freshly generated so the operator can copy it into scripts.
+    before any request handler or DB query reads these values. Both are
+    silent: nothing an operator types is generated here.
     """
     security = settings.security
 
@@ -103,20 +102,3 @@ def resolve_runtime_secrets(settings: Settings) -> None:
         generator=_generate_fernet_key,
     )
     security.field_encryption_key = field_key
-
-    if not security.auth_tokens:
-        api_token, generated = load_or_generate("api_token", None, nbytes=32)
-        security.auth_tokens = [api_token]
-
-        if generated:
-            banner = (
-                "\n"
-                "================================================================\n"
-                "  GENERATED INITIAL API TOKEN (first boot only)\n"
-                "  Use this as the Bearer token for /api/v1/* requests:\n"
-                f"      {api_token}\n"
-                "  Stored at /app/data/api_token (mode 0600).\n"
-                "  Override anytime with SECURITY__AUTH_TOKENS env var.\n"
-                "================================================================"
-            )
-            logger.warning(banner)

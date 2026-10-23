@@ -4,7 +4,6 @@ Security utilities - authentication and authorization.
 
 from __future__ import annotations
 
-import hmac
 from collections.abc import Awaitable, Callable
 from datetime import timedelta
 from typing import TYPE_CHECKING, Annotated, Any
@@ -383,86 +382,6 @@ def verify_token(token: str) -> dict[str, Any]:
             detail="Could not validate credentials",
             headers={"WWW-Authenticate": "Bearer"},
         ) from e
-
-
-async def verify_api_token(
-    authorization: Annotated[str | None, Header()] = None,
-) -> str:
-    """
-    Verify API token from Authorization header.
-
-    Args:
-        authorization: Authorization header value
-
-    Returns:
-        Valid token
-
-    Raises:
-        HTTPException: If token is missing or invalid
-
-    Example:
-        @router.get("/agents")
-        async def list_agents(token: Annotated[str, Depends(verify_api_token)]):
-            ...
-    """
-    if not settings.security.auth_enabled:
-        return "disabled"
-
-    if authorization is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Missing Authorization header",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    # Extract token from "Bearer <token>"
-    parts = authorization.split()
-    if len(parts) != 2 or parts[0].lower() != "bearer":
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid Authorization header format. Expected: Bearer <token>",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    token = parts[1]
-
-    # Constant-time comparison against each configured token (avoids a timing oracle).
-    if not any(hmac.compare_digest(token, t) for t in settings.security.auth_tokens):
-        logger.warning(
-            "Invalid API token attempt",
-            extra={"token_prefix": token[:10]},
-        )
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid API token",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    return token
-
-
-async def get_optional_token(
-    authorization: Annotated[str | None, Header()] = None,
-) -> str | None:
-    """
-    Get API token if provided, but don't require it.
-
-    Args:
-        authorization: Authorization header value
-
-    Returns:
-        Token if valid, None if not provided
-
-    Example:
-        For public endpoints that have different behavior when authenticated
-    """
-    if authorization is None:
-        return None
-
-    try:
-        return await verify_api_token(authorization)
-    except HTTPException:
-        return None
 
 
 async def authenticate_heartbeat(

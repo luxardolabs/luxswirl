@@ -198,7 +198,7 @@ Configure the `/metrics` endpoint for Prometheus scraping.
 - **Metrics Endpoint** — enable/disable `/metrics` (`metrics.enabled`, default **enabled**)
 - **Require Authentication** — require a Bearer token (`metrics.auth_required`, default **off / public**)
 - **Agent Timeout** — seconds before an agent is marked down in metrics (`metrics.agent_timeout_seconds`, default **300**, range 30–3600)
-- **Bearer Token** — dedicated token for scraping (`metrics.bearer_token`, empty by default)
+- **Bearer Token** — the token a scraper sends when authentication is required (`metrics.bearer_token`, empty by default). It is the only credential `/metrics` accepts; with authentication on and no token set, every scrape is refused.
 
 ### Enabling/Disabling the Metrics Endpoint
 
