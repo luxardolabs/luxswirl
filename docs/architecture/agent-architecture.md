@@ -53,14 +53,15 @@ Result: each check is hashed to exactly one of the two agents
 (~25 checks each).
 
 If home-agent-1 stops heartbeating:
-- After 3 missed heartbeats plus 60 s it counts as offline, and its checks
-  move to home-agent-2 (only its checks: home-agent-2 keeps its own).
+- After 3 missed heartbeats plus 60 s it counts as offline (at once, if its
+  last heartbeat said it was shutting down), and its checks move to
+  home-agent-2 (only its checks: home-agent-2 keeps its own).
 - home-agent-2 learns at its next heartbeat (its config_version changes)
   and fetches its new check list.
 - When home-agent-1 heartbeats again, its checks move back to it.
 ```
 
-**Failover.** A distributed check runs on the highest-weighted agent of its pool that is online, by the same rule the silence alerts and the dashboard use (`app.core.liveness`: an agent is offline once its newest heartbeat is older than 3 of its heartbeat intervals plus 60 s). One lost heartbeat therefore moves nothing. When every agent of the pool is offline, the check stays with its first choice, and the Agent Offline alert names that agent. Any agent of the pool may report the check's results: a result is measured before it reaches the server, so the owner's results buffered through an outage and the stand-in's last batch both arrive after the check has moved.
+**Failover.** A distributed check runs on the highest-weighted agent of its pool that is online, by the same rule the silence alerts and the dashboard use (`app.core.liveness`: an agent is offline once its newest heartbeat is older than 3 of its heartbeat intervals plus 60 s). One lost heartbeat therefore moves nothing. An agent whose latest heartbeat said it was shutting down (status `offline`) hands over at once, since nothing will run its checks. The heartbeat's `config_version` is a digest of the agent's check list, an empty one included, and the agent re-fetches its checks whenever it changes. When every agent of the pool is offline, the check stays with its first choice, and the Agent Offline alert names that agent. Any agent of the pool may report the check's results: a result is measured before it reaches the server, so the owner's results buffered through an outage and the stand-in's last batch both arrive after the check has moved.
 
 **Benefits:**
 
@@ -348,7 +349,7 @@ for node in range(1, 1001):  # 1000 nodes
 
 ### Q: What happens when an agent with DISTRIBUTE checks goes offline?
 
-**A:** Once it has missed 3 heartbeats plus 60 s, its checks move to the other online agents of each check's pool, and each of those agents fetches its new list at its next heartbeat. They move back when it heartbeats again. See **Failover** under Use Case 2.
+**A:** Once it has missed 3 heartbeats plus 60 s, or at once when it shuts down cleanly, its checks move to the other online agents of each check's pool, and each of those agents fetches its new list at its next heartbeat. They move back when it heartbeats again. See **Failover** under Use Case 2.
 
 ### Q: Can a check be both REPLICATE and DISTRIBUTE?
 
