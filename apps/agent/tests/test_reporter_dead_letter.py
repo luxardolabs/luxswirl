@@ -181,8 +181,8 @@ async def test_the_cap_prunes_the_oldest_dead_letters(tmp_path: Path) -> None:
 async def test_replay_dead_letters_the_refused_batch_and_drains_the_rest(
     tmp_path: Path,
 ) -> None:
-    """One bad batch in the stored queue used to block every batch behind it:
-    the combined replay POST came back 422 and the pass aborted, every pass."""
+    """A batch the server refuses for good never blocks the batches behind it:
+    a combined replay POST that comes back 422 is retried batch by batch."""
     received: list[str] = []
 
     def handler(request: httpx.Request) -> httpx.Response:

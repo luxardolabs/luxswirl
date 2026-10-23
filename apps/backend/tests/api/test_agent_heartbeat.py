@@ -153,7 +153,7 @@ async def test_the_run_id_is_stored_from_the_heartbeat(
     client: AsyncClient, approved: tuple[str, str], db: AsyncSession
 ) -> None:
     """The heartbeat owns the agent's liveness fields, the run id included:
-    the report path no longer writes the agent row."""
+    the report path never writes the agent row."""
     agent_id, key = approved
     run_id = "6f1c2a0e-1111-4222-8333-444455556666"
 

@@ -1,8 +1,7 @@
 """The key-recovery refusal lives in core.
 
 recover-key refuses an agent that is not active (403), once the caller has
-proved that agent's recovery secret. It used to be checked in the router
-against the ORM row.
+proved that agent's recovery secret. The router never inspects the ORM row.
 """
 
 from __future__ import annotations

@@ -2,8 +2,8 @@
 # Generated secrets and runtime data — NEVER commit
 # =============================================================================
 # These get created by docker-compose at runtime via ./data/<service> bind-mounts.
-# Includes auto-generated SECRET_KEY, encrypted agent credentials, and the
-# api_token file older versions generated (no longer read).
+# Includes the auto-generated SECRET_KEY, the encrypted agent credentials, and
+# any leftover api_token file (the server neither writes nor reads one).
 data/
 *_credentials.json
 secret_key
