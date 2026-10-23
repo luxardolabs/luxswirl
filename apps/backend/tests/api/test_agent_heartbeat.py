@@ -1,13 +1,17 @@
 """POST /api/v1/heartbeat authenticates through AuthenticatedHeartbeat.
 
-The agent's own key dispatches jobs. The registration key is accepted for an
-agent that has not stored its key yet, but dispatches none. Anything else is
-refused before the heartbeat is applied.
+The agent's own key applies the heartbeat and dispatches jobs. The registration
+key, shared by every install, applies a heartbeat only for an agent that has no
+key of its own yet (a pending agent). For an agent that has one, it only reads
+the agent's status back (so an approved agent learns to recover its key):
+nothing is written onto the row and no job is dispatched. Anything else is
+refused before the heartbeat is applied. last_seen is the server's clock.
 """
 
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from datetime import timedelta
 from uuid import UUID, uuid4
 
 import pytest
@@ -168,3 +172,97 @@ async def test_the_run_id_is_stored_from_the_heartbeat(
     assert agent is not None
     await db.refresh(agent)
     assert agent.agent_run_id == run_id
+
+
+async def test_registration_key_cannot_rewrite_an_approved_agents_row(
+    client: AsyncClient,
+    approved: tuple[str, str],
+    registration_token: str,
+    db: AsyncSession,
+) -> None:
+    """Every install holds the shared registration key. Heartbeating as an
+    agent that already has its own key with it only reads that agent's status
+    (so an approved agent can learn to recover its key): it writes nothing onto
+    the row, neither identity (tags, hostname) nor liveness nor health."""
+    agent_id, _ = approved
+    agent = await db.get(Agent, UUID(agent_id))
+    assert agent is not None
+    agent.tags = ["role:probe"]
+    await db.flush()
+    before = (
+        list(agent.tags),
+        agent.hostname,
+        agent.last_seen,
+        agent.agent_run_id,
+        agent.dead_letter_count,
+    )
+
+    resp = await client.post(
+        "/api/v1/heartbeat",
+        json={
+            **_beat(agent_id),
+            "timestamp": (utc_now() + timedelta(days=365)).isoformat(),
+            "tags": ["role:hijacked"],
+            "hostname": "hijacker",
+            "agent_run_id": "6f1c2a0e-1111-4222-8333-444455556666",
+            "dead_letter_count": 99,
+        },
+        headers={"Authorization": f"Bearer {registration_token}"},
+    )
+
+    await db.refresh(agent)
+    after = (
+        list(agent.tags),
+        agent.hostname,
+        agent.last_seen,
+        agent.agent_run_id,
+        agent.dead_letter_count,
+    )
+    assert after == before, f"registration-key heartbeat rewrote the row: {after}"
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["jobs"] == []
+
+
+async def test_registration_key_still_drives_an_agent_without_a_key(
+    client: AsyncClient, registration_token: str, db: AsyncSession
+) -> None:
+    """A pending agent has no key of its own yet: the registration key is its
+    only credential, and its heartbeat is applied."""
+    agent = make_agent(approval_status="pending", hostname="before")
+    db.add(agent)
+    await db.flush()
+
+    resp = await client.post(
+        "/api/v1/heartbeat",
+        json={**_beat(str(agent.id)), "hostname": "after"},
+        headers={"Authorization": f"Bearer {registration_token}"},
+    )
+
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["approval_status"] == "pending"
+    await db.refresh(agent)
+    assert agent.hostname == "after"
+
+
+async def test_heartbeat_timestamp_cannot_pin_last_seen_in_the_future(
+    client: AsyncClient, approved: tuple[str, str], db: AsyncSession
+) -> None:
+    """last_seen is the server's clock at receipt: a skewed or hostile agent
+    cannot keep itself 'online' after it dies by sending a future timestamp."""
+    agent_id, key = approved
+
+    resp = await client.post(
+        "/api/v1/heartbeat",
+        json={
+            **_beat(agent_id),
+            "timestamp": (utc_now() + timedelta(days=365)).isoformat(),
+        },
+        headers={"Authorization": f"Bearer {key}"},
+    )
+
+    assert resp.status_code == 200, resp.text
+    agent = await db.get(Agent, UUID(agent_id))
+    assert agent is not None
+    await db.refresh(agent)
+    assert agent.last_seen is not None
+    assert agent.last_seen <= utc_now() + timedelta(minutes=5), agent.last_seen
