@@ -29,6 +29,7 @@ pytestmark = pytest.mark.unit
 
 def _artifact(**overrides) -> CheckArtifactCreate:
     fields = {
+        "agent_id": uuid4(),
         "check_id": uuid4(),
         "check_result_id": uuid4(),
         "check_result_timestamp": utc_now(),

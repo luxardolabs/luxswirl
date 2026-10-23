@@ -148,6 +148,22 @@ class AgentAssignmentCoreService:
         return CheckApiCoreService.build_check_list_response(checks, agent.agent_name)
 
     @staticmethod
+    async def is_check_assigned(
+        db: AsyncSession, agent_id: UUID, check_id: UUID
+    ) -> bool:
+        """Whether `check_id` is one of the checks `agent_id` should run.
+
+        The same answer GET /api/v1/checks gives the agent, so whatever an agent
+        is told to run is what it may post data for, and nothing else.
+
+        Raises:
+            AgentNotFoundException: If the agent does not exist
+        """
+        agent = await AgentCoreService.get_agent_by_id(db, agent_id)
+        checks = await AgentAssignmentCoreService.get_checks_for_agent(db, agent)
+        return any(check.id == check_id for check in checks)
+
+    @staticmethod
     async def get_checks_for_agent(
         db: AsyncSession,
         agent: Agent,

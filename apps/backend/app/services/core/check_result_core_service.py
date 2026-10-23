@@ -431,14 +431,20 @@ class CheckResultCoreService:
     @staticmethod
     async def get_artifacts_for_result(
         db: AsyncSession,
+        check_id: UUID,
         check_result_id: UUID,
         check_result_timestamp: datetime,
     ) -> list[CheckArtifactResponse]:
-        """The artifacts one check execution produced, metadata only."""
+        """The artifacts one execution of `check_id` produced, metadata only.
+
+        Scoped to the check as well as the result id: the result id is the
+        agent's to choose, so an artifact another check's agent uploaded naming
+        this result never shows here.
+        """
         return [
             CheckArtifactResponse.model_validate(artifact)
             for artifact in await CheckResultCRUD.get_artifacts_for_result(
-                db, check_result_id, check_result_timestamp
+                db, check_id, check_result_id, check_result_timestamp
             )
         ]
 

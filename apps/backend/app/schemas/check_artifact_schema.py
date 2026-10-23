@@ -20,6 +20,9 @@ class CheckArtifactCreate(BaseSchema):
     Binary data is sent as base64-encoded string.
     """
 
+    agent_id: UUID = Field(
+        ..., description="The uploading agent (its own key must authenticate it)"
+    )
     check_id: UUID = Field(..., description="Check UUID this artifact belongs to")
     check_result_id: UUID = Field(..., description="Check result UUID (from agent)")
     check_result_timestamp: datetime = Field(
@@ -39,12 +42,14 @@ class CheckArtifactCreate(BaseSchema):
     model_config = {
         "json_schema_extra": {
             "example": {
+                "agent_id": "550e8400-e29b-41d4-a716-446655440000",
                 "check_id": "123e4567-e89b-12d3-a456-426614174000",
-                "check_result_id": 42,
+                "check_result_id": "9b2f6c1e-3d4a-4f5b-8c7d-0e1f2a3b4c5d",
+                "check_result_timestamp": "2026-10-22T10:00:00Z",
                 "artifact_type": "screenshot",
                 "content_type": "image/png",
-                "filename": "check_result_42.png",
-                "data": "<base64 encoded binary data>",
+                "filename": "screenshot.png",
+                "data_base64": "<base64 encoded binary data>",
             }
         }
     }

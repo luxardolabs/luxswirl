@@ -102,7 +102,9 @@ async def test_create_artifact_is_committed(worker_db) -> None:
     async with worker_db() as s:
         created = await ArtifactCoreService.create_artifact(
             s,
+            agent.id,
             CheckArtifactCreate(
+                agent_id=agent.id,
                 check_id=check.id,
                 check_result_id=uuid4(),
                 check_result_timestamp=utc_now(),

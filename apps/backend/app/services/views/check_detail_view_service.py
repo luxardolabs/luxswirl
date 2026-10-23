@@ -458,7 +458,10 @@ class CheckDetailViewService:
                 # Fetch artifacts using proper foreign key relationship
                 artifacts_models = (
                     await CheckResultCoreService.get_artifacts_for_result(
-                        db, latest_check_result.id, latest_check_result.timestamp
+                        db,
+                        check_id,
+                        latest_check_result.id,
+                        latest_check_result.timestamp,
                     )
                 )
 

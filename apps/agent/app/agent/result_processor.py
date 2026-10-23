@@ -191,6 +191,7 @@ class ResultProcessor:
 
                     # Prepare artifact data
                     artifact_data = {
+                        "agent_id": str(self.config.get("agent_id")),
                         "check_id": check_id,
                         "check_result_id": check_result_id,
                         "check_result_timestamp": check_result_timestamp,

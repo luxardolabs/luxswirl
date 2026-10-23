@@ -636,10 +636,13 @@ class CheckResultCRUD:
 
     @staticmethod
     async def get_artifacts_for_result(
-        db: AsyncSession, check_result_id: UUID, check_result_timestamp: datetime
+        db: AsyncSession,
+        check_id: UUID,
+        check_result_id: UUID,
+        check_result_timestamp: datetime,
     ) -> list[CheckArtifact]:
         """
-        Get artifacts for a check result.
+        Get the artifacts of `check_id` for one of its check results.
 
         check_artifacts is a hypertable partitioned by created_at, so the scan is
         bounded to a ±1-day window around the result's timestamp for chunk
@@ -655,6 +658,7 @@ class CheckResultCRUD:
             .options(defer(CheckArtifact.data, raiseload=True))
             .where(
                 and_(
+                    CheckArtifact.check_id == check_id,
                     CheckArtifact.check_result_id == check_result_id,
                     CheckArtifact.created_at >= check_result_timestamp - window,
                     CheckArtifact.created_at <= check_result_timestamp + window,
