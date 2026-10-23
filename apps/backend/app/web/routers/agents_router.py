@@ -10,7 +10,7 @@ from fastapi import status as http_status
 from fastapi.responses import HTMLResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import AgentNotFoundException
+from app.core.exceptions import AgentNotFoundException, ValidationException
 from app.core.query_params import PerPageFilter
 from app.db import get_db
 from app.services.views.agents_view_service import AgentsViewService
@@ -140,6 +140,33 @@ async def update_agent_web(
     return agent_status_message(request, kind, message, status)
 
 
+@router.get(
+    "/agents/{agent_id}/delete-impact",
+    response_class=HTMLResponse,
+    include_in_schema=False,
+    name="agent_delete_impact",
+)
+async def agent_delete_impact(
+    request: Request,
+    agent_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
+    current_user: EditorUserWeb,
+) -> HTMLResponse:
+    """What deleting the agent removes, shown in its delete confirmation."""
+    try:
+        context = await AgentsViewService.build_delete_impact_context(
+            db, request, agent_id
+        )
+    except AgentNotFoundException:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail=f"Agent not found: {agent_id}",
+        ) from None
+    return templates.TemplateResponse(
+        request, "partials/panels/agents/fields/delete_impact.html", context
+    )
+
+
 @router.delete(
     "/agents/{agent_id}",
     response_class=HTMLResponse,
@@ -151,21 +178,30 @@ async def delete_agent_web(
     agent_id: UUID,
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: EditorUserWeb,
-) -> HTMLResponse:
+    confirm_name: Annotated[str, Form()] = "",
+) -> Response:
     """Enqueue an agent_delete maintenance job and return the polling partial.
 
-    See LUXSWIRL-105. The actual cascade (checks → check_results across
-    compressed Timescale chunks) runs in the maintenance worker on its own
-    session so this web request never holds a transaction longer than the
-    insert. UI polls /maintenance/{job_id}/status until terminal.
+    The cascade (checks → check_results across compressed Timescale chunks)
+    runs in the maintenance worker on its own session, so this web request
+    never holds a transaction longer than the insert. The UI polls
+    /maintenance/{job_id}/status until terminal. A `confirm_name` that is not
+    the agent's name queues nothing and answers 422 into the form's error slot.
     """
     # No explicit commit/rollback: get_db() commits on clean return (before the
     # polling partial is sent, so the job is visible to the first poll) and rolls
-    # back on any exception. Same pattern as LUXSWIRL-164.
+    # back on any exception.
     try:
         job = await AgentsViewService.enqueue_delete(
-            db, agent_id, owner_id=current_user.id
+            db, agent_id, confirm_name, owner_id=current_user.id
         )
+    except ValidationException as e:
+        response = agent_status_message(
+            request, "error", e.message, http_status.HTTP_422_UNPROCESSABLE_CONTENT
+        )
+        response.headers["HX-Retarget"] = f"#agent-delete-error-{agent_id}"
+        response.headers["HX-Reswap"] = "innerHTML"
+        return response
     except AgentNotFoundException:
         raise HTTPException(
             status_code=http_status.HTTP_404_NOT_FOUND,

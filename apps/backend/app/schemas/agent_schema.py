@@ -445,6 +445,7 @@ class AgentUrls:
     disable: str
     enable: str
     delete: str
+    delete_impact: str
     update: str
     regenerate_key: str
     revoke_key: str

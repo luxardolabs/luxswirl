@@ -1,0 +1,7 @@
+{# What deleting the agent removes. Vars: check_count, result_count. #}
+<p class="text-sm text-red-300">
+    This deletes the agent,
+    <strong>{{ check_count or 0 }} check{{ 's' if (check_count or 0) != 1 }}</strong>
+    and <strong>{{ "{:,}".format(result_count) }} stored result{{ 's' if result_count != 1 }}</strong>.
+    It cannot be undone.
+</p>

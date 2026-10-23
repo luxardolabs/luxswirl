@@ -94,6 +94,10 @@ Shows all approved agents, paginated, with rich performance metrics. Two control
 
 A yellow **N dead-lettered** badge next to the approval status means the server refused N report batches as invalid (its own 400 or 422 error, for example a report envelope an older server does not accept). A single result the server cannot store does not do this: it is skipped and the rest of the batch is kept. A 400 or 413 from a proxy, or the server's `Invalid host header` answer to a misaddressed agent, is not a refusal either: those batches stay pending and are sent once the address is fixed. The agent keeps them in its local `dead_letters` table instead of retrying them, so they never hold up the rest of its backlog. The badge is absent when the count is zero or the agent does not report it.
 
+### Deleting an agent
+
+**Delete** is at the bottom of the agent's **Edit** panel. Deleting removes the agent, every check it owns and their stored results, plus any results it reported for other agents' checks, and it cannot be undone. Clicking **Delete** shows how many checks and stored results go with it, then asks for the agent's name (its hostname if it has no name); the delete runs only when the typed name matches. To stop an agent while keeping its checks and history, **Pause** or **Disable** it instead.
+
 ### Statistics grid
 
 | Stat                 | Meaning                                                                                                                                 | Healthy / warning                                                         |

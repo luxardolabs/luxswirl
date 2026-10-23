@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.datetime_utils import utc_now
-from app.core.exceptions import AgentNotFoundException
+from app.core.exceptions import AgentNotFoundException, ValidationException
 from app.models.enum_model import MaintenanceJobKind
 from app.schemas.agent_schema import (
     AgentOption,
@@ -29,6 +29,7 @@ from app.schemas.maintenance_job_schema import MaintenanceJobResponse
 from app.schemas.pagination_schema import build_pagination
 from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.check_core_service import CheckCoreService
+from app.services.core.check_result_core_service import CheckResultCoreService
 from app.services.core.maintenance_job_core_service import MaintenanceJobCoreService
 from app.services.core.settings_core_service import SettingsCoreService
 from app.shared.logger import get_logger
@@ -62,6 +63,7 @@ def build_agent_urls(request: Request, agent_id: UUID) -> AgentUrls:
         disable=u("disable_agent_web"),
         enable=u("enable_agent_web"),
         delete=u("delete_agent_web"),
+        delete_impact=u("agent_delete_impact"),
         update=u("update_agent_web"),
         regenerate_key=u("regenerate_key_web"),
         revoke_key=u("revoke_key_web"),
@@ -270,12 +272,39 @@ class AgentsViewService:
     # ====================================================================
 
     @staticmethod
+    async def build_delete_impact_context(
+        db: AsyncSession, request: Request, agent_id: UUID
+    ) -> dict[str, Any]:
+        """What deleting the agent removes, for its delete confirmation."""
+        agent = await AgentCoreService.get_agent(db, agent_id)
+        return {
+            "request": request,
+            "check_count": agent.check_count,
+            "result_count": await CheckResultCoreService.count_deleted_with_agent(
+                db, agent_id
+            ),
+        }
+
+    @staticmethod
     async def enqueue_delete(
-        db: AsyncSession, agent_id: UUID, owner_id: UUID | None = None
+        db: AsyncSession,
+        agent_id: UUID,
+        confirm_name: str,
+        owner_id: UUID | None = None,
     ) -> MaintenanceJobResponse:
-        """Enqueue an agent_delete maintenance job; returns the job row."""
-        # 404 cleanly if the agent doesn't exist instead of queuing a doomed job.
-        await AgentCoreService.get_agent(db, agent_id)
+        """Enqueue an agent_delete maintenance job; returns the job row.
+
+        Raises:
+            AgentNotFoundException: no such agent, so no job is queued.
+            ValidationException: `confirm_name` is not the agent's name as the
+                confirmation shows it.
+        """
+        agent = await AgentCoreService.get_agent(db, agent_id)
+        expected = AgentsViewService._display_name(
+            agent.agent_name, agent.hostname, agent_id
+        )
+        if confirm_name.strip() != expected:
+            raise ValidationException(f"Type {expected} exactly to delete this agent.")
         return await MaintenanceJobCoreService.enqueue(
             db,
             kind=MaintenanceJobKind.AGENT_DELETE,
@@ -491,6 +520,9 @@ class AgentsViewService:
             "current_user": current_user,
             "agent": agent,
             "check_count": check_count,
+            "delete_confirm_name": AgentsViewService._display_name(
+                agent.agent_name, agent.hostname, agent_id
+            ),
             "default_heartbeat": settings.server.default_heartbeat_interval,
             "default_check_sync": settings.server.default_check_sync_interval,
             "available_agent_tags": available_agent_tags,
