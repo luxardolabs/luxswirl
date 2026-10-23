@@ -296,6 +296,8 @@ collector = [
   "AgentOwnedJobId",
   "require_reporting_agent",
   "ReportingAgentId",
+  "require_uploading_agent",
+  "UploadingAgentId",
 ]
 public_paths = ["login", "setup", "logout"]
 

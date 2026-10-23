@@ -321,7 +321,7 @@ The JSON API is the agent protocol. Operators manage agents, checks, alerts, not
 | `GET`  | `/api/v1/checks?agent_id={id}`          | Agent key                     | The checks this agent should run         |
 | `POST` | `/api/v1/reports`                       | Agent key                     | Submit a batch of check results          |
 | `POST` | `/api/v1/jobs/{job_id}/results`         | Key of the job's own agent    | Submit a job's results                   |
-| `POST` | `/api/v1/artifacts`                     | API token                     | Upload a synthetic-check artifact        |
+| `POST` | `/api/v1/artifacts`                     | Agent key                     | Upload an artifact for one of its checks |
 
 ### Infrastructure
 

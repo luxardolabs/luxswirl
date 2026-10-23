@@ -507,7 +507,7 @@ ______________________________________________________________________
 
 The JSON API under `/api/v1` is the agent protocol: it carries agents' registration, heartbeats, check lists, results and artifacts. Operators manage agents, checks, alerts, notification providers, registration keys, users and status pages through the web UI.
 
-**Versioning**: every agent endpoint lives under `/api/v1`. **Authentication**: `Authorization: Bearer <key>` — a registration key to register or recover, the agent's own key for its check list, reports and job results. **Response format**: JSON.
+**Versioning**: every agent endpoint lives under `/api/v1`. **Authentication**: `Authorization: Bearer <key>` — a registration key to register or recover, the agent's own key for its check list, reports, job results and artifacts. **Response format**: JSON.
 
 ### API Endpoint Structure
 
@@ -519,7 +519,7 @@ The JSON API under `/api/v1` is the agent protocol: it carries agents' registrat
 ├── GET    /checks?agent_id={id}            Fetch this agent's checks (agent key)
 ├── POST   /reports                         Submit a batch of results (agent key)
 ├── POST   /jobs/{job_id}/results           Submit a job's results (the job's agent key)
-└── POST   /artifacts                       Upload a synthetic-check artifact
+└── POST   /artifacts                       Upload an artifact for one of its checks (agent key)
 
 Root level
 ├── GET    /metrics                         Prometheus format (auth configurable)

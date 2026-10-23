@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, status
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.security import verify_api_token
+from app.api.deps import UploadingAgentId
 from app.db import get_db
 from app.schemas.base_schema import ErrorResponse
 from app.schemas.check_artifact_schema import (
@@ -30,21 +30,27 @@ router = APIRouter(tags=["Artifacts"])
     response_model=CheckArtifactResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Create artifact",
-    description="Upload a check artifact (screenshot, trace, etc.) - typically called by agents",
+    description="An agent uploads an artifact (screenshot, trace, etc.) for one of its checks",
     responses={
-        404: {"model": ErrorResponse, "description": "Check not found"},
+        401: {"model": ErrorResponse, "description": "Not the agent's own key"},
+        403: {
+            "model": ErrorResponse,
+            "description": "Agent not approved, or the check is not assigned to it",
+        },
+        404: {"model": ErrorResponse, "description": "Agent or check not found"},
     },
     name="create_artifact",
 )
 async def create_artifact(
     artifact: CheckArtifactCreate,
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
-    _: Annotated[str, Depends(verify_api_token)],
+    agent_id: UploadingAgentId,
 ) -> CheckArtifactResponse:
     """
     Create a new check artifact.
 
-    This endpoint is typically called by agents after executing synthetic checks
-    to upload screenshots, traces, and other binary artifacts.
+    Called by agents after executing synthetic checks to upload screenshots,
+    traces, and other binary artifacts. Only the agent's own key is accepted
+    (`UploadingAgentId`), and only for a check assigned to that agent.
     """
-    return await ArtifactCoreService.create_artifact(db, artifact)
+    return await ArtifactCoreService.create_artifact(db, agent_id, artifact)

@@ -32,6 +32,7 @@ from app.core.security import (
 )
 from app.db import get_db
 from app.schemas.agent_schema import AgentHeartbeat
+from app.schemas.check_artifact_schema import CheckArtifactCreate
 from app.schemas.check_result_schema import AgentReportRequest
 from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.job_core_service import JobCoreService
@@ -159,3 +160,37 @@ async def require_reporting_agent(
 
 # The id of the agent whose own key authenticated this report.
 ReportingAgentId = Annotated[UUID, Depends(require_reporting_agent)]
+
+
+async def require_uploading_agent(
+    artifact: CheckArtifactCreate,
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
+    authorization: Annotated[str | None, Header()] = None,
+) -> UUID:
+    """The artifact's agent, authenticated by its OWN key, exactly as for reports.
+
+    Never the registration key, so one agent cannot upload as another. Proves
+    only WHO is uploading; whether the artifact's check is that agent's is the
+    assignment rule core applies on create. Runs before the route body, so
+    nothing is written for a caller that fails.
+    """
+    try:
+        agent = await AgentCoreService.get_agent_by_id(db, artifact.agent_id)
+    except AgentNotFoundException:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Agent not found: {artifact.agent_id}",
+        ) from None
+    if not agent.api_key_hash:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "Agent must be approved and have agent-specific key to upload artifacts"
+            ),
+        )
+    await verify_agent_token(agent, authorization)
+    return agent.id
+
+
+# The id of the agent whose own key authenticated this artifact upload.
+UploadingAgentId = Annotated[UUID, Depends(require_uploading_agent)]

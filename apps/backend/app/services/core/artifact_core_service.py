@@ -7,7 +7,7 @@ from uuid import UUID
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import CheckNotFoundException
+from app.core.exceptions import AuthorizationException, CheckNotFoundException
 from app.crud.artifact_crud import ArtifactCRUD
 from app.models.check_artifact_model import CheckArtifact
 from app.schemas.check_artifact_schema import (
@@ -15,6 +15,7 @@ from app.schemas.check_artifact_schema import (
     CheckArtifactCreate,
     CheckArtifactResponse,
 )
+from app.services.core.agent_assignment_core_service import AgentAssignmentCoreService
 from app.services.core.check_core_service import CheckCoreService
 
 logger = get_logger("luxswirl.services.artifact")
@@ -25,12 +26,17 @@ class ArtifactCoreService:
 
     @staticmethod
     async def create_artifact(
-        db: AsyncSession, data: CheckArtifactCreate
+        db: AsyncSession, agent_id: UUID, data: CheckArtifactCreate
     ) -> CheckArtifactResponse:
-        """Store an artifact a check execution produced.
+        """Store an artifact one of `agent_id`'s check executions produced.
+
+        The check must be one the assignment model gives that agent (its manual
+        check, or a replicate/distribute check its selector matches), the same
+        set the agent is handed by GET /api/v1/checks.
 
         Args:
             db: Database session
+            agent_id: The authenticated uploading agent
             data: Artifact creation data (includes base64-encoded binary data)
 
         Returns:
@@ -38,8 +44,19 @@ class ArtifactCoreService:
 
         Raises:
             CheckNotFoundException: If the artifact's check does not exist
+            AuthorizationException: If the check is not assigned to the agent
         """
         await ArtifactCoreService._require_check(db, data.check_id)
+        if not await AgentAssignmentCoreService.is_check_assigned(
+            db, agent_id, data.check_id
+        ):
+            logger.warning(
+                "Refused artifact for a check not assigned to the uploading agent",
+                extra={"agent_id": str(agent_id), "check_id": str(data.check_id)},
+            )
+            raise AuthorizationException(
+                "This check is not assigned to the uploading agent"
+            )
         binary_data = data.get_binary_data()
         artifact = CheckArtifact(
             check_id=data.check_id,
@@ -59,6 +76,7 @@ class ArtifactCoreService:
                 "artifact_type": artifact.artifact_type,
                 "size_bytes": artifact.size_bytes,
                 "check_id": str(artifact.check_id),
+                "agent_id": str(agent_id),
             },
         )
         return ArtifactCoreService._metadata(artifact)
