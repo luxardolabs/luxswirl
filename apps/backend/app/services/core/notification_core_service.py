@@ -2,6 +2,8 @@
 Notification service - business logic for notification provider operations.
 """
 
+import asyncio
+from collections.abc import Sequence
 from datetime import datetime, timedelta
 from typing import Any
 from uuid import UUID
@@ -347,12 +349,54 @@ class NotificationCoreService:
         is_resend: bool = False,
         resend_count: int = 0,
     ) -> NotificationLog:
+        """Send one notification through one provider and log the attempt.
+
+        The single-provider form of `send_notifications`; see it for the
+        arguments.
+
+        Raises:
+            NotFoundException: If provider not found
         """
-        Send a notification and log the attempt.
+        (log_entry,) = await NotificationCoreService.send_notifications(
+            db,
+            [provider_id],
+            context,
+            alert_id=alert_id,
+            check_result_id=check_result_id,
+            check_result_timestamp=check_result_timestamp,
+            check_id=check_id,
+            agent_id=agent_id,
+            notification_hash=notification_hash,
+            is_resend=is_resend,
+            resend_count=resend_count,
+        )
+        return log_entry
+
+    @staticmethod
+    async def send_notifications(
+        db: AsyncSession,
+        provider_ids: Sequence[UUID],
+        context: NotificationContext,
+        *,
+        alert_id: UUID,
+        check_result_id: UUID | None,
+        check_result_timestamp: datetime | None,
+        check_id: UUID | None = None,
+        agent_id: UUID | None = None,
+        notification_hash: str | None = None,
+        is_resend: bool = False,
+        resend_count: int = 0,
+    ) -> list[NotificationLog]:
+        """Send a notification through several providers and log each attempt.
+
+        The session is used one statement at a time (an AsyncSession is not
+        safe to share between concurrent tasks). The providers are read and
+        rate-limit-checked in turn, the deliveries run in parallel with no
+        database work, and each attempt's row is written in turn after them.
 
         Args:
             db: Database session
-            provider_id: Provider ID
+            provider_ids: The providers to send through
             context: Notification context
             alert_id: Alert that triggered this notification
             check_result_id: Check result ID that triggered this (None when
@@ -360,26 +404,23 @@ class NotificationCoreService:
             check_result_timestamp: Check result timestamp (None with it)
             check_id: The check the notification is about
             agent_id: The agent an agent_offline notification is about
-            notification_hash: Per-alert-state key (LUXSWIRL-147) — stored on the row
-                so dedup can detect transitions.
-            is_resend: True if this is a same-state resend after resend_interval
-                elapsed (LUXSWIRL-149). False on fresh fires and state transitions.
-            resend_count: Cumulative resend count within the current state. 0 on
-                fresh fires; prior+1 on resends.
+            notification_hash: The alert's state key, stored on each row so
+                dedup can detect transitions.
+            is_resend: True for a same-state resend after the alert's resend
+                interval; False on fresh fires and state transitions.
+            resend_count: Resends within the current state: 0 on fresh fires.
 
         Returns:
-            NotificationLog record
+            One NotificationLog row per provider, in `provider_ids` order.
 
         Raises:
-            NotFoundException: If provider not found
+            NotFoundException: If a provider is not found
         """
-        provider = await NotificationCoreService.get_provider_by_id(db, provider_id)
 
-        # Check if provider is enabled
-        if not provider.is_enabled:
-            # Log as suppressed (provider intentionally disabled — distinct from
-            # delivery failure; useful for not setting off alarms in dashboards)
-            log_entry = NotificationLog(
+        def _row(
+            provider_id: UUID, status: NotificationStatus, error: str | None
+        ) -> NotificationLog:
+            return NotificationLog(
                 alert_id=alert_id,
                 notification_provider_id=provider_id,
                 check_result_id=check_result_id,
@@ -388,106 +429,81 @@ class NotificationCoreService:
                 agent_id=agent_id,
                 check_success=context.success,
                 check_latency_ms=context.latency_ms,
-                status=NotificationStatus.SUPPRESSED.value,
-                error_message="Notification provider is disabled",
+                status=status,
+                error_message=error,
                 notification_hash=notification_hash,
                 is_resend=is_resend,
                 resend_count=resend_count,
                 sent_at=utc_now(),
             )
-            log_entry = await NotificationLogCRUD.add_log(db, log_entry)
 
-            logger.info(
-                "Notification suppressed - provider is disabled",
-                extra={"provider_id": str(provider_id)},
+        # 1. Gate each provider (database reads, in turn).
+        outcomes: dict[UUID, tuple[NotificationStatus, str | None]] = {}
+        deliverable: list[NotificationProvider] = []
+        for provider_id in provider_ids:
+            provider = await NotificationCoreService.get_provider_by_id(db, provider_id)
+            if not provider.is_enabled:
+                # Intentionally disabled — distinct from a delivery failure.
+                outcomes[provider_id] = (
+                    NotificationStatus.SUPPRESSED,
+                    "Notification provider is disabled",
+                )
+                logger.info(
+                    "Notification suppressed - provider is disabled",
+                    extra={"provider_id": str(provider_id)},
+                )
+                continue
+            is_rate_limited, reason = await NotificationCoreService._check_rate_limit(
+                db, provider
             )
-            return log_entry
+            if is_rate_limited:
+                outcomes[provider_id] = (NotificationStatus.RATE_LIMITED, reason)
+                logger.warning(
+                    "Notification rate limited",
+                    extra={"provider_id": str(provider_id), "reason": reason},
+                )
+                continue
+            deliverable.append(provider)
 
-        # Check rate limiting
-        is_rate_limited, reason = await NotificationCoreService._check_rate_limit(
-            db, provider
+        # 2. Deliver in parallel (no database work).
+        delivered = await asyncio.gather(
+            *(
+                NotificationCoreService._deliver(provider, context)
+                for provider in deliverable
+            )
         )
-        if is_rate_limited:
-            # Log as rate limited
-            log_entry = NotificationLog(
-                alert_id=alert_id,
-                notification_provider_id=provider_id,
-                check_result_id=check_result_id,
-                check_result_timestamp=check_result_timestamp,
-                check_id=check_id,
-                agent_id=agent_id,
-                check_success=context.success,
-                check_latency_ms=context.latency_ms,
-                status=NotificationStatus.RATE_LIMITED.value,
-                error_message=reason,
-                notification_hash=notification_hash,
-                is_resend=is_resend,
-                resend_count=resend_count,
-                sent_at=utc_now(),
-            )
-            log_entry = await NotificationLogCRUD.add_log(db, log_entry)
+        for provider, outcome in zip(deliverable, delivered, strict=True):
+            outcomes[provider.id] = outcome
 
-            logger.warning(
-                "Notification rate limited",
-                extra={"provider_id": str(provider_id), "reason": reason},
+        # 3. Record every attempt (database writes, in turn).
+        rows: list[NotificationLog] = []
+        for provider_id in provider_ids:
+            status, error = outcomes[provider_id]
+            rows.append(
+                await NotificationLogCRUD.add_log(db, _row(provider_id, status, error))
             )
-            return log_entry
+        return rows
 
-        # Try to send
+    @staticmethod
+    async def _deliver(
+        provider: NotificationProvider, context: NotificationContext
+    ) -> tuple[NotificationStatus, str | None]:
+        """One provider's delivery attempt: its status and error, never raised."""
         try:
             provider_instance = NotificationRegistry.create_provider(
                 provider.provider_type,
                 provider.config,
             )
-            success = await provider_instance.send(context)
-
-            # Log the attempt
-            log_entry = NotificationLog(
-                alert_id=alert_id,
-                notification_provider_id=provider_id,
-                check_result_id=check_result_id,
-                check_result_timestamp=check_result_timestamp,
-                check_id=check_id,
-                agent_id=agent_id,
-                check_success=context.success,
-                check_latency_ms=context.latency_ms,
-                status=(
-                    NotificationStatus.SENT.value
-                    if success
-                    else NotificationStatus.FAILED.value
-                ),
-                error_message=None if success else "Provider returned failure",
-                notification_hash=notification_hash,
-                is_resend=is_resend,
-                resend_count=resend_count,
-                sent_at=utc_now(),
-            )
-
+            if await provider_instance.send(context):
+                return NotificationStatus.SENT, None
+            return NotificationStatus.FAILED, "Provider returned failure"
         except Exception as e:
-            # Log the failure
             error_msg = str(e)
-            log_entry = NotificationLog(
-                alert_id=alert_id,
-                notification_provider_id=provider_id,
-                check_result_id=check_result_id,
-                check_result_timestamp=check_result_timestamp,
-                check_id=check_id,
-                agent_id=agent_id,
-                check_success=context.success,
-                check_latency_ms=context.latency_ms,
-                status=NotificationStatus.FAILED.value,
-                error_message=error_msg,
-                notification_hash=notification_hash,
-                is_resend=is_resend,
-                resend_count=resend_count,
-                sent_at=utc_now(),
-            )
             logger.exception(
                 "Notification send failed",
-                extra={"provider_id": str(provider_id), "error_message": error_msg},
+                extra={"provider_id": str(provider.id), "error_message": error_msg},
             )
-
-        return await NotificationLogCRUD.add_log(db, log_entry)
+            return NotificationStatus.FAILED, error_msg
 
     @staticmethod
     async def _check_rate_limit(

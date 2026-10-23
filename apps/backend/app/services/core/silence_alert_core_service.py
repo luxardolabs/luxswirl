@@ -7,17 +7,26 @@ interval (see `app.core.liveness`). `agent_offline` fires for an active agent
 whose newest heartbeat is that late. No incoming result can drive either, so
 the scheduler runs `evaluate_silence_alerts` every minute.
 
-Each silence is an episode. It notifies once, then follows the alert's resend
-settings. It ends when data arrives again: a recovery notification goes out if
-the alert asks for one and the silence was notified (not suppressed). The next
-silence is a new episode.
+Each silence is an episode, recorded by the newest notification row for the
+alert and its subject (check or agent): it notifies once, then follows the
+alert's resend settings, and ends when data arrives after that row. A recovery
+notification goes out then if the alert asks for one and the silence was
+notified. The next silence is a new episode.
 
 A silent check whose agents are all offline is the agent's silence, not the
-check's. Its row is written SUPPRESSED, so a dead agent with a hundred checks
-sends one agent_offline notification, not a hundred no_data ones.
+check's: its episode is recorded under its own state key, SUPPRESSED, so a
+dead agent with a hundred checks sends one agent_offline notification, not a
+hundred no_data ones. A silence already open (notified) stays as it is while
+its agent restarts, so its recovery still goes out.
+
+A pass first decides, reading only, then delivers. The scheduled job records
+each notification in its own transaction, so a pass cut short (the job's
+runtime limit, a slow provider) keeps the rows of what it already delivered
+and the next pass does not deliver them again.
 """
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from uuid import UUID
 
@@ -26,7 +35,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.datetime_utils import utc_now
-from app.core.liveness import DEFAULT_MISSED_INTERVALS, silent_after
+from app.core.liveness import (
+    DEFAULT_CHECK_INTERVAL_SECONDS,
+    DEFAULT_MISSED_INTERVALS,
+    MAX_MISSED_INTERVALS,
+    silent_after,
+)
 from app.crud.alert_crud import AlertCRUD
 from app.crud.check_result_crud import CheckResultCRUD
 from app.db import worker_session
@@ -46,6 +60,7 @@ logger = get_logger("luxswirl.services.silence_alert")
 
 # The state keys stored in notification_logs.notification_hash.
 CHECK_SILENT = "no_data:silent"
+CHECK_SUPPRESSED = "no_data:agent_offline"
 CHECK_REPORTING = "no_data:reporting"
 AGENT_OFFLINE = "agent_offline:offline"
 AGENT_ONLINE = "agent_offline:online"
@@ -53,10 +68,29 @@ AGENT_ONLINE = "agent_offline:online"
 _FRESH = SendDecision(send=True, is_resend=False, resend_count=0)
 
 
+@dataclass(frozen=True, slots=True)
+class _Notice:
+    """One thing a pass decided to record: a notification to send (`context`
+    set) or a suppressed silence (`suppressed` set)."""
+
+    alert_id: UUID
+    state_key: str
+    counter: str  # the SilencePassCounts field it counts toward
+    check_id: UUID | None = None
+    agent_id: UUID | None = None
+    context: NotificationContext | None = None
+    decision: SendDecision = _FRESH
+    suppressed: str | None = None
+
+
 def _missed_intervals(alert: Alert) -> int:
     """The alert's `missed_intervals`, or the default when unset or unusable."""
     value = (alert.trigger_config or {}).get("missed_intervals")
-    if isinstance(value, int) and not isinstance(value, bool) and value >= 1:
+    if (
+        isinstance(value, int)
+        and not isinstance(value, bool)
+        and 1 <= value <= MAX_MISSED_INTERVALS
+    ):
         return value
     return DEFAULT_MISSED_INTERVALS
 
@@ -77,82 +111,166 @@ def _ago(delta: timedelta) -> str:
     return f"{minutes // 60} h {minutes % 60} min"
 
 
-def _open_episode(
-    last: NotificationLog | None, state: str, since: datetime | None
-) -> bool:
-    """Whether `last` records a silence (`state`) that no data has ended yet."""
-    return (
-        last is not None
-        and last.notification_hash == state
-        and (since is None or since <= last.sent_at)
-    )
-
-
 class SilenceAlertCoreService:
     """Evaluates the no_data and agent_offline alerts."""
 
     @staticmethod
     async def evaluate(db: AsyncSession) -> SilencePassCounts:
-        """One pass over every enabled silence alert."""
+        """One pass over every enabled silence alert, on one session."""
         counts = SilencePassCounts()
+        for notice in await SilenceAlertCoreService._decide(db, counts):
+            await SilenceAlertCoreService._record(db, notice, counts)
+        return counts
+
+    @staticmethod
+    async def _decide(db: AsyncSession, counts: SilencePassCounts) -> list[_Notice]:
+        """What this pass should record, reading only.
+
+        Each alert is decided on its own: one that fails is logged and the
+        others still go ahead.
+        """
         alerts = await AlertCRUD.list_enabled_alerts_by_trigger(
             db, (AlertTriggerType.NO_DATA, AlertTriggerType.AGENT_OFFLINE)
         )
         if not alerts:
-            return counts
-        counts.alerts = len(alerts)
+            return []
 
         now = utc_now()
         assigned = await AgentAssignmentCoreService.assigned_agents_by_check(db)
+        notices: list[_Notice] = []
         for alert in alerts:
-            if alert.trigger_type == AlertTriggerType.NO_DATA:
-                await SilenceAlertCoreService._evaluate_no_data(
-                    db, alert, assigned, now, counts
+            try:
+                async with db.begin_nested():
+                    if not await SilenceAlertCoreService._has_live_provider(db, alert):
+                        # Nothing could be delivered or recorded, so no
+                        # episode could ever be recorded either.
+                        continue
+                    counts.alerts += 1
+                    if alert.trigger_type == AlertTriggerType.NO_DATA:
+                        notices += await SilenceAlertCoreService._decide_no_data(
+                            db, alert, assigned, now, counts
+                        )
+                    else:
+                        notices += await SilenceAlertCoreService._decide_agent_offline(
+                            db, alert, assigned, now, counts
+                        )
+            except Exception:
+                logger.exception(
+                    "Silence alert evaluation failed",
+                    extra={"alert_id": str(alert.id), "alert_name": alert.name},
                 )
-            else:
-                await SilenceAlertCoreService._evaluate_agent_offline(
-                    db, alert, assigned, now, counts
-                )
-        return counts
+        return notices
+
+    @staticmethod
+    async def _record(
+        db: AsyncSession, notice: _Notice, counts: SilencePassCounts
+    ) -> None:
+        """Send or record one decided notice."""
+        if notice.suppressed is not None:
+            mappings = await AlertCRUD.list_active_notif_mappings_for_alert(
+                db, notice.alert_id
+            )
+            await AlertCRUD.add_notification_logs(
+                db,
+                [
+                    NotificationLog(
+                        alert_id=notice.alert_id,
+                        notification_provider_id=mapping.notification_provider.id,
+                        check_id=notice.check_id,
+                        check_success=False,
+                        status=NotificationStatus.SUPPRESSED,
+                        error_message=notice.suppressed,
+                        notification_hash=notice.state_key,
+                        sent_at=utc_now(),
+                    )
+                    for mapping in mappings
+                    if mapping.notification_provider.deleted_at is None
+                ],
+            )
+            counts.suppressed += 1
+            return
+
+        if notice.context is None:
+            return
+        written = await AlertEvaluationCoreService.send_to_providers(
+            db,
+            notice.alert_id,
+            notice.context,
+            notice.decision,
+            state_key=notice.state_key,
+            check_id=notice.check_id,
+            agent_id=notice.agent_id,
+        )
+        if not written:
+            return
+        setattr(counts, notice.counter, getattr(counts, notice.counter) + 1)
+        logger.info(
+            "Silence alert notified",
+            extra={
+                "alert_id": str(notice.alert_id),
+                "check_id": str(notice.check_id) if notice.check_id else None,
+                "agent_id": str(notice.agent_id) if notice.agent_id else None,
+                "state": notice.state_key,
+                "is_resend": notice.decision.is_resend,
+            },
+        )
+
+    @staticmethod
+    async def _has_live_provider(db: AsyncSession, alert: Alert) -> bool:
+        mappings = await AlertCRUD.list_active_notif_mappings_for_alert(db, alert.id)
+        return any(m.notification_provider.deleted_at is None for m in mappings)
 
     # ── no_data ──────────────────────────────────────────────────────────────
 
     @staticmethod
-    async def _evaluate_no_data(
+    async def _decide_no_data(
         db: AsyncSession,
         alert: Alert,
         assigned: Sequence[tuple[Check, list[Agent]]],
         now: datetime,
         counts: SilencePassCounts,
-    ) -> None:
+    ) -> list[_Notice]:
         mappings = {m.check_id: m for m in alert.check_mappings if m.is_enabled}
         # Only checks some active agent is to run: a disabled check, or one
         # whose agents are all paused, is not expected to report.
         targets = [(c, agents) for c, agents in assigned if c.id in mappings and agents]
         if not targets:
-            return
+            return []
 
         missed = _missed_intervals(alert)
         check_ids = [check.id for check, _ in targets]
         last_rows = await AlertCRUD.last_notifications_by_subject(
             db, alert.id, check_ids=check_ids
         )
-        # Look back far enough to see every check's threshold, and to tell
-        # whether a result arrived after each open episode's notification.
+        # Bounded by the thresholds alone: an old episode never widens the
+        # read for every check of the alert.
         since = min(now - silent_after(c.interval_seconds, missed) for c, _ in targets)
-        for row in last_rows.values():
-            if row.notification_hash == CHECK_SILENT:
-                since = min(since, row.sent_at)
         latest = await CheckResultCRUD.latest_result_times(db, check_ids, since)
 
+        notices: list[_Notice] = []
         for check, agents in targets:
             last_result = latest.get(check.id)
             last_row = last_rows.get(check.id)
             threshold = silent_after(check.interval_seconds, missed)
             if (last_result or check.created_at) >= now - threshold:
-                await SilenceAlertCoreService._check_reporting(
-                    db, alert, check, last_row, last_result, counts
-                )
+                if (
+                    alert.notify_on_recovery
+                    and last_row is not None
+                    and last_row.notification_hash == CHECK_SILENT
+                    and last_result is not None
+                    and last_result > last_row.sent_at
+                ):
+                    notices.append(
+                        _Notice(
+                            alert_id=alert.id,
+                            state_key=CHECK_REPORTING,
+                            counter="recovered",
+                            check_id=check.id,
+                            context=SilenceAlertCoreService._check_context(
+                                alert, check, agents, message=None, recovered=True
+                            ),
+                        )
+                    )
                 continue
 
             counts.silent_checks += 1
@@ -160,29 +278,33 @@ class SilenceAlertCoreService:
             if mapping.snoozed_until and mapping.snoozed_until > now:
                 continue
 
-            in_episode = _open_episode(last_row, CHECK_SILENT, last_result)
+            in_episode = await SilenceAlertCoreService._episode_open(
+                db, check, last_row, last_result
+            )
             offline = [
                 a for a in agents if _agent_offline(a, now, DEFAULT_MISSED_INTERVALS)
             ]
             if len(offline) == len(agents):
-                if not (
-                    in_episode
-                    and last_row
-                    and last_row.status == NotificationStatus.SUPPRESSED
-                ):
-                    await SilenceAlertCoreService._suppress_no_data(
-                        db, alert, check, offline, now
+                # The agents' silence. An open episode (notified or already
+                # suppressed) stays as it is.
+                if not in_episode:
+                    names = ", ".join(a.agent_name or str(a.id) for a in offline)
+                    notices.append(
+                        _Notice(
+                            alert_id=alert.id,
+                            state_key=CHECK_SUPPRESSED,
+                            counter="suppressed",
+                            check_id=check.id,
+                            suppressed=f"Suppressed: agent offline ({names})",
+                        )
                     )
-                    counts.suppressed += 1
                 continue
 
-            if (
-                in_episode
-                and last_row
-                and last_row.status != NotificationStatus.SUPPRESSED
-            ):
+            if in_episode and last_row and last_row.notification_hash == CHECK_SILENT:
                 decision = AlertEvaluationCoreService.resend_decision(alert, last_row)
             else:
+                # First contact, or a suppressed silence that outlived its
+                # agent's outage: now the check's own.
                 decision = _FRESH
             if not decision.send:
                 continue
@@ -193,88 +315,49 @@ class SilenceAlertCoreService:
                 newest = await CheckResultCRUD.get_latest_result_for_check(db, check.id)
                 last_result = newest.timestamp if newest else None
             age = now - (last_result or check.created_at)
-            context = SilenceAlertCoreService._check_context(
-                alert,
-                check,
-                agents,
-                success=False,
-                message=(
-                    f"No results for {_ago(age)} (expected every "
-                    f"{check.interval_seconds or 60} s)"
-                    if last_result
-                    else f"No results since it was created {_ago(age)} ago"
-                ),
+            notices.append(
+                _Notice(
+                    alert_id=alert.id,
+                    state_key=CHECK_SILENT,
+                    counter="notified",
+                    check_id=check.id,
+                    decision=decision,
+                    context=SilenceAlertCoreService._check_context(
+                        alert,
+                        check,
+                        agents,
+                        message=(
+                            f"No results for {_ago(age)} (expected every "
+                            f"{check.interval_seconds or DEFAULT_CHECK_INTERVAL_SECONDS} s)"
+                            if last_result
+                            else f"No results since it was created {_ago(age)} ago"
+                        ),
+                    ),
+                )
             )
-            await AlertEvaluationCoreService.send_to_providers(
-                db, alert, context, decision, state_key=CHECK_SILENT, check_id=check.id
-            )
-            counts.notified += 1
-            logger.info(
-                "Check silent",
-                extra={
-                    "alert_id": str(alert.id),
-                    "check_id": str(check.id),
-                    "check_name": check.display_name,
-                    "last_result": last_result.isoformat() if last_result else None,
-                    "is_resend": decision.is_resend,
-                },
-            )
+        return notices
 
     @staticmethod
-    async def _check_reporting(
+    async def _episode_open(
         db: AsyncSession,
-        alert: Alert,
         check: Check,
         last_row: NotificationLog | None,
         last_result: datetime | None,
-        counts: SilencePassCounts,
-    ) -> None:
-        """A reporting check: send the recovery that ends a notified silence."""
-        if not (
-            alert.notify_on_recovery
-            and last_row is not None
-            and last_row.notification_hash == CHECK_SILENT
-            and last_row.status != NotificationStatus.SUPPRESSED
-            and last_result is not None
-            and last_result > last_row.sent_at
+    ) -> bool:
+        """Whether `last_row` records a silence of `check` that no result has
+        ended since."""
+        if last_row is None or last_row.notification_hash not in (
+            CHECK_SILENT,
+            CHECK_SUPPRESSED,
         ):
-            return
-        context = SilenceAlertCoreService._check_context(
-            alert, check, [], success=True, message=None, is_recovery=True
-        )
-        await AlertEvaluationCoreService.send_to_providers(
-            db, alert, context, _FRESH, state_key=CHECK_REPORTING, check_id=check.id
-        )
-        counts.recovered += 1
-
-    @staticmethod
-    async def _suppress_no_data(
-        db: AsyncSession,
-        alert: Alert,
-        check: Check,
-        offline: Sequence[Agent],
-        now: datetime,
-    ) -> None:
-        """Record the silence as the offline agents', one row per provider."""
-        names = ", ".join(a.agent_name or str(a.id) for a in offline)
-        mappings = await AlertCRUD.list_active_notif_mappings_for_alert(db, alert.id)
-        await AlertCRUD.add_notification_logs(
-            db,
-            [
-                NotificationLog(
-                    alert_id=alert.id,
-                    notification_provider_id=mapping.notification_provider.id,
-                    check_id=check.id,
-                    check_success=False,
-                    status=NotificationStatus.SUPPRESSED,
-                    error_message=f"Suppressed: agent offline ({names})",
-                    notification_hash=CHECK_SILENT,
-                    sent_at=now,
-                )
-                for mapping in mappings
-                if mapping.notification_provider.deleted_at is None
-            ],
-        )
+            return False
+        if last_result is None:
+            # Not in the threshold window: one probe for anything newer than
+            # the row, which would mean the check reported in between.
+            last_result = await CheckResultCRUD.newest_result_after(
+                db, check.id, last_row.sent_at
+            )
+        return last_result is None or last_result <= last_row.sent_at
 
     @staticmethod
     def _check_context(
@@ -282,9 +365,8 @@ class SilenceAlertCoreService:
         check: Check,
         agents: Sequence[Agent],
         *,
-        success: bool,
         message: str | None,
-        is_recovery: bool = False,
+        recovered: bool = False,
     ) -> NotificationContext:
         agent = agents[0] if len(agents) == 1 else None
         return NotificationContext(
@@ -293,13 +375,13 @@ class SilenceAlertCoreService:
             target=check.target,
             agent_id=agent.id if agent else None,
             agent_name=(agent.hostname or agent.agent_name) if agent else None,
-            status="success" if success else "no_data",
-            success=success,
+            status="success" if recovered else "no_data",
+            success=recovered,
             timestamp=utc_now().isoformat(),
             error_message=message,
             alert_name=alert.name,
             alert_description=alert.description,
-            is_recovery=is_recovery,
+            is_recovery=recovered,
             custom_subject=alert.custom_subject,
             custom_message=alert.custom_message,
         )
@@ -307,13 +389,13 @@ class SilenceAlertCoreService:
     # ── agent_offline ────────────────────────────────────────────────────────
 
     @staticmethod
-    async def _evaluate_agent_offline(
+    async def _decide_agent_offline(
         db: AsyncSession,
         alert: Alert,
         assigned: Sequence[tuple[Check, list[Agent]]],
         now: datetime,
         counts: SilencePassCounts,
-    ) -> None:
+    ) -> list[_Notice]:
         """The agents this alert covers: those assigned any of its checks."""
         mapped = {m.check_id for m in alert.check_mappings if m.is_enabled}
         agents: dict[UUID, Agent] = {}
@@ -322,82 +404,79 @@ class SilenceAlertCoreService:
                 for agent in check_agents:
                     agents[agent.id] = agent
         if not agents:
-            return
+            return []
 
         missed = _missed_intervals(alert)
         last_rows = await AlertCRUD.last_notifications_by_subject(
             db, alert.id, agent_ids=list(agents)
         )
+        notices: list[_Notice] = []
         for agent in agents.values():
             last_row = last_rows.get(agent.id)
+            last = agent.last_seen
             if not _agent_offline(agent, now, missed):
                 if (
                     alert.notify_on_recovery
                     and last_row is not None
                     and last_row.notification_hash == AGENT_OFFLINE
-                    and agent.last_seen is not None
-                    and agent.last_seen > last_row.sent_at
+                    and last is not None
+                    and last > last_row.sent_at
                 ):
-                    await AlertEvaluationCoreService.send_to_providers(
-                        db,
-                        alert,
-                        SilenceAlertCoreService._agent_context(
-                            alert, agent, success=True, message=None, is_recovery=True
-                        ),
-                        _FRESH,
-                        state_key=AGENT_ONLINE,
-                        check_id=None,
-                        agent_id=agent.id,
+                    notices.append(
+                        _Notice(
+                            alert_id=alert.id,
+                            state_key=AGENT_ONLINE,
+                            counter="recovered",
+                            agent_id=agent.id,
+                            context=SilenceAlertCoreService._agent_context(
+                                alert, agent, message=None, recovered=True
+                            ),
+                        )
                     )
-                    counts.recovered += 1
                 continue
 
             counts.offline_agents += 1
-            if _open_episode(last_row, AGENT_OFFLINE, agent.last_seen) and last_row:
-                decision = AlertEvaluationCoreService.resend_decision(alert, last_row)
-            else:
-                decision = _FRESH
+            in_episode = (
+                last_row is not None
+                and last_row.notification_hash == AGENT_OFFLINE
+                and (last is None or last <= last_row.sent_at)
+            )
+            decision = (
+                AlertEvaluationCoreService.resend_decision(alert, last_row)
+                if in_episode and last_row
+                else _FRESH
+            )
             if not decision.send:
                 continue
 
-            last = agent.last_seen
-            message = (
-                f"No heartbeat for {_ago(now - last)} "
-                f"(expected every {_heartbeat_interval(agent)} s)"
-                if last
-                else "No heartbeat since it was approved"
+            notices.append(
+                _Notice(
+                    alert_id=alert.id,
+                    state_key=AGENT_OFFLINE,
+                    counter="notified",
+                    agent_id=agent.id,
+                    decision=decision,
+                    context=SilenceAlertCoreService._agent_context(
+                        alert,
+                        agent,
+                        message=(
+                            f"No heartbeat for {_ago(now - last)} "
+                            f"(expected every {_heartbeat_interval(agent)} s)"
+                            if last
+                            else "No heartbeat since it was approved"
+                        ),
+                    ),
+                )
             )
-            await AlertEvaluationCoreService.send_to_providers(
-                db,
-                alert,
-                SilenceAlertCoreService._agent_context(
-                    alert, agent, success=False, message=message
-                ),
-                decision,
-                state_key=AGENT_OFFLINE,
-                check_id=None,
-                agent_id=agent.id,
-            )
-            counts.notified += 1
-            logger.info(
-                "Agent offline",
-                extra={
-                    "alert_id": str(alert.id),
-                    "agent_id": str(agent.id),
-                    "agent_name": agent.agent_name,
-                    "last_seen": last.isoformat() if last else None,
-                    "is_resend": decision.is_resend,
-                },
-            )
+        return notices
 
     @staticmethod
     def _agent_context(
         alert: Alert,
         agent: Agent,
         *,
-        success: bool,
         message: str | None,
-        is_recovery: bool = False,
+        recovered: bool = False,
     ) -> NotificationContext:
         name = agent.agent_name or str(agent.id)
         return NotificationContext(
@@ -406,20 +485,25 @@ class SilenceAlertCoreService:
             target=agent.hostname or name,
             agent_id=agent.id,
             agent_name=agent.hostname or agent.agent_name,
-            status="success" if success else "offline",
-            success=success,
+            status="success" if recovered else "offline",
+            success=recovered,
             timestamp=utc_now().isoformat(),
             error_message=message,
             alert_name=alert.name,
             alert_description=alert.description,
-            is_recovery=is_recovery,
+            is_recovery=recovered,
             custom_subject=alert.custom_subject,
             custom_message=alert.custom_message,
         )
 
 
 async def evaluate_silence_alerts() -> dict[str, int]:
-    """Scheduler job: one silence pass in its own session."""
+    """Scheduler job: decide in one session, then record each notice in its own,
+    so what is delivered is committed with it before the next is sent."""
+    counts = SilencePassCounts()
     async with worker_session() as db:
-        counts = await SilenceAlertCoreService.evaluate(db)
-        return counts.as_dict()
+        notices = await SilenceAlertCoreService._decide(db, counts)
+    for notice in notices:
+        async with worker_session() as db:
+            await SilenceAlertCoreService._record(db, notice, counts)
+    return counts.as_dict()

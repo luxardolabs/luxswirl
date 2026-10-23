@@ -10,6 +10,7 @@ offline is the agent's silence, so its no_data row is suppressed, not sent.
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Iterator
 from datetime import timedelta
 from unittest.mock import patch
@@ -17,12 +18,14 @@ from unittest.mock import patch
 import pytest
 from app.core.datetime_utils import utc_now
 from app.crud.alert_crud import AlertCRUD
+from app.crud.check_result_crud import CheckResultCRUD
 from app.db.defaults.scheduler_templates import DEFAULT_JOB_CONFIGURATIONS
 from app.models.agent_model import Agent
 from app.models.alert_model import Alert
 from app.models.check_model import Check
 from app.models.notification_log_model import NotificationLog
 from app.notifications.providers.base import NotificationContext
+from app.schemas.alert_schema import AlertCreate, AlertUpdate
 from app.services.core.alert_evaluation_core_service import AlertEvaluationCoreService
 from app.services.core.scheduler_core_service import SchedulerCoreService
 from app.services.core.silence_alert_core_service import (
@@ -30,6 +33,7 @@ from app.services.core.silence_alert_core_service import (
     CHECK_REPORTING,
     CHECK_SILENT,
     SilenceAlertCoreService,
+    evaluate_silence_alerts,
 )
 from fixtures.factories import (
     make_agent,
@@ -40,6 +44,7 @@ from fixtures.factories import (
     make_check_result,
     make_notification_provider,
 )
+from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -445,3 +450,210 @@ async def test_the_scheduler_runs_the_silence_pass() -> None:
     assert config["enabled"] is True
     assert config["interval_seconds"] == 60
     assert config["function_name"] in SchedulerCoreService().job_functions
+
+
+# ── what the adversarial pass broke ──────────────────────────────────────────
+
+
+async def test_a_pass_cut_short_does_not_redeliver_what_it_delivered(
+    worker_db,
+) -> None:
+    """The scheduled job records each notification in its own transaction: a
+    pass stopped by its runtime limit keeps the rows of what it delivered, so
+    the next pass delivers only the rest."""
+    delivered: list[str] = []
+    delay = 0.4
+
+    async def _slow_send(self, context: NotificationContext) -> bool:
+        await asyncio.sleep(delay)
+        delivered.append(context.check_name)
+        return True
+
+    async with worker_db() as s:
+        agent = await _agent(s)
+        checks = [
+            await _check(s, agent, last_result_ago=timedelta(hours=1)) for _ in range(3)
+        ]
+        await _alert(s, "no_data", checks)
+        await s.commit()
+
+    with patch(
+        "app.notifications.providers.webhook.WebhookNotificationProvider.send",
+        _slow_send,
+    ):
+        with pytest.raises(TimeoutError):
+            await asyncio.wait_for(evaluate_silence_alerts(), timeout=1.0)
+        first = list(delivered)
+        delay = 0
+        await evaluate_silence_alerts()
+
+    assert first, "the first pass delivered nothing before its limit"
+    assert sorted(delivered) == sorted(c.display_name for c in checks)
+
+
+async def test_one_failing_alert_does_not_stop_the_others(
+    db: AsyncSession, sent
+) -> None:
+    """A stored config the evaluator cannot use falls back to the default, so
+    one bad alert never stops the pass: every silent check still notifies."""
+    agent = await _agent(db)
+    good = await _check(db, agent, last_result_ago=timedelta(hours=1))
+    other = await _check(db, agent, last_result_ago=timedelta(hours=1))
+    await _alert(db, "no_data", [good])
+    broken = await _alert(db, "no_data", [other])
+    broken.trigger_config = {"missed_intervals": 10**12}
+    await db.flush()
+
+    await SilenceAlertCoreService.evaluate(db)
+
+    assert sorted(c.check_name for c in sent) == sorted(
+        [good.display_name, other.display_name]
+    )
+
+
+async def test_an_alert_that_raises_is_skipped(db: AsyncSession, sent) -> None:
+    agent = await _agent(db)
+    good = await _check(db, agent, last_result_ago=timedelta(hours=1))
+    other = await _check(db, agent, last_result_ago=timedelta(hours=1))
+    await _alert(db, "no_data", [good])
+    broken = await _alert(db, "no_data", [other])
+    real = SilenceAlertCoreService._decide_no_data
+
+    async def _flaky(db_, alert, *args):
+        if alert.id == broken.id:
+            raise RuntimeError("boom")
+        return await real(db_, alert, *args)
+
+    with patch.object(SilenceAlertCoreService, "_decide_no_data", _flaky):
+        await SilenceAlertCoreService.evaluate(db)
+
+    assert [c.check_name for c in sent] == [good.display_name]
+
+
+@pytest.mark.parametrize("value", [0, 101, 10**12, "3", True])
+def test_missed_intervals_out_of_range_is_refused(value) -> None:
+    with pytest.raises(ValidationError):
+        AlertCreate(
+            name="silent",
+            trigger_type="no_data",
+            trigger_config={"missed_intervals": value},
+        )
+    with pytest.raises(ValidationError):
+        AlertUpdate(trigger_config={"missed_intervals": value})
+
+
+async def test_a_notified_silence_recovers_after_its_agent_restarts(
+    db: AsyncSession, sent
+) -> None:
+    """Restarting the agent is the usual fix: its brief outage must not turn a
+    notified silence into a suppressed one and lose the recovery."""
+    agent = await _agent(db, heartbeat_interval=5)
+    check = await _check(db, agent, last_result_ago=timedelta(minutes=10))
+    await _alert(db, "no_data", [check])
+    await SilenceAlertCoreService.evaluate(db)
+
+    agent.last_seen = utc_now() - timedelta(minutes=5)
+    await db.flush()
+    await SilenceAlertCoreService.evaluate(db)
+    agent.last_seen = utc_now() - timedelta(seconds=10)
+    await db.flush()
+    await SilenceAlertCoreService.evaluate(db)
+
+    agent.last_seen = utc_now()
+    db.add(make_check_result(check_id=check.id, agent_id=agent.id))
+    await db.flush()
+    await SilenceAlertCoreService.evaluate(db)
+
+    assert [c.status_label for c in sent] == ["NO DATA", "UP"]
+
+
+async def test_a_disabled_provider_records_the_silence_once(
+    db: AsyncSession, sent
+) -> None:
+    agent = await _agent(db)
+    check = await _check(db, agent, last_result_ago=timedelta(hours=1))
+    alert = await _alert(db, "no_data", [check])
+    (provider,) = await _providers(db, alert)
+    provider.is_enabled = False
+    await db.flush()
+
+    for _ in range(5):
+        await SilenceAlertCoreService.evaluate(db)
+
+    rows = await _rows(db, alert)
+    assert [(r.status, r.notification_hash) for r in rows] == [
+        ("suppressed", CHECK_SILENT)
+    ]
+
+
+async def test_an_old_silence_does_not_widen_the_read_for_every_check(
+    db: AsyncSession, sent
+) -> None:
+    agent = await _agent(db)
+    healthy = await _check(db, agent, last_result_ago=timedelta(minutes=1))
+    dead = await _check(db, agent, last_result_ago=timedelta(days=31))
+    alert = await _alert(db, "no_data", [healthy, dead])
+    await SilenceAlertCoreService.evaluate(db)
+    (row,) = await _rows(db, alert)
+    row.sent_at = utc_now() - timedelta(days=30)
+    await db.flush()
+
+    seen = []
+    real = CheckResultCRUD.latest_result_times
+
+    async def _spy(db_, ids, since):
+        seen.append(since)
+        return await real(db_, ids, since)
+
+    with patch.object(CheckResultCRUD, "latest_result_times", _spy):
+        await SilenceAlertCoreService.evaluate(db)
+
+    (since,) = seen
+    assert utc_now() - since < THRESHOLD + timedelta(minutes=1)
+    assert len(sent) == 1  # still the same open silence
+
+
+async def test_an_alert_without_providers_is_not_evaluated(
+    db: AsyncSession, sent
+) -> None:
+    agent = await _agent(db)
+    check = await _check(db, agent, last_result_ago=timedelta(hours=1))
+    alert = make_alert(trigger_type="no_data", trigger_config={"missed_intervals": 3})
+    db.add(alert)
+    await db.flush()
+    db.add(make_alert_check_mapping(alert_id=alert.id, check_id=check.id))
+    await db.flush()
+
+    totals = [(await SilenceAlertCoreService.evaluate(db)).as_dict() for _ in range(2)]
+
+    assert all(t["notified"] == 0 and t["alerts"] == 0 for t in totals)
+    assert sent == []
+
+
+async def test_every_provider_of_an_alert_gets_its_row(db: AsyncSession, sent) -> None:
+    """Providers deliver in parallel, but their rows are written one at a time:
+    a shared session cannot take concurrent writes, and a lost row loses the
+    episode."""
+    agent = await _agent(db)
+    check = await _check(db, agent, last_result_ago=timedelta(hours=1))
+    alert = await _alert(db, "no_data", [check])
+    second = make_notification_provider()
+    db.add(second)
+    await db.flush()
+    db.add(
+        make_alert_notification_mapping(
+            alert_id=alert.id, notification_provider_id=second.id
+        )
+    )
+    await db.flush()
+
+    await SilenceAlertCoreService.evaluate(db)
+
+    rows = await _rows(db, alert)
+    assert sorted(r.status for r in rows) == ["sent", "sent"]
+    assert len(sent) == 2
+
+
+async def _providers(db: AsyncSession, alert: Alert):
+    mappings = await AlertCRUD.list_active_notif_mappings_for_alert(db, alert.id)
+    return [m.notification_provider for m in mappings]

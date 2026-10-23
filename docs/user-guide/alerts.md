@@ -84,7 +84,8 @@ Triggers when a check that should be running has reported nothing for a while. T
 - **Missed Intervals** (1–100, default 3): a check is silent once its newest result is older than this many of its intervals plus one minute's grace for the agent's report batching. A 60-second check with the default is silent after 4 minutes; a check that has never reported counts from when it was created.
 - **Which checks:** only a check that is enabled and that an active agent is to run. A check whose agents are all paused, disabled, pending or rejected is not expected to report and never fires. A replicate check is silent only when no agent reports it.
 - **Behavior:** one notification per silence, then the resend settings apply; a recovery notification fires when results arrive again (if enabled). Snoozing the alert for a check silences it like any other trigger.
-- **Agent offline:** when every agent that runs the check is offline, the silence belongs to the agent. The check's notification is recorded as **suppressed** (visible in the notification log) instead of sent, so an agent with a hundred checks produces one Agent Offline notification, not a hundred No Data ones. Once the agent is back, a check that still reports nothing notifies as its own silence.
+- **Agent offline:** when every agent that runs the check is offline, the silence belongs to the agent. The check's notification is recorded as **suppressed** (visible in the notification log) instead of sent, so an agent with a hundred checks produces one Agent Offline notification, not a hundred No Data ones. Once the agent is back, a check that still reports nothing notifies as its own silence. A silence already notified stays notified while its agent restarts, so its recovery still goes out.
+- **Without providers:** an alert with no notification provider attached is not evaluated.
 
 ### Agent Offline
 
