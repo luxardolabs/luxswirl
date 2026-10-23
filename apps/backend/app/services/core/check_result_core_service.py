@@ -175,9 +175,9 @@ class CheckResultCoreService:
 
         rows_to_insert: list[dict[str, Any]] = []
 
-        # Exactly the checks this agent was told to run (GET /api/v1/checks): its
-        # manual checks plus the replicate/distribute checks it is selected for.
-        assigned_checks = await AgentAssignmentCoreService.get_checks_for_agent(
+        # The checks this agent may report: its manual checks, the replicate
+        # checks it is selected for, and the distribute checks whose pool it is in.
+        assigned_checks = await AgentAssignmentCoreService.get_reportable_checks(
             db, agent
         )
         check_map = {c.id: c for c in assigned_checks}  # Map by UUID

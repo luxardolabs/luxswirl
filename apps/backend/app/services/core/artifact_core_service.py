@@ -30,9 +30,10 @@ class ArtifactCoreService:
     ) -> CheckArtifactResponse:
         """Store an artifact one of `agent_id`'s check executions produced.
 
-        The check must be one the assignment model gives that agent (its manual
-        check, or a replicate/distribute check its selector matches), the same
-        set the agent is handed by GET /api/v1/checks.
+        The check must be one the agent may report
+        (`AgentAssignmentCoreService.get_reportable_checks`): its manual check,
+        a replicate check its selector matches, or a distribute check whose
+        pool it is in.
 
         Args:
             db: Database session
@@ -47,7 +48,7 @@ class ArtifactCoreService:
             AuthorizationException: If the check is not assigned to the agent
         """
         await ArtifactCoreService._require_check(db, data.check_id)
-        if not await AgentAssignmentCoreService.is_check_assigned(
+        if not await AgentAssignmentCoreService.may_report_for_check(
             db, agent_id, data.check_id
         ):
             logger.warning(

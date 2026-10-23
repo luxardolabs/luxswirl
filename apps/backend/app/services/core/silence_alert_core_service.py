@@ -38,6 +38,8 @@ from app.core.liveness import (
     DEFAULT_CHECK_INTERVAL_SECONDS,
     DEFAULT_MISSED_INTERVALS,
     MAX_MISSED_INTERVALS,
+    agent_offline,
+    heartbeat_interval,
     silent_after,
 )
 from app.crud.alert_crud import AlertCRUD
@@ -93,15 +95,6 @@ def _missed_intervals(alert: Alert) -> int:
     ):
         return value
     return DEFAULT_MISSED_INTERVALS
-
-
-def _heartbeat_interval(agent: Agent) -> int:
-    return agent.heartbeat_interval or settings.server.default_heartbeat_interval
-
-
-def _agent_offline(agent: Agent, now: datetime, missed: int) -> bool:
-    last = agent.last_seen or agent.created_at
-    return last < now - silent_after(_heartbeat_interval(agent), missed)
 
 
 def _ago(delta: timedelta) -> str:
@@ -226,33 +219,47 @@ class SilenceAlertCoreService:
     async def _decide_no_data(
         db: AsyncSession,
         alert: Alert,
-        assigned: Sequence[tuple[Check, list[Agent]]],
+        assigned: Sequence[tuple[Check, list[Agent], list[Agent]]],
         now: datetime,
         counts: SilencePassCounts,
     ) -> list[_Notice]:
         mappings = {m.check_id: m for m in alert.check_mappings if m.is_enabled}
         # Only checks some active agent is to run: a disabled check, or one
         # whose agents are all paused, is not expected to report.
-        targets = [(c, agents) for c, agents in assigned if c.id in mappings and agents]
+        targets = [
+            (c, agents, pool)
+            for c, agents, pool in assigned
+            if c.id in mappings and agents
+        ]
         if not targets:
             return []
 
         missed = _missed_intervals(alert)
-        check_ids = [check.id for check, _ in targets]
+        check_ids = [check.id for check, _, _ in targets]
         last_rows = await AlertCRUD.last_notifications_by_subject(
             db, alert.id, check_ids=check_ids
         )
         # Bounded by the thresholds alone: an old episode never widens the
         # read for every check of the alert.
-        since = min(now - silent_after(c.interval_seconds, missed) for c, _ in targets)
+        since = min(
+            now - silent_after(c.interval_seconds, missed) for c, _, _ in targets
+        )
         latest = await CheckResultCRUD.latest_result_times(db, check_ids, since)
 
         notices: list[_Notice] = []
-        for check, agents in targets:
+        for check, agents, pool in targets:
             last_result = latest.get(check.id)
             last_row = last_rows.get(check.id)
             threshold = silent_after(check.interval_seconds, missed)
-            if (last_result or check.created_at) >= now - threshold:
+            # A distributed check that moved off an offline agent is the new
+            # agent's from the moment it moved, not from the old agent's last
+            # result.
+            expected_from = max(
+                last_result or check.created_at,
+                AgentAssignmentCoreService.handed_over_at(check, pool, now)
+                or check.created_at,
+            )
+            if expected_from >= now - threshold:
                 if (
                     alert.notify_on_recovery
                     and last_row is not None
@@ -282,7 +289,7 @@ class SilenceAlertCoreService:
                 db, check, last_row, last_result
             )
             offline = [
-                a for a in agents if _agent_offline(a, now, DEFAULT_MISSED_INTERVALS)
+                a for a in agents if agent_offline(a, now, DEFAULT_MISSED_INTERVALS)
             ]
             if len(offline) == len(agents):
                 # The agents' silence. An open episode (notified or already
@@ -392,14 +399,16 @@ class SilenceAlertCoreService:
     async def _decide_agent_offline(
         db: AsyncSession,
         alert: Alert,
-        assigned: Sequence[tuple[Check, list[Agent]]],
+        assigned: Sequence[tuple[Check, list[Agent], list[Agent]]],
         now: datetime,
         counts: SilencePassCounts,
     ) -> list[_Notice]:
-        """The agents this alert covers: those assigned any of its checks."""
+        """The agents this alert covers: every active agent any of its checks
+        may run on, so an agent whose distributed checks moved to another
+        while it is offline is still watched."""
         mapped = {m.check_id for m in alert.check_mappings if m.is_enabled}
         agents: dict[UUID, Agent] = {}
-        for check, check_agents in assigned:
+        for check, _, check_agents in assigned:
             if check.id in mapped:
                 for agent in check_agents:
                     agents[agent.id] = agent
@@ -414,7 +423,7 @@ class SilenceAlertCoreService:
         for agent in agents.values():
             last_row = last_rows.get(agent.id)
             last = agent.last_seen
-            if not _agent_offline(agent, now, missed):
+            if not agent_offline(agent, now, missed):
                 if (
                     alert.notify_on_recovery
                     and last_row is not None
@@ -461,7 +470,7 @@ class SilenceAlertCoreService:
                         agent,
                         message=(
                             f"No heartbeat for {_ago(now - last)} "
-                            f"(expected every {_heartbeat_interval(agent)} s)"
+                            f"(expected every {heartbeat_interval(agent)} s)"
                             if last
                             else "No heartbeat since it was approved"
                         ),

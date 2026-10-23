@@ -82,7 +82,7 @@ Thresholds: [7, 14, 30] days   Resend Interval: 1440 minutes
 Triggers when a check that should be running has reported nothing for a while. The other triggers evaluate each incoming result, so none of them can notice that results stopped arriving. This one is evaluated by the server every minute (the **Evaluate Silence Alerts** scheduler job).
 
 - **Missed Intervals** (1–100, default 3): a check is silent once its newest result is older than this many of its intervals plus one minute's grace for the agent's report batching. A 60-second check with the default is silent after 4 minutes; a check that has never reported counts from when it was created.
-- **Which checks:** only a check that is enabled and that an active agent is to run. A check whose agents are all paused, disabled, pending or rejected is not expected to report and never fires. A replicate check is silent only when no agent reports it.
+- **Which checks:** only a check that is enabled and that an active agent is to run. A check whose agents are all paused, disabled, pending or rejected is not expected to report and never fires. A replicate check is silent only when no agent reports it. A distribute check that moved to another agent because its agent went offline counts from the moment it moved, so the new agent has a full threshold to report it.
 - **Behavior:** one notification per silence, then the resend settings apply; a recovery notification fires when results arrive again (if enabled). Snoozing the alert for a check silences it like any other trigger.
 - **Agent offline:** when every agent that runs the check is offline, the silence belongs to the agent. The check's notification is recorded as **suppressed** (visible in the notification log) instead of sent, so an agent with a hundred checks produces one Agent Offline notification, not a hundred No Data ones. Once the agent is back, a check that still reports nothing notifies as its own silence. A silence already notified stays notified while its agent restarts, so its recovery still goes out.
 - **Without providers:** an alert with no notification provider attached is not evaluated.
@@ -92,7 +92,7 @@ Triggers when a check that should be running has reported nothing for a while. T
 Triggers when an active agent stops sending heartbeats. Evaluated every minute alongside No Data.
 
 - **Missed Intervals** (1–100, default 3): an agent is offline once its newest heartbeat is older than this many of its heartbeat intervals plus one minute's grace. With the default 5-second heartbeat that is 75 seconds.
-- **Which agents:** the active agents that run any of the alert's checks. A global alert therefore covers every active agent that has checks.
+- **Which agents:** the active agents that run any of the alert's checks, or that a distribute check may run on. A global alert therefore covers every active agent that has checks, and an agent whose distribute checks moved to another while it is offline is still watched.
 - **Behavior:** one notification per outage (status **OFFLINE**), the resend settings while it lasts, and a recovery notification on the next heartbeat (if enabled). The notification log lists it under the agent's name.
 
 ```

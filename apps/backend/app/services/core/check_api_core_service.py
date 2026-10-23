@@ -18,6 +18,8 @@ from app.schemas.check_schema import (
     CheckResponse,
     CheckView,
 )
+from app.services.core.agent_assignment_core_service import AgentAssignmentCoreService
+from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.check_core_service import CheckCoreService
 
 
@@ -118,3 +120,16 @@ class CheckApiCoreService:
             enabled_count=enabled,
             disabled_count=len(responses) - enabled,
         )
+
+    @staticmethod
+    async def check_list_for_agent(
+        db: AsyncSession, agent_id: UUID
+    ) -> CheckListResponse:
+        """The checks `agent_id` should run, as the agent's check-list response.
+
+        Raises:
+            AgentNotFoundException: If the agent does not exist
+        """
+        agent = await AgentCoreService.get_agent_by_id(db, agent_id)
+        checks = await AgentAssignmentCoreService.get_checks_for_agent(db, agent)
+        return CheckApiCoreService.build_check_list_response(checks, agent.agent_name)

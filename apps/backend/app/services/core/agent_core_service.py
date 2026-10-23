@@ -36,6 +36,7 @@ from app.schemas.agent_schema import (
     AgentUpdate,
     PendingAgent,
 )
+from app.services.core.agent_assignment_core_service import AgentAssignmentCoreService
 from app.services.core.job_core_service import JobCoreService
 from app.services.core.metrics_collector_core_service import MetricsCollectorCoreService
 from app.shared.logger import get_logger
@@ -689,9 +690,7 @@ class AgentCoreService:
                 extra={"agent_id": str(agent.id)},
             )
 
-        config_version = (
-            agent.checks_updated_at.isoformat() if agent.checks_updated_at else None
-        )
+        config_version = await AgentAssignmentCoreService.config_version(db, agent)
         heartbeat_interval = (
             agent.heartbeat_interval or settings.server.default_heartbeat_interval
         )
