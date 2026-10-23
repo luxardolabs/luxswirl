@@ -527,6 +527,10 @@ class AgentCoreService:
         """
         Update agent from heartbeat data and record metrics.
 
+        Both are stamped with the server's clock at receipt, never the
+        heartbeat's own timestamp: an agent with a skewed (or hostile) clock
+        could otherwise pin itself online, or its latest metric, in the future.
+
         Args:
             db: Database session
             agent_id: Agent UUID
@@ -540,10 +544,11 @@ class AgentCoreService:
         if not agent:
             raise AgentNotFoundException(str(agent_id))
 
-        AgentCoreService._apply_heartbeat(agent, heartbeat)
+        received_at = utc_now()
+        AgentCoreService._apply_heartbeat(agent, heartbeat, received_at)
         await AgentCRUD.save_agent(db, agent)
 
-        metric = AgentCoreService._heartbeat_metric(agent, heartbeat)
+        metric = AgentCoreService._heartbeat_metric(agent, heartbeat, received_at)
         await AgentCRUD.add_metric(db, metric)
 
         # Update Prometheus metrics in-memory (instant update on ingestion)
@@ -569,14 +574,18 @@ class AgentCoreService:
         return agent
 
     @staticmethod
-    def _apply_heartbeat(agent: Agent, heartbeat: AgentHeartbeat) -> None:
+    def _apply_heartbeat(
+        agent: Agent, heartbeat: AgentHeartbeat, received_at: datetime
+    ) -> None:
         """Copy what a heartbeat reports about the agent onto its row.
 
         Identity fields (hostname, ip, version, tags) change only when the
         heartbeat sends a value; health fields always take the latest report.
         """
-        # Liveness: the heartbeat is the only writer of last_seen and the run id
-        agent.last_seen = heartbeat.timestamp
+        # Liveness: the heartbeat is the only writer of last_seen and the run
+        # id. last_seen is when the server heard from the agent, not the time
+        # the agent claims to have sent it.
+        agent.last_seen = received_at
         if heartbeat.agent_run_id:
             agent.agent_run_id = str(heartbeat.agent_run_id)
 
@@ -616,11 +625,13 @@ class AgentCoreService:
         agent.subprocess_count = heartbeat.subprocess_count
 
     @staticmethod
-    def _heartbeat_metric(agent: Agent, heartbeat: AgentHeartbeat) -> AgentMetric:
+    def _heartbeat_metric(
+        agent: Agent, heartbeat: AgentHeartbeat, received_at: datetime
+    ) -> AgentMetric:
         """The heartbeat as an AgentMetric row, for time-series storage."""
         return AgentMetric(
             agent_id=agent.id,
-            timestamp=heartbeat.timestamp,
+            timestamp=received_at,
             cpu_percent=heartbeat.cpu_percent,
             memory_mb=heartbeat.memory_mb,
             queue_depth=heartbeat.queue_depth,
@@ -649,11 +660,29 @@ class AgentCoreService:
     ) -> AgentHeartbeatResponse:
         """Apply heartbeat update and build the response payload.
 
-        Caller handles HTTP-layer auth and passes ``using_agent_key`` to gate
-        job dispatch. This method handles persistence, gating, and response
-        construction.
+        Caller handles HTTP-layer auth and passes ``using_agent_key``: whether
+        the agent's own key authenticated the heartbeat, rather than the shared
+        registration key every install holds.
+
+        The heartbeat is applied (identity, liveness, health, a metric row)
+        when the agent's own key sent it, or when the agent has no key yet (a
+        pending agent, whose only credential is the registration key). A
+        registration-key heartbeat for an agent that HAS its own key writes
+        nothing: it only reads the status back, which is how an approved agent
+        that has not stored its key yet learns to recover it. Jobs go only to
+        the agent's own key.
         """
-        agent = await AgentCoreService.update_from_heartbeat(db, agent_id, heartbeat)
+        agent = await AgentCoreService.get_agent_by_id(db, agent_id)
+        if using_agent_key or not agent.api_key_hash:
+            agent = await AgentCoreService.update_from_heartbeat(
+                db, agent_id, heartbeat
+            )
+        else:
+            logger.info(
+                "Registration-key heartbeat for an agent with its own key: "
+                "status returned, nothing applied",
+                extra={"agent_id": str(agent.id)},
+            )
 
         config_version = (
             agent.checks_updated_at.isoformat() if agent.checks_updated_at else None

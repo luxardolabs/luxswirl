@@ -393,8 +393,11 @@ async def authenticate_heartbeat(
     """Authenticate a heartbeat; True when the agent's own key was used.
 
     An agent with its own key must present it; only a 401 from that check
-    falls back to the registration key (an agent that has not yet stored its
-    key). Any other refusal (a paused or disabled agent) stands.
+    falls back to the registration key (an approved agent that has not stored
+    its key yet). Any other refusal (a paused or disabled agent) stands. The
+    registration key is shared by every install, so a False here never lets
+    the heartbeat write onto an agent that has its own key: core only reads
+    that agent's status back (`AgentCoreService.process_heartbeat`).
     """
     if agent.api_key_hash:
         try:

@@ -261,7 +261,13 @@ class AgentHeartbeat(BaseSchema):
     agent_id: UUID = Field(..., description="Agent UUID from registration")
 
     # Timestamp
-    timestamp: datetime = Field(..., description="Heartbeat timestamp")
+    timestamp: datetime = Field(
+        ...,
+        description=(
+            "The agent's clock when it sent the heartbeat. Informational: the "
+            "server stamps last_seen and the metric row with its own receipt time"
+        ),
+    )
 
     # Agent info
     hostname: str | None = Field(None, description="Agent hostname")

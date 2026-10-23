@@ -213,12 +213,14 @@ async def test_the_secret_without_the_registration_key_is_refused(
 async def test_an_agent_registered_before_secrets_cannot_recover(
     client: AsyncClient, db: AsyncSession, reg_key: str
 ) -> None:
-    """No hash on the row: no secret matches, not even an empty one."""
+    """No hash on the row: no secret matches, not even an empty one, and the
+    agent's key is never rotated."""
     agent = make_agent(approval_status="pending")
     db.add(agent)
     await db.flush()
     await _approve(db, agent.id)
     assert agent.recovery_secret_hash is None
+    key_hash = agent.api_key_hash
 
     empty = await _recover(client, agent.id, bearer=reg_key, secret="")
     anything = await _recover(client, agent.id, bearer=reg_key, secret="anything")
@@ -229,6 +231,8 @@ async def test_an_agent_registered_before_secrets_cannot_recover(
     assert empty.status_code == 401, empty.text
     assert anything.status_code == 401, anything.text
     assert hash_of_empty.status_code == 401, hash_of_empty.text
+    await db.refresh(agent)
+    assert agent.api_key_hash == key_hash
 
 
 async def test_an_unknown_agent_is_refused_exactly_like_a_wrong_secret(
@@ -295,3 +299,22 @@ async def test_secret_guesses_spend_the_recovery_rate_limit(
 
     assert set(statuses[:allowed]) == {401}, statuses
     assert statuses[allowed] == 429, statuses
+
+
+async def test_the_stored_digest_is_not_a_recovery_secret(
+    client: AsyncClient, db: AsyncSession, reg_key: str
+) -> None:
+    """Presenting the stored digest itself (say, read from a database backup)
+    recovers nothing: only the plaintext secret does."""
+    agent_id, secret = await _register(client, reg_key)
+    await _approve(db, agent_id)
+    row = await db.get(Agent, agent_id)
+    assert row is not None and row.recovery_secret_hash is not None
+
+    digest = await _recover(
+        client, agent_id, bearer=reg_key, secret=row.recovery_secret_hash
+    )
+    plaintext = await _recover(client, agent_id, bearer=reg_key, secret=secret)
+
+    assert digest.status_code == 401, digest.text
+    assert plaintext.status_code == 200, plaintext.text

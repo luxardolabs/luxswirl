@@ -83,7 +83,11 @@ async def agent_heartbeat(
     sender: AuthenticatedHeartbeat,
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> AgentHeartbeatResponse:
-    """Process agent heartbeat. Auth accepts agent-specific key OR registration token."""
+    """Process agent heartbeat.
+
+    The agent's own key applies it. The registration key applies it only for an
+    agent with no key yet; for one that has a key it only returns the status.
+    """
     return await AgentCoreService.process_heartbeat(
         db, sender.agent_id, heartbeat, using_agent_key=sender.using_agent_key
     )
