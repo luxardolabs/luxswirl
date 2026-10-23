@@ -41,7 +41,6 @@ from fixtures.factories import (
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
 
-API_TOKEN = "route-smoke-api-token"
 ADMIN_PASSWORD = "RouteSmoke123!"
 
 
@@ -214,9 +213,8 @@ async def empty_install(worker_db, monkeypatch):
 
 @pytest_asyncio.fixture
 async def smoke_world(worker_db, monkeypatch):
-    """The app with a seeded DB, an admin session cookie and the API token set."""
+    """The app with a seeded DB and an admin session cookie."""
     monkeypatch.setattr(settings.security, "auth_enabled", True)
-    monkeypatch.setattr(settings.security, "auth_tokens", [API_TOKEN])
     # The limiter is deliberately outside RATE_LIMIT_ENABLED for login; this
     # suite logs in once, so reset rather than disable it.
     monkeypatch.setattr(settings.security, "rate_limit_enabled", False)
@@ -258,7 +256,6 @@ async def smoke_world(worker_db, monkeypatch):
             "client": client,
             "ids": ids,
             "web_headers": {"Cookie": f"luxswirl_session={session_token}"},
-            "api_headers": {"Authorization": f"Bearer {API_TOKEN}"},
             "admin_password": ADMIN_PASSWORD,
         }
     app.dependency_overrides.clear()

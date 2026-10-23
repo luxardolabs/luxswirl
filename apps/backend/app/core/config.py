@@ -158,10 +158,6 @@ class SecuritySettings(BaseSettings):
     """Security configuration."""
 
     auth_enabled: bool = Field(default=True, description="Enable authentication")
-    auth_tokens: list[str] = Field(
-        default_factory=list,
-        description="Valid API tokens. Resolved at startup via env → /app/data/api_token → generate.",
-    )
     secret_key: str = Field(
         default="",
         description="Secret key for JWT. Resolved at startup via env → /app/data/secret_key → generate.",

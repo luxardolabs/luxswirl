@@ -557,7 +557,7 @@ DEFAULT_SETTINGS: list[dict[str, Any]] = [
         "value": "",
         "type": "string",
         "display_name": "Bearer Token",
-        "description": "Dedicated bearer token for Prometheus scraping (leave empty to use API tokens)",
+        "description": "Bearer token for Prometheus scraping (required when authentication is on)",
         "validation": None,
     },
     {

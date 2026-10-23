@@ -131,13 +131,11 @@ async def get_metrics(
         if authorization.startswith("Bearer "):
             token = authorization[7:]  # Remove "Bearer " prefix
 
-            # Check against configured metrics token (if set) — constant-time.
-            if (
-                configured_token
-                and hmac.compare_digest(token, configured_token)
-                or any(
-                    hmac.compare_digest(token, t) for t in settings.security.auth_tokens
-                )
+            # The configured metrics token is the only credential — constant-time.
+            # Compared as bytes: a str compare_digest raises on a non-ASCII
+            # header value, which would answer 500 instead of 401.
+            if configured_token and hmac.compare_digest(
+                token.encode(), str(configured_token).encode()
             ):
                 authenticated = True
 

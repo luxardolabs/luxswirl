@@ -87,7 +87,6 @@ def _settings(**security: object) -> Any:
     defaults: dict[str, object] = {
         "secret_key": "",
         "field_encryption_key": "",
-        "auth_tokens": [],
     }
     return SimpleNamespace(security=SimpleNamespace(**(defaults | security)))
 
@@ -101,10 +100,10 @@ def test_resolution_fills_every_secret_and_keeps_them_across_boots(
     second = _settings()
     runtime_secrets.resolve_runtime_secrets(second)
 
-    assert first.security.secret_key and first.security.auth_tokens
+    assert first.security.secret_key and first.security.field_encryption_key
     assert vars(first.security) == vars(second.security)
     Fernet(first.security.field_encryption_key.encode())  # a usable Fernet key
-    for name in ("secret_key", "field_encryption_key", "api_token"):
+    for name in ("secret_key", "field_encryption_key"):
         assert _mode(tmp_path / name) == 0o600
 
 
@@ -113,13 +112,28 @@ def test_configured_values_are_left_alone(
 ) -> None:
     monkeypatch.setattr(runtime_secrets, "SECRETS_DIR", tmp_path)
     key = Fernet.generate_key().decode()
-    settings = _settings(
-        secret_key="configured", field_encryption_key=key, auth_tokens=["tok"]
-    )
+    settings = _settings(secret_key="configured", field_encryption_key=key)
 
     runtime_secrets.resolve_runtime_secrets(settings)
 
     assert settings.security.secret_key == "configured"
     assert settings.security.field_encryption_key == key
-    assert settings.security.auth_tokens == ["tok"]
     assert list(tmp_path.iterdir()) == []
+
+
+def test_no_shared_api_token_is_generated_or_announced(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The JSON API is the agent protocol, authenticated by agent and
+    registration keys: no shared admin token is minted, stored or printed."""
+    monkeypatch.setattr(runtime_secrets, "SECRETS_DIR", tmp_path)
+    settings = _settings()
+
+    runtime_secrets.resolve_runtime_secrets(settings)
+
+    assert sorted(p.name for p in tmp_path.iterdir()) == [
+        "field_encryption_key",
+        "secret_key",
+    ]
+    assert set(vars(settings.security)) == {"secret_key", "field_encryption_key"}
+    assert "API TOKEN" not in caplog.text

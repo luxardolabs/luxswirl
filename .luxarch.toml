@@ -75,7 +75,6 @@ deps = [
   "get_current_user_web",
   "require_admin_web",
   "require_editor_web",
-  "verify_api_token",
 ]
 
 [target.rbac]
@@ -284,7 +283,6 @@ column = "user_id"
 superuser = ["AdminUserWeb", "require_admin_web"]
 tenant_user = ["CurrentUserWeb", "EditorUserWeb", "get_current_user"]
 collector = [
-  "verify_api_token",
   "verify_agent_token",
   # Agent-authenticated dependencies (app/api/deps.py): each proves the
   # agent's key before the route runs and yields only the agent or job id.
