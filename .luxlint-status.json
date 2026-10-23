@@ -7,7 +7,8 @@
     "apps/agent/app",
     "apps/shared",
     "apps/backend/alembic",
-    "apps/backend/scripts"
+    "apps/backend/scripts",
+    "apps/backend/conftest.py"
   ],
   "rules": [
     {
@@ -206,6 +207,6 @@
     "INERT": 0
   },
   "mypy": "separate: `luxlint --mypy` ([mypy].baseline ratchet)",
-  "commit": "a6019f3f50721ff6418e463146861ef2418e6f88",
-  "generated_at": "2026-10-23T06:29:25Z"
+  "commit": "71f4c58e59306403525c42166ee1ccce4d36043d",
+  "generated_at": "2026-10-23T08:20:18Z"
 }
