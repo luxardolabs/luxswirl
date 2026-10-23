@@ -222,7 +222,7 @@ async def _unauthenticated_web_redirect(
     if await admin_bootstrap_crud.count_users(db) == 0:
         return HTTPException(
             status_code=status.HTTP_307_TEMPORARY_REDIRECT,
-            headers={"Location": request.app.url_path_for("setup_page")},
+            headers={"Location": request.app.url_path_for("admin.setup")},
         )
     # The requested path rides as an encoded query value; the whole target still
     # goes through the one safe-redirect helper, since part of it is the request's.

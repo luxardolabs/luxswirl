@@ -43,7 +43,7 @@ async def login_page(
     If already authenticated, redirect to home.
     """
     # First run: no user exists yet -> the token-gated /setup.
-    setup_path = await AdminBootstrapViewService().login_page_redirect(db)
+    setup_path = await AdminBootstrapViewService().login_page_redirect(request, db)
     if setup_path:
         return RedirectResponse(url=setup_path, status_code=status.HTTP_302_FOUND)
 
