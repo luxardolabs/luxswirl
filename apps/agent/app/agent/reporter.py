@@ -1,8 +1,11 @@
 """
 Result reporter for the LuxSwirl agent.
 
-Stores failed batches in a local SQLite database with gzip-compressed payloads.
-Automatically migrates legacy JSON file storage on first startup.
+Stores batches the server could not take yet in a local SQLite database with
+gzip-compressed payloads, and replays them. A batch the server refuses for good
+(400/413/422) goes to the `dead_letters` table instead (see `dead_letter`), so
+it never blocks the queue behind it. Automatically migrates legacy JSON file
+storage on first startup.
 """
 
 import asyncio
@@ -12,10 +15,20 @@ import logging
 import sqlite3
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 import httpx
 from shared.logger import get_logger
+
+from app.agent.dead_letter import (
+    CREATE_DEAD_LETTERS,
+    Delivery,
+    classify_status,
+    count_dead_letters,
+    error_detail,
+    insert_dead_letter,
+    prune_dead_letters,
+)
 
 # SQL constants
 _CREATE_TABLE = """
@@ -30,6 +43,14 @@ CREATE TABLE IF NOT EXISTS pending_batches (
 _CREATE_INDEX = (
     "CREATE INDEX IF NOT EXISTS idx_created_at ON pending_batches(created_at)"
 )
+
+
+class StoredBatch(NamedTuple):
+    """A pending batch read back from SQLite for replay."""
+
+    row_id: int
+    created_at: float
+    checks: list[dict[str, Any]]
 
 
 class Reporter:
@@ -59,6 +80,7 @@ class Reporter:
         self.process_interval = config.get("report_process_interval", 10)
         self.max_files_per_batch = config.get("report_max_files_per_batch", 5)
         self.max_stored_batches = config.get("report_max_stored_batches", 10000)
+        self.max_dead_letters = config.get("report_max_dead_letters", 1000)
 
         # Create storage directory if needed
         if self.enable_local_storage:
@@ -126,6 +148,7 @@ class Reporter:
         try:
             conn.execute(_CREATE_TABLE)
             conn.execute(_CREATE_INDEX)
+            conn.execute(CREATE_DEAD_LETTERS)
             conn.commit()
         finally:
             conn.close()
@@ -452,6 +475,9 @@ class Reporter:
     async def send_batch(self, batch: list[dict[str, Any]]) -> bool:
         """Send a batch of results to the server.
 
+        A transient failure stores the batch for replay; a permanent refusal
+        (400/413/422) dead-letters it, since sending it again cannot succeed.
+
         Args:
             batch: List of check results to send
 
@@ -465,7 +491,33 @@ class Reporter:
             self.logger.warning("No push URL configured, not sending results")
             return False
 
-        # Prepare the payload
+        outcome, status_code, detail = await self._post_batch(batch)
+
+        if outcome is Delivery.SENT:
+            return True
+
+        if outcome is Delivery.PERMANENT and status_code is not None:
+            await self._dead_letter_batch(batch, status_code, detail)
+        else:
+            await self._store_batch_to_db(batch)
+        return False
+
+    async def _post_batch(
+        self, batch: list[dict[str, Any]]
+    ) -> tuple[Delivery, int | None, str]:
+        """POST a batch, retrying transient failures up to `max_retries`.
+
+        A permanent refusal returns at once: retrying it cannot succeed.
+
+        Returns:
+            The outcome, the last HTTP status (None for a network error), and
+            the server's error detail, scrubbed and truncated.
+        """
+        push_url = self.push_url
+        if not push_url:
+            self.logger.warning("No push URL configured, not sending results")
+            return Delivery.TRANSIENT, None, ""
+
         agent_id = self.config.get("agent_id", "unknown")
         payload = {
             "agent_id": str(agent_id) if agent_id != "unknown" else "unknown",
@@ -473,88 +525,123 @@ class Reporter:
             "checks": batch,
         }
 
-        success = False
-        retry_count = 0
-
         self.logger.info(
             "Attempting to send batch",
             extra={"batch_size": len(batch), "push_url": self.push_url},
         )
 
-        while retry_count < self.max_retries and not success and self.running:
-            try:
-                if retry_count > 0:
-                    self.logger.info(
-                        "Retrying batch send",
-                        extra={
-                            "attempt": retry_count + 1,
-                            "max_retries": self.max_retries,
-                        },
-                    )
+        status_code: int | None = None
+        detail = ""
+        for attempt in range(self.max_retries):
+            if self._stopped():
+                break
+            if attempt > 0:
+                self.logger.info(
+                    "Retrying batch send",
+                    extra={"attempt": attempt + 1, "max_retries": self.max_retries},
+                )
 
-                # Send the request
+            try:
                 if not self.client:
                     await self.start()
                 assert self.client is not None
-
-                resp = await self.client.post(self.push_url, json=payload)
-
-                if resp.status_code < 300:
-                    self.logger.info(
-                        "Successfully sent batch",
-                        extra={"batch_size": len(batch)},
-                    )
-                    self.last_sent_time = time.time()
-                    success = True
-
-                    # Update metrics
-                    self.metrics["batches_sent"] += 1
-                    self.metrics["results_sent"] += len(batch)
-                    self.metrics["last_batch_size"] = len(batch)
-
-                else:
-                    self.logger.warning(
-                        "Failed to send results",
-                        extra={
-                            "status_code": resp.status_code,
-                            "response_text": resp.text,
-                        },
-                    )
-                    retry_count += 1
-                    self.metrics["send_failures"] += 1
-
-                    if self._stopped():
-                        break
-
-                    await asyncio.sleep(self.retry_delay)
-
+                resp = await self.client.post(push_url, json=payload)
             except httpx.RequestError:
                 self.logger.warning(
                     "Connection error while sending results", exc_info=True
                 )
-                retry_count += 1
-                self.metrics["send_failures"] += 1
-
-                if self._stopped():
-                    break
-
-                await asyncio.sleep(self.retry_delay)
-
+                status_code, detail = None, ""
+            # swallowed-exceptions: the reporter retries and spools to disk; raising would drop results already collected
             except Exception:
                 self.logger.exception("Unexpected error while sending results")
-                retry_count += 1
-                self.metrics["send_failures"] += 1
+                status_code, detail = None, ""
+            else:
+                status_code = resp.status_code
+                outcome = classify_status(status_code)
+                if outcome is Delivery.SENT:
+                    self.logger.info(
+                        "Successfully sent batch", extra={"batch_size": len(batch)}
+                    )
+                    self.last_sent_time = time.time()
+                    self.metrics["batches_sent"] += 1
+                    self.metrics["results_sent"] += len(batch)
+                    self.metrics["last_batch_size"] = len(batch)
+                    return Delivery.SENT, status_code, ""
 
+                detail = error_detail(resp.text)
+                self.metrics["send_failures"] += 1
+                if outcome is Delivery.PERMANENT:
+                    return Delivery.PERMANENT, status_code, detail
+                self.logger.warning(
+                    "Failed to send results",
+                    extra={"status_code": status_code, "response_text": detail},
+                )
                 if self._stopped():
                     break
-
                 await asyncio.sleep(self.retry_delay)
+                continue
 
-        # If we couldn't send the results, store them locally
-        if not success and self.enable_local_storage:
-            await self._store_batch_to_db(batch)
+            self.metrics["send_failures"] += 1
+            if self._stopped():
+                break
+            await asyncio.sleep(self.retry_delay)
 
-        return success
+        return Delivery.TRANSIENT, status_code, detail
+
+    def _dead_letter_batch_sync(
+        self, batch: list[dict[str, Any]], status_code: int, detail: str
+    ) -> None:
+        """Insert a refused batch into dead_letters and enforce the cap (runs in thread)."""
+        now = time.time()
+        conn = self._get_db()
+        try:
+            insert_dead_letter(
+                conn,
+                created_at=now,
+                failed_at=now,
+                status_code=status_code,
+                detail=detail,
+                batch_size=len(batch),
+                payload=gzip.compress(json.dumps(batch).encode()),
+            )
+            self._prune_dead_letters(conn)
+            conn.commit()
+        finally:
+            conn.close()
+
+    def _prune_dead_letters(self, conn: sqlite3.Connection) -> None:
+        """Hold dead_letters to `report_max_dead_letters`, oldest pruned first."""
+        pruned = prune_dead_letters(conn, self.max_dead_letters)
+        if pruned:
+            self.logger.warning(
+                "Pruned oldest dead-lettered batches",
+                extra={"pruned_count": pruned, "cap": self.max_dead_letters},
+            )
+
+    async def _dead_letter_batch(
+        self, batch: list[dict[str, Any]], status_code: int, detail: str
+    ) -> None:
+        """Dead-letter a batch the server refused for good, loudly.
+
+        Without local storage the batch is only logged: it is never retried.
+        """
+        self.logger.error(
+            "Server refused batch permanently, dead-lettered",
+            extra={
+                "status_code": status_code,
+                "result_count": len(batch),
+                "error_detail": detail,
+            },
+        )
+        if not self.enable_local_storage:
+            return
+        # swallowed-exceptions: the batch was already refused; raising here would take down the reporter loop and every batch after it
+        try:
+            await asyncio.to_thread(
+                self._dead_letter_batch_sync, batch, status_code, detail
+            )
+        except Exception:
+            self.logger.exception("Failed to store dead-lettered batch")
 
     def _store_batch_to_db_sync(self, batch: list[dict[str, Any]]) -> None:
         """Store a failed batch into SQLite with gzip compression (runs in thread)."""
@@ -623,24 +710,26 @@ class Reporter:
         except Exception:
             self.logger.exception("Failed to store results to SQLite")
 
-    def _process_stored_reports_sync(self) -> list[tuple[int, list[dict[str, Any]]]]:
+    def _process_stored_reports_sync(self) -> list[StoredBatch]:
         """Fetch pending batches from SQLite for replay (runs in thread).
 
         Returns:
-            List of (row_id, checks) tuples ready to send.
+            The oldest pending batches, ready to send.
         """
         conn = self._get_db()
         try:
             rows = conn.execute(
-                "SELECT id, payload FROM pending_batches ORDER BY created_at ASC LIMIT ?",
+                "SELECT id, created_at, payload FROM pending_batches "
+                "ORDER BY created_at ASC LIMIT ?",
                 (self.max_files_per_batch,),
             ).fetchall()
 
             results = []
-            for row_id, payload in rows:
+            for row_id, created_at, payload in rows:
                 try:
                     checks = json.loads(gzip.decompress(payload))
-                    results.append((row_id, checks))
+                    results.append(StoredBatch(row_id, created_at, checks))
+                # swallowed-exceptions: one corrupt row must not wedge replay of every row behind it
                 except Exception:
                     self.logger.warning(
                         "Corrupted stored batch, deleting",
@@ -663,6 +752,112 @@ class Reporter:
         finally:
             conn.close()
 
+    def _move_to_dead_letters_sync(
+        self, row_id: int, status_code: int, detail: str
+    ) -> None:
+        """Move a pending batch to dead_letters in one transaction (runs in thread).
+
+        The row keeps its original created_at and its compressed payload as is.
+        """
+        conn = self._get_db()
+        try:
+            row = conn.execute(
+                "SELECT created_at, batch_size, payload FROM pending_batches "
+                "WHERE id = ?",
+                (row_id,),
+            ).fetchone()
+            if row is None:
+                return
+            created_at, batch_size, payload = row
+            insert_dead_letter(
+                conn,
+                created_at=created_at,
+                failed_at=time.time(),
+                status_code=status_code,
+                detail=detail,
+                batch_size=batch_size,
+                payload=payload,
+            )
+            conn.execute("DELETE FROM pending_batches WHERE id = ?", (row_id,))
+            self._prune_dead_letters(conn)
+            conn.commit()
+        finally:
+            conn.close()
+
+    async def _replay_group(self, group: list[StoredBatch]) -> bool:
+        """Replay stored batches as one combined POST.
+
+        On a permanent refusal one of them is bad, so each is retried alone:
+        those the server takes are deleted, those it refuses for good move to
+        dead_letters. Replay never stops at a refused batch.
+
+        Returns:
+            False when a transient failure should end this pass (the batches
+            not yet sent stay pending), True otherwise.
+        """
+        combined = [check for stored in group for check in stored.checks]
+        outcome, status_code, detail = await self._post_batch(combined)
+
+        if outcome is Delivery.SENT:
+            for stored in group:
+                await asyncio.to_thread(self._delete_stored_batch_sync, stored.row_id)
+            self.logger.info(
+                "Drained stored batches in one POST",
+                extra={"batch_count": len(group), "result_count": len(combined)},
+            )
+            return True
+
+        if outcome is Delivery.TRANSIENT or status_code is None:
+            self.logger.warning(
+                "Failed replay POST",
+                extra={"batch_count": len(group), "result_count": len(combined)},
+            )
+            return False
+
+        if len(group) > 1:
+            self.logger.warning(
+                "Replay POST refused permanently, retrying its batches one by one",
+                extra={"batch_count": len(group), "status_code": status_code},
+            )
+            for stored in group:
+                if self._stopped():
+                    return False
+                if not await self._replay_group([stored]):
+                    return False
+            return True
+
+        [stored] = group
+        self.logger.error(
+            "Server refused stored batch permanently, dead-lettered",
+            extra={
+                "status_code": status_code,
+                "result_count": len(stored.checks),
+                "error_detail": detail,
+            },
+        )
+        await asyncio.to_thread(
+            self._move_to_dead_letters_sync, stored.row_id, status_code, detail
+        )
+        return True
+
+    async def _replay_pending(self, pending: list[StoredBatch]) -> None:
+        """Replay one fetch of stored batches, combined up to `batch_size` per POST."""
+        group: list[StoredBatch] = []
+        size = 0
+        for stored in pending:
+            if self._stopped():
+                return
+            # Send before adding if appending would exceed the cap.
+            if group and size + len(stored.checks) > self.batch_size:
+                if not await self._replay_group(group):
+                    return
+                group, size = [], 0
+            group.append(stored)
+            size += len(stored.checks)
+
+        if group and not self._stopped():
+            await self._replay_group(group)
+
     async def process_stored_reports(self) -> None:
         """Process stored reports in the background."""
         self.logger.info(
@@ -672,7 +867,6 @@ class Reporter:
 
         while self.running:
             try:
-                # Fetch pending batches from SQLite
                 pending = await asyncio.to_thread(self._process_stored_reports_sync)
 
                 if pending and self.running:
@@ -680,67 +874,7 @@ class Reporter:
                         "Found stored batches to process",
                         extra={"pending_count": len(pending)},
                     )
-
-                    combined: list[dict[str, Any]] = []
-                    consumed_ids: list[int] = []
-                    aborted = False
-
-                    for row_id, checks in pending:
-                        if self._stopped():
-                            break
-
-                        # Flush before adding if appending would exceed the cap.
-                        if combined and len(combined) + len(checks) > self.batch_size:
-                            if await self.send_batch(combined):
-                                for cid in consumed_ids:
-                                    await asyncio.to_thread(
-                                        self._delete_stored_batch_sync, cid
-                                    )
-                                self.logger.info(
-                                    "Drained stored batches in one POST",
-                                    extra={
-                                        "batch_count": len(consumed_ids),
-                                        "result_count": len(combined),
-                                    },
-                                )
-                                combined = []
-                                consumed_ids = []
-                            else:
-                                self.logger.warning(
-                                    "Failed replay POST",
-                                    extra={
-                                        "batch_count": len(consumed_ids),
-                                        "result_count": len(combined),
-                                    },
-                                )
-                                aborted = True
-                                break
-
-                        combined.extend(checks)
-                        consumed_ids.append(row_id)
-
-                    # Flush any remainder
-                    if combined and self.running and not aborted:
-                        if await self.send_batch(combined):
-                            for cid in consumed_ids:
-                                await asyncio.to_thread(
-                                    self._delete_stored_batch_sync, cid
-                                )
-                            self.logger.info(
-                                "Drained stored batches in one POST",
-                                extra={
-                                    "batch_count": len(consumed_ids),
-                                    "result_count": len(combined),
-                                },
-                            )
-                        else:
-                            self.logger.warning(
-                                "Failed final replay POST",
-                                extra={
-                                    "batch_count": len(consumed_ids),
-                                    "result_count": len(combined),
-                                },
-                            )
+                    await self._replay_pending(pending)
 
                 # Check if we should continue running
                 if self._stopped():
@@ -752,6 +886,7 @@ class Reporter:
                         break
                     await asyncio.sleep(1)
 
+            # swallowed-exceptions: the replay loop must outlive one bad pass, or stored batches never drain
             except Exception:
                 self.logger.exception("Error in stored reports processor")
 
@@ -764,18 +899,18 @@ class Reporter:
 
         self.logger.info("Stored reports processor stopped")
 
-    def _get_metrics_sync(self) -> tuple[int, float | None]:
+    def _get_metrics_sync(self) -> tuple[int, float | None, int]:
         """Get stored report metrics from SQLite (runs in thread).
 
         Returns:
-            Tuple of (count, oldest_timestamp).
+            Tuple of (pending count, oldest pending timestamp, dead-letter count).
         """
         conn = self._get_db()
         try:
             row = conn.execute(
                 "SELECT COUNT(*), MIN(created_at) FROM pending_batches"
             ).fetchone()
-            return (row[0], row[1])
+            return (row[0], row[1], count_dead_letters(conn))
         finally:
             conn.close()
 
@@ -795,18 +930,22 @@ class Reporter:
         if self.enable_local_storage and self._db_initialized:
             try:
                 # Synchronous call — fast single-row query, safe from main thread
-                count, oldest = self._get_metrics_sync()
+                count, oldest, dead = self._get_metrics_sync()
                 metrics["stored_reports_count"] = count
                 metrics["stored_reports_oldest_timestamp"] = oldest or 0.0
+                metrics["dead_letter_count"] = dead
+            # swallowed-exceptions: metrics are best-effort; a locked database must not break the heartbeat
             except Exception:
                 self.logger.warning(
                     "Failed to get stored reports metrics", exc_info=True
                 )
                 metrics["stored_reports_count"] = 0
                 metrics["stored_reports_oldest_timestamp"] = 0.0
+                metrics["dead_letter_count"] = 0
         else:
             metrics["stored_reports_count"] = 0
             metrics["stored_reports_oldest_timestamp"] = 0.0
+            metrics["dead_letter_count"] = 0
 
         return metrics
 

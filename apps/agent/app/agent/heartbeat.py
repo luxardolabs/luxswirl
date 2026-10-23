@@ -249,6 +249,10 @@ class HeartbeatSender:
                         "stored_reports_oldest_timestamp": reporter_metrics.get(
                             "stored_reports_oldest_timestamp"
                         ),
+                        # Batches the server refused for good (400/413/422)
+                        "dead_letter_count": reporter_metrics.get(
+                            "dead_letter_count", 0
+                        ),
                         # Resource monitoring (SWIRL-57)
                         "open_file_descriptors": resource_metrics.get(
                             "open_file_descriptors"

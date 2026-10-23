@@ -43,6 +43,7 @@ DEFAULT_AGENT_CONFIG = {
     "report_process_interval": 10,  # Seconds between checking stored reports
     "report_max_files_per_batch": 5,  # Max files to process at once
     "report_max_stored_batches": 10000,  # Max batches to keep in SQLite before pruning oldest
+    "report_max_dead_letters": 1000,  # Max permanently refused batches kept in SQLite before pruning oldest
     # Metrics and TTL configuration
     "metrics_ttl_seconds": 300,  # How long to keep check results in metrics (5 minutes)
     "metrics_cleanup_interval": 60,  # How often to cleanup stale metrics (1 minute)
