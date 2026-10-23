@@ -4,6 +4,9 @@ GET /api/v1/checks hands an agent its manual checks plus every replicate and
 distribute check whose selector it matches. The report path looked results up
 by the check's own `agent_id` column instead, so a replicate or distribute
 check run by any other selected agent had every result dropped.
+
+Only active agents are in a distribute check's pool: an agent that may not run
+checks (pending, paused, disabled, rejected) never wins one.
 """
 
 from __future__ import annotations
@@ -14,6 +17,7 @@ import pytest
 from app.core.datetime_utils import utc_now
 from app.schemas.check_result_schema import AgentReportRequest, CheckResultCreate
 from app.services.core.agent_assignment_core_service import AgentAssignmentCoreService
+from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.check_result_core_service import CheckResultCoreService
 from fixtures.factories import make_agent, make_check
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -128,3 +132,68 @@ async def test_another_agents_manual_check_is_refused(db: AsyncSession) -> None:
     )
 
     assert result["results_processed"] == 0
+
+
+async def test_a_pending_registration_cannot_steal_a_distribute_check(
+    db: AsyncSession,
+) -> None:
+    """Anyone with the shared registration key can register agents carrying any
+    tags. Pending agents are not in the distribute pool, so they cannot win the
+    hash and take the check away from the only approved agent."""
+    owner = make_agent(agent_name="owner", tags=["role:probe"])
+    db.add(owner)
+    await db.flush()
+    check = make_check(
+        agent_id=owner.id,
+        assignment_mode="distribute",
+        agent_selector={"tags": ["role:probe"]},
+    )
+    db.add(check)
+    await db.flush()
+
+    taken = await CheckResultCoreService.process_agent_report(
+        db, _report(owner.id, check.id)
+    )
+    assert taken["results_processed"] == 1  # control
+
+    for _ in range(40):
+        await AgentCoreService.register_agent(
+            db, hostname="squatter", tags=["role:probe"]
+        )
+    await db.flush()
+    owner_checks = await AgentAssignmentCoreService.get_checks_for_agent(db, owner)
+    still_taken = await CheckResultCoreService.process_agent_report(
+        db, _report(owner.id, check.id)
+    )
+
+    assert check.id in {c.id for c in owner_checks}
+    assert still_taken["results_processed"] == 1
+
+
+@pytest.mark.parametrize("status", ["pending", "paused", "disabled", "rejected"])
+async def test_only_active_agents_are_in_the_distribute_pool(
+    db: AsyncSession, status: str
+) -> None:
+    """An agent that may not run checks never holds a distribute check: every
+    one of them goes to an active agent."""
+    active = make_agent(agent_name="active", tags=["role:probe"])
+    idle = [
+        make_agent(agent_name=f"idle-{i}", tags=["role:probe"], approval_status=status)
+        for i in range(20)
+    ]
+    db.add_all([active, *idle])
+    await db.flush()
+    checks = [
+        make_check(
+            agent_id=active.id,
+            assignment_mode="distribute",
+            agent_selector={"tags": ["role:probe"]},
+        )
+        for _ in range(5)
+    ]
+    db.add_all(checks)
+    await db.flush()
+
+    active_checks = await AgentAssignmentCoreService.get_checks_for_agent(db, active)
+
+    assert {c.id for c in checks} <= {c.id for c in active_checks}
