@@ -20,7 +20,7 @@ TOO_LARGE is never the payload's content: the app sends no 413, so it is a proxy
 (nginx's `client_max_body_size`) refusing the body's size. The reporter sends
 such a batch in halves. It never dead-letters on a 413: a result's long text
 fields are capped far below any body limit, so a 413 on one result is usually
-the route's fault, and the result stays pending like a transient failure.
+the route's fault, and the result stays pending while the rest goes.
 
 A PERMANENT batch goes to `dead_letters`, in the same SQLite database as the
 pending queue, so it never blocks the queue behind it. The table keeps the
