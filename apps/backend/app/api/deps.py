@@ -33,7 +33,7 @@ from app.core.security import (
 from app.db import get_db
 from app.schemas.agent_schema import AgentHeartbeat
 from app.schemas.check_artifact_schema import CheckArtifactCreate
-from app.schemas.check_result_schema import AgentReportRequest
+from app.schemas.check_result_schema import AgentReportSubmission
 from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.job_core_service import JobCoreService
 
@@ -129,7 +129,7 @@ AuthenticatedHeartbeat = Annotated[HeartbeatSender, Depends(require_heartbeat_se
 
 
 async def require_reporting_agent(
-    report: AgentReportRequest,
+    report: AgentReportSubmission,
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     authorization: Annotated[str | None, Header()] = None,
 ) -> UUID:

@@ -7,4 +7,4 @@ paths = ["apps/agent/app"]
 # The whole percent `make test` measured when the agent suite joined the gate
 # (2026-10-23, 57 tests, branch coverage 28.92%), raised as tests land
 # (84 tests, 35.30%). It only ever goes up.
-coverage_min = 35
+coverage_min = 36

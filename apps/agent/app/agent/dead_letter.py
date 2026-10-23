@@ -1,9 +1,18 @@
 """Delivery outcomes for a report POST, and the dead-letter table.
 
-A response is SENT (2xx), PERMANENT (the server refuses this payload and will
-refuse it again: 400, 413, 422) or TRANSIENT (anything else, including network
-errors, 5xx, 408, 429 and 401/403; an auth failure is something the agent's key
-recovery can fix, so it is never dead-lettered).
+A response is SENT (2xx), PERMANENT (the LuxSwirl server itself refuses this
+payload as invalid and will refuse it again) or TRANSIENT (anything else).
+
+PERMANENT needs the server's own word: a 400 or 422 whose body is the app's
+JSON error envelope with a payload error code (`{"error": "VALIDATION_ERROR",
+...}` from request validation, `"BAD_REQUEST"` from a service ValueError). Every
+other answer is TRANSIENT and the batch stays pending: network errors, 5xx,
+408, 429, 401/403 (key recovery can fix those), and any 4xx without that
+envelope. The trusted-host middleware answers an unlisted Host with a plain-text
+`400 Invalid host header`, and a proxy such as nginx answers with its own HTML
+400 or 413 (the app never sends 413); those say the agent is misaddressed or the
+route is misconfigured, not that the payload is bad, and dead-lettering on them
+would empty the pending queue into a capped table that prunes it.
 
 A PERMANENT batch goes to `dead_letters`, in the same SQLite database as the
 pending queue, so it never blocks the queue behind it. The table keeps the
@@ -12,6 +21,7 @@ server's (scrubbed, truncated) error detail and is capped, oldest pruned first.
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from enum import StrEnum
 
@@ -20,7 +30,10 @@ from shared.log_redaction import scrub_text
 # The server's error detail kept per dead letter, after scrubbing.
 MAX_DETAIL_CHARS = 2048
 
-PERMANENT_STATUSES = frozenset({400, 413, 422})
+# The statuses the server answers an invalid payload with...
+PERMANENT_STATUSES = frozenset({400, 422})
+# ...and the error codes in its JSON envelope that say the payload is the fault.
+PAYLOAD_ERROR_CODES = frozenset({"VALIDATION_ERROR", "BAD_REQUEST"})
 
 CREATE_DEAD_LETTERS = """
 CREATE TABLE IF NOT EXISTS dead_letters (
@@ -43,19 +56,30 @@ class Delivery(StrEnum):
     TRANSIENT = "transient"
 
 
-def classify_status(status_code: int) -> Delivery:
-    """Classify an HTTP status from the reports endpoint.
+def _is_payload_refusal(body: str) -> bool:
+    """Whether `body` is the server's JSON error envelope blaming the payload."""
+    try:
+        envelope = json.loads(body)
+    except ValueError:
+        return False
+    return isinstance(envelope, dict) and envelope.get("error") in PAYLOAD_ERROR_CODES
+
+
+def classify_response(status_code: int, body: str) -> Delivery:
+    """Classify a response from the reports endpoint.
 
     Args:
         status_code: The response status.
+        body: The response body, as text.
 
     Returns:
-        SENT for 2xx, PERMANENT for a refusal the server will repeat
-        (400, 413, 422), TRANSIENT for everything else.
+        SENT for 2xx; PERMANENT for a 400/422 carrying the server's own JSON
+        error envelope with a payload error code; TRANSIENT for everything
+        else, including a 400/413 from a proxy or the trusted-host middleware.
     """
     if 200 <= status_code < 300:
         return Delivery.SENT
-    if status_code in PERMANENT_STATUSES:
+    if status_code in PERMANENT_STATUSES and _is_payload_refusal(body):
         return Delivery.PERMANENT
     return Delivery.TRANSIENT
 

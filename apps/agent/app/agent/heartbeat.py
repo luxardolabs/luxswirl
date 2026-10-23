@@ -249,7 +249,7 @@ class HeartbeatSender:
                         "stored_reports_oldest_timestamp": reporter_metrics.get(
                             "stored_reports_oldest_timestamp"
                         ),
-                        # Batches the server refused for good (400/413/422)
+                        # Batches the server refused as invalid (dead-lettered)
                         "dead_letter_count": reporter_metrics.get(
                             "dead_letter_count", 0
                         ),

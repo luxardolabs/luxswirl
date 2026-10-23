@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
+from pydantic import ValidationError
 from shared.logger import get_logger
 from sqlalchemy import Row
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,6 +22,8 @@ from app.schemas.agent_schema import AgentOption
 from app.schemas.check_artifact_schema import CheckArtifactResponse
 from app.schemas.check_result_schema import (
     AgentReportRequest,
+    AgentReportSubmission,
+    CheckResultCreate,
     RecentCheckResult,
     StatusBarResult,
 )
@@ -68,6 +71,64 @@ class CheckResultCoreService:
                 critical_days=critical_days,
             ),
         }
+
+    @staticmethod
+    def validate_results(
+        submission: AgentReportSubmission,
+    ) -> tuple[list[CheckResultCreate], int]:
+        """Validate each result of a submission on its own.
+
+        A result the schema refuses (an HTTP status outside 100-599, an error
+        text over its limit, a missing field) is logged and counted, the same
+        way a result for an unknown check is; the others are kept. The log line
+        names the result and the failing fields, never the submitted values.
+
+        Returns:
+            The valid results, and how many were refused.
+        """
+        valid: list[CheckResultCreate] = []
+        refused = 0
+        for raw in submission.checks:
+            try:
+                valid.append(CheckResultCreate.model_validate(raw))
+            except ValidationError as exc:
+                refused += 1
+                logger.warning(
+                    "Invalid check result in report - skipping result",
+                    extra={
+                        "check_id": str(raw.get("check_id"))[:64],
+                        "display_name": str(raw.get("display_name"))[:255],
+                        "agent_id": str(submission.agent_id),
+                        "invalid_fields": [
+                            {
+                                "field": ".".join(str(part) for part in error["loc"]),
+                                "error": error["type"],
+                            }
+                            for error in exc.errors(include_input=False)
+                        ],
+                    },
+                )
+        return valid, refused
+
+    @staticmethod
+    async def process_agent_submission(
+        db: AsyncSession,
+        submission: AgentReportSubmission,
+    ) -> dict[str, Any]:
+        """Validate a report's results one by one, then process the valid ones.
+
+        The refused results are added to `results_failed`.
+        """
+        valid, refused = CheckResultCoreService.validate_results(submission)
+        report = AgentReportRequest(
+            agent_id=submission.agent_id,
+            agent_run_id=submission.agent_run_id,
+            timestamp=submission.timestamp,
+            checks=valid,
+        )
+        result = await CheckResultCoreService.process_agent_report(db, report)
+        result["results_failed"] += refused
+        return result
 
     @staticmethod
     async def process_agent_report(
