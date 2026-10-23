@@ -184,10 +184,13 @@ class AgentAssignmentCoreService:
 
         all_checks = await CheckCRUD.list_assignment_candidates(db, agent.id)
 
-        # Distribute-mode checks each need the set of agents matching their
-        # selector. That set is the same table read every time — filtering is
-        # pure Python — so it is read once here rather than per check.
-        all_agents: Sequence[Agent] | None = None
+        # Distribute-mode checks each need the pool of agents matching their
+        # selector. The pool is the ACTIVE agents only: a pending registration
+        # (anyone with the shared registration key can make one), or a paused,
+        # disabled or rejected agent, may not run checks, so it must never win
+        # one. That set is the same table read every time (filtering is pure
+        # Python), so it is read once here rather than per check.
+        active_agents: Sequence[Agent] | None = None
 
         for check in all_checks:
             if check.assignment_mode == "manual":
@@ -208,10 +211,10 @@ class AgentAssignmentCoreService:
                     agent, check.agent_selector
                 )
             ):
-                if all_agents is None:
-                    all_agents = await AgentCRUD.list_all(db)
+                if active_agents is None:
+                    active_agents = await AgentCRUD.list_active(db)
                 matching_agents = AgentAssignmentCoreService.filter_agents_by_selector(
-                    all_agents, check.agent_selector
+                    active_agents, check.agent_selector
                 )
 
                 # Determine assigned agent via hash

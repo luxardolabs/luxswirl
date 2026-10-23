@@ -22,7 +22,7 @@ pytestmark = pytest.mark.integration
 
 
 # ---------------------------------------------------------------------------
-# list_all / get_by_id_with_checks / get_by_name_with_checks
+# list_all / list_active / get_by_id_with_checks / get_by_name_with_checks
 # ---------------------------------------------------------------------------
 
 
@@ -36,6 +36,19 @@ class TestListAll:
 
     async def test_empty_returns_empty_list(self, db: AsyncSession):
         assert await AgentCRUD.list_all(db) == []
+
+
+class TestListActive:
+    async def test_returns_only_active_agents(self, db: AsyncSession):
+        active = make_agent()
+        db.add(active)
+        for status in ("pending", "paused", "disabled", "rejected"):
+            db.add(make_agent(approval_status=status))
+        await db.flush()
+
+        rows = await AgentCRUD.list_active(db)
+
+        assert [a.id for a in rows] == [active.id]
 
 
 class TestGetByIdWithChecks:
