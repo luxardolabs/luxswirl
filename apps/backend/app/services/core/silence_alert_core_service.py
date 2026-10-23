@@ -32,7 +32,6 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import settings
 from app.core.datetime_utils import utc_now
 from app.core.liveness import (
     DEFAULT_CHECK_INTERVAL_SECONDS,
