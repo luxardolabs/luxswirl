@@ -113,3 +113,34 @@ async def test_a_page_of_several_agents_renders_each_ones_check_counts(
             f'{n}<span class="text-sm text-dark-text-muted">/{n + 2}</span>'
             in resp.text
         )
+
+
+async def test_an_agent_with_no_heartbeat_stats_yet_renders(
+    client: AsyncClient, db: AsyncSession
+) -> None:
+    """A freshly registered agent has sent no heartbeat, so every stat column is
+    NULL. Building its card must not fail on those NULLs (they rendered a 500
+    when the response schema required numbers)."""
+    stats = (
+        "uptime_seconds",
+        "checks_total",
+        "checks_active",
+        "checks_executed_total",
+        "checks_succeeded_total",
+        "checks_failed_total",
+        "cpu_percent",
+        "memory_mb",
+        "queue_depth",
+    )
+    fresh = make_agent(agent_name="just-registered", **dict.fromkeys(stats))
+    pending = make_agent(
+        hostname="fresh-pending", approval_status="pending", **dict.fromkeys(stats)
+    )
+    db.add_all([fresh, pending])
+    await db.flush()
+
+    resp = await client.get("/agents")
+
+    assert resp.status_code == 200, resp.text[:500]
+    assert "just-registered" in resp.text
+    assert "fresh-pending" in resp.text
