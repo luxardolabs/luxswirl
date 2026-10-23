@@ -3,7 +3,7 @@ CheckResult service - business logic for check result operations and analytics.
 """
 
 import json
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Any
 from uuid import UUID
 
@@ -494,12 +494,8 @@ class CheckResultCoreService:
 
     @staticmethod
     async def count_deleted_with_agent(db: AsyncSession, agent_id: UUID) -> int:
-        """How many stored results deleting the agent removes. Retention has
-        already dropped anything older than its window, so that is the bound."""
-        days = await SettingsCoreService.get_setting(db, "database.retention_days", 90)
-        return await CheckResultCRUD.count_deleted_with_agent(
-            db, agent_id, utc_now() - timedelta(days=days)
-        )
+        """How many stored results deleting the agent removes."""
+        return await CheckResultCRUD.count_deleted_with_agent(db, agent_id)
 
     @staticmethod
     async def get_artifacts_for_result(

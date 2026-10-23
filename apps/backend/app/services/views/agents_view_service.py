@@ -5,6 +5,7 @@ This web service acts as an aggregation layer, delegating to core services
 while providing web-specific functionality and data aggregation.
 """
 
+import re
 from datetime import timedelta
 from typing import Any
 from uuid import UUID
@@ -37,6 +38,16 @@ from app.web.hx_responses import hx_empty_with_toast
 from app.web.templates import templates
 
 logger = get_logger("luxswirl.web.services.agents")
+
+_CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f]")
+
+
+def _confirm_key(text: str) -> str:
+    """`text` as a browser's text field can send it back: control characters
+    gone (an input drops CR and LF from its value), whitespace runs as one
+    space, the ends trimmed. An agent reports its own name and hostname, so
+    either may carry characters no one can type."""
+    return " ".join(_CONTROL_CHARS.sub("", text).split())
 
 
 def build_agent_urls(request: Request, agent_id: UUID) -> AgentUrls:
@@ -300,10 +311,10 @@ class AgentsViewService:
                 confirmation shows it.
         """
         agent = await AgentCoreService.get_agent(db, agent_id)
-        expected = AgentsViewService._display_name(
+        expected = AgentsViewService._delete_confirm_name(
             agent.agent_name, agent.hostname, agent_id
         )
-        if confirm_name.strip() != expected:
+        if _confirm_key(confirm_name) != expected:
             raise ValidationException(f"Type {expected} exactly to delete this agent.")
         return await MaintenanceJobCoreService.enqueue(
             db,
@@ -317,6 +328,18 @@ class AgentsViewService:
     # follow-up events are its job, not the router's. Returning the response here also
     # keeps these routes on ONE surface (HTML) — they used to hand back JSON that the
     # UI never read (fw.web_routers_single_surface).
+
+    @staticmethod
+    def _delete_confirm_name(
+        agent_name: str | None, hostname: str | None, agent_id: UUID
+    ) -> str:
+        """The name a delete is confirmed with: the display name as a text
+        field can carry it (see `_confirm_key`), or the id when nothing of the
+        name survives that."""
+        key = _confirm_key(
+            AgentsViewService._display_name(agent_name, hostname, agent_id)
+        )
+        return key or str(agent_id)
 
     @staticmethod
     def _display_name(
@@ -520,7 +543,7 @@ class AgentsViewService:
             "current_user": current_user,
             "agent": agent,
             "check_count": check_count,
-            "delete_confirm_name": AgentsViewService._display_name(
+            "delete_confirm_name": AgentsViewService._delete_confirm_name(
                 agent.agent_name, agent.hostname, agent_id
             ),
             "default_heartbeat": settings.server.default_heartbeat_interval,

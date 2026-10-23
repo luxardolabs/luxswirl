@@ -11,12 +11,15 @@ import pytest_asyncio
 from app.core.config import settings
 from app.core.datetime_utils import utc_now
 from app.main import app
+from app.models.check_model import Check
+from app.models.check_result_model import CheckResult
 from app.models.maintenance_job_model import MaintenanceJob
+from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.auth_core_service import AuthCoreService
 from app.services.core.check_result_core_service import CheckResultCoreService
 from fixtures.factories import make_agent, make_check, make_check_result, make_user
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import select
+from sqlalchemy import func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 pytestmark = pytest.mark.integration
@@ -40,6 +43,17 @@ async def _jobs(db: AsyncSession, agent_id) -> list[MaintenanceJob]:
         select(MaintenanceJob).where(MaintenanceJob.target_id == agent_id)
     )
     return list(result.scalars().all())
+
+
+async def _results_of(db: AsyncSession, agent_id) -> int:
+    """Rows the cascade removes with `agent_id`, counted independently."""
+    owned = select(Check.id).where(Check.agent_id == agent_id)
+    result = await db.execute(
+        select(func.count())
+        .select_from(CheckResult)
+        .where(or_(CheckResult.agent_id == agent_id, CheckResult.check_id.in_(owned)))
+    )
+    return int(result.scalar_one())
 
 
 async def test_the_count_is_what_the_cascade_removes(db: AsyncSession) -> None:
@@ -69,7 +83,7 @@ async def test_the_count_is_what_the_cascade_removes(db: AsyncSession) -> None:
                 agent_id=other.id,
                 timestamp=now - timedelta(seconds=2),
             ),
-            # Past retention (90 days by default): already gone, not counted.
+            # Older than the retention window but still stored: removed too.
             make_check_result(
                 check_id=owned.id,
                 agent_id=doomed.id,
@@ -79,7 +93,52 @@ async def test_the_count_is_what_the_cascade_removes(db: AsyncSession) -> None:
     )
     await db.flush()
 
-    assert await CheckResultCoreService.count_deleted_with_agent(db, doomed.id) == 3
+    shown = await CheckResultCoreService.count_deleted_with_agent(db, doomed.id)
+    await AgentCoreService.delete_agent(db, doomed.id)
+
+    assert shown == 4
+    assert await _results_of(db, doomed.id) == 0
+    assert await _results_of(db, other.id) == 1, "a row it did not own went too"
+
+
+async def test_the_count_includes_rows_retention_left(db: AsyncSession) -> None:
+    """Retention drops whole one-day chunks, so a row just past its window
+    survives it; the cascade still removes that row."""
+    agent = make_agent()
+    db.add(agent)
+    await db.flush()
+    check = make_check(agent_id=agent.id)
+    db.add(check)
+    await db.flush()
+    now = utc_now()
+    edge = now - timedelta(days=90)
+    day_start = edge.replace(hour=0, minute=0, second=0, microsecond=0)
+    db.add_all(
+        [
+            make_check_result(check_id=check.id, agent_id=agent.id, timestamp=now),
+            make_check_result(
+                check_id=check.id,
+                agent_id=agent.id,
+                timestamp=day_start + (edge - day_start) / 2,
+            ),
+        ]
+    )
+    await db.flush()
+    await db.execute(
+        text("SELECT drop_chunks('check_results', older_than => INTERVAL '90 days')")
+    )
+    stored = await _results_of(db, agent.id)
+
+    assert stored == 2
+    assert await CheckResultCoreService.count_deleted_with_agent(db, agent.id) == stored
+
+
+async def test_an_agent_that_never_reported_counts_none(db: AsyncSession) -> None:
+    agent = make_agent()
+    db.add(agent)
+    await db.flush()
+
+    assert await CheckResultCoreService.count_deleted_with_agent(db, agent.id) == 0
 
 
 async def test_the_confirmation_states_what_is_removed(
@@ -183,3 +242,40 @@ async def test_a_viewer_is_not_offered_the_delete(db: AsyncSession) -> None:
     assert 'name="confirm_name"' not in panel.text
     assert refused.status_code == 307
     assert await _jobs(db, agent.id) == []
+
+
+async def test_a_hostname_with_a_newline_is_confirmed_as_a_browser_sends_it(
+    client: AsyncClient, db: AsyncSession
+) -> None:
+    """An agent reports its own hostname; a text field drops the newline, so
+    the panel asks for, and the server accepts, the name without it."""
+    agent = make_agent(agent_name=None, hostname="web01\nedge")
+    db.add(agent)
+    await db.flush()
+
+    panel = await client.get(f"/agents/{agent.id}/edit-form")
+    resp = await client.request(
+        "DELETE", f"/agents/{agent.id}", data={"confirm_name": "web01edge"}
+    )
+
+    assert "web01edge</code>" in panel.text
+    assert resp.status_code == 200, resp.text
+    assert len(await _jobs(db, agent.id)) == 1
+
+
+async def test_a_name_of_only_control_characters_confirms_with_the_id(
+    client: AsyncClient, db: AsyncSession
+) -> None:
+    agent = make_agent(agent_name=None, hostname="\x07\x1b")
+    db.add(agent)
+    await db.flush()
+
+    empty = await client.request(
+        "DELETE", f"/agents/{agent.id}", data={"confirm_name": ""}
+    )
+    by_id = await client.request(
+        "DELETE", f"/agents/{agent.id}", data={"confirm_name": str(agent.id)}
+    )
+
+    assert empty.status_code == 422
+    assert by_id.status_code == 200, by_id.text
