@@ -25,9 +25,9 @@ from app.schemas.check_result_schema import (
     StatusBarResult,
 )
 from app.schemas.check_schema import CheckStatusInfo
+from app.services.core.agent_assignment_core_service import AgentAssignmentCoreService
 from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.alert_evaluation_core_service import AlertEvaluationCoreService
-from app.services.core.check_core_service import CheckCoreService
 from app.services.core.metrics_collector_core_service import MetricsCollectorCoreService
 from app.services.core.settings_core_service import SettingsCoreService
 
@@ -114,9 +114,12 @@ class CheckResultCoreService:
 
         rows_to_insert: list[dict[str, Any]] = []
 
-        # Get all existing checks for this agent in one query
-        existing_checks = await CheckCoreService.list_checks_for_agent(db, agent.id)
-        check_map = {c.id: c for c in existing_checks}  # Map by UUID
+        # Exactly the checks this agent was told to run (GET /api/v1/checks): its
+        # manual checks plus the replicate/distribute checks it is selected for.
+        assigned_checks = await AgentAssignmentCoreService.get_checks_for_agent(
+            db, agent
+        )
+        check_map = {c.id: c for c in assigned_checks}  # Map by UUID
 
         # Process each check result
         for check_data in report.checks:
