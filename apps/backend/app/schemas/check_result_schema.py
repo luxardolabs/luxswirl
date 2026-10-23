@@ -8,7 +8,7 @@ from uuid import UUID
 
 from pydantic import Field
 
-from app.models.enum_model import CheckErrorType, CheckResultStatus, CheckType
+from app.models.enum_model import CheckErrorType, CheckType
 from app.schemas.base_schema import BaseSchema
 
 
@@ -75,50 +75,6 @@ class CheckResultCreate(CheckResultBase):
     }
 
 
-class CheckResultInDB(CheckResultBase):
-    """Schema for check result in database."""
-
-    id: UUID = Field(..., description="Result UUID")
-    agent_id: UUID = Field(..., description="Foreign key to agent (UUID)")
-    check_id: UUID = Field(..., description="Foreign key to check (UUID)")
-    error_type: CheckErrorType | None = None
-    http_status_code: int | None = None
-    http_response_time_ms: float | None = None
-    metrics: dict[str, Any] | None = None
-
-
-class CheckResultResponse(CheckResultInDB):
-    """Schema for check result API responses."""
-
-    status: CheckResultStatus = Field(..., description="Outcome, or the error type")
-    latency_seconds: float | None = Field(None, description="Latency in seconds")
-    agent_name: str | None = Field(None, description="Agent identifier")
-    check_name: str | None = Field(None, description="Check name")
-    check_type: CheckType | None = Field(None, description="Check type")
-    target: str | None = Field(None, description="Check target")
-
-    model_config = {
-        "json_schema_extra": {
-            "example": {
-                "id": 12345,
-                "agent_id": 1,
-                "check_id": 5,
-                "timestamp": "2024-01-01T12:00:00Z",
-                "success": True,
-                "latency_ms": 45.2,
-                "latency_seconds": 0.0452,
-                "status": "success",
-                "http_status_code": 200,
-                "http_response_time_ms": 42.1,
-                "agent_name": "prod-web-01",
-                "check_name": "api_health",
-                "check_type": "http",
-                "target": "https://api.example.com/health",
-            }
-        }
-    }
-
-
 class RecentCheckResult(BaseSchema):
     """One recent result as the check detail panel and status bars read it."""
 
@@ -139,73 +95,6 @@ class StatusBarResult(BaseSchema):
     success: bool
     latency_ms: float | None
     http_status_code: int | None
-
-
-class CheckResultListResponse(BaseSchema):
-    """Schema for listing check results."""
-
-    results: list[CheckResultResponse] = Field(..., description="List of check results")
-    total: int = Field(..., description="Total number of results")
-    success_count: int = Field(..., description="Number of successful checks")
-    failure_count: int = Field(..., description="Number of failed checks")
-    success_rate: float = Field(
-        ..., ge=0, le=100, description="Success rate percentage"
-    )
-
-
-class CheckHistoryResponse(BaseSchema):
-    """Schema for check history (time-series data)."""
-
-    agent_id: UUID = Field(..., description="Agent identifier")
-    check_name: str = Field(..., description="Check name")
-    check_type: CheckType = Field(..., description="Check type")
-    target: str = Field(..., description="Check target")
-    start_time: datetime = Field(..., description="Start of time range")
-    end_time: datetime = Field(..., description="End of time range")
-    data_points: list[CheckResultResponse] = Field(
-        ..., description="Time-series data points"
-    )
-    summary: CheckSummary = Field(..., description="Summary statistics")
-
-
-class CheckSummary(BaseSchema):
-    """Schema for check summary statistics."""
-
-    total_checks: int = Field(..., description="Total number of checks")
-    successful_checks: int = Field(..., description="Number of successful checks")
-    failed_checks: int = Field(..., description="Number of failed checks")
-    success_rate: float = Field(
-        ..., ge=0, le=100, description="Success rate percentage"
-    )
-    avg_latency_ms: float | None = Field(
-        None, description="Average latency in milliseconds"
-    )
-    min_latency_ms: float | None = Field(
-        None, description="Minimum latency in milliseconds"
-    )
-    max_latency_ms: float | None = Field(
-        None, description="Maximum latency in milliseconds"
-    )
-    p50_latency_ms: float | None = Field(None, description="50th percentile latency")
-    p95_latency_ms: float | None = Field(None, description="95th percentile latency")
-    p99_latency_ms: float | None = Field(None, description="99th percentile latency")
-
-    model_config = {
-        "json_schema_extra": {
-            "example": {
-                "total_checks": 1000,
-                "successful_checks": 995,
-                "failed_checks": 5,
-                "success_rate": 99.5,
-                "avg_latency_ms": 45.2,
-                "min_latency_ms": 12.3,
-                "max_latency_ms": 234.5,
-                "p50_latency_ms": 42.1,
-                "p95_latency_ms": 78.9,
-                "p99_latency_ms": 156.7,
-            }
-        }
-    }
 
 
 class AgentReportRequest(BaseSchema):
@@ -265,16 +154,3 @@ class AgentReportResponse(BaseSchema):
             }
         }
     }
-
-
-class GlobalStatsResponse(BaseSchema):
-    """Aggregated check-result statistics across the whole install."""
-
-    total_checks: int
-    successful_checks: int
-    failed_checks: int
-    success_rate: float
-    avg_latency_ms: float | None = None
-    active_agents: int
-    active_checks: int
-    time_window_hours: int

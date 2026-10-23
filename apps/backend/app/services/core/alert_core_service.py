@@ -20,12 +20,10 @@ from app.models.alert_model import Alert
 from app.schemas.alert_schema import (
     AlertCheckSnooze,
     AlertCreate,
-    AlertListResponse,
     AlertOption,
     AlertResponse,
     AlertUpdate,
 )
-from app.schemas.pagination_schema import build_pagination
 
 logger = get_logger("luxswirl.services.alert")
 
@@ -179,37 +177,6 @@ class AlertCoreService:
         return total
 
     @staticmethod
-    async def list_alerts_page(
-        db: AsyncSession,
-        *,
-        page: int,
-        per_page: int,
-        is_enabled: bool | None = None,
-        is_global: bool | None = None,
-    ) -> AlertListResponse:
-        """One page of alerts for the JSON API.
-
-        Args:
-            db: Database session
-            page: 1-based page number
-            per_page: Alerts per page
-            is_enabled: Filter by enabled status
-            is_global: Filter by global status
-
-        Returns:
-            The page, with its page state
-        """
-        items, total = await AlertCoreService.list_alert_responses(
-            db,
-            skip=(page - 1) * per_page,
-            limit=per_page,
-            is_enabled=is_enabled,
-            is_global=is_global,
-        )
-        pagination = build_pagination(page=page, per_page=per_page, total=total)
-        return AlertListResponse.of(items, pagination)
-
-    @staticmethod
     async def create_alert(
         db: AsyncSession,
         data: AlertCreate,
@@ -337,30 +304,6 @@ class AlertCoreService:
                 "delete_kind": "hard" if hard_delete else "soft",
             },
         )
-
-    @staticmethod
-    async def add_notification_provider(
-        db: AsyncSession,
-        alert_id: UUID,
-        provider_id: UUID,
-    ) -> UUID:
-        """Add a notification provider to an alert."""
-        existing = await AlertCRUD.get_notif_mapping(db, alert_id, provider_id)
-
-        if existing:
-            raise ValidationException("Provider already added to this alert")
-
-        mapping = await AlertCRUD.add_notif_mapping(db, alert_id, provider_id)
-        return mapping.id
-
-    @staticmethod
-    async def remove_notification_provider(
-        db: AsyncSession,
-        alert_id: UUID,
-        provider_id: UUID,
-    ) -> None:
-        """Remove a notification provider from an alert."""
-        await AlertCRUD.delete_notif_mapping(db, alert_id, provider_id)
 
     @staticmethod
     async def add_check(

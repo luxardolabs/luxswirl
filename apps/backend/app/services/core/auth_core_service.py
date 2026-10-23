@@ -288,19 +288,6 @@ class AuthCoreService:
         )
         return CurrentUserResponse.model_validate(user)
 
-    async def get_current_user_response(
-        self, db: AsyncSession, user_id: UUID
-    ) -> CurrentUserResponse:
-        """The signed-in user's own record.
-
-        Raises:
-            NotFoundException: If the user no longer exists
-        """
-        user = await UserCRUD.get_by_id(db, user_id)
-        if user is None:
-            raise NotFoundException(f"User {user_id} not found")
-        return CurrentUserResponse.model_validate(user)
-
     async def create_session(
         self,
         db: AsyncSession,
@@ -463,36 +450,6 @@ class AuthCoreService:
             },
         )
         return count
-
-    async def logout_session_by_id(
-        self, db: AsyncSession, user_id: UUID, session_id: UUID
-    ) -> bool:
-        """
-        Logout a specific session (for user managing their sessions).
-
-        Args:
-            db: Database session
-            user_id: User UUID (for authorization check)
-            session_id: Session UUID to delete
-
-        Returns:
-            True if session was deleted
-        """
-        session = await SessionCRUD.get_for_user(db, session_id, user_id)
-
-        if session:
-            await SessionCRUD.delete_session(db, session)
-            logger.info(
-                "User logged out specific session",
-                extra={
-                    "event": "auth.logout_session",
-                    "user_id": str(user_id),
-                    "session_id": str(session_id),
-                },
-            )
-            return True
-
-        return False
 
     async def cleanup_expired_sessions(self, db: AsyncSession) -> int:
         """

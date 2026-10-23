@@ -20,8 +20,12 @@
 # REGISTRY := your.registry.example:5000
 
 # `make smoke` (run by `make dev-deploy`) probes the deployed dev stack from
-# outside. Point it at the address the dev stack answers on, and export
-# SMOKE_AUTH_TOKEN (one of the stack's SECURITY__AUTH_TOKENS) in your shell for
-# the authenticated probe.
+# outside. Point it at the address the dev stack answers on.
 #
 # SMOKE_URL := https://luxswirl.dev.example
+#
+# The authenticated probe runs when SMOKE_AUTH_PATH is set. On a stack whose
+# /metrics requires a bearer token (Settings > API Keys), point it there and
+# export SMOKE_AUTH_TOKEN (that metrics token) in your shell:
+#
+# SMOKE_AUTH_PATH := /metrics

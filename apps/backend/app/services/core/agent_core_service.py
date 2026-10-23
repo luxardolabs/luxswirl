@@ -4,7 +4,7 @@ Agent service - business logic for agent operations.
 
 import secrets
 from collections.abc import Sequence
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Any
 from uuid import UUID
 
@@ -21,7 +21,6 @@ from app.core.exceptions import (
     ValidationException,
 )
 from app.crud.agent_crud import AgentCRUD
-from app.crud.check_result_crud import CheckResultCRUD
 from app.models.agent_metric_model import AgentMetric
 from app.models.agent_model import Agent
 from app.models.enum_model import AgentApprovalStatus
@@ -29,11 +28,9 @@ from app.schemas.agent_schema import (
     AgentCreate,
     AgentHeartbeat,
     AgentHeartbeatResponse,
-    AgentListResponse,
     AgentMetricSample,
     AgentOption,
     AgentResponse,
-    AgentStatsResponse,
     AgentUpdate,
     PendingAgent,
 )
@@ -216,14 +213,6 @@ class AgentCoreService:
         return await AgentCRUD.get_by_name_with_checks(db, agent_name)
 
     @staticmethod
-    async def get_agent_by_name_or_raise(db: AsyncSession, agent_name: str) -> Agent:
-        """Get agent by name, raising AgentNotFoundException if missing."""
-        agent = await AgentCRUD.get_by_name_with_checks(db, agent_name)
-        if not agent:
-            raise AgentNotFoundException(agent_name)
-        return agent
-
-    @staticmethod
     async def recover_agent_key(db: AsyncSession, agent_id: UUID) -> str:
         """Issue an active agent a fresh key, for an agent that lost its own.
 
@@ -239,51 +228,6 @@ class AgentCoreService:
             )
         _, new_key = await AgentCoreService.regenerate_agent_key(db, agent_id)
         return new_key
-
-    @staticmethod
-    async def regenerate_active_agent_key(db: AsyncSession, agent_id: UUID) -> str:
-        """Replace an active agent's key (an admin rotation).
-
-        Raises:
-            AgentNotFoundException: If the agent does not exist
-            ValueError: If the agent is not active (a 400)
-        """
-        agent = await AgentCoreService.get_agent_by_id(db, agent_id)
-        if agent.approval_status != "active":
-            raise ValueError("Can only regenerate keys for active agents")
-        _, new_key = await AgentCoreService.regenerate_agent_key(db, agent_id)
-        return new_key
-
-    @staticmethod
-    async def agent_id_by_name(db: AsyncSession, agent_name: str) -> UUID:
-        """The id of the agent named `agent_name`.
-
-        Raises:
-            AgentNotFoundException: If no agent has that name
-        """
-        return (await AgentCoreService.get_agent_by_name_or_raise(db, agent_name)).id
-
-    @staticmethod
-    async def get_agent_response_by_name(
-        db: AsyncSession, agent_name: str
-    ) -> AgentResponse:
-        """The agent named `agent_name`, in its API shape.
-
-        Raises:
-            AgentNotFoundException: If no agent has that name
-        """
-        return AgentCoreService.to_response(
-            await AgentCoreService.get_agent_by_name_or_raise(db, agent_name)
-        )
-
-    @staticmethod
-    async def create_agent_response(
-        db: AsyncSession, data: AgentCreate
-    ) -> AgentResponse:
-        """Create an agent and return it in its API shape."""
-        return AgentCoreService.to_response(
-            await AgentCoreService.create_agent(db, data)
-        )
 
     @staticmethod
     async def update_agent_response(
@@ -534,61 +478,6 @@ class AgentCoreService:
         )
 
     @staticmethod
-    async def list_agents_with_stats(
-        db: AsyncSession,
-        active_only: bool = False,
-        active_window_minutes: int = 10,
-        offset: int = 0,
-        limit: int = 100,
-    ) -> AgentListResponse:
-        """
-        List agents with aggregated statistics.
-
-        Returns a fully-formed AgentListResponse with online/offline counts
-        and per-agent statistics. This method handles all data aggregation
-        and transformation, allowing routers to simply return the result.
-
-        Args:
-            db: Database session
-            active_only: Only return active agents
-            active_window_minutes: Minutes to consider agent active
-            offset: Pagination offset
-            limit: Pagination limit
-
-        Returns:
-            AgentListResponse with agents and aggregated stats
-        """
-        # Get agents from existing list_agents method
-        agents, total = await AgentCoreService.list_agents(
-            db=db,
-            active_only=active_only,
-            active_window_minutes=active_window_minutes,
-            offset=offset,
-            limit=limit,
-        )
-
-        # Aggregate statistics
-        agent_responses = []
-        online_count = 0
-        offline_count = 0
-
-        for agent in agents:
-            if agent.is_online:
-                online_count += 1
-            else:
-                offline_count += 1
-
-            # Use helper method to build response
-            agent_responses.append(AgentCoreService.to_response(agent))
-
-        return AgentListResponse(
-            agents=agent_responses,
-            total=total,
-            online_count=online_count,
-            offline_count=offline_count,
-        )
-
-    @staticmethod
     async def get_pending_count(db: AsyncSession) -> int:
         """
         Get count of agents with pending approval status.
@@ -600,54 +489,6 @@ class AgentCoreService:
             Count of pending agents
         """
         return await AgentCRUD.count_pending(db)
-
-    @staticmethod
-    async def get_agent_stats(
-        db: AsyncSession, agent_id: UUID, hours: int = 24
-    ) -> AgentStatsResponse:
-        """
-        Get agent statistics.
-
-        Args:
-            db: Database session
-            agent_id: Agent UUID
-            hours: Hours to look back for stats
-
-        Returns:
-            Agent statistics
-
-        Raises:
-            AgentNotFoundException: If agent not found
-        """
-        agent = await AgentCoreService.get_agent_by_id(db, agent_id)
-        if not agent:
-            raise AgentNotFoundException(str(agent_id))
-
-        cutoff_time = utc_now() - timedelta(hours=hours)
-
-        row = await CheckResultCRUD.get_stats_for_agent(db, agent.id, cutoff_time)
-
-        total_checks = row.total_checks or 0
-        successful_checks = int(row.successful_checks or 0)
-        failed_checks = total_checks - successful_checks
-        success_rate = (
-            (successful_checks / total_checks * 100) if total_checks > 0 else 0.0
-        )
-
-        uptime_seconds = (
-            (utc_now() - agent.first_seen).total_seconds() if agent.first_seen else 0.0
-        )
-
-        return AgentStatsResponse(
-            agent_name=agent.agent_name,
-            total_checks=total_checks,
-            successful_checks=successful_checks,
-            failed_checks=failed_checks,
-            success_rate=round(success_rate, 2),
-            avg_latency_ms=round(row.avg_latency_ms, 2) if row.avg_latency_ms else None,
-            uptime_seconds=uptime_seconds,
-            last_check_time=row.last_check_time,
-        )
 
     @staticmethod
     async def update_from_heartbeat(

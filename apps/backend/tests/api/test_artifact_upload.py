@@ -1,8 +1,6 @@
-"""Listing a check's artifacts must not erase them.
+"""An agent's artifact upload answers the stored metadata, never the bytes.
 
-The list paths "left out" the binary data by assigning `artifact.data = b""`
-on rows still attached to the session; the request's commit then wrote the
-empty bytes over every listed artifact.
+An upload for a check that does not exist is refused (404).
 """
 
 from __future__ import annotations
@@ -21,7 +19,6 @@ from app.models.check_artifact_model import CheckArtifact
 from app.models.enum_model import CheckArtifactType
 from fixtures.factories import make_agent, make_check, make_check_result
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 pytestmark = pytest.mark.integration
@@ -76,40 +73,6 @@ async def artifact(db: AsyncSession) -> CheckArtifact:
     return row
 
 
-async def _stored_bytes(db: AsyncSession, artifact_id) -> bytes:
-    db.expire_all()
-    return (
-        await db.execute(
-            select(CheckArtifact.data).where(CheckArtifact.id == artifact_id)
-        )
-    ).scalar_one()
-
-
-@pytest.mark.parametrize("by_result", [False, True])
-async def test_listing_leaves_the_stored_bytes_alone(
-    client: AsyncClient, db: AsyncSession, artifact: CheckArtifact, by_result: bool
-) -> None:
-    url = f"/api/v1/checks/{artifact.check_id}/artifacts"
-    if by_result:
-        url = f"/api/v1/checks/{artifact.check_id}/results/{artifact.check_result_id}/artifacts"
-    artifact_id = artifact.id
-
-    resp = await client.get(url)
-
-    assert resp.status_code == 200, resp.text
-    assert [a["id"] for a in resp.json()["artifacts"]] == [str(artifact_id)]
-    assert await _stored_bytes(db, artifact_id) == PNG
-
-
-async def test_download_returns_the_bytes(
-    client: AsyncClient, artifact: CheckArtifact
-) -> None:
-    resp = await client.get(f"/api/v1/artifacts/{artifact.id}/download")
-
-    assert resp.status_code == 200
-    assert resp.content == PNG
-
-
 async def test_upload_answers_metadata_and_refuses_an_unknown_check(
     client: AsyncClient, artifact: CheckArtifact
 ) -> None:
@@ -131,15 +94,4 @@ async def test_upload_answers_metadata_and_refuses_an_unknown_check(
     assert created.status_code == 201, created.text
     assert created.json()["size_bytes"] == len(PNG)
     assert "data" not in created.json()
-    assert unknown.status_code == 404
-
-
-async def test_stats_count_the_checks_artifacts_and_refuse_an_unknown_check(
-    client: AsyncClient, artifact: CheckArtifact
-) -> None:
-    stats = await client.get(f"/api/v1/checks/{artifact.check_id}/artifacts/stats")
-    unknown = await client.get(f"/api/v1/checks/{uuid4()}/artifacts/stats")
-
-    assert stats.status_code == 200, stats.text
-    assert stats.json() == {"count": 1, "total_size_bytes": len(PNG)}
     assert unknown.status_code == 404

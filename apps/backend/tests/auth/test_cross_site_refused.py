@@ -22,13 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 pytestmark = pytest.mark.integration
 
 OWN = settings.allowed_hosts[0]
-AUTH_POSTS = [
-    "/login",
-    "/logout",
-    "/api/v1/auth/login",
-    "/api/v1/auth/logout",
-    "/api/v1/auth/logout-all",
-]
+AUTH_POSTS = ["/login", "/logout"]
 
 
 def _client() -> AsyncClient:
@@ -77,8 +71,13 @@ async def test_same_origin_login_reaches_the_route(routed: AsyncClient) -> None:
 
 
 async def test_a_request_without_browser_headers_passes(routed: AsyncClient) -> None:
-    # The agent and webhooks send neither Origin nor Sec-Fetch-Site.
-    r = await routed.post("/api/v1/auth/login", json={"username": "x", "password": "y"})
+    # The agent and webhooks send neither Origin nor Sec-Fetch-Site: the request
+    # reaches the route, which refuses the unknown registration key itself.
+    r = await routed.post(
+        "/api/v1/agents/register",
+        json={"hostname": "x"},
+        headers={"Authorization": "Bearer not-a-registration-key"},
+    )
     assert r.status_code == 401
 
 

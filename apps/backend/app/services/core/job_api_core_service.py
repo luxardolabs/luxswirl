@@ -9,11 +9,9 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.enum_model import JobStatus, JobType
 from app.models.job_model import Job
 from app.schemas.job_schema import (
     JobCreate,
-    JobListResponse,
     JobResponse,
     JobResultSubmit,
 )
@@ -92,49 +90,3 @@ class JobApiCoreService:
     async def cancel_job(db: AsyncSession, job_id: UUID) -> bool:
         """Cancel a pending job or delete a finished one; False if neither applies."""
         return await JobCoreService.cancel_job(db, job_id) is not None
-
-    @staticmethod
-    async def list_jobs(
-        db: AsyncSession,
-        *,
-        agent_filter: str | None,
-        status: JobStatus | None,
-        job_type: JobType | None,
-        page: int,
-        page_size: int,
-    ) -> JobListResponse:
-        """A page of jobs with their agents' hostnames, and the status counts.
-
-        `agent_filter` is an agent id, "server" for server-run jobs, or None.
-        """
-        agent_id, server_only = JobCoreService.resolve_runner_filter(agent_filter)
-        jobs, total = await JobCoreService.list_jobs(
-            db=db,
-            agent_id=agent_id,
-            server_only=server_only,
-            status=status,
-            job_type=job_type,
-            offset=(page - 1) * page_size,
-            limit=page_size,
-        )
-        # One query for the whole page's agents, not one per distinct agent: a
-        # page of jobs can span the entire fleet.
-        hostnames = await AgentCoreService.get_hostnames_by_ids(
-            db, [job.agent_id for job in jobs if job.agent_id]
-        )
-        stats = await JobCoreService.get_job_stats(
-            db, agent_id=agent_id, server_only=server_only
-        )
-        return JobListResponse(
-            jobs=[
-                JobApiCoreService.to_response(
-                    job, hostnames.get(job.agent_id) if job.agent_id else None
-                )
-                for job in jobs
-            ],
-            total=total,
-            pending_count=stats.pending,
-            running_count=stats.running,
-            completed_count=stats.completed,
-            failed_count=stats.failed,
-        )

@@ -170,11 +170,6 @@ EXEMPT: frozenset[str] = frozenset(
         # route that was never registered at all.
         "/health",  # liveness probe — the container healthcheck exercises it
         "/metrics",  # prometheus scrape — tests/api asserts the exposition itself
-        # UNREACHABLE, not untestable: /agents/{agent_name}/regenerate-key is
-        # registered first and matches any single segment, so this handler has
-        # never received a request. Which of the two is the contract is a
-        # published-API decision. Drop this line once it is decided.
-        "/api/v1/agents/{agent_id}/regenerate-key",
     }
 )
 

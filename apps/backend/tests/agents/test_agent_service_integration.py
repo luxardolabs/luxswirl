@@ -100,10 +100,6 @@ class TestGetters:
         # get_agent_by_name returns None (doesn't raise) — see _or_raise variant
         assert await AgentCoreService.get_agent_by_name(db, "absent") is None
 
-    async def test_get_by_name_or_raise(self, db: AsyncSession):
-        with pytest.raises(AgentNotFoundException):
-            await AgentCoreService.get_agent_by_name_or_raise(db, "absent")
-
 
 # ---------------------------------------------------------------------------
 # update_agent

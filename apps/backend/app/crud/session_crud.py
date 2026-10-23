@@ -56,16 +56,6 @@ class SessionCRUD:
         return list(result.scalars().all())
 
     @staticmethod
-    async def get_for_user(
-        db: AsyncSession, session_id: UUID, user_id: UUID
-    ) -> Session | None:
-        """Look up session that belongs to a user."""
-        result = await db.execute(
-            select(Session).where(Session.id == session_id, Session.user_id == user_id)
-        )
-        return result.scalar_one_or_none()
-
-    @staticmethod
     async def delete_expired(db: AsyncSession) -> int:
         """Delete every session with expires_at <= now; the number deleted."""
         result = await db.execute(

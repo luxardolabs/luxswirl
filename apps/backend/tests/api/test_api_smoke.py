@@ -12,7 +12,6 @@ import pytest
 from app.core.config import settings
 from app.db.database import get_db
 from app.main import app
-from fixtures.factories import make_agent
 from httpx import ASGITransport, AsyncClient
 
 pytestmark = pytest.mark.integration
@@ -91,76 +90,43 @@ class TestHealthRoutes:
         # Root may return 200 (JSON) or 302/307 (redirect to /dashboard)
         assert resp.status_code in (200, 302, 307)
 
-
-# ---------------------------------------------------------------------------
-# /api/v1/agents — list + get + create
-# ---------------------------------------------------------------------------
-
-
-class TestAgentRoutes:
-    async def test_list_empty(self, client, db):
-        resp = await client.get("/api/v1/agents")
+    async def test_api_root_describes_the_api(self, client):
+        resp = await client.get(app.url_path_for("api_root"))
         assert resp.status_code == 200
-        body = resp.json()
-        # AgentListResponse shape
-        assert "agents" in body or "items" in body or isinstance(body, list)
-
-    async def test_list_returns_seeded_agent(self, client, db):
-        a = make_agent(agent_name="seeded-via-fixture")
-        db.add(a)
-        await db.flush()
-
-        resp = await client.get("/api/v1/agents")
-        assert resp.status_code == 200
-        body = resp.json()
-        # Body shape varies — flatten for assertion
-        agents = body.get("agents") or body.get("items") or body
-        names = [a.get("agent_name") for a in agents]
-        assert "seeded-via-fixture" in names
-
-    async def test_get_missing_returns_404(self, client, db):
-        resp = await client.get("/api/v1/agents/this-agent-does-not-exist")
-        assert resp.status_code == 404
 
 
 # ---------------------------------------------------------------------------
-# Auth gating
+# Auth gating: the artifact upload takes a configured API token
 # ---------------------------------------------------------------------------
 
 
 class TestAuthGating:
     async def test_missing_token_returns_401(self, authed_client):
-        resp = await authed_client.get("/api/v1/agents")
+        resp = await authed_client.post("/api/v1/artifacts", json={})
         assert resp.status_code == 401
 
     async def test_wrong_token_returns_401(self, authed_client):
-        resp = await authed_client.get(
-            "/api/v1/agents", headers={"Authorization": "Bearer wrong-token"}
+        resp = await authed_client.post(
+            "/api/v1/artifacts",
+            json={},
+            headers={"Authorization": "Bearer wrong-token"},
         )
         assert resp.status_code == 401
 
-    async def test_correct_token_returns_200(self, authed_client):
-        resp = await authed_client.get(
-            "/api/v1/agents", headers={"Authorization": "Bearer test-token-xyz"}
+    async def test_correct_token_passes_the_gate(self, authed_client):
+        # The gate lets it through; the empty body is then refused as invalid.
+        resp = await authed_client.post(
+            "/api/v1/artifacts",
+            json={},
+            headers={"Authorization": "Bearer test-token-xyz"},
         )
-        assert resp.status_code == 200
+        assert resp.status_code == 422
 
     async def test_malformed_authorization_header_returns_401(self, authed_client):
         # Missing "Bearer " prefix
-        resp = await authed_client.get(
-            "/api/v1/agents", headers={"Authorization": "test-token-xyz"}
+        resp = await authed_client.post(
+            "/api/v1/artifacts",
+            json={},
+            headers={"Authorization": "test-token-xyz"},
         )
         assert resp.status_code == 401
-
-
-# ---------------------------------------------------------------------------
-# Notification providers
-# ---------------------------------------------------------------------------
-
-
-class TestNotificationProviderRoutes:
-    async def test_list_providers(self, client, db):
-        resp = await client.get("/api/v1/notification-providers")
-        # Some installs may not register this router under that path —
-        # accept 404 (not wired) or 200 (wired and empty)
-        assert resp.status_code in (200, 404)

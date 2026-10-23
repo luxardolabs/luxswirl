@@ -1,4 +1,4 @@
-"""ArtifactCRUD deletes report how many rows went, and the stats query is typed.
+"""ArtifactCRUD deletes report how many rows went.
 
 The deletes returned the driver's `rowcount` behind `type: ignore`; they now
 count a data-modifying CTE. These pin the counts and that nothing outside the
@@ -16,6 +16,7 @@ from app.crud.artifact_crud import ArtifactCRUD
 from app.models.check_artifact_model import CheckArtifact
 from app.models.enum_model import CheckArtifactType
 from fixtures.factories import make_agent, make_check
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 pytestmark = pytest.mark.integration
@@ -49,7 +50,10 @@ def _artifact(check_id: UUID, *, age_days: int = 0, size: int = 10) -> CheckArti
 
 
 async def _ids(db: AsyncSession, check_id: UUID) -> set[UUID]:
-    return {a.id for a in await ArtifactCRUD.list_by_check(db, check_id)}
+    rows = await db.scalars(
+        select(CheckArtifact.id).where(CheckArtifact.check_id == check_id)
+    )
+    return set(rows)
 
 
 async def test_delete_older_than_counts_only_what_it_deleted(db: AsyncSession) -> None:
@@ -64,18 +68,6 @@ async def test_delete_older_than_counts_only_what_it_deleted(db: AsyncSession) -
 
     assert deleted == 2
     assert await _ids(db, check_id) == {keep.id}
-
-
-async def test_delete_by_id_is_one_then_zero(db: AsyncSession) -> None:
-    check_id = await _check(db)
-    artifact = _artifact(check_id)
-    db.add(artifact)
-    await db.flush()
-    artifact_id = artifact.id
-    db.expunge(artifact)
-
-    assert await ArtifactCRUD.delete_by_id(db, artifact_id) == 1
-    assert await ArtifactCRUD.delete_by_id(db, artifact_id) == 0
 
 
 @pytest.mark.parametrize("keep", [0, 2])
@@ -94,12 +86,3 @@ async def test_delete_for_check_excluding_spares_the_kept_and_other_checks(
     assert deleted == 5 - keep
     assert await _ids(db, check_id) == kept
     assert await _ids(db, other_id) == {theirs.id}
-
-
-async def test_stats_for_a_check_with_and_without_artifacts(db: AsyncSession) -> None:
-    check_id, empty_id = await _check(db), await _check(db)
-    db.add_all([_artifact(check_id, size=100), _artifact(check_id, size=23)])
-    await db.flush()
-
-    assert await ArtifactCRUD.get_stats_for_check(db, check_id) == (2, 123)
-    assert await ArtifactCRUD.get_stats_for_check(db, empty_id) == (0, 0)

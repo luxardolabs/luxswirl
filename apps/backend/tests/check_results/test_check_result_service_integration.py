@@ -13,6 +13,7 @@ from uuid import uuid4
 
 import pytest
 from pydantic import ValidationError
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 _tests_root = str(Path(__file__).resolve().parent.parent)
@@ -21,7 +22,6 @@ if _tests_root not in sys.path:
 
 from app.core.datetime_utils import utc_now  # noqa: E402
 from app.core.exceptions import AgentNotFoundException  # noqa: E402
-from app.crud.check_result_crud import CheckResultCRUD  # noqa: E402
 from app.models.check_result_model import CheckResult  # noqa: E402
 from app.models.enum_model import CheckErrorType  # noqa: E402
 from app.schemas.check_result_schema import (  # noqa: E402
@@ -32,6 +32,16 @@ from app.services.core.check_result_core_service import CheckResultCoreService  
 from fixtures.factories import make_agent, make_check  # noqa: E402
 
 pytestmark = pytest.mark.integration
+
+
+async def _history(db: AsyncSession, check_id) -> list[CheckResult]:
+    """The check's stored results, newest first."""
+    rows = await db.scalars(
+        select(CheckResult)
+        .where(CheckResult.check_id == check_id)
+        .order_by(CheckResult.timestamp.desc())
+    )
+    return list(rows)
 
 
 def _result_payload(*, check_id, **overrides) -> CheckResultCreate:
@@ -135,12 +145,7 @@ class TestProcessAgentReport:
         assert result["results_failed"] == 0
 
         # Verify rows landed in the hypertable
-        history = await CheckResultCRUD.get_history_for_check(
-            db,
-            check.id,
-            utc_now() - __import__("datetime").timedelta(hours=1),
-            limit=10,
-        )
+        history = await _history(db, check.id)
         assert len(history) == 2
 
     async def test_unknown_check_id_skipped(self, db: AsyncSession):
@@ -236,12 +241,7 @@ class TestProcessAgentReport:
         )
         await CheckResultCoreService.process_agent_report(db, report)
 
-        history = await CheckResultCRUD.get_history_for_check(
-            db,
-            check.id,
-            utc_now() - dt.timedelta(hours=1),
-            limit=10,
-        )
+        history = await _history(db, check.id)
         assert len(history) == 1
         # Per-check timestamp was preserved, not overwritten by batch ts
         assert abs((history[0].timestamp - per_check_time).total_seconds()) < 1
@@ -302,12 +302,7 @@ class TestProcessAgentReport:
         result = await CheckResultCoreService.process_agent_report(db, report)
         assert result["results_processed"] == 1
 
-        history = await CheckResultCRUD.get_history_for_check(
-            db,
-            check.id,
-            utc_now() - dt.timedelta(hours=1),
-            limit=1,
-        )
+        history = await _history(db, check.id)
         assert len(history) == 1
         # Metrics serialized as JSON; the SSL block should be present
         import json as json_lib

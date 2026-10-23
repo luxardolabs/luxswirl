@@ -1,0 +1,3 @@
+{# The database-growth chart's points, carried in markup: static/js/database-health.js
+   fetches this fragment and parses data-points. #}
+<div id="database-growth-data" data-points="{{ chart_points | tojson | forceescape }}"></div>

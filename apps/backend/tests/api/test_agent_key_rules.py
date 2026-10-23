@@ -1,8 +1,7 @@
-"""The key-recovery and key-rotation refusals now live in core.
+"""The key-recovery refusal lives in core.
 
-recover-key refuses an agent that is not active (403); rotating a key by name
-refuses an agent that is not active (400). Both used to be checked in the
-router against the ORM row.
+recover-key refuses an agent that is not active (403). It used to be checked
+in the router against the ORM row.
 """
 
 from __future__ import annotations
@@ -58,14 +57,3 @@ async def test_recover_key_refuses_an_inactive_agent(
     )
 
     assert resp.status_code == 403, resp.text
-
-
-async def test_rotating_an_inactive_agents_key_by_name_is_refused(
-    client: AsyncClient, db: AsyncSession
-) -> None:
-    db.add(make_agent(agent_name="sleepy", approval_status="disabled"))
-    await db.flush()
-
-    resp = await client.post("/api/v1/agents/sleepy/regenerate-key")
-
-    assert resp.status_code == 400, resp.text

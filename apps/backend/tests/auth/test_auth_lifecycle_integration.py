@@ -239,34 +239,6 @@ class TestMultiSessionHelpers:
         assert await auth.logout_all_sessions(db, user.id) == 1
         assert len(await auth.get_user_sessions(db, other.id)) == 1
 
-    async def test_logout_session_by_id(self, db: AsyncSession, auth):
-        user = make_user()
-        db.add(user)
-        await db.flush()
-        s_keep, _ = await auth.create_session(db, user.id)
-        s_drop, _ = await auth.create_session(db, user.id)
-
-        ok = await auth.logout_session_by_id(db, user.id, s_drop.id)
-        assert ok is True
-
-        remaining = await auth.get_user_sessions(db, user.id)
-        assert len(remaining) == 1
-        assert remaining[0].id == s_keep.id
-
-    async def test_logout_session_for_other_user_rejected(self, db: AsyncSession, auth):
-        owner = make_user(username="owner")
-        attacker = make_user(username="attacker")
-        db.add(owner)
-        db.add(attacker)
-        await db.flush()
-        session, _ = await auth.create_session(db, owner.id)
-
-        # Attacker should not be able to invalidate owner's session even by id
-        ok = await auth.logout_session_by_id(db, attacker.id, session.id)
-        assert ok is False
-        # Session still exists
-        assert len(await auth.get_user_sessions(db, owner.id)) == 1
-
 
 # ---------------------------------------------------------------------------
 # cleanup_expired_sessions

@@ -97,34 +97,6 @@ class AlertCRUD:
         return result.scalars().all(), total
 
     @staticmethod
-    async def get_notif_mapping(
-        db: AsyncSession, alert_id: UUID, provider_id: UUID
-    ) -> AlertNotificationMapping | None:
-        result = await db.execute(
-            select(AlertNotificationMapping).where(
-                and_(
-                    AlertNotificationMapping.alert_id == alert_id,
-                    AlertNotificationMapping.notification_provider_id == provider_id,
-                )
-            )
-        )
-        return result.scalar_one_or_none()
-
-    @staticmethod
-    async def delete_notif_mapping(
-        db: AsyncSession, alert_id: UUID, provider_id: UUID
-    ) -> int:
-        result = await db.execute(
-            delete(AlertNotificationMapping).where(
-                and_(
-                    AlertNotificationMapping.alert_id == alert_id,
-                    AlertNotificationMapping.notification_provider_id == provider_id,
-                )
-            )
-        )
-        return result.rowcount or 0  # type: ignore[attr-defined]
-
-    @staticmethod
     async def list_mapped_alert_ids_for_check(
         db: AsyncSession, check_id: UUID
     ) -> set[UUID]:
@@ -348,18 +320,6 @@ class AlertCRUD:
     async def hard_delete_alert(db: AsyncSession, alert: Alert) -> None:
         """Delete an alert row (its mappings cascade)."""
         await db.delete(alert)
-
-    @staticmethod
-    async def add_notif_mapping(
-        db: AsyncSession, alert_id: UUID, provider_id: UUID
-    ) -> AlertNotificationMapping:
-        mapping = AlertNotificationMapping(
-            alert_id=alert_id, notification_provider_id=provider_id, is_enabled=True
-        )
-        db.add(mapping)
-        await db.flush()
-        await db.refresh(mapping)
-        return mapping
 
     @staticmethod
     async def add_check_mapping(

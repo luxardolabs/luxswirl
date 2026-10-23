@@ -10,10 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.user_crud import UserCRUD
 from app.models.user_model import User
-from app.schemas.pagination_schema import build_pagination
 from app.schemas.user_schema import (
     UserCreate,
-    UserListResponse,
     UserResponse,
     UserStatsResponse,
     UserUpdate,
@@ -144,40 +142,6 @@ class UserCoreService:
             search=search,
         )
         return [UserResponse.model_validate(u) for u in users], total
-
-    async def list_users_page(
-        self,
-        db: AsyncSession,
-        *,
-        page: int,
-        per_page: int,
-        role: str | None = None,
-        is_active: bool | None = None,
-        search: str | None = None,
-    ) -> UserListResponse:
-        """One page of users for the JSON API.
-
-        Args:
-            db: Database session
-            page: 1-based page number
-            per_page: Users per page
-            role: Filter by role
-            is_active: Filter by active status
-            search: Search in username, email, or full_name
-
-        Returns:
-            The page, with its page state
-        """
-        users, total = await self.list_users(
-            db,
-            skip=(page - 1) * per_page,
-            limit=per_page,
-            role=role,
-            is_active=is_active,
-            search=search,
-        )
-        pagination = build_pagination(page=page, per_page=per_page, total=total)
-        return UserListResponse.of(users, pagination)
 
     async def update_user(
         self, db: AsyncSession, user_id: UUID, user_data: UserUpdate

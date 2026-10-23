@@ -82,45 +82,6 @@ class CheckArtifactResponse(BaseSchema):
     }
 
 
-class CheckArtifactListResponse(BaseSchema):
-    """
-    Schema for listing artifacts with pagination.
-    """
-
-    artifacts: list[CheckArtifactResponse] = Field(..., description="List of artifacts")
-    total: int = Field(..., description="Total number of artifacts")
-    check_id: UUID | None = Field(None, description="Filter by check ID if specified")
-
-    model_config = {
-        "json_schema_extra": {
-            "example": {
-                "artifacts": [
-                    {
-                        "id": "987fcdeb-51a2-43c1-b456-426614174111",
-                        "check_id": "123e4567-e89b-12d3-a456-426614174000",
-                        "artifact_type": "screenshot",
-                        "content_type": "image/png",
-                        "filename": "check_result_42.png",
-                        "size_bytes": 153600,
-                        "created_at": "2024-10-22T15:30:00Z",
-                    }
-                ],
-                "total": 1,
-                "check_id": "123e4567-e89b-12d3-a456-426614174000",
-            }
-        }
-    }
-
-
-class CheckArtifactStatsResponse(BaseSchema):
-    """How many artifacts a check holds, and their combined size."""
-
-    count: int = Field(..., ge=0, description="Number of artifacts")
-    total_size_bytes: int = Field(
-        ..., ge=0, description="Combined size of the artifacts in bytes"
-    )
-
-
 class CheckArtifactContent(CheckArtifactResponse):
     """An artifact's metadata plus its bytes, for serving a download."""
 

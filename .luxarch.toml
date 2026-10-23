@@ -72,7 +72,6 @@ js_network = [
 # nothing.
 deps = [
   "get_current_user",
-  "require_admin",
   "get_current_user_web",
   "require_admin_web",
   "require_editor_web",
@@ -81,11 +80,10 @@ deps = [
 
 [target.rbac]
 # Admin-tier surfaces: settings (including users), registration keys, and the
-# agent approval/lifecycle actions. require_admin/_web are the role gates;
-# require_api_admin (ApiAdmin) is the JSON API's, where every bearer token is an
-# admin credential (no role model on the API; see SECURITY.md).
+# agent approval/lifecycle actions. require_admin_web (AdminUserWeb) is the
+# role gate.
 admin_url_patterns = ["/settings", "/registration-keys", "/users"]
-require_names = ["require_admin", "require_admin_web", "AdminUser", "AdminUserWeb", "require_api_admin", "ApiAdmin"]
+require_names = ["require_admin_web", "AdminUserWeb"]
 
 # AUDIT confirmations — rules examined and found genuinely N/A, recorded so the
 # next reader knows they were adjudicated rather than overlooked:
@@ -221,13 +219,7 @@ require_dep = ["AdminUserWeb", "require_admin_web"]
 
 [[target.authz.signature]]
 prefix = "/database-health"
-require_dep = ["AdminUser", "AdminUserWeb", "require_admin", "require_admin_web"]
-
-# The WEB user routes register under /settings/users, so the /settings row above
-# already covers them. This row is the JSON API's own user surface.
-[[target.authz.signature]]
-prefix = "/api/v1/users"
-require_dep = ["AdminUser", "AdminUserWeb", "require_admin", "require_admin_web"]
+require_dep = ["AdminUserWeb", "require_admin_web"]
 
 # A check's configuration is a promise to the operator: every field the form
 # offers has to reach the agent that runs the check, or the setting is inert.
@@ -276,7 +268,7 @@ border = "dark-border"
 # from tests/conftest.py. It pairs with filterwarnings=error: a deprecation only
 # fails a test on a line some test executes, and this makes that "every route".
 enabled = true
-exempt = ["/health", "/metrics", "/api/v1/agents/{agent_id}/regenerate-key"]
+exempt = ["/health", "/metrics"]
 
 [target.tenant]
 # luxswirl is single-organisation: agents, checks, results, alerts and status
@@ -289,8 +281,8 @@ column = "user_id"
 # Which auth marker a route carries decides whether reaching an unscoped session
 # query is a leak. Admin is privileged; a plain signed-in user is not; the agent
 # API-token routes are the system/collector tier.
-superuser = ["AdminUser", "AdminUserWeb", "require_admin", "require_admin_web"]
-tenant_user = ["CurrentUser", "CurrentUserWeb", "EditorUserWeb", "get_current_user"]
+superuser = ["AdminUserWeb", "require_admin_web"]
+tenant_user = ["CurrentUserWeb", "EditorUserWeb", "get_current_user"]
 collector = [
   "verify_api_token",
   "verify_agent_token",

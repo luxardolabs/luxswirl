@@ -14,7 +14,6 @@ from app.models.registration_key_model import RegistrationKey
 from app.schemas.registration_key_schema import (
     RegistrationKeyCreate,
     RegistrationKeyRevoke,
-    RegistrationKeyUpdate,
 )
 from app.services.core.registration_key_core_service import RegistrationKeyCoreService
 from sqlalchemy import select
@@ -42,15 +41,6 @@ async def test_create_key_is_committed(worker_db) -> None:
     key_id, _ = await _create(worker_db)
     stored = await _stored(worker_db, key_id)
     assert stored is not None and stored.name == "lab"
-
-
-async def test_update_key_is_committed(worker_db) -> None:
-    key_id, _ = await _create(worker_db)
-    async with worker_db() as s:
-        await svc.update_key(s, key_id, RegistrationKeyUpdate(name="lab-2"))
-        await s.commit()
-    stored = await _stored(worker_db, key_id)
-    assert stored is not None and stored.name == "lab-2"
 
 
 async def test_revoke_key_is_committed(worker_db) -> None:

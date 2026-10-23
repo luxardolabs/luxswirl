@@ -21,7 +21,6 @@ if _tests_root not in sys.path:
 from app.core.exceptions import NotFoundException, ValidationException  # noqa: E402
 from app.schemas.notification_provider_schema import (  # noqa: E402
     NotificationProviderCreate,
-    NotificationProviderResponse,
     NotificationProviderUpdate,
 )
 from app.services.core.notification_core_service import NotificationCoreService  # noqa: E402
@@ -89,29 +88,6 @@ class TestCreateProvider:
                     config={"post_url": "http://169.254.169.254/latest/meta-data/"}
                 ),
             )
-
-    async def test_webhook_additional_headers_masked_in_response(
-        self, db: AsyncSession
-    ):
-        """M-2 (LUXSWIRL-190): secrets in additional_headers must not be echoed back
-        in plaintext on a read; header names stay visible."""
-        provider = await NotificationCoreService.create_provider(
-            db,
-            _create_data(
-                config={
-                    "post_url": "https://hooks.example.test/notify",
-                    "additional_headers": {
-                        "Authorization": "Bearer super-secret",
-                        "X-Env": "prod",
-                    },
-                }
-            ),
-        )
-        resp = NotificationProviderResponse.model_validate(provider)
-        headers = resp.config["additional_headers"]
-        assert headers["Authorization"] == "***MASKED***"
-        assert headers["X-Env"] == "***MASKED***"
-        assert set(headers) == {"Authorization", "X-Env"}  # names preserved
 
 
 # ---------------------------------------------------------------------------

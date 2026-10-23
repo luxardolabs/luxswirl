@@ -3,8 +3,7 @@ CheckResult service - business logic for check result operations and analytics.
 """
 
 import json
-from collections.abc import Sequence
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Any
 from uuid import UUID
 
@@ -22,8 +21,6 @@ from app.schemas.agent_schema import AgentOption
 from app.schemas.check_artifact_schema import CheckArtifactResponse
 from app.schemas.check_result_schema import (
     AgentReportRequest,
-    CheckSummary,
-    GlobalStatsResponse,
     RecentCheckResult,
     StatusBarResult,
 )
@@ -71,116 +68,6 @@ class CheckResultCoreService:
                 critical_days=critical_days,
             ),
         }
-
-    @staticmethod
-    async def get_latest_results_for_agent(
-        db: AsyncSession,
-        agent_name: str,
-        minutes: int = 5,
-    ) -> Sequence[CheckResult]:
-        """
-        Get latest check results for an agent.
-
-        Args:
-            db: Database session
-            agent_name: Agent name
-            minutes: How many minutes back to look
-
-        Returns:
-            List of latest check results (one per check)
-        """
-        agent = await AgentCoreService.get_agent_by_name(db, agent_name)
-        if not agent:
-            raise AgentNotFoundException(agent_name)
-
-        cutoff_time = utc_now() - timedelta(minutes=minutes)
-        return await CheckResultCRUD.get_latest_per_check_for_agent(
-            db, agent.id, cutoff_time
-        )
-
-    @staticmethod
-    async def get_check_history(
-        db: AsyncSession,
-        check_id: UUID,
-        hours: int,
-        limit: int,
-    ) -> Sequence[CheckResult]:
-        """
-        Get historical check results.
-
-        Args:
-            db: Database session
-            check_id: Check UUID
-            hours: Hours of history to retrieve
-            limit: Maximum number of results (typically from API query parameter)
-
-        Returns:
-            List of check results ordered by timestamp desc
-        """
-        check = await CheckCoreService.get_check_by_id(db, check_id)
-
-        cutoff_time = utc_now() - timedelta(hours=hours)
-        return await CheckResultCRUD.get_history_for_check(
-            db, check.id, cutoff_time, limit
-        )
-
-    @staticmethod
-    async def get_check_summary(
-        db: AsyncSession,
-        check_id: UUID,
-        hours: int = 24,
-    ) -> CheckSummary:
-        """
-        Get summary statistics for a check.
-
-        Args:
-            db: Database session
-            check_id: Check UUID
-            hours: Hours to include in summary
-
-        Returns:
-            Check summary statistics
-        """
-        check = await CheckCoreService.get_check_by_id(db, check_id)
-
-        cutoff_time = utc_now() - timedelta(hours=hours)
-
-        row = await CheckResultCRUD.get_summary_stats_for_check(
-            db, check.id, cutoff_time
-        )
-
-        total_checks = row.total_checks or 0
-        successful_checks = int(row.successful_checks or 0)
-        failed_checks = total_checks - successful_checks
-        success_rate = (
-            (successful_checks / total_checks * 100) if total_checks > 0 else 0.0
-        )
-
-        p50_latency_ms = None
-        p95_latency_ms = None
-        p99_latency_ms = None
-
-        if total_checks > 0 and row.avg_latency_ms:
-            percentile_row = await CheckResultCRUD.get_latency_percentiles_for_check(
-                db, check.id, cutoff_time
-            )
-            if percentile_row:
-                p50_latency_ms = percentile_row.p50
-                p95_latency_ms = percentile_row.p95
-                p99_latency_ms = percentile_row.p99
-
-        return CheckSummary(
-            total_checks=total_checks,
-            successful_checks=successful_checks,
-            failed_checks=failed_checks,
-            success_rate=round(success_rate, 2),
-            avg_latency_ms=round(row.avg_latency_ms, 2) if row.avg_latency_ms else None,
-            min_latency_ms=round(row.min_latency_ms, 2) if row.min_latency_ms else None,
-            max_latency_ms=round(row.max_latency_ms, 2) if row.max_latency_ms else None,
-            p50_latency_ms=round(p50_latency_ms, 2) if p50_latency_ms else None,
-            p95_latency_ms=round(p95_latency_ms, 2) if p95_latency_ms else None,
-            p99_latency_ms=round(p99_latency_ms, 2) if p99_latency_ms else None,
-        )
 
     @staticmethod
     async def process_agent_report(
@@ -413,48 +300,6 @@ class CheckResultCoreService:
             "check_display_names": check_display_names,
             "alerts_evaluated": alerts_evaluated,
         }
-
-    @staticmethod
-    async def get_aggregated_stats(
-        db: AsyncSession,
-        hours: int = 24,
-    ) -> GlobalStatsResponse:
-        """
-        Get aggregated statistics across all agents and checks.
-
-        Args:
-            db: Database session
-            hours: Hours to include in aggregation
-
-        Returns:
-            Aggregated statistics
-        """
-        cutoff_time = utc_now() - timedelta(hours=hours)
-
-        row = await CheckResultCRUD.get_overall_stats(db, cutoff_time)
-
-        total_checks = row.total_checks or 0
-        successful_checks = int(row.successful_checks or 0)
-        failed_checks = total_checks - successful_checks
-        success_rate = (
-            (successful_checks / total_checks * 100) if total_checks > 0 else 0.0
-        )
-
-        active_agents = await CheckResultCRUD.count_active_agents_since(db, cutoff_time)
-        active_checks = await CheckResultCRUD.count_active_checks_since(db, cutoff_time)
-
-        return GlobalStatsResponse(
-            total_checks=total_checks,
-            successful_checks=successful_checks,
-            failed_checks=failed_checks,
-            success_rate=round(success_rate, 2),
-            avg_latency_ms=(
-                round(row.avg_latency_ms, 2) if row.avg_latency_ms else None
-            ),
-            active_agents=active_agents,
-            active_checks=active_checks,
-            time_window_hours=hours,
-        )
 
     # ------------------------------------------------------------------
     # CRUD delegation methods (used by view services)

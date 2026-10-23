@@ -18,7 +18,7 @@ from uuid import UUID, uuid4
 
 import pytest
 from app.core.datetime_utils import utc_now
-from app.crud.artifact_crud import ArtifactCRUD
+from app.models.check_artifact_model import CheckArtifact
 from app.models.check_model import Check
 from fixtures.factories import make_agent, make_check
 from sqlalchemy import select, text
@@ -129,5 +129,7 @@ async def test_artifacts_the_console_cannot_serve_are_deleted(db: AsyncSession) 
 
     await _migrate(db)
 
-    rows = await ArtifactCRUD.list_by_check(db, check_id)
-    assert sorted(r.content_type for r in rows) == ["application/zip", "image/png"]
+    rows = await db.scalars(
+        select(CheckArtifact.content_type).where(CheckArtifact.check_id == check_id)
+    )
+    assert sorted(rows) == ["application/zip", "image/png"]

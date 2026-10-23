@@ -30,45 +30,6 @@ class RegistrationKeyCreate(BaseSchema):
     }
 
 
-class RegistrationKeyCreateResponse(BaseSchema):
-    """Response when creating a registration key (includes plaintext key ONCE)."""
-
-    id: UUID = Field(..., description="Key UUID")
-    name: str = Field(..., description="Key name")
-    key: str = Field(..., description="Plaintext key (shown only once!)")
-    message: str = Field(
-        default="Save this key securely - it cannot be retrieved again",
-        description="Warning message",
-    )
-
-    model_config = {
-        "json_schema_extra": {
-            "example": {
-                "id": "550e8400-e29b-41d4-a716-446655440000",
-                "name": "Production Agents",
-                "key": "luxswirl_rk_abcdef1234567890abcdef1234567890",
-                "message": "Save this key securely - it cannot be retrieved again",
-            }
-        }
-    }
-
-
-class RegistrationKeyUpdate(BaseSchema):
-    """Schema for updating a registration key."""
-
-    name: str | None = Field(None, min_length=1, max_length=255, description="New name")
-    description: str | None = Field(None, description="New description")
-
-    model_config = {
-        "json_schema_extra": {
-            "example": {
-                "name": "Production Agents (Updated)",
-                "description": "Updated description",
-            }
-        }
-    }
-
-
 class RegistrationKeyRevoke(BaseSchema):
     """Schema for revoking a registration key."""
 
@@ -133,32 +94,6 @@ class RegistrationKeyRow(RegistrationKeyResponse):
     urls: RegistrationKeyUrls
 
 
-class RegistrationKeyListResponse(BaseSchema):
-    """Response containing list of registration keys."""
-
-    keys: list[RegistrationKeyResponse] = Field(
-        ..., description="List of registration keys"
-    )
-    total: int = Field(..., description="Total number of keys")
-
-    model_config = {
-        "json_schema_extra": {
-            "example": {
-                "keys": [
-                    {
-                        "id": "550e8400-e29b-41d4-a716-446655440000",
-                        "name": "Production Agents",
-                        "status": "active",
-                        "usage_count": 42,
-                        "created_at": "2024-01-01T00:00:00Z",
-                    }
-                ],
-                "total": 1,
-            }
-        }
-    }
-
-
 class AgentKeyRecoveryResponse(BaseSchema):
     """Response for agent key recovery (includes new plaintext key)."""
 
@@ -172,27 +107,6 @@ class AgentKeyRecoveryResponse(BaseSchema):
                 "agent_id": "550e8400-e29b-41d4-a716-446655440000",
                 "api_key": "luxswirl_ak_abcdef1234567890abcdef1234567890",
                 "message": "Agent key recovered successfully. Save this key securely.",
-            }
-        }
-    }
-
-
-class AgentKeyRegenerateResponse(BaseSchema):
-    """Response when admin regenerates agent key."""
-
-    agent_id: UUID = Field(..., description="Agent UUID")
-    api_key: str = Field(..., description="New agent-specific API key")
-    message: str = Field(
-        default="Key regenerated - update agent configuration with new key",
-        description="Instructions for admin",
-    )
-
-    model_config = {
-        "json_schema_extra": {
-            "example": {
-                "agent_id": "550e8400-e29b-41d4-a716-446655440000",
-                "api_key": "luxswirl_ak_abcdef1234567890abcdef1234567890",
-                "message": "Key regenerated - update agent configuration with new key",
             }
         }
     }

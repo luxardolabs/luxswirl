@@ -2,13 +2,14 @@
 
 Before HTTP method was enum-typed the API took any method; the agent passes the
 method through, so a stored OPTIONS check ran. The enum is every standard method,
-so such a row still reads: the agent still fetches its checks and the export
-still works. An import is validated per check: one entry an older export could
+so such a row still reads: the agent still fetches its checks and the web
+export still works. An import is validated per check: one entry an older export could
 carry (an unknown type or method) is that check's error, and the rest import.
 """
 
 from __future__ import annotations
 
+import json
 from collections.abc import AsyncIterator
 from uuid import uuid4
 
@@ -19,19 +20,18 @@ from app.core.rate_limit import limiter
 from app.db.database import get_db
 from app.main import app
 from app.services.core.agent_core_service import AgentCoreService
+from app.services.core.check_core_service import CheckCoreService
+from app.services.views.import_export_view_service import ImportExportViewService
 from fixtures.factories import make_agent, make_check
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 pytestmark = pytest.mark.integration
 
-TOKEN = "closed-set-token"
-
 
 @pytest_asyncio.fixture
 async def client(db: AsyncSession, monkeypatch) -> AsyncIterator[AsyncClient]:
     monkeypatch.setattr(settings.security, "auth_enabled", True)
-    monkeypatch.setattr(settings.security, "auth_tokens", [TOKEN])
     limiter.reset()
 
     async def _override_get_db() -> AsyncIterator[AsyncSession]:
@@ -89,21 +89,18 @@ async def test_the_agent_still_fetches_its_checks(
 
 
 @pytest.mark.parametrize("method", STORED)
-async def test_the_export_still_works(
-    db: AsyncSession, client: AsyncClient, method: str
-) -> None:
+async def test_the_export_still_works(db: AsyncSession, method: str) -> None:
     agent, _ = await _agent_with_stored_method(db, method)
 
-    resp = await client.get(
-        f"/api/v1/import-export/export/{agent.id}",
-        headers={"Authorization": f"Bearer {TOKEN}"},
-    )
+    resp = await ImportExportViewService.build_export_download(db, agent.id)
+    body = b"".join([chunk async for chunk in resp.body_iterator])
 
-    assert resp.status_code == 200, resp.text[:300]
+    exported = json.loads(body)
+    assert method.upper() in {c.get("http_method") for c in exported["checks"]}
 
 
 async def test_an_import_refuses_only_the_entries_that_are_not_checks(
-    db: AsyncSession, client: AsyncClient
+    db: AsyncSession,
 ) -> None:
     agent = make_agent(agent_name=f"cs-imp-{uuid4().hex[:6]}")
     db.add(agent)
@@ -116,22 +113,18 @@ async def test_an_import_refuses_only_the_entries_that_are_not_checks(
             "target": f"https://{name}.test",
         } | fields
 
-    resp = await client.post(
-        "/api/v1/import-export/import",
-        json={
-            "agent_id": str(agent.id),
-            "overwrite": False,
-            "checks": [
-                entry("plain", http_method="GET"),
-                entry("options", http_method="options"),
-                entry("bad-method", http_method="FETCH"),
-                entry("bad-type", check_type="keyword"),
-            ],
-        },
-        headers={"Authorization": f"Bearer {TOKEN}"},
+    result = await CheckCoreService.bulk_import_checks(
+        db,
+        agent.id,
+        [
+            entry("plain", http_method="GET"),
+            entry("options", http_method="options"),
+            entry("bad-method", http_method="FETCH"),
+            entry("bad-type", check_type="keyword"),
+        ],
+        overwrite=False,
+        actor_is_admin=True,
     )
 
-    assert resp.status_code == 200, resp.text[:300]
-    body = resp.json()
-    assert body["created"] == 2
-    assert sorted(e["check"] for e in body["errors"]) == ["bad-method", "bad-type"]
+    assert result["created"] == 2
+    assert sorted(e["check"] for e in result["errors"]) == ["bad-method", "bad-type"]
