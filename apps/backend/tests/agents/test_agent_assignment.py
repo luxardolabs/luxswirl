@@ -115,12 +115,9 @@ def _assign_in_subprocess(hashseed: str) -> str:
     env = {
         **os.environ,
         "PYTHONHASHSEED": hashseed,
-        # Fresh interpreter: put the backend root (for app.*), its parent (for the
-        # vendored shared.*, as pyproject's pythonpath [".", ".."] does) and the
-        # tests root (for fixtures.*) on the path explicitly.
-        "PYTHONPATH": os.pathsep.join(
-            [str(_COMPONENT_ROOT), str(_COMPONENT_ROOT.parent), _tests_root]
-        ),
+        # Fresh interpreter: put the backend root (for app.*, app.shared being
+        # the overlaid SSOT) and the tests root (for fixtures.*) on the path.
+        "PYTHONPATH": os.pathsep.join([str(_COMPONENT_ROOT), _tests_root]),
     }
     proc = subprocess.run(
         [sys.executable, str(_PROBE), _CHECK_ID, *_AGENT_IDS],

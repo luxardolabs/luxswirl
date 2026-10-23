@@ -541,9 +541,13 @@ LOG__LEVEL=INFO
 ```bash
 # Apply database migrations. Note: when run via Docker the server applies these
 # automatically on boot (alembic upgrade head); for manual installs run it once
-# yourself.
+# yourself. Shared code is imported as app.shared: copy apps/shared over each
+# component's placeholder package first (the images do the same), and again
+# after every upgrade.
+cp -r /opt/luxswirl/apps/shared/. /opt/luxswirl/apps/backend/app/shared/
+cp -r /opt/luxswirl/apps/shared/. /opt/luxswirl/apps/agent/app/shared/
 cd /opt/luxswirl/apps/backend
-PYTHONPATH=.:.. python -m alembic upgrade head
+PYTHONPATH=. python -m alembic upgrade head
 ```
 
 ### Step 7: Create systemd Services
@@ -561,7 +565,7 @@ Type=simple
 User=luxswirl
 WorkingDirectory=/opt/luxswirl/apps/backend
 Environment="PATH=/opt/luxswirl/venv/bin"
-Environment="PYTHONPATH=/opt/luxswirl/apps/backend:/opt/luxswirl/apps"
+Environment="PYTHONPATH=/opt/luxswirl/apps/backend"
 EnvironmentFile=/opt/luxswirl/.env
 ExecStart=/opt/luxswirl/venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 9000
 Restart=on-failure
@@ -584,7 +588,7 @@ Type=simple
 User=luxswirl
 WorkingDirectory=/opt/luxswirl/apps/agent
 Environment="PATH=/opt/luxswirl/venv/bin"
-Environment="PYTHONPATH=/opt/luxswirl/apps/agent:/opt/luxswirl/apps"
+Environment="PYTHONPATH=/opt/luxswirl/apps/agent"
 EnvironmentFile=/opt/luxswirl/.env
 # Full reports endpoint, ending in /api/v1/reports.
 Environment="LUXSWIRL_SERVER_URL=http://localhost:9000/api/v1/reports"
@@ -1171,9 +1175,11 @@ source venv/bin/activate
 # Upgrade dependencies
 cd apps/backend && poetry update && cd ../..
 
-# Run migrations (if available)
+# Re-copy shared code over the placeholders, then run migrations
+cp -r apps/shared/. apps/backend/app/shared/
+cp -r apps/shared/. apps/agent/app/shared/
 cd apps/backend
-PYTHONPATH=.:.. python -m alembic upgrade head
+PYTHONPATH=. python -m alembic upgrade head
 
 # Start services
 sudo systemctl start luxswirl_server luxswirl-agent
