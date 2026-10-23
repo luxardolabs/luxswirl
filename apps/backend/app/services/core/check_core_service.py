@@ -727,7 +727,7 @@ class CheckCoreService:
     async def list_agent_checks(db: AsyncSession, agent_id: UUID) -> list[CheckInDB]:
         """An agent's checks as the web seam holds them — schemas, not ORM rows.
 
-        list_checks_for_agent stays ORM: the job-to-check, check-result and
+        list_checks_for_agent stays ORM: the job-to-check and
         bulk-create paths below read it and go on to mutate what they get.
         """
         return [
