@@ -5,7 +5,8 @@ Every log line goes through `scrub` before it is written: once for the envelope
 bound `log_context`), each as a flat dict. It masks credentials wherever they
 appear: a connection-string password, a Bearer token, `api_key=`/`auth_key=`/
 `password=` pairs and JSON password fields, and the whole value of any field
-whose NAME says it is secret (`password`, `api_key`, `token`, ...).
+whose NAME says it is secret (`password`, `api_key`, `token`, ...). Keys match
+in any case, and a value is masked whole, up to its delimiter.
 
 It is the backstop, not the control: a call site still names every field it
 writes (`repo.log_fields_explicit`), and logs identifiers, never credentials.
@@ -19,18 +20,24 @@ from typing import Any
 
 _MASK = "***"
 
+# Where a key=value secret ends: whitespace, a quote, or a list/query delimiter.
+_VALUE = r"[^\s;,&\"']+"
+
 _PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
-    # Connection strings: mysql://user:PASSWORD@host -> mysql://user:***@host
-    (re.compile(r"://([^:/@\s]+):([^@\s]+)@"), r"://\1:***@"),
-    # JSON / Python-literal password fields
-    (re.compile(r'"password"\s*:\s*"[^"]+"'), '"password":"***"'),
-    (re.compile(r"'password'\s*:\s*'[^']+'"), "'password':'***'"),
-    # Bearer tokens
-    (re.compile(r"Bearer\s+[\w\-\.]+"), "Bearer ***"),
-    # key=value / key: value credentials
-    (re.compile(r"api_key[=:]\s*[\w\-]+"), "api_key=***"),
-    (re.compile(r"auth_key[=:]\s*[\w\-]+"), "auth_key=***"),
-    (re.compile(r"password[=:]\s*[\w\-]+"), "password=***"),
+    # Connection strings: mysql://user:PASSWORD@host -> mysql://user:***@host.
+    # The password runs to the LAST @ before the host (a password may contain
+    # @), so the match is greedy up to whitespace or a closing quote.
+    (re.compile(r"://([^:/@\s]+):[^\s\"]*@"), r"://\1:***@"),
+    # JSON / Python-literal password fields, any case
+    (re.compile(r'"(password)"\s*:\s*"[^"]*"', re.IGNORECASE), r'"\1":"***"'),
+    (re.compile(r"'(password)'\s*:\s*'[^']*'", re.IGNORECASE), r"'\1':'***'"),
+    # Bearer tokens, any case
+    (re.compile(r"(bearer)\s+[\w\-\.~+/=]+", re.IGNORECASE), r"\1 ***"),
+    # key=value / key: value credentials, any case, masked up to the delimiter
+    (
+        re.compile(rf"(api_key|auth_key|password)(\s*[=:]\s*){_VALUE}", re.IGNORECASE),
+        r"\1\2***",
+    ),
     # An agent's recovery secret, wherever it appears (it has its own prefix)
     (re.compile(r"luxswirl_rs_[\w\-]+"), "luxswirl_rs_***"),
 )

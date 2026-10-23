@@ -38,6 +38,29 @@ def test_scrub_text_masks_every_credential_shape(raw: str, leaked: str) -> None:
     assert leaked not in scrub_text(raw)
 
 
+@pytest.mark.parametrize(
+    ("raw", "masked"),
+    [
+        # The password runs to the LAST @ before the host, @ signs and all.
+        (
+            "postgresql://monitor:p@ss@db:5432/app",
+            "postgresql://monitor:***@db:5432/app",
+        ),
+        ("mysql://root:a@b@c@host/db", "mysql://root:***@host/db"),
+        # A key=value secret is masked up to its delimiter, not its first symbol.
+        ("password=p@ss!w0rd done", "password=*** done"),
+        ("Password=Hunter2!x;Host=db", "Password=***;Host=db"),
+        ("PASSWORD: s3cr3t!, next", "PASSWORD: ***, next"),
+        ("API_KEY=sk-live-1!2 tail", "API_KEY=*** tail"),
+        ("Auth_Key=luxswirl_rk_ab&cd", "Auth_Key=***&cd"),
+        ('{"Password": "Hunter2"}', '"Password":"***"'),
+        ("authorization: bearer abc.DEF-123", "authorization: bearer ***"),
+    ],
+)
+def test_scrub_text_masks_the_whole_value_in_any_case(raw: str, masked: str) -> None:
+    assert masked in scrub_text(raw), scrub_text(raw)
+
+
 def test_scrub_text_leaves_ordinary_text_alone() -> None:
     text = "check web-01 failed: HTTP 503 from https://example.com/health"
     assert scrub_text(text) == text
