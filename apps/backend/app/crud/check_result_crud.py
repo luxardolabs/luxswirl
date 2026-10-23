@@ -362,6 +362,20 @@ class CheckResultCRUD:
         return dict(result.all())
 
     @staticmethod
+    async def newest_result_after(
+        db: AsyncSession, check_id: UUID, after: datetime
+    ) -> datetime | None:
+        """The check's newest result time later than `after`, if any: one
+        backward index probe, bounded below by `after`."""
+        result = await db.execute(
+            select(CheckResult.timestamp)
+            .where(CheckResult.check_id == check_id, CheckResult.timestamp > after)
+            .order_by(desc(CheckResult.timestamp))
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
+    @staticmethod
     async def get_24h_stats_batch(
         db: AsyncSession, check_ids: list[UUID]
     ) -> dict[UUID, AggregateRow]:

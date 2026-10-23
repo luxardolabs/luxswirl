@@ -8,10 +8,9 @@ it reads the configured alerts, writes the notification audit trail
 (`notification_logs`) and hands sends to the notification providers.
 """
 
-import asyncio
 import fnmatch
 from datetime import datetime
-from typing import Any, cast
+from typing import Any
 from uuid import UUID
 
 from shared.logger import get_logger
@@ -469,7 +468,7 @@ class AlertEvaluationCoreService:
         # transitions (LUXSWIRL-147). Computed once per fire.
         await AlertEvaluationCoreService.send_to_providers(
             db,
-            alert,
+            alert.id,
             context,
             decision,
             state_key=AlertEvaluationCoreService._compute_alert_state_key(
@@ -516,7 +515,7 @@ class AlertEvaluationCoreService:
     @staticmethod
     async def send_to_providers(
         db: AsyncSession,
-        alert: Alert,
+        alert_id: UUID,
         context: NotificationContext,
         decision: SendDecision,
         *,
@@ -525,62 +524,40 @@ class AlertEvaluationCoreService:
         agent_id: UUID | None = None,
         check_result_id: UUID | None = None,
         check_result_timestamp: datetime | None = None,
-    ) -> None:
-        """Send `context` through each of the alert's live providers, in parallel.
+    ) -> int:
+        """Send `context` through each of the alert's live providers.
 
         Every provider's NotificationLog row records `state_key`, the subject
         (`check_id`, or `agent_id` for an agent_offline alert) and the result
-        that triggered it, when one did. A provider that fails is logged; it
-        never stops the others.
+        that triggered it, when one did. A provider that fails is recorded as
+        failed; it never stops the others.
+
+        Returns:
+            How many notification rows were written (0 when the alert has no
+            live provider).
         """
-        mappings = await AlertCRUD.list_active_notif_mappings_for_alert(db, alert.id)
-
-        # Send notifications through each provider IN PARALLEL
-        notification_tasks = []
-        for mapping in mappings:
-            provider = mapping.notification_provider
-            if provider.deleted_at is not None:
-                continue  # Skip soft-deleted providers
-
-            # Create task but don't await yet - we'll run them all in parallel
-            task = NotificationCoreService.send_notification(
-                db=db,
-                provider_id=provider.id,
-                context=context,
-                alert_id=alert.id,
-                check_result_id=check_result_id,
-                check_result_timestamp=check_result_timestamp,
-                check_id=check_id,
-                agent_id=agent_id,
-                notification_hash=state_key,
-                is_resend=decision.is_resend,
-                resend_count=decision.resend_count,
-            )
-            notification_tasks.append((provider.id, task))
-
-        if not notification_tasks:
-            return
-
-        # Send all notifications in parallel
-        results = cast(
-            list[NotificationLog | BaseException],
-            await asyncio.gather(
-                *[task for _, task in notification_tasks], return_exceptions=True
-            ),
+        mappings = await AlertCRUD.list_active_notif_mappings_for_alert(db, alert_id)
+        provider_ids = [
+            mapping.notification_provider.id
+            for mapping in mappings
+            if mapping.notification_provider.deleted_at is None
+        ]
+        if not provider_ids:
+            return 0
+        rows = await NotificationCoreService.send_notifications(
+            db,
+            provider_ids,
+            context,
+            alert_id=alert_id,
+            check_result_id=check_result_id,
+            check_result_timestamp=check_result_timestamp,
+            check_id=check_id,
+            agent_id=agent_id,
+            notification_hash=state_key,
+            is_resend=decision.is_resend,
+            resend_count=decision.resend_count,
         )
-
-        # Log any failures
-        for (provider_id, _), task_result in zip(
-            notification_tasks, results, strict=False
-        ):
-            if isinstance(task_result, BaseException):
-                logger.error(
-                    "Failed to send notification via provider",
-                    extra={
-                        "provider_id": str(provider_id),
-                        "task_result": str(task_result),
-                    },
-                )
+        return len(rows)
 
     @staticmethod
     async def _handle_parent_suppression(

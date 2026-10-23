@@ -7,10 +7,27 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from pydantic import Field
+from pydantic import Field, field_validator
 
+from app.core.liveness import MAX_MISSED_INTERVALS
 from app.models.enum_model import AlertTriggerType
 from app.schemas.base_schema import BaseSchema, TimestampSchema
+
+
+def _check_missed_intervals(config: dict[str, Any] | None) -> dict[str, Any] | None:
+    """A silence trigger's `missed_intervals` is a whole number in range."""
+    if config is None or "missed_intervals" not in config:
+        return config
+    value = config["missed_intervals"]
+    if (
+        not isinstance(value, int)
+        or isinstance(value, bool)
+        or not 1 <= value <= MAX_MISSED_INTERVALS
+    ):
+        raise ValueError(
+            f"missed_intervals must be a whole number from 1 to {MAX_MISSED_INTERVALS}"
+        )
+    return config
 
 
 class AlertBase(BaseSchema):
@@ -51,6 +68,12 @@ class AlertBase(BaseSchema):
         None, max_length=500, description="Custom subject template"
     )
     custom_message: str | None = Field(None, description="Custom message body template")
+
+    @field_validator("trigger_config")
+    @classmethod
+    def _missed_intervals_in_range(cls, value: dict[str, Any]) -> dict[str, Any]:
+        _check_missed_intervals(value)
+        return value
 
 
 class AlertCreate(AlertBase):
@@ -108,6 +131,13 @@ class AlertUpdate(BaseSchema):
     max_resends: int | None = Field(None, ge=1)
     custom_subject: str | None = None
     custom_message: str | None = None
+
+    @field_validator("trigger_config")
+    @classmethod
+    def _missed_intervals_in_range(
+        cls, value: dict[str, Any] | None
+    ) -> dict[str, Any] | None:
+        return _check_missed_intervals(value)
 
     model_config = {
         "json_schema_extra": {

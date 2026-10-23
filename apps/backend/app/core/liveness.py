@@ -12,6 +12,9 @@ from datetime import timedelta
 # The agent runs a check with no interval of its own every 60 s.
 DEFAULT_CHECK_INTERVAL_SECONDS = 60
 DEFAULT_MISSED_INTERVALS = 3
+# The most an alert may set: a larger value is a typo, and far enough out it
+# overflows the datetime range.
+MAX_MISSED_INTERVALS = 100
 # Results reach the server in batches (the agent's report_interval, 10 s by
 # default) and a check may run up to its timeout before it reports, so a check
 # exactly on time can still look a little late.
