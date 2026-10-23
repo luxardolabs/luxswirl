@@ -206,6 +206,8 @@ Selector keys:
 
 `Agent.tags` is a comma-separated string (`apps/backend/app/models/agent_model.py`).
 
+Tags are admin-managed. An agent declares tags at registration, and its heartbeat may update them while it is pending, as a suggestion the admin sees when approving. From approval on, a heartbeat's tags never change the row (`AgentCoreService._apply_heartbeat`); only an admin does, through the agent's Edit panel. Tags decide which replicate and distribute checks GET `/api/v1/checks` hands the agent and which it may report on, so an agent must not be able to retag itself into another group's checks.
+
 **Tag format:** `key:value` pairs, comma-separated
 
 ```

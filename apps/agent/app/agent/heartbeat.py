@@ -206,6 +206,9 @@ class HeartbeatSender:
                         "version": os.getenv("APP_VERSION", "dev"),
                         "uptime_seconds": uptime_seconds,
                         "status": "online" if self.running else "offline",
+                        # The server stores these only while the agent is
+                        # pending (a suggestion for the admin approving it);
+                        # after approval tags are admin-managed.
                         "tags": self.config.get("tags", []),
                         # Check stats
                         "checks_total": len(self.checks),

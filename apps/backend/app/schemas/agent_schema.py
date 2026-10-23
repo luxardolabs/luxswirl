@@ -279,7 +279,13 @@ class AgentHeartbeat(BaseSchema):
     )
 
     # Tags
-    tags: list[str] | None = Field(None, description="Agent tags for grouping")
+    tags: list[str] | None = Field(
+        None,
+        description=(
+            "The agent's declared tags. Stored only while the agent is pending, "
+            "as a suggestion for the admin; after approval tags are admin-managed"
+        ),
+    )
 
     # Check stats
     checks_total: int = Field(0, description="Total checks configured")

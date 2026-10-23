@@ -80,7 +80,7 @@ Shows all approved agents, paginated, with rich performance metrics. Two control
 - **Status indicator** — pulsing green dot (online) or red dot (offline); a yellow border warns if the agent has been offline longer than the threshold.
 - **Agent name** — links to the agent detail page.
 - **Status badge** — Active, Paused, or Disabled.
-- **Tags** — agent-level tags (e.g. `production`, `us-east-1`), inherited by all checks on the agent.
+- **Tags** — agent-level tags (e.g. `production`, `us-east-1`), inherited by all checks on the agent. Tags are admin-managed: the tags an agent declares are kept only while it is pending, as a suggestion for approval; after approval only an admin changes them (**Edit**), and a tag change takes effect on the agent's next check sync.
 - **Metadata row** — hostname (monospace), heartbeat interval, and check-sync interval.
 
 ### Action buttons
