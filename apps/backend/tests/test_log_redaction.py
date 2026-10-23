@@ -28,6 +28,8 @@ pytestmark = pytest.mark.unit
         ("api_key=sk-live-999", "sk-live-999"),
         ("auth_key: luxswirl_rk_deadbeef", "luxswirl_rk_deadbeef"),
         ("password=letmein", "letmein"),
+        ("recovered with luxswirl_rs_0a1b2c3d4e5f", "0a1b2c3d4e5f"),
+        ('{"sent": "luxswirl_rs_xyz"}', "_xyz"),
         ('{"password": "letmein"}', "letmein"),
         ("{'password': 'letmein'}", "letmein"),
     ],

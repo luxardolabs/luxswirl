@@ -31,6 +31,8 @@ _PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
     (re.compile(r"api_key[=:]\s*[\w\-]+"), "api_key=***"),
     (re.compile(r"auth_key[=:]\s*[\w\-]+"), "auth_key=***"),
     (re.compile(r"password[=:]\s*[\w\-]+"), "password=***"),
+    # An agent's recovery secret, wherever it appears (it has its own prefix)
+    (re.compile(r"luxswirl_rs_[\w\-]+"), "luxswirl_rs_***"),
 )
 
 # A field whose name contains one of these is masked outright, whatever its value.

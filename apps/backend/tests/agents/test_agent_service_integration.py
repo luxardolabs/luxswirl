@@ -45,7 +45,7 @@ class TestCreateAgent:
 
 class TestRegisterAgent:
     async def test_creates_with_pending_status(self, db: AsyncSession):
-        registered = await AgentCoreService.register_agent(
+        registered, _ = await AgentCoreService.register_agent(
             db,
             hostname="newcomer.example.test",
             ip_address="10.0.0.1",
@@ -56,7 +56,7 @@ class TestRegisterAgent:
         assert agent.hostname == "newcomer.example.test"
 
     async def test_packs_tags_as_array(self, db: AsyncSession):
-        registered = await AgentCoreService.register_agent(
+        registered, _ = await AgentCoreService.register_agent(
             db,
             hostname="h",
             tags=["prod", "us-east"],
@@ -66,7 +66,9 @@ class TestRegisterAgent:
         assert agent.tags == ["prod", "us-east"]
 
     async def test_none_tags_stored_as_none(self, db: AsyncSession):
-        registered = await AgentCoreService.register_agent(db, hostname="h", tags=None)
+        registered, _ = await AgentCoreService.register_agent(
+            db, hostname="h", tags=None
+        )
         agent = await _stored(db, registered.id)
         assert agent.tags is None
 
@@ -138,7 +140,7 @@ async def _stored(db: AsyncSession, agent_id: UUID) -> Agent:
 
 class TestApprovalWorkflow:
     async def test_approve_pending_agent_assigns_api_key(self, db: AsyncSession):
-        pending = await AgentCoreService.register_agent(db, hostname="h")
+        pending, _ = await AgentCoreService.register_agent(db, hostname="h")
         assert (await _stored(db, pending.id)).approval_status == "pending"
 
         approved, plaintext_key = await AgentCoreService.approve_agent(db, pending.id)
@@ -160,7 +162,7 @@ class TestApprovalWorkflow:
             await AgentCoreService.approve_agent(db, a.id)
 
     async def test_reject_pending_agent(self, db: AsyncSession):
-        pending = await AgentCoreService.register_agent(db, hostname="h")
+        pending, _ = await AgentCoreService.register_agent(db, hostname="h")
         await AgentCoreService.reject_agent(db, pending.id, reason="failed audit")
         rejected = await _stored(db, pending.id)
         assert rejected.approval_status == "rejected"
@@ -206,7 +208,7 @@ class TestApiKeyManagement:
     async def test_regenerate_changes_hash_and_returns_plaintext(
         self, db: AsyncSession
     ):
-        pending = await AgentCoreService.register_agent(db, hostname="h")
+        pending, _ = await AgentCoreService.register_agent(db, hostname="h")
         _, original_key = await AgentCoreService.approve_agent(db, pending.id)
         original_hash = (await _stored(db, pending.id)).api_key_hash
 
@@ -221,7 +223,7 @@ class TestApiKeyManagement:
         )
 
     async def test_revoke_clears_hash(self, db: AsyncSession):
-        pending = await AgentCoreService.register_agent(db, hostname="h")
+        pending, _ = await AgentCoreService.register_agent(db, hostname="h")
         await AgentCoreService.approve_agent(db, pending.id)
         assert (await _stored(db, pending.id)).api_key_hash is not None
 

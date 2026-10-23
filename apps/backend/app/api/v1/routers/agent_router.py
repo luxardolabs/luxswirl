@@ -17,7 +17,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import AuthenticatedHeartbeat
 from app.core.config import settings
 from app.core.rate_limit import limiter
-from app.core.security import verify_registration_token
+from app.core.security import (
+    verify_recovery_registration_key,
+    verify_registration_token,
+)
 from app.db import get_db
 from app.models.enum_model import AgentApprovalStatus
 from app.schemas.agent_schema import (
@@ -52,7 +55,7 @@ async def register_agent(
     authorization: Annotated[str | None, Header()] = None,
 ) -> AgentRegisterResponse:
     await verify_registration_token(authorization, db)
-    agent = await AgentCoreService.register_agent(
+    agent, recovery_secret = await AgentCoreService.register_agent(
         db=db,
         hostname=data.hostname or "",
         ip_address=data.ip_address,
@@ -63,6 +66,7 @@ async def register_agent(
         agent_id=agent.id,
         status=AgentApprovalStatus.PENDING,
         message="Agent registered successfully. Awaiting administrator approval.",
+        recovery_secret=recovery_secret,
     )
 
 
@@ -88,7 +92,11 @@ async def agent_heartbeat(
 @agent_ops_router.post(
     "/agents/{agent_id}/recover-key",
     summary="Recover agent API key",
-    description="Agent calls this with registration token to get new agent-specific key",
+    description=(
+        "Agent calls this with the registration key AND its own recovery secret "
+        "(header X-Agent-Recovery-Secret, issued once at registration) to get a "
+        "new agent-specific key"
+    ),
     response_model=AgentKeyRecoveryResponse,
     name="recover_agent_key",
 )
@@ -98,14 +106,12 @@ async def recover_agent_key(
     agent_id: UUID,
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     authorization: Annotated[str | None, Header()] = None,
+    recovery_secret: Annotated[
+        str | None, Header(alias="X-Agent-Recovery-Secret")
+    ] = None,
 ) -> AgentKeyRecoveryResponse:
-    await verify_registration_token(authorization, db)
-
-    new_key = await AgentCoreService.recover_agent_key(db, agent_id)
-    logger.info(
-        "Agent recovered API key using registration token",
-        extra={"agent_id": str(agent_id)},
-    )
+    await verify_recovery_registration_key(agent_id, authorization, db)
+    new_key = await AgentCoreService.recover_agent_key(db, agent_id, recovery_secret)
 
     return AgentKeyRecoveryResponse(
         agent_id=agent_id,

@@ -41,6 +41,14 @@ class AgentRegisterResponse(BaseSchema):
         ..., description="Registration status (always pending: an operator approves)"
     )
     message: str = Field(..., description="Human-readable message")
+    recovery_secret: str = Field(
+        ...,
+        description=(
+            "This agent's recovery secret, returned once and never again. "
+            "recover-key needs it (header X-Agent-Recovery-Secret) together with "
+            "the registration key; store it with the agent id."
+        ),
+    )
 
     model_config = {
         "json_schema_extra": {
@@ -48,6 +56,7 @@ class AgentRegisterResponse(BaseSchema):
                 "agent_id": "550e8400-e29b-41d4-a716-446655440000",
                 "status": "pending",
                 "message": "Agent registered. Awaiting approval.",
+                "recovery_secret": "luxswirl_rs_<64 hex characters>",
             }
         }
     }

@@ -362,6 +362,10 @@ class LuxSwirlAgent:
                 self.logger.error("Failed to register with server - cannot continue")
                 return
 
+        elif not await self.registration.ensure_recoverable():
+            self.logger.error("Failed to re-register with server - cannot continue")
+            return
+
         self.logger.info(
             "Agent ID",
             extra={"agent_id": str(self.config.get("agent_id"))},

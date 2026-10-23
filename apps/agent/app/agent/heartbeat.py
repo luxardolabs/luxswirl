@@ -196,7 +196,10 @@ class HeartbeatSender:
 
                     # Build heartbeat payload
                     heartbeat = {
-                        "agent_id": str(agent_id),
+                        # Read per beat: a re-registration (orphaned agent, or
+                        # credentials from before recovery secrets) gives the
+                        # agent a new id while this loop runs.
+                        "agent_id": str(self.config.get("agent_id") or agent_id),
                         "timestamp": datetime.now(UTC).isoformat(),
                         "hostname": self.hostname,
                         "ip_address": self.ip_address,

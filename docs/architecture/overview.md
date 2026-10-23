@@ -507,14 +507,14 @@ ______________________________________________________________________
 
 The JSON API under `/api/v1` is the agent protocol: it carries agents' registration, heartbeats, check lists, results and artifacts. Operators manage agents, checks, alerts, notification providers, registration keys, users and status pages through the web UI.
 
-**Versioning**: every agent endpoint lives under `/api/v1`. **Authentication**: `Authorization: Bearer <key>` — a registration key to register or recover, the agent's own key for its check list, reports, job results and artifacts. **Response format**: JSON.
+**Versioning**: every agent endpoint lives under `/api/v1`. **Authentication**: `Authorization: Bearer <key>` — a registration key to register, a registration key plus the agent's recovery secret (header `X-Agent-Recovery-Secret`) to recover, the agent's own key for its check list, reports, job results and artifacts. **Response format**: JSON.
 
 ### API Endpoint Structure
 
 ```
 /api/v1
 ├── POST   /agents/register                 Register (registration key)
-├── POST   /agents/{agent_id}/recover-key   Recover the agent key (registration key)
+├── POST   /agents/{agent_id}/recover-key   Recover the agent key (registration key + recovery secret)
 ├── POST   /heartbeat                       Heartbeat (agent key or registration key)
 ├── GET    /checks?agent_id={id}            Fetch this agent's checks (agent key)
 ├── POST   /reports                         Submit a batch of results (agent key)

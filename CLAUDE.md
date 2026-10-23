@@ -313,15 +313,15 @@ The JSON API is the agent protocol. Operators manage agents, checks, alerts, not
 
 ### Agent protocol (`/api/v1`)
 
-| Method | Path                                    | Auth                          | Purpose                                  |
-| ------ | --------------------------------------- | ----------------------------- | ---------------------------------------- |
-| `POST` | `/api/v1/agents/register`               | Registration key              | Register a new agent (pending approval)  |
-| `POST` | `/api/v1/agents/{agent_id}/recover-key` | Registration key              | Issue a fresh agent key to a known agent |
-| `POST` | `/api/v1/heartbeat`                     | Agent key or registration key | Report liveness and self-metrics         |
-| `GET`  | `/api/v1/checks?agent_id={id}`          | Agent key                     | The checks this agent should run         |
-| `POST` | `/api/v1/reports`                       | Agent key                     | Submit a batch of check results          |
-| `POST` | `/api/v1/jobs/{job_id}/results`         | Key of the job's own agent    | Submit a job's results                   |
-| `POST` | `/api/v1/artifacts`                     | Agent key                     | Upload an artifact for one of its checks |
+| Method | Path                                    | Auth                               | Purpose                                  |
+| ------ | --------------------------------------- | ---------------------------------- | ---------------------------------------- |
+| `POST` | `/api/v1/agents/register`               | Registration key                   | Register a new agent (pending approval)  |
+| `POST` | `/api/v1/agents/{agent_id}/recover-key` | Registration key + recovery secret | Issue a fresh agent key to a known agent |
+| `POST` | `/api/v1/heartbeat`                     | Agent key or registration key      | Report liveness and self-metrics         |
+| `GET`  | `/api/v1/checks?agent_id={id}`          | Agent key                          | The checks this agent should run         |
+| `POST` | `/api/v1/reports`                       | Agent key                          | Submit a batch of check results          |
+| `POST` | `/api/v1/jobs/{job_id}/results`         | Key of the job's own agent         | Submit a job's results                   |
+| `POST` | `/api/v1/artifacts`                     | Agent key                          | Upload an artifact for one of its checks |
 
 ### Infrastructure
 
@@ -389,7 +389,7 @@ Agent credentials (`agent_id` + `api_key`) are automatically encrypted using **F
 **How it works:**
 
 1. **Registration:** Agent registers with server using `LUXSWIRL_AUTH_KEY` (registration key)
-1. **Approval:** Server generates unique agent-specific API key
+1. **Approval:** Server generates unique agent-specific API key; the agent fetches it with the registration key plus the per-agent recovery secret it was given at registration
 1. **Storage:** Agent encrypts and saves credentials to persistent Docker volume
 1. **Restart:** Agent loads and decrypts credentials automatically using container-derived key
 

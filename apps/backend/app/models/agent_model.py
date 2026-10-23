@@ -313,6 +313,15 @@ class Agent(UUIDBaseModel):
         comment="Bcrypt hash of agent-specific API key (NULL until approved)",
     )
 
+    recovery_secret_hash: Mapped[str | None] = mapped_column(
+        String(64),
+        nullable=True,
+        comment=(
+            "SHA-256 hex of the per-agent recovery secret issued at registration "
+            "(NULL for agents registered before it existed: they cannot recover)"
+        ),
+    )
+
     api_key_created_at: Mapped[datetime | None] = mapped_column(
         nullable=True,
         comment="When the API key was created/last regenerated",

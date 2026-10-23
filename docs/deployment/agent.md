@@ -481,6 +481,16 @@ docker compose restart luxswirl_agent
 
 See [Agent Credential Encryption](../architecture/security-credentials.md) for details.
 
+### Agent Registered Before Recovery Secrets Re-registers
+
+**Symptom:** after upgrading, an agent that had not yet received its agent key logs `No recovery secret stored ... registering again; approve the new agent`, and a new pending agent appears in the server UI.
+
+**Cause:** key recovery (`POST /api/v1/agents/{agent_id}/recover-key`) now needs the agent's own recovery secret as well as the registration key. The secret is issued at registration, so an agent registered before this version has none, and the server has no digest to check it against: such an agent can never recover a key.
+
+**Solution:** approve the new registration in the server UI and delete the old, superseded agent. An agent that already holds its agent key keeps running on it; it only needs to register again if it ever loses that key (for example after deleting its credentials), and then it is approved like a new agent.
+
+A recovery refused for a wrong or missing secret answers 401 and is logged on the server as `SECURITY AUDIT: Agent key recovery refused`.
+
 ### High CPU/Memory Usage
 
 **Check resource usage:**
