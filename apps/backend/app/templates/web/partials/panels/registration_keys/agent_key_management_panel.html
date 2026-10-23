@@ -91,7 +91,8 @@
                         <h4 class="font-semibold text-red-400 mb-1">Revoke Agent-Specific Key</h4>
                         <p class="text-sm text-dark-text-muted mb-3">
                             Permanently revoke the agent-specific key. The agent will be unable to connect
-                            until a new key is generated or recovered using a registration key.
+                            until a new key is generated here, or the agent recovers one with a registration
+                            key and its own recovery secret.
                         </p>
                         {{ confirm_action_btn(icon_svg=ICO_BAN, label='Revoke Key', color='red',
                             hx_delete=agent_urls.revoke_key,
@@ -110,13 +111,21 @@
                 Key Recovery Information
             </h4>
             <p class="text-sm text-dark-text-muted mb-3">
-                If the agent loses its agent-specific key (e.g., container restart without persistent storage),
-                it can recover by calling the recovery endpoint with a valid <strong>registration key</strong>.
+                An approved agent recovers a new agent-specific key itself by calling the recovery endpoint with
+                <strong>both</strong> a valid <strong>registration key</strong> and its own <strong>recovery secret</strong>.
+                The server issues the recovery secret once, at registration, and the agent keeps it in its
+                credentials file next to its key. A registration key alone recovers nothing.
             </p>
             <div class="p-3 bg-dark-bg-tertiary rounded text-xs font-mono text-dark-text-muted">
                 POST /api/v1/agents/{{ agent.id }}/recover-key<br/>
-                Authorization: Bearer &lt;registration_key&gt;
+                Authorization: Bearer &lt;registration_key&gt;<br/>
+                X-Agent-Recovery-Secret: &lt;recovery_secret&gt;
             </div>
+            <p class="text-sm text-dark-text-muted mt-3">
+                An agent that has lost its credentials file (for example, a container restarted without
+                persistent storage) has lost its recovery secret too, so it cannot recover: it registers
+                again as a new pending agent, which must be approved.
+            </p>
             <p class="text-xs text-dark-text-muted mt-3">
                 Note: Registration keys are managed separately in <a href="{{ nav.settings_registration_keys }}" class="text-brand-400 hover:underline">Settings > Registration Keys</a>.
             </p>
