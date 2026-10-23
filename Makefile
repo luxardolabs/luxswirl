@@ -49,7 +49,7 @@ LUXAUDIT_IMAGE   ?= $(LUXARCH_REGISTRY)/luxardolabs/luxaudit:$(LUXAUDIT_VERSION)
 # ruff/mypy config byte-identical (see .luxlint.toml); ruff runs mount-only, mypy
 # runs as an in-repo tail (needs a current mypy for PEP 758 excepts — the baked
 # lint image freezes an older one, so the tail installs a fresh mypy).
-LUXLINT_VERSION := 0.69.1
+LUXLINT_VERSION := 0.69.2
 LUXLINT_IMAGE    ?= $(LUXARCH_REGISTRY)/luxardolabs/luxlint:$(LUXLINT_VERSION)
 # The gitleaks asset reads the luxlint ref as $(LUXLINT).
 LUXLINT          = $(LUXLINT_IMAGE)
@@ -2320,6 +2320,15 @@ TEST_WORKDIR  := apps/backend
 # compose interpolates every service, so the agent's required ${LUXSWIRL_AUTH_KEY:?} needs a
 # value even though only the test DB starts: .env.test is the committed file holding it.
 TEST_ENV_FILE := .env.test
+# Two suites, one per component (each is its own `app` package and image): the backend
+# takes the TEST_* settings above; the agent needs no backing service, only its code
+# and the vendored shared package on the path, and keeps its own coverage floor.
+TEST_SUITES          := backend agent
+agent_TEST_WORKDIR   := apps/agent
+agent_TEST_SERVICES  :=
+agent_TEST_ENV       := -e PYTHONPATH=/repo/apps/agent:/repo/apps \
+                        -e HYPOTHESIS_STORAGE_DIRECTORY=/out/.hypothesis
+agent_TEST_FLOOR     := apps/agent/.luxlint.toml
 # The suite reads TEST_DATABASE_URL (a name the app never reads, so an exported dev
 # DATABASE__URL can never aim the schema-dropping harness at the dev DB); DATABASE__URL
 # lands anything that builds the real engine on the throwaway DB too. PYTHONPATH points

@@ -68,6 +68,7 @@ dnspython = "^2.7.0"        # DNS checks
 # repo.guard_owned_tools_undeclared.
 pytest = "^9.1.1"
 pytest-asyncio = "^1.3.0"
+pytest-cov = "^7.0.0"
 
 [build-system]
 # Fleet's one build backend is hatchling (repo.hatchling_build_backend). Poetry stays the
