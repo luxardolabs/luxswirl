@@ -63,7 +63,11 @@ The agent authenticates with a registration key. Bring up the **server** first, 
 docker compose up -d
 ```
 
-### 4. Check Logs
+### 4. Approve the Agent and Set Its Tags
+
+The agent registers as **pending**. An admin approves it on the **Agents** page. Tags the agent declares in its config are stored only while it is pending, as a suggestion shown at approval. From approval on, tags are admin-managed: only an admin changes them (the agent's **Edit** panel), and the agent's own heartbeat never does. Tags decide which replicate and distribute checks the agent runs, so an agent cannot widen its own assignments.
+
+### 5. Check Logs
 
 ```bash
 docker compose logs -f luxswirl_agent

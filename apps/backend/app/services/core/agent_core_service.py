@@ -579,8 +579,13 @@ class AgentCoreService:
     ) -> None:
         """Copy what a heartbeat reports about the agent onto its row.
 
-        Identity fields (hostname, ip, version, tags) change only when the
-        heartbeat sends a value; health fields always take the latest report.
+        Identity fields (hostname, ip, version) change only when the heartbeat
+        sends a value; health fields always take the latest report.
+
+        Tags decide which replicate and distribute checks an agent is handed
+        (and may report on), so they are admin-managed: the agent's declared
+        tags are taken only while it is pending, as the suggestion an admin
+        sees when approving. From approval on, only an admin changes them.
         """
         # Liveness: the heartbeat is the only writer of last_seen and the run
         # id. last_seen is when the server heard from the agent, not the time
@@ -596,7 +601,7 @@ class AgentCoreService:
             agent.ip_address = heartbeat.ip_address
         if heartbeat.version:
             agent.version = heartbeat.version
-        if heartbeat.tags:
+        if heartbeat.tags and agent.approval_status == AgentApprovalStatus.PENDING:
             agent.tags = heartbeat.tags
 
         # Update health fields
