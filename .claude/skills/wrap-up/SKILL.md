@@ -3,7 +3,7 @@ name: wrap-up
 description: Close out a piece of work the fleet way before calling it done — tests written and run for what changed, every red in touched files fixed, docs updated (stale advice removed), make check green, committed in the issue's worktree, LuxPM fully closed out (issues, checklists, activities, commit links, sync receipt), then landed on the base branch, the worktree removed, and pushed as the repo declares. Every step reports evidence, not a tick.
 ---
 
-<!-- luxarch:wrap-up-skill asset v14 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit wrap-up-skill`. -->
+<!-- luxarch:wrap-up-skill asset v15 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit wrap-up-skill`. -->
 
 # Wrap up
 
@@ -77,7 +77,7 @@ A red can also be moved instead of fixed: the code goes to another layer, helper
 
 - In the worktree: `python3 .claude/hooks/worktree.py land`. If it rebased onto new commits (this machine's, or under `"agent"` another machine's, fetched from origin), it stops: re-run the touched tests and `make check` on the rebased code, then `land` again. A conflict stops it with nothing changed: resolve it in the worktree, re-run the gate, land.
 - Pushing follows `.luxarch.toml`. `[agents] push = "agent"`: `land` pushes the tested HEAD to origin as it lands. If origin rejected it, origin moved: run `land` again, never `git pull --rebase` on the base. `push = "owner"`: `land` stays local; say the work is landed and ready. A repo with no declaration reds `repo.agent_push_declared`: ask the owner which it is, once, and write the answer there.
-- `ExitWorktree` with `action: "remove"`. The session is back in the main checkout and the worktree and its branch are gone.
+- `ExitWorktree` with `action: "remove"`. The session is back in the main checkout and the worktree and its branch are gone. A worktree you adopted (entered by `path`) is not one `ExitWorktree` removes: `ExitWorktree` with `action: "keep"`, then from the main checkout `python3 .claude/hooks/worktree.py list --prune`, which removes it now that it is landed, clean, and locked only by you.
 - `python3 .claude/hooks/worktree.py list`: no worktree left for this issue.
 
 **Evidence:** `land`'s `Landed and pushed N commit(s) on <base> at <sha>` line (`Landed N commit(s)` under `"owner"`), the `list` output, and `git status -sb` (nothing ahead under `"agent"`; the commits ahead named under `"owner"`).

@@ -39,7 +39,7 @@ DEV_WAIT_TIMEOUT      ?= 180
 # Makefile.local (gitignored): copy Makefile.local.example -> Makefile.local and set it.
 # Contributors don't need it — lint/test and the import-linter contracts run without it.
 LUXARCH_REGISTRY ?=
-LUXARCH_VERSION := 0.315.0
+LUXARCH_VERSION := 0.316.0
 LUXARCH_IMAGE    ?= $(LUXARCH_REGISTRY)/luxardolabs/luxarch:$(LUXARCH_VERSION)
 # Dependency-CVE guard (luxaudit) — same private registry as luxarch, mount-only.
 # Scans the pinned poetry.locks against the live advisory feed (see .luxaudit.toml).
@@ -2354,7 +2354,7 @@ TEST_ENV      := -e TEST_DATABASE_URL=postgresql+asyncpg://luxswirl_test:luxswir
                  $(call shared_overlay,/repo/apps/backend/app) \
                  -e HYPOTHESIS_STORAGE_DIRECTORY=/out/.hypothesis
 
-# luxarch:test-block asset v5 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit test-block`.
+# luxarch:test-block asset v6 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit test-block`.
 # ── Test: THE suite, in the test image, against an isolated stack of real services ───────────────
 # Emitted by `luxarch --emit test-block`; paste below the build core (`luxarch --emit build-core`, v4:
 # it builds with the core's `img_*` helpers and TEST_IMAGE, and the repo's BUILD_ARGS, and quotes every
@@ -2444,6 +2444,14 @@ TEST_ENV      := -e TEST_DATABASE_URL=postgresql+asyncpg://luxswirl_test:luxswir
 #     PYTEST_ARGS narrows the main run only: a path in it would otherwise run outside the block. Coverage
 #     appends both runs, and `make test` fails when either fails. Layout: `luxarch --playbook
 #     test-isolation`, "Migration tests".
+#   - A NARROWED RUN, `make test-fast PYTEST_ARGS='tests/test_orders.py -k refund'` (v6), is `make test`
+#     with the same isolation (its own image tag, compose project, labels and reaping, so concurrent
+#     checkouts and agents never share a stack or an image) and no coverage verdict: the ratchet
+#     judges the whole floor, so a narrowed run would always fail it, and the migration tests' own
+#     run is skipped. Only `make test` judges the floor; the check gate runs it. The recipe reads
+#     the goals make sets from its own command line (MAKECMDGOALS at origin `default`), inline, with
+#     no variable of its own: a makefile, environment, target- or pattern-specific value, or a
+#     MAKEOVERRIDES word handed to a sub-make keeps the ratchet on, and `make test test-fast` runs it.
 #   - Each run's project is named from its own `mktemp -d` token, and refuses to run without one (a
 #     PID repeats across containers and CI runners), and everything mounts the makefile's directory
 #     ($(CURDIR)), so `make -C` runs the right suite.
@@ -2481,10 +2489,10 @@ TEST_SUITES ?=
 # Setting: the migration tests' directory, from TEST_WORKDIR (`tests/migrations`), run on their own
 # outside the test-db-bound block (v5); empty: none. A listed suite's is `<suite>_TEST_MIGRATIONS` ---
 TEST_MIGRATIONS ?=
-# Setting: NONE. For a one-off run only, on the command line: `make test PYTEST_ARGS='-k orders'`.
+# Setting: NONE. For a one-off run only, on the command line: `make test-fast PYTEST_ARGS='-k orders'`.
 # A committed value narrows THE suite for everyone (`repo.test_block_wired` reds one). The ratchet
-# still judges the whole floor, so a narrowed run measures only what it touched and fails it: a
-# quick subset target of your own runs pytest without the ratchet, never through `make test` ----
+# judges the whole floor, so a narrowed `make test` measures only what it touched and fails it:
+# `make test-fast` runs the narrowed suite the same isolated way, without the ratchet ------------
 PYTEST_ARGS ?=
 
 # One-off pytest arguments reach the container through the environment, never spliced into a quoted
@@ -2568,7 +2576,7 @@ test: test-reap ## THE suite (each of TEST_SUITES in turn): its own test image, 
 	printf '%s\n%s\n%s\n%s\n%s\n' "$$$$" "$$ns" "$$co" "$$boot" "$$machine" > "$$D/owner" || { rm -rf "$$D"; exit 2; }; \
 	[ -z $(call sq,$(TEST_ENV_FILE)) ] || [ -f $(call sq,$(TEST_ENV_FILE)) ] || { printf 'REFUSING: TEST_ENV_FILE is %s, which this checkout does not have: compose would fail on interpolation. Commit it (test-suite.env), or set TEST_ENV_FILE to a committed file\n' $(call sq,$(TEST_ENV_FILE)); rm -rf "$$D"; exit 2; }; \
 	[ $(words $(test_suite_floors)) = $(words $(sort $(test_suite_floors))) ] || { printf 'REFUSING: two suites would share one coverage floor (%s): give each its own <suite>_TEST_FLOOR\n' $(call sq,$(foreach s,$(test_suites),$(s)=$(call test_suite,$(s),FLOOR))); rm -rf "$$D"; exit 2; }; \
-	stop="$$D/stop"; kid=; insuite=; \
+	stop="$$D/stop"; kid=; insuite=; fast=$(if $(filter default,$(origin MAKECMDGOALS)),$(if $(filter test,$(MAKECMDGOALS)),,$(if $(filter test-fast,$(MAKECMDGOALS)),1))); \
 	kids() { p=$$1; if command -v pgrep >/dev/null 2>&1; then pgrep -P "$$p"; else set +f; for f in /proc/[0-9]*/stat; do read -r l < "$$f" 2>/dev/null || continue; set -- $${l##*)}; [ "$${2:-}" = "$$p" ] && { c=$${f#/proc/}; echo "$${c%/stat}"; }; done; set -f; fi; }; \
 	tree() { for c in $$(kids "$$1"); do tree "$$c"; done; kill -TERM "$$1" 2>/dev/null; }; \
 	trap 'rm -rf "$$D"' EXIT; \
@@ -2604,12 +2612,13 @@ test: test-reap ## THE suite (each of TEST_SUITES in turn): its own test image, 
 	      [ "$$(docker network inspect -f '{{index .Labels "com.docker.compose.project"}}' $$n)" = "$$p" ] && { net=$$n; break; }; done; \
 	    [ -n "$$net" ] || { printf 'FAIL  %s joined no network of this run'"'"'s own project (%s)\n' $(call sq,$(firstword $(call test_suite,$(s),SERVICES))) "$$p"; exit 1; }; \
 	    net="--network $$net"; fi; \
-	  bg docker run --rm --init $$lab --label "luxarch.test-block.checkout=$$co" -e TINI_KILL_PROCESS_GROUP=1 $$net $(call sqw,$(call test_suite,$(s),ENV)) -e PYTEST_ADDOPTS="$${PYTEST_ARGS:-}" -e LUXARCH_TEST_MIGRATIONS="$$mig" \
+	  bg docker run --rm --init $$lab --label "luxarch.test-block.checkout=$$co" -e TINI_KILL_PROCESS_GROUP=1 $$net $(call sqw,$(call test_suite,$(s),ENV)) -e PYTEST_ADDOPTS="$${PYTEST_ARGS:-}" -e LUXARCH_TEST_MIGRATIONS="$$mig" -e LUXARCH_TEST_FAST="$$fast" \
 	    -e LUXARCH_TEST_COV=$(call sq,$(call test_suite,$(s),COV)) -e COVERAGE_CORE=sysmon -e COVERAGE_FILE=/out/.coverage -e PYTHONDONTWRITEBYTECODE=1 \
 	    -v $(call sq,$(CURDIR)):/repo:ro -v "$$D/cfg":/cfg:ro -v "$$out":/out -w /repo/$(call sq,$(call test_suite,$(s),WORKDIR)) "$$img" \
-	    sh -c 'm=$${LUXARCH_TEST_MIGRATIONS:-}; python -m coverage run --branch --source="$$LUXARCH_TEST_COV" -m pytest -c /cfg/pytest.ini --rootdir=. -p no:cacheprovider $${m:+"--ignore=$$m"}; s=$$?; if [ -n "$$m" ]; then PYTEST_ADDOPTS= python -m coverage run --append --branch --source="$$LUXARCH_TEST_COV" -m pytest -c /cfg/pytest.ini --rootdir=. -p no:cacheprovider --confcutdir="$$m" "$$m"; ms=$$?; [ "$$ms" = 0 ] || echo "FAIL  the migration tests in $$m failed (exit $$ms)"; [ "$$s" != 0 ] || s=$$ms; fi; python -m coverage report --show-missing --precision=2 > /out/coverage.txt; echo $$? > /out/coverage.rc; python -m coverage json -q -o - > /out/coverage.json; cat /out/coverage.txt; exit $$s'; \
+	    sh -c 'm=$${LUXARCH_TEST_MIGRATIONS:-}; python -m coverage run --branch --source="$$LUXARCH_TEST_COV" -m pytest -c /cfg/pytest.ini --rootdir=. -p no:cacheprovider $${m:+"--ignore=$$m"}; s=$$?; if [ -n "$$m" ] && [ -z "$${LUXARCH_TEST_FAST:-}" ]; then PYTEST_ADDOPTS= python -m coverage run --append --branch --source="$$LUXARCH_TEST_COV" -m pytest -c /cfg/pytest.ini --rootdir=. -p no:cacheprovider --confcutdir="$$m" "$$m"; ms=$$?; [ "$$ms" = 0 ] || echo "FAIL  the migration tests in $$m failed (exit $$ms)"; [ "$$s" != 0 ] || s=$$ms; fi; python -m coverage report --show-missing --precision=2 > /out/coverage.txt; echo $$? > /out/coverage.rc; python -m coverage json -q -o - > /out/coverage.json; cat /out/coverage.txt; exit $$s'; \
 	  rc=$$?; \
 	  [ "$$rc" = 0 ] || { echo "FAIL  the suite failed (exit $$rc)"; exit 1; }; \
+	  [ -z "$$fast" ] || { echo "test-fast: passed, with no coverage verdict and no migration tests (make test runs both)"; exit 0; }; \
 	  [ "$$(cat "$$out/coverage.rc" 2>/dev/null)" = 0 ] || { printf 'FAIL  coverage measured nothing (coverage report: %s): check %s names the package the suite imports\n' "$$(tail -n 1 "$$out/coverage.txt" 2>/dev/null)" $(call sq,$(call test_suite_var,$(s),COV)); exit 1; }; \
 	  [ -f $(call sq,$(abspath $(call test_suite,$(s),FLOOR))) ] || { printf 'FAIL  the coverage floor %s (%s) does not exist: put [test].coverage_min there\n' $(call sq,$(call test_suite,$(s),FLOOR)) $(call sq,$(call test_suite_var,$(s),FLOOR)); exit 1; }; \
 	  cat "$$out/coverage.txt" "$$out/coverage.json" > "$$out/ratchet.in" 2>/dev/null; \
@@ -2619,6 +2628,10 @@ test: test-reap ## THE suite (each of TEST_SUITES in turn): its own test image, 
 	  [ "$$crc" = 0 ] || { echo "FAIL  the coverage ratchet failed (its verdict is above): add tests, never lower the floor"; exit 1; } \
 	) & kid=$$!; while wait "$$kid"; r=$$?; kill -0 "$$kid" 2>/dev/null; do :; done; kid=; insuite=; halt; [ "$$r" = 0 ] || failed="$$failed "$(call sq,$(s)); ) \
 	[ -z "$$failed" ] || { $(if $(strip $(TEST_SUITES)),echo "FAIL  suites that failed:$$failed";) exit 1; }
+
+# THE NARROWED RUN (v6): `make test` with the same isolation and no coverage verdict. The recipe is
+# `test`'s own: it reads this goal from make's command line.
+test-fast: test ## One-off narrowed run, isolated like `make test`, no coverage verdict: make test-fast PYTEST_ARGS='tests/test_x.py -k y'
 
 test-db-up: ## Start the disposable test Postgres (throwaway — never the dev DB)
 	$(DC_TEST) up -d --wait timescaledb-test
