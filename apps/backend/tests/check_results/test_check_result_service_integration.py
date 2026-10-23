@@ -193,12 +193,16 @@ class TestProcessAgentReport:
         with pytest.raises(AgentNotFoundException):
             await CheckResultCoreService.process_agent_report(db, report)
 
-    async def test_updates_agent_last_seen(self, db: AsyncSession):
-        """Every report bumps the agent's last_seen so the dashboard knows
-        the agent is alive."""
+    async def test_leaves_the_agent_row_unwritten(self, db: AsyncSession):
+        """A report never writes the agent row. It runs as one long transaction
+        (insert the results, evaluate the alerts); an agent-row write at its
+        start held that row's lock for all of it, and the agent's heartbeat,
+        which owns last_seen, timed out waiting behind it."""
         import datetime as dt
 
-        agent = make_agent(last_seen=utc_now() - dt.timedelta(hours=2))
+        agent = make_agent(
+            last_seen=utc_now() - dt.timedelta(hours=2), agent_run_id="run-before"
+        )
         db.add(agent)
         await db.flush()
         check = make_check(agent_id=agent.id)
@@ -208,12 +212,15 @@ class TestProcessAgentReport:
 
         report = AgentReportRequest(
             agent_id=agent.id,
+            agent_run_id="run-after",
             checks=[_result_payload(check_id=check.id)],
         )
         await CheckResultCoreService.process_agent_report(db, report)
 
+        assert agent not in db.dirty
         await db.refresh(agent)
-        assert agent.last_seen > original_last_seen
+        assert agent.last_seen == original_last_seen
+        assert agent.agent_run_id == "run-before"
 
     async def test_uses_per_check_timestamp(self, db: AsyncSession):
         """Each check_data has its own timestamp; results must use that, not
