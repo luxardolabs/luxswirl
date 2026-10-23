@@ -232,7 +232,13 @@ The agent uses a sophisticated batching reporter (`apps/agent/app/agent/reporter
   - Automatic migration of legacy `report_*.json` files on first startup
   - Disk cap: `report_max_stored_batches` (default 10,000) prunes oldest batches when exceeded
   - Uses `asyncio.to_thread()` for non-blocking I/O (stdlib `sqlite3`, zero new dependencies)
-- Background task processes stored reports when server becomes available
+- Background task processes stored reports when server becomes available, combined up to `report_batch_size` per POST
+- **Dead letters for permanent refusals** (`apps/agent/app/agent/dead_letter.py`)
+  - A 400, 413 or 422 means the server refuses that payload and will again: the batch is not retried or stored, it goes to the `dead_letters` table in the same database (original `created_at`, `failed_at`, status, the server's error detail scrubbed by `shared/log_redaction.py` and cut to 2 KB, and the gzip payload), with an ERROR log line
+  - Everything else is transient and stored for replay: network errors, 5xx, 408, 429, and 401/403 (key recovery can fix auth; it is never dead-lettered)
+  - Replay never stops at a refused batch: a combined POST refused permanently is retried batch by batch; each one the server takes is deleted, each one it refuses moves to `dead_letters`, and a transient failure ends the pass
+  - Cap: `report_max_dead_letters` (default 1,000) prunes the oldest
+  - The count rides each heartbeat as `dead_letter_count`, is stored on the agent row, and shows as a yellow "N dead-lettered" badge on the agent's card when above zero
 - Backpressure handling: drops oldest results when queue exceeds `report_max_queue_size`
 
 ### Agent Performance Features

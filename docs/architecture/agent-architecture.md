@@ -215,6 +215,25 @@ Examples:
 - "location:home,role:internal-monitor"
 ```
 
+## Result Reporting
+
+The agent's reporter (`apps/agent/app/agent/reporter.py`) batches check results and POSTs them to `/api/v1/reports`. Each response is classified (`classify_status` in `apps/agent/app/agent/dead_letter.py`):
+
+| Outcome       | Statuses                                              | What happens to the batch                                                         |
+| ------------- | ----------------------------------------------------- | --------------------------------------------------------------------------------- |
+| **Sent**      | 2xx                                                   | Done                                                                              |
+| **Permanent** | 400, 413, 422                                         | Not retried, not stored: moved to the `dead_letters` table with an ERROR log line |
+| **Transient** | network errors, 5xx, 408, 429, 401/403, anything else | Retried `report_max_retries` times, then stored in `pending_batches` for replay   |
+
+Auth failures (401/403) stay transient: the agent's key-recovery path can fix them, so they are never dead-lettered.
+
+Both tables live in one SQLite file, `reports/pending_reports.db` (WAL, gzip-compressed payloads, every query through `asyncio.to_thread`):
+
+- **`pending_batches`** — capped by `report_max_stored_batches` (default 10,000). A background task replays the oldest batches, combined up to `report_batch_size` results per POST. If a combined POST is refused permanently, each batch in it is retried alone: one the server takes is deleted, one it refuses moves to `dead_letters`. A transient failure ends the pass and leaves the rest pending. Replay never stops at a refused batch.
+- **`dead_letters`** — the original `created_at`, `failed_at`, `status_code`, the server's error detail (scrubbed by `shared/log_redaction.py`, at most 2 KB) and the gzip payload. Capped by `report_max_dead_letters` (default 1,000), oldest pruned first.
+
+Each heartbeat carries `dead_letter_count`. The server stores it on `Agent.dead_letter_count`, and the agents page shows a yellow "N dead-lettered" badge on the agent's card when it is above zero.
+
 ## Data Model
 
 ### Agent Model (shipped)
