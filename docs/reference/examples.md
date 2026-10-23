@@ -28,7 +28,7 @@ LuxSwirl checks use a **flat schema** — there is no nested `config` object. Ch
 
 There are two surfaces with slightly different key names:
 
-**REST API (`POST /api/v1/agents/{agent_id}/checks`)** — uses `display_name`, `interval_seconds`, `timeout_seconds`:
+**Check fields** — the examples below name each field of a check; set them in **Checks → Create Check**, where the form shows the fields for the chosen check type:
 
 | Field               | Type     | Applies to      | Notes                                                                                     |
 | ------------------- | -------- | --------------- | ----------------------------------------------------------------------------------------- |
@@ -56,7 +56,7 @@ There are two surfaces with slightly different key names:
 
 **Import/Export JSON** — uses `name` plus `interval`/`timeout` (instead of `display_name`/`interval_seconds`/`timeout_seconds`). Supported keys: `name`, `check_type`, `target`, `interval`, `timeout`, `retry_attempts`, `enabled`, `description`, `http_method`, `expected_status`, `json_path`, `expected_value`, `tags`.
 
-> **Note on JSON comparisons:** the agent supports a `comparison_type` (`equals`, `contains`, `regex`, `greater_than`/`gt`, `less_than`/`lt`, `not_equals`/`ne`) that defaults to `equals`. It is applied agent-side; the create/import schema does not persist a custom comparison, so JSON checks created through the API/import use `equals`.
+> **Note on JSON comparisons:** the agent supports a `comparison_type` (`equals`, `contains`, `regex`, `greater_than`/`gt`, `less_than`/`lt`, `not_equals`/`ne`) that defaults to `equals`. It is applied agent-side; the create/import schema does not persist a custom comparison, so JSON checks created through the form or an import use `equals`.
 
 ______________________________________________________________________
 
@@ -485,7 +485,7 @@ ______________________________________________________________________
 
 ## Alert Configurations
 
-Alerts are separate from checks. An alert has a `trigger_type` (`status_change`, `threshold`, or `repeated_failure`), a `trigger_config` object, and a list of notification providers. It can target specific checks (`check_ids`) or be global (`is_global: true`) with optional `trigger_config.check_filters`.
+Alerts are separate from checks. An alert has a `trigger_type` (`status_change`, `threshold`, or `repeated_failure`), a `trigger_config` object, and a list of notification providers. It can target specific checks (`check_ids`) or be global (`is_global: true`) with optional `trigger_config.check_filters`. Set these in **Alerts → Create Alert**.
 
 ### Status-Change Alert (specific checks)
 
@@ -543,7 +543,7 @@ ______________________________________________________________________
 
 ## Notification Providers
 
-Notification providers are created with a `provider_type`, a `friendly_name`, and a provider-specific `config` object. Sensitive fields (password, api_key, token, secret) are masked in API responses.
+Notification providers are created with a `provider_type`, a `friendly_name`, and a provider-specific `config` object, all set in **Notification Providers → Add Provider**.
 
 ### Email (SMTP)
 
@@ -798,7 +798,7 @@ These stacks use the **import/export** format (`name`, `interval`, `timeout`).
 }
 ```
 
-> DNS `record_type`/`expect_value` and database `query` are not part of the import/export key set, so they fall back to defaults on import (DNS resolves the record; databases run `SELECT 1`). Set those fields afterward via the UI or the REST API if you need specific values.
+> DNS `record_type`/`expect_value` and database `query` are not part of the import/export key set, so they fall back to defaults on import (DNS resolves the record; databases run `SELECT 1`). Set those fields afterward on the check's edit form if you need specific values.
 
 ______________________________________________________________________
 
@@ -856,7 +856,7 @@ ______________________________________________________________________
 }
 ```
 
-> For a Redis port check, add a `tcp` check via the REST API or UI (target `redis.example.com`, `port` `6379`) — `port` is not part of the import/export key set.
+> For a Redis port check, add a `tcp` check on the Checks page (target `redis.example.com`, `port` `6379`) — `port` is not part of the import/export key set.
 
 ______________________________________________________________________
 
@@ -888,7 +888,7 @@ ______________________________________________________________________
 | DNS records      | 3600 seconds (hourly) | Changes infrequently      |
 | Synthetic checks | 300-600 seconds       | Resource-heavy operations |
 
-`interval_seconds` (API) / `interval` (import) accepts 1–86400 seconds.
+The check interval accepts 1–86400 seconds (`interval_seconds`; `interval` in an import file).
 
 ______________________________________________________________________
 
@@ -899,7 +899,7 @@ ______________________________________________________________________
 - **DNS checks**: ~10 seconds
 - **Synthetic checks**: 60-120 seconds (complex workflows)
 
-`timeout_seconds` (API) / `timeout` (import) accepts 1–300 seconds.
+The check timeout accepts 1–300 seconds (`timeout_seconds`; `timeout` in an import file).
 
 **Rule of thumb**: Timeout should be ~2x expected response time.
 

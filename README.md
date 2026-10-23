@@ -39,7 +39,7 @@ Run checks from agents deployed across networks, regions, and private LANs, all 
 │  LuxSwirl Server             │
 │  - Aggregates agent results  │
 │  - TimescaleDB storage       │
-│  - Web UI + REST API         │
+│  - Web UI + agent API        │
 │  - Alerting engine           │
 └──────────────────────────────┘
      ▲        ▲        ▲
@@ -105,7 +105,7 @@ Import and export checks as JSON: version-control your monitoring config, back i
 
 ### Built to operate
 
-Prometheus metrics at `/metrics`, an OpenAPI-documented REST API (`/docs`, `/redoc`), role-based access (admin/editor/viewer), agent registration keys, and agent credentials encrypted at rest (Fernet).
+Prometheus metrics at `/metrics`, an OpenAPI-documented agent protocol (`/docs`, `/redoc`), role-based access (admin/editor/viewer), agent registration keys, and agent credentials encrypted at rest (Fernet).
 
 ______________________________________________________________________
 
@@ -131,7 +131,7 @@ echo 'LUXSWIRL_AUTH_KEY=<paste-your-key-here>' >> .env
 docker compose up -d luxswirl_agent
 ```
 
-Approve the agent on the **Agents** page, then create your first check. The full walkthrough — including creating checks via the UI or API, notifications, and status pages — is in the [Quickstart](docs/quickstart/quickstart.md).
+Approve the agent on the **Agents** page, then create your first check. The full walkthrough — including creating checks, notifications, and status pages — is in the [Quickstart](docs/quickstart/quickstart.md).
 
 > Prefer to build from source instead of pulling published images? `make build` builds the backend and agent images locally.
 
@@ -144,7 +144,7 @@ ______________________________________________________________________
 - **[User guide](docs/user-guide/)** — one document per feature: [Dashboard](docs/user-guide/dashboard.md), [Agents](docs/user-guide/agents.md), [Checks](docs/user-guide/checks.md), [Jobs](docs/user-guide/jobs.md), [Status Pages](docs/user-guide/status-pages.md), [Alerts](docs/user-guide/alerts.md), [Notifications](docs/user-guide/notifications.md), [Settings](docs/user-guide/settings.md), [Database Health](docs/user-guide/database-health.md), [Import/Export](docs/user-guide/import-export.md).
 - **[Architecture](docs/architecture/overview.md)** — system design, agent model, and database schema.
 - **[FAQ](docs/user-guide/faq.md)** and **[Limitations](docs/reference/limitations.md)** — honest answers about what it does and doesn't do.
-- **API reference** — auto-generated Swagger UI at `/docs` and ReDoc at `/redoc` on a running server.
+- **Agent protocol reference** — auto-generated Swagger UI at `/docs` and ReDoc at `/redoc` on a running server (outside production).
 
 ______________________________________________________________________
 

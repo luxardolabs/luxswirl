@@ -63,17 +63,17 @@ Synthetic checks execute arbitrary Python code. Administrators can run any code 
 
 **Mitigations**:
 
-- Admin role required — enforced in the core service (`CheckCoreService.create_check`/`update_check`/`clone_check`), so it cannot be bypassed by entry layer (web UI *or* JSON API).
+- Admin role required — enforced in the core service (`CheckCoreService.create_check`/`update_check`/`clone_check`), not only in the web layer.
 - AST validation (blocks obvious attacks) — hardening, **not** the access control.
 - Audit logging
 - UI warning banner
 
-**Authorization model — important**: The web UI enforces this via the user's RBAC role (`viewer`/`editor`/`admin`). **The JSON API has no role model: any valid `/api/v1/*` Bearer token is admin-equivalent** and may therefore create synthetic checks. This is by design for the self-hosted, single-organization threat model — treat every API token as a full administrator and scope/issue them accordingly. (Multi-tenant or least-privilege API access is out of scope for v1.0.)
+**Authorization model**: Synthetic checks are created and edited only through the web UI, which enforces the user's RBAC role (`viewer`/`editor`/`admin`). The JSON API under `/api/v1` is the agent protocol and offers no route that creates or edits checks.
 
 **Recommendations**:
 
 - Only use in trusted, self-hosted environments
-- Vet admin accounts carefully; treat API tokens as admin credentials
+- Vet admin accounts carefully
 - Review synthetic check code before deployment
 
 ### 2. Status Page Custom CSS
@@ -115,7 +115,7 @@ LuxSwirl does **not** use CSRF tokens. Cross-site request forgery is prevented b
 - Session cookies are set with `SameSite=Lax` — modern browsers (Chrome 80+, Firefox 79+, Safari 13+, all 2020+) refuse to attach the cookie to cross-site `POST` / `PUT` / `PATCH` / `DELETE` requests, defeating CSRF before the request reaches our backend.
 - Session cookies are set with `Secure=True` in production, restricting them to HTTPS.
 - Session cookies are `HttpOnly`, so JavaScript on a compromised page cannot read or exfiltrate them.
-- API endpoints (`/api/v1/*`) authenticate via `Authorization: Bearer <token>` headers, not cookies — browsers never auto-attach those cross-site, so API endpoints are CSRF-immune by design.
+- Agent-protocol endpoints (`/api/v1/*`) authenticate via `Authorization: Bearer <key>` headers, not cookies — browsers never auto-attach those cross-site, so those endpoints are CSRF-immune by design.
 - Content-Security-Policy includes `frame-ancestors 'none'`, preventing the application from being embedded in malicious iframes.
 
 This is the same model used across Luxardo Labs FastAPI portals. Token-based CSRF (the older pattern) added significant code complexity without meaningfully improving on what browser cookie attributes already provide.
@@ -137,7 +137,7 @@ Health checks and webhook notifications make outbound requests to operator-suppl
 - **Cloud-metadata / link-local is blocked by default** (`169.254.0.0/16`, IPv6 `fe80::/10`). On the agent this range is always enforced regardless of the server toggle.
 - **RFC 1918 private networks are *allowed* by default** (`security.block_private_networks`, default off), because monitoring LAN hosts is the intended use. Operators in hardened environments can switch this on.
 - **Validation runs in two places**: on the server when a check or webhook is created/updated, and **again on the agent at fetch time** — immediately before each connection, and on every redirect hop for HTTP/JSON checks. The fetch-time check is what defeats DNS-rebinding and HTTP-redirect bypasses: a target that resolves to a safe IP at create time but later resolves (or 3xx-redirects) to the metadata endpoint is blocked at the moment the agent would connect.
-- **Trust note**: like synthetic checks, an admin can disable the toggle or run a synthetic check to reach any address — SSRF protection is a guardrail against *editors* and *API-token integrations* (and against the rebinding/redirect bypass), not against the trusted admin.
+- **Trust note**: like synthetic checks, an admin can disable the toggle or run a synthetic check to reach any address — SSRF protection is a guardrail against *editors* (and against the rebinding/redirect bypass), not against the trusted admin.
 
 **Residual**: the agent validates the resolved IP immediately before connecting, closing the create→fetch window. A sub-millisecond TTL-0 rebind between that check and the socket's own resolution is not closed (it would require pinning the validated IP through TLS/SNI) and is tracked as future hardening. See `docs/reference/settings-reference.md` → Network Protection (SSRF).
 
@@ -150,7 +150,7 @@ ______________________________________________________________________
 - ✅ Use strong passwords (20+ characters)
 - ✅ Deploy behind HTTPS reverse proxy
 - ✅ Enable firewall (restrict to trusted IPs)
-- ✅ Rotate API keys every 90 days
+- ✅ Rotate agent and registration keys every 90 days
 - ✅ Review synthetic check code carefully
 
 ### For Deployments

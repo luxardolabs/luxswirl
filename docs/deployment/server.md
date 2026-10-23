@@ -2,7 +2,7 @@
 
 ## Overview
 
-The LuxSwirl server is a FastAPI-based REST API server that receives check results from agents, stores them in TimescaleDB, and provides a web UI for monitoring and management. This guide covers deploying the server using Docker and Docker Compose.
+The LuxSwirl server is a FastAPI application that receives check results from agents, stores them in TimescaleDB, and provides a web UI for monitoring and management. This guide covers deploying the server using Docker and Docker Compose.
 
 ## Architecture
 
@@ -571,24 +571,10 @@ docker exec luxswirl_timescaledb psql -U luxswirl luxswirl -c "
 
 ### Change Your Password
 
-**Via Web UI:**
-
 1. Log in, then open **Profile** (top right)
 1. Click **Change Password**
 1. Enter your current password and a new one (min 8 characters: at least one uppercase, one lowercase, and one digit)
 1. Save
-
-**Via API:**
-
-```bash
-curl -X POST https://server.example.com:9000/api/v1/auth/change-password \
-  -H "Authorization: Bearer YOUR_API_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "current_password": "<your-current-password>",
-    "new_password": "NewSecurePassword123"
-  }'
-```
 
 ### Create Additional Users
 
@@ -1069,7 +1055,7 @@ Not currently supported:
 - [Agent Credential Encryption](../architecture/security-credentials.md)
 - [Check Types Reference](../user-guide/checks.md)
 - [Security Policy](../../SECURITY.md)
-- API documentation is auto-generated and available at `/docs` on a running server (Swagger UI)
+- The agent protocol is documented at `/docs` on a running server (Swagger UI, outside production)
 
 ## Support
 

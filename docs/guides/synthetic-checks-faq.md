@@ -47,7 +47,7 @@ ______________________________________________________________________
 
 **Security Controls:**
 
-1. **Admin-Only Access** - Only admins can create/modify synthetic checks, enforced in the core service so both the web UI and the REST API are covered. Web users are checked by `role=admin`; the REST API has no role model, so any API Bearer token is admin-equivalent — scope API tokens accordingly.
+1. **Admin-Only Access** - Only admins can create/modify synthetic checks, through the web UI; the `role=admin` check is enforced in the core service, not only in the form.
 1. **AST Validation** - Scripts validated to block obvious attacks (eval, os, subprocess, etc.)
 1. **Security Audit Logging** - All operations logged with SECURITY AUDIT prefix
 1. **Docker Isolation** - Agents run in Docker containers with basic host isolation
@@ -101,8 +101,6 @@ ______________________________________________________________________
 
 ### What Happens if Non-Admin Tries?
 
-**Web UI:**
-
 ```
 Admin access required: Synthetic checks execute arbitrary Python code and
 require administrator privileges. Please contact your administrator.
@@ -110,12 +108,6 @@ require administrator privileges. Please contact your administrator.
 
 - Returns HTTP 403 Forbidden
 - Security warning logged: `User {username} (role=editor) attempted to create synthetic check without admin privileges`
-
-**API:**
-
-- API tokens have admin-level access by design
-- All API users can create synthetic checks
-- Intended for programmatic/trusted access only
 
 ______________________________________________________________________
 

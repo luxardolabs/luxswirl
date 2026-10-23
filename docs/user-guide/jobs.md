@@ -175,7 +175,7 @@ ______________________________________________________________________
 
 ## Not yet supported
 
-Scheduled/recurring jobs — jobs are one-time today. To run them on a schedule, drive the API from an external scheduler (e.g. cron).
+Scheduled/recurring jobs — jobs are one-time today, started from the **Jobs** page.
 
 ______________________________________________________________________
 
