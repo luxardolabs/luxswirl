@@ -1,7 +1,9 @@
 """Delivery outcomes for a report POST, and the dead-letter table.
 
 A response is SENT (2xx), PERMANENT (the LuxSwirl server itself refuses this
-payload as invalid and will refuse it again) or TRANSIENT (anything else).
+payload as invalid and will refuse it again), TOO_LARGE (413: the request body
+is over a size limit on the way, so this payload can never pass but a smaller
+one can) or TRANSIENT (anything else).
 
 PERMANENT needs the server's own word: a 400 or 422 whose body is the app's
 JSON error envelope with a payload error code (`{"error": "VALIDATION_ERROR",
@@ -10,9 +12,15 @@ other answer is TRANSIENT and the batch stays pending: network errors, 5xx,
 408, 429, 401/403 (key recovery can fix those), and any 4xx without that
 envelope. The trusted-host middleware answers an unlisted Host with a plain-text
 `400 Invalid host header`, and a proxy such as nginx answers with its own HTML
-400 or 413 (the app never sends 413); those say the agent is misaddressed or the
-route is misconfigured, not that the payload is bad, and dead-lettering on them
-would empty the pending queue into a capped table that prunes it.
+400; those say the agent is misaddressed or the route is misconfigured, not that
+the payload is bad, and dead-lettering on them would empty the pending queue
+into a capped table that prunes it.
+
+TOO_LARGE is never the payload's content: the app sends no 413, so it is a proxy
+(nginx's `client_max_body_size`) refusing the body's size. The reporter sends
+such a batch in halves. It never dead-letters on a 413: a result's long text
+fields are capped far below any body limit, so a 413 on one result is usually
+the route's fault, and the result stays pending like a transient failure.
 
 A PERMANENT batch goes to `dead_letters`, in the same SQLite database as the
 pending queue, so it never blocks the queue behind it. The table keeps the
@@ -53,6 +61,7 @@ class Delivery(StrEnum):
 
     SENT = "sent"
     PERMANENT = "permanent"
+    TOO_LARGE = "too_large"
     TRANSIENT = "transient"
 
 
@@ -74,11 +83,14 @@ def classify_response(status_code: int, body: str) -> Delivery:
 
     Returns:
         SENT for 2xx; PERMANENT for a 400/422 carrying the server's own JSON
-        error envelope with a payload error code; TRANSIENT for everything
-        else, including a 400/413 from a proxy or the trusted-host middleware.
+        error envelope with a payload error code; TOO_LARGE for a 413;
+        TRANSIENT for everything else, including a proxy's or the trusted-host
+        middleware's 400.
     """
     if 200 <= status_code < 300:
         return Delivery.SENT
+    if status_code == 413:
+        return Delivery.TOO_LARGE
     if status_code in PERMANENT_STATUSES and _is_payload_refusal(body):
         return Delivery.PERMANENT
     return Delivery.TRANSIENT
