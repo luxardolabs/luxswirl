@@ -170,7 +170,7 @@ async def create_alert(
     # An alert with is_global=false and no check mappings simply won't trigger
     # until checks are assigned to it.
 
-    # Create alert (DTO built in the view seam — LUXSWIRL-168)
+    # Create alert (DTO built in the view seam)
     alert = await AlertsViewService.create_alert(
         db,
         name=name,
@@ -318,7 +318,7 @@ async def update_alert(
 
         trigger_config = {"days_thresholds": days_thresholds}
 
-    # Update alert (DTO built in the view seam — LUXSWIRL-168)
+    # Update alert (DTO built in the view seam)
     alert = await AlertsViewService.update_alert(
         db,
         alert_id,
@@ -342,6 +342,7 @@ async def update_alert(
     return hx_close_panel_and_refresh()
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.delete(
     "/alerts/{alert_id}", response_class=HTMLResponse, name="web_delete_alert"
 )

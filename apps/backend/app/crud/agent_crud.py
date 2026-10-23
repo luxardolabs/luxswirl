@@ -85,13 +85,6 @@ class AgentCRUD:
         return len(result.all())
 
     @staticmethod
-    async def list_all(db: AsyncSession) -> list[Agent]:
-        """Return all agents (unfiltered, unsorted)."""
-        # unbounded-reads: the whole fleet roster, every approval status, is what this returns
-        result = await db.execute(select(Agent))
-        return list(result.scalars().all())
-
-    @staticmethod
     async def list_active(db: AsyncSession) -> list[Agent]:
         """Return the active (approved, not paused or disabled) agents."""
         # unbounded-reads: the distribute pool: a distributed check is hashed over every active agent matching its selector, so all are the input

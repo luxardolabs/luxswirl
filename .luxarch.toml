@@ -49,13 +49,6 @@ cascading_delete_calls = [
 ]
 uuid_typing = [
   { path = "core/exceptions.py", name = "agent_id", evidence = "raised not-found message arg, not the column" },
-  { path = "schemas/import_export_schema.py", name = "agent_id", evidence = "AgentConfigExport mirrors the agent CONFIG FILE's `agent_id` key, which is an identifier STRING (\"docker-agent\") — not a registered agent's UUID. Typing it UUID is what made GET /export-agent-config fail response validation on every call" },
-]
-hypertable_unbounded = [
-  { file = "artifact_crud", func = "get_stats_for_check", evidence = "check_artifacts is retention-scoped + filtered by check_id (indexed); a time bound prunes nothing (LUXSWIRL-180)" },
-]
-tenant_cross = [
-  { function = "get_by_token_hash", evidence = "the session token IS the credential — this is the pre-auth lookup that establishes who the caller is, so there is no user to scope by yet", token_source = "apps/backend/app/services/core/auth_core_service.py" },
 ]
 js_network = [
   { file = "app.js", pattern = "window.location.reload(", evidence = "canonical refreshPage HX-Trigger handler" },

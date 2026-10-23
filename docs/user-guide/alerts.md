@@ -86,6 +86,7 @@ Triggers when a check that should be running has reported nothing for a while. T
 - **Behavior:** one notification per silence, then the resend settings apply; a recovery notification fires when results arrive again (if enabled). Snoozing the alert for a check silences it like any other trigger.
 - **Agent offline:** when every agent that runs the check is offline, the silence belongs to the agent. The check's notification is recorded as **suppressed** (visible in the notification log) instead of sent, so an agent with a hundred checks produces one Agent Offline notification, not a hundred No Data ones. Once the agent is back, a check that still reports nothing notifies as its own silence. A silence already notified stays notified while its agent restarts, so its recovery still goes out.
 - **Without providers:** an alert with no notification provider attached is not evaluated.
+- **An alert that fails to evaluate** is skipped for that run while the others go ahead. The error is logged, and the job's run in the **Scheduler** page's Execution History counts it under `failed`.
 
 ### Agent Offline
 

@@ -147,6 +147,7 @@ class SilenceAlertCoreService:
                             db, alert, assigned, now, counts
                         )
             except Exception:
+                counts.failed += 1
                 logger.exception(
                     "Silence alert evaluation failed",
                     extra={"alert_id": str(alert.id), "alert_name": alert.name},
@@ -246,6 +247,7 @@ class SilenceAlertCoreService:
         latest = await CheckResultCRUD.latest_result_times(db, check_ids, since)
 
         notices: list[_Notice] = []
+        silent: list[tuple[Check, list[Agent], SendDecision, datetime | None]] = []
         for check, agents, pool in targets:
             last_result = latest.get(check.id)
             last_row = last_rows.get(check.id)
@@ -314,12 +316,18 @@ class SilenceAlertCoreService:
                 decision = _FRESH
             if not decision.send:
                 continue
+            silent.append((check, agents, decision, last_result))
 
-            if last_result is None and not decision.is_resend:
-                # Older than the look-back window: once per episode, find out
-                # when it last reported, for the message.
-                newest = await CheckResultCRUD.get_latest_result_for_check(db, check.id)
-                last_result = newest.timestamp if newest else None
+        # A first notice for a check silent longer than the look-back window
+        # finds out when it last reported, for the message: one read for all.
+        undated = [
+            check.id
+            for check, _, decision, last_result in silent
+            if last_result is None and not decision.is_resend
+        ]
+        newest = await CheckResultCRUD.newest_result_times(db, undated)
+        for check, agents, decision, last_result in silent:
+            last_result = last_result or newest.get(check.id)
             age = now - (last_result or check.created_at)
             notices.append(
                 _Notice(

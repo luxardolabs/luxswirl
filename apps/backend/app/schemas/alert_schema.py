@@ -336,6 +336,7 @@ class SilencePassCounts:
     notified: int = 0
     suppressed: int = 0
     recovered: int = 0
+    failed: int = 0  # alerts whose evaluation raised, rolled back and skipped
 
     def as_dict(self) -> dict[str, int]:
         return asdict(self)

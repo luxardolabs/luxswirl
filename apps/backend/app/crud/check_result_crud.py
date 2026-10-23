@@ -362,6 +362,29 @@ class CheckResultCRUD:
         return dict(result.all())
 
     @staticmethod
+    async def newest_result_times(
+        db: AsyncSession, check_ids: Sequence[UUID]
+    ) -> dict[UUID, datetime]:
+        """Each check's newest result time, however old; a check that never
+        reported is absent. One backward index probe per check, in one query."""
+        if not check_ids:
+            return {}
+        newest = (
+            select(CheckResult.timestamp)
+            .where(CheckResult.check_id == Check.id)
+            .order_by(desc(CheckResult.timestamp))
+            .limit(1)
+            .lateral("newest_result")
+        )
+        result = await db.execute(
+            select(Check.id, newest.c.timestamp)
+            .select_from(Check)
+            .join(newest, true())
+            .where(Check.id.in_(check_ids))
+        )
+        return dict(result.all())
+
+    @staticmethod
     async def newest_result_after(
         db: AsyncSession, check_id: UUID, after: datetime
     ) -> datetime | None:
