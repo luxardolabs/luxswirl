@@ -385,6 +385,26 @@ class CheckResultCRUD:
         return dict(result.all())
 
     @staticmethod
+    async def count_deleted_with_agent(
+        db: AsyncSession, agent_id: UUID, since: datetime
+    ) -> int:
+        """Results since `since` that deleting the agent removes: those it
+        reported, and those of the checks it owns (both cascade)."""
+        owned = select(Check.id).where(Check.agent_id == agent_id)
+        result = await db.execute(
+            select(func.count())
+            .select_from(CheckResult)
+            .where(
+                or_(
+                    CheckResult.agent_id == agent_id,
+                    CheckResult.check_id.in_(owned),
+                ),
+                CheckResult.timestamp >= since,
+            )
+        )
+        return int(result.scalar_one())
+
+    @staticmethod
     async def newest_result_after(
         db: AsyncSession, check_id: UUID, after: datetime
     ) -> datetime | None:

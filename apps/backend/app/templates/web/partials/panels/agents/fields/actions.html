@@ -1,4 +1,5 @@
-{% from 'macros/buttons.html' import confirm_action_btn %}
+{% from 'macros/buttons.html' import confirm_action_btn, btn_delete_text, text_btn %}
+{% from 'macros/form_fields.html' import input %}
 
 {# Action button icons — inline so the page doesn't pull from a sprite #}
 {%- set ICO_CHECK %}<span class="w-3.5 h-3.5 mr-1.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/check.svg" %}</span>{% endset %}
@@ -36,11 +37,15 @@
             </div>
             {% endif %}
 
-            {# Delete action — hx-target is the action card so the polling
-               partial REPLACES the button while the job is in flight; the
-               page reloads on `maintenanceJobDone`. #}
+            {# Delete action. Opening it fetches what the delete removes; the
+               form only deletes when the agent's name is typed, which the
+               server checks. On success the polling partial REPLACES the card
+               while the job is in flight, and the page reloads on
+               `maintenanceJobDone`. Offered to the roles the endpoint accepts. #}
+            {% if current_user.role in ('admin', 'editor') %}
             <div id="agent-delete-action-{{ agent.id }}"
-                 class="card bg-red-500/5 border-red-500/20 p-3">
+                 class="card bg-red-500/5 border-red-500/20 p-3"
+                 x-data="{ open: false }">
                 <div class="flex items-center justify-between">
                     <div class="flex items-center gap-2">
                         <span class="w-4 h-4 text-red-400 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/exclamation-triangle.svg" %}</span>
@@ -52,11 +57,29 @@
                             {% endif %}
                         </span>
                     </div>
-                    {{ confirm_action_btn(icon_svg=ICO_TRASH, label='Delete', color='red',
-                        hx_delete=agent_urls.delete,
-                        hx_target='#agent-delete-action-' ~ agent.id|string,
-                        hx_swap='innerHTML',
-                        title='Delete agent and all data') }}
+                    {{ btn_delete_text(label='Delete', size='sm',
+                        extra_attrs='x-show="!open" @click="open = true" hx-get="' ~ agent_urls.delete_impact ~ '" hx-target="#agent-delete-impact-' ~ agent.id|string ~ '" hx-swap="innerHTML"') }}
                 </div>
+                <form x-show="open" x-cloak class="mt-3 space-y-2"
+                      hx-delete="{{ agent_urls.delete }}"
+                      hx-target="#agent-delete-action-{{ agent.id }}"
+                      hx-swap="innerHTML">
+                    <div id="agent-delete-impact-{{ agent.id }}">
+                        <p class="text-sm text-dark-text-muted">Counting what this removes…</p>
+                    </div>
+                    <label for="agent-delete-confirm-{{ agent.id }}" class="block text-sm text-dark-text-muted">
+                        Type <code class="font-mono text-red-300">{{ delete_confirm_name }}</code> to confirm
+                    </label>
+                    {{ input(name='confirm_name', id='agent-delete-confirm-' ~ agent.id|string, required=true,
+                        autocomplete='off', class='input input-sm font-mono text-sm w-full',
+                        extra_attrs='spellcheck="false"') }}
+                    <div id="agent-delete-error-{{ agent.id }}"></div>
+                    <div class="flex items-center justify-end gap-2">
+                        {{ text_btn(ICO_X, 'Cancel', style='secondary', size='sm', type='button',
+                            extra_attrs='@click="open = false"') }}
+                        {{ btn_delete_text(label='Delete agent', size='sm') }}
+                    </div>
+                </form>
             </div>
+            {% endif %}
         </div>

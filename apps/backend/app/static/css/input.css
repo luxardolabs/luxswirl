@@ -12,6 +12,11 @@
     background-color: theme('colors.dark.bg.primary');
     color: theme('colors.dark.text.primary');
   }
+
+  /* Alpine: hidden until Alpine initialises the element (x-show takes over). */
+  [x-cloak] {
+    display: none !important;
+  }
 }
 
 /* Custom components */
