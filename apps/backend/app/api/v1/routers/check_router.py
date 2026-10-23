@@ -16,7 +16,7 @@ from app.core.rate_limit import limiter
 from app.db import get_db
 from app.schemas.base_schema import ErrorResponse
 from app.schemas.check_schema import CheckListResponse
-from app.services.core.agent_assignment_core_service import AgentAssignmentCoreService
+from app.services.core.check_api_core_service import CheckApiCoreService
 from app.shared.logger import get_logger
 
 # Agent-facing router (agents call these)
@@ -53,4 +53,4 @@ async def list_checks(
     The agent authenticates with its own key and must be approved
     (`AuthenticatedAgentId`).
     """
-    return await AgentAssignmentCoreService.check_list_for_agent(db, agent_id)
+    return await CheckApiCoreService.check_list_for_agent(db, agent_id)

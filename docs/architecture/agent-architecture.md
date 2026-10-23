@@ -52,13 +52,15 @@ Agents:
 Result: each check is hashed to exactly one of the two agents
 (~25 checks each).
 
-If home-agent-1 dies:
-- It stops appearing in the matching pool, so its checks rehash onto
-  home-agent-2 the next time agents fetch their config.
-- No gaps in monitoring once the offline agent is excluded from the pool.
+If home-agent-1 stops heartbeating:
+- After 3 missed heartbeats plus 60 s it counts as offline, and its checks
+  move to home-agent-2 (only its checks: home-agent-2 keeps its own).
+- home-agent-2 learns at its next heartbeat (its config_version changes)
+  and fetches its new check list.
+- When home-agent-1 heartbeats again, its checks move back to it.
 ```
 
-**Note on failover:** `filter_agents_by_selector()` matches by selector against *all* agents (the caller loads them with `AgentCRUD.list_all`); it does not filter on online status. Rebalancing therefore depends on offline agents being removed from the pool by whatever populates the agent list, not on liveness within this function.
+**Failover.** A distributed check runs on the highest-weighted agent of its pool that is online, by the same rule the silence alerts and the dashboard use (`app.core.liveness`: an agent is offline once its newest heartbeat is older than 3 of its heartbeat intervals plus 60 s). One lost heartbeat therefore moves nothing. When every agent of the pool is offline, the check stays with its first choice, and the Agent Offline alert names that agent. Any agent of the pool may report the check's results: a result is measured before it reaches the server, so the owner's results buffered through an outage and the stand-in's last batch both arrive after the check has moved.
 
 **Benefits:**
 
@@ -137,7 +139,7 @@ def get_assigned_agent_for_check(check, available_agents):
 - **Keyed on the immutable `check.id`, not `display_name`.** `display_name` is editable and not unique, so hashing it meant a rename silently reassigned the check and same-named checks always co-located. The UUID is the stable identity.
 - **Minimal reshuffle on pool change.** With HRW, when an agent joins or leaves the matching pool, only the checks owned by that agent move; everyone else stays put. Plain `hash % n` reshuffles *every* check whenever the pool size changes.
 
-> **Failover caveat.** This function only assigns among the agents it is *given*. `filter_agents_by_selector()` does not filter on liveness, so a dead-but-still-listed agent stays in the pool and its checks are not reassigned to survivors. Health-based failover is tracked separately in **LUXSWIRL-184**.
+`distribute_owner(check, pool, now)` calls this with the pool's online agents (the whole pool when none is online), so an offline agent's checks go to the next-highest weight among the others.
 
 ### Agent Check Fetch Logic (shipped)
 
@@ -159,9 +161,9 @@ async def get_checks_for_agent(db, agent):
 
         elif check.assignment_mode == "distribute":
             if agent_matches_selector(agent, check.agent_selector):
-                matching_agents = filter_agents_by_selector(all_agents, check.agent_selector)
-                assigned = get_assigned_agent_for_check(check, matching_agents)
-                if assigned and assigned.id == agent.id:
+                pool = filter_agents_by_selector(active_agents, check.agent_selector)
+                owner = distribute_owner(check, pool, now)
+                if owner and owner.id == agent.id:
                     checks_to_run.append(check)
 
     return checks_to_run
@@ -346,7 +348,7 @@ for node in range(1, 1001):  # 1000 nodes
 
 ### Q: What happens when an agent with DISTRIBUTE checks goes offline?
 
-**A:** Its checks rehash onto the remaining agents the next time agents refetch, *provided the offline agent is removed from the matching pool*. See the failover note under Use Case 2 — `filter_agents_by_selector()` itself does not filter on liveness.
+**A:** Once it has missed 3 heartbeats plus 60 s, its checks move to the other online agents of each check's pool, and each of those agents fetches its new list at its next heartbeat. They move back when it heartbeats again. See **Failover** under Use Case 2.
 
 ### Q: Can a check be both REPLICATE and DISTRIBUTE?
 
@@ -369,5 +371,4 @@ http_google (replicate)
 
 ## Known Limitations
 
-- **DISTRIBUTE hashing is not stable across processes.** It uses builtin `hash()`, which is per-process randomized for strings. See the hash stability note above. Switch to a deterministic digest for stable cross-process / multi-worker assignment.
-- **Pool membership ignores liveness.** `filter_agents_by_selector()` matches against all agents regardless of online status; failover relies on offline agents being excluded upstream.
+- **Failover waits for the offline threshold.** A distributed check whose agent dies goes unrun for 3 heartbeat intervals plus 60 s before it moves.

@@ -1,9 +1,7 @@
-"""An agent's report is accepted for exactly the checks it was told to run.
+"""An agent's report is accepted for the checks it may run.
 
-GET /api/v1/checks hands an agent its manual checks plus every replicate and
-distribute check whose selector it matches. The report path looked results up
-by the check's own `agent_id` column instead, so a replicate or distribute
-check run by any other selected agent had every result dropped.
+Its manual checks, every replicate check whose selector it matches, and every
+distribute check whose pool it is in. A result for any other check is refused.
 
 Only active agents are in a distribute check's pool: an agent that may not run
 checks (pending, paused, disabled, rejected) never wins one.
@@ -90,10 +88,13 @@ async def test_an_agent_the_selector_does_not_match_is_refused(
     assert result["results_failed"] == 1
 
 
-async def test_a_distribute_check_takes_results_only_from_its_assigned_agent(
+async def test_a_distribute_check_runs_on_one_agent_and_takes_results_from_its_pool(
     db: AsyncSession,
 ) -> None:
-    owner, other, _ = await _agents(db)
+    """One agent of the pool is handed the check, but any agent of the pool may
+    report it: the check moves between them as they go offline and come back,
+    and results measured before a move arrive after it."""
+    owner, other, outsider = await _agents(db)
     check = make_check(
         agent_id=owner.id,
         assignment_mode="distribute",
@@ -108,16 +109,16 @@ async def test_a_distribute_check_takes_results_only_from_its_assigned_agent(
         in {c.id for c in await AgentAssignmentCoreService.get_checks_for_agent(db, a)}
     ]
     assert len(assigned) == 1
-    unassigned = other if assigned[0] is owner else owner
 
-    taken = await CheckResultCoreService.process_agent_report(
-        db, _report(assigned[0].id, check.id)
-    )
+    from_pool = [
+        await CheckResultCoreService.process_agent_report(db, _report(a.id, check.id))
+        for a in (owner, other)
+    ]
     refused = await CheckResultCoreService.process_agent_report(
-        db, _report(unassigned.id, check.id)
+        db, _report(outsider.id, check.id)
     )
 
-    assert taken["results_processed"] == 1
+    assert [r["results_processed"] for r in from_pool] == [1, 1]
     assert refused["results_processed"] == 0
 
 

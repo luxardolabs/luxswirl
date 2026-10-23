@@ -6,18 +6,19 @@ Implements REPLICATE and DISTRIBUTE modes for checks.
 
 import hashlib
 from collections.abc import Sequence
+from datetime import datetime
 from typing import Any
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.datetime_utils import utc_now
+from app.core.exceptions import AgentNotFoundException
+from app.core.liveness import agent_offline, offline_at
 from app.crud.agent_crud import AgentCRUD
 from app.crud.check_crud import CheckCRUD
 from app.models.agent_model import Agent
 from app.models.check_model import Check
-from app.schemas.check_schema import CheckListResponse
-from app.services.core.agent_core_service import AgentCoreService
-from app.services.core.check_api_core_service import CheckApiCoreService
 from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.services.agent_assignment")
@@ -72,6 +73,14 @@ class AgentAssignmentCoreService:
         return False
 
     @staticmethod
+    def _hrw_score(check: Check, agent: Agent) -> tuple[int, str]:
+        """`agent`'s rendezvous weight for `check`: the highest wins."""
+        digest = hashlib.sha256(f"{check.id}:{agent.id}".encode()).digest()
+        # Tie-break on the agent UUID (unique, stable) so the result is fully
+        # deterministic even in the astronomically unlikely digest tie.
+        return (int.from_bytes(digest, "big"), str(agent.id))
+
+    @staticmethod
     def get_assigned_agent_for_check(
         check: Check,
         available_agents: Sequence[Agent],
@@ -99,14 +108,51 @@ class AgentAssignmentCoreService:
         """
         if not available_agents:
             return None
+        return max(
+            available_agents,
+            key=lambda agent: AgentAssignmentCoreService._hrw_score(check, agent),
+        )
 
-        def _score(agent: Agent) -> tuple[int, str]:
-            digest = hashlib.sha256(f"{check.id}:{agent.id}".encode()).digest()
-            # Tie-break on the agent UUID (unique, stable) so the result is
-            # fully deterministic even in the astronomically unlikely digest tie.
-            return (int.from_bytes(digest, "big"), str(agent.id))
+    @staticmethod
+    def distribute_owner(
+        check: Check, pool: Sequence[Agent], now: datetime
+    ) -> Agent | None:
+        """The agent of `pool` (the active agents matching the check's
+        selector) that runs a distributed check.
 
-        return max(available_agents, key=_score)
+        The highest-weighted agent that is online (`app.core.liveness`), so an
+        agent that misses its heartbeats hands its checks to the others and
+        takes them back at its next heartbeat. When the whole pool is offline
+        the check stays with its first choice: nothing is running it, and the
+        silence alerts name that agent's outage.
+        """
+        online = [agent for agent in pool if not agent_offline(agent, now)]
+        return AgentAssignmentCoreService.get_assigned_agent_for_check(
+            check, online or pool
+        )
+
+    @staticmethod
+    def handed_over_at(
+        check: Check, pool: Sequence[Agent], now: datetime
+    ) -> datetime | None:
+        """When a distributed check moved to the agent now running it, or None
+        when it runs on its first choice.
+
+        Every agent weighted above the current owner is offline; the check
+        moved when the last of them went offline.
+        """
+        owner = AgentAssignmentCoreService.distribute_owner(check, pool, now)
+        if owner is None:
+            return None
+        owner_score = AgentAssignmentCoreService._hrw_score(check, owner)
+        above = [
+            agent
+            for agent in pool
+            if AgentAssignmentCoreService._hrw_score(check, agent) > owner_score
+        ]
+        if not above:
+            return None
+        return max(offline_at(agent) for agent in above)
 
     @staticmethod
     def filter_agents_by_selector(
@@ -135,32 +181,20 @@ class AgentAssignmentCoreService:
         ]
 
     @staticmethod
-    async def check_list_for_agent(
-        db: AsyncSession, agent_id: UUID
-    ) -> CheckListResponse:
-        """The checks `agent_id` should run, as the agent's check-list response.
-
-        Raises:
-            AgentNotFoundException: If the agent does not exist
-        """
-        agent = await AgentCoreService.get_agent_by_id(db, agent_id)
-        checks = await AgentAssignmentCoreService.get_checks_for_agent(db, agent)
-        return CheckApiCoreService.build_check_list_response(checks, agent.agent_name)
-
-    @staticmethod
-    async def is_check_assigned(
+    async def may_report_for_check(
         db: AsyncSession, agent_id: UUID, check_id: UUID
     ) -> bool:
-        """Whether `check_id` is one of the checks `agent_id` should run.
+        """Whether `agent_id` may post data for `check_id`.
 
-        The same answer GET /api/v1/checks gives the agent, so whatever an agent
-        is told to run is what it may post data for, and nothing else.
+        The same answer `get_reportable_checks` gives a report.
 
         Raises:
             AgentNotFoundException: If the agent does not exist
         """
-        agent = await AgentCoreService.get_agent_by_id(db, agent_id)
-        checks = await AgentAssignmentCoreService.get_checks_for_agent(db, agent)
+        agent = await AgentCRUD.get_by_id_with_checks(db, agent_id)
+        if agent is None:
+            raise AgentNotFoundException(str(agent_id))
+        checks = await AgentAssignmentCoreService.get_reportable_checks(db, agent)
         return any(check.id == check_id for check in checks)
 
     @staticmethod
@@ -171,7 +205,8 @@ class AgentAssignmentCoreService:
         """
         Get all checks that should run on a specific agent.
 
-        Implements the assignment logic for manual/replicate/distribute modes.
+        Implements the assignment logic for manual/replicate/distribute modes:
+        a distributed check goes to its `distribute_owner` alone.
 
         Args:
             db: Database session
@@ -180,6 +215,39 @@ class AgentAssignmentCoreService:
         Returns:
             List of checks this agent should run
         """
+        checks_to_run = await AgentAssignmentCoreService._checks_for_agent(
+            db, agent, owned_only=True
+        )
+        logger.debug(
+            "Agent assigned checks (manual + replicate + distribute)",
+            extra={
+                "agent_name": agent.agent_name,
+                "agent_id": str(agent.id),
+                "check_count": len(checks_to_run),
+            },
+        )
+        return checks_to_run
+
+    @staticmethod
+    async def get_reportable_checks(db: AsyncSession, agent: Agent) -> list[Check]:
+        """The checks `agent` may post results and artifacts for.
+
+        Its `get_checks_for_agent` checks, plus every distributed check whose
+        pool it is in. A distributed check moves between the agents of its pool
+        as they go offline and come back, and a result is measured before it
+        reaches the server: the owner's results buffered through an outage, or
+        the stand-in's last batch, arrive after the check has moved. Each of
+        those agents is one the check may run on, so its results are the
+        check's results.
+        """
+        return await AgentAssignmentCoreService._checks_for_agent(
+            db, agent, owned_only=False
+        )
+
+    @staticmethod
+    async def _checks_for_agent(
+        db: AsyncSession, agent: Agent, *, owned_only: bool
+    ) -> list[Check]:
         checks_to_run = []
 
         all_checks = await CheckCRUD.list_assignment_candidates(db, agent.id)
@@ -191,6 +259,7 @@ class AgentAssignmentCoreService:
         # one. That set is the same table read every time (filtering is pure
         # Python), so it is read once here rather than per check.
         active_agents: Sequence[Agent] | None = None
+        now = utc_now()
 
         for check in all_checks:
             if check.assignment_mode == "manual":
@@ -205,7 +274,7 @@ class AgentAssignmentCoreService:
                 ):
                     checks_to_run.append(check)
 
-            # DISTRIBUTE: Check assigned to ONE agent via hash
+            # DISTRIBUTE: Check assigned to ONE agent of its pool
             elif check.assignment_mode == "distribute" and (
                 AgentAssignmentCoreService.agent_matches_selector(
                     agent, check.agent_selector
@@ -213,65 +282,74 @@ class AgentAssignmentCoreService:
             ):
                 if active_agents is None:
                     active_agents = await AgentCRUD.list_active(db)
-                matching_agents = AgentAssignmentCoreService.filter_agents_by_selector(
+                pool = AgentAssignmentCoreService.filter_agents_by_selector(
                     active_agents, check.agent_selector
                 )
-
-                # Determine assigned agent via hash
-                assigned_agent = (
-                    AgentAssignmentCoreService.get_assigned_agent_for_check(
-                        check, matching_agents
-                    )
-                )
-
-                # Add check if this agent was assigned
-                if assigned_agent and assigned_agent.id == agent.id:
+                if not owned_only:
+                    if any(member.id == agent.id for member in pool):
+                        checks_to_run.append(check)
+                    continue
+                owner = AgentAssignmentCoreService.distribute_owner(check, pool, now)
+                if owner and owner.id == agent.id:
                     checks_to_run.append(check)
-
-        logger.debug(
-            "Agent assigned checks (manual + replicate + distribute)",
-            extra={
-                "agent_name": agent.agent_name,
-                "agent_id": str(agent.id),
-                "check_count": len(checks_to_run),
-            },
-        )
 
         return checks_to_run
 
     @staticmethod
+    async def config_version(db: AsyncSession, agent: Agent) -> str | None:
+        """The version of `agent`'s check list, sent on every heartbeat.
+
+        The agent fetches its checks again whenever this changes, so it covers
+        both an edit to its checks (`checks_updated_at`) and a distributed
+        check moving to or from it. None until the agent has checks.
+        """
+        checks = await AgentAssignmentCoreService.get_checks_for_agent(db, agent)
+        if agent.checks_updated_at is None and not checks:
+            return None
+        stamp = agent.checks_updated_at.isoformat() if agent.checks_updated_at else ""
+        ids = ",".join(sorted(str(check.id) for check in checks))
+        return hashlib.sha256(f"{stamp}|{ids}".encode()).hexdigest()[:32]
+
+    @staticmethod
     async def assigned_agents_by_check(
         db: AsyncSession,
-    ) -> list[tuple[Check, list[Agent]]]:
-        """Every enabled check with the active agents that are to run it.
+    ) -> list[tuple[Check, list[Agent], list[Agent]]]:
+        """Every enabled check with the active agents that are to run it, and
+        the active agents it may run on.
 
         The same rules as `get_checks_for_agent`, read the other way round and
         limited to active agents: a check whose agents are all pending, paused,
-        disabled or rejected has an empty list, since nothing is to run it.
+        disabled or rejected has empty lists, since nothing is to run it. The
+        second list differs from the first only for a distributed check: it is
+        the check's whole pool, its owner among them.
         """
         checks = await CheckCRUD.list_enabled(db)
         active_agents = await AgentCRUD.list_active(db)
         by_id = {agent.id: agent for agent in active_agents}
+        now = utc_now()
 
-        assigned: list[tuple[Check, list[Agent]]] = []
+        assigned: list[tuple[Check, list[Agent], list[Agent]]] = []
         for check in checks:
             agents: list[Agent] = []
+            pool: list[Agent] = []
             if check.assignment_mode == "manual":
                 owner = by_id.get(check.agent_id)
                 agents = [owner] if owner else []
+                pool = agents
             elif check.assignment_mode == "replicate":
                 agents = list(
                     AgentAssignmentCoreService.filter_agents_by_selector(
                         active_agents, check.agent_selector
                     )
                 )
+                pool = agents
             elif check.assignment_mode == "distribute":
-                chosen = AgentAssignmentCoreService.get_assigned_agent_for_check(
-                    check,
+                pool = list(
                     AgentAssignmentCoreService.filter_agents_by_selector(
                         active_agents, check.agent_selector
-                    ),
+                    )
                 )
+                chosen = AgentAssignmentCoreService.distribute_owner(check, pool, now)
                 agents = [chosen] if chosen else []
-            assigned.append((check, agents))
+            assigned.append((check, agents, pool))
         return assigned
