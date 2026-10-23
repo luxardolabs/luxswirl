@@ -9,7 +9,6 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.models.enum_model import UserRole
-from app.schemas.paginated_response_schema import PaginatedResponse
 
 
 class UserCreate(BaseModel):
@@ -87,31 +86,6 @@ class UserUpdate(BaseModel):
     )
 
 
-class UserPasswordReset(BaseModel):
-    """Request schema for admin resetting user password."""
-
-    new_password: str = Field(
-        ..., min_length=8, max_length=100, description="New password"
-    )
-    must_change_password: bool = Field(
-        True, description="Require user to change password on next login"
-    )
-
-    @field_validator("new_password")
-    @classmethod
-    def validate_password_strength(cls, v: str) -> str:
-        """Validate password meets minimum strength requirements."""
-        if len(v) < 8:
-            raise ValueError("Password must be at least 8 characters long")
-        if not any(c.isupper() for c in v):
-            raise ValueError("Password must contain at least one uppercase letter")
-        if not any(c.islower() for c in v):
-            raise ValueError("Password must contain at least one lowercase letter")
-        if not any(c.isdigit() for c in v):
-            raise ValueError("Password must contain at least one digit")
-        return v
-
-
 class UserResponse(BaseModel):
     """Response schema for user data."""
 
@@ -130,10 +104,6 @@ class UserResponse(BaseModel):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
-
-
-class UserListResponse(PaginatedResponse[UserResponse]):
-    """One page of users."""
 
 
 class UserStatsResponse(BaseModel):

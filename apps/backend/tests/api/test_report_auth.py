@@ -1,8 +1,8 @@
-"""Report submission authenticates in ReportingAgentId; exports come from core.
+"""Report submission authenticates in ReportingAgentId.
 
 POST /api/v1/reports takes only the agent's own key: the registration key, a
 wrong key, or an agent that has no key yet are all refused before anything is
-written. The agent check export is built in core and typed.
+written.
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ from app.core.rate_limit import limiter
 from app.db.database import get_db
 from app.main import app
 from app.services.core.agent_core_service import AgentCoreService
-from fixtures.factories import make_agent, make_check
+from fixtures.factories import make_agent
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -86,41 +86,3 @@ async def test_an_unknown_agent_is_not_found(client: AsyncClient) -> None:
     )
 
     assert resp.status_code == 404
-
-
-async def test_the_export_lists_the_agents_checks(
-    client: AsyncClient, db: AsyncSession, monkeypatch
-) -> None:
-    monkeypatch.setattr(settings.security, "auth_enabled", False)
-    agent = make_agent(hostname="edge-host")
-    db.add(agent)
-    await db.flush()
-    db.add_all([make_check(agent_id=agent.id) for _ in range(2)])
-    await db.flush()
-
-    resp = await client.get(f"/api/v1/import-export/export/{agent.id}")
-
-    assert resp.status_code == 200, resp.text
-    body = resp.json()
-    assert body["agent_hostname"] == "edge-host"
-    assert body["total_checks"] == 2
-    assert len(body["checks"]) == 2
-
-
-async def test_exporting_an_unknown_agent_is_not_found(
-    client: AsyncClient, monkeypatch
-) -> None:
-    monkeypatch.setattr(settings.security, "auth_enabled", False)
-
-    resp = await client.get(f"/api/v1/import-export/export/{uuid4()}")
-
-    assert resp.status_code == 404
-
-
-async def test_the_default_config_exports(client: AsyncClient, monkeypatch) -> None:
-    monkeypatch.setattr(settings.security, "auth_enabled", False)
-
-    resp = await client.get("/api/v1/import-export/export-agent-config")
-
-    assert resp.status_code == 200, resp.text
-    assert resp.json()["total_checks"] == len(resp.json()["checks"])

@@ -39,7 +39,7 @@ async def test_allowed_host_is_served() -> None:
 
 
 @pytest.mark.parametrize(
-    "path", ["/health", "/", "/login", "/api/v1/agents", "/metrics"]
+    "path", ["/health", "/", "/login", "/api/v1/checks", "/metrics"]
 )
 async def test_forged_host_is_refused_on_every_route(path: str) -> None:
     async with _client(peer="10.0.0.7") as c:

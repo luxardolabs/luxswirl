@@ -60,51 +60,6 @@ class CurrentUserDTO(BaseModel):
 type AuthedUser = CurrentUserDTO
 
 
-class LoginRequest(BaseModel):
-    """Request schema for user login."""
-
-    username: str = Field(..., min_length=1, max_length=100, description="Username")
-    password: str = Field(..., min_length=1, description="Password")
-
-    model_config = ConfigDict(
-        json_schema_extra={
-            "example": {
-                "username": "admin",
-                "password": "Admin123",
-            }
-        }
-    )
-
-
-class LoginResponse(BaseModel):
-    """Response schema for successful login."""
-
-    message: str = Field(..., description="Success message")
-    user: CurrentUserResponse = Field(..., description="Logged in user details")
-    must_change_password: bool = Field(
-        False,
-        description="True when no session was issued: the password must be changed first",
-    )
-
-    model_config = ConfigDict(
-        json_schema_extra={
-            "example": {
-                "message": "Login successful",
-                "user": {
-                    "id": "550e8400-e29b-41d4-a716-446655440000",
-                    "username": "admin",
-                    "role": "admin",
-                    "full_name": "System Administrator",
-                    "is_active": True,
-                    "must_change_password": False,
-                    "last_login_at": "2025-01-08T12:00:00Z",
-                    "created_at": "2025-01-01T00:00:00Z",
-                },
-            }
-        }
-    )
-
-
 class ChangePasswordRequest(BaseModel):
     """Request schema for password change."""
 
@@ -168,10 +123,3 @@ class SessionResponse(BaseModel):
     user_agent: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
-
-
-class SessionListResponse(BaseModel):
-    """Response schema for user's session list."""
-
-    sessions: list[SessionResponse]
-    total: int

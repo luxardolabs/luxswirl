@@ -13,12 +13,9 @@ from app.models.check_artifact_model import CheckArtifact
 from app.schemas.check_artifact_schema import (
     CheckArtifactContent,
     CheckArtifactCreate,
-    CheckArtifactListResponse,
     CheckArtifactResponse,
-    CheckArtifactStatsResponse,
 )
 from app.services.core.check_core_service import CheckCoreService
-from app.services.core.check_result_core_service import CheckResultCoreService
 
 logger = get_logger("luxswirl.services.artifact")
 
@@ -107,75 +104,6 @@ class ArtifactCoreService:
             raise CheckNotFoundException("unknown", str(check_id))
 
     @staticmethod
-    async def list_artifacts_by_check(
-        db: AsyncSession, check_id: UUID, limit: int = 100
-    ) -> CheckArtifactListResponse:
-        """A check's most recent artifacts, metadata only.
-
-        Raises:
-            CheckNotFoundException: If the check does not exist
-        """
-        await ArtifactCoreService._require_check(db, check_id)
-        artifacts = await ArtifactCRUD.list_by_check(db, check_id, limit=limit)
-        items = [ArtifactCoreService._metadata(a) for a in artifacts]
-        return CheckArtifactListResponse(
-            artifacts=items, total=len(items), check_id=check_id
-        )
-
-    @staticmethod
-    async def list_artifacts_by_check_result(
-        db: AsyncSession, check_id: UUID, check_result_id: UUID
-    ) -> CheckArtifactListResponse:
-        """The artifacts one check execution produced, metadata only.
-
-        Raises:
-            CheckNotFoundException: If the check does not exist
-        """
-        await ArtifactCoreService._require_check(db, check_id)
-        # check_artifacts is a hypertable partitioned by created_at, so the
-        # listing query is bounded on it — source the result's timestamp first.
-        check_result = await CheckResultCoreService.get_check_result_by_id(
-            db, check_result_id
-        )
-        artifacts = (
-            []
-            if check_result is None
-            else await ArtifactCRUD.list_by_check_result(
-                db, check_id, check_result_id, check_result.timestamp
-            )
-        )
-        items = [ArtifactCoreService._metadata(a) for a in artifacts]
-        return CheckArtifactListResponse(
-            artifacts=items, total=len(items), check_id=check_id
-        )
-
-    @staticmethod
-    async def delete_artifact(db: AsyncSession, artifact_id: UUID) -> bool:
-        """Delete an artifact.
-
-        Args:
-            db: Database session
-            artifact_id: Artifact UUID
-
-        Returns:
-            True if deleted, False if not found
-        """
-        deleted = (await ArtifactCRUD.delete_by_id(db, artifact_id)) > 0
-
-        if deleted:
-            logger.info(
-                "Deleted artifact",
-                extra={"artifact_id": str(artifact_id)},
-            )
-        else:
-            logger.warning(
-                "Artifact not found for deletion",
-                extra={"artifact_id": str(artifact_id)},
-            )
-
-        return deleted
-
-    @staticmethod
     async def delete_old_artifacts(
         db: AsyncSession,
         check_id: UUID,
@@ -208,23 +136,3 @@ class ArtifactCoreService:
             )
 
         return deleted_count
-
-    @staticmethod
-    async def get_artifact_stats(
-        db: AsyncSession, check_id: UUID
-    ) -> CheckArtifactStatsResponse:
-        """Get statistics about artifacts for a check.
-
-        Args:
-            db: Database session
-            check_id: Check UUID
-
-        Returns:
-            The artifact count and their combined size
-
-        Raises:
-            CheckNotFoundException: If the check does not exist
-        """
-        await ArtifactCoreService._require_check(db, check_id)
-        count, total_size = await ArtifactCRUD.get_stats_for_check(db, check_id)
-        return CheckArtifactStatsResponse(count=count, total_size_bytes=total_size)

@@ -48,19 +48,18 @@ async function updateGrowthChart(hours) {
     if (!chartEl) return;
 
     try {
-        // Fetch data from API
         // The endpoint comes from the markup (data-url), resolved by route name.
+        // It answers an HTML fragment whose data-points carries the series.
         const url = new URL(chartEl.dataset.url, window.location.origin);
         url.searchParams.set('hours', hours);
         const response = await fetch(url);
-        const result = await response.json();
-
-        if (result.error) {
-            console.error('Error loading chart data:', result.error);
+        if (!response.ok) {
+            console.error('Error loading chart data:', response.status);
             return;
         }
-
-        const chartData = result.data || [];
+        const fragment = new DOMParser().parseFromString(await response.text(), 'text/html');
+        const pointsEl = fragment.getElementById('database-growth-data');
+        const chartData = pointsEl ? JSON.parse(pointsEl.dataset.points || '[]') : [];
 
         // Prepare chart data
         const labels = chartData.map(d => formatChartLabel(d.timestamp, hours));

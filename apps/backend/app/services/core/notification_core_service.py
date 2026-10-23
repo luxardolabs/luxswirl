@@ -21,11 +21,8 @@ from app.notifications.registry import NotificationRegistry
 from app.schemas.notification_provider_schema import (
     NotificationProviderCreate,
     NotificationProviderInDB,
-    NotificationProviderListResponse,
-    NotificationProviderResponse,
     NotificationProviderUpdate,
 )
-from app.schemas.pagination_schema import build_pagination
 
 logger = get_logger("luxswirl.services.notification")
 
@@ -41,10 +38,8 @@ class NotificationCoreService:
     ) -> NotificationProviderInDB:
         """The provider as the web seam holds it — a DTO, not the ORM row.
 
-        Deliberately NOT NotificationProviderResponse: that schema masks
-        password/token/header values, and the edit form re-renders the saved
-        secret so an operator can save without retyping it. The API keeps the
-        masking through its response_model.
+        Unmasked on purpose: the edit form re-renders the saved secret so an
+        operator can save without retyping it.
         """
         provider = await NotificationCoreService.get_provider_by_id(
             db, provider_id, include_deleted
@@ -109,38 +104,6 @@ class NotificationCoreService:
             include_deleted=include_deleted,
         )
         return [NotificationProviderInDB.model_validate(p) for p in providers], total
-
-    @staticmethod
-    async def list_providers_page(
-        db: AsyncSession,
-        *,
-        page: int,
-        per_page: int,
-        provider_type: str | None = None,
-    ) -> NotificationProviderListResponse:
-        """One page of notification providers for the JSON API, secrets masked.
-
-        Args:
-            db: Database session
-            page: 1-based page number
-            per_page: Providers per page
-            provider_type: Filter by provider type
-
-        Returns:
-            The page, with its page state
-        """
-        providers, total = await NotificationCoreService.list_providers(
-            db,
-            skip=(page - 1) * per_page,
-            limit=per_page,
-            provider_type=provider_type,
-        )
-        items = [
-            NotificationProviderResponse.model_validate(p, from_attributes=True)
-            for p in providers
-        ]
-        pagination = build_pagination(page=page, per_page=per_page, total=total)
-        return NotificationProviderListResponse.of(items, pagination)
 
     @staticmethod
     async def create_provider(

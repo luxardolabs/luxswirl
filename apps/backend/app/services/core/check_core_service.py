@@ -754,8 +754,8 @@ class CheckCoreService:
         *,
         actor_is_admin: bool,
     ) -> dict[str, Any]:
-        """Import checks for an agent: the ONE import, for the JSON API and the
-        web upload's worker job alike.
+        """Import checks for an agent: the ONE import, run by the web upload's
+        worker job.
 
         Each entry is validated on its own: one that is not a valid check (an
         unknown type or method from an older export) is an error for that check,

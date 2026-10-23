@@ -161,32 +161,7 @@ def require_role(
     return role_checker
 
 
-async def require_api_admin(
-    token: Annotated[str, Depends(verify_api_token)],
-) -> str:
-    """Require an API bearer token, the JSON API's ADMIN credential.
-
-    The JSON API has no role model: every configured API token acts with full
-    admin rights (SECURITY.md). This gate is that policy, named, so an
-    admin-tier API route declares that it is admin-only instead of reading as
-    "any authenticated caller".
-    """
-    return token
-
-
 # Convenience dependencies for common role requirements
-async def require_admin(
-    user: Annotated[CurrentUserDTO, Depends(get_current_active_user)],
-) -> CurrentUserDTO:
-    """Require admin role."""
-    if user.role != "admin":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin access required",
-        )
-    return user
-
-
 async def require_editor(
     user: Annotated[CurrentUserDTO, Depends(get_current_active_user)],
 ) -> CurrentUserDTO:

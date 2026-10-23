@@ -235,23 +235,6 @@ class AgentResponse(AgentInDB):
     }
 
 
-class AgentLifecycleResponse(BaseSchema):
-    """An operator lifecycle action (reject, pause, resume, disable, enable) took effect."""
-
-    message: str = Field(..., description="What happened")
-    agent_name: str = Field(..., description="The agent acted on")
-    status: AgentApprovalStatus = Field(..., description="Its approval status now")
-
-
-class AgentKeyIssuedResponse(AgentLifecycleResponse):
-    """An agent-specific API key was issued (approval or regeneration).
-
-    The plaintext key appears here once; only its hash is stored.
-    """
-
-    api_key: str = Field(..., description="The new agent-specific API key")
-
-
 class AgentOption(BaseSchema):
     """One agent in a picker: what a form needs to list and choose it."""
 
@@ -259,49 +242,6 @@ class AgentOption(BaseSchema):
     agent_name: str | None = None
     hostname: str | None = None
     tags: list[str] | None = None
-
-
-class AgentListResponse(BaseSchema):
-    """Schema for listing agents."""
-
-    agents: list[AgentResponse] = Field(..., description="List of agents")
-    total: int = Field(..., description="Total number of agents")
-    online_count: int = Field(..., description="Number of online agents")
-    offline_count: int = Field(..., description="Number of offline agents")
-
-
-class AgentStatsResponse(BaseSchema):
-    """Schema for agent statistics."""
-
-    agent_name: str | None = Field(None, description="Agent name (None until approved)")
-    total_checks: int = Field(..., description="Total number of checks executed")
-    successful_checks: int = Field(..., description="Number of successful checks")
-    failed_checks: int = Field(..., description="Number of failed checks")
-    success_rate: float = Field(
-        ..., ge=0, le=100, description="Success rate percentage"
-    )
-    avg_latency_ms: float | None = Field(
-        None, description="Average latency in milliseconds"
-    )
-    uptime_seconds: float = Field(..., description="Agent uptime in seconds")
-    last_check_time: datetime | None = Field(
-        None, description="When last check was executed"
-    )
-
-    model_config = {
-        "json_schema_extra": {
-            "example": {
-                "agent_name": "prod-web-01",
-                "total_checks": 1000,
-                "successful_checks": 995,
-                "failed_checks": 5,
-                "success_rate": 99.5,
-                "avg_latency_ms": 45.2,
-                "uptime_seconds": 86400.0,
-                "last_check_time": "2024-01-01T12:00:00Z",
-            }
-        }
-    }
 
 
 class AgentHeartbeat(BaseSchema):

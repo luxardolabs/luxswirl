@@ -10,14 +10,12 @@ from datetime import datetime
 from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import AliasChoices, Field, field_validator
+from pydantic import Field, field_validator
 
 from app.models.enum_model import (
     SERVER_RUNNER,
     JobStatus,
     JobType,
-    MaintenanceJobKind,
-    MaintenanceJobStatus,
 )
 from app.schemas.base_schema import BaseSchema, TimestampSchema
 
@@ -218,31 +216,6 @@ class JobListRow(BaseSchema):
         return str(self.agent_id) if self.agent_id else SERVER_RUNNER
 
 
-class JobListResponse(BaseSchema):
-    """Schema for listing jobs."""
-
-    jobs: list[JobResponse] = Field(..., description="List of jobs")
-    total: int = Field(..., description="Total number of jobs")
-    pending_count: int = Field(0, description="Number of pending jobs")
-    running_count: int = Field(0, description="Number of running jobs")
-    completed_count: int = Field(0, description="Number of completed jobs")
-    failed_count: int = Field(0, description="Number of failed jobs")
-
-
-class JobStatsResponse(BaseSchema):
-    """Job counts by status (server-wide, or for one runner)."""
-
-    pending: int = Field(0, description="Waiting to be assigned")
-    assigned: int = Field(0, description="Assigned, not yet started")
-    running: int = Field(0, description="Executing")
-    completed: int = Field(0, description="Finished successfully")
-    failed: int = Field(0, description="Finished with an error")
-    cancelled: int = Field(0, description="Cancelled before finishing")
-    total: int = Field(0, description="All of the above")
-    active: int = Field(0, description="pending + assigned + running")
-    terminal: int = Field(0, description="completed + failed + cancelled")
-
-
 class JobDispatch(BaseSchema):
     """Job dispatch info sent to agent in heartbeat response."""
 
@@ -267,24 +240,6 @@ class JobDispatch(BaseSchema):
             }
         }
     }
-
-
-class MaintenanceJobEnqueuedResponse(BaseSchema):
-    """Acknowledgement that a maintenance job was queued for the worker.
-
-    The work itself (e.g. an agent delete cascading through checks and results)
-    runs in the in-process maintenance worker, so the request returns this
-    immediately instead of holding a long transaction.
-    """
-
-    # Read straight off the queued MaintenanceJob row, whose key is `id`.
-    job_id: UUID = Field(
-        ...,
-        validation_alias=AliasChoices("job_id", "id"),
-        description="Id of the queued maintenance job",
-    )
-    status: MaintenanceJobStatus = Field(..., description="Queued job's status")
-    kind: MaintenanceJobKind = Field(..., description="What the job will do")
 
 
 @dataclass(frozen=True)

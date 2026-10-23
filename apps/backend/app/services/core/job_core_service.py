@@ -30,7 +30,6 @@ from app.schemas.job_schema import (
     JobDispatch,
     JobListRow,
     JobResultSubmit,
-    JobStatsResponse,
 )
 from app.services.core._job_enrichers import enrich_job_result
 from app.services.core.network_scan_core_service import NetworkScanCoreService
@@ -393,45 +392,6 @@ class JobCoreService:
             )
 
         return deleted_count
-
-    @staticmethod
-    async def get_job_stats(
-        db: AsyncSession,
-        agent_id: UUID | None = None,
-        server_only: bool = False,
-    ) -> JobStatsResponse:
-        """
-        Get job statistics.
-
-        Args:
-            db: Database session
-            agent_id: Optional agent filter
-
-        Returns:
-            Job counts by status, with the totals derived from them
-        """
-        rows = await JobCRUD.get_status_counts(
-            db, agent_id=agent_id, server_only=server_only
-        )
-
-        counts = {str(status): count for status, count in rows}
-        pending = counts.get(JobStatus.PENDING, 0)
-        assigned = counts.get(JobStatus.ASSIGNED, 0)
-        running = counts.get(JobStatus.RUNNING, 0)
-        completed = counts.get(JobStatus.COMPLETED, 0)
-        failed = counts.get(JobStatus.FAILED, 0)
-        cancelled = counts.get(JobStatus.CANCELLED, 0)
-        return JobStatsResponse(
-            pending=pending,
-            assigned=assigned,
-            running=running,
-            completed=completed,
-            failed=failed,
-            cancelled=cancelled,
-            total=sum(counts.values()),
-            active=pending + assigned + running,
-            terminal=completed + failed + cancelled,
-        )
 
     @staticmethod
     async def job_to_dispatch(db: AsyncSession, job: Job) -> JobDispatch:

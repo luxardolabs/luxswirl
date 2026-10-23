@@ -2,12 +2,11 @@
 CheckArtifact CRUD - database queries for check artifacts (screenshots, logs, traces).
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import ColumnElement, and_, delete, desc, func, select
+from sqlalchemy import ColumnElement, and_, delete, desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import defer
 
 from app.models.check_artifact_model import CheckArtifact
 
@@ -50,54 +49,6 @@ class ArtifactCRUD:
         return result.scalar_one_or_none()
 
     @staticmethod
-    async def list_by_check(
-        db: AsyncSession, check_id: UUID, limit: int = 50
-    ) -> list[CheckArtifact]:
-        """Most recent artifacts for a check, without their bytes (`data` raises)."""
-        result = await db.execute(
-            select(CheckArtifact)
-            .options(defer(CheckArtifact.data, raiseload=True))
-            .where(CheckArtifact.check_id == check_id)
-            .order_by(desc(CheckArtifact.created_at))
-            .limit(limit)
-        )
-        return list(result.scalars().all())
-
-    @staticmethod
-    async def list_by_check_result(
-        db: AsyncSession,
-        check_id: UUID,
-        check_result_id: UUID,
-        check_result_timestamp: datetime,
-    ) -> list[CheckArtifact]:
-        """Artifacts for a specific check execution.
-
-        check_artifacts is a hypertable partitioned by created_at, so the scan is
-        bounded to a ±1-day window around the result's timestamp for chunk
-        exclusion (artifacts are written within seconds of the result, so the
-        window is result-identical).
-        """
-        window = timedelta(days=1)
-        result = await db.execute(
-            select(CheckArtifact)
-            .options(defer(CheckArtifact.data, raiseload=True))
-            .where(
-                and_(
-                    CheckArtifact.check_id == check_id,
-                    CheckArtifact.check_result_id == check_result_id,
-                    CheckArtifact.created_at >= check_result_timestamp - window,
-                    CheckArtifact.created_at <= check_result_timestamp + window,
-                )
-            )
-            .order_by(desc(CheckArtifact.created_at))
-        )
-        return list(result.scalars().all())
-
-    @staticmethod
-    async def delete_by_id(db: AsyncSession, artifact_id: UUID) -> int:
-        return await _delete_counted(db, CheckArtifact.id == artifact_id)
-
-    @staticmethod
     async def get_recent_ids_for_check(
         db: AsyncSession, check_id: UUID, keep_count: int
     ) -> list[UUID]:
@@ -119,15 +70,3 @@ class ArtifactCRUD:
         if keep_ids:
             criteria = and_(criteria, CheckArtifact.id.not_in(keep_ids))
         return await _delete_counted(db, criteria)
-
-    @staticmethod
-    async def get_stats_for_check(db: AsyncSession, check_id: UUID) -> tuple[int, int]:
-        """(artifact_count, total_size_bytes) for a check; 0 bytes when it has none."""
-        result = await db.execute(
-            select(
-                func.count(CheckArtifact.id),
-                func.coalesce(func.sum(CheckArtifact.size_bytes), 0),
-            ).where(CheckArtifact.check_id == check_id)
-        )
-        count, total_size = result.one()
-        return count, total_size

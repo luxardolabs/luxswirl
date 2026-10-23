@@ -17,7 +17,6 @@ from app.schemas.registration_key_schema import (
     RegistrationKeyCreate,
     RegistrationKeyResponse,
     RegistrationKeyRevoke,
-    RegistrationKeyUpdate,
 )
 
 logger = get_logger("luxswirl.services.registration_key")
@@ -117,24 +116,6 @@ class RegistrationKeyCoreService:
         return RegistrationKeyResponse.model_validate(key), plaintext_key
 
     @staticmethod
-    async def get_key_by_id(
-        db: AsyncSession,
-        key_id: UUID,
-    ) -> RegistrationKeyResponse | None:
-        """
-        Get a registration key by ID.
-
-        Args:
-            db: Database session
-            key_id: Key UUID
-
-        Returns:
-            The key (never its plaintext), or None
-        """
-        key = await RegistrationKeyCRUD.get_by_id(db, key_id)
-        return None if key is None else RegistrationKeyResponse.model_validate(key)
-
-    @staticmethod
     async def list_keys(
         db: AsyncSession,
         skip: int = 0,
@@ -157,46 +138,6 @@ class RegistrationKeyCoreService:
             db, skip=skip, limit=limit, include_revoked=include_revoked
         )
         return [RegistrationKeyResponse.model_validate(k) for k in keys], total
-
-    @staticmethod
-    async def update_key(
-        db: AsyncSession,
-        key_id: UUID,
-        data: RegistrationKeyUpdate,
-    ) -> RegistrationKeyResponse:
-        """
-        Update a registration key.
-
-        Args:
-            db: Database session
-            key_id: Key UUID
-            data: Update data
-
-        Returns:
-            Updated RegistrationKey model
-
-        Raises:
-            NotFoundException: If key not found
-        """
-        key = await RegistrationKeyCRUD.get_by_id(db, key_id)
-        if not key:
-            raise NotFoundException(f"Registration key not found: {key_id}")
-
-        # Update fields
-        if data.name is not None:
-            key.name = data.name
-
-        if data.description is not None:
-            key.description = data.description
-
-        key = await RegistrationKeyCRUD.save_key(db, key)
-
-        logger.info(
-            "Updated registration key",
-            extra={"key_name": key.name, "key_id": str(key.id)},
-        )
-
-        return RegistrationKeyResponse.model_validate(key)
 
     @staticmethod
     async def revoke_key(

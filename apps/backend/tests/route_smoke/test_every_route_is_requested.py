@@ -44,10 +44,6 @@ SESSION_ENDING = frozenset(
     {
         ("POST", "/change-password"),
         ("POST", "/profile/change-password"),
-        ("POST", "/api/v1/auth/change-password"),
-        ("POST", "/api/v1/auth/logout-all"),
-        # Ends the caller's own session now (it used to leave it valid).
-        ("POST", "/api/v1/auth/logout"),
     }
 )
 
@@ -91,9 +87,9 @@ def _routes():
     return sorted(set(seen))
 
 
-# Path endings that destroy the seeded world. DELETE /api/v1/agents/{agent_id}
-# cascades away the seeded check, job and artifact; run before the reads and
-# writes, it turned every one of their routes into a 404.
+# Path endings that destroy the seeded world. Deleting an agent cascades away
+# the seeded check, job and artifact; run before the reads and writes, it
+# turned every one of their routes into a 404.
 DESTRUCTIVE_SUFFIXES = ("/delete", "/revoke", "/revoke-key", "/logout-all")
 
 
@@ -209,10 +205,6 @@ async def _signed_out(client, headers: dict[str, str]) -> bool:
             "/profile/change-password",
             {"data": {"new_password": NEW_PASSWORD, "confirm_password": NEW_PASSWORD}},
         ),
-        (
-            "/api/v1/auth/change-password",
-            {"json": {"new_password": NEW_PASSWORD}},
-        ),
     ],
 )
 async def test_a_password_change_takes_and_ends_every_session(smoke_world, path, body):
@@ -231,24 +223,3 @@ async def test_a_password_change_takes_and_ends_every_session(smoke_world, path,
     assert await _signed_out(client, headers)
     assert not await _logs_in(client, old_password)
     assert await _logs_in(client, NEW_PASSWORD)
-
-
-async def test_api_logout_ends_the_callers_session(smoke_world):
-    client = smoke_world["client"]
-    headers = smoke_world["web_headers"]
-
-    response = await client.post("/api/v1/auth/logout", headers=headers)
-
-    assert response.status_code == 200, response.text
-    assert await _signed_out(client, headers)
-
-
-async def test_logout_all_ends_the_callers_sessions(smoke_world):
-    client = smoke_world["client"]
-    headers = smoke_world["web_headers"]
-
-    response = await client.post("/api/v1/auth/logout-all", headers=headers)
-
-    assert response.status_code == 200, response.text
-    assert response.json()["sessions_terminated"] >= 1
-    assert await _signed_out(client, headers)

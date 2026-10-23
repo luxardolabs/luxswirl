@@ -169,45 +169,6 @@ class TestDeleteAlert:
 
 
 # ---------------------------------------------------------------------------
-# Provider mapping management
-# ---------------------------------------------------------------------------
-
-
-class TestProviderMappings:
-    async def test_add_notification_provider(self, db: AsyncSession):
-        alert = await AlertCoreService.create_alert(db, _create_data())
-        provider = make_notification_provider()
-        db.add(provider)
-        await db.flush()
-
-        await AlertCoreService.add_notification_provider(db, alert.id, provider.id)
-        # Verify mapping
-        from app.crud.alert_crud import AlertCRUD
-
-        mapping = await AlertCRUD.get_notif_mapping(db, alert.id, provider.id)
-        assert mapping is not None
-
-    async def test_remove_notification_provider(self, db: AsyncSession):
-        provider = make_notification_provider()
-        db.add(provider)
-        await db.flush()
-        alert = await AlertCoreService.create_alert(
-            db,
-            _create_data(provider_ids=[provider.id]),
-        )
-
-        await AlertCoreService.remove_notification_provider(
-            db,
-            alert.id,
-            provider.id,
-        )
-        from app.crud.alert_crud import AlertCRUD
-
-        mapping = await AlertCRUD.get_notif_mapping(db, alert.id, provider.id)
-        assert mapping is None
-
-
-# ---------------------------------------------------------------------------
 # Check assignment
 # ---------------------------------------------------------------------------
 

@@ -7,55 +7,32 @@ LuxSwirlException handler in main.py converts AgentNotFoundException → 404,
 so routes do not catch it explicitly.
 """
 
-from typing import Annotated, Any
+from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, Header, Request, status
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import AuthenticatedHeartbeat
 from app.core.config import settings
 from app.core.rate_limit import limiter
-from app.core.security import (
-    verify_api_token,
-    verify_registration_token,
-)
+from app.core.security import verify_registration_token
 from app.db import get_db
-from app.models.enum_model import AgentApprovalStatus, MaintenanceJobKind
+from app.models.enum_model import AgentApprovalStatus
 from app.schemas.agent_schema import (
-    AgentCreate,
     AgentHeartbeat,
     AgentHeartbeatResponse,
-    AgentKeyIssuedResponse,
-    AgentLifecycleResponse,
-    AgentListResponse,
     AgentRegisterRequest,
     AgentRegisterResponse,
-    AgentResponse,
-    AgentStatsResponse,
-    AgentUpdate,
 )
-from app.schemas.base_schema import ErrorResponse
-from app.schemas.job_schema import MaintenanceJobEnqueuedResponse
-from app.schemas.registration_key_schema import (
-    AgentKeyRecoveryResponse,
-    AgentKeyRegenerateResponse,
-)
+from app.schemas.registration_key_schema import AgentKeyRecoveryResponse
 from app.services.core.agent_core_service import AgentCoreService
-from app.services.core.maintenance_job_core_service import MaintenanceJobCoreService
 
 logger = get_logger("luxswirl.agent_router")
 
 # Agent-facing router (agents call these endpoints)
 agent_ops_router = APIRouter(tags=["Agent Operations"])
-
-# Management router (web UI / users call these)
-router = APIRouter(prefix="/agents", tags=["Agents"])
-
-_NOT_FOUND: dict[int | str, dict[str, Any]] = {
-    404: {"model": ErrorResponse, "description": "Agent not found"}
-}
 
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
@@ -89,280 +66,6 @@ async def register_agent(
     )
 
 
-@router.get(
-    "",
-    response_model=AgentListResponse,
-    summary="List all agents",
-    description="Get a list of all agents with optional filtering by active status",
-    name="list_agents",
-)
-async def list_agents(
-    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
-    _: Annotated[str, Depends(verify_api_token)],
-    active_only: Annotated[
-        bool, Query(description="Only return active agents")
-    ] = False,
-    page: Annotated[int, Query(ge=1, description="Page number")] = 1,
-    page_size: Annotated[int, Query(ge=1, le=1000, description="Items per page")] = 50,
-) -> AgentListResponse:
-    return await AgentCoreService.list_agents_with_stats(
-        db=db,
-        active_only=active_only,
-        offset=(page - 1) * page_size,
-        limit=page_size,
-    )
-
-
-@router.get(
-    "/{agent_name}",
-    response_model=AgentResponse,
-    summary="Get agent by name",
-    responses=_NOT_FOUND,
-    name="get_agent",
-)
-async def get_agent(
-    agent_name: str,
-    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
-    _: Annotated[str, Depends(verify_api_token)],
-) -> AgentResponse:
-    return await AgentCoreService.get_agent_response_by_name(db, agent_name)
-
-
-@router.post(
-    "",
-    response_model=AgentResponse,
-    status_code=status.HTTP_201_CREATED,
-    summary="Create a new agent",
-    responses={409: {"model": ErrorResponse, "description": "Agent already exists"}},
-    name="create_agent",
-)
-async def create_agent(
-    data: AgentCreate,
-    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
-    _: Annotated[str, Depends(verify_api_token)],
-) -> AgentResponse:
-    return await AgentCoreService.create_agent_response(db, data)
-
-
-@router.patch(
-    "/{agent_id}",
-    response_model=AgentResponse,
-    summary="Update an agent",
-    responses=_NOT_FOUND,
-    name="update_agent",
-)
-async def update_agent(
-    agent_id: UUID,
-    data: AgentUpdate,
-    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
-    _: Annotated[str, Depends(verify_api_token)],
-) -> AgentResponse:
-    return await AgentCoreService.update_agent_response(db, agent_id, data)
-
-
-@router.delete(
-    "/{agent_id}",
-    status_code=status.HTTP_202_ACCEPTED,
-    summary="Enqueue agent delete (async — runs in maintenance worker)",
-    responses=_NOT_FOUND,
-    response_model=MaintenanceJobEnqueuedResponse,
-    name="delete_agent",
-)
-async def delete_agent(
-    agent_id: UUID,
-    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
-    _: Annotated[str, Depends(verify_api_token)],
-) -> MaintenanceJobEnqueuedResponse:
-    """Enqueue an agent_delete maintenance job and return the job id.
-
-    The cascade through checks → check_results runs in the in-process worker
-    so this request never holds a long transaction. Poll
-    `GET /maintenance/{job_id}/status` (web) for completion, or query the
-    `maintenance_jobs` table directly. See LUXSWIRL-105.
-    """
-    # 404 if the agent doesn't exist
-    await AgentCoreService.get_agent(db, agent_id)
-    job = await MaintenanceJobCoreService.enqueue(
-        db,
-        kind=MaintenanceJobKind.AGENT_DELETE,
-        target_id=agent_id,
-    )
-    return MaintenanceJobEnqueuedResponse.model_validate(job)
-
-
-@router.post(
-    "/{agent_name}/approve",
-    response_model=AgentKeyIssuedResponse,
-    summary="Approve pending agent",
-    responses=_NOT_FOUND,
-    name="approve_agent",
-)
-async def approve_agent(
-    agent_name: str,
-    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
-    _: Annotated[str, Depends(verify_api_token)],
-) -> AgentKeyIssuedResponse:
-    agent_id = await AgentCoreService.agent_id_by_name(db, agent_name)
-    _approved_agent, api_key = await AgentCoreService.approve_agent(db, agent_id)
-    return AgentKeyIssuedResponse(
-        message="Agent approved successfully",
-        agent_name=agent_name,
-        api_key=api_key,
-        status=AgentApprovalStatus.ACTIVE,
-    )
-
-
-@router.post(
-    "/{agent_name}/reject",
-    response_model=AgentLifecycleResponse,
-    summary="Reject pending agent",
-    responses=_NOT_FOUND,
-    name="reject_agent",
-)
-async def reject_agent(
-    agent_name: str,
-    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
-    _: Annotated[str, Depends(verify_api_token)],
-    reason: Annotated[str | None, Query(description="Reason for rejection")] = None,
-) -> AgentLifecycleResponse:
-    agent_id = await AgentCoreService.agent_id_by_name(db, agent_name)
-    await AgentCoreService.reject_agent(db, agent_id, reason)
-    return AgentLifecycleResponse(
-        message="Agent rejected",
-        agent_name=agent_name,
-        status=AgentApprovalStatus.REJECTED,
-    )
-
-
-# route-smoke: requested by the route-table sweep (tests/route_smoke)
-@router.post(
-    "/{agent_name}/pause",
-    response_model=AgentLifecycleResponse,
-    summary="Pause active agent",
-    responses=_NOT_FOUND,
-    name="pause_agent",
-)
-async def pause_agent(
-    agent_name: str,
-    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
-    _: Annotated[str, Depends(verify_api_token)],
-    reason: Annotated[str | None, Query(description="Reason for pausing")] = None,
-) -> AgentLifecycleResponse:
-    agent_id = await AgentCoreService.agent_id_by_name(db, agent_name)
-    await AgentCoreService.pause_agent(db, agent_id, reason)
-    return AgentLifecycleResponse(
-        message="Agent paused", agent_name=agent_name, status=AgentApprovalStatus.PAUSED
-    )
-
-
-# route-smoke: requested by the route-table sweep (tests/route_smoke)
-@router.post(
-    "/{agent_name}/resume",
-    response_model=AgentLifecycleResponse,
-    summary="Resume paused agent",
-    responses=_NOT_FOUND,
-    name="resume_agent",
-)
-async def resume_agent(
-    agent_name: str,
-    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
-    _: Annotated[str, Depends(verify_api_token)],
-) -> AgentLifecycleResponse:
-    agent_id = await AgentCoreService.agent_id_by_name(db, agent_name)
-    await AgentCoreService.resume_agent(db, agent_id)
-    return AgentLifecycleResponse(
-        message="Agent resumed",
-        agent_name=agent_name,
-        status=AgentApprovalStatus.ACTIVE,
-    )
-
-
-# route-smoke: requested by the route-table sweep (tests/route_smoke)
-@router.post(
-    "/{agent_name}/disable",
-    response_model=AgentLifecycleResponse,
-    summary="Disable agent",
-    responses=_NOT_FOUND,
-    name="disable_agent",
-)
-async def disable_agent(
-    agent_name: str,
-    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
-    _: Annotated[str, Depends(verify_api_token)],
-    reason: Annotated[str | None, Query(description="Reason for disabling")] = None,
-) -> AgentLifecycleResponse:
-    agent_id = await AgentCoreService.agent_id_by_name(db, agent_name)
-    await AgentCoreService.disable_agent(db, agent_id, reason)
-    return AgentLifecycleResponse(
-        message="Agent disabled",
-        agent_name=agent_name,
-        status=AgentApprovalStatus.DISABLED,
-    )
-
-
-# route-smoke: requested by the route-table sweep (tests/route_smoke)
-@router.post(
-    "/{agent_name}/enable",
-    response_model=AgentLifecycleResponse,
-    summary="Re-enable disabled agent",
-    responses=_NOT_FOUND,
-    name="enable_agent",
-)
-async def enable_agent(
-    agent_name: str,
-    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
-    _: Annotated[str, Depends(verify_api_token)],
-) -> AgentLifecycleResponse:
-    agent_id = await AgentCoreService.agent_id_by_name(db, agent_name)
-    await AgentCoreService.enable_agent(db, agent_id)
-    return AgentLifecycleResponse(
-        message="Agent enabled",
-        agent_name=agent_name,
-        status=AgentApprovalStatus.ACTIVE,
-    )
-
-
-@router.post(
-    "/{agent_name}/regenerate-key",
-    response_model=AgentKeyIssuedResponse,
-    summary="Regenerate agent API key (by name)",
-    responses=_NOT_FOUND,
-    name="regenerate_agent_key_by_name",
-)
-async def regenerate_agent_key_by_name(
-    agent_name: str,
-    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
-    _: Annotated[str, Depends(verify_api_token)],
-) -> AgentKeyIssuedResponse:
-    agent_id = await AgentCoreService.agent_id_by_name(db, agent_name)
-    api_key = await AgentCoreService.regenerate_active_agent_key(db, agent_id)
-    return AgentKeyIssuedResponse(
-        message="API key regenerated successfully",
-        agent_name=agent_name,
-        api_key=api_key,
-        status=AgentApprovalStatus.ACTIVE,
-    )
-
-
-# route-smoke: requested by the route-table sweep (tests/route_smoke)
-@router.get(
-    "/{agent_id}/stats",
-    response_model=AgentStatsResponse,
-    summary="Get agent statistics",
-    responses=_NOT_FOUND,
-    name="get_agent_stats",
-)
-async def get_agent_stats(
-    agent_id: UUID,
-    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
-    _: Annotated[str, Depends(verify_api_token)],
-    hours: Annotated[
-        int, Query(ge=1, le=720, description="Hours to include in stats")
-    ] = 24,
-) -> AgentStatsResponse:
-    return await AgentCoreService.get_agent_stats(db, agent_id, hours)
-
-
 @agent_ops_router.post(
     "/heartbeat",
     response_model=AgentHeartbeatResponse,
@@ -380,9 +83,6 @@ async def agent_heartbeat(
     return await AgentCoreService.process_heartbeat(
         db, sender.agent_id, heartbeat, using_agent_key=sender.using_agent_key
     )
-
-
-# ========== Agent API Key Management Endpoints ==========
 
 
 @agent_ops_router.post(
@@ -411,84 +111,4 @@ async def recover_agent_key(
         agent_id=agent_id,
         api_key=new_key,
         message="Agent key recovered successfully. Save this key securely - it cannot be retrieved again.",
-    )
-
-
-# route-smoke: requested by the route-table sweep (tests/route_smoke)
-@agent_ops_router.get(
-    "/agents/{agent_id}/api-key",
-    summary="Get agent API key",
-    description="Agent retrieves its agent-specific key after approval",
-    name="get_agent_api_key",
-)
-@limiter.limit(settings.security.registration_rate_limit)
-async def get_agent_api_key(
-    request: Request,
-    agent_id: UUID,
-    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
-    authorization: Annotated[str | None, Header()] = None,
-) -> None:
-    await verify_registration_token(authorization, db)
-
-    agent = await AgentCoreService.get_agent(db, agent_id)
-
-    if agent.approval_status != "active":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Agent not approved yet. Current status: {agent.approval_status}",
-        )
-
-    if not agent.has_api_key:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Agent has no API key. This is an internal error - keys should be auto-generated on approval.",
-        )
-
-    raise HTTPException(
-        status_code=status.HTTP_410_GONE,
-        detail="API key was already issued and cannot be retrieved. Use /recover-key endpoint if key was lost.",
-    )
-
-
-@router.post(
-    "/{agent_id}/regenerate-key",
-    summary="Regenerate agent API key",
-    description="Admin regenerates agent-specific key (revokes old key)",
-    response_model=AgentKeyRegenerateResponse,
-    name="regenerate_agent_key",
-)
-async def regenerate_agent_key(
-    agent_id: UUID,
-    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
-    _: Annotated[str, Depends(verify_api_token)],
-) -> AgentKeyRegenerateResponse:
-    agent, new_key = await AgentCoreService.regenerate_agent_key(db, agent_id)
-    logger.info(
-        "Admin regenerated API key for agent",
-        extra={"agent_id": str(agent_id)},
-    )
-    return AgentKeyRegenerateResponse(
-        agent_id=agent.id,
-        api_key=new_key,
-        message="Key regenerated successfully. Update agent configuration with new key.",
-    )
-
-
-# route-smoke: requested by the route-table sweep (tests/route_smoke)
-@router.delete(
-    "/{agent_id}/revoke-key",
-    status_code=status.HTTP_204_NO_CONTENT,
-    summary="Revoke agent API key",
-    description="Admin revokes agent-specific key (blocks agent access)",
-    name="revoke_agent_key",
-)
-async def revoke_agent_key(
-    agent_id: UUID,
-    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
-    _: Annotated[str, Depends(verify_api_token)],
-) -> None:
-    await AgentCoreService.revoke_agent_key(db, agent_id)
-    logger.warning(
-        "Admin revoked API key for agent",
-        extra={"agent_id": str(agent_id)},
     )

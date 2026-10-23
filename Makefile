@@ -1635,7 +1635,8 @@ SMOKE_CONTAINERS   ?= luxswirl_server luxswirl_agent
 SMOKE_SCRIPTS_DIR  := apps/backend/app/scripts
 SMOKE_IMPORT_ROOT  := apps/backend
 SMOKE_ENTRY_MODULES := app.main
-SMOKE_AUTH_PATH    ?= /api/v1/agents
+# No bearer-token GET is served by default: /metrics takes one only when the
+# stack requires it, so the authenticated probe is set per stack (Makefile.local).
 
 # luxarch:smoke asset v9 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit smoke`.
 # ── Smoke: probe the DEPLOYED stack from outside, after every dev deploy ──────────────────────────

@@ -10,6 +10,7 @@ from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.schemas.auth_schema import AuthedUser
+from app.schemas.setting_schema import DatabaseGrowthResponse
 from app.services.core.timescale_core_service import TimescaleCoreService
 
 logger = get_logger("luxswirl.web.services.database_health")
@@ -50,4 +51,20 @@ class DatabaseHealthViewService:
             "current_user": current_user,
             "health": health,
             "chart_data_url": _chart_data_url(request),
+        }
+
+    @staticmethod
+    async def build_growth_chart_context(
+        db: AsyncSession, request: Request, hours: int
+    ) -> dict[str, Any]:
+        """Context for the growth chart's data fragment: storage by table category.
+
+        The points ride in the fragment's markup (a data attribute), which the
+        chart's script parses; the route stays an HTML route.
+        """
+        data = await TimescaleCoreService.get_growth_chart_data(db, hours)
+        chart = DatabaseGrowthResponse.model_validate({"data": data})
+        return {
+            "request": request,
+            "chart_points": [point.model_dump() for point in chart.data],
         }

@@ -4,7 +4,7 @@ Database Health router — admin monitoring & metrics for the database.
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -54,4 +54,27 @@ async def database_health_refresh(
     )
     return templates.TemplateResponse(
         request, "partials/settings/database_health.html", context
+    )
+
+
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
+@router.get(
+    "/database-health/chart-data",
+    response_class=HTMLResponse,
+    name="database_growth_chart_data",
+)
+async def database_growth_chart_data(
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
+    current_user: AdminUserWeb,
+    hours: Annotated[
+        int, Query(ge=1, le=8760, description="Hours of data to fetch")
+    ] = 168,
+) -> HTMLResponse:
+    """The growth chart's data fragment, fetched by the page's chart script."""
+    context = await DatabaseHealthViewService.build_growth_chart_context(
+        db, request, hours
+    )
+    return templates.TemplateResponse(
+        request, "partials/settings/database_growth_data.html", context
     )

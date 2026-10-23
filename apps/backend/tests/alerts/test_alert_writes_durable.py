@@ -118,23 +118,16 @@ async def test_delete_alert_is_committed(worker_db, hard: bool) -> None:
         assert row is not None and row.deleted_at is not None
 
 
-async def test_add_provider_and_check_mappings_are_committed(worker_db) -> None:
-    check_id, provider_id = await _check_and_provider(worker_db)
+async def test_add_check_mapping_is_committed(worker_db) -> None:
+    check_id, _ = await _check_and_provider(worker_db)
     alert = make_alert()
     await _seed(worker_db, alert)
 
     async with worker_db() as s:
-        provider_mapping_id = await AlertCoreService.add_notification_provider(
-            s, alert.id, provider_id
-        )
         check_mapping_id = await AlertCoreService.add_check(s, alert.id, check_id)
-        assert isinstance(provider_mapping_id, UUID)
         assert isinstance(check_mapping_id, UUID)
         await s.commit()
 
-    assert (
-        await _count(worker_db, AlertNotificationMapping, id=provider_mapping_id) == 1
-    )
     assert await _count(worker_db, AlertCheckMapping, id=check_mapping_id) == 1
 
 

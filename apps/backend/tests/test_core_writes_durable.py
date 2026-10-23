@@ -89,11 +89,6 @@ async def test_sessions_are_created_and_ended_durably(worker_db) -> None:
         await s.commit()
     assert await _ids() == {second.id}
 
-    async with worker_db() as s:
-        assert await auth.logout_session_by_id(s, user.id, second.id) is True
-        await s.commit()
-    assert await _ids() == set()
-
 
 async def test_create_artifact_is_committed(worker_db) -> None:
     agent = make_agent()
