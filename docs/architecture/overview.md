@@ -272,9 +272,9 @@ ______________________________________________________________________
      │                                              ├────┐
      │                                              │    │
      │  For each result:                           │    │
-     │    - Upsert check                           │    │
+     │    - Validate it alone (bad: count failed)  │    │
+     │    - Skip unless assigned to this agent     │    │
      │    - Insert result                          │    │
-     │    - Update agent last_seen                 │    │
      │                                              │<───┘
      │                                              │
      │  6. Response: {"received": 500}             │
@@ -515,7 +515,7 @@ The JSON API under `/api/v1` is the agent protocol: it carries agents' registrat
 /api/v1
 ├── POST   /agents/register                 Register (registration key)
 ├── POST   /agents/{agent_id}/recover-key   Recover the agent key (registration key + recovery secret)
-├── POST   /heartbeat                       Heartbeat (agent key or registration key)
+├── POST   /heartbeat                       Heartbeat (agent key; registration key only until the agent has one)
 ├── GET    /checks?agent_id={id}            Fetch this agent's checks (agent key)
 ├── POST   /reports                         Submit a batch of results (agent key)
 ├── POST   /jobs/{job_id}/results           Submit a job's results (the job's agent key)
@@ -688,9 +688,10 @@ Content-Type: application/json
 
 ```python
 # For each result in batch:
-#   1. Upsert check (if config changed)
-#   2. Insert check_result row
-#   3. Update agent.last_seen
+#   1. Validate it on its own (an invalid one is counted failed and skipped)
+#   2. Skip it unless its check is assigned to this agent
+#   3. Insert the check_result rows (ON CONFLICT DO NOTHING)
+# The heartbeat, not the report, writes agent.last_seen (server clock).
 
 # All in single transaction for consistency
 ```
