@@ -465,7 +465,7 @@ class AlertEvaluationCoreService:
             alert, check, check_result, is_recovery=is_recovery
         )
         # State key recorded on every NotificationLog row so dedup can detect
-        # transitions (LUXSWIRL-147). Computed once per fire.
+        # transitions. Computed once per fire.
         await AlertEvaluationCoreService.send_to_providers(
             db,
             alert.id,
