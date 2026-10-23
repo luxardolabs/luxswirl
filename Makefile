@@ -39,7 +39,7 @@ DEV_WAIT_TIMEOUT      ?= 180
 # Makefile.local (gitignored): copy Makefile.local.example -> Makefile.local and set it.
 # Contributors don't need it — lint/test and the import-linter contracts run without it.
 LUXARCH_REGISTRY ?=
-LUXARCH_VERSION := 0.313.0
+LUXARCH_VERSION := 0.314.1
 LUXARCH_IMAGE    ?= $(LUXARCH_REGISTRY)/luxardolabs/luxarch:$(LUXARCH_VERSION)
 # Dependency-CVE guard (luxaudit) — same private registry as luxarch, mount-only.
 # Scans the pinned poetry.locks against the live advisory feed (see .luxaudit.toml).
@@ -2341,7 +2341,7 @@ TEST_ENV      := -e TEST_DATABASE_URL=postgresql+asyncpg://luxswirl_test:luxswir
                  -e PYTHONPATH=/repo/apps/backend:/repo/apps:/repo/apps/backend/tests \
                  -e HYPOTHESIS_STORAGE_DIRECTORY=/out/.hypothesis
 
-# luxarch:test-block asset v4 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit test-block`.
+# luxarch:test-block asset v5 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit test-block`.
 # ── Test: THE suite, in the test image, against an isolated stack of real services ───────────────
 # Emitted by `luxarch --emit test-block`; paste below the build core (`luxarch --emit build-core`, v4:
 # it builds with the core's `img_*` helpers and TEST_IMAGE, and the repo's BUILD_ARGS, and quotes every
@@ -2420,6 +2420,17 @@ TEST_ENV      := -e TEST_DATABASE_URL=postgresql+asyncpg://luxswirl_test:luxswir
 #     not exist refuses, naming it; `repo.test_block_wired` reds one git does not track.
 #     Empty (neither file exists), compose gets `--env-file /dev/null`: its implicit `.env` is a
 #     file one checkout has and another does not.
+#   - MIGRATION TESTS run as a second pytest run of the same suite, in the same container, image,
+#     stack and coverage (v5). A migration test builds a database of its own at an older revision
+#     (`CREATE DATABASE` through the server's maintenance database, `alembic upgrade <parent>`, seed,
+#     upgrade) and runs what a migration really runs, `CREATE INDEX CONCURRENTLY` among it: the
+#     test-db-bound block refuses both, by design, so these tests cannot run under it. TEST_MIGRATIONS
+#     names their directory (`tests/migrations`, its last part `migrations`): the main run ignores it
+#     (`--ignore`), and it runs alone with `--confcutdir` set to it, so no conftest above it, the
+#     block's included, is loaded; its own conftest.py builds and drops its databases. A one-off
+#     PYTEST_ARGS narrows the main run only: a path in it would otherwise run outside the block. Coverage
+#     appends both runs, and `make test` fails when either fails. Layout: `luxarch --playbook
+#     test-isolation`, "Migration tests".
 #   - Each run's project is named from its own `mktemp -d` token, and refuses to run without one (a
 #     PID repeats across containers and CI runners), and everything mounts the makefile's directory
 #     ($(CURDIR)), so `make -C` runs the right suite.
@@ -2454,6 +2465,9 @@ TEST_FLOOR ?= .luxlint.toml
 #   agent_TEST_ENV       :=
 #   agent_TEST_FLOOR     := apps/agent/.luxlint.toml
 TEST_SUITES ?=
+# Setting: the migration tests' directory, from TEST_WORKDIR (`tests/migrations`), run on their own
+# outside the test-db-bound block (v5); empty: none. A listed suite's is `<suite>_TEST_MIGRATIONS` ---
+TEST_MIGRATIONS ?=
 # Setting: NONE. For a one-off run only, on the command line: `make test PYTEST_ARGS='-k orders'`.
 # A committed value narrows THE suite for everyone (`repo.test_block_wired` reds one). The ratchet
 # still judges the whole floor, so a narrowed run measures only what it touched and fails it: a
@@ -2562,6 +2576,10 @@ test: test-reap ## THE suite (each of TEST_SUITES in turn): its own test image, 
 	  trap 'ok=; for t in 1 2 3; do dc down --volumes --remove-orphans >/dev/null 2>&1; [ -z "$$(docker network ls -q --filter "label=com.docker.compose.project=$$p"; docker volume ls -q --filter "label=com.docker.compose.project=$$p")" ] && { ok=1; break; }; done; if [ -n "$$ok" ]; then docker rmi -f "$$img" >/dev/null 2>&1; else printf "FAIL  the test stack %s did not come down (its networks or volumes remain): make test-reap removes it once they are free\n" "$$p"; exit 1; fi' EXIT; \
 	  trap '[ -z "$$kid" ] || tree "$$kid"' TERM; \
 	  mkdir "$$out" && chmod 733 "$$out" || exit 2; \
+	  mig=$(call sq,$(call test_suite,$(s),MIGRATIONS)); mig=$${mig%/}; \
+	  if [ -n "$$mig" ]; then case "/$$mig/" in (//*|*/../*|*/./*) mig=;; esac; case "$$mig" in (migrations|*/migrations) ;; (*) mig=;; esac; \
+	    [ -n "$$mig" ] && [ -d $(call sq,$(CURDIR)/$(call test_suite,$(s),WORKDIR))/"$$mig" ] \
+	      || { printf 'REFUSING: %s is %s: name the directory of the migration tests under %s, its last part migrations (tests/migrations)\n' $(call sq,$(call test_suite_var,$(s),MIGRATIONS)) $(call sq,$(call test_suite,$(s),MIGRATIONS)) $(call sq,$(call test_suite,$(s),WORKDIR)); exit 2; }; fi; \
 	  $(if $(filter -,$(s)),,printf '── suite %s (%s)\n' $(call sq,$(s)) $(call sq,$(call test_suite,$(s),WORKDIR));) \
 	  bg docker build --load --target test $$lab --label "luxarch.test-block.checkout=$$co" --label "luxarch.test-block.project=$$p" $(call sqw,$(BUILD_ARGS)) -f $(call sq,$(call img_dockerfile,$(call test_suite_image,$(s)))) -t "$$img" $(call sq,$(call img_context,$(call test_suite_image,$(s)))) >/dev/null \
 	    || { printf 'FAIL  the test image did not build: the test stage of %s\n' $(call sq,$(call img_dockerfile,$(call test_suite_image,$(s)))); exit 1; }; \
@@ -2573,10 +2591,10 @@ test: test-reap ## THE suite (each of TEST_SUITES in turn): its own test image, 
 	      [ "$$(docker network inspect -f '{{index .Labels "com.docker.compose.project"}}' $$n)" = "$$p" ] && { net=$$n; break; }; done; \
 	    [ -n "$$net" ] || { printf 'FAIL  %s joined no network of this run'"'"'s own project (%s)\n' $(call sq,$(firstword $(call test_suite,$(s),SERVICES))) "$$p"; exit 1; }; \
 	    net="--network $$net"; fi; \
-	  bg docker run --rm --init $$lab --label "luxarch.test-block.checkout=$$co" -e TINI_KILL_PROCESS_GROUP=1 $$net $(call sqw,$(call test_suite,$(s),ENV)) -e PYTEST_ADDOPTS="$${PYTEST_ARGS:-}" \
+	  bg docker run --rm --init $$lab --label "luxarch.test-block.checkout=$$co" -e TINI_KILL_PROCESS_GROUP=1 $$net $(call sqw,$(call test_suite,$(s),ENV)) -e PYTEST_ADDOPTS="$${PYTEST_ARGS:-}" -e LUXARCH_TEST_MIGRATIONS="$$mig" \
 	    -e LUXARCH_TEST_COV=$(call sq,$(call test_suite,$(s),COV)) -e COVERAGE_CORE=sysmon -e COVERAGE_FILE=/out/.coverage -e PYTHONDONTWRITEBYTECODE=1 \
 	    -v $(call sq,$(CURDIR)):/repo:ro -v "$$D/cfg":/cfg:ro -v "$$out":/out -w /repo/$(call sq,$(call test_suite,$(s),WORKDIR)) "$$img" \
-	    sh -c 'python -m coverage run --branch --source="$$LUXARCH_TEST_COV" -m pytest -c /cfg/pytest.ini --rootdir=. -p no:cacheprovider; s=$$?; python -m coverage report --show-missing --precision=2 > /out/coverage.txt; echo $$? > /out/coverage.rc; python -m coverage json -q -o - > /out/coverage.json; cat /out/coverage.txt; exit $$s'; \
+	    sh -c 'm=$${LUXARCH_TEST_MIGRATIONS:-}; python -m coverage run --branch --source="$$LUXARCH_TEST_COV" -m pytest -c /cfg/pytest.ini --rootdir=. -p no:cacheprovider $${m:+"--ignore=$$m"}; s=$$?; if [ -n "$$m" ]; then PYTEST_ADDOPTS= python -m coverage run --append --branch --source="$$LUXARCH_TEST_COV" -m pytest -c /cfg/pytest.ini --rootdir=. -p no:cacheprovider --confcutdir="$$m" "$$m"; ms=$$?; [ "$$ms" = 0 ] || echo "FAIL  the migration tests in $$m failed (exit $$ms)"; [ "$$s" != 0 ] || s=$$ms; fi; python -m coverage report --show-missing --precision=2 > /out/coverage.txt; echo $$? > /out/coverage.rc; python -m coverage json -q -o - > /out/coverage.json; cat /out/coverage.txt; exit $$s'; \
 	  rc=$$?; \
 	  [ "$$rc" = 0 ] || { echo "FAIL  the suite failed (exit $$rc)"; exit 1; }; \
 	  [ "$$(cat "$$out/coverage.rc" 2>/dev/null)" = 0 ] || { printf 'FAIL  coverage measured nothing (coverage report: %s): check %s names the package the suite imports\n' "$$(tail -n 1 "$$out/coverage.txt" 2>/dev/null)" $(call sq,$(call test_suite_var,$(s),COV)); exit 1; }; \
