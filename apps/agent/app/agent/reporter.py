@@ -2,9 +2,9 @@
 Result reporter for the LuxSwirl agent.
 
 Stores batches the server could not take yet in a local SQLite database with
-gzip-compressed payloads, and replays them. A batch the server refuses for good
-(400/413/422) goes to the `dead_letters` table instead (see `dead_letter`), so
-it never blocks the queue behind it. Automatically migrates legacy JSON file
+gzip-compressed payloads, and replays them. A batch the server itself refuses
+as invalid (a 400/422 in its JSON error envelope) goes to the `dead_letters`
+table instead (see `dead_letter`), so it never blocks the queue behind it. Automatically migrates legacy JSON file
 storage on first startup.
 """
 
@@ -23,12 +23,13 @@ from shared.logger import get_logger
 from app.agent.dead_letter import (
     CREATE_DEAD_LETTERS,
     Delivery,
-    classify_status,
+    classify_response,
     count_dead_letters,
     error_detail,
     insert_dead_letter,
     prune_dead_letters,
 )
+from app.agent.result_limits import fit_result
 
 # SQL constants
 _CREATE_TABLE = """
@@ -397,11 +398,17 @@ class Reporter:
     async def add_result(self, result: dict[str, Any]) -> None:
         """Add a result to the current batch with graceful degradation.
 
+        The result is first fitted to the server's per-result limits
+        (`result_limits.fit_result`), so a long error or an odd HTTP status
+        never costs the server-side result.
+
         Args:
             result: The check result to add
         """
         if not self.running:
             await self.start()
+
+        fit_result(result)
 
         # Check if we need to apply backpressure
         async with self.batch_lock:
@@ -476,7 +483,9 @@ class Reporter:
         """Send a batch of results to the server.
 
         A transient failure stores the batch for replay; a permanent refusal
-        (400/413/422) dead-letters it, since sending it again cannot succeed.
+        (the server's own 400/422 envelope saying the payload is invalid, see
+        `dead_letter.classify_response`) dead-letters it, since sending it
+        again cannot succeed.
 
         Args:
             batch: List of check results to send
@@ -557,7 +566,7 @@ class Reporter:
                 status_code, detail = None, ""
             else:
                 status_code = resp.status_code
-                outcome = classify_status(status_code)
+                outcome = classify_response(status_code, resp.text)
                 if outcome is Delivery.SENT:
                     self.logger.info(
                         "Successfully sent batch", extra={"batch_size": len(batch)}

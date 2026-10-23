@@ -98,7 +98,11 @@ class StatusBarResult(BaseSchema):
 
 
 class AgentReportRequest(BaseSchema):
-    """Schema for agent report submission."""
+    """An agent report whose every result has passed validation.
+
+    Built from an `AgentReportSubmission` by core, after each result was
+    validated on its own; the API never parses a request body into it.
+    """
 
     agent_id: UUID = Field(..., description="Agent UUID from registration")
     agent_run_id: str | None = Field(None, max_length=128, description="Agent run ID")
@@ -126,6 +130,28 @@ class AgentReportRequest(BaseSchema):
             }
         }
     }
+
+
+class AgentReportSubmission(BaseSchema):
+    """An agent report as it arrives on the wire: the envelope, results unparsed.
+
+    Only the envelope is validated here (the agent id, the run id, the item
+    count, each item an object). Each result is validated on its own in core
+    (`CheckResultCoreService.process_agent_submission`), so one result the
+    server cannot store is counted failed instead of refusing the whole report,
+    which the agent would otherwise dead-letter with every other result in it.
+    """
+
+    agent_id: UUID = Field(..., description="Agent UUID from registration")
+    agent_run_id: str | None = Field(None, max_length=128, description="Agent run ID")
+    timestamp: datetime | None = Field(None, description="Report timestamp")
+    # Cap the batch: report_batch_size defaults to 5000, so 10k is generous
+    # headroom while bounding an unbounded-write DoS from a hostile agent.
+    checks: list[dict[str, Any]] = Field(
+        ...,
+        max_length=10000,
+        description="Check results, each a CheckResultCreate (validated per result)",
+    )
 
 
 class AgentReportResponse(BaseSchema):

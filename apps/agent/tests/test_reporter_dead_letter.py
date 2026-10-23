@@ -1,10 +1,15 @@
-"""A batch the server permanently refuses is dead-lettered, never retried forever.
+"""A batch the server refuses as invalid is dead-lettered, never retried forever.
 
-A 400/413/422 means the server refuses this payload and will again, so the
-batch goes to the `dead_letters` table instead of the pending queue, and replay
-of the pending queue never stops at it. Everything else (network errors, 5xx,
-408, 429, and 401/403, which key recovery can fix) stays transient: the batch
-is stored and retried as before.
+Only the LuxSwirl server itself can say a payload is invalid: a 400 or 422
+carrying the app's JSON error envelope (`{"error": "VALIDATION_ERROR" |
+"BAD_REQUEST", ...}`). That batch goes to the `dead_letters` table instead of
+the pending queue, and replay of the pending queue never stops at it.
+
+Everything else stays transient and is stored and retried: network errors,
+5xx, 408, 429, 401/403 (which key recovery can fix), and any 4xx without the
+app's envelope, such as the trusted-host middleware's plain-text
+`400 Invalid host header` or a proxy's own 400/413 page. Those describe the
+route to the server, not the payload, so a misaddressed agent keeps its queue.
 """
 
 from __future__ import annotations
@@ -21,7 +26,7 @@ from typing import Any
 import httpx
 import pytest
 from app.agent import http_client
-from app.agent.dead_letter import Delivery, classify_status
+from app.agent.dead_letter import Delivery, classify_response
 from app.agent.heartbeat import HeartbeatSender
 from app.agent.reporter import Reporter
 
@@ -74,29 +79,51 @@ def _result(name: str) -> dict[str, Any]:
     return {"check_id": name, "timestamp": 1_760_000_000.0, "success": True}
 
 
+_JSON_HEADERS = {"content-type": "application/json"}
+_HTML_413 = "<html><head><title>413 Request Entity Too Large</title></head></html>"
+
+
+def _app_error(code: str, message: str = "refused") -> str:
+    """A body in the server's JSON error envelope."""
+    return json.dumps({"error": code, "message": message})
+
+
+def _app_response(status: int, code: str, message: str = "refused") -> httpx.Response:
+    return httpx.Response(status, text=_app_error(code, message), headers=_JSON_HEADERS)
+
+
 @pytest.mark.parametrize(
-    ("status", "expected"),
+    ("status", "body", "expected"),
     [
-        (200, Delivery.SENT),
-        (201, Delivery.SENT),
-        (204, Delivery.SENT),
-        (400, Delivery.PERMANENT),
-        (413, Delivery.PERMANENT),
-        (422, Delivery.PERMANENT),
-        (401, Delivery.TRANSIENT),
-        (403, Delivery.TRANSIENT),
-        (404, Delivery.TRANSIENT),
-        (408, Delivery.TRANSIENT),
-        (429, Delivery.TRANSIENT),
-        (500, Delivery.TRANSIENT),
-        (502, Delivery.TRANSIENT),
-        (503, Delivery.TRANSIENT),
-        (504, Delivery.TRANSIENT),
-        (301, Delivery.TRANSIENT),
+        (200, "", Delivery.SENT),
+        (201, "", Delivery.SENT),
+        (202, _app_error("VALIDATION_ERROR"), Delivery.SENT),
+        (204, "", Delivery.SENT),
+        (422, _app_error("VALIDATION_ERROR"), Delivery.PERMANENT),
+        (400, _app_error("BAD_REQUEST"), Delivery.PERMANENT),
+        # Not the app saying the payload is invalid: the route, a proxy, auth.
+        (400, "Invalid host header", Delivery.TRANSIENT),
+        (400, "<html>400 Bad Request</html>", Delivery.TRANSIENT),
+        (413, _HTML_413, Delivery.TRANSIENT),
+        (413, _app_error("VALIDATION_ERROR"), Delivery.TRANSIENT),
+        (422, "", Delivery.TRANSIENT),
+        (422, '{"detail": "not the app envelope"}', Delivery.TRANSIENT),
+        (422, "[1, 2]", Delivery.TRANSIENT),
+        (400, _app_error("INTERNAL_SERVER_ERROR"), Delivery.TRANSIENT),
+        (401, _app_error("UNAUTHORIZED"), Delivery.TRANSIENT),
+        (403, "", Delivery.TRANSIENT),
+        (404, "", Delivery.TRANSIENT),
+        (408, "", Delivery.TRANSIENT),
+        (429, "", Delivery.TRANSIENT),
+        (500, _app_error("INTERNAL_SERVER_ERROR"), Delivery.TRANSIENT),
+        (502, "", Delivery.TRANSIENT),
+        (503, "", Delivery.TRANSIENT),
+        (504, "", Delivery.TRANSIENT),
+        (301, "", Delivery.TRANSIENT),
     ],
 )
-def test_classify_status(status: int, expected: Delivery) -> None:
-    assert classify_status(status) is expected
+def test_classify_response(status: int, body: str, expected: Delivery) -> None:
+    assert classify_response(status, body) is expected
 
 
 async def test_a_422_is_dead_lettered_once_and_not_stored(tmp_path: Path) -> None:
@@ -104,7 +131,7 @@ async def test_a_422_is_dead_lettered_once_and_not_stored(tmp_path: Path) -> Non
 
     def handler(request: httpx.Request) -> httpx.Response:
         calls.append(request)
-        return httpx.Response(422, json={"detail": "status 'weird' is not allowed"})
+        return _app_response(422, "VALIDATION_ERROR", "status 'weird' is not allowed")
 
     reporter = await _reporter(tmp_path, handler)
 
@@ -153,23 +180,23 @@ async def test_a_network_error_is_stored(tmp_path: Path) -> None:
 
 
 async def test_the_stored_detail_is_scrubbed_and_truncated(tmp_path: Path) -> None:
-    body = "Bearer sekrit-token " + "x" * 10_000
+    message = "Bearer sekrit-token " + "x" * 10_000
 
     def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(422, text=body)
+        return _app_response(422, "VALIDATION_ERROR", message)
 
     reporter = await _reporter(tmp_path, handler)
     await reporter.send_batch([_result("c1")])
 
     [(detail,)] = _rows(tmp_path, "SELECT response_body FROM dead_letters")
     assert "sekrit-token" not in detail
-    assert detail.startswith("Bearer ***")
+    assert "Bearer ***" in detail
     assert len(detail) <= 2048
 
 
 async def test_the_cap_prunes_the_oldest_dead_letters(tmp_path: Path) -> None:
     def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(422, json={"detail": "no"})
+        return _app_response(422, "VALIDATION_ERROR", "no")
 
     reporter = await _reporter(tmp_path, handler, report_max_dead_letters=2)
     for name in ("first", "second", "third"):
@@ -181,14 +208,14 @@ async def test_the_cap_prunes_the_oldest_dead_letters(tmp_path: Path) -> None:
 async def test_replay_dead_letters_the_refused_batch_and_drains_the_rest(
     tmp_path: Path,
 ) -> None:
-    """A batch the server refuses for good never blocks the batches behind it:
-    a combined replay POST that comes back 422 is retried batch by batch."""
+    """A batch the server refuses as invalid never blocks the batches behind
+    it: a combined replay POST that comes back 422 is retried batch by batch."""
     received: list[str] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
         checks = json.loads(request.content)["checks"]
         if any(c["check_id"] == "bad" for c in checks):
-            return httpx.Response(422, json={"detail": "bad value"})
+            return _app_response(422, "VALIDATION_ERROR", "bad value")
         received.extend(c["check_id"] for c in checks)
         return httpx.Response(200, json={})
 
@@ -292,3 +319,73 @@ async def test_the_heartbeat_carries_dead_letter_count() -> None:
         await http_client.aclose_all()
 
     assert bodies[0]["dead_letter_count"] == 3
+
+
+def _seed(tmp_path: Path, n: int) -> None:
+    conn = sqlite3.connect(str(tmp_path / "pending_reports.db"))
+    try:
+        for i in range(n):
+            conn.execute(
+                "INSERT INTO pending_batches "
+                "(agent_id, created_at, batch_size, payload) VALUES (?, ?, ?, ?)",
+                (
+                    "a1",
+                    time.time() + i,
+                    1,
+                    gzip.compress(json.dumps([_result(f"c{i}")]).encode()),
+                ),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+async def _replay_passes(reporter: Reporter, passes: int) -> None:
+    for _ in range(passes):
+        pending = reporter._process_stored_reports_sync()
+        if pending:
+            await reporter._replay_pending(pending)
+
+
+async def test_a_503_keeps_every_pending_batch(tmp_path: Path) -> None:
+    reporter = await _reporter(
+        tmp_path,
+        lambda r: httpx.Response(503, text="Service Unavailable"),
+        report_max_files_per_batch=5,
+        report_max_dead_letters=3,
+    )
+    _seed(tmp_path, 10)
+
+    await _replay_passes(reporter, 5)
+
+    assert _pending(tmp_path) == 10
+
+
+@pytest.mark.parametrize(
+    ("status", "body"),
+    [(400, "Invalid host header"), (413, _HTML_413)],
+    ids=["host-header-400", "proxy-413"],
+)
+async def test_a_host_header_400_does_not_destroy_the_pending_queue(
+    tmp_path: Path, status: int, body: str
+) -> None:
+    """The server's trusted-host middleware answers an unlisted Host with a
+    plain-text 400, and a proxy answers with its own 400/413 page. Neither is
+    the server judging the payload, so every batch stays pending until the
+    route is fixed, rather than being dead-lettered and pruned by the cap."""
+    reporter = await _reporter(
+        tmp_path,
+        lambda r: httpx.Response(status, text=body),
+        report_max_files_per_batch=5,
+        report_max_dead_letters=3,
+    )
+    _seed(tmp_path, 10)
+
+    await _replay_passes(reporter, 5)
+
+    kept = _pending(tmp_path) + len(_dead_payloads(tmp_path))
+    assert kept == 10, (
+        f"10 deliverable batches in, {kept} left (pending={_pending(tmp_path)}): "
+        "a misrouted request deleted the rest"
+    )
+    assert _pending(tmp_path) == 10

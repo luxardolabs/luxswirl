@@ -21,8 +21,8 @@ from app.core.config import settings
 from app.core.rate_limit import limiter
 from app.db import get_db
 from app.schemas.check_result_schema import (
-    AgentReportRequest,
     AgentReportResponse,
+    AgentReportSubmission,
 )
 from app.services.core.check_result_core_service import CheckResultCoreService
 
@@ -40,7 +40,7 @@ router = APIRouter(tags=["Check Results"])
 @limiter.limit(settings.security.agent_api_rate_limit)
 async def submit_report(
     request: Request,
-    report: AgentReportRequest,
+    report: AgentReportSubmission,
     _agent_id: ReportingAgentId,
     background_tasks: BackgroundTasks,
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
@@ -51,10 +51,11 @@ async def submit_report(
     This endpoint accepts reports and processes them asynchronously.
 
     Only the agent's own key is accepted (`ReportingAgentId`), never the
-    registration key.
+    registration key. Each result is validated on its own: an invalid one is
+    counted in `results_failed`, and the rest are stored.
     """
     # Process report (this commits the transaction)
-    result = await CheckResultCoreService.process_agent_report(db, report)
+    result = await CheckResultCoreService.process_agent_submission(db, report)
 
     return AgentReportResponse(
         status=result["status"],
