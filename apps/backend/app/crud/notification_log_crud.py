@@ -9,13 +9,14 @@ from uuid import UUID
 from sqlalchemy import Row, Select, and_, delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.agent_model import Agent
 from app.models.alert_check_mapping_model import AlertCheckMapping
 from app.models.alert_model import Alert
 from app.models.check_model import Check
 from app.models.notification_log_model import NotificationLog
 from app.models.notification_provider_model import NotificationProvider
 
-# The table-row select spans 14 columns; SQLAlchemy types only the first ten,
+# The table-row select spans 15 columns; SQLAlchemy types only the first ten,
 # and cannot know the outer-joined check columns may be NULL. Rows are
 # validated into NotificationLogEntry in core, which carries the real types.
 LogRowSelect = Select[*tuple[Any, ...]]
@@ -87,6 +88,7 @@ class NotificationLogCRUD:
                 NotificationLog.check_success.label("success"),
                 NotificationLog.check_latency_ms.label("latency_ms"),
                 Check.id.label("check_id"),
+                Agent.agent_name.label("agent_name"),
             )
             .select_from(NotificationLog)
             .join(Alert, NotificationLog.alert_id == Alert.id)
@@ -95,6 +97,7 @@ class NotificationLogCRUD:
                 NotificationLog.notification_provider_id == NotificationProvider.id,
             )
             .outerjoin(Check, Check.id == NotificationLog.check_id)
+            .outerjoin(Agent, Agent.id == NotificationLog.agent_id)
             .outerjoin(
                 AlertCheckMapping,
                 and_(

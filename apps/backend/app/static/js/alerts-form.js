@@ -82,6 +82,25 @@ function updateTriggerConfig() {
                 <p class="text-xs text-dark-text-muted mt-2">Example: "&gt; 1000" alerts when response time exceeds 1 second</p>
             </div>
         `;
+    } else if (triggerType === 'no_data' || triggerType === 'agent_offline') {
+        const help = triggerType === 'no_data'
+            ? 'Alert when a check has reported nothing for this many of its intervals (plus a minute\'s grace)'
+            : 'Alert when an agent has sent no heartbeat for this many of its heartbeat intervals (plus a minute\'s grace)';
+        configFields.innerHTML = `
+            <div>
+                <label class="label">Missed Intervals <span class="text-red-400">*</span></label>
+                <input
+                    type="number"
+                    name="trigger_missed_intervals"
+                    class="input"
+                    value="3"
+                    min="1"
+                    max="100"
+                    required
+                >
+                <p class="text-xs text-dark-text-muted mt-1">${help}</p>
+            </div>
+        `;
     } else if (triggerType === 'ssl_cert_expiry') {
         configFields.innerHTML = `
             <div>

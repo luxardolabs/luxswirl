@@ -2,7 +2,7 @@
 Pydantic schemas for Alert domain.
 """
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import datetime
 from typing import Any
 from uuid import UUID
@@ -22,7 +22,7 @@ class AlertBase(BaseSchema):
     description: str | None = Field(None, description="Detailed description")
     trigger_type: AlertTriggerType = Field(
         ...,
-        description="Type of trigger (status_change, threshold, repeated_failure, ssl_cert_expiry)",
+        description="Type of trigger (status_change, threshold, repeated_failure, ssl_cert_expiry, no_data, agent_offline)",
     )
     trigger_config: dict[str, Any] = Field(
         ...,
@@ -279,3 +279,33 @@ class AlertCheckSnooze(BaseSchema):
     check_id: UUID
     check_name: str
     snoozed_until: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class SendDecision:
+    """Whether to send an alert notification, and whether it is a resend.
+
+    `send` gates the provider call; `is_resend` and `resend_count` are written
+    through to `notification_logs.is_resend` and `notification_logs.resend_count`,
+    so the audit trail tells a resend (the Nth) of an ongoing incident from
+    first contact.
+    """
+
+    send: bool
+    is_resend: bool
+    resend_count: int
+
+
+@dataclass(slots=True)
+class SilencePassCounts:
+    """What one silence-alert pass did: the scheduler job's output."""
+
+    alerts: int = 0
+    silent_checks: int = 0
+    offline_agents: int = 0
+    notified: int = 0
+    suppressed: int = 0
+    recovered: int = 0
+
+    def as_dict(self) -> dict[str, int]:
+        return asdict(self)

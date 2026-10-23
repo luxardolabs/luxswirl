@@ -10,7 +10,8 @@ from app.schemas.base_schema import BaseSchema
 class NotificationLogEntry(BaseSchema):
     """One notification log with its alert, provider and check.
 
-    The check fields are None when the log's check has since been deleted.
+    The check fields are None when the log's check has since been deleted, and
+    for an agent_offline notification, which is about `agent_name`'s agent.
     """
 
     id: UUID
@@ -27,3 +28,4 @@ class NotificationLogEntry(BaseSchema):
     success: bool | None
     latency_ms: float | None
     check_id: UUID | None
+    agent_name: str | None = None

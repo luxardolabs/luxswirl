@@ -62,7 +62,7 @@ class Alert(
     trigger_type: Mapped[AlertTriggerType] = mapped_column(
         str_enum(AlertTriggerType, 50),
         nullable=False,
-        comment="Type of trigger (status_change, threshold, repeated_failure, ssl_cert_expiry)",
+        comment="Type of trigger (status_change, threshold, repeated_failure, ssl_cert_expiry, no_data, agent_offline)",
     )
 
     trigger_config: Mapped[dict[str, Any]] = mapped_column(

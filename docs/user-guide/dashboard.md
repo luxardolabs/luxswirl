@@ -23,7 +23,7 @@ ______________________________________________________________________
 
 | Filter       | Options                                                                | Use case                                                               |
 | ------------ | ---------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| **Status**   | All, Up, Down, Unknown (no recent results)                             | Filter to "Down" to focus on failing infrastructure during an incident |
+| **Status**   | All, Up, Down, No data (silent: no current result)                     | Filter to "Down" to focus on failing infrastructure during an incident |
 | **Agent**    | All approved agents (name or ID)                                       | View all checks on a specific server/datacenter                        |
 | **Type**     | `ping`, `http`, `tcp`, `json`, `dns`, `mysql`, `postgres`, `synthetic` | Audit all database checks, or review all HTTP monitoring               |
 | **Tag**      | All unique check-level and agent-level tags                            | View all `production` or all `critical` checks                         |
@@ -39,7 +39,7 @@ Each row is one check. Columns:
 
 | Column           | Shows                                                                                                                                                                              |
 | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Status**       | Green (Up), red (Down), or gray (Unknown — no recent results; check disabled or agent offline) badge                                                                               |
+| **Status**       | Green (Up), red (Down), or gray (No data — the check is silent: disabled, agent offline, or not reporting) badge                                                                   |
 | **Type**         | Icon + uppercase label (PING, HTTP, TCP, JSON, DNS, MYSQL, POSTGRES, SYNTHETIC)                                                                                                    |
 | **Check Name**   | Display name (falls back to target)                                                                                                                                                |
 | **Target**       | Monospace; per type — `https://api.example.com/health`, `192.168.1.1`, `redis.example.com:6379`, `mysql://user@db:3306/mydb` (password redacted), `example.com`; truncated if long |
@@ -89,7 +89,7 @@ Clicking a row opens a slide-out panel on the right.
 
 **Metadata:** display name, target (monospace), type icon + label, and the check interval.
 
-**Current status:** a pulsing dot (green Up / red Down / gray Unknown), the status text, and the timestamp of the last result.
+**Current status:** a pulsing dot (green Up / red Down / gray No data), the status text, and the timestamp of the last result.
 
 ### 30-minute status bar
 
@@ -161,13 +161,13 @@ ______________________________________________________________________
 
 ## Troubleshooting
 
-| Symptom                           | Cause                                        | Solution                                                                                                        |
-| --------------------------------- | -------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| Checks show **"Unknown"**         | No recent results (last ~5 min)              | Verify the agent is online; confirm the check is enabled; if the interval is longer than 5 min, that's expected |
-| Dashboard **not auto-refreshing** | HTMX/JS issue                                | Check the browser console (F12); ensure JS isn't blocked by an ad blocker; hard-refresh (Ctrl/Cmd+Shift+R)      |
-| **"No checks found"**             | Filters too restrictive, or none configured  | Reset filters to "All"; verify checks exist (Checks page) and agents are approved/online                        |
-| **Latency seems wrong**           | It's measured from the agent, not the server | Check the agent's network connectivity; compare with `ping`/`curl` from the agent host                          |
-| **Detail panel won't open**       | JS/HTMX error                                | Check the console; use a modern browser; try another row; refresh                                               |
+| Symptom                           | Cause                                                     | Solution                                                                                                    |
+| --------------------------------- | --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| Checks show **"No data"**         | No result within 3 of the check's intervals plus a minute | Verify the agent is online; confirm the check is enabled; a No Data alert notifies about this automatically |
+| Dashboard **not auto-refreshing** | HTMX/JS issue                                             | Check the browser console (F12); ensure JS isn't blocked by an ad blocker; hard-refresh (Ctrl/Cmd+Shift+R)  |
+| **"No checks found"**             | Filters too restrictive, or none configured               | Reset filters to "All"; verify checks exist (Checks page) and agents are approved/online                    |
+| **Latency seems wrong**           | It's measured from the agent, not the server              | Check the agent's network connectivity; compare with `ping`/`curl` from the agent host                      |
+| **Detail panel won't open**       | JS/HTMX error                                             | Check the console; use a modern browser; try another row; refresh                                           |
 
 ______________________________________________________________________
 

@@ -112,6 +112,8 @@ Sends an HTTP POST with the full check/alert context — the bridge to Slack, Di
 }
 ```
 
+`status` is `success`, `error`, `no_data` (a No Data alert: the check stopped reporting) or `offline` (an Agent Offline alert, whose `check_name` is `Agent <name>` and `check_type` is `agent`).
+
 **Examples:**
 
 ```
@@ -194,13 +196,13 @@ ______________________________________________________________________
 
 Subjects and messages support `{{VARIABLE}}` substitution:
 
-| Variable              | Value              |     | Variable          | Value            |
-| --------------------- | ------------------ | --- | ----------------- | ---------------- |
-| `{{NAME}}`            | Check display name |     | `{{AGENT}}`       | Agent name/ID    |
-| `{{HOSTNAME_OR_URL}}` | Check target       |     | `{{TIMESTAMP}}`   | Execution time   |
-| `{{STATUS}}`          | "UP" / "DOWN"      |     | `{{TYPE}}`        | Check type       |
-| `{{LATENCY}}`         | Response time      |     | `{{ALERT}}`       | Alert name       |
-| `{{ERROR_MESSAGE}}`   | Error details      |     | `{{HTTP_STATUS}}` | HTTP status code |
+| Variable              | Value                                 |     | Variable          | Value            |
+| --------------------- | ------------------------------------- | --- | ----------------- | ---------------- |
+| `{{NAME}}`            | Check display name                    |     | `{{AGENT}}`       | Agent name/ID    |
+| `{{HOSTNAME_OR_URL}}` | Check target                          |     | `{{TIMESTAMP}}`   | Execution time   |
+| `{{STATUS}}`          | "UP" / "DOWN" / "NO DATA" / "OFFLINE" |     | `{{TYPE}}`        | Check type       |
+| `{{LATENCY}}`         | Response time                         |     | `{{ALERT}}`       | Alert name       |
+| `{{ERROR_MESSAGE}}`   | Error details                         |     | `{{HTTP_STATUS}}` | HTTP status code |
 
 **Substitution rules:** variables are **case-sensitive** (`{{NAME}}`, not `{{name}}`); a null/missing value renders as `N/A` / `No error` / `Unknown` as appropriate; everything is coerced to string; values are **not** HTML-escaped.
 

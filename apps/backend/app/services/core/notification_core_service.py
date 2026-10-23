@@ -339,9 +339,10 @@ class NotificationCoreService:
         provider_id: UUID,
         context: NotificationContext,
         alert_id: UUID,
-        check_result_id: UUID,
-        check_result_timestamp: datetime,
+        check_result_id: UUID | None,
+        check_result_timestamp: datetime | None,
         check_id: UUID | None = None,
+        agent_id: UUID | None = None,
         notification_hash: str | None = None,
         is_resend: bool = False,
         resend_count: int = 0,
@@ -354,8 +355,11 @@ class NotificationCoreService:
             provider_id: Provider ID
             context: Notification context
             alert_id: Alert that triggered this notification
-            check_result_id: Check result ID that triggered this
-            check_result_timestamp: Check result timestamp
+            check_result_id: Check result ID that triggered this (None when
+                missing data triggered it: no_data, agent_offline)
+            check_result_timestamp: Check result timestamp (None with it)
+            check_id: The check the notification is about
+            agent_id: The agent an agent_offline notification is about
             notification_hash: Per-alert-state key (LUXSWIRL-147) — stored on the row
                 so dedup can detect transitions.
             is_resend: True if this is a same-state resend after resend_interval
@@ -381,6 +385,7 @@ class NotificationCoreService:
                 check_result_id=check_result_id,
                 check_result_timestamp=check_result_timestamp,
                 check_id=check_id,
+                agent_id=agent_id,
                 check_success=context.success,
                 check_latency_ms=context.latency_ms,
                 status=NotificationStatus.SUPPRESSED.value,
@@ -410,6 +415,7 @@ class NotificationCoreService:
                 check_result_id=check_result_id,
                 check_result_timestamp=check_result_timestamp,
                 check_id=check_id,
+                agent_id=agent_id,
                 check_success=context.success,
                 check_latency_ms=context.latency_ms,
                 status=NotificationStatus.RATE_LIMITED.value,
@@ -442,6 +448,7 @@ class NotificationCoreService:
                 check_result_id=check_result_id,
                 check_result_timestamp=check_result_timestamp,
                 check_id=check_id,
+                agent_id=agent_id,
                 check_success=context.success,
                 check_latency_ms=context.latency_ms,
                 status=(
@@ -465,6 +472,7 @@ class NotificationCoreService:
                 check_result_id=check_result_id,
                 check_result_timestamp=check_result_timestamp,
                 check_id=check_id,
+                agent_id=agent_id,
                 check_success=context.success,
                 check_latency_ms=context.latency_ms,
                 status=NotificationStatus.FAILED.value,

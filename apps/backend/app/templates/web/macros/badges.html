@@ -111,13 +111,13 @@
 
 
 {# Status pip - tiny w-2 h-2 inline status dot for check status indicators in compact layouts.
-   Maps 'up'/'down'/unknown to green/red/gray. Smaller than status_dot (w-2.5 h-2.5). #}
+   Maps 'up'/'down'/no data to green/red/gray. Smaller than status_dot (w-2.5 h-2.5). #}
 {% macro status_pip(status) %}
 {% set pip_config = {
     'up': {'color': 'bg-green-500', 'label': 'Up'},
     'down': {'color': 'bg-red-500', 'label': 'Down'}
 } %}
-{% set config = pip_config.get(status, {'color': 'bg-dark-surface-muted', 'label': 'Unknown'}) %}
+{% set config = pip_config.get(status, {'color': 'bg-dark-surface-muted', 'label': 'No data'}) %}
 <span class="w-2 h-2 rounded-full {{ config.color }} inline-block" role="img" aria-label="Status: {{ config.label }}" title="{{ config.label }}"></span>
 {% endmacro %}
 

@@ -65,7 +65,7 @@ If statistics are available, an overview row shows counts for Notification Provi
 **Summary:**
 
 - Create, edit, delete alert rules
-- Configure trigger conditions (status change, latency threshold, SSL expiry)
+- Configure trigger conditions (status change, latency threshold, SSL expiry, no data, agent offline)
 - Assign alerts to checks (global or specific) and attach notification providers
 - Configure recovery notifications
 

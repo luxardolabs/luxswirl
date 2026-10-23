@@ -105,6 +105,26 @@ DEFAULT_JOB_CONFIGURATIONS: list[dict[str, Any]] = [
         "notify_on_failure": True,
     },
     # ==========================================================================
+    # ALERTING JOBS
+    # ==========================================================================
+    # Silence alerts (no_data, agent_offline) - every 60 seconds. They fire on
+    # the absence of results, so no incoming result can evaluate them.
+    {
+        "job_key": "evaluate_silence_alerts",
+        "function_name": "evaluate_silence_alerts",
+        "display_name": "Evaluate Silence Alerts",
+        "description": "Fire no-data and agent-offline alerts for checks and agents that stopped reporting",
+        "category": CATEGORY_MONITORING,
+        "enabled": True,
+        "parameters": {},
+        "trigger_type": TRIGGER_INTERVAL,
+        "interval_seconds": 60,
+        "next_run_at": datetime.now(UTC) + timedelta(seconds=60),
+        "max_runtime_seconds": 50,
+        "retry_limit": 0,  # Never auto-disable - alerting is critical
+        "notify_on_failure": True,
+    },
+    # ==========================================================================
     # MONITORING JOBS
     # ==========================================================================
     # Collect database metrics - every 5 minutes

@@ -39,6 +39,7 @@ from app.services.core.monitoring_core_service import (
     collect_database_metrics,
     collect_operational_metrics,
 )
+from app.services.core.silence_alert_core_service import evaluate_silence_alerts
 
 logger = get_logger("luxswirl.scheduler")
 
@@ -69,6 +70,8 @@ class SchedulerCoreService:
             # Monitoring jobs
             "collect_database_metrics": collect_database_metrics,
             "collect_operational_metrics": collect_operational_metrics,
+            # Alerting jobs
+            "evaluate_silence_alerts": evaluate_silence_alerts,
         }
 
     async def start(self) -> None:

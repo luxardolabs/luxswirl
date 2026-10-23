@@ -20,10 +20,8 @@ from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
 import pytest
-from app.services.core.alert_evaluation_core_service import (
-    AlertEvaluationCoreService,
-    SendDecision,
-)
+from app.schemas.alert_schema import SendDecision
+from app.services.core.alert_evaluation_core_service import AlertEvaluationCoreService
 
 pytestmark = pytest.mark.unit  # all tests in this module are pure-logic
 
