@@ -55,6 +55,21 @@ class NotificationProviderCRUD:
         return result.scalar_one_or_none()
 
     @staticmethod
+    async def get_by_ids(
+        db: AsyncSession, provider_ids: Sequence[UUID]
+    ) -> dict[UUID, NotificationProvider]:
+        """The live (not soft-deleted) providers among `provider_ids`, by id."""
+        if not provider_ids:
+            return {}
+        result = await db.execute(
+            select(NotificationProvider).where(
+                NotificationProvider.id.in_(provider_ids),
+                NotificationProvider.deleted_at.is_(None),
+            )
+        )
+        return {p.id: p for p in result.scalars().all()}
+
+    @staticmethod
     async def list_paginated(
         db: AsyncSession,
         *,

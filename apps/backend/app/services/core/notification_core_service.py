@@ -336,43 +336,6 @@ class NotificationCoreService:
             return False, error_msg
 
     @staticmethod
-    async def send_notification(
-        db: AsyncSession,
-        provider_id: UUID,
-        context: NotificationContext,
-        alert_id: UUID,
-        check_result_id: UUID | None,
-        check_result_timestamp: datetime | None,
-        check_id: UUID | None = None,
-        agent_id: UUID | None = None,
-        notification_hash: str | None = None,
-        is_resend: bool = False,
-        resend_count: int = 0,
-    ) -> NotificationLog:
-        """Send one notification through one provider and log the attempt.
-
-        The single-provider form of `send_notifications`; see it for the
-        arguments.
-
-        Raises:
-            NotFoundException: If provider not found
-        """
-        (log_entry,) = await NotificationCoreService.send_notifications(
-            db,
-            [provider_id],
-            context,
-            alert_id=alert_id,
-            check_result_id=check_result_id,
-            check_result_timestamp=check_result_timestamp,
-            check_id=check_id,
-            agent_id=agent_id,
-            notification_hash=notification_hash,
-            is_resend=is_resend,
-            resend_count=resend_count,
-        )
-        return log_entry
-
-    @staticmethod
     async def send_notifications(
         db: AsyncSession,
         provider_ids: Sequence[UUID],
@@ -440,8 +403,13 @@ class NotificationCoreService:
         # 1. Gate each provider (database reads, in turn).
         outcomes: dict[UUID, tuple[NotificationStatus, str | None]] = {}
         deliverable: list[NotificationProvider] = []
+        providers = await NotificationProviderCRUD.get_by_ids(db, provider_ids)
         for provider_id in provider_ids:
-            provider = await NotificationCoreService.get_provider_by_id(db, provider_id)
+            provider = providers.get(provider_id)
+            if provider is None:
+                raise NotFoundException(
+                    f"Notification provider {provider_id} not found"
+                )
             if not provider.is_enabled:
                 # Intentionally disabled — distinct from a delivery failure.
                 outcomes[provider_id] = (

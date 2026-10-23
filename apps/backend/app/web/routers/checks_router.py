@@ -131,6 +131,7 @@ async def clone_form(
 # ---- Mutations ----------------------------------------------------------
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post(
     "/checks/{check_id}/clone",
     response_class=HTMLResponse,
@@ -209,6 +210,7 @@ async def toggle_check(
     )
 
 
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.delete(
     "/checks/{check_id}",
     response_class=HTMLResponse,
@@ -221,7 +223,7 @@ async def delete_check(
     current_user: EditorUserWeb,
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> Response:
-    """Delete a check (enqueues a background cascade — see LUXSWIRL-105)."""
+    """Delete a check: enqueues a maintenance job that runs the cascade."""
     return await ChecksViewService.enqueue_check_delete(
         db, request, current_user, check_id
     )
@@ -309,7 +311,7 @@ async def bulk_action(
     """Perform bulk action on checks (delete, disable, enable).
 
     `action=delete` enqueues a maintenance job (cascade through check_results
-    runs in the worker, not the web request). See LUXSWIRL-105. Other actions
+    runs in the worker, not the web request). Other actions
     stay synchronous — they're in-place UPDATEs, no cascade.
     """
     # Background-friendly cases (cascade or large N) → enqueue maintenance
@@ -364,7 +366,7 @@ async def bulk_modify(
     agent_id: OptionalIdForm = None,
     alert_id: OptionalIdForm = None,
 ) -> HTMLResponse:
-    """Enqueue a bulk_check_modify maintenance job. See LUXSWIRL-105."""
+    """Enqueue a bulk_check_modify maintenance job."""
     interval_int = int(interval) if interval else None
     timeout_int = int(timeout) if timeout else None
     retry_attempts_int = int(retry_attempts) if retry_attempts else None

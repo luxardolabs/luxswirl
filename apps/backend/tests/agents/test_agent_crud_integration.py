@@ -2,40 +2,21 @@
 
 from __future__ import annotations
 
-import sys
 from datetime import timedelta
-from pathlib import Path
 from uuid import uuid4
 
 import pytest
+from app.core.datetime_utils import utc_now
+from app.crud.agent_crud import AgentCRUD
+from fixtures.factories import make_agent, make_check
 from sqlalchemy.ext.asyncio import AsyncSession
-
-_tests_root = str(Path(__file__).resolve().parent.parent)
-if _tests_root not in sys.path:
-    sys.path.insert(0, _tests_root)
-
-from app.core.datetime_utils import utc_now  # noqa: E402
-from app.crud.agent_crud import AgentCRUD  # noqa: E402
-from fixtures.factories import make_agent, make_check  # noqa: E402
 
 pytestmark = pytest.mark.integration
 
 
 # ---------------------------------------------------------------------------
-# list_all / list_active / get_by_id_with_checks / get_by_name_with_checks
+# list_active / get_by_id_with_checks / get_by_name_with_checks
 # ---------------------------------------------------------------------------
-
-
-class TestListAll:
-    async def test_returns_all_agents(self, db: AsyncSession):
-        for _ in range(3):
-            db.add(make_agent())
-        await db.flush()
-        rows = await AgentCRUD.list_all(db)
-        assert len(rows) == 3
-
-    async def test_empty_returns_empty_list(self, db: AsyncSession):
-        assert await AgentCRUD.list_all(db) == []
 
 
 class TestListActive:
@@ -178,7 +159,7 @@ class TestStaleAgents:
         count = await AgentCRUD.delete_stale_agents(db, now - timedelta(days=1))
         assert count == 2
 
-        remaining = await AgentCRUD.list_all(db)
+        remaining = await AgentCRUD.list_active(db)
         assert len(remaining) == 1
         assert remaining[0].id == keep.id
 

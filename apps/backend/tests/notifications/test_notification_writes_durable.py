@@ -101,9 +101,9 @@ def _context() -> NotificationContext:
 
 async def _send(maker, provider_id: UUID, alert_id: UUID) -> None:
     async with maker() as s:
-        await NotificationCoreService.send_notification(
+        await NotificationCoreService.send_notifications(
             s,
-            provider_id,
+            [provider_id],
             _context(),
             alert_id=alert_id,
             check_result_id=uuid4(),

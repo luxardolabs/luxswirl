@@ -149,6 +149,23 @@ async def test_a_silent_check_notifies_once(db: AsyncSession, sent) -> None:
     assert rows[0].check_result_id is None
 
 
+async def test_each_long_silent_check_reports_its_own_last_result(
+    db: AsyncSession, sent
+) -> None:
+    agent = await _agent(db)
+    recent = await _check(db, agent, last_result_ago=timedelta(minutes=9))
+    older = await _check(db, agent, last_result_ago=timedelta(hours=3))
+    never = await _check(db, agent, last_result_ago=None)
+    await _alert(db, "no_data", [recent, older, never])
+
+    await SilenceAlertCoreService.evaluate(db)
+
+    messages = {c.check_name: c.error_message or "" for c in sent}
+    assert messages[recent.display_name].startswith("No results for 9 min")
+    assert messages[older.display_name].startswith("No results for 3 h 0 min")
+    assert messages[never.display_name].startswith("No results since it was created")
+
+
 async def test_a_check_reporting_on_time_does_not_notify(
     db: AsyncSession, sent
 ) -> None:
@@ -525,9 +542,10 @@ async def test_an_alert_that_raises_is_skipped(db: AsyncSession, sent) -> None:
         return await real(db_, alert, *args)
 
     with patch.object(SilenceAlertCoreService, "_decide_no_data", _flaky):
-        await SilenceAlertCoreService.evaluate(db)
+        counts = await SilenceAlertCoreService.evaluate(db)
 
     assert [c.check_name for c in sent] == [good.display_name]
+    assert counts.failed == 1, "the skipped alert is not in the pass's output"
 
 
 @pytest.mark.parametrize("value", [0, 101, 10**12, "3", True])
