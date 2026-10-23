@@ -16,6 +16,7 @@ from fastapi.responses import Response, StreamingResponse
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.content_disposition import content_disposition
 from app.core.datetime_utils import utc_now
 from app.core.exceptions import AgentNotFoundException
 from app.models.enum_model import MaintenanceJobKind
@@ -120,7 +121,9 @@ class ImportExportViewService:
         return StreamingResponse(
             json_bytes,
             media_type="application/json",
-            headers={"Content-Disposition": f"attachment; filename={filename}"},
+            headers={
+                "Content-Disposition": content_disposition("attachment", filename)
+            },
         )
 
     @staticmethod

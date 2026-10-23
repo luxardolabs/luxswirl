@@ -29,6 +29,7 @@ router = APIRouter(tags=["Web UI - Artifacts"])
 )
 async def view_artifact(
     artifact_id: Annotated[UUID, Path(description="Artifact UUID")],
+    current_user: CurrentUserWeb,
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> Response:
     """View/download artifact binary data from web UI."""

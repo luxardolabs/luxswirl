@@ -12,6 +12,7 @@ from fastapi import Request, Response
 from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.content_disposition import content_disposition
 from app.schemas.auth_schema import AuthedUser
 from app.services.core.artifact_core_service import ArtifactCoreService
 
@@ -37,7 +38,7 @@ class ArtifactsViewService:
             content=artifact.data,
             media_type=artifact.content_type,
             headers={
-                "Content-Disposition": f'inline; filename="{artifact.filename}"',
+                "Content-Disposition": content_disposition("inline", artifact.filename),
                 "Content-Length": str(artifact.size_bytes),
             },
         )
