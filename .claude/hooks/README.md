@@ -41,6 +41,7 @@ The exception is `no-ai-attribution`, which must NOT mask: a commit message *is*
 | `no-identity-override`       | Bash                         | **deny** — `git -c user.email=`                                                                  |
 | `no-ai-attribution`          | Bash                         | **deny** — Co-Authored-By: Claude                                                                |
 | `no-silenced-staging`        | Bash                         | **deny** — `2>/dev/null` on mutating git                                                         |
+| `targeted-guard-run`         | Bash                         | **deny** — a full luxarch scan piped into grep/head/tail; use `--rule <id> [--path <file>]`      |
 | `luxpm-search-before-create` | `luxpm_create_issue`         | **deny** — no LuxPM search since the last issue created                                          |
 | `delete-proposal-evidence`   | `AskUserQuestion`, Stop      | **deny** — a removal ask without a checked block per candidate; Stop only reminds once           |
 | `edit-history`               | Edit/Write/Bash writes       | **deny** — a session's first change to a tracked file before it has searched LuxPM for that file |

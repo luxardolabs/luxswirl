@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 @~/.claude/projects/luxswirl.md
 
-<!-- luxarch:claude-pointer asset v10 - DO NOT edit this marker line; it is how repo.claude_pointer_present knows your copy is current. Re-emit with `luxarch --emit claude-pointer`. -->
+<!-- luxarch:claude-pointer asset v11 - DO NOT edit this marker line; it is how repo.claude_pointer_present knows your copy is current. Re-emit with `luxarch --emit claude-pointer`. -->
 
 ## How to work here (fleet conduct — read the standard, not just this block)
 
@@ -28,6 +28,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Do it** — aligning code to a ratified standard or a guard red; anything you have evidence for that is reversible in one commit. The standard already decided; say what you did.
 
 **Work the guard reds in `luxarch --plan` order. Never ask which family or sweep is next.** The order is decided. An escalation covers ONE site: its family keeps going.
+
+**Check one rule or one file with a targeted run, never a filtered full scan.** `luxarch --rule <id>` runs only the matching rules (exact or substring, repeatable); add `--path <file>` to show one file's sites. The whole repo's per-rule counts are in `.luxarch-status.json` (`make status`). A full scan piped into `grep`, `head` or `tail` is denied by the emitted `targeted-guard-run` hook.
 
 **An owner hold is exactly as wide as the owner said.** "Hold off on X" excludes X and nothing else. It is not permission to pause, ask, or check in about anything outside X. Skip the held family, say so in one line, and keep burning down the rest.
 

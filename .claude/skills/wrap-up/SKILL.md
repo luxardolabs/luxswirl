@@ -3,7 +3,7 @@ name: wrap-up
 description: Close out a piece of work the fleet way before calling it done — tests written and run for what changed, every red in touched files fixed, docs updated (stale advice removed), make check green, committed in the issue's worktree, LuxPM fully closed out (issues, checklists, activities, commit links, sync receipt), then landed on the base branch, the worktree removed, and pushed as the repo declares. Every step reports evidence, not a tick.
 ---
 
-<!-- luxarch:wrap-up-skill asset v13 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit wrap-up-skill`. -->
+<!-- luxarch:wrap-up-skill asset v14 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit wrap-up-skill`. -->
 
 # Wrap up
 
@@ -38,7 +38,7 @@ A green suite is evidence only for what it can see. Four bugs in one repo passed
 
 ## 3. Every red in a file you touched, and none moved
 
-You touched it, you own it (conduct standard #11): fix every mypy, ruff and luxarch red in each changed file, not only yours, and never spend time proving one predates you. For mypy, read `luxlint --playbook mypy-sweep` in full first. Fix by aligning the code; never `type: ignore`, `cast`, `Any`, `noqa` or an exemption.
+You touched it, you own it (conduct standard #11): fix every mypy, ruff and luxarch red in each changed file, not only yours, and never spend time proving one predates you. Check a file's luxarch reds with a targeted run, `luxarch --rule <id> --path <file>` (or `--path <file>` alone over the rules that fire there), never a full scan filtered through `grep`. For mypy, read `luxlint --playbook mypy-sweep` in full first. Fix by aligning the code; never `type: ignore`, `cast`, `Any`, `noqa` or an exemption.
 
 A red can also be moved instead of fixed: the code goes to another layer, helper or consumer module, and a rule stops seeing it or another rule starts. Counting only the files you touched cannot see that. So compare the WHOLE repo. Take the base's committed status (`git show <base>:.luxarch-status.json`, and `.luxlint-status.json` the same way), run `make status` on your tree, and compare each rule's `violations` count in the two. A rule whose count rose anywhere is a red you moved: fix it in this change, or escalate it. A site that cleared because its code moved rather than changed is the same thing. A site you skipped because it is held (conduct standard, "Before you change code to clear a red") is named here with its issue key.
 
@@ -65,12 +65,13 @@ A red can also be moved instead of fixed: the code goes to another layer, helper
 - Every issue this work touched: **closed** (`luxpm_update_issue` with a `close_summary` saying what shipped and anything deliberately not done), or left open on purpose with a comment saying what remains. A comment is not a close. **Close when the code is done** (committed, pushed, gate green), never later: not "after the deploy", not "once I've checked prod". Deploying is the owner's step; a check of the deployed stack is its own step or its own issue.
 - **Checklist items** done: one `luxpm_update_checklist(sequence_id, items=[{item: <number or title>, done: true}, …])` per issue, ticking every finished item. **Activities and todos** for this work completed (`luxpm_list_activities`).
 - **Work logged with its commits**, one call per issue: `luxpm_log_activity(sequence_id, kind="code_change", content=<the evidence>, commits=[{sha, committed_at}, …])` records the entry AND links the commits (use `luxpm_link_commits` only for commits that belong to no issue), every commit with its `committed_at` (`git log -1 --format=%cI <sha>`): without it LuxPM cannot know the commit's age, and an old sha linked as evidence becomes the sync receipt's anchor. Link this repo's commits to this repo's issues only.
-- New follow-up work: **search first** (`luxpm_semantic_search`, `luxpm_list_issues` with `search`), comment on an existing issue if found, create only if none.
+- **Every finding this session raised, filed or dropped.** Go back through the session, not just the diff: each bug, red, limit or follow-up you named in a reply ("not filed yet", "to file", "follow-up", "out of scope"), each `/adversarial` UNREPRODUCED or deferred item, each red you noticed in a file outside the change, and each owner aside. For each one: **search first** (`luxpm_semantic_search`, `luxpm_list_issues` with `search`), comment on the match, or create one; or name it dropped with the reason. One that lives only in the conversation is lost at the next compact.
+- New follow-up work from the close-out itself: the same, search first, comment on an existing issue if found, create only if none.
 - **Close on the commit and the green gate**: step 7 lands and pushes it next. If landing then fails, set the issue back to `in_progress` with the reason.
 - Re-issue the **sync receipt** (`luxpm_issue_sync_receipt`), write it verbatim to `.luxpm-receipt` in the worktree, and commit it there: it lands with the work.
 - **Read the receipt you just issued.** If `open_untriaged` or `closed_without_summary` is above zero (`repo.luxpm_backlog_triaged` reds it), the backlog beyond this work needs triage: say so in your report with the counts and run `/luxpm-audit` (it works in batches; a large backlog is not a reason to skip it). This step covers only what THIS work touched.
 
-**Evidence:** each issue key with its new state, and the receipt's `issued_at`.
+**Evidence:** each issue key with its new state; each finding the session raised with its issue key, or "dropped: <why>"; and the receipt's `issued_at`.
 
 ## 7. Land, remove the worktree, push
 
