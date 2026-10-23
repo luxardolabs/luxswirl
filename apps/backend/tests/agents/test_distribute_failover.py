@@ -304,7 +304,9 @@ def sent() -> Iterator[list[NotificationContext]]:
 
 
 async def _alert(db: AsyncSession, trigger_type: str, check: Check):
-    alert = make_alert(trigger_type=trigger_type, trigger_config={"missed_intervals": 3})
+    alert = make_alert(
+        trigger_type=trigger_type, trigger_config={"missed_intervals": 3}
+    )
     provider = make_notification_provider()
     db.add_all([alert, provider])
     await db.flush()
