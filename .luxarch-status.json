@@ -1,6 +1,6 @@
 {
   "guard": "luxarch",
-  "guard_version": "0.313.0",
+  "guard_version": "0.314.1",
   "repo": "/repo",
   "targets": [
     {
@@ -1472,12 +1472,12 @@
         },
         {
           "rule": "fw.test_engine_pool_parity",
-          "status": "INERT",
+          "status": "PASS",
           "since": "0.160.0",
           "violations": 0,
           "deferred": false,
-          "inert": true,
-          "inert_reason": "the harness isolates by holding ONE connection and rolling it back (apps/backend/tests/fixtures/db.py:109), so a pooled test engine cannot work here \u2014 each pytest-asyncio test gets its own loop and a pooled connection belongs to the loop that opened it. **This INERT is the correct END STATE for such a harness, not a todo.** Do NOT migrate to DELETE/TRUNCATE-per-test to satisfy this rule: luxlint's test.no_handrolled_cleanup exists to red exactly that, and rollback isolation is the better pattern (faster, no table-ordering bugs, nothing to forget). An earlier version of this message named that migration as the prerequisite and was wrong \u2014 it pointed at something another fleet guard forbids. Measured, pursuing pooling here costs you: 0 failures on NullPool, 139 pooled, 366 pooled+dispose. And you lose nothing in DETECTION \u2014 the cross-session visibility class this rule guards is caught by durability locks that read on a SEPARATE connection, which works whatever the pool class. Pool the APP engine (fw.dev_prod_pool_parity); leave the test engine alone.",
+          "inert": false,
+          "inert_reason": "",
           "fix": "",
           "example": ""
         },
@@ -1769,13 +1769,13 @@
         },
         {
           "rule": "fw.logout_revokes_server_side",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.288.0",
-          "violations": 1,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
-          "fix": "Revoke on the server, not only in the browser: give the user a `sessions_valid_after` timestamp, set it to now at logout, and have the auth dependency (which already loads the user) refuse a token issued before it. That signs out everywhere with no extra I/O. Use a per-token denylist only if signing out one device alone is a product need. Prove it with the shipped replay test, which this rule then credits whatever the revocation's shape: `luxarch --emit logout-revokes > tests/test_logout_revokes.py`, listing the path in LOGOUT_PATHS. See --doc FLEET-AUTH-SESSION-STANDARD \u00a72.1.",
+          "fix": "",
           "example": ""
         },
         {
@@ -1835,13 +1835,13 @@
         },
         {
           "rule": "fw.test_sessions_isolated",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.304.0",
-          "violations": 3,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
-          "fix": "Adopt the shipped harness, `luxarch --emit test-db-bound`, in its own conftest.py one directory above the tests, with TEST_DB_SESSION_FACTORY naming the app's sessionmaker. It runs every test in one rolled-back transaction that every session the app opens joins (routes, background jobs, importers of the factory), so delete the overrides and patches: the repo's own `db` fixture is `async with AsyncSessionLocal() as s: yield s`, its `client` uses the app as it is, and a test that must really commit requests `real_commits`. See --playbook test-isolation",
+          "fix": "",
           "example": ""
         },
         {
@@ -1989,11 +1989,11 @@
         }
       ],
       "summary": {
-        "PASS": 159,
-        "FAIL": 2,
+        "PASS": 162,
+        "FAIL": 0,
         "XFAIL": 0,
         "XPASS": 0,
-        "INERT": 19
+        "INERT": 18
       }
     },
     {
@@ -2880,12 +2880,12 @@
     }
   },
   "summary": {
-    "PASS": 234,
-    "FAIL": 2,
+    "PASS": 237,
+    "FAIL": 0,
     "XFAIL": 0,
     "XPASS": 0,
-    "INERT": 22
+    "INERT": 21
   },
-  "commit": "a6019f3f50721ff6418e463146861ef2418e6f88",
-  "generated_at": "2026-10-23T06:29:25Z"
+  "commit": "71f4c58e59306403525c42166ee1ccce4d36043d",
+  "generated_at": "2026-10-23T08:20:18Z"
 }
