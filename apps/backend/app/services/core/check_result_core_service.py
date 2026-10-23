@@ -101,10 +101,10 @@ class CheckResultCoreService:
             },
         )
 
-        # Update agent's last_seen
-        agent = await AgentCoreService.update_agent_last_seen(
-            db, agent.id, report.agent_run_id
-        )
+        # No write to the agent row here: this transaction runs long (insert the
+        # results, evaluate the alerts), and a row write at its start held that
+        # lock throughout, timing out the agent's own heartbeat behind it. The
+        # heartbeat owns last_seen and the run id.
 
         results_processed = 0
         results_failed = 0

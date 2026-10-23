@@ -473,39 +473,6 @@ class AgentCoreService:
         return agent
 
     @staticmethod
-    async def update_agent_last_seen(
-        db: AsyncSession, agent_id: UUID, agent_run_id: str | None = None
-    ) -> Agent:
-        """
-        Update agent's last_seen timestamp.
-
-        Args:
-            db: Database session
-            agent_id: Agent UUID
-            agent_run_id: Optional run ID
-
-        Returns:
-            Updated agent
-
-        Raises:
-            AgentNotFoundException: If agent doesn't exist
-        """
-        agent = await AgentCoreService.get_agent_by_id(db, agent_id)
-
-        if not agent:
-            # Agents must register first to get a UUID - no auto-creation
-            raise AgentNotFoundException(str(agent_id))
-        else:
-            # Update existing agent
-            agent.last_seen = utc_now()
-            if agent_run_id:
-                agent.agent_run_id = agent_run_id
-
-        agent = await AgentCRUD.save_and_reload_agent(db, agent)
-
-        return agent
-
-    @staticmethod
     async def list_agents(
         db: AsyncSession,
         active_only: bool = False,
@@ -608,8 +575,10 @@ class AgentCoreService:
         Identity fields (hostname, ip, version, tags) change only when the
         heartbeat sends a value; health fields always take the latest report.
         """
-        # Update last_seen
+        # Liveness: the heartbeat is the only writer of last_seen and the run id
         agent.last_seen = heartbeat.timestamp
+        if heartbeat.agent_run_id:
+            agent.agent_run_id = str(heartbeat.agent_run_id)
 
         # Update agent fields from heartbeat
         if heartbeat.hostname:

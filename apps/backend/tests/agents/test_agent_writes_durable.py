@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
 from app.core.datetime_utils import utc_now
@@ -70,19 +70,9 @@ async def test_a_registered_agent_is_committed_pending(worker_db) -> None:
     assert stored.approval_status == AgentApprovalStatus.PENDING
 
 
-async def test_last_seen_is_committed(worker_db) -> None:
-    agent_id = await _seed(worker_db)
-
-    async with worker_db() as s:
-        await AgentCoreService.update_agent_last_seen(s, agent_id, "run-durable")
-        await s.commit()
-
-    stored = await _stored(worker_db, agent_id)
-    assert stored is not None and stored.agent_run_id == "run-durable"
-
-
 async def test_a_heartbeat_commits_the_agent_and_its_metric(worker_db) -> None:
     agent_id = await _seed(worker_db)
+    run_id = uuid4()
 
     async with worker_db() as s:
         await AgentCoreService.update_from_heartbeat(
@@ -93,12 +83,14 @@ async def test_a_heartbeat_commits_the_agent_and_its_metric(worker_db) -> None:
                 timestamp=utc_now(),
                 status=AgentStatus.ONLINE,
                 queue_depth=17,
+                agent_run_id=run_id,
             ),
         )
         await s.commit()
 
     stored = await _stored(worker_db, agent_id)
     assert stored is not None and stored.queue_depth == 17
+    assert stored.agent_run_id == str(run_id)
     async with worker_db() as other:
         metrics = await other.scalar(
             select(func.count())

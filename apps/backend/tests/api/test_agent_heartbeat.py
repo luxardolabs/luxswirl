@@ -147,3 +147,24 @@ async def test_dead_letter_count_is_stored_on_the_agent(
     assert agent is not None
     await db.refresh(agent)
     assert agent.dead_letter_count == 4
+
+
+async def test_the_run_id_is_stored_from_the_heartbeat(
+    client: AsyncClient, approved: tuple[str, str], db: AsyncSession
+) -> None:
+    """The heartbeat owns the agent's liveness fields, the run id included:
+    the report path no longer writes the agent row."""
+    agent_id, key = approved
+    run_id = "6f1c2a0e-1111-4222-8333-444455556666"
+
+    resp = await client.post(
+        "/api/v1/heartbeat",
+        json={**_beat(agent_id), "agent_run_id": run_id},
+        headers={"Authorization": f"Bearer {key}"},
+    )
+
+    assert resp.status_code == 200, resp.text
+    agent = await db.get(Agent, UUID(agent_id))
+    assert agent is not None
+    await db.refresh(agent)
+    assert agent.agent_run_id == run_id
