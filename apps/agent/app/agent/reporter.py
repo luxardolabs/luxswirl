@@ -14,6 +14,7 @@ import json
 import logging
 import sqlite3
 import time
+from collections import deque
 from pathlib import Path
 from typing import Any, NamedTuple
 
@@ -80,6 +81,10 @@ class Reporter:
         self.enable_local_storage = config.get("enable_local_storage", True)
         self.process_interval = config.get("report_process_interval", 10)
         self.max_files_per_batch = config.get("report_max_files_per_batch", 5)
+        # Stored rows a size refusal (413) left unchanged: replay reads past
+        # them, so they never fill its read window, and retries them once
+        # nothing else is left to read.
+        self._size_held: set[int] = set()
         self.max_stored_batches = config.get("report_max_stored_batches", 10000)
         self.max_dead_letters = config.get("report_max_dead_letters", 1000)
 
@@ -505,12 +510,12 @@ class Reporter:
 
     async def _deliver(self, batch: list[dict[str, Any]]) -> Delivery:
         """POST a batch; whatever the server does not take is stored for replay
-        or dead-lettered, never dropped.
+        (as one batch) or dead-lettered, never dropped.
 
         Returns:
             SENT when all of it was taken, PERMANENT when some was dead-lettered
-            and the rest taken, otherwise what stopped delivery (TRANSIENT or
-            TOO_LARGE), with what was not sent stored.
+            and the rest taken, otherwise what kept the rest from going
+            (TRANSIENT or TOO_LARGE).
         """
         outcome, status_code, detail = await self._post_batch(batch)
         if outcome is Delivery.SENT:
@@ -518,70 +523,70 @@ class Reporter:
         if outcome is Delivery.PERMANENT and status_code is not None:
             await self._dead_letter_batch(batch, status_code, detail)
             return Delivery.PERMANENT
-        unsent = [batch]
+        unsent = batch
         if outcome is Delivery.TOO_LARGE:
             outcome, unsent = await self._send_in_parts(batch)
-        await self._store_unsent(batch, unsent)
+        if unsent:
+            await self._store_batch_to_db(unsent)
         return outcome
 
     async def _send_in_parts(
         self, batch: list[dict[str, Any]]
-    ) -> tuple[Delivery, list[list[dict[str, Any]]]]:
+    ) -> tuple[Delivery, list[dict[str, Any]]]:
         """Send a batch the request size limit refused (413) in halves, each
-        split again while still refused. Nothing is stored here.
+        split again while still refused, in order. Nothing is stored here.
 
-        Splitting stops at a single result with TOO_LARGE, as it stops at a
-        transient failure, and the result is kept, never dead-lettered on a
-        proxy's word: `fit_result` caps a result's long text fields far below
-        the body limit a deployment sets, so a 413 on one result usually says
-        the route is wrong (a misrouted request, a misconfigured proxy), and
-        dead-lettering would empty a misaddressed agent's queue. Replay passes
-        such a row by, so it never blocks the rows behind it.
+        A single result the limit still refuses is kept and the split goes on
+        past it, so it never holds back the results beside it. It is never
+        dead-lettered on a proxy's word: `fit_result` caps a result's long text
+        fields far below the body limit a deployment sets, so a 413 on one
+        result usually says the route is wrong (a misrouted request, a
+        misconfigured proxy), and dead-lettering would empty a misaddressed
+        agent's queue. Two refused results with nothing sent say the same of
+        the whole route, and the split stops there, as at a transient failure.
 
         Returns:
-            SENT or PERMANENT (some halves dead-lettered by the server) when
-            every part was dealt with, else TRANSIENT or TOO_LARGE; and the
-            parts not sent (empty unless the outcome is one of those two).
+            SENT, or PERMANENT (some parts dead-lettered by the server), when
+            every result was dealt with; else TRANSIENT or TOO_LARGE. And the
+            results not sent, in their original order.
         """
         if len(batch) == 1:
-            return Delivery.TOO_LARGE, [batch]
-        mid = len(batch) // 2
-        halves = (batch[:mid], batch[mid:])
+            return Delivery.TOO_LARGE, list(batch)
         self.logger.warning(
-            "Batch over the request size limit, sending it in halves",
+            "Batch over the request size limit, sending it in parts",
             extra={"result_count": len(batch)},
         )
-        overall = Delivery.SENT
-        for i, half in enumerate(halves):
-            outcome, status_code, detail = await self._post_batch(half)
+        work = deque(_halves(batch))
+        unsent: list[dict[str, Any]] = []
+        sent = refused = 0
+        stop: Delivery | None = None
+        permanent = False
+        while work:
+            part = work.popleft()
+            if stop is not None:
+                unsent.extend(part)
+                continue
+            outcome, status_code, detail = await self._post_batch(part)
             if outcome is Delivery.SENT:
-                continue
-            if outcome is Delivery.PERMANENT and status_code is not None:
-                await self._dead_letter_batch(half, status_code, detail)
-                overall = Delivery.PERMANENT
-                continue
-            unsent = [half]
-            if outcome is Delivery.TOO_LARGE:
-                outcome, unsent = await self._send_in_parts(half)
-                if outcome is Delivery.PERMANENT:
-                    overall = outcome
-                if outcome in (Delivery.SENT, Delivery.PERMANENT):
-                    continue
-            return outcome, [*unsent, *halves[i + 1 :]]
-        return overall, []
-
-    async def _store_unsent(
-        self, batch: list[dict[str, Any]], unsent: list[list[dict[str, Any]]]
-    ) -> None:
-        """Store what of `batch` was not sent: as the one batch it was when
-        none of it went, so a route that refuses everything never multiplies
-        the stored rows (and the stored-batch cap never prunes them for it)."""
-        if sum(len(part) for part in unsent) == len(batch):
-            if unsent:
-                await self._store_batch_to_db(batch)
-            return
-        for part in unsent:
-            await self._store_batch_to_db(part)
+                sent += len(part)
+            elif outcome is Delivery.PERMANENT and status_code is not None:
+                await self._dead_letter_batch(part, status_code, detail)
+                permanent = True
+            elif outcome is Delivery.TOO_LARGE and len(part) > 1:
+                work.extendleft(reversed(_halves(part)))
+            elif outcome is Delivery.TOO_LARGE:
+                unsent.extend(part)
+                refused += 1
+                if refused >= 2 and not sent:
+                    stop = Delivery.TOO_LARGE
+            else:
+                unsent.extend(part)
+                stop = Delivery.TRANSIENT
+        if stop is Delivery.TRANSIENT:
+            return Delivery.TRANSIENT, unsent
+        if unsent:
+            return Delivery.TOO_LARGE, unsent
+        return (Delivery.PERMANENT if permanent else Delivery.SENT), unsent
 
     async def _post_batch(
         self, batch: list[dict[str, Any]]
@@ -651,8 +656,10 @@ class Reporter:
                     return Delivery.SENT, status_code, ""
 
                 detail = error_detail(resp.text)
+                if outcome is Delivery.TOO_LARGE:
+                    return outcome, status_code, detail
                 self.metrics["send_failures"] += 1
-                if outcome in (Delivery.PERMANENT, Delivery.TOO_LARGE):
+                if outcome is Delivery.PERMANENT:
                     return outcome, status_code, detail
                 self.logger.warning(
                     "Failed to send results",
@@ -800,11 +807,11 @@ class Reporter:
         """
         conn = self._get_db()
         try:
-            rows = conn.execute(
-                "SELECT id, created_at, payload FROM pending_batches "
-                "ORDER BY created_at ASC LIMIT ?",
-                (self.max_files_per_batch,),
-            ).fetchall()
+            rows = self._read_pending(conn)
+            if not rows and self._size_held:
+                # Nothing left but rows a size refusal held: retry those.
+                self._size_held.clear()
+                rows = self._read_pending(conn)
 
             results = []
             for row_id, created_at, payload in rows:
@@ -822,6 +829,31 @@ class Reporter:
                     conn.commit()
 
             return results
+        finally:
+            conn.close()
+
+    def _read_pending(self, conn: sqlite3.Connection) -> list[tuple[Any, ...]]:
+        """The oldest pending rows not held by a size refusal."""
+        return conn.execute(
+            "SELECT id, created_at, payload FROM pending_batches "
+            "WHERE id NOT IN (SELECT value FROM json_each(?)) "
+            "ORDER BY created_at ASC LIMIT ?",
+            (json.dumps(sorted(self._size_held)), self.max_files_per_batch),
+        ).fetchall()
+
+    def _rewrite_stored_batch_sync(
+        self, row_id: int, checks: list[dict[str, Any]]
+    ) -> None:
+        """Replace a pending row's results with what is left of them, in place:
+        same row, same created_at, so the row count never rises and the
+        stored-batch cap never prunes another row for it (runs in thread)."""
+        conn = self._get_db()
+        try:
+            conn.execute(
+                "UPDATE pending_batches SET batch_size = ?, payload = ? WHERE id = ?",
+                (len(checks), gzip.compress(json.dumps(checks).encode()), row_id),
+            )
+            conn.commit()
         finally:
             conn.close()
 
@@ -894,16 +926,16 @@ class Reporter:
         if outcome is Delivery.TOO_LARGE and len(group) == 1:
             [stored] = group
             got, unsent = await self._send_in_parts(stored.checks)
-            if sum(len(part) for part in unsent) == len(stored.checks):
-                # Nothing went: the row stays as it is. Past a size refusal the
-                # pass goes on, so one row never blocks the queue behind it.
-                return got is Delivery.TOO_LARGE
-            # The rest is stored as new rows, then the original row goes. A
-            # crash between the two resends parts the server already has, which
-            # its (check, timestamp) key ignores.
-            for part in unsent:
-                await self._store_batch_to_db(part)
-            await asyncio.to_thread(self._delete_stored_batch_sync, stored.row_id)
+            if not unsent:
+                await asyncio.to_thread(self._delete_stored_batch_sync, stored.row_id)
+            elif len(unsent) < len(stored.checks):
+                await asyncio.to_thread(
+                    self._rewrite_stored_batch_sync, stored.row_id, unsent
+                )
+            if got is Delivery.TOO_LARGE:
+                # Held: later reads go past it, so it never blocks the rows
+                # behind it, and the pass goes on.
+                self._size_held.add(stored.row_id)
             return got is not Delivery.TRANSIENT
 
         if outcome is Delivery.TRANSIENT or status_code is None:
@@ -1050,6 +1082,12 @@ class Reporter:
 
 
 # Simplified function for backward compatibility
+def _halves(batch: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
+    """`batch` cut in two, in order."""
+    mid = len(batch) // 2
+    return [batch[:mid], batch[mid:]]
+
+
 async def push_results(
     config: dict[str, Any], payload: list[dict[str, Any]], logger: logging.Logger
 ) -> bool:

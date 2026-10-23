@@ -12,7 +12,8 @@ app's envelope, such as the trusted-host middleware's plain-text
 route to the server, not the payload, so a misaddressed agent keeps its queue.
 
 A 413 is a proxy refusing the body's size: the batch is sent in halves, and a
-single result it still refuses is kept pending, never dead-lettered.
+single result it still refuses is kept pending, never dead-lettered, while the
+rest goes.
 """
 
 from __future__ import annotations
@@ -450,7 +451,8 @@ async def test_a_route_that_refuses_every_size_keeps_the_batch_as_one_row(
     [(payload,)] = _rows(tmp_path, "SELECT payload FROM pending_batches")
     assert json.loads(gzip.decompress(payload)) == batch
     assert _dead_payloads(tmp_path) == []
-    assert len(calls) <= 4, "the split walks one path down, not the whole tree"
+    # The whole batch, the left path down, and one more refused result.
+    assert len(calls) <= 5, "the split walks one path down, not the whole tree"
 
 
 async def test_a_transient_failure_mid_split_stores_only_what_was_not_sent(
@@ -529,3 +531,133 @@ async def test_a_single_result_the_route_refuses_never_blocks_the_rows_behind_it
     assert sorted(received) == ["next-1", "next-2"]
     assert _pending(tmp_path) == 1  # kept, not dead-lettered
     assert _dead_payloads(tmp_path) == []
+
+
+def _stored_ids(tmp_path: Path) -> list[str]:
+    return [
+        c["check_id"]
+        for (payload,) in _rows(
+            tmp_path, "SELECT payload FROM pending_batches ORDER BY id"
+        )
+        for c in json.loads(gzip.decompress(payload))
+    ]
+
+
+def _refuses(name: str, received: list[str]) -> Handler:
+    """A proxy whose body limit only the result `name` exceeds."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        checks = json.loads(request.content)["checks"]
+        if any(c["check_id"] == name for c in checks):
+            return httpx.Response(413, text=_HTML_413)
+        received.extend(c["check_id"] for c in checks)
+        return httpx.Response(200, json={})
+
+    return handler
+
+
+@pytest.mark.parametrize("at", [0, 3, 7])
+async def test_one_refused_result_never_holds_back_the_rest_of_its_batch(
+    tmp_path: Path, at: int
+) -> None:
+    received: list[str] = []
+    reporter = await _reporter(tmp_path, _refuses("huge", received))
+    others = [_result(f"c{i}") for i in range(7)]
+    batch = [*others[:at], _result("huge"), *others[at:]]
+
+    await reporter.send_batch(batch)
+    await _replay_passes(reporter, 3)
+
+    assert sorted(received) == sorted(r["check_id"] for r in others)
+    assert _stored_ids(tmp_path) == ["huge"]
+    assert _dead_payloads(tmp_path) == []
+
+
+async def test_rows_the_size_limit_holds_never_starve_the_rows_behind_them(
+    tmp_path: Path,
+) -> None:
+    received: list[str] = []
+    reporter = await _reporter(
+        tmp_path, _refuses("huge", received), report_max_files_per_batch=2
+    )
+    for _ in range(3):
+        reporter._store_batch_to_db_sync([_result("huge")])
+        await asyncio.sleep(0.01)
+    reporter._store_batch_to_db_sync([_result("next")])
+
+    await _replay_passes(reporter, 4)
+
+    assert received == ["next"]
+    assert _stored_ids(tmp_path) == ["huge", "huge", "huge"]
+
+
+def _count_limit_then_503(limit: int, bad: str, received: list[str]) -> Handler:
+    def handler(request: httpx.Request) -> httpx.Response:
+        checks = json.loads(request.content)["checks"]
+        if len(checks) > limit:  # stands in for a body-size limit
+            return httpx.Response(413, text=_HTML_413)
+        if any(c["check_id"] == bad for c in checks):
+            return httpx.Response(503, text="down")
+        received.extend(c["check_id"] for c in checks)
+        return httpx.Response(200, json={})
+
+    return handler
+
+
+async def test_a_split_stores_what_is_left_as_one_row_so_nothing_else_is_pruned(
+    tmp_path: Path,
+) -> None:
+    received: list[str] = []
+    reporter = await _reporter(
+        tmp_path,
+        _count_limit_then_503(2, "c3", received),
+        report_max_stored_batches=3,
+    )
+    for name in ("old-A", "old-B"):
+        reporter._store_batch_to_db_sync([_result(name)])
+        await asyncio.sleep(0.01)
+
+    await reporter.send_batch([_result(f"c{i}") for i in range(8)])
+
+    assert received == ["c0", "c1"]
+    assert _stored_ids(tmp_path) == ["old-A", "old-B"] + [f"c{i}" for i in range(2, 8)]
+
+
+async def test_a_replay_split_rewrites_its_row_so_nothing_else_is_pruned(
+    tmp_path: Path,
+) -> None:
+    received: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        checks = json.loads(request.content)["checks"]
+        ids = [c["check_id"] for c in checks]
+        if "huge" in ids or len(checks) > 2:
+            return httpx.Response(413, text=_HTML_413)
+        if "r3" in ids:
+            return httpx.Response(503, text="down")
+        received.extend(ids)
+        return httpx.Response(200, json={})
+
+    reporter = await _reporter(
+        tmp_path, handler, report_max_stored_batches=2, report_batch_size=8
+    )
+    reporter._store_batch_to_db_sync([_result("huge")])
+    await asyncio.sleep(0.01)
+    reporter._store_batch_to_db_sync([_result(f"r{i}") for i in range(8)])
+
+    await _replay_passes(reporter, 1)
+
+    assert received == ["r0", "r1"]
+    assert _stored_ids(tmp_path) == ["huge"] + [f"r{i}" for i in range(2, 8)]
+    assert _dead_payloads(tmp_path) == []
+
+
+async def test_a_413_the_parts_then_clear_is_not_a_send_failure(tmp_path: Path) -> None:
+    received: list[str] = []
+    reporter = await _reporter(tmp_path, _count_limit_then_503(2, "none", received))
+
+    assert await reporter.send_batch([_result(f"c{i}") for i in range(8)]) is True
+
+    metrics = reporter.get_metrics()
+    assert metrics["send_failures"] == 0
+    assert metrics["results_sent"] == 8
