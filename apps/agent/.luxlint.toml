@@ -1,0 +1,9 @@
+# The agent suite's own coverage floor: `make test` runs it as the `agent` suite
+# (TEST_SUITES in the Makefile). The repo root's .luxlint.toml lints both components.
+[source]
+paths = ["apps/agent/app"]
+
+[test]
+# The whole percent `make test` measured when the agent suite joined the gate
+# (2026-10-23, 57 tests, branch coverage 28.92%). It only ever goes up.
+coverage_min = 28

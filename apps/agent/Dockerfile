@@ -92,3 +92,19 @@ HEALTHCHECK --interval=60s --timeout=10s --start-period=120s --retries=3 \
     CMD ["python", "-m", "app.health.check"]
 
 CMD ["python", "-m", "app.main"]
+
+# ---- test: the production image plus the lock's dev group ----
+# The suite runs on the same app layers production ships; `make test` builds this stage
+# for the agent suite (TEST_SUITES). Production carries no installer, so poetry is put
+# back from the deps stage to add the dev group to the same /opt/venv. Root, because
+# that venv belongs to root.
+FROM production AS test
+USER root
+COPY --from=deps /opt/poetry /opt/poetry
+COPY apps/agent/pyproject.toml apps/agent/poetry.lock* /app/
+RUN VIRTUAL_ENV=/opt/venv POETRY_VIRTUALENVS_CREATE=false \
+    /opt/poetry/bin/poetry install --only dev --no-root --no-cache
+COPY apps/agent/tests /app/tests
+# Never a bare `pytest`: the canonical config is emitted per run by `make test` and
+# mounted at /cfg/pytest.ini (the test block's mount).
+CMD ["sh", "-c", "exec pytest -c /cfg/pytest.ini"]
