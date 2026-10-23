@@ -7,7 +7,6 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse
-from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.query_params import ProviderTypeFilter
@@ -15,6 +14,7 @@ from app.db import get_db
 from app.services.views.notification_providers_view_service import (
     NotificationProvidersViewService,
 )
+from app.shared.logger import get_logger
 from app.web.deps import CurrentUserWeb, EditorUserWeb
 from app.web.hx_responses import hx_close_panel_and_refresh, hx_empty_with_toast
 from app.web.templates import templates

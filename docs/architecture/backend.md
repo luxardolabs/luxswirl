@@ -35,7 +35,7 @@ Files starting with `_` (e.g. `_dashboard_render.py`) are **shared helpers** and
 
 ## Imports
 
-`apps/backend/app/` and `apps/agent/app/` are both the `app` package, so imports are **`app.`-prefixed within each component** (`from app.models.foo import ...`, `from app.crud.bar import ...`). `shared.*` stays a flat top-level import (vendored into each image at build). `pyproject.toml` sets `pythonpath = [".", "..", "tests"]` so pytest resolves `app.*` and `shared.*`; the Dockerfile sets the same at runtime. Top-of-file imports are enforced by a PreToolUse hook — use `TYPE_CHECKING` for circular deps.
+`apps/backend/app/` and `apps/agent/app/` are both the `app` package, so imports are **`app.`-prefixed within each component** (`from app.models.foo import ...`, `from app.crud.bar import ...`). Shared code is `app.shared.*`: each leg carries the 0-byte placeholder package `app/shared/`, and the real `apps/shared` is overlaid on it (baked by the images, mounted by `make lint`'s mypy run and `make test`). Modules inside `apps/shared` import each other relatively. Top-of-file imports are enforced by a PreToolUse hook — use `TYPE_CHECKING` for circular deps.
 
 ## Where business logic vs. HTTP plumbing lives
 

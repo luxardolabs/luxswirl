@@ -11,7 +11,6 @@ from uuid import UUID
 
 from fastapi import Request, Response
 from fastapi.responses import HTMLResponse
-from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -32,6 +31,7 @@ from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.check_core_service import CheckCoreService
 from app.services.core.maintenance_job_core_service import MaintenanceJobCoreService
 from app.services.core.settings_core_service import SettingsCoreService
+from app.shared.logger import get_logger
 from app.web.hx_responses import hx_empty_with_toast
 from app.web.templates import templates
 

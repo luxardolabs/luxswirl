@@ -8,13 +8,13 @@ from typing import Any
 
 import httpx
 from fastapi.encoders import jsonable_encoder
-from shared.logger import get_logger
 
 from app.core.check_target_validator import validate_check_target
 from app.notifications.providers.base import (
     BaseNotificationProvider,
     NotificationContext,
 )
+from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.notifications.webhook")
 

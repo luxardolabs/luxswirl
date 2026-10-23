@@ -14,7 +14,7 @@ import sys
 import pytest
 from app.core.logging_config import JsonFormatter
 from app.core.logging_options import logging_options
-from shared.log_redaction import scrub, scrub_text
+from app.shared.log_redaction import scrub, scrub_text
 
 pytestmark = pytest.mark.unit
 

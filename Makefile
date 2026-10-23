@@ -1952,11 +1952,21 @@ format: ## THE canonical fixer — `luxlint --format` (ruff fix+format AND markd
 	fi
 	docker run --rm -v $(PWD):/repo $(LUXLINT_IMAGE) --format $(if $(PATH_SCOPE),--path $(PATH_SCOPE),)
 
+# The shared SSOT (apps/shared) mounted over a leg's 0-byte placeholder package app/shared,
+# so mypy and the suite resolve `app.shared.*` to the real code ($(1) = the leg's app root
+# in the container). It is what `luxlint --emit-shared-overlay` derives from .luxlint.toml
+# [shared]; the images bake the same copy (COPY apps/shared /app/app/shared).
+SHARED_HOST ?= $(abspath apps/shared)
+shared_overlay = -v $(SHARED_HOST)/.:$(1)/shared:ro
+
 mypy: ## mypy for both components — `luxlint --mypy` (canonical config, fleet libraries baked, mount-only)
 	@if [ -z "$(LUXARCH_REGISTRY)" ]; then \
 		echo ">> mypy skipped: LUXARCH_REGISTRY unset (internal tooling — see Makefile.local.example)"; exit 0; \
 	fi
-	docker run --rm -v $(PWD):/repo $(LUXLINT_IMAGE) --mypy
+	docker run --rm -v $(PWD):/repo \
+	  $(call shared_overlay,/repo/apps/backend/app) \
+	  $(call shared_overlay,/repo/apps/agent/app) \
+	  $(LUXLINT_IMAGE) --mypy
 
 guard-version-check: ## FATAL: fail if any guard pin is behind the published latest
 	@if [ -z "$(LUXARCH_REGISTRY)" ]; then \
@@ -2322,23 +2332,26 @@ TEST_WORKDIR  := apps/backend
 TEST_ENV_FILE := .env.test
 # Two suites, one per component (each is its own `app` package and image): the backend
 # takes the TEST_* settings above; the agent needs no backing service, only its code
-# and the vendored shared package on the path, and keeps its own coverage floor.
+# with the shared SSOT overlaid on app/shared, and keeps its own coverage floor.
 TEST_SUITES          := backend agent
 agent_TEST_WORKDIR   := apps/agent
 agent_TEST_SERVICES  :=
-agent_TEST_ENV       := -e PYTHONPATH=/repo/apps/agent:/repo/apps \
+agent_TEST_ENV       := -e PYTHONPATH=/repo/apps/agent \
+                        $(call shared_overlay,/repo/apps/agent/app) \
                         -e HYPOTHESIS_STORAGE_DIRECTORY=/out/.hypothesis
 agent_TEST_FLOOR     := apps/agent/.luxlint.toml
 # The suite reads TEST_DATABASE_URL (a name the app never reads, so an exported dev
 # DATABASE__URL can never aim the schema-dropping harness at the dev DB); DATABASE__URL
 # lands anything that builds the real engine on the throwaway DB too. PYTHONPATH points
-# imports at the mounted source: `app.*` (apps/backend), `shared.*` (apps), `fixtures.*`.
+# imports at the mounted source: `app.*` (apps/backend, with the shared SSOT overlaid on
+# its placeholder package app/shared) and `fixtures.*`.
 # The source is mounted read-only, so Hypothesis keeps its example DB in the run's own dir.
 TEST_ENV      := -e TEST_DATABASE_URL=postgresql+asyncpg://luxswirl_test:luxswirl_test@timescaledb-test:5432/luxswirl_test \
                  -e DATABASE__URL=postgresql+asyncpg://luxswirl_test:luxswirl_test@timescaledb-test:5432/luxswirl_test \
                  -e LUXSWIRL_INTEGRATION=1 \
                  -e ALLOWED_HOSTS=test,route-smoke \
-                 -e PYTHONPATH=/repo/apps/backend:/repo/apps:/repo/apps/backend/tests \
+                 -e PYTHONPATH=/repo/apps/backend:/repo/apps/backend/tests \
+                 $(call shared_overlay,/repo/apps/backend/app) \
                  -e HYPOTHESIS_STORAGE_DIRECTORY=/out/.hypothesis
 
 # luxarch:test-block asset v5 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit test-block`.

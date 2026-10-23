@@ -13,7 +13,7 @@ from app.core.check_target_validator import (
     CheckTargetBlockedError,
     validate_check_target,
 )
-from shared.ssrf import (
+from app.shared.ssrf import (
     SsrfBlockedError,
     assert_ip_allowed,
     assert_target_allowed,

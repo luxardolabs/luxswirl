@@ -8,10 +8,10 @@ shapes results.
 
 from typing import Any
 
-from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.timescale_crud import TimescaleCRUD
+from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.services.timescale")
 

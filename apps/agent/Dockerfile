@@ -80,10 +80,10 @@ LABEL org.opencontainers.image.source="https://github.com/luxardolabs/luxswirl" 
       org.opencontainers.image.revision="${BUILD_COMMIT}" \
       org.opencontainers.image.created="${BUILD_TIMESTAMP}"
 
-# app package -> /app/app ; shared -> /app/shared.
-# PYTHONPATH=/app resolves both `import app.*` and `import shared.*`.
+# app package -> /app/app. The shared SSOT (apps/shared) is baked over the app's
+# 0-byte placeholder package app/shared, so it is imported as `app.shared.*`.
 COPY --chown=luxswirl:luxswirl apps/agent/app /app/app
-COPY --chown=luxswirl:luxswirl apps/shared /app/shared
+COPY --chown=luxswirl:luxswirl apps/shared /app/app/shared
 ENV PYTHONPATH=/app
 
 # Liveness = the agent's own work, not a live process: app/health/check.py asserts the

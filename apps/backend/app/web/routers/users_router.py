@@ -9,7 +9,6 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Form, Query, Request, Response
 from fastapi.responses import HTMLResponse, RedirectResponse
-from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -17,6 +16,7 @@ from app.core.query_params import ActiveFilter, PerPageFilter
 from app.core.rate_limit import limiter
 from app.db import get_db
 from app.services.views.web_users_view_service import WebUsersViewService
+from app.shared.logger import get_logger
 from app.web.deps import AdminUserWeb
 from app.web.hx_responses import hx_empty_with_toast, hx_toast_without_swap
 from app.web.render import settings_error_partial

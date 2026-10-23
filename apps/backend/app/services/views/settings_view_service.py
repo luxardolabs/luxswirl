@@ -8,7 +8,6 @@ from collections import defaultdict
 from typing import Any
 
 from fastapi import Request, Response
-from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ValidationException
@@ -36,6 +35,7 @@ from app.services.core.registration_key_core_service import RegistrationKeyCoreS
 from app.services.core.settings_core_service import SettingsCoreService
 from app.services.core.timescale_core_service import TimescaleCoreService
 from app.services.core.user_core_service import UserCoreService
+from app.shared.logger import get_logger
 from app.web.template_filters import update_settings_cache
 from app.web.templates import templates
 

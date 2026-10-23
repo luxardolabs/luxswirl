@@ -21,8 +21,6 @@ from typing import Any
 
 import httpx
 import psutil
-from shared.jobs.base import BaseJob
-from shared.logger import get_logger
 
 from app.agent.check_executor import CheckExecutor
 from app.agent.check_manager import CheckManager
@@ -35,6 +33,8 @@ from app.agent.registration import AgentRegistration
 from app.agent.reporter import Reporter
 from app.agent.result_processor import ResultProcessor
 from app.checks.base import BaseCheck
+from app.shared.jobs.base import BaseJob
+from app.shared.logger import get_logger
 
 
 class LuxSwirlAgent:

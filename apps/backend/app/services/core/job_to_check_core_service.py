@@ -13,7 +13,6 @@ monitoring checks. Encodes the domain rules:
 from dataclasses import dataclass
 from uuid import UUID
 
-from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.scan_check_names import PORT_CATEGORIES
@@ -22,6 +21,7 @@ from app.schemas.check_schema import BulkCheckCreateSummary, CheckCreate
 from app.services.core.check_core_service import CheckCoreService
 from app.services.core.job_core_service import JobCoreService
 from app.services.core.network_scan_core_service import NetworkScanCoreService
+from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.services.job_to_check")
 

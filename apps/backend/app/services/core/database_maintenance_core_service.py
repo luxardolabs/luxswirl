@@ -18,8 +18,6 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
-from shared.logger import get_logger
-
 from app.core.datetime_utils import utc_now
 from app.crud.artifact_crud import ArtifactCRUD
 from app.crud.database_maintenance_crud import (
@@ -34,6 +32,7 @@ from app.schemas.database_maintenance_schema import (
     VacuumResult,
 )
 from app.services.core.settings_core_service import SettingsCoreService
+from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.background.db_maintenance")
 

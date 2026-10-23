@@ -16,13 +16,13 @@ from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from prometheus_client import CollectorRegistry, Counter, Gauge, generate_latest
-from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.datetime_utils import utc_now
 from app.crud.agent_crud import AgentCRUD
 from app.crud.check_result_crud import CheckResultCRUD
 from app.services.core.settings_core_service import SettingsCoreService
+from app.shared.logger import get_logger
 
 # Server start time (set when this module is imported during lifespan startup).
 # Used for the luxswirl_server_uptime_seconds metric.

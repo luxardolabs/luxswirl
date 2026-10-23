@@ -9,7 +9,8 @@ hop — which also re-resolves at connect time, closing the create→fetch windo
 from typing import Any
 
 import httpx
-from shared.ssrf import assert_target_allowed
+
+from app.shared.ssrf import assert_target_allowed
 
 
 async def ssrf_guarded_send(

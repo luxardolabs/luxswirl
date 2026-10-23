@@ -18,7 +18,6 @@ from pathlib import Path
 from typing import Any, NamedTuple
 
 import httpx
-from shared.logger import get_logger
 
 from app.agent.dead_letter import (
     CREATE_DEAD_LETTERS,
@@ -30,6 +29,7 @@ from app.agent.dead_letter import (
     prune_dead_letters,
 )
 from app.agent.result_limits import fit_result
+from app.shared.logger import get_logger
 
 # SQL constants
 _CREATE_TABLE = """

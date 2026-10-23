@@ -8,7 +8,6 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
 from fastapi import status as http_status
 from fastapi.responses import HTMLResponse, Response
-from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import AgentNotFoundException
@@ -16,6 +15,7 @@ from app.core.query_params import PerPageFilter
 from app.db import get_db
 from app.services.views.agents_view_service import AgentsViewService
 from app.services.views.maintenance_job_view_service import MaintenanceJobViewService
+from app.shared.logger import get_logger
 from app.web.deps import CurrentUserWeb, EditorUserWeb
 from app.web.render import agent_status_message
 from app.web.templates import templates

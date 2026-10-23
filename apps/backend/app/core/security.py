@@ -13,7 +13,6 @@ from uuid import UUID
 import bcrypt
 import jwt
 from fastapi import Cookie, Depends, Header, HTTPException, Request, status
-from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -26,6 +25,7 @@ from app.services.core.auth_core_service import AuthCoreService
 from app.services.core.registration_key_core_service import (
     RegistrationKeyCoreService,
 )
+from app.shared.logger import get_logger
 
 if TYPE_CHECKING:
     from app.models.agent_model import Agent

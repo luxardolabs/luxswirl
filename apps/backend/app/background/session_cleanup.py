@@ -7,10 +7,9 @@ Periodically removes expired sessions from the database to prevent table bloat.
 import asyncio
 import contextlib
 
-from shared.logger import get_logger
-
 from app.db import worker_session
 from app.services.core.auth_core_service import AuthCoreService
+from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.background.session_cleanup")
 

@@ -9,7 +9,7 @@ import time
 from abc import ABC, abstractmethod
 from typing import Any
 
-from shared.logger import get_logger
+from ..logger import get_logger
 
 
 class BaseJob(ABC):

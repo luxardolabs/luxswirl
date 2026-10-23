@@ -12,7 +12,6 @@ from urllib.parse import urlencode
 from uuid import UUID
 
 from fastapi import Request
-from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.query_params import split_csv
@@ -33,6 +32,7 @@ from app.services.core.maintenance_job_core_service import MaintenanceJobCoreSer
 from app.services.core.settings_core_service import SettingsCoreService
 from app.services.core.status_page_core_service import StatusPageCoreService
 from app.services.views._dashboard_render import DashboardRender
+from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.web.services.status_pages")
 

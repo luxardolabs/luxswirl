@@ -19,7 +19,8 @@ from pathlib import Path
 from uuid import UUID
 
 from cryptography.fernet import Fernet, InvalidToken
-from shared.logger import get_logger
+
+from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.credentials")
 

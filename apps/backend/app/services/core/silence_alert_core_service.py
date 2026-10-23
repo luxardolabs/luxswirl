@@ -30,7 +30,6 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from uuid import UUID
 
-from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -55,6 +54,7 @@ from app.services.core.agent_assignment_core_service import (
     AgentAssignmentCoreService,
 )
 from app.services.core.alert_evaluation_core_service import AlertEvaluationCoreService
+from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.services.silence_alert")
 

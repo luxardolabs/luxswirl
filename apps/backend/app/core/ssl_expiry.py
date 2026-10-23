@@ -10,7 +10,7 @@ thresholds, so the panel cannot disagree with the stored value.
 from datetime import UTC, datetime
 from typing import Any
 
-from shared.logger import get_logger
+from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.ssl_expiry")
 

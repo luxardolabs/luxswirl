@@ -10,7 +10,7 @@ Settings (Settings > Security):
 - security.block_private_networks (default False) — blocks RFC 1918 + IPv6 ULA
 """
 
-from shared.ssrf import SsrfBlockedError, assert_target_allowed
+from app.shared.ssrf import SsrfBlockedError, assert_target_allowed
 
 
 class CheckTargetBlockedError(ValueError):

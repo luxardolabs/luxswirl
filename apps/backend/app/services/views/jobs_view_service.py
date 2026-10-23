@@ -12,10 +12,6 @@ from uuid import UUID
 
 from fastapi import HTTPException, Request
 from fastapi import status as http_status
-from shared.jobs.base import BaseJob
-from shared.jobs.network_discover import NetworkDiscoverJob
-from shared.jobs.network_scan import NetworkScanJob
-from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import NotFoundException
@@ -29,6 +25,10 @@ from app.services.core.check_core_service import CheckCoreService
 from app.services.core.job_api_core_service import JobApiCoreService
 from app.services.core.job_core_service import JobCoreService
 from app.services.core.settings_core_service import SettingsCoreService
+from app.shared.jobs.base import BaseJob
+from app.shared.jobs.network_discover import NetworkDiscoverJob
+from app.shared.jobs.network_scan import NetworkScanJob
+from app.shared.logger import get_logger
 
 _JOB_REGISTRY: dict[str, type[BaseJob]] = {
     "network_scan": NetworkScanJob,

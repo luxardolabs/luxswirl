@@ -6,12 +6,12 @@ admin pages.
 from typing import Any
 
 from fastapi import Request
-from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.schemas.auth_schema import AuthedUser
 from app.schemas.setting_schema import DatabaseGrowthResponse
 from app.services.core.timescale_core_service import TimescaleCoreService
+from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.web.services.database_health")
 

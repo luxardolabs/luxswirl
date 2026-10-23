@@ -49,9 +49,12 @@ globals = [
 [python]
 target = "py314"   # per-repo fact: both components pin python ^3.14 (PEP 758 excepts in use)
 
-# No [shared] overlay: apps/shared is REAL code COPYd into both images at build
-# (not 0-byte placeholders bind-mounted at runtime), so the mypy tail resolves it
-# directly via MYPYPATH. Omitting [shared] is this repo's "no overlay" attestation.
+[shared]
+# The shared SSOT (same as .luxarch.toml). Each leg carries the 0-byte placeholder
+# package app/shared (its __init__.py), which the real apps/shared overlays: baked
+# by both images, mounted by `make lint`'s mypy run and by `make test`.
+paths = ["apps/shared"]
+overlay = [{ shared = ".", app_path = "shared" }]
 
 [gitleaks]
 # Path regexes appended to the canonical allowlist at emit time. Each is a file
@@ -100,3 +103,8 @@ ruff = [
 [rules.deferred]
 # Owner's dial only — evidence-backed. Empty at onboarding: reds stay RED and are
 # tracked in LuxPM, not silenced here.
+
+[mypy.tail]
+# The mount-only `luxlint --mypy` run gets shared_overlay per leg (`make mypy`), so both legs
+# resolve the real apps/shared, not the 0-byte placeholder package app/shared.
+overlay = "make mypy passes shared_overlay(/repo/apps/{backend,agent}/app); reveal_type(app.shared.log_redaction.scrub_text) is def (value: str) -> str in both legs (was Any)"

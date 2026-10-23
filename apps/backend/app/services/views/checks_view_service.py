@@ -11,7 +11,6 @@ from uuid import UUID
 
 from fastapi import Request
 from fastapi.responses import Response
-from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.check_target_validator import CheckTargetBlockedError
@@ -38,6 +37,7 @@ from app.services.core.check_core_service import CheckCoreService
 from app.services.core.maintenance_job_core_service import MaintenanceJobCoreService
 from app.services.core.settings_core_service import SettingsCoreService
 from app.services.views._job_status import build_job_status_context
+from app.shared.logger import get_logger
 from app.web.hx_responses import hx_close_panel_and_refresh, hx_empty_with_toast
 from app.web.templates import templates
 

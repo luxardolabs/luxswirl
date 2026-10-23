@@ -12,10 +12,10 @@ import asyncio
 import time
 from typing import Any
 
-from shared.logger import get_logger
 from uuid_extensions import uuid7
 
 from app.checks.base import BaseCheck
+from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.agent.check_executor")
 

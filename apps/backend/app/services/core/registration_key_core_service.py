@@ -6,7 +6,6 @@ import secrets
 from uuid import UUID
 
 import bcrypt
-from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.datetime_utils import utc_now
@@ -18,6 +17,7 @@ from app.schemas.registration_key_schema import (
     RegistrationKeyResponse,
     RegistrationKeyRevoke,
 )
+from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.services.registration_key")
 

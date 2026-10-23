@@ -16,8 +16,8 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from shared.jobs.base import BaseJob
-from shared.subprocess_safe import get_subprocess_config, run_subprocess_safely
+from ..subprocess_safe import get_subprocess_config, run_subprocess_safely
+from .base import BaseJob
 
 
 class NetworkDiscoverParams(BaseModel):

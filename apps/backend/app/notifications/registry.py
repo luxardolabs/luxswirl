@@ -4,9 +4,8 @@ Notification Provider Registry - Auto-discovery and registration of providers.
 
 from typing import Any
 
-from shared.logger import get_logger
-
 from app.notifications.providers.base import BaseNotificationProvider
+from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.notifications.registry")
 

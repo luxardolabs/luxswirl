@@ -11,12 +11,11 @@ module only schedules it; the cycle and its SQL live in the core service and
 import asyncio
 import contextlib
 
-from shared.logger import get_logger
-
 from app.core.config import settings
 from app.services.core.database_maintenance_core_service import (
     DatabaseMaintenanceCoreService,
 )
+from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.background.db_maintenance")
 

@@ -11,7 +11,6 @@ from typing import Any
 from uuid import UUID
 
 import bcrypt
-from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -39,6 +38,7 @@ from app.schemas.agent_schema import (
 )
 from app.services.core.job_core_service import JobCoreService
 from app.services.core.metrics_collector_core_service import MetricsCollectorCoreService
+from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.services.agent")
 

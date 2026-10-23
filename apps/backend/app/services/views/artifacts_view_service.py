@@ -9,12 +9,12 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import Request, Response
-from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.content_disposition import content_disposition
 from app.schemas.auth_schema import AuthedUser
 from app.services.core.artifact_core_service import ArtifactCoreService
+from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.web.services.artifacts")
 

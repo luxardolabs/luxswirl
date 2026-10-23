@@ -5,10 +5,9 @@ MySQL/MariaDB Check Module - Implements MySQL/MariaDB database health checks.
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
-from shared.logger import get_logger
-from shared.ssrf import assert_target_allowed
-
 from app.checks.base import BaseCheck
+from app.shared.logger import get_logger
+from app.shared.ssrf import assert_target_allowed
 
 try:
     import aiomysql

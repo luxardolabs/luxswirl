@@ -22,7 +22,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from cryptography.fernet import Fernet
-from shared.logger import get_logger
+
+from app.shared.logger import get_logger
 
 if TYPE_CHECKING:
     from app.core.config import Settings

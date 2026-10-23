@@ -6,13 +6,13 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Form, Request, Response
 from fastapi.responses import HTMLResponse
-from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.rate_limit import limiter
 from app.db import get_db
 from app.services.views.profile_view_service import ProfileViewService
+from app.shared.logger import get_logger
 from app.web.deps import CurrentUserWeb
 from app.web.render import profile_status_message
 from app.web.templates import templates

@@ -11,6 +11,6 @@ COPY apps/agent/pyproject.toml apps/agent/poetry.lock* /app/
 RUN poetry install --no-root --with dev
 
 COPY apps/agent/app /app/app
-COPY apps/shared /app/shared
+COPY apps/shared /app/app/shared
 COPY apps/agent/tests /app/tests
 ENV PYTHONPATH=/app

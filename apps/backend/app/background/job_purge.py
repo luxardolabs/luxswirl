@@ -7,11 +7,10 @@ Periodically removes expired jobs from the database based on retention policy.
 import asyncio
 import contextlib
 
-from shared.logger import get_logger
-
 from app.core.config import settings
 from app.db import worker_session
 from app.services.core.job_core_service import JobCoreService
+from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.background.job_purge")
 

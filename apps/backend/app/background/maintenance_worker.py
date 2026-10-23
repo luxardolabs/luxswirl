@@ -16,7 +16,6 @@ from collections.abc import Awaitable, Callable
 from datetime import datetime, timedelta
 from uuid import UUID
 
-from shared.logger import get_logger
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -24,6 +23,7 @@ from app.core.datetime_utils import utc_now
 from app.db import worker_session
 from app.models.maintenance_job_model import MaintenanceJob
 from app.services.core.maintenance_job_core_service import MaintenanceJobCoreService
+from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.background.maintenance_worker")
 

@@ -23,10 +23,9 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from shared.logger import get_logger
-
 from app.core.exceptions import AuthorizationException
 from app.core.synthetic_security import SyntheticSecurityError, validate_and_raise
+from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.core.synthetic_guard")
 

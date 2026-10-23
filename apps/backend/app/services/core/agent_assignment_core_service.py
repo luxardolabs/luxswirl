@@ -9,7 +9,6 @@ from collections.abc import Sequence
 from typing import Any
 from uuid import UUID
 
-from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.agent_crud import AgentCRUD
@@ -19,6 +18,7 @@ from app.models.check_model import Check
 from app.schemas.check_schema import CheckListResponse
 from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.check_api_core_service import CheckApiCoreService
+from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.services.agent_assignment")
 

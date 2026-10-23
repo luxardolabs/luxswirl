@@ -8,7 +8,6 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Form, Request, Response, status
 from fastapi.responses import HTMLResponse, RedirectResponse
-from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -19,6 +18,7 @@ from app.core.same_origin import is_cross_site
 from app.db import get_db
 from app.services.views.admin_bootstrap_view_service import AdminBootstrapViewService
 from app.services.views.web_auth_view_service import WebAuthViewService
+from app.shared.logger import get_logger
 from app.web.deps import OptionalUserWeb
 from app.web.templates import templates
 

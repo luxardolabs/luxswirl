@@ -7,12 +7,12 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Path, Request
 from fastapi.responses import HTMLResponse
-from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.query_params import HistoryHoursFilter
 from app.db import get_db
 from app.services.views.check_detail_view_service import CheckDetailViewService
+from app.shared.logger import get_logger
 from app.web.deps import CurrentUserWeb
 from app.web.templates import templates
 

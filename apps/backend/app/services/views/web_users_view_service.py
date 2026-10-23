@@ -11,7 +11,6 @@ from uuid import UUID
 
 from fastapi import Request
 from pydantic import ValidationError
-from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.datetime_utils import utc_now
@@ -27,6 +26,7 @@ from app.schemas.user_schema import (
 from app.services.core.auth_core_service import AuthCoreService
 from app.services.core.settings_core_service import SettingsCoreService
 from app.services.core.user_core_service import UserCoreService
+from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.web.services.web_users")
 

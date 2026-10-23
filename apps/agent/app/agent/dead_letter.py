@@ -25,7 +25,7 @@ import json
 import sqlite3
 from enum import StrEnum
 
-from shared.log_redaction import scrub_text
+from app.shared.log_redaction import scrub_text
 
 # The server's error detail kept per dead letter, after scrubbing.
 MAX_DETAIL_CHARS = 2048

@@ -13,7 +13,6 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.datetime_utils import utc_now
@@ -27,6 +26,7 @@ from app.models.notification_log_model import NotificationLog
 from app.notifications.providers.base import NotificationContext
 from app.schemas.alert_schema import SendDecision
 from app.services.core.notification_core_service import NotificationCoreService
+from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.services.alert")
 

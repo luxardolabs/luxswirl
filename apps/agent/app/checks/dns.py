@@ -4,9 +4,8 @@ DNS Check Module - Implements DNS query health checks.
 
 from typing import Any
 
-from shared.ssrf import assert_target_allowed
-
 from app.checks.base import BaseCheck
+from app.shared.ssrf import assert_target_allowed
 
 try:
     import dns.asyncresolver

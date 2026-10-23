@@ -14,7 +14,6 @@ from collections.abc import Sequence
 from typing import Any
 from uuid import UUID
 
-from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -34,6 +33,7 @@ from app.schemas.job_schema import (
 from app.services.core._job_enrichers import enrich_job_result
 from app.services.core.network_scan_core_service import NetworkScanCoreService
 from app.services.core.settings_core_service import SettingsCoreService
+from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.services.job")
 

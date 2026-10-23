@@ -6,12 +6,12 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Form, Query, Request
 from fastapi.responses import HTMLResponse, Response
-from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.query_params import EnabledFilter, GlobalFilter, PerPageFilter
 from app.db import get_db
 from app.services.views.settings_view_service import SettingsViewService
+from app.shared.logger import get_logger
 from app.web.deps import AdminUserWeb
 from app.web.hx_responses import hx_empty_with_toast, hx_toast_trigger
 from app.web.render import settings_error_partial

@@ -13,7 +13,6 @@ from uuid import UUID
 
 from fastapi import Request
 from fastapi.responses import Response, StreamingResponse
-from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.content_disposition import content_disposition
@@ -27,6 +26,7 @@ from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.check_core_service import CheckCoreService
 from app.services.core.maintenance_job_core_service import MaintenanceJobCoreService
 from app.services.views._job_status import build_job_status_context
+from app.shared.logger import get_logger
 from app.web.templates import templates
 
 logger = get_logger("luxswirl.web.services.import_export")

@@ -5,7 +5,6 @@ StatusPage service - business logic for status page operations.
 from typing import Any
 from uuid import UUID
 
-from shared.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import attributes
 
@@ -18,6 +17,7 @@ from app.schemas.status_page_schema import (
     StatusPageInDB,
     StatusPageUpdate,
 )
+from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.services.status_page")
 
