@@ -32,12 +32,18 @@ CLOUD_METADATA_NETWORKS = [
     ipaddress.ip_network("fe80::/10"),  # IPv6 link-local
 ]
 
-# RFC 1918 private networks — where most self-hosted targets live.
+# Private and internal networks — where most self-hosted targets live, and the
+# host's own services (loopback; 0.0.0.0 reaches it on Linux).
 PRIVATE_NETWORKS = [
     ipaddress.ip_network("10.0.0.0/8"),
     ipaddress.ip_network("172.16.0.0/12"),
     ipaddress.ip_network("192.168.0.0/16"),
     ipaddress.ip_network("fc00::/7"),  # IPv6 unique local
+    ipaddress.ip_network("127.0.0.0/8"),  # loopback
+    ipaddress.ip_network("::1/128"),  # IPv6 loopback
+    ipaddress.ip_network("0.0.0.0/8"),  # unspecified / "this host"
+    ipaddress.ip_network("::/128"),  # IPv6 unspecified
+    ipaddress.ip_network("100.64.0.0/10"),  # CGNAT shared address space
 ]
 
 

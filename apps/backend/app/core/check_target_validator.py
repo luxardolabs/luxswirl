@@ -7,7 +7,7 @@ which the API and web error layers already translate to a 4xx.
 
 Settings (Settings > Security):
 - security.block_cloud_metadata (default True) — blocks 169.254.0.0/16 + IPv6 link-local
-- security.block_private_networks (default False) — blocks RFC 1918 + IPv6 ULA
+- security.block_private_networks (default False) — blocks RFC 1918, IPv6 ULA, loopback, 0.0.0.0 and CGNAT
 """
 
 from app.shared.ssrf import SsrfBlockedError, assert_target_allowed
@@ -32,7 +32,7 @@ def validate_check_target(
     Args:
         target: The check target (URL or ``host:port``).
         block_cloud_metadata: Block cloud-metadata / link-local addresses.
-        block_private_networks: Block RFC 1918 / IPv6 ULA addresses.
+        block_private_networks: Block private and internal addresses (RFC 1918, IPv6 ULA, loopback, 0.0.0.0, CGNAT).
     """
     try:
         assert_target_allowed(

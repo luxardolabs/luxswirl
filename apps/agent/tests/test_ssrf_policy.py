@@ -302,3 +302,11 @@ async def test_an_agent_restarted_offline_keeps_the_servers_policy(
         await http_client.aclose_all()
 
     assert _ssrf_policy.block_private_networks() is True
+
+
+@pytest.mark.parametrize("ip", ["127.0.0.1", "::1", "0.0.0.0", "100.64.0.1"])
+def test_the_agent_host_itself_follows_the_policy(ip: str) -> None:
+    _ssrf_policy.assert_ip_allowed(ip)
+    _ssrf_policy.apply_server_policy({"block_private_networks": True})
+    with pytest.raises(SsrfBlockedError):
+        _ssrf_policy.assert_ip_allowed(ip)
