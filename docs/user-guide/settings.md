@@ -457,7 +457,7 @@ The table supports filtering by **role** and **active status**, a **search** box
 
 ### Editing a User
 
-Use the edit (pencil) action to change role, full name, active status, and the must-change-password flag.
+Use the edit (pencil) action to change role, full name, active status, and the must-change-password flag. The last active admin cannot be given another role or deactivated: make another user an active admin first.
 
 ### Resetting a Password
 
@@ -469,7 +469,7 @@ After too many failed login attempts (see `security.max_failed_attempts`), an ac
 
 ### Deleting a User
 
-Use the delete action and confirm. You cannot delete your own account.
+Use the delete action and confirm. You cannot delete your own account, or the last active admin.
 
 ______________________________________________________________________
 
