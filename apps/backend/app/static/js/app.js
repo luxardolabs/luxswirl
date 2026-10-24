@@ -70,9 +70,11 @@ function showToast(message, type = 'success') {
             <svg class="w-5 h-5 ${textColor} flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 ${icon}
             </svg>
-            <p class="text-sm ${textColor} flex-1">${message}</p>
+            <p class="text-sm ${textColor} flex-1"></p>
         </div>
     `;
+    // The message can carry user input (a username, a refused value): text, never markup.
+    toast.querySelector('p').textContent = message;
 
     container.appendChild(toast);
     setTimeout(() => { toast.style.opacity = '1'; }, 10);
