@@ -449,7 +449,9 @@ async def test_a_route_that_refuses_every_size_keeps_the_batch_as_one_row(
 
     assert _pending(tmp_path) == 1
     [(payload,)] = _rows(tmp_path, "SELECT payload FROM pending_batches")
-    assert json.loads(gzip.decompress(payload)) == batch
+    kept = json.loads(gzip.decompress(payload))
+    # Every result, refused ones behind the rest.
+    assert sorted(kept, key=lambda r: r["check_id"]) == batch
     assert _dead_payloads(tmp_path) == []
     # The whole batch, the left path down, and one more refused result.
     assert len(calls) <= 5, "the split walks one path down, not the whole tree"
@@ -661,3 +663,93 @@ async def test_a_413_the_parts_then_clear_is_not_a_send_failure(tmp_path: Path) 
     metrics = reporter.get_metrics()
     assert metrics["send_failures"] == 0
     assert metrics["results_sent"] == 8
+
+
+def _refuses_any(names: set[str], received: list[str]) -> Handler:
+    """A proxy whose body limit each result in `names` exceeds on its own."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        checks = json.loads(request.content)["checks"]
+        if any(c["check_id"] in names for c in checks):
+            return httpx.Response(413, text=_HTML_413)
+        received.extend(c["check_id"] for c in checks)
+        return httpx.Response(200, json={})
+
+    return handler
+
+
+async def test_two_refused_results_first_never_strand_the_rest(tmp_path: Path) -> None:
+    """Two refused results with nothing sent stop the split; the rest is stored
+    ahead of them, so the next try reaches it first."""
+    received: list[str] = []
+    reporter = await _reporter(tmp_path, _refuses_any({"h1", "h2"}, received))
+    order = ["h1", "h2", "c0", "c1", "c2", "c3", "c4", "c5"]
+
+    await reporter.send_batch([_result(n) for n in order])
+    await _replay_passes(reporter, 3)
+
+    assert sorted(received) == [f"c{i}" for i in range(6)]
+    assert sorted(_stored_ids(tmp_path)) == ["h1", "h2"]
+
+
+async def test_results_a_transient_failure_stopped_are_tried_before_refused_ones(
+    tmp_path: Path,
+) -> None:
+    received: list[str] = []
+    down = {"t": True}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        ids = [c["check_id"] for c in json.loads(request.content)["checks"]]
+        if "h1" in ids or "h2" in ids:
+            return httpx.Response(413, text=_HTML_413)
+        if "t" in ids and down["t"]:
+            return httpx.Response(503, text="down")
+        received.extend(ids)
+        return httpx.Response(200, json={})
+
+    reporter = await _reporter(tmp_path, handler)
+    batch = ["h1", "c0", "h2", "c1", "t", "c2", "c3", "c4"]
+    await reporter.send_batch([_result(n) for n in batch])
+    down["t"] = False
+
+    await _replay_passes(reporter, 3)
+
+    assert sorted(received) == sorted(n for n in batch if n not in {"h1", "h2"})
+    assert sorted(_stored_ids(tmp_path)) == ["h1", "h2"]
+
+
+async def test_a_part_dead_lettered_in_a_replay_split_keeps_its_created_at(
+    tmp_path: Path,
+) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        checks = json.loads(request.content)["checks"]
+        if len(checks) > 2:
+            return httpx.Response(413, text=_HTML_413)
+        if any(c["check_id"] == "bad" for c in checks):
+            return _app_response(422, "VALIDATION_ERROR")
+        return httpx.Response(200, json={})
+
+    reporter = await _reporter(tmp_path, handler)
+    stored_at = time.time() - 3600
+    conn = sqlite3.connect(str(tmp_path / "pending_reports.db"))
+    try:
+        names = ["c0", "c1", "bad", "c3"]
+        conn.execute(
+            "INSERT INTO pending_batches (agent_id, created_at, batch_size, payload) "
+            "VALUES (?, ?, ?, ?)",
+            (
+                "a1",
+                stored_at,
+                len(names),
+                gzip.compress(json.dumps([_result(n) for n in names]).encode()),
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    await _replay_passes(reporter, 1)
+
+    [(created_at,)] = _rows(tmp_path, "SELECT created_at FROM dead_letters")
+    assert _pending(tmp_path) == 0
+    assert abs(created_at - stored_at) < 1

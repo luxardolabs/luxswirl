@@ -237,7 +237,7 @@ Each response is classified (`classify_response` in `apps/agent/app/agent/dead_l
 
 Only the server itself can say a payload is invalid. The server's trusted-host middleware answers a request whose `Host` is not in `allowed_hosts` with a plain-text `400 Invalid host header`, and a proxy such as nginx answers with its own HTML 400. Those mean the agent is misaddressed or the route is misconfigured, so the batches stay pending and are delivered once it is fixed, instead of being dead-lettered and pruned by the cap. Auth failures (401/403) stay transient too: the agent's key-recovery path can fix them.
 
-A 413 is never dead-lettered either. The agent sends the batch in halves, splitting each again while it is still refused. A single result the limit still refuses is kept pending and the split goes on past it: a result's long text fields are capped far below any body limit, so that usually says the route is wrong. Two refused results with nothing sent stop the split, as a transient failure does. What was not sent is stored as one batch, so splitting never adds stored rows.
+A 413 is never dead-lettered either. The agent sends the batch in halves, splitting each again while it is still refused. A single result the limit still refuses is kept pending and the split goes on past it: a result's long text fields are capped far below any body limit, so that usually says the route is wrong. Two refused results with nothing sent stop the split, as a transient failure does. What was not sent is stored as one batch, refused results last so the next try reaches the others first; splitting never adds stored rows.
 
 Both tables live in one SQLite file, `reports/pending_reports.db` (WAL, gzip-compressed payloads, every query through `asyncio.to_thread`):
 

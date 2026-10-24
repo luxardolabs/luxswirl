@@ -531,7 +531,7 @@ class Reporter:
         return outcome
 
     async def _send_in_parts(
-        self, batch: list[dict[str, Any]]
+        self, batch: list[dict[str, Any]], created_at: float | None = None
     ) -> tuple[Delivery, list[dict[str, Any]]]:
         """Send a batch the request size limit refused (413) in halves, each
         split again while still refused, in order. Nothing is stored here.
@@ -545,10 +545,19 @@ class Reporter:
         agent's queue. Two refused results with nothing sent say the same of
         the whole route, and the split stops there, as at a transient failure.
 
+        The results not sent come back untried first and refused last, so the
+        next try reaches the untried ones before the stop rule can meet the
+        refused ones again.
+
+        Args:
+            batch: The refused batch.
+            created_at: When the batch was first stored, kept on any part the
+                server dead-letters; now when it is a fresh send.
+
         Returns:
             SENT, or PERMANENT (some parts dead-lettered by the server), when
             every result was dealt with; else TRANSIENT or TOO_LARGE. And the
-            results not sent, in their original order.
+            results not sent: untried, then refused, each in original order.
         """
         if len(batch) == 1:
             return Delivery.TOO_LARGE, list(batch)
@@ -557,31 +566,32 @@ class Reporter:
             extra={"result_count": len(batch)},
         )
         work = deque(_halves(batch))
-        unsent: list[dict[str, Any]] = []
-        sent = refused = 0
+        untried: list[dict[str, Any]] = []
+        refused: list[dict[str, Any]] = []
+        sent = 0
         stop: Delivery | None = None
         permanent = False
         while work:
             part = work.popleft()
             if stop is not None:
-                unsent.extend(part)
+                untried.extend(part)
                 continue
             outcome, status_code, detail = await self._post_batch(part)
             if outcome is Delivery.SENT:
                 sent += len(part)
             elif outcome is Delivery.PERMANENT and status_code is not None:
-                await self._dead_letter_batch(part, status_code, detail)
+                await self._dead_letter_batch(part, status_code, detail, created_at)
                 permanent = True
             elif outcome is Delivery.TOO_LARGE and len(part) > 1:
                 work.extendleft(reversed(_halves(part)))
             elif outcome is Delivery.TOO_LARGE:
-                unsent.extend(part)
-                refused += 1
-                if refused >= 2 and not sent:
+                refused.extend(part)
+                if len(refused) >= 2 and not sent:
                     stop = Delivery.TOO_LARGE
             else:
-                unsent.extend(part)
+                untried.extend(part)
                 stop = Delivery.TRANSIENT
+        unsent = untried + refused
         if stop is Delivery.TRANSIENT:
             return Delivery.TRANSIENT, unsent
         if unsent:
@@ -678,15 +688,22 @@ class Reporter:
         return Delivery.TRANSIENT, status_code, detail
 
     def _dead_letter_batch_sync(
-        self, batch: list[dict[str, Any]], status_code: int, detail: str
+        self,
+        batch: list[dict[str, Any]],
+        status_code: int,
+        detail: str,
+        created_at: float | None = None,
     ) -> None:
-        """Insert a refused batch into dead_letters and enforce the cap (runs in thread)."""
+        """Insert a refused batch into dead_letters and enforce the cap (runs in thread).
+
+        `created_at` is when the batch was first stored; a fresh one is now.
+        """
         now = time.time()
         conn = self._get_db()
         try:
             insert_dead_letter(
                 conn,
-                created_at=now,
+                created_at=now if created_at is None else created_at,
                 failed_at=now,
                 status_code=status_code,
                 detail=detail,
@@ -708,10 +725,15 @@ class Reporter:
             )
 
     async def _dead_letter_batch(
-        self, batch: list[dict[str, Any]], status_code: int, detail: str
+        self,
+        batch: list[dict[str, Any]],
+        status_code: int,
+        detail: str,
+        created_at: float | None = None,
     ) -> None:
         """Dead-letter a batch the server refused for good, loudly.
 
+        `created_at` is when the batch was first stored; a fresh one is now.
         Without local storage the batch is only logged: it is never retried.
         """
         self.logger.error(
@@ -727,7 +749,7 @@ class Reporter:
         # swallowed-exceptions: the batch was already refused; raising here would take down the reporter loop and every batch after it
         try:
             await asyncio.to_thread(
-                self._dead_letter_batch_sync, batch, status_code, detail
+                self._dead_letter_batch_sync, batch, status_code, detail, created_at
             )
         except Exception:
             self.logger.exception("Failed to store dead-lettered batch")
@@ -925,10 +947,13 @@ class Reporter:
 
         if outcome is Delivery.TOO_LARGE and len(group) == 1:
             [stored] = group
-            got, unsent = await self._send_in_parts(stored.checks)
+            got, unsent = await self._send_in_parts(
+                stored.checks, created_at=stored.created_at
+            )
             if not unsent:
                 await asyncio.to_thread(self._delete_stored_batch_sync, stored.row_id)
-            elif len(unsent) < len(stored.checks):
+            elif unsent != stored.checks:
+                # Fewer results, or the refused ones moved behind the untried.
                 await asyncio.to_thread(
                     self._rewrite_stored_batch_sync, stored.row_id, unsent
                 )
