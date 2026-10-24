@@ -3,7 +3,7 @@ name: pin-bump
 description: Move this repo to the latest fleet guards (luxarch, luxlint, luxaudit) the fleet way — bump the pins, read what changed, re-emit every asset whose version moved, leave new reds red, review every open guard escalation this repo filed against the new version, and regenerate and commit the status files. Use whenever guard-version-check says a pin is behind.
 ---
 
-<!-- luxarch:pin-bump-skill asset v3 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit pin-bump-skill`. -->
+<!-- luxarch:pin-bump-skill asset v4 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit pin-bump-skill`. -->
 
 # Pin bump
 
@@ -31,8 +31,10 @@ For each guard that moved:
 Emitted assets carry a version marker (`luxarch:<name> asset vN`). Run `make arch`: `repo.emitted_assets_current` names each asset whose marker is behind, and `repo.claude_pointer_present` the CLAUDE.md block. For each one, re-apply it in place with the image, mounted read-write:
 
 ```sh
-docker run --rm -v "$PWD":/repo -w /repo <luxarch image> --emit <name> --update <file>
+docker run --rm -v <checkout>:/repo -w /repo <luxarch image> --emit <name> --update <file>
 ```
+
+`<checkout>` is the checkout's absolute path, written out: inside a worktree Claude Code refuses a mount computed at run time, such as `"$PWD"`.
 
 It replaces the asset in `<file>` (a whole file, or the block inside your Makefile or CLAUDE.md) and carries your `EDIT THIS` regions and your make variable settings (`?=`, `:=` or `=`) across. It refuses, changing nothing, when your copy was edited anywhere else: undo that edit, or `/escalate` if the asset needs it. Do not merge by hand, and never hand-patch an emitted asset to make it pass.
 
