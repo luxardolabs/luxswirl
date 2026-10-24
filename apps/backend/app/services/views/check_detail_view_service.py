@@ -24,6 +24,42 @@ from app.shared.logger import get_logger
 logger = get_logger("luxswirl.web.services.check_detail")
 
 
+# The certificate card's classes and label for each ssl_expiry_fields state. An
+# unreadable expiry is grey "Unknown", never the green of a valid certificate.
+SSL_CERT_TONES: dict[str, dict[str, str]] = {
+    "expired": {
+        "card": "bg-red-500/10 border-red-500/30",
+        "text": "text-red-400",
+        "badge": "bg-red-600/20 text-red-300",
+        "label": "Expired",
+    },
+    "critical": {
+        "card": "bg-orange-500/10 border-orange-500/30",
+        "text": "text-orange-400",
+        "badge": "bg-orange-600/20 text-orange-300",
+        "label": "Critical",
+    },
+    "soon": {
+        "card": "bg-yellow-500/10 border-yellow-500/30",
+        "text": "text-yellow-400",
+        "badge": "bg-yellow-600/20 text-yellow-300",
+        "label": "Expiring Soon",
+    },
+    "valid": {
+        "card": "bg-green-500/5 border-green-500/20",
+        "text": "text-green-400",
+        "badge": "bg-green-600/20 text-green-300",
+        "label": "Valid",
+    },
+    "unknown": {
+        "card": "bg-slate-500/10 border-slate-500/30",
+        "text": "text-slate-300",
+        "badge": "bg-slate-600/20 text-slate-300",
+        "label": "Unknown",
+    },
+}
+
+
 # Every key the synthetic panel reads, with what "not reported" looks like.
 SYNTHETIC_PANEL_DEFAULTS: dict[str, Any] = {
     "status": "unknown",
@@ -188,6 +224,7 @@ class CheckDetailViewService:
                             critical_days=ssl_critical_days,
                         )
                     )
+                    ssl_cert["tone"] = SSL_CERT_TONES[ssl_cert["state"]]
 
             history.append(history_item)
 

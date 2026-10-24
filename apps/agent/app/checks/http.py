@@ -257,7 +257,8 @@ class HTTPCheck(BaseCheck):
                 not_after = cert.not_valid_after_utc
                 not_before = cert.not_valid_before_utc
 
-                # Format dates to match expected format (e.g., "Nov 10 22:56:57 2025 GMT")
+                # OpenSSL's notAfter format (e.g. "Nov 10 22:56:57 2025 GMT"), the one
+                # the server's app/core/ssl_expiry.py reads first (it also reads ISO 8601)
                 expiration_date = not_after.strftime("%b %d %H:%M:%S %Y GMT")
                 valid_from = not_before.strftime("%b %d %H:%M:%S %Y GMT")
 

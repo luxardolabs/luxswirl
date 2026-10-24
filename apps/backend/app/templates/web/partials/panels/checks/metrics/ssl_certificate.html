@@ -1,0 +1,38 @@
+{# The certificate card: ssl_cert carries ssl_expiry_fields' flags, its `tone` (classes and label for its state), expiration_display, subject and issuer. #}
+<div class="card p-4 {{ ssl_cert.tone.card }}">
+    <div class="flex items-center justify-between mb-3">
+        <h3 class="text-sm font-medium uppercase tracking-wide {{ ssl_cert.tone.text }}">
+            <span class="w-4 h-4 inline mr-1 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/lock-open.svg" %}</span>
+            SSL Certificate
+        </h3>
+        <span class="px-2 py-1 text-xs font-medium rounded {{ ssl_cert.tone.badge }}">{{ ssl_cert.tone.label }}</span>
+    </div>
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+        <div>
+            <p class="text-dark-text-muted text-xs mb-1">Days Until Expiration</p>
+            <p class="font-bold {{ ssl_cert.tone.text }}">
+                {% if ssl_cert.days_until_expiration is not none %}
+                    {% if ssl_cert.days_until_expiration < 0 %}
+                        Expired {{ ssl_cert.days_until_expiration|abs }} days ago
+                    {% else %}
+                        {{ ssl_cert.days_until_expiration }} days
+                    {% endif %}
+                {% else %}
+                    Unknown
+                {% endif %}
+            </p>
+        </div>
+        <div>
+            <p class="text-dark-text-muted text-xs mb-1">Expiration Date</p>
+            <p class="font-mono text-dark-text-primary text-xs">{{ ssl_cert.expiration_display }}</p>
+        </div>
+        <div>
+            <p class="text-dark-text-muted text-xs mb-1">Subject</p>
+            <p class="font-mono text-dark-text-primary text-xs truncate">{{ ssl_cert.subject or 'Unknown' }}</p>
+        </div>
+        <div>
+            <p class="text-dark-text-muted text-xs mb-1">Issuer</p>
+            <p class="font-mono text-dark-text-primary text-xs truncate">{{ ssl_cert.issuer or 'Unknown' }}</p>
+        </div>
+    </div>
+</div>
