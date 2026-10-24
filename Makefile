@@ -39,7 +39,7 @@ DEV_WAIT_TIMEOUT      ?= 180
 # Makefile.local (gitignored): copy Makefile.local.example -> Makefile.local and set it.
 # Contributors don't need it — lint/test and the import-linter contracts run without it.
 LUXARCH_REGISTRY ?=
-LUXARCH_VERSION := 0.320.0
+LUXARCH_VERSION := 0.321.0
 LUXARCH_IMAGE    ?= $(LUXARCH_REGISTRY)/luxardolabs/luxarch:$(LUXARCH_VERSION)
 # Dependency-CVE guard (luxaudit) — same private registry as luxarch, mount-only.
 # Scans the pinned poetry.locks against the live advisory feed (see .luxaudit.toml).
@@ -2381,7 +2381,7 @@ TEST_ENV      := -e TEST_DATABASE_URL=postgresql+asyncpg://luxswirl_test:luxswir
                  $(call shared_overlay,/repo/apps/backend/app) \
                  -e HYPOTHESIS_STORAGE_DIRECTORY=/out/.hypothesis
 
-# luxarch:test-block asset v6 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit test-block`.
+# luxarch:test-block asset v7 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit test-block`.
 # ── Test: THE suite, in the test image, against an isolated stack of real services ───────────────
 # Emitted by `luxarch --emit test-block`; paste below the build core (`luxarch --emit build-core`, v4:
 # it builds with the core's `img_*` helpers and TEST_IMAGE, and the repo's BUILD_ARGS, and quotes every
@@ -2479,6 +2479,27 @@ TEST_ENV      := -e TEST_DATABASE_URL=postgresql+asyncpg://luxswirl_test:luxswir
 #     the goals make sets from its own command line (MAKECMDGOALS at origin `default`), inline, with
 #     no variable of its own: a makefile, environment, target- or pattern-specific value, or a
 #     MAKEOVERRIDES word handed to a sub-make keeps the ratchet on, and `make test test-fast` runs it.
+#   - THE [shared] OVERLAY (v7). A repo declaring `[shared]` keeps 0-byte placeholders in each app
+#     that the real shared code is mounted over; the suite runs from the read-only `/repo` mount, so
+#     it imports the placeholders unless the overlay is mounted there too. TEST_MOUNTS
+#     (`<suite>_TEST_MOUNTS`) is that overlay: `-v <host path>:<path under /repo/<workdir>>[:ro]`
+#     pairs, which luxlint emits as `$(call shared_overlay,/repo/<workdir>/app)` (`luxlint
+#     --emit-shared-overlay`). The overlaid code is another package's, so it counts in ONE ratchet:
+#     every suite leaves its overlay out of its coverage (`coverage run --omit`), except the suite
+#     holding the shared tests, which sets `<suite>_TEST_OVERLAY_COV := 1` and measures it. Its
+#     mounts land under a package its TEST_COV names (a directory under the workdir, or a package
+#     name such as `mypkg` in a src layout). Coverage walks a package only through directories
+#     holding an `__init__.py`, so every directory from that package down to the mount, and every
+#     directory of the host path that holds code, holds one, and the host path exists. A mount
+#     replaces a PLACEHOLDER only: a 0-byte file, or a package holding an empty `__init__.py` and
+#     no other .py or .pyw, never a symlink. A mount over code with content would hide that code
+#     from the suite's coverage. The run refuses an overlay no suite measures, and one two suites measure
+#     (host paths compared as the files they are). It also refuses a pair outside that shape, a
+#     path holding anything but letters, digits and `._/@+-` or a `.` or `..` part (make resolves
+#     `link/..` after the symlink, docker as text), and a placeholder this checkout lacks (docker
+#     cannot make a mount point inside the read-only mount). A destination is read as docker reads
+#     it: repeated and trailing slashes dropped. Make compares the host paths on this machine, so
+#     a DOCKER_HOST on another machine is outside what the run can check.
 #   - Each run's project is named from its own `mktemp -d` token, and refuses to run without one (a
 #     PID repeats across containers and CI runners), and everything mounts the makefile's directory
 #     ($(CURDIR)), so `make -C` runs the right suite.
@@ -2504,7 +2525,8 @@ TEST_FLOOR ?= .luxlint.toml
 # suite, set by the TEST_* settings above. Each name is an image's settings name, as in the image
 # block's IMAGES: its test image is the `test` stage of `<name>_DOCKERFILE` in `<name>_BUILD_CONTEXT`,
 # tagged from `<name>_IMAGE_NAME`. A suite's own settings are `<name>_TEST_SERVICES`, `_TEST_ENV`,
-# `_TEST_WORKDIR`, `_TEST_COV` and `_TEST_FLOOR`; one it leaves unset is the TEST_* value. Every
+# `_TEST_WORKDIR`, `_TEST_COV`, `_TEST_FLOOR`, `_TEST_MIGRATIONS`, `_TEST_MOUNTS` and
+# `_TEST_OVERLAY_COV`; one it leaves unset is the TEST_* value. Every
 # suite has a floor of its own: the run refuses two that name the same file. For example
 #   TEST_SUITES          := backend agent
 #   backend_TEST_WORKDIR := apps/backend
@@ -2516,6 +2538,12 @@ TEST_SUITES ?=
 # Setting: the migration tests' directory, from TEST_WORKDIR (`tests/migrations`), run on their own
 # outside the test-db-bound block (v5); empty: none. A listed suite's is `<suite>_TEST_MIGRATIONS` ---
 TEST_MIGRATIONS ?=
+# Setting: the [shared] overlay mounted over the suite's placeholders, `-v <host>:<container>[:ro]`
+# pairs inside /repo/<workdir> (`$(call shared_overlay,/repo/apps/backend/app)`); empty: none -----
+TEST_MOUNTS ?=
+# Setting: 1 on the ONE suite whose ratchet measures the overlay (it holds the shared tests); every
+# other suite leaves its overlay out of its coverage --------------------------------------------
+TEST_OVERLAY_COV ?=
 # Setting: NONE. For a one-off run only, on the command line: `make test-fast PYTEST_ARGS='-k orders'`.
 # A committed value narrows THE suite for everyone (`repo.test_block_wired` reds one). The ratchet
 # judges the whole floor, so a narrowed `make test` measures only what it touched and fails it:
@@ -2538,6 +2566,11 @@ test_suite_var = $(if $(filter -,$(1)),TEST_$(2),$(if $(filter undefined,$(origi
 test_suite = $($(call test_suite_var,$(1),$(2)))
 test_suite_image = $(if $(filter -,$(1)),$(IMAGE_PRIMARY),$(1))
 test_suite_floors = $(foreach s,$(test_suites),$(or $(realpath $(call test_suite,$(s),FLOOR)),$(abspath $(call test_suite,$(s),FLOOR))))
+# The overlay's host paths a suite mounts (v7), and over every suite those measured (OVERLAY_COV 1)
+# and those left out: each left out must be measured, and by one suite.
+test_suite_mount_srcs = $(sort $(foreach w,$(filter-out -v,$(call test_suite,$(1),MOUNTS)),$(foreach h,$(firstword $(subst :, ,$(w))),$(or $(realpath $(h)),$(abspath $(h))))))
+test_overlay_measured = $(foreach s,$(test_suites),$(if $(filter 1,$(call test_suite,$(s),OVERLAY_COV)),$(call test_suite_mount_srcs,$(s))))
+test_overlay_unmeasured = $(filter-out $(test_overlay_measured),$(foreach s,$(test_suites),$(if $(filter 1,$(call test_suite,$(s),OVERLAY_COV)),,$(call test_suite_mount_srcs,$(s)))))
 
 # LEFTOVERS. Every image and container a run makes is labelled `luxarch.test-block=1`, with its run
 # token, its shell's PID and PID namespace, this host's machine id (/etc/machine-id; IOPlatformUUID
@@ -2603,6 +2636,9 @@ test: test-reap ## THE suite (each of TEST_SUITES in turn): its own test image, 
 	printf '%s\n%s\n%s\n%s\n%s\n' "$$$$" "$$ns" "$$co" "$$boot" "$$machine" > "$$D/owner" || { rm -rf "$$D"; exit 2; }; \
 	[ -z $(call sq,$(TEST_ENV_FILE)) ] || [ -f $(call sq,$(TEST_ENV_FILE)) ] || { printf 'REFUSING: TEST_ENV_FILE is %s, which this checkout does not have: compose would fail on interpolation. Commit it (test-suite.env), or set TEST_ENV_FILE to a committed file\n' $(call sq,$(TEST_ENV_FILE)); rm -rf "$$D"; exit 2; }; \
 	[ $(words $(test_suite_floors)) = $(words $(sort $(test_suite_floors))) ] || { printf 'REFUSING: two suites would share one coverage floor (%s): give each its own <suite>_TEST_FLOOR\n' $(call sq,$(foreach s,$(test_suites),$(s)=$(call test_suite,$(s),FLOOR))); rm -rf "$$D"; exit 2; }; \
+	[ -z $(call sq,$(findstring %,$(foreach s,$(test_suites),$(call test_suite,$(s),MOUNTS)))) ] || { echo 'REFUSING: a TEST_MOUNTS path holds %, which make reads as a pattern: each path is letters, digits and ._/@+-'; rm -rf "$$D"; exit 2; }; \
+	[ -z $(call sq,$(strip $(test_overlay_unmeasured))) ] || { printf 'REFUSING: no suite measures the overlay %s, and every suite mounting it leaves it out of its coverage: set <suite>_TEST_OVERLAY_COV := 1 on the suite holding its tests\n' $(call sq,$(strip $(test_overlay_unmeasured))); rm -rf "$$D"; exit 2; }; \
+	[ $(words $(test_overlay_measured)) = $(words $(sort $(test_overlay_measured))) ] || { printf 'REFUSING: two suites measure one overlay (%s): it counts in one ratchet, so set <suite>_TEST_OVERLAY_COV := 1 on one suite only\n' $(call sq,$(strip $(test_overlay_measured))); rm -rf "$$D"; exit 2; }; \
 	stop="$$D/stop"; kid=; insuite=; fast=$(if $(filter default,$(origin MAKECMDGOALS)),$(if $(filter test,$(MAKECMDGOALS)),,$(if $(filter test-fast,$(MAKECMDGOALS)),1))); \
 	kids() { p=$$1; if command -v pgrep >/dev/null 2>&1; then pgrep -P "$$p"; else set +f; for f in /proc/[0-9]*/stat; do read -r l < "$$f" 2>/dev/null || continue; set -- $${l##*)}; [ "$${2:-}" = "$$p" ] && { c=$${f#/proc/}; echo "$${c%/stat}"; }; done; set -f; fi; }; \
 	tree() { for c in $$(kids "$$1"); do tree "$$c"; done; kill -TERM "$$1" 2>/dev/null; }; \
@@ -2628,6 +2664,25 @@ test: test-reap ## THE suite (each of TEST_SUITES in turn): its own test image, 
 	  if [ -n "$$mig" ]; then case "/$$mig/" in (//*|*/../*|*/./*) mig=;; esac; case "$$mig" in (migrations|*/migrations) ;; (*) mig=;; esac; \
 	    [ -n "$$mig" ] && [ -d $(call sq,$(CURDIR)/$(call test_suite,$(s),WORKDIR))/"$$mig" ] \
 	      || { printf 'REFUSING: %s is %s: name the directory of the migration tests under %s, its last part migrations (tests/migrations)\n' $(call sq,$(call test_suite_var,$(s),MIGRATIONS)) $(call sq,$(call test_suite,$(s),MIGRATIONS)) $(call sq,$(call test_suite,$(s),WORKDIR)); exit 2; }; fi; \
+	  wd=$$(printf '%s\n' /repo/$(call sq,$(call test_suite,$(s),WORKDIR)) | sed -e 's#//*#/#g' -e ':a' -e 's#/\./#/#' -e 'ta' -e 's#/\.$$##' -e 's#/$$##'); own=$(call sq,$(filter 1,$(call test_suite,$(s),OVERLAY_COV))); mnt=; omit=; set -- $(call sqw,$(call test_suite,$(s),MOUNTS)); \
+	  while [ $$# -gt 0 ]; do \
+	    m=$${2:-}; src=$${m%%:*}; dst=$${m#*:}; opt=$${dst#*:}; [ "$$opt" != "$$dst" ] || opt=; dst=$$(printf '%s\n' "$${dst%%:*}" | sed -e 's#//*#/#g' -e 's#\(.\)/$$#\1#'); bad=; \
+	    [ "$$1" = -v ] || bad=1; case "$$opt" in (''|ro) ;; (*) bad=1;; esac; case "$$src$$dst" in (*[!A-Za-z0-9._/@+-]*) bad=1;; esac; \
+	    case "$$src" in (/*) ;; (*) bad=1;; esac; case "$$dst/" in ("$$wd"/?*/) ;; (*) bad=1;; esac; case "/$$src/ /$$dst/" in (*/../*|*/./*) bad=1;; esac; \
+	    [ -z "$$bad" ] || { printf 'REFUSING: %s takes -v <host path>:<path under %s>[:ro] pairs, each path of letters, digits and ._/@+- (the [shared] overlay: $$(call shared_overlay,%s/app)); %s %s is not one\n' $(call sq,$(call test_suite_var,$(s),MOUNTS)) "$$wd" "$$wd" "$$1" "$$m"; exit 2; }; \
+	    ph=$(call sq,$(CURDIR))/"$${dst#/repo/}"; \
+	    [ -e "$$ph" ] || [ -L "$$ph" ] || { printf 'REFUSING: %s mounts over %s, which this checkout does not have: docker cannot make a mount point inside the read-only /repo. Commit the placeholder (a directory: an empty __init__.py in it, as git keeps no empty directory)\n' $(call sq,$(call test_suite_var,$(s),MOUNTS)) "$${dst#/repo/}"; exit 2; }; \
+	    if [ ! -L "$$ph" ] && { { [ -f "$$ph" ] && [ ! -s "$$ph" ]; } || { [ -d "$$ph" ] && [ -f "$$ph/__init__.py" ] && [ -z "$$(find "$$ph" \( -name '*.py' -o -name '*.pyw' \) ! \( -name __init__.py -size 0 \) | head -n 1)" ]; }; }; then :; else \
+	      printf 'REFUSING: %s mounts over %s, which is not a placeholder: the overlay replaces a 0-byte file, or a package holding an empty __init__.py and no other .py or .pyw, never code of the suite'"'"'s own\n' $(call sq,$(call test_suite_var,$(s),MOUNTS)) "$${dst#/repo/}"; exit 2; fi; \
+	    if [ -n "$$own" ]; then root=; for c in $$(printf '%s' $(call sq,$(call test_suite,$(s),COV)) | tr ',' ' '); do c=$${c#./}; c=$${c%/}; [ "$$c" != . ] || c=; \
+	      if [ -z "$$c" ] || [ -d $(call sq,$(CURDIR))$${wd#/repo}/"$$c" ]; then case "$$dst/" in ("$$wd$${c:+/$$c}"/*) root=$$wd$${c:+/$$c};; esac; \
+	      else cp=$$(printf '%s' "$$c" | tr . /); case "$$dst/" in (*/"$$cp"/*) d2=$$dst/; root=$${d2%%/"$$cp"/*}/$$cp;; esac; fi; done; \
+	    [ -n "$$root" ] || { printf 'REFUSING: %s measures its overlay, so each mount lands under a package it measures (%s); %s does not\n' $(call sq,$(call test_suite_var,$(s),OVERLAY_COV)) $(call sq,$(call test_suite,$(s),COV)) "$$dst"; exit 2; }; \
+	    [ -e "$$src" ] || { printf 'REFUSING: %s measures the overlay %s, which does not exist\n' $(call sq,$(call test_suite_var,$(s),OVERLAY_COV)) "$$src"; exit 2; }; \
+	    rel=$${dst#"$$root"/}; q=$$root; last=; nopkg=; for x in $$(printf '%s' "$$rel" | tr '/' ' '); do [ -z "$$last" ] || { q=$$q/$$last; [ -f $(call sq,$(CURDIR))/"$${q#/repo/}"/__init__.py ] || nopkg="$$nopkg $${q#/repo/}"; }; last=$$x; done; \
+	    [ ! -d "$$src" ] || nopkg="$$nopkg$$(find "$$src" -type d ! -name __pycache__ | while read -r d; do [ -f "$$d/__init__.py" ] || [ -z "$$(find "$$d" \( -name '*.py' -o -name '*.pyw' \) | head -n 1)" ] || printf ' %s' "$$d"; done)"; \
+	    [ -z "$$nopkg" ] || { printf 'REFUSING: %s measures its overlay, and coverage walks a package only through directories holding an __init__.py, so it would never report the code under%s: give each one an __init__.py\n' $(call sq,$(call test_suite_var,$(s),OVERLAY_COV)) "$$nopkg"; exit 2; }; fi; \
+	    mnt="$$mnt -v $$src:$$dst$${opt:+:$$opt}"; [ -n "$$own" ] || omit="$$omit,$$dst,$$dst/*"; shift 2; done; omit=$${omit#,}; \
 	  $(if $(filter -,$(s)),,printf '── suite %s (%s)\n' $(call sq,$(s)) $(call sq,$(call test_suite,$(s),WORKDIR));) \
 	  bg docker build --load --target test $$lab --label "luxarch.test-block.checkout=$$co" --label "luxarch.test-block.project=$$p" $(call sqw,$(BUILD_ARGS)) -f $(call sq,$(call img_dockerfile,$(call test_suite_image,$(s)))) -t "$$img" $(call sq,$(call img_context,$(call test_suite_image,$(s)))) >/dev/null \
 	    || { printf 'FAIL  the test image did not build: the test stage of %s\n' $(call sq,$(call img_dockerfile,$(call test_suite_image,$(s)))); exit 1; }; \
@@ -2640,9 +2695,9 @@ test: test-reap ## THE suite (each of TEST_SUITES in turn): its own test image, 
 	    [ -n "$$net" ] || { printf 'FAIL  %s joined no network of this run'"'"'s own project (%s)\n' $(call sq,$(firstword $(call test_suite,$(s),SERVICES))) "$$p"; exit 1; }; \
 	    net="--network $$net"; fi; \
 	  bg docker run --rm --init $$lab --label "luxarch.test-block.checkout=$$co" -e TINI_KILL_PROCESS_GROUP=1 $$net $(call sqw,$(call test_suite,$(s),ENV)) -e PYTEST_ADDOPTS="$${PYTEST_ARGS:-}" -e LUXARCH_TEST_MIGRATIONS="$$mig" -e LUXARCH_TEST_FAST="$$fast" \
-	    -e LUXARCH_TEST_COV=$(call sq,$(call test_suite,$(s),COV)) -e COVERAGE_CORE=sysmon -e COVERAGE_FILE=/out/.coverage -e PYTHONDONTWRITEBYTECODE=1 \
-	    -v $(call sq,$(CURDIR)):/repo:ro -v "$$D/cfg":/cfg:ro -v "$$out":/out -w /repo/$(call sq,$(call test_suite,$(s),WORKDIR)) "$$img" \
-	    sh -c 'm=$${LUXARCH_TEST_MIGRATIONS:-}; python -m coverage run --branch --source="$$LUXARCH_TEST_COV" -m pytest -c /cfg/pytest.ini --rootdir=. -p no:cacheprovider $${m:+"--ignore=$$m"}; s=$$?; if [ -n "$$m" ] && [ -z "$${LUXARCH_TEST_FAST:-}" ]; then PYTEST_ADDOPTS= python -m coverage run --append --branch --source="$$LUXARCH_TEST_COV" -m pytest -c /cfg/pytest.ini --rootdir=. -p no:cacheprovider --confcutdir="$$m" "$$m"; ms=$$?; [ "$$ms" = 0 ] || echo "FAIL  the migration tests in $$m failed (exit $$ms)"; [ "$$s" != 0 ] || s=$$ms; fi; python -m coverage report --show-missing --precision=2 > /out/coverage.txt; echo $$? > /out/coverage.rc; python -m coverage json -q -o - > /out/coverage.json; cat /out/coverage.txt; exit $$s'; \
+	    -e LUXARCH_TEST_COV=$(call sq,$(call test_suite,$(s),COV)) -e LUXARCH_TEST_OMIT="$$omit" -e COVERAGE_CORE=sysmon -e COVERAGE_FILE=/out/.coverage -e PYTHONDONTWRITEBYTECODE=1 \
+	    -v $(call sq,$(CURDIR)):/repo:ro $$mnt -v "$$D/cfg":/cfg:ro -v "$$out":/out -w /repo/$(call sq,$(call test_suite,$(s),WORKDIR)) "$$img" \
+	    sh -c 'm=$${LUXARCH_TEST_MIGRATIONS:-}; o=$${LUXARCH_TEST_OMIT:-}; python -m coverage run --branch --source="$$LUXARCH_TEST_COV" $${o:+"--omit=$$o"} -m pytest -c /cfg/pytest.ini --rootdir=. -p no:cacheprovider $${m:+"--ignore=$$m"}; s=$$?; if [ -n "$$m" ] && [ -z "$${LUXARCH_TEST_FAST:-}" ]; then PYTEST_ADDOPTS= python -m coverage run --append --branch --source="$$LUXARCH_TEST_COV" $${o:+"--omit=$$o"} -m pytest -c /cfg/pytest.ini --rootdir=. -p no:cacheprovider --confcutdir="$$m" "$$m"; ms=$$?; [ "$$ms" = 0 ] || echo "FAIL  the migration tests in $$m failed (exit $$ms)"; [ "$$s" != 0 ] || s=$$ms; fi; python -m coverage report --show-missing --precision=2 > /out/coverage.txt; echo $$? > /out/coverage.rc; python -m coverage json -q -o - > /out/coverage.json; cat /out/coverage.txt; exit $$s'; \
 	  rc=$$?; \
 	  [ "$$rc" = 0 ] || { echo "FAIL  the suite failed (exit $$rc)"; exit 1; }; \
 	  [ -z "$$fast" ] || { echo "test-fast: passed, with no coverage verdict and no migration tests (make test runs both)"; exit 0; }; \
