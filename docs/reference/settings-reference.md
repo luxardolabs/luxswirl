@@ -116,10 +116,10 @@ Controls which network targets a health check may point at, to prevent Server-Si
 
 > Residual: the agent validates the resolved IP immediately before connecting, closing the create→fetch window. A sub-millisecond TTL-0 rebind between that check and the socket's own resolution is not closed (it would require pinning the validated IP through TLS/SNI) and is tracked as a future hardening item.
 
-| Key                               | Default | Type | Allowed / Validation | Description                                                                                                                                                       |
-| --------------------------------- | ------- | ---- | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `security.block_cloud_metadata`   | true    | bool | —                    | Block checks from targeting cloud metadata and link-local addresses (169.254.x.x). Prevents metadata exfiltration in cloud/container environments.                |
-| `security.block_private_networks` | false   | bool | —                    | Block checks from targeting RFC 1918 private networks (10.x, 172.16-31.x, 192.168.x). Disabled by default since most self-hosted users monitor internal services. |
+| Key                               | Default | Type | Allowed / Validation | Description                                                                                                                                                                                                                                              |
+| --------------------------------- | ------- | ---- | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `security.block_cloud_metadata`   | true    | bool | —                    | Block checks from targeting cloud metadata and link-local addresses (169.254.x.x). Prevents metadata exfiltration in cloud/container environments.                                                                                                       |
+| `security.block_private_networks` | false   | bool | —                    | Block checks from targeting private and internal addresses: RFC 1918 (10.x, 172.16-31.x, 192.168.x), IPv6 unique-local, loopback (127.x, ::1), 0.0.0.0 and CGNAT (100.64.x). Disabled by default since most self-hosted users monitor internal services. |
 
 ### general
 

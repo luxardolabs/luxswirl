@@ -434,7 +434,7 @@ DEFAULT_SETTINGS: list[dict[str, Any]] = [
         "value": False,
         "type": "bool",
         "display_name": "Block Private Network Targets",
-        "description": "Block checks from targeting RFC 1918 private networks (10.x, 172.16-31.x, 192.168.x). Disabled by default since most self-hosted users monitor internal services.",
+        "description": "Block checks from targeting private and internal addresses: RFC 1918 (10.x, 172.16-31.x, 192.168.x), IPv6 unique-local, loopback (127.x, ::1), 0.0.0.0 and CGNAT (100.64.x). Disabled by default since most self-hosted users monitor internal services.",
         "validation": None,
     },
     # ------------------------------------------------------------------

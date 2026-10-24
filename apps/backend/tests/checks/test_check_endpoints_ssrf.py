@@ -46,7 +46,8 @@ def _create(check_type: str, **fields: Any) -> CheckCreate:
     return CheckCreate(
         display_name=f"ssrf-{check_type}",
         check_type=check_type,
-        target="127.0.0.1" if check_type != "dns" else "example.com",
+        # A documentation address: outside every blocked range, resolves to itself.
+        target="192.0.2.10" if check_type != "dns" else "example.com",
         interval_seconds=60,
         timeout_seconds=5,
         **fields,
@@ -84,7 +85,7 @@ async def test_update_refuses_a_metadata_address_in_any_endpoint(
     db.add(agent)
     await db.flush()
     check = await CheckCoreService.create_check(
-        db, agent.id, _create(check_type, **{field: at("127.0.0.1")})
+        db, agent.id, _create(check_type, **{field: at("192.0.2.10")})
     )
 
     with pytest.raises(CheckTargetBlockedError):
@@ -135,7 +136,7 @@ async def test_clone_refuses_a_nameserver_that_is_now_blocked(
     [
         f"postgresql://u:p@/db?host={METADATA_IP}",
         f"postgresql://u:p@/db?hostaddr={METADATA_IP}",
-        f"postgresql://u:p@127.0.0.1,{METADATA_IP}:5432/db",
+        f"postgresql://u:p@192.0.2.10,{METADATA_IP}:5432/db",
         f"postgresql://u:p@[::ffff:{METADATA_IP}]/db",
     ],
     ids=["host-param", "hostaddr-param", "multi-host", "mapped-v6"],
