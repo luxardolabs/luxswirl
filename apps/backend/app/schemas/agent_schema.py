@@ -25,7 +25,7 @@ class AgentRegisterRequest(BaseSchema):
     hostname: PlainText | None = Field(
         None, max_length=255, description="Agent hostname"
     )
-    ip_address: IpAddressText | None = Field(
+    ip_address: IpAddressText = Field(
         None, max_length=45, description="Agent IP address"
     )
     version: PlainText | None = Field(None, max_length=50, description="Agent version")
@@ -96,7 +96,7 @@ class AgentCreate(AgentBase):
     hostname: PlainText | None = Field(
         None, max_length=255, description="Agent hostname"
     )
-    ip_address: IpAddressText | None = Field(
+    ip_address: IpAddressText = Field(
         None, max_length=45, description="Agent IP address"
     )
     version: PlainText | None = Field(None, max_length=50, description="Agent version")
@@ -124,7 +124,7 @@ class AgentUpdate(BaseSchema):
     agent_name: PlainText | None = Field(None, min_length=1, max_length=255)
     agent_run_id: str | None = None
     hostname: PlainText | None = Field(None, max_length=255)
-    ip_address: IpAddressText | None = Field(None, max_length=45)
+    ip_address: IpAddressText = Field(None, max_length=45)
     version: PlainText | None = Field(None, max_length=50)
     tags: TagList | None = None
     heartbeat_interval: int | None = Field(
@@ -297,7 +297,7 @@ class AgentHeartbeat(BaseSchema):
     hostname: PlainText | None = Field(
         None, max_length=255, description="Agent hostname"
     )
-    ip_address: IpAddressText | None = Field(
+    ip_address: IpAddressText = Field(
         None, max_length=45, description="Agent IP address"
     )
     version: PlainText | None = Field(None, max_length=50, description="Agent version")
@@ -307,7 +307,10 @@ class AgentHeartbeat(BaseSchema):
     )
 
     # Tags
-    tags: TagList | None = Field(
+    # Not a TagList: an approved agent's tags are ignored, and refusing the
+    # whole heartbeat over them would stop its liveness. A pending agent's
+    # tags are checked where they are stored (AgentCoreService).
+    tags: list[str] | None = Field(
         None,
         description=(
             "The agent's declared tags. Stored only while the agent is pending, "

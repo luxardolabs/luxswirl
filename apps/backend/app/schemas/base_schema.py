@@ -2,16 +2,26 @@
 Base Pydantic schemas with common configurations.
 """
 
-import re
+import unicodedata
 from datetime import datetime
 from ipaddress import ip_address
 from typing import Annotated, Any
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    BeforeValidator,
+    ConfigDict,
+    Field,
+    TypeAdapter,
+    ValidationError,
+)
 
 from app.core.datetime_utils import utc_now
 
-_CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f]")
+# Control (C0, DEL, C1), format (bidi overrides, zero-width), and line and
+# paragraph separators: each one breaks a line or changes how text around it reads.
+_REFUSED_CATEGORIES = frozenset({"Cc", "Cf", "Zl", "Zp"})
 
 MAX_TAGS = 100
 MAX_TAG_LENGTH = 100
@@ -26,18 +36,28 @@ def upper_or_none(value: object) -> object:
 
 
 def refuse_control_chars(value: str) -> str:
-    """Refuse a string holding a control character (a newline, NUL, ESC...).
+    """Refuse a string holding a control character (a newline, NUL, ESC, NEL,
+    a line separator, a bidi override...).
 
     Stripping trims only the ends, so without this a value such as
     ``"web01\\nedge"`` is stored and shown on every page that names it.
     """
-    if _CONTROL_CHARS.search(value):
+    if any(unicodedata.category(c) in _REFUSED_CATEGORIES for c in value):
         raise ValueError("must not contain control characters")
     return value
 
 
-def canonical_ip(value: str) -> str:
+def blank_to_none(value: object) -> object:
+    """An empty or all-space string is unset."""
+    if isinstance(value, str) and not value.strip():
+        return None
+    return value
+
+
+def canonical_ip(value: str | None) -> str | None:
     """An IPv4 or IPv6 address in its canonical text form; anything else is refused."""
+    if value is None:
+        return None
     try:
         return str(ip_address(value))
     except ValueError:
@@ -47,13 +67,26 @@ def canonical_ip(value: str) -> str:
 PlainText = Annotated[str, AfterValidator(refuse_control_chars)]
 """Free text an input sets on one line: a name, a hostname, a version."""
 
-IpAddressText = Annotated[str, AfterValidator(canonical_ip)]
+IpAddressText = Annotated[
+    str | None, BeforeValidator(blank_to_none), AfterValidator(canonical_ip)
+]
+"""An optional IP address: blank is unset, anything else must parse."""
 
 Tag = Annotated[
     str, Field(max_length=MAX_TAG_LENGTH), AfterValidator(refuse_control_chars)
 ]
 TagList = Annotated[list[Tag], Field(max_length=MAX_TAGS)]
 """An input's tags: at most MAX_TAGS, each one line of at most MAX_TAG_LENGTH."""
+
+_TAG_LIST = TypeAdapter(TagList)
+
+
+def storable_tags(tags: list[str]) -> list[str] | None:
+    """`tags` as a TagList stores them, or None when they do not fit one."""
+    try:
+        return _TAG_LIST.validate_python(tags)
+    except ValidationError:
+        return None
 
 
 class BaseSchema(BaseModel):
