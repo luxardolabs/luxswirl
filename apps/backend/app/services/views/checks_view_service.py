@@ -463,8 +463,7 @@ class ChecksViewService:
 
     # ------------------------------------------------------------------
     # Rendered responses — the view owns presentation; routers just return
-    # these. (LUXSWIRL-163/172: no render helpers or template selection in
-    # the router.)
+    # these (no render helpers or template selection in the router).
     # ------------------------------------------------------------------
 
     @staticmethod
@@ -665,7 +664,7 @@ class ChecksViewService:
         """The create form's bulk-URL mode: one check per URL, made in the background.
 
         Bulk URL creates can be 100+ inserts, so the request only commits the
-        intent and returns the job's polling partial. See LUXSWIRL-105.
+        intent and returns the job's polling partial.
         """
         form_data = await request.form()
         bulk_item_urls = [str(i) for i in form_data.getlist("bulk_item_url")]
@@ -904,7 +903,6 @@ class ChecksViewService:
         A check delete cascades all of its check_results — a TimescaleDB
         hypertable, potentially millions of rows — so the cascade runs in the
         maintenance worker, not the web request (mirrors the bulk path).
-        See LUXSWIRL-105.
         """
         try:
             check = await CheckApiCoreService.get_check_view(db, check_id)
@@ -1011,7 +1009,7 @@ class ChecksViewService:
     ) -> tuple[MaintenanceJobResponse, int]:
         """Resolve selection + enqueue bulk_check_modify job.
 
-        Returns (MaintenanceJobResponse, resolved_count). See LUXSWIRL-105.
+        Returns (MaintenanceJobResponse, resolved_count).
         """
         ids = await ChecksViewService._resolve_bulk_check_ids(
             db, select_all, agent, enabled, tag, check_ids, list_limit=10000

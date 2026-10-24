@@ -633,7 +633,7 @@ class AgentCoreService:
         )
         agent.dead_letter_count = heartbeat.dead_letter_count
 
-        # Update resource monitoring fields (SWIRL-57)
+        # Update resource monitoring fields
         agent.open_file_descriptors = heartbeat.open_file_descriptors
         agent.fd_limit_soft = heartbeat.fd_limit_soft
         agent.fd_usage_percent = heartbeat.fd_usage_percent
@@ -658,7 +658,7 @@ class AgentCoreService:
             errors_count=heartbeat.errors_since_last_heartbeat,
             warnings_count=heartbeat.warnings_since_last_heartbeat,
             last_error=heartbeat.last_error_message,
-            # Resource monitoring (SWIRL-57)
+            # Resource monitoring
             open_file_descriptors=heartbeat.open_file_descriptors,
             fd_limit_soft=heartbeat.fd_limit_soft,
             fd_usage_percent=heartbeat.fd_usage_percent,

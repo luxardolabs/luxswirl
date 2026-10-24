@@ -123,7 +123,7 @@ class AgentMetric(Base):
         comment="Last error message",
     )
 
-    # Resource monitoring (SWIRL-57: detect subprocess/FD leaks)
+    # Resource monitoring: detect subprocess/FD leaks
     open_file_descriptors: Mapped[int | None] = mapped_column(
         Integer,
         nullable=True,

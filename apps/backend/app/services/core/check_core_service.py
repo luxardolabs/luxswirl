@@ -765,9 +765,8 @@ class CheckCoreService:
         check of the same name; otherwise it is skipped. `actor_is_admin` is the caller's authority, as for a single
         create: a synthetic check is refused unless it is True.
 
-        Builds the AgentCreate / CheckCreate / CheckUpdate DTOs internally —
-        moved here from the api router so routers don't marshal schemas
-        (LUXSWIRL-168). Returns {created, updated, skipped, errors}.
+        Builds the AgentCreate / CheckCreate / CheckUpdate DTOs here, so
+        routers don't marshal schemas. Returns {created, updated, skipped, errors}.
         """
         created = updated = skipped = 0
         errors: list[dict[str, str]] = []
@@ -1312,8 +1311,8 @@ class CheckCoreService:
         # takes a raw list rather than a set difference, so "already added" is a
         # real possibility and is the state the caller asked for — that one is
         # caught by TYPE and treated as satisfied. Everything else propagates:
-        # the broad swallow here returned success while the check was wired to
-        # fewer alerts than requested. (LUXSWIRL-215)
+        # swallowing it would return success while the check was wired to
+        # fewer alerts than requested.
         for alert_id in alert_ids:
             try:
                 await AlertCoreService.add_check(db, alert_id, check_id)

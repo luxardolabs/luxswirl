@@ -7,9 +7,7 @@ Covers the dedup state machine that gates notification delivery:
 - Same state + no resend interval → skip
 - Same state + resend interval elapsed → resend, counter increments
 - Same state + max_resends reached → skip, counter preserved
-- Legacy fallback path (prior row without notification_hash)
-
-See LUXSWIRL-145, LUXSWIRL-147, LUXSWIRL-149.
+- Fallback path (prior row without notification_hash)
 """
 
 from __future__ import annotations
@@ -131,7 +129,7 @@ async def test_no_prior_notification_sends_fresh():
 
 
 # ---------------------------------------------------------------------------
-# Hash-based dedup (post-LUXSWIRL-147)
+# Hash-based dedup
 # ---------------------------------------------------------------------------
 
 
@@ -292,7 +290,7 @@ async def test_max_resends_not_yet_reached_proceeds():
 
 
 # ---------------------------------------------------------------------------
-# Legacy fallback (prior row predates LUXSWIRL-147 — no hash recorded)
+# Fallback (prior row has no hash recorded)
 # ---------------------------------------------------------------------------
 
 

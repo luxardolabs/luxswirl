@@ -384,7 +384,7 @@ class StatusPagesViewService:
     async def enqueue_delete(
         db: AsyncSession, status_page_id: UUID, owner_id: UUID | None = None
     ) -> MaintenanceJobResponse:
-        """Enqueue a status_page_delete maintenance job. See LUXSWIRL-105."""
+        """Enqueue a status_page_delete maintenance job (the cascade runs in the worker)."""
         await StatusPageCoreService.get_status_page(db, status_page_id)  # 404 cleanly
         return await MaintenanceJobCoreService.enqueue(
             db,

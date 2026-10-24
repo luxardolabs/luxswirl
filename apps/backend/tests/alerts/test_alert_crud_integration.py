@@ -104,7 +104,7 @@ async def _write_log(
 
 
 # ---------------------------------------------------------------------------
-# get_last_notification_for_dedup — the LUXSWIRL-145 fix lives here
+# get_last_notification_for_dedup — what dedup remembers
 # ---------------------------------------------------------------------------
 
 
@@ -142,7 +142,7 @@ class TestGetLastNotificationForDedup:
         assert result.id != older.id
 
     async def test_returns_suppressed_row_when_only_history(self, db: AsyncSession):
-        """The whole point of LUXSWIRL-145: dedup must see suppressed/failed
+        """Dedup must see suppressed/failed
         rows, not just sent rows. Otherwise dedup amnesia floods the logs."""
         alert, check, provider, agent = await _make_alert_with_check_and_provider(db)
         await _write_log(

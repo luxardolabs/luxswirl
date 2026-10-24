@@ -134,7 +134,7 @@ def get_assigned_agent_for_check(check, available_agents):
     return max(available_agents, key=_score)
 ```
 
-**Why HRW + sha256 over the UUIDs (LUXSWIRL-183):**
+**Why HRW + sha256 over the UUIDs:**
 
 - **Process-independent.** `sha256` is not seeded, so the mapping is identical across server restarts, multiple uvicorn workers, and replicas. (The previous implementation used the builtin `hash()` over `check.display_name`, which is `PYTHONHASHSEED`-salted per process — stable only within a single process, and prone to overlapping/conflicting assignments across workers.)
 - **Keyed on the immutable `check.id`, not `display_name`.** `display_name` is editable and not unique, so hashing it meant a rename silently reassigned the check and same-named checks always co-located. The UUID is the stable identity.

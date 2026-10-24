@@ -154,7 +154,7 @@ async def test_suppression_parent_down_first_occurrence_writes_log_per_provider(
 
 @pytest.mark.asyncio
 async def test_suppression_parent_down_steady_state_dedups(monkeypatch, written):
-    """LUXSWIRL-148: continuously-parent-down leaf doesn't write a row every tick."""
+    """A continuously-parent-down leaf doesn't write a row every tick."""
     db = AsyncMock()
     parent_id = uuid4()
     check = _check(

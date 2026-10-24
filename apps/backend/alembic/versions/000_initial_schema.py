@@ -1,6 +1,6 @@
 """initial_schema — single squashed baseline for the v1.0 release.
 
-Generated from the SQLAlchemy models (LUXSWIRL-178): the pre-release migration
+Generated from the SQLAlchemy models: the pre-release migration
 chain (000_v1_0_baseline .. 005_reconcile_with_models) was collapsed into this
 one "fresh build" baseline. TimescaleDB hypertable/retention/continuous-aggregate
 DDL is NOT here — the app applies it at boot (timescale_*). `make migration-check`

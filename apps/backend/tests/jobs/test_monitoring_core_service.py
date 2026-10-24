@@ -1,4 +1,4 @@
-"""Correctness tests for monitoring_core_service (LUXSWIRL-127).
+"""Correctness tests for monitoring_core_service.
 
 Unlike the cleanups, these collectors are READ-ONLY — they COUNT live state
 (agents, checks, alerts, statuses) and push gauges into the in-memory Prometheus

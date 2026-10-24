@@ -9,7 +9,7 @@ paths = ["apps/backend/poetry.lock", "apps/agent/poetry.lock"]
 # agent, which carries Playwright and the DB drivers. `{version}` is filled from
 # the VERSION file, so naming them here does not pin the version a second place
 # (repo.version_single_source). Added with luxaudit 0.12.0, which shipped both
-# the list and the token (LUXSWIRL-244).
+# the list and the token.
 [image]
 refs = [
   "ghcr.io/luxardolabs/luxswirl-backend:{version}",

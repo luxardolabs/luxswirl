@@ -410,7 +410,7 @@ class AlertCoreService:
         # wired to a different set of alerts than the operator had just chosen.
         # On a monitoring product that means an outage produces no notification
         # and nothing anywhere says so. A failure here propagates, the
-        # transaction rolls back, and the caller is told. (LUXSWIRL-215)
+        # transaction rolls back, and the caller is told.
         #
         # Both loops work on a set DIFFERENCE, so `add_check`'s "Check already
         # added to this alert" cannot fire — every id here is genuinely new or

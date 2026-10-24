@@ -1,13 +1,12 @@
-"""Pure tests for the scheduler's decision logic (LUXSWIRL-127).
+"""Pure tests for the scheduler's decision logic.
 
-The coverage number was a lie of omission: scheduler_core sat at 63% with its two
-most dangerous pieces uncovered —
+Its two most dangerous pieces —
 
   1. `_calculate_next_run` — the SCHEDULING MATH. A wrong cron/interval branch
      fires jobs at the wrong time or never reschedules them.
   2. `_scheduler_loop`'s exception handler — the CRASH-SURVIVAL guard. If a poll
      iteration raises and the loop doesn't swallow it, the scheduler dies
-     silently and nothing ever runs again. That is exactly LUXSWIRL-191.
+     silently and nothing ever runs again.
 
 Both are pure (no DB) and cheap. They are the lines that actually matter, so they
 get tested regardless of what the coverage percentage already "looked like".
@@ -96,7 +95,7 @@ class TestNextRunSchedulingMath:
 
 
 class TestPollLoopSurvivesABadIteration:
-    """The exact LUXSWIRL-191 failure shape: a poll iteration raises. If the loop
+    """The failure shape: a poll iteration raises. If the loop
     doesn't swallow it, the scheduler task dies and nothing ever runs again."""
 
     async def test_loop_catches_iteration_error_instead_of_dying(self, monkeypatch):

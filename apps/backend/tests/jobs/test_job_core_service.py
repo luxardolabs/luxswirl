@@ -1,6 +1,6 @@
 """Unit + integration tests for JobCoreService.
 
-Focused coverage on the LUXSWIRL-188 rework (LUXSWIRL-127): the runner-sentinel
+Focused coverage on the runner-sentinel
 resolution (uuid | "server" | none) and the job lifecycle (create / status
 transitions / result submission / cancel guard).
 """

@@ -1,4 +1,4 @@
-"""Subprocess probe for the cross-hash-seed determinism test (LUXSWIRL-183).
+"""Subprocess probe for the cross-hash-seed determinism test.
 
 Run as a standalone script with a fixed check id followed by agent ids on
 argv; prints the chosen agent id. Used by

@@ -152,7 +152,7 @@ class ImportExportViewService:
 
         File parsing stays in the request (kilobytes); the actual import — which
         for mode=replace cascades through check_results — runs in the worker.
-        See LUXSWIRL-105. No explicit commit: get_db() commits on clean return
+        No explicit commit: get_db() commits on clean return
         before the response is sent, so the job is visible when the client polls.
         """
         try:

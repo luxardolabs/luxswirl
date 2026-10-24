@@ -1,7 +1,7 @@
 """Unit tests for AlertEvaluationCoreService._compute_alert_state_key.
 
 The state key is the dedup primitive — it must be stable for the same logical
-state and distinct across transitions. See LUXSWIRL-147.
+state and distinct across transitions.
 """
 
 from __future__ import annotations
@@ -73,7 +73,7 @@ class TestRepeatedFailure:
 
 
 class TestSSLCertExpiry:
-    """Multi-band escalation — the critical LUXSWIRL-146 fix."""
+    """Multi-band escalation: each threshold band crossed is its own state."""
 
     @pytest.fixture
     def alert(self):

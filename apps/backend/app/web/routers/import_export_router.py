@@ -94,7 +94,7 @@ async def import_checks(
 
     File parsing + structural validation stay in the request (fast — kilobytes).
     The actual import (which for mode=replace cascades through check_results)
-    runs in the worker. See LUXSWIRL-105.
+    runs in the worker.
     """
     content = await file.read()
     return await ImportExportViewService.handle_import(

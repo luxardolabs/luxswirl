@@ -100,7 +100,7 @@ class EncryptedString(TypeDecorator[str]):
         # database in the clear, under a column every reader believes is
         # encrypted, with nothing but a log line to say so. Failing the write is
         # the honest outcome: the caller finds out, and no credential is
-        # silently downgraded. (LUXSWIRL-215)
+        # silently downgraded.
         try:
             encrypted = fernet.encrypt(value.encode())
         except Exception as e:

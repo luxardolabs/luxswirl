@@ -62,7 +62,7 @@ class TestRegisterAgent:
             tags=["prod", "us-east"],
         )
         agent = await _stored(db, registered.id)
-        # Tags column is a real ARRAY(String) for agents (LUXSWIRL-176)
+        # Tags column is a real ARRAY(String) for agents
         assert agent.tags == ["prod", "us-east"]
 
     async def test_none_tags_stored_as_none(self, db: AsyncSession):

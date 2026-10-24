@@ -442,7 +442,7 @@ class TestGetAllCheckTags:
 
 class TestGetAllTagsCombined:
     async def test_merges_check_and_agent_array_tags(self, db: AsyncSession):
-        # Both agents and checks use PostgreSQL arrays now (LUXSWIRL-176).
+        # Both agents and checks store tags as PostgreSQL arrays.
         # The combined helper must merge, dedupe, and sort across both.
         agent_with_tags = make_agent(tags=["ops", "alpha"])
         agent_without = make_agent(tags=None)

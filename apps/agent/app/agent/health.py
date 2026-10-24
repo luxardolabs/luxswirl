@@ -5,7 +5,7 @@ Handles internal health monitoring including:
 - Watchdog for result processing stalls
 - Health status reporting
 - Internal metrics tracking
-- Resource monitoring (file descriptors, subprocesses) - SWIRL-57
+- Resource monitoring (file descriptors, subprocesses)
 """
 
 import asyncio
@@ -65,7 +65,7 @@ class HealthMonitor:
         # Tracking
         self.last_heartbeat_time = time.time()
 
-        # Resource monitoring (SWIRL-57)
+        # Resource monitoring
         self.resource_monitoring_enabled = config.get(
             "resource_monitoring_enabled", True
         )
@@ -154,7 +154,7 @@ class HealthMonitor:
 
     def _get_resource_metrics(self) -> dict[str, Any]:
         """
-        Get resource usage metrics (SWIRL-57: detect file descriptor leaks).
+        Get resource usage metrics, to detect file descriptor leaks.
 
         Returns:
             Dictionary with resource metrics
@@ -252,7 +252,7 @@ class HealthMonitor:
             },
         }
 
-        # Add resource metrics (SWIRL-57)
+        # Add resource metrics
         if self.resource_monitoring_enabled:
             health["resources"] = self._get_resource_metrics()
 

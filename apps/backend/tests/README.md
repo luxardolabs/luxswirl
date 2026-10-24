@@ -1,7 +1,5 @@
 # LuxSwirl Test Suite
 
-**Tracking issue:** LUXSWIRL-127
-
 A test platform for the LuxSwirl monitoring system. Tests are organized by **functional domain** (not by test type) so each directory mirrors a product area. Pure logic tests, integration tests, and API tests live side-by-side within each domain.
 
 ______________________________________________________________________
@@ -178,7 +176,7 @@ If your domain needs new factories, add them to `tests/fixtures/factories.py` fo
 
 ______________________________________________________________________
 
-## Coverage Targets (LUXSWIRL-127)
+## Coverage Targets
 
 - `apps/backend/app/services/core/` ≥ 70%
 - `apps/backend/app/crud/` ≥ 70%
@@ -193,7 +191,5 @@ ______________________________________________________________________
 
 ## Related
 
-- LUXSWIRL-127 — tracking issue for bringing coverage to target
-- LUXSWIRL-128 — Black + Ruff sweep before OSS publish
 - `tests/_paths.py` — layout-aware helpers (host + container)
 - `compose.yml` (profile `test`) — test DB on tmpfs

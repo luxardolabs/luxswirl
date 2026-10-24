@@ -2744,7 +2744,7 @@ db-verify: test-build test-db-up ## PROVE the migration chain builds the schema 
 	$(MAKE) test-db-down; \
 	exit $$status
 
-migration-check: test-build ## Verify alembic migrations match the models — `alembic check` on a fresh DB must be clean (LUXSWIRL-178)
+migration-check: test-build ## Verify alembic migrations match the models — `alembic check` on a fresh DB must be clean
 	$(DC_TEST) up -d --wait timescaledb-test
 	$(DC_TEST) run --rm tests sh -c 'alembic upgrade head && alembic check' ; status=$$? ; $(DC_TEST) down -v ; exit $$status
 

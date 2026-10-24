@@ -2,11 +2,11 @@
 
 `EncryptedString` and `EncryptedJSON` back the columns that hold check targets
 with embedded credentials, database connection strings and `check_config` API
-keys. Both used to catch every exception from `fernet.encrypt` and return the
-plaintext instead — so a secret went to the database in the clear, under a
-column every reader believes is encrypted, with a log line as the only trace.
+keys. Returning the plaintext when `fernet.encrypt` fails would put a secret
+in the database in the clear, under a column every reader believes is
+encrypted, with a log line as the only trace.
 
-These tests fail if that fallback returns. See LUXSWIRL-215.
+These tests fail if such a fallback exists.
 """
 
 from __future__ import annotations

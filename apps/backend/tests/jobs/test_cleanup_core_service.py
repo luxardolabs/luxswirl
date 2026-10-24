@@ -1,11 +1,10 @@
-"""Persistence-asserting tests for cleanup_core_service (LUXSWIRL-127 / -191).
+"""Persistence-asserting tests for cleanup_core_service.
 
-These cleanups DELETE rows older than a cutoff. Pre-fix (LUXSWIRL-191) the delete
-ran but the worker session never committed, so a fresh connection still saw the
-"deleted" rows — and a test that only checked the returned count would have passed
-anyway. So each test seeds an OLD row and a RECENT row, runs the cleanup, then
+These cleanups DELETE rows older than a cutoff. A delete the worker session never
+commits leaves a fresh connection still seeing the "deleted" rows, and a test that
+only checked the returned count would pass anyway. So each test seeds an OLD row and a RECENT row, runs the cleanup, then
 reads from a FRESH session and asserts the old one is actually GONE and the recent
-one survived. That fresh-session read is the assertion the bug failed.
+one survived. That fresh-session read is the assertion that catches it.
 """
 
 from __future__ import annotations

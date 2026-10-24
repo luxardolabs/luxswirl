@@ -4,7 +4,7 @@ Check API core service - checks in their JSON API shape.
 One builder makes every CheckResponse, so a single check and the same check in
 an agent's list carry the same fields (the check-type config included). Every
 operation addressed by /agents/{agent_id}/checks/{check_id} is bound to that
-agent: a check under another agent is not found here (LUXSWIRL-190 L-5).
+agent: a check under another agent is not found here.
 """
 
 from uuid import UUID

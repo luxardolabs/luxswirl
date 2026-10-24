@@ -1,6 +1,6 @@
 """Unit + integration tests for RegistrationKeyCoreService.
 
-Focused coverage on the genuinely risky, previously-untested paths (LUXSWIRL-127):
+Focused coverage on the genuinely risky paths:
 the key crypto (generate/hash/verify) and the agent-registration auth path
 (verify_key_and_update_usage) — including the security property that a REVOKED
 key must not authenticate.
