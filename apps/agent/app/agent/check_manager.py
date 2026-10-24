@@ -25,7 +25,7 @@ from cryptography.fernet import Fernet, InvalidToken
 
 from app.agent.credentials import AgentCredentials
 from app.agent.http_client import server_client
-from app.checks._ssrf_policy import apply_server_policy
+from app.checks._ssrf_policy import apply_server_policy, block_private_networks
 from app.checks.base import BaseCheck
 from app.shared.logger import get_logger
 
@@ -138,6 +138,8 @@ class CheckManager:
                 "cached_at": datetime.now(UTC).isoformat(),
                 "agent_id": str(agent_id) if agent_id != "unknown" else "unknown",
                 "check_count": len(checks),
+                # An agent restarted while the server is down keeps its policy.
+                "block_private_networks": block_private_networks(),
             }
 
             # Encrypt the cache data
@@ -216,6 +218,7 @@ class CheckManager:
             checks = cache_data.get("checks", [])
             version = cache_data.get("config_version")
             cached_at = cache_data.get("cached_at")
+            apply_server_policy(cache_data)
 
             self.logger.info(
                 "Loaded checks from cache",

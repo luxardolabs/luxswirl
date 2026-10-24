@@ -130,6 +130,53 @@ async def test_clone_refuses_a_nameserver_that_is_now_blocked(
         await CheckCoreService.clone_check(db, source.id, agent.id)
 
 
+@pytest.mark.parametrize(
+    "dsn",
+    [
+        f"postgresql://u:p@/db?host={METADATA_IP}",
+        f"postgresql://u:p@/db?hostaddr={METADATA_IP}",
+        f"postgresql://u:p@127.0.0.1,{METADATA_IP}:5432/db",
+        f"postgresql://u:p@[::ffff:{METADATA_IP}]/db",
+    ],
+    ids=["host-param", "hostaddr-param", "multi-host", "mapped-v6"],
+)
+async def test_a_postgres_url_cannot_hide_a_metadata_host(
+    db: AsyncSession, dsn: str
+) -> None:
+    """libpq takes hosts from a comma list and from `host`/`hostaddr`; each is checked."""
+    agent = make_agent()
+    db.add(agent)
+    await db.flush()
+
+    with pytest.raises(CheckTargetBlockedError):
+        await CheckCoreService.create_check(
+            db, agent.id, _create("postgres", connection_string=dsn)
+        )
+
+
+@pytest.mark.parametrize(
+    ("check_type", "fields"),
+    [
+        ("http", {"target": f"http://[::ffff:{METADATA_IP}]/latest/"}),
+        ("tcp", {"target": "::ffff:a9fe:a9fe"}),
+        ("dns", {"nameserver": f"::ffff:{METADATA_IP}"}),
+        ("tcp", {"target": "64:ff9b::a9fe:a9fe"}),
+        ("tcp", {"target": "2002:a9fe:a9fe::1"}),
+    ],
+    ids=["http-mapped", "tcp-mapped-hex", "dns-mapped", "tcp-nat64", "tcp-6to4"],
+)
+async def test_an_ipv6_form_of_the_metadata_address_is_refused(
+    db: AsyncSession, check_type: str, fields: dict[str, Any]
+) -> None:
+    agent = make_agent()
+    db.add(agent)
+    await db.flush()
+    data = _create(check_type).model_copy(update=fields)
+
+    with pytest.raises(CheckTargetBlockedError):
+        await CheckCoreService.create_check(db, agent.id, data)
+
+
 # ---------------------------------------------------------------------------
 # The agent is told the setting.
 # ---------------------------------------------------------------------------
