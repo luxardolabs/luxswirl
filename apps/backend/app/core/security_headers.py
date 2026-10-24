@@ -53,7 +53,9 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         # All resources loaded from same origin only (self-hosted)
         csp_directives = [
             "default-src 'self'",  # Default: only from our domain
-            "script-src 'self' 'unsafe-inline' 'unsafe-eval'",  # Scripts: our domain + inline (HTMX) + eval (Alpine.js)
+            # Scripts: our files only, no inline <script> or on*= handler.
+            # 'unsafe-eval' is for Alpine.js (standard build) and htmx hx-on.
+            "script-src 'self' 'unsafe-eval'",
             "style-src 'self' 'unsafe-inline'",  # Styles: our domain + inline
             "img-src 'self' data: https:",  # Images: our domain + data URIs + any HTTPS
             "font-src 'self' data:",  # Fonts: our domain + data URIs

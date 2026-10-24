@@ -130,6 +130,12 @@ function downloadToken(token) {
  * Initialize settings module
  */
 export function init() {
+    // A setting whose control saves on change (`data-autosubmit`) submits its form.
+    document.addEventListener('change', (e) => {
+        const control = e.target.closest?.('[data-autosubmit]');
+        if (control?.form) control.form.requestSubmit();
+    });
+
     // Event delegation for all settings interactions
     document.addEventListener('click', (e) => {
         const target = e.target.closest('button');

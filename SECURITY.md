@@ -122,11 +122,11 @@ This is the same model used across Luxardo Labs FastAPI portals. Token-based CSR
 
 **Operator responsibility:** make sure your reverse proxy terminates HTTPS in production. Without `Secure=True` cookies, an attacker on the same network could downgrade the connection. The `session_cookie_secure` setting must be `True` for any deployment exposed beyond localhost.
 
-### 5. Content-Security-Policy (`unsafe-inline` / `unsafe-eval`)
+### 5. Content-Security-Policy (`unsafe-eval`)
 
 **Status**: ⚠️ BY DESIGN
 
-The CSP `script-src` allows `'unsafe-inline'` and `'unsafe-eval'`, required by the HTMX + Alpine.js front-end (inline handlers and Alpine's expression evaluation). This weakens the in-browser XSS containment a stricter, nonce-based CSP would provide — a single template-injection becomes script execution rather than being blocked by the CSP. It is an accepted trade-off for the chosen stack; the primary XSS defense remains Jinja2 auto-escaping and not rendering untrusted HTML. A nonce-based CSP is a candidate hardening for a future release.
+The CSP `script-src` is `'self' 'unsafe-eval'`: scripts load only from the app's own files, and an inline `<script>` or `on*=` handler is refused, so an injected one does not run. `'unsafe-eval'` remains because Alpine.js (standard build) and htmx `hx-on` evaluate expressions written in template attributes, so a template injection that reaches one of those attributes can still execute script. `style-src` keeps `'unsafe-inline'` for the `style="--var: …"` custom properties that carry data values into CSS. The primary XSS defense remains Jinja2 auto-escaping and not rendering untrusted HTML.
 
 ### 6. Network Protection (SSRF)
 

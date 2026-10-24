@@ -227,6 +227,12 @@ export function init() {
     pageTotal = Number(config.dataset.total);
     pageSize = Number(config.dataset.perPage);
 
+    // A click on a row's checkbox selects it; it must not reach the row, whose
+    // hx-get opens the check. Capture runs before the row's listener.
+    document.addEventListener('click', (e) => {
+        if (e.target.closest?.('.check-select')) e.stopPropagation();
+    }, true);
+
     // Toggle selection mode button
     document.getElementById('toggle-selection-mode')?.addEventListener('click', toggleSelectionMode);
 
