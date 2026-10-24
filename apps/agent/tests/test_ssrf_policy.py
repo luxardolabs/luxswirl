@@ -200,3 +200,106 @@ async def test_a_heartbeat_response_sets_the_policy() -> None:
         await http_client.aclose_all()
 
     assert _ssrf_policy.block_private_networks() is True
+
+
+async def _hosts_dialed(check: PostgreSQLCheck, monkeypatch: Any) -> list[str]:
+    """Run the check and record each host asyncpg opens a socket to (refused,
+    so nothing leaves the box)."""
+    dialed: list[str] = []
+    loop = asyncio.get_running_loop()
+
+    async def refuse(_factory: Any, host: Any = None, *a: Any, **k: Any) -> Any:
+        dialed.append(str(host))
+        raise ConnectionRefusedError("test")
+
+    monkeypatch.setattr(loop, "create_connection", refuse)
+    try:
+        await check.run()
+    except SsrfBlockedError:
+        pass
+    return dialed
+
+
+def _postgres(dsn: str) -> PostgreSQLCheck:
+    return PostgreSQLCheck(
+        _cfg("postgres", target="192.0.2.10", connection_string=dsn, query="SELECT 1")
+    )
+
+
+async def test_postgres_dials_a_public_host(monkeypatch: Any) -> None:
+    """Control: the recorder sees what asyncpg dials."""
+    assert "192.0.2.10" in await _hosts_dialed(
+        _postgres("postgresql://u:p@192.0.2.10/db"), monkeypatch
+    )
+
+
+@pytest.mark.parametrize(
+    "dsn",
+    [
+        "postgresql://u:p@/db?host=169.254.169.254",
+        "postgresql://u:p@192.0.2.10,169.254.169.254/db",
+    ],
+    ids=["host-param", "multi-host"],
+)
+async def test_postgres_never_dials_a_metadata_host_its_url_hides(
+    dsn: str, monkeypatch: Any
+) -> None:
+    pytest.importorskip("asyncpg")
+    assert "169.254.169.254" not in await _hosts_dialed(_postgres(dsn), monkeypatch)
+
+
+@pytest.mark.parametrize(
+    "target",
+    [
+        "http://[::ffff:169.254.169.254]/latest/meta-data/",
+        "::ffff:169.254.169.254",
+        "::ffff:a9fe:a9fe",
+        "64:ff9b::a9fe:a9fe",
+        "2002:a9fe:a9fe::1",
+    ],
+)
+def test_an_ipv6_form_of_the_metadata_address_is_refused(target: str) -> None:
+    with pytest.raises(SsrfBlockedError):
+        _ssrf_policy.assert_target_allowed(target)
+
+
+def test_an_ipv6_form_of_a_private_address_follows_the_policy() -> None:
+    _ssrf_policy.assert_ip_allowed("::ffff:10.0.0.5")
+    _ssrf_policy.apply_server_policy({"block_private_networks": True})
+    _ssrf_policy.assert_ip_allowed("1.1.1.1")
+    with pytest.raises(SsrfBlockedError):
+        _ssrf_policy.assert_ip_allowed("::ffff:10.0.0.5")
+
+
+async def test_an_agent_restarted_offline_keeps_the_servers_policy(
+    tmp_path: Path,
+) -> None:
+    config = {
+        "agent_id": "a1",
+        "push_url": "https://server.example/api/v1/reports",
+        "auth_key": "k",
+    }
+    cache = tmp_path / "checks_cache.json"
+    _mock_server({"checks": [], "block_private_networks": True})
+    try:
+        await CheckManager(
+            config=config, cache_file=cache, credentials=None, on_orphaned_agent=None
+        ).load_checks()
+    finally:
+        await http_client.aclose_all()
+
+    # A fresh process, and the server unreachable.
+    _ssrf_policy.apply_server_policy({"block_private_networks": False})
+
+    def down(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("server down")
+
+    http_client._server_client = httpx.AsyncClient(transport=httpx.MockTransport(down))
+    try:
+        await CheckManager(
+            config=config, cache_file=cache, credentials=None, on_orphaned_agent=None
+        ).load_checks()
+    finally:
+        await http_client.aclose_all()
+
+    assert _ssrf_policy.block_private_networks() is True

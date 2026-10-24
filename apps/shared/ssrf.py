@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import ipaddress
 import socket
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
 from .logger import get_logger
 
@@ -58,6 +58,56 @@ def extract_host(target: str) -> str | None:
     return target or None
 
 
+# libpq/asyncpg URLs name several hosts: a comma list in the netloc, and the
+# `host` / `hostaddr` query parameters.
+_POSTGRES_SCHEMES = frozenset({"postgres", "postgresql"})
+
+# IPv6 forms that carry an IPv4 address a socket reaches (RFC 6052 NAT64).
+_NAT64 = ipaddress.ip_network("64:ff9b::/96")
+
+
+def _strip_port(host: str) -> str:
+    if host.startswith("["):
+        return host[1 : host.find("]")] if "]" in host else host[1:]
+    return host.rsplit(":", 1)[0] if host.count(":") == 1 else host
+
+
+def extract_hosts(target: str) -> list[str]:
+    """Every host ``target`` connects to: one for a URL or ``host[:port]``, and
+    each host a PostgreSQL URL names (a unix-socket path is not a network host)."""
+    if "://" not in target:
+        host = extract_host(target)
+        return [host] if host else []
+    try:
+        parsed = urlparse(target)
+    except ValueError:
+        return []
+    if parsed.scheme.lower().split("+", 1)[0] not in _POSTGRES_SCHEMES:
+        return [parsed.hostname] if parsed.hostname else []
+    named = parsed.netloc.rpartition("@")[2].split(",")
+    query = parse_qs(parsed.query)
+    for key in ("host", "hostaddr"):
+        for value in query.get(key, []):
+            named.extend(value.split(","))
+    hosts = (_strip_port(unquote(h).strip()) for h in named)
+    return [h for h in hosts if h and not h.startswith("/")]
+
+
+def _embedded_ipv4(
+    ip: ipaddress.IPv4Address | ipaddress.IPv6Address,
+) -> ipaddress.IPv4Address | None:
+    """The IPv4 address an IPv6 one carries (mapped, 6to4, NAT64), if any."""
+    if not isinstance(ip, ipaddress.IPv6Address):
+        return None
+    if ip.ipv4_mapped is not None:
+        return ip.ipv4_mapped
+    if ip.sixtofour is not None:
+        return ip.sixtofour
+    if ip in _NAT64:
+        return ipaddress.IPv4Address(int(ip) & 0xFFFFFFFF)
+    return None
+
+
 def resolve_host(host: str) -> list[str]:
     """Resolve a hostname (or pass a literal IP through) to a list of IP strings.
 
@@ -91,13 +141,15 @@ def assert_ip_allowed(
         ip = ipaddress.ip_address(ip_str)
     except ValueError:
         return
+    embedded = _embedded_ipv4(ip)
+    candidates = [ip] if embedded is None else [ip, embedded]
     ranges: list[tuple[list[ipaddress.IPv4Network | ipaddress.IPv6Network], str]] = []
     if block_cloud_metadata:
         ranges.append((CLOUD_METADATA_NETWORKS, "cloud metadata / link-local"))
     if block_private_networks:
         ranges.append((PRIVATE_NETWORKS, "private network"))
     for networks, label in ranges:
-        matched = next((net for net in networks if ip in net), None)
+        matched = next((net for net in networks for c in candidates if c in net), None)
         if matched is not None:
             logger.warning(
                 "SSRF protection: blocked IP",
@@ -121,12 +173,10 @@ def assert_target_allowed(
     """
     if not block_cloud_metadata and not block_private_networks:
         return
-    host = extract_host(target)
-    if not host:
-        return
-    for ip_str in resolve_host(host):
-        assert_ip_allowed(
-            ip_str,
-            block_cloud_metadata=block_cloud_metadata,
-            block_private_networks=block_private_networks,
-        )
+    for host in extract_hosts(target):
+        for ip_str in resolve_host(host):
+            assert_ip_allowed(
+                ip_str,
+                block_cloud_metadata=block_cloud_metadata,
+                block_private_networks=block_private_networks,
+            )
