@@ -39,7 +39,7 @@ DEV_WAIT_TIMEOUT      ?= 180
 # Makefile.local (gitignored): copy Makefile.local.example -> Makefile.local and set it.
 # Contributors don't need it — lint/test and the import-linter contracts run without it.
 LUXARCH_REGISTRY ?=
-LUXARCH_VERSION := 0.316.0
+LUXARCH_VERSION := 0.317.0
 LUXARCH_IMAGE    ?= $(LUXARCH_REGISTRY)/luxardolabs/luxarch:$(LUXARCH_VERSION)
 # Dependency-CVE guard (luxaudit) — same private registry as luxarch, mount-only.
 # Scans the pinned poetry.locks against the live advisory feed (see .luxaudit.toml).
@@ -275,7 +275,7 @@ override sq = $(if $(findstring $(IB_NL),$(1)),$(error REFUSING: a value a block
 override sqw = $(foreach w,$(1),$(call sq,$(w)))
 # luxarch:build-core end - DO NOT edit this marker line: the image block's runtime guard reads its range.
 
-# luxarch:image-block asset v19 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit image-block`.
+# luxarch:image-block asset v20 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit image-block`.
 # ── Images: ONE naming scheme, and the NAME declares what the image IS ──────────────────────────
 # Emitted by `luxarch --emit image-block`. Two axes, both readable from the name alone:
 #
@@ -1320,9 +1320,19 @@ DEV_WAIT_TIMEOUT ?= 120
 # `:__TAG__`, substitutes TAG into the rendered copy (the tracked overlay is never written, so the
 # next build's tree stays clean), refuses any `__X__` placeholder still left, applies it, and waits on
 # each workload it applied, in its namespace (rollout, a Job's completion, a Pod's readiness). v18 had no such lane, so a k3s-deployed repo could not adopt the
-# block at all. DEV_KUBECTL is the kubectl to run (set its context with `--context <ctx>`).
+# block at all.
+# v20: DEV_PRE_OVERLAYS are committed kustomizations applied, in order, before DEV_OVERLAY: what must
+# exist or finish before the app rolls out (a Secret, the migration Job, cluster-scoped config). Each
+# is rendered from HEAD with the same checks (an image the block publishes runs only at `:__TAG__`; no
+# `__X__` placeholder left), every overlay renders and passes them before any is applied, and each is
+# applied and waited on before the next: a Job that does not complete prints its logs and stops the
+# deploy before the app's rollout. DEV_KUSTOMIZE renders on this machine; DEV_KUBECTL talks to the
+# cluster and reads every manifest on its stdin, so it can be a kubectl on another host
+# (`DEV_KUBECTL := ssh <node> kubectl`), or a local one with `--context <ctx>`.
 DEV_DEPLOY ?= compose
 DEV_OVERLAY ?= k8s/overlays/dev
+DEV_PRE_OVERLAYS ?=
+DEV_KUSTOMIZE ?= kubectl kustomize
 DEV_KUBECTL ?= kubectl
 
 # v15: a file with more than one `TAG=` line refuses. v14 rewrote the first, and compose reads the
@@ -1490,11 +1500,12 @@ endef
 # kubelet pulls instead of the tag), no tag (`:latest`), a suffixed tag, or another tag; and at least
 # one `image:` does. Only `image:` values are read (a pin in an annotation runs nothing), and a name is
 # the whole value up to its digest (`@`) and its tag (the last `:` after the last `/`; a registry's
-# `:<port>` is part of the name), so another registry's `x<registry>/<name>` is not this image.
+# `:<port>` is part of the name), so another registry's `x<registry>/<name>` is not this image. The
+# "at least one" holds for DEV_OVERLAY (`$$km` set); a pre-overlay may run none of them (a Secret).
 override define dev_kustomize_image
 kv=$$(awk -v b=$(call sq,$(call img_base,$(1))) '/^[ \t]*(- )?image:[ \t]/ { v = $$0; sub(/^[ \t]*(- )?image:[ \t]*/, "", v); sub(/[ \t]+$$/, "", v); gsub(/^["\047]|["\047]$$/, "", v); n = v; sub(/@.*/, "", n); if (match(n, /:[^\/]*$$/)) n = substr(n, 1, RSTART - 1); if (n != b) next; if (v == b ":__TAG__") ok = 1; else bad = bad " " v } END { if (bad != "") print "BAD" bad; else if (!ok) print "NONE" }' "$$kr"); \
-case "$$kv" in NONE) \
-  echo "REFUSING: the rendered dev overlay $$ov runs no container at "$(call sq,$(call img_base,$(1)))":__TAG__ (pin it with images: - name: … newTag: __TAG__): the tag dev-pin pins must be the one that runs"; exit 1 ;; \
+case "$$kv" in NONE) [ -z "$$km" ] || { \
+  echo "REFUSING: the rendered dev overlay $$ov runs no container at "$(call sq,$(call img_base,$(1)))":__TAG__ (pin it with images: - name: … newTag: __TAG__): the tag dev-pin pins must be the one that runs"; exit 1; } ;; \
 BAD*) echo "REFUSING: the rendered dev overlay $$ov also runs "$(call sq,$(call img_base,$(1)))" as:$${kv#BAD} (only :__TAG__, exactly, is the pin: not a digest, no tag, nor another tag)"; exit 1 ;; esac
 endef
 
@@ -1502,28 +1513,45 @@ endef
 # so an edited or untracked file in the working tree never reaches the cluster. The workloads waited
 # on are read from the render with their namespace: `rollout status` for a Deployment, StatefulSet or
 # DaemonSet, completion for a Job, Ready for a Pod (a CronJob runs on its schedule, not at deploy).
+# v20: every overlay (DEV_PRE_OVERLAYS in order, then DEV_OVERLAY) is rendered and checked before any
+# is applied, so a bad app overlay never leaves a migration run against the cluster; then each is
+# applied and its workloads waited on before the next is applied. A Job's template cannot change once
+# the Job exists, so each Job an overlay holds is deleted just before that overlay is applied: the
+# next deploy runs the migration again at its own TAG, and a retry re-runs a Job that failed. A Job
+# that does not complete prints its logs. Every manifest reaches DEV_KUBECTL on its stdin
+# (`apply -f -`), never as a local path. Each overlay is spelled one way (no `./`, `//` or trailing
+# `/`), so no overlay is applied twice under two spellings.
 override define dev_kustomize
-ov=$(call sq,$(DEV_OVERLAY)); \
-case "$$ov" in ''|-*|/*|*..*|*[!A-Za-z0-9._/-]*) echo "REFUSING: DEV_OVERLAY must be one plain path inside the repo (letters, digits, . _ / -), not $$ov"; exit 1 ;; esac; \
-{ git cat-file -e "HEAD:$$ov/kustomization.yaml" || git cat-file -e "HEAD:$$ov/kustomization.yml"; } 2>/dev/null || { \
-  echo "REFUSING: $$ov holds no committed kustomization: the dev overlay is what runs, so it must be committed"; exit 1; }; \
-kd=$$(mktemp -d); kr=$$kd/render.yaml; ka=$$kd/apply.yaml; trap 'rm -rf "$$kd"' EXIT; \
-mkdir "$$kd/src" && git archive --format=tar HEAD | tar -x -C "$$kd/src" || { echo "REFUSING: could not export HEAD to render the dev overlay from"; exit 1; }; \
-$(call sqw,$(DEV_KUBECTL)) kustomize "$$kd/src/$$ov" > "$$kr" || { echo "REFUSING: kubectl kustomize could not render $$ov (as committed)"; exit 1; }; \
-$(call image_block_each,dev_kustomize_image,;); \
-sed -e "s|__TAG__|"$(call sq,$(TAG))"|g" "$$kr" > "$$ka" || exit 1; \
-kl=$$(grep -o '__[A-Z][A-Z0-9_]*__' "$$ka" | sort -u | tr '\n' ' '); \
-[ -z "$$kl" ] || { echo "REFUSING: the rendered dev overlay $$ov still holds $$kl once TAG is substituted: the dev deploy substitutes __TAG__ only"; exit 1; }; \
-kw=$$(awk 'function out() { if (k != "" && nm != "") print k "|" nm "|" ns } /^---/ { out(); k = ""; nm = ""; ns = ""; md = 0; next } /^kind:[ \t]/ { k = $$2 } /^metadata:/ { md = 1; next } /^[^ \t]/ { md = 0 } md && /^  name:[ \t]/ { nm = $$2 } md && /^  namespace:[ \t]/ { ns = $$2 } END { out() }' "$$ka" | tr -d "\"'"); \
-$(call sqw,$(DEV_KUBECTL)) apply -f "$$ka" >/dev/null || { echo "FAIL  kubectl apply of the rendered dev overlay $$ov failed"; exit 1; }; \
-for w in $$kw; do k=$${w%%|*}; r=$${w#*|}; nm=$${r%%|*}; ns=$${r#*|}; set -- $${ns:+-n "$$ns"}; \
-  case "$$k" in \
-    Deployment|StatefulSet|DaemonSet) $(call sqw,$(DEV_KUBECTL)) rollout status "$$@" "$$k/$$nm" --timeout=$(call sq,$(DEV_WAIT_TIMEOUT))s ;; \
-    Job) $(call sqw,$(DEV_KUBECTL)) wait "$$@" --for=condition=complete "job/$$nm" --timeout=$(call sq,$(DEV_WAIT_TIMEOUT))s ;; \
-    Pod) $(call sqw,$(DEV_KUBECTL)) wait "$$@" --for=condition=Ready "pod/$$nm" --timeout=$(call sq,$(DEV_WAIT_TIMEOUT))s ;; \
-    *) true ;; \
-  esac || { echo "FAIL  $$k/$$nm$${ns:+ (namespace $$ns)} did not become ready within "$(call sq,$(DEV_WAIT_TIMEOUT))"s"; exit 1; }; done; \
-echo "$$ov: applied at TAG="$(call sq,$(TAG))
+kd=$$(mktemp -d); trap 'rm -rf "$$kd"' EXIT; \
+mkdir "$$kd/src" && git archive --format=tar HEAD | tar -x -C "$$kd/src" || { echo "REFUSING: could not export HEAD to render the dev overlays from"; exit 1; }; \
+kn=0; kall=; for ov in $(call sqw,$(DEV_PRE_OVERLAYS)) $(call sq,$(DEV_OVERLAY)); do \
+  case "$$ov" in ''|-*|/*|*..*|*[!A-Za-z0-9._/-]*|.|./*|*/.|*/./*|*//*|*/) echo "REFUSING: DEV_OVERLAY and each of DEV_PRE_OVERLAYS must be one plain path inside the repo, spelled one way (letters, digits, . _ / -; no ./, //, /./ or trailing /), not $$ov"; exit 1 ;; esac; \
+  case " $$kall " in *" $$ov "*) echo "REFUSING: $$ov is listed twice (DEV_PRE_OVERLAYS, DEV_OVERLAY): each overlay is applied once"; exit 1 ;; esac; kall="$$kall $$ov"; \
+  { git cat-file -e "HEAD:$$ov/kustomization.yaml" || git cat-file -e "HEAD:$$ov/kustomization.yml"; } 2>/dev/null || { \
+    echo "REFUSING: $$ov holds no committed kustomization: a dev overlay is what runs, so it must be committed"; exit 1; }; \
+  kn=$$((kn + 1)); kr=$$kd/$$kn.render.yaml; ka=$$kd/$$kn.apply.yaml; km=; [ "$$ov" != $(call sq,$(DEV_OVERLAY)) ] || km=1; \
+  $(call sqw,$(DEV_KUSTOMIZE)) "$$kd/src/$$ov" > "$$kr" || { echo "REFUSING: "$(call sq,$(DEV_KUSTOMIZE))" could not render $$ov (as committed)"; exit 1; }; \
+  $(call image_block_each,dev_kustomize_image,;); \
+  sed -e "s|__TAG__|"$(call sq,$(TAG))"|g" "$$kr" > "$$ka" || exit 1; \
+  kl=$$(grep -o '__[A-Z][A-Z0-9_]*__' "$$ka" | sort -u | tr '\n' ' '); \
+  [ -z "$$kl" ] || { echo "REFUSING: the rendered dev overlay $$ov still holds $$kl once TAG is substituted: the dev deploy substitutes __TAG__ only"; exit 1; }; \
+  printf '%s\n' "$$ov" > "$$kd/$$kn.name"; \
+done; \
+ki=0; while [ "$$ki" -lt "$$kn" ]; do ki=$$((ki + 1)); ka=$$kd/$$ki.apply.yaml; ov=$$(cat "$$kd/$$ki.name"); \
+  kw=$$(awk 'function out() { if (k != "" && nm != "") print k "|" nm "|" ns } /^---/ { out(); k = ""; nm = ""; ns = ""; md = 0; next } /^kind:[ \t]/ { k = $$2 } /^metadata:/ { md = 1; next } /^[^ \t]/ { md = 0 } md && /^  name:[ \t]/ { nm = $$2 } md && /^  namespace:[ \t]/ { ns = $$2 } END { out() }' "$$ka" | tr -d "\"'"); \
+  for w in $$kw; do case "$${w%%|*}" in Job) r=$${w#*|}; nm=$${r%%|*}; ns=$${r#*|}; set -- $${ns:+-n "$$ns"}; \
+    $(call sqw,$(DEV_KUBECTL)) delete "$$@" "job/$$nm" --ignore-not-found >/dev/null || { echo "FAIL  could not delete the previous job/$$nm$${ns:+ (namespace $$ns)} before applying $$ov"; exit 1; } ;; esac; done; \
+  $(call sqw,$(DEV_KUBECTL)) apply -f - < "$$ka" >/dev/null || { echo "FAIL  kubectl apply of the rendered dev overlay $$ov failed"; exit 1; }; \
+  for w in $$kw; do k=$${w%%|*}; r=$${w#*|}; nm=$${r%%|*}; ns=$${r#*|}; set -- $${ns:+-n "$$ns"}; \
+    case "$$k" in \
+      Deployment|StatefulSet|DaemonSet) $(call sqw,$(DEV_KUBECTL)) rollout status "$$@" "$$k/$$nm" --timeout=$(call sq,$(DEV_WAIT_TIMEOUT))s ;; \
+      Job) $(call sqw,$(DEV_KUBECTL)) wait "$$@" --for=condition=complete "job/$$nm" --timeout=$(call sq,$(DEV_WAIT_TIMEOUT))s || { \
+        echo "FAIL  job/$$nm$${ns:+ (namespace $$ns)} in $$ov did not complete; its logs:"; $(call sqw,$(DEV_KUBECTL)) logs "$$@" "job/$$nm" --tail=200 || true; false; } ;; \
+      Pod) $(call sqw,$(DEV_KUBECTL)) wait "$$@" --for=condition=Ready "pod/$$nm" --timeout=$(call sq,$(DEV_WAIT_TIMEOUT))s ;; \
+      *) true ;; \
+    esac || { echo "FAIL  $$k/$$nm$${ns:+ (namespace $$ns)} did not become ready within "$(call sq,$(DEV_WAIT_TIMEOUT))"s"; exit 1; }; done; \
+  echo "$$ov: applied at TAG="$(call sq,$(TAG)); \
+done
 endef
 
 override define require_dev_env_file
