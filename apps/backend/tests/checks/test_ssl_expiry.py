@@ -13,12 +13,13 @@ constants: the ingest path and the panel must agree on the same windows.
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, timedelta, timezone
 
 import pytest
 from app.core.ssl_expiry import ssl_expiry_fields
 
 KEYS = {
+    "state",
     "expiration_date",
     "days_until_expiration",
     "expired",
@@ -36,7 +37,7 @@ def _in(days: int) -> str:
 
 @pytest.mark.parametrize(
     "value",
-    [None, "", "not a date", "2025-01-15T23:59:59Z", "Feb 30 00:00:00 2025 GMT"],
+    [None, "", "not a date", "2025-13-15T23:59:59Z", "Feb 30 00:00:00 2025 GMT"],
 )
 def test_unreadable_expiry_still_returns_every_field(value: str | None) -> None:
     fields = ssl_expiry_fields(value, warning_days=30, critical_days=7)
@@ -45,6 +46,7 @@ def test_unreadable_expiry_still_returns_every_field(value: str | None) -> None:
     assert fields["expired"] is False
     assert fields["expires_soon"] is False
     assert fields["expires_critical"] is False
+    assert fields["state"] == "unknown"
 
 
 def test_unparseable_date_is_logged(app_logs: list[logging.LogRecord]) -> None:
@@ -106,3 +108,43 @@ def test_expiring_today_is_soon_and_critical() -> None:
     assert fields["expired"] is False
     assert fields["expires_soon"] is True
     assert fields["expires_critical"] is True
+
+
+@pytest.mark.parametrize(
+    "fmt",
+    [
+        "%Y-%m-%dT%H:%M:%S+00:00",
+        "%Y-%m-%dT%H:%M:%SZ",
+        "%Y-%m-%d %H:%M:%S",
+    ],
+)
+def test_an_iso_8601_expiry_is_read_too(fmt: str) -> None:
+    """A producer that switches to ISO 8601 keeps the expiry alerts working."""
+    raw = (datetime.now(UTC) + timedelta(days=10, hours=1)).strftime(fmt)
+    assert (
+        ssl_expiry_fields(raw, warning_days=30, critical_days=7)[
+            "days_until_expiration"
+        ]
+        == 10
+    )
+
+
+def test_an_iso_8601_expiry_with_an_offset_is_read_in_utc() -> None:
+    """23:30 at +05:00 on day N is 18:30 UTC, so the day count follows UTC."""
+    at = (datetime.now(UTC) + timedelta(days=10, hours=1)).astimezone(
+        timezone(timedelta(hours=5))
+    )
+    fields = ssl_expiry_fields(at.isoformat(), warning_days=30, critical_days=7)
+    assert fields["days_until_expiration"] == 10
+
+
+@pytest.mark.parametrize(
+    ("days", "state"),
+    [(-5, "expired"), (3, "critical"), (20, "soon"), (90, "valid")],
+)
+def test_state_names_the_one_window_the_certificate_is_in(
+    days: int, state: str
+) -> None:
+    assert (
+        ssl_expiry_fields(_in(days), warning_days=30, critical_days=7)["state"] == state
+    )

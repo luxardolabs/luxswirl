@@ -213,53 +213,7 @@
         {# undefined-guards: additional_data is always a dict; the per-check-type metric keys inside it are genuinely optional #}
         {% if history and history|length > 0 and history[0].additional_data and history[0].additional_data.get('response') and history[0].additional_data.response.get('ssl_certificate') %}
         {% set ssl_cert = history[0].additional_data.response.ssl_certificate %}
-        <div class="card p-4 {% if ssl_cert.expired %}bg-red-500/10 border-red-500/30{% elif ssl_cert.expires_critical %}bg-orange-500/10 border-orange-500/30{% elif ssl_cert.expires_soon %}bg-yellow-500/10 border-yellow-500/30{% else %}bg-green-500/5 border-green-500/20{% endif %}">
-            <div class="flex items-center justify-between mb-3">
-                <h3 class="text-sm font-medium uppercase tracking-wide {% if ssl_cert.expired %}text-red-400{% elif ssl_cert.expires_critical %}text-orange-400{% elif ssl_cert.expires_soon %}text-yellow-400{% else %}text-green-400{% endif %}">
-                    <span class="w-4 h-4 inline mr-1 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/lock-open.svg" %}</span>
-                    SSL Certificate
-                </h3>
-                <span class="px-2 py-1 text-xs font-medium rounded {% if ssl_cert.expired %}bg-red-600/20 text-red-300{% elif ssl_cert.expires_critical %}bg-orange-600/20 text-orange-300{% elif ssl_cert.expires_soon %}bg-yellow-600/20 text-yellow-300{% else %}bg-green-600/20 text-green-300{% endif %}">
-                    {% if ssl_cert.expired %}
-                        Expired
-                    {% elif ssl_cert.expires_critical %}
-                        Critical
-                    {% elif ssl_cert.expires_soon %}
-                        Expiring Soon
-                    {% else %}
-                        Valid
-                    {% endif %}
-                </span>
-            </div>
-            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
-                <div>
-                    <p class="text-dark-text-muted text-xs mb-1">Days Until Expiration</p>
-                    <p class="font-bold {% if ssl_cert.expired %}text-red-400{% elif ssl_cert.expires_critical %}text-orange-400{% elif ssl_cert.expires_soon %}text-yellow-400{% else %}text-green-400{% endif %}">
-                        {% if ssl_cert.days_until_expiration is not none %}
-                            {% if ssl_cert.days_until_expiration < 0 %}
-                                Expired {{ ssl_cert.days_until_expiration|abs }} days ago
-                            {% else %}
-                                {{ ssl_cert.days_until_expiration }} days
-                            {% endif %}
-                        {% else %}
-                            Unknown
-                        {% endif %}
-                    </p>
-                </div>
-                <div>
-                    <p class="text-dark-text-muted text-xs mb-1">Expiration Date</p>
-                    <p class="font-mono text-dark-text-primary text-xs">{{ ssl_cert.expiration_display }}</p>
-                </div>
-                <div>
-                    <p class="text-dark-text-muted text-xs mb-1">Subject</p>
-                    <p class="font-mono text-dark-text-primary text-xs truncate">{{ ssl_cert.subject or 'Unknown' }}</p>
-                </div>
-                <div>
-                    <p class="text-dark-text-muted text-xs mb-1">Issuer</p>
-                    <p class="font-mono text-dark-text-primary text-xs truncate">{{ ssl_cert.issuer or 'Unknown' }}</p>
-                </div>
-            </div>
-        </div>
+        {% include 'partials/panels/checks/metrics/ssl_certificate.html' %}
         {% endif %}
 
         <!-- Check-type-specific metrics -->
