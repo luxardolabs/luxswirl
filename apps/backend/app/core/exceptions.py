@@ -19,6 +19,13 @@ def validation_message(exc: ValidationError) -> str:
     return "; ".join(parts)
 
 
+def value_error_message(exc: ValueError) -> str:
+    """The text a page shows for a refusal: a schema's as field and reason, else its own."""
+    if isinstance(exc, ValidationError):
+        return validation_message(exc)
+    return str(exc)
+
+
 class LuxSwirlException(Exception):
     """Base exception for all LuxSwirl errors."""
 

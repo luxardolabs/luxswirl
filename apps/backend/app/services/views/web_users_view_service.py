@@ -14,6 +14,7 @@ from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.datetime_utils import utc_now
+from app.core.exceptions import validation_message, value_error_message
 from app.models.enum_model import UserRole, options_for
 from app.schemas.auth_schema import AuthedUser
 from app.schemas.pagination_schema import build_pagination
@@ -135,26 +136,28 @@ class WebUsersViewService:
     ) -> tuple[UserResponse | None, str | None]:
         """Build the UserCreate DTO from raw form inputs and create the user.
 
-        Returns (User, None) on success or (None, error_message) — including the
-        first Pydantic validation message when the inputs are invalid.
+        Returns (User, None) on success or (None, error_message), naming each
+        refused field when the inputs are invalid.
         """
         try:
-            user_data = UserCreate(
-                username=username,
-                password=password,
-                role=UserRole(role),
-                full_name=full_name or None,
-                is_active=is_active,
-                must_change_password=must_change_password,
+            # The schema reads the role, so an unknown one is refused by field.
+            user_data = UserCreate.model_validate(
+                {
+                    "username": username,
+                    "password": password,
+                    "role": role,
+                    "full_name": full_name or None,
+                    "is_active": is_active,
+                    "must_change_password": must_change_password,
+                }
             )
         except ValidationError as exc:
-            errors = exc.errors()
-            return None, (str(errors[0]["msg"]) if errors else "Invalid input")
+            return None, validation_message(exc)
         try:
             user = await self.user_service.create_user(db, user_data, created_by)
             return user, None
         except ValueError as e:
-            return None, str(e)
+            return None, value_error_message(e)
 
     async def update_user(
         self,
@@ -166,12 +169,18 @@ class WebUsersViewService:
         is_active: bool,
         must_change_password: bool,
     ) -> tuple[UserResponse | None, str | None]:
-        """Build the UserUpdate DTO from raw form inputs and update the user."""
-        update_data = UserUpdate(
-            role=UserRole(role),
-            full_name=full_name or None,
-            is_active=is_active,
-            must_change_password=must_change_password,
+        """Build the UserUpdate DTO from raw form inputs and update the user.
+
+        A refused input raises the schema's ValidationError, which the app's 400
+        handler renders as field and reason.
+        """
+        update_data = UserUpdate.model_validate(
+            {
+                "role": role,
+                "full_name": full_name or None,
+                "is_active": is_active,
+                "must_change_password": must_change_password,
+            }
         )
         try:
             user = await self.user_service.update_user(db, user_id, update_data)
@@ -179,7 +188,7 @@ class WebUsersViewService:
                 return None, "User not found"
             return user, None
         except ValueError as e:
-            return None, str(e)
+            return None, value_error_message(e)
 
     async def delete_user(
         self, db: AsyncSession, user_id: UUID
@@ -230,7 +239,7 @@ class WebUsersViewService:
             )
             return user, None
         except ValueError as e:
-            return None, str(e)
+            return None, value_error_message(e)
 
     async def unlock_user(
         self, db: AsyncSession, user_id: UUID
@@ -250,7 +259,7 @@ class WebUsersViewService:
         try:
             return await self.user_service.unlock_user(db, user_id), None
         except ValueError as e:
-            return None, str(e)
+            return None, value_error_message(e)
 
     async def build_users_page_context(
         self,

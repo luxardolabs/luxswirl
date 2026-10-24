@@ -14,7 +14,6 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from pydantic import ValidationError
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from sqlalchemy.exc import SQLAlchemyError
@@ -38,7 +37,7 @@ from app.background.maintenance_worker import (
 )
 from app.cli import bootstrap_on_startup
 from app.core.config import settings
-from app.core.exceptions import LuxSwirlException, validation_message
+from app.core.exceptions import LuxSwirlException, value_error_message
 from app.core.logging_config import configure_logging
 from app.core.logging_options import logging_options
 from app.core.rate_limit import limiter
@@ -295,7 +294,7 @@ async def value_error_handler(request: Request, exc: ValueError) -> Response:
     Web routers used to catch these and render a 400 partial themselves; now
     they propagate here so the handling lives in exactly one place.
     """
-    message = validation_message(exc) if isinstance(exc, ValidationError) else str(exc)
+    message = value_error_message(exc)
     get_logger("luxswirl.server").warning(
         "Value error", extra={"error_message": message}
     )
