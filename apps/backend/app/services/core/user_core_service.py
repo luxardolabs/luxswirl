@@ -8,6 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.user_crud import UserCRUD
+from app.models.enum_model import UserRole
 from app.models.user_model import User
 from app.schemas.user_schema import (
     UserCreate,
@@ -169,8 +170,15 @@ class UserCoreService:
         original_role = user.role
         role_changed = False
 
-        # Update fields
         update_data = user_data.model_dump(exclude_unset=True)
+        await self._assert_an_active_admin_remains(
+            db,
+            user,
+            stays_active_admin=update_data.get("role", user.role) == UserRole.ADMIN
+            and update_data.get("is_active", user.is_active) is True,
+        )
+
+        # Update fields
         for field, value in update_data.items():
             if field == "role" and value != original_role:
                 role_changed = True
@@ -201,6 +209,24 @@ class UserCoreService:
         except IntegrityError as e:
             raise ValueError(f"User update failed: {e}") from e
 
+    @staticmethod
+    async def _assert_an_active_admin_remains(
+        db: AsyncSession, user: User, *, stays_active_admin: bool
+    ) -> None:
+        """Refuse a change that leaves no active admin to sign in and manage users.
+
+        Raises:
+            ValueError: If `user` is the last active admin and would stop being one.
+        """
+        is_active_admin = user.role == UserRole.ADMIN and user.is_active
+        if not is_active_admin or stays_active_admin:
+            return
+        if await UserCRUD.count_other_active_admins(db, user.id) == 0:
+            raise ValueError(
+                "Cannot remove the last active admin: make another user an "
+                "active admin first"
+            )
+
     async def delete_user(self, db: AsyncSession, user_id: UUID) -> bool:
         """
         Delete user.
@@ -220,11 +246,7 @@ class UserCoreService:
         if not user:
             raise ValueError(f"User not found: {user_id}")
 
-        # Check if this is the last admin
-        if user.role == "admin":
-            admin_count = await UserCRUD.count_by_role(db, "admin")
-            if admin_count <= 1:
-                raise ValueError("Cannot delete the last admin user")
+        await self._assert_an_active_admin_remains(db, user, stays_active_admin=False)
 
         # Delete user (cascade will delete sessions)
         await UserCRUD.delete_user(db, user)

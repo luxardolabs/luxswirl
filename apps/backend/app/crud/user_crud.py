@@ -9,6 +9,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.datetime_utils import utc_now
+from app.models.enum_model import UserRole
 from app.models.user_model import User
 
 
@@ -105,6 +106,18 @@ class UserCRUD:
     @staticmethod
     async def count_by_role(db: AsyncSession, role: str) -> int:
         result = await db.execute(select(func.count(User.id)).where(User.role == role))
+        return result.scalar_one()
+
+    @staticmethod
+    async def count_other_active_admins(db: AsyncSession, user_id: UUID) -> int:
+        """Active admins other than `user_id`: the ones who could still sign in."""
+        result = await db.execute(
+            select(func.count(User.id)).where(
+                User.role == UserRole.ADMIN,
+                User.is_active.is_(True),
+                User.id != user_id,
+            )
+        )
         return result.scalar_one()
 
     @staticmethod
