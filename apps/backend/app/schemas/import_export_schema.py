@@ -8,6 +8,7 @@ the layered architecture standard (no BaseModel subclasses inside routers).
 from pydantic import BaseModel, Field
 
 from app.models.enum_model import CheckType
+from app.schemas.base_schema import TagList
 from app.schemas.check_schema import HttpMethodField
 
 
@@ -26,4 +27,4 @@ class CheckExport(BaseModel):
     expected_status: int | None = None
     json_path: str | None = None
     expected_value: str | None = None
-    tags: list[str] | None = None
+    tags: TagList | None = None

@@ -5,11 +5,14 @@ Jinja2 template filters for the web UI.
 import hashlib
 from datetime import UTC, datetime
 from pathlib import Path
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from jinja2 import Environment
 
 from app.schemas.pagination_schema import paginated_url
+from app.shared.logger import get_logger
+
+logger = get_logger("luxswirl.web.template_filters")
 
 # Abbreviation mapping for the timeago filter
 _TIME_UNITS = [
@@ -96,8 +99,8 @@ def format_datetime(
     # Convert UTC to target timezone (with fallback to UTC if invalid)
     try:
         tz = ZoneInfo(timezone)
-    except Exception:
-        # Fallback to UTC if timezone is invalid
+    except ZoneInfoNotFoundError, ValueError:
+        logger.debug("Unknown timezone, showing UTC", extra={"timezone": timezone})
         tz = ZoneInfo("UTC")
 
     local_dt = dt.astimezone(tz)

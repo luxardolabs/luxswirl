@@ -20,7 +20,7 @@ These apply to every check type:
 | **Interval (s)** | Yes      | 60      | 10–86400 (10s to 24h). Lower = more frequent = more results and database load. Recommended: 60s production, 300s non-critical                            |
 | **Timeout (s)**  | Yes      | 10      | 1–300; must be less than the interval (the check must finish before the next run). Global default in Settings → Checks                                   |
 | **Retries**      | Yes      | 2       | 0–10. On failure the agent waits the retry interval (~30s) and retries up to N times before marking down — reduces false positives from transient issues |
-| **Tags**         | No       | —       | Comma-separated (e.g. `critical,api,customer-facing`); agent tags also apply to its checks. Used in dashboard and checks-page filters                    |
+| **Tags**         | No       | —       | Comma-separated (e.g. `critical,api,customer-facing`), up to 100 tags of at most 100 characters each; agent tags also apply to its checks. Used in dashboard and checks-page filters |
 | **Alert Rule**   | No       | —       | Attach a configured alert (or "No Alert"); the same alert can cover many checks. Alerts are configured in Settings → Alerts                              |
 | **Enabled**      | No       | true    | Uncheck to create a check without running it yet (prepare now, enable later)                                                                             |
 

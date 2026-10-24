@@ -33,7 +33,7 @@ Open the panel and click **Download JSON** — a one-click operation that includ
       "expected_status": 200,
       "json_path": null,
       "expected_value": null,
-      "tags": "production,critical"
+      "tags": ["production", "critical"]
     }
   ]
 }
@@ -57,7 +57,7 @@ Open the panel and click **Download JSON** — a one-click operation that includ
 | `expected_status` | int    | No (HTTP only)      | —       | Expected HTTP status                                                   |
 | `json_path`       | string | No (JSON only)      | —       | JSONata query                                                          |
 | `expected_value`  | string | No (JSON only)      | —       | Expected value for comparison                                          |
-| `tags`            | string | No                  | —       | Comma-separated                                                        |
+| `tags`            | list   | No                  | —       | Up to 100 strings, each one line of at most 100 characters             |
 
 The minimal valid check is `name` + `check_type` + `target`; everything else takes the defaults:
 
@@ -80,20 +80,20 @@ The minimal valid check is `name` + `check_type` + `target`; everything else tak
 ```json
 // HTTP — method + expected status
 { "name": "http_check", "check_type": "http", "target": "https://example.com",
-  "http_method": "POST", "expected_status": 201, "tags": "web" }
+  "http_method": "POST", "expected_status": 201, "tags": ["web"] }
 
 // JSON — JSONata query + expected value
 { "name": "json_api_check", "check_type": "json", "target": "https://api.example.com/data",
   "http_method": "GET", "expected_status": 200,
-  "json_path": "data.users[0].status", "expected_value": "active", "tags": "api,validation" }
+  "json_path": "data.users[0].status", "expected_value": "active", "tags": ["api", "validation"] }
 
 // TCP — host:port
 { "name": "redis_port", "check_type": "tcp", "target": "redis.example.com:6379",
-  "timeout": 5, "tags": "infrastructure,redis" }
+  "timeout": 5, "tags": ["infrastructure", "redis"] }
 
 // MySQL / PostgreSQL — connection string in the target
 { "name": "mysql_connection", "check_type": "mysql",
-  "target": "mysql://user:pass@host:3306/database", "timeout": 15, "tags": "database,mysql" }
+  "target": "mysql://user:pass@host:3306/database", "timeout": 15, "tags": ["database", "mysql"] }
 ```
 
 > ⚠️ Synthetic checks run arbitrary Python and are admin-only — importing them is discouraged for security. See [SECURITY.md](../../SECURITY.md).
@@ -166,7 +166,7 @@ An exported file is plain JSON, so `jq` makes bulk edits easy before re-importin
 
 ```bash
 jq '.checks[].interval = 120' export.json > slower.json                 # change every interval
-jq '.checks |= map(select(.tags | contains("production")))' \           # keep only prod checks
+jq '.checks |= map(select(.tags // [] | index("production")))' \           # keep only prod checks
    export.json > prod.json
 jq '.checks[].interval = (.checks[].interval * 2)' prod.json > dev.json  # derive a dev variant
 jq . export.json                                                        # validate JSON
@@ -243,7 +243,7 @@ File structure                       Import modes
 
 ```bash
 jq . export.json                                                    # validate
-jq '.checks |= map(select(.tags | contains("production")))' export.json   # filter by tag
+jq '.checks |= map(select(.tags // [] | index("production")))' export.json   # filter by tag
 jq '.checks[].interval = 120' export.json                           # modify intervals
 sed -i 's/password:[^@]*/password:****/g' export.json               # scrub credentials
 ```
