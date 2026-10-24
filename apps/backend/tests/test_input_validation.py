@@ -13,7 +13,7 @@ import logging
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from typing import Any
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 import pytest_asyncio
@@ -33,6 +33,7 @@ from app.schemas.check_schema import BulkCheckCreateRequest, CheckCreate, CheckU
 from app.schemas.import_export_schema import CheckExport
 from app.schemas.job_schema import JobCreate
 from app.schemas.registration_key_schema import RegistrationKeyCreate
+from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.auth_core_service import AuthCoreService
 from app.services.core.registration_key_core_service import RegistrationKeyCoreService
 from app.web.template_filters import format_datetime
@@ -69,7 +70,9 @@ _IP_INPUTS: list[tuple[type, dict[str, Any]]] = [
 ]
 
 _TAG_INPUTS: list[tuple[type, dict[str, Any]]] = [
-    *_IP_INPUTS,
+    (AgentRegisterRequest, {}),
+    (AgentCreate, {}),
+    (AgentUpdate, {}),
     (
         CheckCreate,
         {"display_name": "c", "check_type": "http", "target": "https://example.com"},
@@ -89,7 +92,21 @@ def _ids(cases: list[tuple[Any, ...]]) -> list[str]:
 @pytest.mark.parametrize(
     ("schema", "base", "field"), _AGENT_TEXT, ids=_ids(_AGENT_TEXT)
 )
-@pytest.mark.parametrize("bad", ["web01\nedge", "a\x00b", "a\x1b[31mb", "a\x7fb"])
+@pytest.mark.parametrize(
+    "bad",
+    [
+        "web01\nedge",
+        "a\x00b",
+        "a\x1b[31mb",
+        "a\x7fb",
+        "web01\u0085edge",  # NEL: str.splitlines() breaks on it
+        "a\x9b31mb",  # 8-bit CSI
+        "web01\u2028edge",  # line separator
+        "web01\u2029edge",  # paragraph separator
+        "admin\u202egpj.exe",  # right-to-left override
+        "web\u200b01",  # zero-width space
+    ],
+)
 def test_text_with_a_control_character_is_refused(
     schema: type, base: dict[str, Any], field: str, bad: str
 ) -> None:
@@ -121,12 +138,23 @@ def test_an_ip_address_that_does_not_parse_is_refused(
 
 @pytest.mark.unit
 @pytest.mark.parametrize(("schema", "base"), _IP_INPUTS, ids=_ids(_IP_INPUTS))
+@pytest.mark.parametrize("blank", ["", "   ", None])
+def test_a_blank_ip_address_is_unset(
+    schema: type, base: dict[str, Any], blank: str | None
+) -> None:
+    """An agent config's `ip_address: ${UNSET}` expands to an empty string."""
+    assert schema(**base, ip_address=blank).ip_address is None
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(("schema", "base"), _IP_INPUTS, ids=_ids(_IP_INPUTS))
 @pytest.mark.parametrize(
     ("given", "stored"),
     [
         ("10.0.1.100", "10.0.1.100"),
         ("2001:0db8:0000:0000:0000:0000:0000:0001", "2001:db8::1"),
         ("::ffff:10.0.0.1", "::ffff:10.0.0.1"),
+        ("fe80::1%eth0", "fe80::1%eth0"),
     ],
 )
 def test_an_ip_address_is_stored_in_canonical_form(
@@ -311,3 +339,121 @@ async def test_the_agent_form_still_clears_a_setting_with_zero(
     assert resp.status_code == 200, resp.text
     await db.refresh(agent)
     assert agent.heartbeat_interval is None
+
+
+@pytest_asyncio.fixture
+async def approved(db: AsyncSession) -> tuple[Agent, str]:
+    agent = make_agent(approval_status="pending", tags=["kept"])
+    db.add(agent)
+    await db.flush()
+    _, key = await AgentCoreService.approve_agent(db, agent.id)
+    return agent, key
+
+
+def _beat(agent_id: object, **fields: object) -> dict[str, object]:
+    return {
+        "agent_id": str(agent_id),
+        "timestamp": utc_now().isoformat(),
+        "status": "online",
+        **fields,
+    }
+
+
+_OVER_LIMIT_TAGS = pytest.mark.parametrize(
+    "tags",
+    [[f"t{i}" for i in range(101)], ["x" * 101], ["prod\nweb"]],
+    ids=["101-tags", "101-char-tag", "multiline-tag"],
+)
+
+
+@pytest.mark.integration
+@_OVER_LIMIT_TAGS
+async def test_an_approved_agents_heartbeat_is_never_refused_over_its_tags(
+    agent_client: AsyncClient, db: AsyncSession, approved: tuple[Agent, str], tags
+) -> None:
+    """After approval the server ignores declared tags; refusing the heartbeat
+    over them would show the agent offline and stop its config updates."""
+    agent, key = approved
+
+    resp = await agent_client.post(
+        "/api/v1/heartbeat",
+        json=_beat(agent.id, tags=tags),
+        headers={"Authorization": f"Bearer {key}"},
+    )
+
+    assert resp.status_code == 200, resp.text
+    await db.refresh(agent)
+    assert agent.tags == ["kept"]
+
+
+@pytest.mark.integration
+@_OVER_LIMIT_TAGS
+async def test_a_pending_agents_over_limit_tags_are_not_stored(
+    agent_client: AsyncClient,
+    reg_key: str,
+    db: AsyncSession,
+    caplog: pytest.LogCaptureFixture,
+    tags,
+) -> None:
+    agent = make_agent(approval_status="pending", tags=["suggested"])
+    db.add(agent)
+    await db.flush()
+
+    with caplog.at_level(logging.WARNING, logger="luxswirl.services.agent"):
+        resp = await agent_client.post(
+            "/api/v1/heartbeat",
+            json=_beat(agent.id, tags=tags),
+            headers={"Authorization": f"Bearer {reg_key}"},
+        )
+
+    assert resp.status_code == 200, resp.text
+    await db.refresh(agent)
+    assert agent.tags == ["suggested"]
+    assert any("over the tag limits" in r.getMessage() for r in caplog.records)
+
+
+@pytest.mark.integration
+async def test_a_pending_agents_tags_within_the_limits_are_stored(
+    agent_client: AsyncClient, reg_key: str, db: AsyncSession
+) -> None:
+    agent = make_agent(approval_status="pending", tags=["suggested"])
+    db.add(agent)
+    await db.flush()
+
+    resp = await agent_client.post(
+        "/api/v1/heartbeat",
+        json=_beat(agent.id, tags=["prod", "web"]),
+        headers={"Authorization": f"Bearer {reg_key}"},
+    )
+
+    assert resp.status_code == 200, resp.text
+    await db.refresh(agent)
+    assert agent.tags == ["prod", "web"]
+
+
+@pytest.mark.integration
+async def test_registration_with_an_empty_ip_address_stores_it_unset(
+    agent_client: AsyncClient, reg_key: str, db: AsyncSession
+) -> None:
+    resp = await agent_client.post(
+        "/api/v1/agents/register",
+        json={"hostname": "blank-ip", "ip_address": ""},
+        headers={"Authorization": f"Bearer {reg_key}"},
+    )
+
+    assert resp.status_code == 201, resp.text
+    stored = await db.get(Agent, UUID(resp.json()["agent_id"]))
+    assert stored is not None and stored.ip_address is None
+
+
+@pytest.mark.integration
+async def test_registration_with_a_nel_in_the_hostname_is_refused(
+    agent_client: AsyncClient, reg_key: str
+) -> None:
+    resp = await agent_client.post(
+        "/api/v1/agents/register",
+        json={"hostname": "web01\u0085edge"},
+        headers={"Authorization": f"Bearer {reg_key}"},
+    )
+
+    assert resp.status_code == 422, resp.text

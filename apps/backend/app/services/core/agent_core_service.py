@@ -36,6 +36,7 @@ from app.schemas.agent_schema import (
     AgentUpdate,
     PendingAgent,
 )
+from app.schemas.base_schema import storable_tags
 from app.services.core.agent_assignment_core_service import AgentAssignmentCoreService
 from app.services.core.job_core_service import JobCoreService
 from app.services.core.metrics_collector_core_service import MetricsCollectorCoreService
@@ -603,7 +604,14 @@ class AgentCoreService:
         if heartbeat.version:
             agent.version = heartbeat.version
         if heartbeat.tags and agent.approval_status == AgentApprovalStatus.PENDING:
-            agent.tags = heartbeat.tags
+            tags = storable_tags(heartbeat.tags)
+            if tags is None:
+                logger.warning(
+                    "Declared tags not stored: over the tag limits",
+                    extra={"agent_id": str(agent.id), "tag_count": len(heartbeat.tags)},
+                )
+            else:
+                agent.tags = tags
 
         # Update health fields
         agent.status = heartbeat.status
