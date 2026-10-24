@@ -18,7 +18,12 @@ from app.models.enum_model import (
     HttpMethod,
 )
 from app.schemas.agent_schema import AgentOption
-from app.schemas.base_schema import BaseSchema, TimestampSchema, upper_or_none
+from app.schemas.base_schema import (
+    BaseSchema,
+    TagList,
+    TimestampSchema,
+    upper_or_none,
+)
 
 # Accept the case a client sent (`get`, `aaaa`) and an empty form value.
 HttpMethodField = Annotated[HttpMethod | None, BeforeValidator(upper_or_none)]
@@ -69,7 +74,7 @@ class CheckCreate(CheckBase):
         le=100,
         description="Resend notification if down X times consecutively (NULL = disabled)",
     )
-    tags: list[str] | None = Field(
+    tags: TagList | None = Field(
         None, description="Tags for organizing/filtering checks"
     )
 
@@ -145,7 +150,7 @@ class CheckUpdate(BaseSchema):
     retry_attempts: int | None = Field(None, ge=0, le=10)
     retry_interval_seconds: int | None = Field(None, ge=1, le=300)
     resend_notification_after: int | None = Field(None, ge=1, le=100)
-    tags: list[str] | None = None
+    tags: TagList | None = None
 
     # Agent assignment (Phase 2)
     assignment_mode: AssignmentMode | None = None
@@ -303,7 +308,7 @@ class BulkCheckCreateRequest(BaseSchema):
         10, gt=0, le=300, description="Check timeout in seconds"
     )
     enabled: bool = Field(True, description="Whether check is enabled")
-    tags: list[str] | None = Field(
+    tags: TagList | None = Field(
         None, description="Tags for organizing/filtering checks"
     )
     expected_status: int | None = Field(

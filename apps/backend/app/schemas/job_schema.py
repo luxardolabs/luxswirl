@@ -17,7 +17,7 @@ from app.models.enum_model import (
     JobStatus,
     JobType,
 )
-from app.schemas.base_schema import BaseSchema, TimestampSchema
+from app.schemas.base_schema import BaseSchema, TagList, TimestampSchema
 
 
 class JobBase(BaseSchema):
@@ -51,6 +51,8 @@ class JobBase(BaseSchema):
 class JobCreate(JobBase):
     """Schema for creating a new job."""
 
+    # Validated here, not on JobBase, which also reads stored rows.
+    tags: TagList | None = Field(None, description="Tags for organizing/filtering jobs")
     # Future fields (design now, implement in Phase 2)
     schedule: dict[str, Any] | None = Field(
         None, description="Scheduling config (null = one-time job)"

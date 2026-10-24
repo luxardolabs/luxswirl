@@ -2,12 +2,19 @@
 Base Pydantic schemas with common configurations.
 """
 
+import re
 from datetime import datetime
-from typing import Any
+from ipaddress import ip_address
+from typing import Annotated, Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field
 
 from app.core.datetime_utils import utc_now
+
+_CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f]")
+
+MAX_TAGS = 100
+MAX_TAG_LENGTH = 100
 
 
 def upper_or_none(value: object) -> object:
@@ -16,6 +23,37 @@ def upper_or_none(value: object) -> object:
     if isinstance(value, str):
         return value.strip().upper() or None
     return value
+
+
+def refuse_control_chars(value: str) -> str:
+    """Refuse a string holding a control character (a newline, NUL, ESC...).
+
+    Stripping trims only the ends, so without this a value such as
+    ``"web01\\nedge"`` is stored and shown on every page that names it.
+    """
+    if _CONTROL_CHARS.search(value):
+        raise ValueError("must not contain control characters")
+    return value
+
+
+def canonical_ip(value: str) -> str:
+    """An IPv4 or IPv6 address in its canonical text form; anything else is refused."""
+    try:
+        return str(ip_address(value))
+    except ValueError:
+        raise ValueError(f"not a valid IP address: {value!r}") from None
+
+
+PlainText = Annotated[str, AfterValidator(refuse_control_chars)]
+"""Free text an input sets on one line: a name, a hostname, a version."""
+
+IpAddressText = Annotated[str, AfterValidator(canonical_ip)]
+
+Tag = Annotated[
+    str, Field(max_length=MAX_TAG_LENGTH), AfterValidator(refuse_control_chars)
+]
+TagList = Annotated[list[Tag], Field(max_length=MAX_TAGS)]
+"""An input's tags: at most MAX_TAGS, each one line of at most MAX_TAG_LENGTH."""
 
 
 class BaseSchema(BaseModel):

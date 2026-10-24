@@ -612,27 +612,24 @@ class AgentsViewService:
                 parsed_tags = [t.strip() for t in str(tags).split(",") if t.strip()]
                 update_dict["tags"] = parsed_tags or None
 
+            # 0 clears the setting (stored as unset); any
+            # other value goes to AgentUpdate, whose bounds refuse it if out of
+            # range. A value that is not a number is refused here.
             def _parse_int(v: str | int | float | None, name: str) -> None:
                 if v is not None and str(v).strip():
                     try:
                         n = int(v)
-                        if n > 0:
-                            update_dict[name] = n
-                        elif n == 0:
-                            update_dict[name] = None
                     except ValueError:
-                        pass
+                        raise ValueError(f"{name} must be a whole number") from None
+                    update_dict[name] = n or None
 
             def _parse_float(v: str | int | float | None, name: str) -> None:
                 if v is not None and str(v).strip():
                     try:
                         f = float(v)
-                        if f > 0:
-                            update_dict[name] = f
-                        elif f == 0:
-                            update_dict[name] = None
                     except ValueError:
-                        pass
+                        raise ValueError(f"{name} must be a number") from None
+                    update_dict[name] = f or None
 
             _parse_int(form_kwargs.get("heartbeat_interval"), "heartbeat_interval")
             _parse_int(form_kwargs.get("check_sync_interval"), "check_sync_interval")

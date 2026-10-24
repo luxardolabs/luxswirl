@@ -10,16 +10,26 @@ from uuid import UUID
 from pydantic import Field
 
 from app.models.enum_model import AgentApprovalStatus, AgentStatus
-from app.schemas.base_schema import BaseSchema, TimestampSchema
+from app.schemas.base_schema import (
+    BaseSchema,
+    IpAddressText,
+    PlainText,
+    TagList,
+    TimestampSchema,
+)
 
 
 class AgentRegisterRequest(BaseSchema):
     """Schema for agent registration (before approval)."""
 
-    hostname: str | None = Field(None, max_length=255, description="Agent hostname")
-    ip_address: str | None = Field(None, max_length=45, description="Agent IP address")
-    version: str | None = Field(None, max_length=50, description="Agent version")
-    tags: list[str] | None = Field(None, description="Agent tags")
+    hostname: PlainText | None = Field(
+        None, max_length=255, description="Agent hostname"
+    )
+    ip_address: IpAddressText | None = Field(
+        None, max_length=45, description="Agent IP address"
+    )
+    version: PlainText | None = Field(None, max_length=50, description="Agent version")
+    tags: TagList | None = Field(None, description="Agent tags")
 
     model_config = {
         "json_schema_extra": {
@@ -75,8 +85,22 @@ class AgentBase(BaseSchema):
 
 
 class AgentCreate(AgentBase):
-    """Schema for creating a new agent."""
+    """Schema for creating a new agent.
 
+    The fields are validated here, not on AgentBase, which also reads stored rows.
+    """
+
+    agent_name: PlainText | None = Field(
+        None, max_length=255, description="Agent name (None until approved)"
+    )
+    hostname: PlainText | None = Field(
+        None, max_length=255, description="Agent hostname"
+    )
+    ip_address: IpAddressText | None = Field(
+        None, max_length=45, description="Agent IP address"
+    )
+    version: PlainText | None = Field(None, max_length=50, description="Agent version")
+    tags: TagList | None = Field(None, description="Tags for grouping/filtering")
     agent_run_id: str | None = Field(
         None, max_length=255, description="Current run ID (UUID)"
     )
@@ -97,12 +121,12 @@ class AgentCreate(AgentBase):
 class AgentUpdate(BaseSchema):
     """Schema for updating an agent."""
 
-    agent_name: str | None = Field(None, min_length=1, max_length=255)
+    agent_name: PlainText | None = Field(None, min_length=1, max_length=255)
     agent_run_id: str | None = None
-    hostname: str | None = None
-    ip_address: str | None = None
-    version: str | None = None
-    tags: list[str] | None = None
+    hostname: PlainText | None = Field(None, max_length=255)
+    ip_address: IpAddressText | None = Field(None, max_length=45)
+    version: PlainText | None = Field(None, max_length=50)
+    tags: TagList | None = None
     heartbeat_interval: int | None = Field(
         None, ge=1, le=600, description="Heartbeat interval in seconds"
     )
@@ -270,16 +294,20 @@ class AgentHeartbeat(BaseSchema):
     )
 
     # Agent info
-    hostname: str | None = Field(None, description="Agent hostname")
-    ip_address: str | None = Field(None, description="Agent IP address")
-    version: str | None = Field(None, description="Agent version")
+    hostname: PlainText | None = Field(
+        None, max_length=255, description="Agent hostname"
+    )
+    ip_address: IpAddressText | None = Field(
+        None, max_length=45, description="Agent IP address"
+    )
+    version: PlainText | None = Field(None, max_length=50, description="Agent version")
     uptime_seconds: int | None = Field(None, description="Agent uptime in seconds")
     status: AgentStatus = Field(
         AgentStatus.ONLINE, description="Agent status (online/degraded/offline)"
     )
 
     # Tags
-    tags: list[str] | None = Field(
+    tags: TagList | None = Field(
         None,
         description=(
             "The agent's declared tags. Stored only while the agent is pending, "
