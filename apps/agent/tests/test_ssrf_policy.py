@@ -10,6 +10,7 @@ heartbeat response carry it. A response without it leaves the policy as it is.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import time
 from collections.abc import Iterator
 from pathlib import Path
@@ -213,10 +214,8 @@ async def _hosts_dialed(check: PostgreSQLCheck, monkeypatch: Any) -> list[str]:
         raise ConnectionRefusedError("test")
 
     monkeypatch.setattr(loop, "create_connection", refuse)
-    try:
+    with contextlib.suppress(SsrfBlockedError):
         await check.run()
-    except SsrfBlockedError:
-        pass
     return dialed
 
 
