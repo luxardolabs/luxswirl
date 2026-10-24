@@ -25,6 +25,7 @@ from cryptography.fernet import Fernet, InvalidToken
 
 from app.agent.credentials import AgentCredentials
 from app.agent.http_client import server_client
+from app.checks._ssrf_policy import apply_server_policy
 from app.checks.base import BaseCheck
 from app.shared.logger import get_logger
 
@@ -266,6 +267,8 @@ class CheckManager:
             data = response.json()
 
             checks: list[dict[str, Any]] = data.get("checks", [])
+            # Before any check runs: the first heartbeat may come later.
+            apply_server_policy(data)
             self.logger.info(
                 "Fetched checks from server",
                 extra={"check_count": len(checks)},

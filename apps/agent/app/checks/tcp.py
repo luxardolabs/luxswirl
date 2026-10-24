@@ -6,8 +6,8 @@ import asyncio
 import socket
 from typing import Any
 
+from app.checks._ssrf_policy import assert_ip_allowed
 from app.checks.base import BaseCheck
-from app.shared.ssrf import assert_ip_allowed
 
 
 class TCPCheck(BaseCheck):
@@ -69,7 +69,7 @@ class TCPCheck(BaseCheck):
 
                 # SSRF: validate the exact resolved IP we're about to connect to
                 # (pinned — no re-resolution gap) before opening the socket.
-                assert_ip_allowed(socket_address[0], block_cloud_metadata=True)
+                assert_ip_allowed(socket_address[0])
 
                 # Open connection
                 reader, writer = await asyncio.wait_for(

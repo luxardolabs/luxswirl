@@ -23,6 +23,7 @@ import httpx
 import psutil
 
 from app.agent.http_client import server_client
+from app.checks._ssrf_policy import apply_server_policy
 from app.shared.logger import get_logger
 
 if TYPE_CHECKING:
@@ -306,6 +307,9 @@ class HeartbeatSender:
 
                             # Update logging configuration if provided
                             self._update_logging_config(response_data)
+
+                            # The SSRF policy every check enforces
+                            apply_server_policy(response_data)
 
                             # Check if config version changed and reload if needed
                             await self._handle_config_version(response_data)

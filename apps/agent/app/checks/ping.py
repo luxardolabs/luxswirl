@@ -6,8 +6,8 @@ import platform
 import re
 from typing import Any
 
+from app.checks._ssrf_policy import assert_target_allowed
 from app.checks.base import BaseCheck
-from app.shared.ssrf import assert_target_allowed
 from app.shared.subprocess_safe import get_subprocess_config, run_subprocess_safely
 
 
@@ -37,8 +37,8 @@ class PingCheck(BaseCheck):
             A dictionary containing the check result
         """
         host = self.config["target"]
-        # SSRF: refuse a ping target that resolves into the cloud-metadata range.
-        assert_target_allowed(host, block_cloud_metadata=True)
+        # SSRF: refuse a ping target that resolves into a blocked range.
+        assert_target_allowed(host)
         count = self.config.get("count", 1)
         timeout = self.config.get("timeout", 1)
         retries = self.config.get("retries", 1)

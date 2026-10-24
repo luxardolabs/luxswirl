@@ -4,8 +4,8 @@ DNS Check Module - Implements DNS query health checks.
 
 from typing import Any
 
+from app.checks._ssrf_policy import assert_target_allowed
 from app.checks.base import BaseCheck
-from app.shared.ssrf import assert_target_allowed
 
 try:
     import dns.asyncresolver
@@ -88,8 +88,8 @@ class DNSCheck(BaseCheck):
         }
 
         # SSRF: the nameserver is the host the agent actually connects to — block
-        # one that resolves into the cloud-metadata range.
-        assert_target_allowed(nameserver, block_cloud_metadata=True)
+        # one that resolves into a blocked range.
+        assert_target_allowed(nameserver)
 
         # Try query with retries
         for _attempt in range(retries):

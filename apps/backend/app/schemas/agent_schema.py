@@ -453,6 +453,15 @@ class AgentHeartbeatResponse(BaseSchema):
         None, description="Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)"
     )
 
+    # Network protection
+    block_private_networks: bool = Field(
+        False,
+        description=(
+            "Whether the agent refuses private-network addresses when it connects "
+            "(Settings > Security). It always refuses cloud-metadata addresses"
+        ),
+    )
+
 
 @dataclass(frozen=True)
 class AgentUrls:

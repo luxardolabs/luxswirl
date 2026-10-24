@@ -21,6 +21,7 @@ from app.schemas.check_schema import (
 from app.services.core.agent_assignment_core_service import AgentAssignmentCoreService
 from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.check_core_service import CheckCoreService
+from app.services.core.settings_core_service import SettingsCoreService
 
 
 class CheckApiCoreService:
@@ -132,4 +133,9 @@ class CheckApiCoreService:
         """
         agent = await AgentCoreService.get_agent_by_id(db, agent_id)
         checks = await AgentAssignmentCoreService.get_checks_for_agent(db, agent)
-        return CheckApiCoreService.build_check_list_response(checks, agent.agent_name)
+        protection = await SettingsCoreService.get_network_protection(db)
+        response = CheckApiCoreService.build_check_list_response(
+            checks, agent.agent_name
+        )
+        response.block_private_networks = protection.block_private_networks
+        return response
