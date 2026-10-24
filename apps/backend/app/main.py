@@ -38,7 +38,7 @@ from app.background.maintenance_worker import (
 )
 from app.cli import bootstrap_on_startup
 from app.core.config import settings
-from app.core.exceptions import LuxSwirlException
+from app.core.exceptions import LuxSwirlException, validation_message
 from app.core.logging_config import configure_logging
 from app.core.logging_options import logging_options
 from app.core.rate_limit import limiter
@@ -295,7 +295,7 @@ async def value_error_handler(request: Request, exc: ValueError) -> Response:
     Web routers used to catch these and render a 400 partial themselves; now
     they propagate here so the handling lives in exactly one place.
     """
-    message = _validation_message(exc) if isinstance(exc, ValidationError) else str(exc)
+    message = validation_message(exc) if isinstance(exc, ValidationError) else str(exc)
     get_logger("luxswirl.server").warning(
         "Value error", extra={"error_message": message}
     )
@@ -304,14 +304,6 @@ async def value_error_handler(request: Request, exc: ValueError) -> Response:
         status.HTTP_400_BAD_REQUEST,
         message,
         error_code="BAD_REQUEST",
-    )
-
-
-def _validation_message(exc: ValidationError) -> str:
-    """A schema refusal as `<field>: <reason>` per error, without the input echoed."""
-    return "; ".join(
-        f"{'.'.join(str(part) for part in err['loc']) or 'value'}: {err['msg']}"
-        for err in exc.errors(include_url=False, include_input=False)
     )
 
 

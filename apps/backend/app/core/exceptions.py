@@ -4,6 +4,20 @@ Custom exceptions for LuxSwirl application.
 
 from typing import Any
 
+from pydantic import ValidationError
+
+
+def validation_message(exc: ValidationError) -> str:
+    """A schema refusal as `<field>: <reason>` per error, without pydantic's input echo.
+
+    An error on the whole model (no field) is its reason alone.
+    """
+    parts = []
+    for err in exc.errors(include_url=False, include_input=False):
+        field = ".".join(str(part) for part in err["loc"])
+        parts.append(f"{field}: {err['msg']}" if field else err["msg"])
+    return "; ".join(parts)
+
 
 class LuxSwirlException(Exception):
     """Base exception for all LuxSwirl errors."""

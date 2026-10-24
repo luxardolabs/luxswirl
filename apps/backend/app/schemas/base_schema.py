@@ -61,7 +61,8 @@ def canonical_ip(value: str | None) -> str | None:
     try:
         return str(ip_address(value))
     except ValueError:
-        raise ValueError(f"not a valid IP address: {value!r}") from None
+        # The refused text is not repeated: the message reaches the UI's toast.
+        raise ValueError("not a valid IP address") from None
 
 
 PlainText = Annotated[str, AfterValidator(refuse_control_chars)]
