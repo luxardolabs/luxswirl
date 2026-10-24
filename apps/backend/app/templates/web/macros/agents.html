@@ -51,8 +51,8 @@
         </div>
     </div>
 
-    <!-- Stats Grid - 6 cards, API Key double width -->
-    <div class="grid gap-3 mb-6" style="grid-template-columns: 1fr 1fr 1fr 1fr 1fr 2fr;">
+    <!-- Stats Grid - 6 cards, API Key double width (seven columns from lg) -->
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3 mb-6">
         <!-- Success Rate -->
         <div class="bg-dark-bg-tertiary/50 rounded-lg p-2 border border-dark-border flex flex-col justify-center">
             <div class="flex items-center gap-1.5 mb-1">
@@ -112,7 +112,7 @@
         </div>
 
         <!-- API Key - Double Width, Two Columns -->
-        <div class="bg-dark-bg-tertiary/50 rounded-lg p-2 border border-dark-border flex flex-col justify-center">
+        <div class="col-span-2 sm:col-span-3 lg:col-span-2 bg-dark-bg-tertiary/50 rounded-lg p-2 border border-dark-border flex flex-col justify-center">
             {% if item.agent.has_api_key %}
                 <div class="grid grid-cols-2 gap-x-4 gap-y-1">
                     <div class="flex items-center gap-1.5">
