@@ -39,7 +39,7 @@ DEV_WAIT_TIMEOUT      ?= 180
 # Makefile.local (gitignored): copy Makefile.local.example -> Makefile.local and set it.
 # Contributors don't need it — lint/test and the import-linter contracts run without it.
 LUXARCH_REGISTRY ?=
-LUXARCH_VERSION := 0.319.0
+LUXARCH_VERSION := 0.320.0
 LUXARCH_IMAGE    ?= $(LUXARCH_REGISTRY)/luxardolabs/luxarch:$(LUXARCH_VERSION)
 # Dependency-CVE guard (luxaudit) — same private registry as luxarch, mount-only.
 # Scans the pinned poetry.locks against the live advisory feed (see .luxaudit.toml).
@@ -2011,19 +2011,17 @@ guard-version-check: ## FATAL: fail if any guard pin is behind the published lat
 # The guard-upgrade asset pulls from $(REGISTRY). Here REGISTRY is the PUBLIC app registry
 # (ghcr.io); the guards live on the private one, so this target reads that instead.
 guard-upgrade: REGISTRY = $(LUXARCH_REGISTRY)
-# luxarch:guard-upgrade asset v3 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit guard-upgrade`.
-# v2: the preview mounts `$(CURDIR)`, this makefile's directory (it edits ./Makefile there). v1 mounted
-# `$(PWD)`, the caller's directory, so `make -C <repo> guard-upgrade` previewed ANOTHER repo's new reds.
-# v3: it runs on macOS and on a machine with no registry. v2 rewrote the pin with `sed -i -E`, which
-# BSD sed reads as `-i` with the backup suffix `-E`: it failed, safely, and never bumped a pin on a Mac.
-# The rewrite is now `sed` into a temporary file beside the Makefile (its mode copied first), renamed
-# over it (`mv`, one atomic step: a failed write leaves the Makefile as it was), then read back.
-# With REGISTRY empty (guards loaded from the release tarball), v2 read `latest` only from
-# `$(REGISTRY)/…:latest` and always exited 1. Latest is now the highest released `<guard>:X.Y.Z` on
-# this machine (a guard's `make build-local` tags one only when its source IS that release), never
-# `:local`, which the fleet never runs.
+# luxarch:guard-upgrade asset v4 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit guard-upgrade`.
+# Bumps each guard pin to its latest release and prints the rules the new luxarch adds (`--new-rules`).
+# The preview mounts `$(CURDIR)`, this makefile's directory, whatever directory `make -C` ran from.
+# Latest is the registry's `:latest`, or with REGISTRY empty (guards loaded from the release tarball)
+# the highest released `<guard>:X.Y.Z` on this machine, never `:local`. The pin is rewritten with `sed`
+# into a temporary file beside the Makefile (its mode copied first), renamed over it (`mv`, one atomic
+# step: a failed write leaves the Makefile as it was), then read back: the same on macOS and Linux.
+# A guard whose latest cannot be read is named and fails the run: "all pins already at latest" is
+# printed only when every guard was read.
 guard-upgrade:  ## Bump every guard pin to the published latest (prints what newly bites)
-	@for g in luxarch luxlint luxaudit; do \
+	@unread=; checked=; bumped=; for g in luxarch luxlint luxaudit; do \
 	  if [ -n "$(REGISTRY)" ]; then \
 	    img=$(REGISTRY)/luxardolabs/$$g; src="$$img:latest"; \
 	    docker pull -q $$img:latest >/dev/null 2>&1 || true; \
@@ -2034,8 +2032,8 @@ guard-upgrade:  ## Bump every guard pin to the published latest (prints what new
 	  fi; \
 	  var=$$(echo $$g | tr a-z A-Z)_VERSION; \
 	  old=$$(sed -n -E "s/^$$var[[:space:]]*:=[[:space:]]*//p" Makefile); \
-	  if [ -z "$$old" ]; then echo "!! no $$var pin found in Makefile — NOT bumped"; continue; fi; \
-	  if [ -z "$$latest" ]; then echo "!! could not read $$src — $$var left at $$old"; continue; fi; \
+	  if [ -z "$$old" ]; then echo "!! no $$var pin found in Makefile — NOT bumped"; unread="$$unread $$g"; continue; fi; \
+	  if [ -z "$$latest" ]; then echo "!! could not read $$src — $$var left at $$old"; unread="$$unread $$g"; continue; fi; \
 	  checked=1; \
 	  tmp=$$(mktemp ./.guard-upgrade.XXXXXX) && cp -p Makefile "$$tmp" && sed -E "s|^($$var[[:space:]]*:=[[:space:]]*).*|\\1$$latest|" Makefile > "$$tmp" && mv -f "$$tmp" Makefile; rc=$$?; \
 	  if [ "$$rc" != 0 ]; then rm -f "$$tmp"; echo "!! could not rewrite Makefile (it is unchanged) — $$var NOT bumped"; exit 1; fi; \
@@ -2044,9 +2042,10 @@ guard-upgrade:  ## Bump every guard pin to the published latest (prints what new
 	  if [ "$$old" != "$$latest" ]; then echo "$$var $$old -> $$latest"; bumped=1; fi; \
 	  [ "$$g" = luxarch ] && [ "$$old" != "$$latest" ] && docker run --rm -v "$(CURDIR)":/repo $$img:$$latest --new-rules --since $$old || true; \
 	done; \
-	if [ -n "$$bumped" ]; then echo "pins bumped — re-run make check"; \
-	elif [ -n "$$checked" ]; then echo "all pins already at latest"; \
-	else echo "!! could not read any guard's latest (the registry, or with REGISTRY empty this machine's released images) — NO pin was checked; currency NOT established"; exit 1; fi
+	if [ -n "$$bumped" ]; then echo "pins bumped — re-run make check"; fi; \
+	if [ -z "$$checked" ]; then echo "!! could not read any guard's latest (the registry, or with REGISTRY empty this machine's released images) — NO pin was checked; currency NOT established"; exit 1; fi; \
+	if [ -n "$$unread" ]; then echo "!! NOT checked:$$unread (no pin, or its latest could not be read) — currency NOT established"; exit 1; fi; \
+	if [ -z "$$bumped" ]; then echo "all pins already at latest"; fi
 
 honest: ## HONESTY gate — a green `make check` must mean nothing was silently unchecked
 	@if [ -z "$(LUXARCH_REGISTRY)" ]; then \
