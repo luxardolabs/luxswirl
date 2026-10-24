@@ -1,4 +1,7 @@
-"""Backend test conftest — path setup, the test database, and the route sweep.
+"""Backend test conftest — the test database and the route sweep.
+
+`app.*` and `fixtures.*` import from the run's PYTHONPATH (apps/backend and
+apps/backend/tests, set by `make test`).
 
 Tiers are the FLEET's markers, declared by the canonical pytest config, not by
 this file:
@@ -17,21 +20,6 @@ Run a single tier:
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
-# Layout: this file is apps/backend/tests/conftest.py.
-_TESTS_DIR = Path(__file__).resolve().parent  # apps/backend/tests
-_COMPONENT_ROOT = _TESTS_DIR.parent  # apps/backend  → resolves `import app.*`
-
-# Prepend in reverse priority so the highest-priority entry ends at index 0.
-# Shared code is `app.shared` (apps/shared overlaid on the placeholder package),
-# so apps/ itself is never on the path: a top-level `shared` must not resolve.
-for candidate in (_COMPONENT_ROOT, _TESTS_DIR):
-    if candidate.exists() and str(candidate) not in sys.path:
-        sys.path.insert(0, str(candidate))
-
-
 # WHICH DATABASE THIS SUITE TALKS TO — stated here, in the file you open to
 # learn how the harness is wired, and checked before a single test is collected.
 #
@@ -41,7 +29,7 @@ for candidate in (_COMPONENT_ROOT, _TESTS_DIR):
 # also runs the dev stack — used to run the whole suite against the dev database.
 # The guard below is the belt: a URL whose database name does not say "test" is
 # refused outright rather than dropped.
-from fixtures._db_url import TEST_DATABASE_URL  # noqa: E402
+from fixtures._db_url import TEST_DATABASE_URL
 
 _TEST_DB_NAME = TEST_DATABASE_URL.rsplit("/", 1)[-1]
 if "test" not in _TEST_DB_NAME:

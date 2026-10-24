@@ -6,25 +6,18 @@ the config-validation gate enforced by NotificationCoreService.create_provider.
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
 from uuid import uuid4
 
 import pytest
-from pydantic import ValidationError
-from sqlalchemy.ext.asyncio import AsyncSession
-
-_tests_root = str(Path(__file__).resolve().parent.parent)
-if _tests_root not in sys.path:
-    sys.path.insert(0, _tests_root)
-
-from app.core.exceptions import NotFoundException, ValidationException  # noqa: E402
-from app.schemas.notification_provider_schema import (  # noqa: E402
+from app.core.exceptions import NotFoundException, ValidationException
+from app.schemas.notification_provider_schema import (
     NotificationProviderCreate,
     NotificationProviderUpdate,
 )
-from app.services.core.notification_core_service import NotificationCoreService  # noqa: E402
-from fixtures.factories import make_notification_provider  # noqa: E402
+from app.services.core.notification_core_service import NotificationCoreService
+from fixtures.factories import make_notification_provider
+from pydantic import ValidationError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 pytestmark = pytest.mark.integration
 

@@ -9,6 +9,7 @@ from __future__ import annotations
 from uuid import uuid4
 
 import pytest
+from app.core.exceptions import CheckNotFoundException
 from app.crud.check_crud import CheckCRUD
 from app.models.check_model import Check
 from app.schemas.check_schema import CheckCreate, CheckUpdate
@@ -285,7 +286,7 @@ class TestCloneCheck:
         agent = make_agent()
         db.add(agent)
         await db.flush()
-        with pytest.raises(Exception):  # noqa: B017
+        with pytest.raises(CheckNotFoundException):
             await CheckCoreService.clone_check(
                 db,
                 uuid4(),

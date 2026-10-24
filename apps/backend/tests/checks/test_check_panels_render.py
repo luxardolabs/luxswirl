@@ -29,6 +29,28 @@ async def client(db: AsyncSession) -> AsyncIterator[AsyncClient]:
         yield c
 
 
+async def test_saving_the_dependents_form_with_none_ticked_clears_them(
+    client: AsyncClient, db: AsyncSession
+) -> None:
+    """A form with no box ticked sends no dependent_ids field at all; that reads
+    as an empty list, not a refused request."""
+    agent = make_agent()
+    db.add(agent)
+    await db.flush()
+    parent = make_check(agent_id=agent.id)
+    db.add(parent)
+    await db.flush()
+    child = make_check(agent_id=agent.id, depends_on_check_id=parent.id)
+    db.add(child)
+    await db.flush()
+
+    resp = await client.post(f"/checks/{parent.id}/dependents", data={})
+
+    assert resp.status_code == 200, resp.text[:300]
+    await db.refresh(child)
+    assert child.depends_on_check_id is None
+
+
 async def test_edit_clone_and_dependents_panels(
     client: AsyncClient, db: AsyncSession
 ) -> None:

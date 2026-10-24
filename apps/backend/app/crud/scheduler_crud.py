@@ -102,7 +102,7 @@ class JobConfigurationCRUD:
         result = await db.execute(
             select(JobConfiguration)
             .where(
-                JobConfiguration.enabled == True,  # noqa: E712
+                JobConfiguration.enabled.is_(True),
                 JobConfiguration.next_run_at <= now,
                 JobConfiguration.lease_expires_at.is_(None)
                 | (JobConfiguration.lease_expires_at <= now),

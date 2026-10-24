@@ -7,26 +7,19 @@ notification provider attach/detach, check assignment.
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
 from uuid import uuid4
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession
-
-_tests_root = str(Path(__file__).resolve().parent.parent)
-if _tests_root not in sys.path:
-    sys.path.insert(0, _tests_root)
-
-from app.core.exceptions import NotFoundException  # noqa: E402
-from app.crud.alert_crud import AlertCRUD  # noqa: E402
-from app.schemas.alert_schema import AlertCreate, AlertUpdate  # noqa: E402
-from app.services.core.alert_core_service import AlertCoreService  # noqa: E402
-from fixtures.factories import (  # noqa: E402
+from app.core.exceptions import NotFoundException
+from app.crud.alert_crud import AlertCRUD
+from app.schemas.alert_schema import AlertCreate, AlertUpdate
+from app.services.core.alert_core_service import AlertCoreService
+from fixtures.factories import (
     make_agent,
     make_check,
     make_notification_provider,
 )
+from sqlalchemy.ext.asyncio import AsyncSession
 
 pytestmark = pytest.mark.integration
 

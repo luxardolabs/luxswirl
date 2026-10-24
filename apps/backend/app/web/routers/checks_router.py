@@ -278,7 +278,7 @@ async def update_dependents(
     check_id: Annotated[UUID, Path(description="Parent check UUID")],
     current_user: EditorUserWeb,
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
-    dependent_ids: Annotated[list[str], Form()] = [],  # noqa: B006
+    dependent_ids: Annotated[list[str], Form(default_factory=list)],
 ) -> HTMLResponse:
     added, removed = await ChecksViewService.set_dependents(db, check_id, dependent_ids)
     msg = f"Updated dependents: +{added} −{removed}"
@@ -303,10 +303,10 @@ async def bulk_action(
     current_user: EditorUserWeb,
     action: Annotated[str, Form()],
     select_all: Annotated[str, Form()],
+    check_ids: Annotated[list[UUID], Form(default_factory=list)],
     agent: OptionalIdForm = None,
     enabled: Annotated[str, Form()] = "all",
     tag: Annotated[str, Form()] = "",
-    check_ids: Annotated[list[UUID], Form()] = [],  # noqa: B006
 ) -> HTMLResponse:
     """Perform bulk action on checks (delete, disable, enable).
 
@@ -356,10 +356,10 @@ async def bulk_modify(
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: EditorUserWeb,
     select_all: Annotated[str, Form()],
+    check_ids: Annotated[list[UUID], Form(default_factory=list)],
     agent: OptionalIdForm = None,
     enabled: Annotated[str, Form()] = "all",
     tag: Annotated[str, Form()] = "",
-    check_ids: Annotated[list[UUID], Form()] = [],  # noqa: B006
     interval: Annotated[str, Form()] = "",
     timeout: Annotated[str, Form()] = "",
     retry_attempts: Annotated[str, Form()] = "",

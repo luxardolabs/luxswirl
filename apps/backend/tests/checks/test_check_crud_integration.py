@@ -6,21 +6,14 @@ Exercises every public method on `CheckCRUD`. Pattern mirrors
 
 from __future__ import annotations
 
-import sys
 from datetime import timedelta
-from pathlib import Path
 from uuid import uuid4
 
 import pytest
+from app.core.datetime_utils import utc_now
+from app.crud.check_crud import CheckCRUD
+from fixtures.factories import make_agent, make_check
 from sqlalchemy.ext.asyncio import AsyncSession
-
-_tests_root = str(Path(__file__).resolve().parent.parent)
-if _tests_root not in sys.path:
-    sys.path.insert(0, _tests_root)
-
-from app.core.datetime_utils import utc_now  # noqa: E402
-from app.crud.check_crud import CheckCRUD  # noqa: E402
-from fixtures.factories import make_agent, make_check  # noqa: E402
 
 pytestmark = pytest.mark.integration
 

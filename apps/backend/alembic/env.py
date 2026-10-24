@@ -3,12 +3,14 @@
 import asyncio
 import logging
 
-import app.models  # noqa: F401 — registers tables on Base.metadata
 from alembic import context
 from app.core.config import settings
 from app.core.logging_config import configure_logging
 from app.core.logging_options import logging_options
-from app.models.base_model import Base
+
+# The package, not base_model: importing app.models registers every table on
+# Base.metadata, which autogenerate compares against.
+from app.models import Base
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config

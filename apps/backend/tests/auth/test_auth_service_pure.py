@@ -38,12 +38,9 @@ class TestPasswordHashing:
         assert AuthCoreService.verify_password("same-password", h1)
         assert AuthCoreService.verify_password("same-password", h2)
 
-    def test_verify_invalid_hash_returns_false(self):
-        """Malformed hash must not crash — just return False."""
-        # bcrypt raises ValueError on malformed hashes; production code may want
-        # to catch this. For now, document the behavior: verify_password raises
-        # rather than swallowing. If that changes, this test should change too.
-        with pytest.raises(Exception):  # noqa: B017
+    def test_verify_with_a_malformed_hash_raises_value_error(self):
+        """verify_password does not swallow bcrypt's refusal of a malformed hash."""
+        with pytest.raises(ValueError):
             AuthCoreService.verify_password("any-password", "not-a-hash")
 
 

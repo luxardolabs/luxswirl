@@ -15,23 +15,16 @@ in a transaction that's rolled back at the end — no test pollutes the next.
 
 from __future__ import annotations
 
-import sys
 from datetime import timedelta
-from pathlib import Path
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession
 
 # Allow `from fixtures.X import Y` resolution. conftest does this for the
 # pytest entry point; standalone tools (e.g. mutmut, ad-hoc imports) need it
 # too. Cheap idempotent insert.
-_tests_root = str(Path(__file__).resolve().parent.parent)
-if _tests_root not in sys.path:
-    sys.path.insert(0, _tests_root)
-
-from app.core.datetime_utils import utc_now  # noqa: E402
-from app.crud.alert_crud import DEDUP_RELEVANT_STATUSES, AlertCRUD  # noqa: E402
-from fixtures.factories import (  # noqa: E402
+from app.core.datetime_utils import utc_now
+from app.crud.alert_crud import DEDUP_RELEVANT_STATUSES, AlertCRUD
+from fixtures.factories import (
     make_agent,
     make_alert,
     make_alert_check_mapping,
@@ -41,6 +34,7 @@ from fixtures.factories import (  # noqa: E402
     make_notification_log,
     make_notification_provider,
 )
+from sqlalchemy.ext.asyncio import AsyncSession
 
 pytestmark = pytest.mark.integration
 

@@ -7,29 +7,22 @@ system stores flows through it. Untested before LUXSWIRL-127.
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
 from uuid import uuid4
 
 import pytest
-from pydantic import ValidationError
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-
-_tests_root = str(Path(__file__).resolve().parent.parent)
-if _tests_root not in sys.path:
-    sys.path.insert(0, _tests_root)
-
-from app.core.datetime_utils import utc_now  # noqa: E402
-from app.core.exceptions import AgentNotFoundException  # noqa: E402
-from app.models.check_result_model import CheckResult  # noqa: E402
-from app.models.enum_model import CheckErrorType  # noqa: E402
-from app.schemas.check_result_schema import (  # noqa: E402
+from app.core.datetime_utils import utc_now
+from app.core.exceptions import AgentNotFoundException
+from app.models.check_result_model import CheckResult
+from app.models.enum_model import CheckErrorType
+from app.schemas.check_result_schema import (
     AgentReportRequest,
     CheckResultCreate,
 )
-from app.services.core.check_result_core_service import CheckResultCoreService  # noqa: E402
-from fixtures.factories import make_agent, make_check  # noqa: E402
+from app.services.core.check_result_core_service import CheckResultCoreService
+from fixtures.factories import make_agent, make_check
+from pydantic import ValidationError
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 pytestmark = pytest.mark.integration
 
