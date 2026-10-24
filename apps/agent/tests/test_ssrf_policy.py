@@ -310,3 +310,11 @@ def test_the_agent_host_itself_follows_the_policy(ip: str) -> None:
     _ssrf_policy.apply_server_policy({"block_private_networks": True})
     with pytest.raises(SsrfBlockedError):
         _ssrf_policy.assert_ip_allowed(ip)
+
+
+async def test_a_mysql_url_naming_no_host_is_refused_before_it_connects() -> None:
+    """aiomysql would connect a hostless URL to localhost."""
+    _ssrf_policy.apply_server_policy({"block_private_networks": True})
+    check = MySQLCheck(_cfg("mysql", target="mysql://root:pw@/db", query="SELECT 1"))
+
+    assert await _blocked(check)

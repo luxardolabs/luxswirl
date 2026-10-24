@@ -18,7 +18,12 @@ from app.models.setting_model import Setting
 from app.schemas.check_schema import CheckCreate
 from app.services.core.check_core_service import CheckCoreService
 from app.services.core.settings_core_service import SettingsCoreService
-from app.shared.ssrf import SsrfBlockedError, assert_ip_allowed, assert_target_allowed
+from app.shared.ssrf import (
+    SsrfBlockedError,
+    assert_ip_allowed,
+    assert_target_allowed,
+    extract_hosts,
+)
 from fixtures.factories import make_agent
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -68,6 +73,48 @@ def test_an_external_address_is_allowed_with_private_networks_blocked(
     "target", ["http://127.0.0.1:8080/admin", "http://[::1]/", "http://0.0.0.0:9000/"]
 )
 def test_a_url_on_the_host_itself_is_refused(target: str) -> None:
+    with pytest.raises(SsrfBlockedError):
+        assert_target_allowed(target, block_private_networks=True)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "target",
+    [
+        "mysql://root:pw@/db",
+        "mysql://root:pw@:3306/db",
+        "mariadb://root:pw@/db",
+        "postgresql://u:p@/db",
+        "postgresql+asyncpg://u:p@:5432/db",
+    ],
+)
+def test_a_database_url_naming_no_host_is_its_drivers_localhost(target: str) -> None:
+    """The driver connects a hostless URL to localhost, so the guard checks that."""
+    assert extract_hosts(target) == ["localhost"]
+    with pytest.raises(SsrfBlockedError):
+        assert_target_allowed(target, block_private_networks=True)
+    assert_target_allowed(target)
+
+
+@pytest.mark.unit
+def test_a_postgres_url_on_a_unix_socket_names_no_network_host() -> None:
+    assert extract_hosts("postgresql://u:p@/db?host=/var/run/postgresql") == []
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("target", "host"),
+    [("[::1]", "::1"), ("[::1]:22", "::1"), ("::1", "::1"), ("db:5432", "db")],
+)
+def test_a_bare_target_names_its_host_without_brackets_or_port(
+    target: str, host: str
+) -> None:
+    assert extract_hosts(target) == [host]
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("target", ["[::1]", "[::1]:22"])
+def test_a_bracketed_loopback_target_is_refused(target: str) -> None:
     with pytest.raises(SsrfBlockedError):
         assert_target_allowed(target, block_private_networks=True)
 

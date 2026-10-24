@@ -58,15 +58,16 @@ def extract_host(target: str) -> str | None:
             return urlparse(target).hostname
         except ValueError:
             return None
-    # host:port — but leave bare IPv6 (multiple colons) alone.
-    if target.count(":") == 1:
-        return target.rsplit(":", 1)[0]
-    return target or None
+    # host:port, [v6] or [v6]:port; a bare IPv6 (several colons) is left alone.
+    return _strip_port(target.strip()) or None
 
 
 # libpq/asyncpg URLs name several hosts: a comma list in the netloc, and the
 # `host` / `hostaddr` query parameters.
 _POSTGRES_SCHEMES = frozenset({"postgres", "postgresql"})
+# A database URL that names no host connects to the driver's default: localhost.
+_DATABASE_SCHEMES = _POSTGRES_SCHEMES | {"mysql", "mariadb"}
+_DEFAULT_DATABASE_HOST = "localhost"
 
 # IPv6 forms that carry an IPv4 address a socket reaches (RFC 6052 NAT64).
 _NAT64 = ipaddress.ip_network("64:ff9b::/96")
@@ -88,15 +89,21 @@ def extract_hosts(target: str) -> list[str]:
         parsed = urlparse(target)
     except ValueError:
         return []
-    if parsed.scheme.lower().split("+", 1)[0] not in _POSTGRES_SCHEMES:
-        return [parsed.hostname] if parsed.hostname else []
+    scheme = parsed.scheme.lower().split("+", 1)[0]
+    if scheme not in _POSTGRES_SCHEMES:
+        if parsed.hostname:
+            return [parsed.hostname]
+        return [_DEFAULT_DATABASE_HOST] if scheme in _DATABASE_SCHEMES else []
     named = parsed.netloc.rpartition("@")[2].split(",")
     query = parse_qs(parsed.query)
     for key in ("host", "hostaddr"):
         for value in query.get(key, []):
             named.extend(value.split(","))
-    hosts = (_strip_port(unquote(h).strip()) for h in named)
-    return [h for h in hosts if h and not h.startswith("/")]
+    hosts = [_strip_port(unquote(h).strip()) for h in named]
+    network = [h for h in hosts if h and not h.startswith("/")]
+    if network or any(h.startswith("/") for h in hosts):
+        return network
+    return [_DEFAULT_DATABASE_HOST]
 
 
 def _embedded_ipv4(
