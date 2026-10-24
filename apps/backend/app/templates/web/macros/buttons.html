@@ -28,6 +28,18 @@
 #}
 
 
+{# In flight: a button that sends a write disables itself (hx-disabled-elt) and
+   shows _busy_spinner in place of its icon while the spinner, its hx-indicator,
+   carries HTMX's htmx-request class (the btn-busy-only / btn-idle-only rules in
+   css/input.css). The indicator is the spinner, not the button: htmx 1.9.10 counts
+   one element's indicator and disabled state together, so a button that is both
+   keeps htmx-request after the response. These attributes follow extra_attrs, so
+   a caller's own hx-indicator wins. #}
+{% macro _busy_spinner() -%}
+<span class="btn-busy-only w-4 h-4 items-center justify-center animate-spin [&>svg]:w-full [&>svg]:h-full" aria-hidden="true">{% include "icons/hero/outline/arrow-path.svg" %}</span>
+{%- endmacro %}
+
+
 {# ═══════════════════════════════════════════════════════════════════════════
    ICON SQUARE BUTTON - Base macro for tiny action buttons
    ═══════════════════════════════════════════════════════════════════════════ #}
@@ -77,8 +89,9 @@
     {% if (hx_get or hx_post or hx_delete) and hx_vals %}hx-vals='{{ hx_vals | safe }}'{% endif %}
     {% if (hx_get or hx_post or hx_delete) and hx_include %}hx-include="{{ hx_include }}"{% endif %}
     {{ extra_attrs | safe }}
+    {% if hx_post or hx_delete %}hx-disabled-elt="this" hx-indicator="find .btn-busy-only"{% endif %}
 >
-    {{ icon_svg }}
+    {% if hx_post or hx_delete %}<span class="btn-idle-only inline-flex">{{ icon_svg }}</span>{{ _busy_spinner() }}{% else %}{{ icon_svg }}{% endif %}
 </button>
 {% endif %}
 {% endmacro %}
@@ -191,8 +204,9 @@
     {% if hx_target %}hx-target="{{ hx_target }}"{% endif %}
     {% if hx_swap %}hx-swap="{{ hx_swap }}"{% endif %}
     {{ extra_attrs | safe }}
+    {% if hx_post or hx_delete %}hx-disabled-elt="this" hx-indicator="find .btn-busy-only"{% endif %}
 >
-    {{ icon_svg }}
+    {% if hx_post or hx_delete or type == 'submit' %}<span class="btn-idle-only inline-flex">{{ icon_svg }}</span>{{ _busy_spinner() }}{% else %}{{ icon_svg }}{% endif %}
     {{ label }}
 </button>
 {% endif %}
@@ -377,12 +391,13 @@
 {%- set _after = '.then(() => window.location.reload())' if after == 'reload' else '' -%}
 <button type="button"
     x-data="{ confirm: false }"
-    @click="if (confirm) { let t = '{{ hx_target }}'; htmx.ajax('{{ method }}', '{{ url }}', {target: t.startsWith('closest ') ? $el.closest(t.substring(8)) : t, swap: '{{ hx_swap }}'}){{ _after }}; confirm = false; } else { confirm = true; setTimeout(() => confirm = false, {{ timeout }}); }"
+    @click="if (confirm) { let t = '{{ hx_target }}'; htmx.ajax('{{ method }}', '{{ url }}', {source: $el, target: t.startsWith('closest ') ? $el.closest(t.substring(8)) : t, swap: '{{ hx_swap }}'}){{ _after }}; confirm = false; } else { confirm = true; setTimeout(() => confirm = false, {{ timeout }}); }"
     :class="confirm ? '{{ p.armed }}' : '{{ p.normal }}'"
     :title="confirm ? 'Click again to confirm' : '{{ title }}'"
     {% if not label %}aria-label="{{ title }}"{% endif %}
+    hx-disabled-elt="this" hx-indicator="find .btn-busy-only"
     class="{{ size_class }} flex items-center justify-center rounded border transition-all duration-150 {{ extra_classes }}">
-    {{ icon_svg | safe }}{% if label %}<span>{{ label }}</span>{% endif %}
+    <span class="btn-idle-only inline-flex">{{ icon_svg | safe }}</span>{{ _busy_spinner() }}{% if label %}<span>{{ label }}</span>{% endif %}
 </button>
 {% endmacro %}
 
