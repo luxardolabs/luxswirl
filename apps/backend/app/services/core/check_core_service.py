@@ -1121,6 +1121,7 @@ class CheckCoreService:
                     expected_status=req.expected_status,
                     http_method=req.http_method,
                     verify_ssl=req.verify_ssl,
+                    resend_notification_after=req.resend_notification_after,
                 )
 
                 # Create the check

@@ -1397,7 +1397,7 @@ class ChecksViewService:
         )
         ChecksViewService.parse_optional_int(retry_attempts)
         ChecksViewService.parse_optional_int(retry_interval_seconds)
-        ChecksViewService.parse_optional_int(resend_notification_after)
+        resend_after = ChecksViewService.parse_optional_int(resend_notification_after)
 
         # The form posts the method as text; an unknown one is refused here (ValueError),
         # as the request schema would refuse it.
@@ -1417,6 +1417,7 @@ class ChecksViewService:
                 expected_status=expected_status if expected_status else None,
                 http_method=http_method_enum,
                 verify_ssl=verify_ssl,
+                resend_notification_after=resend_after,
             )
             bulk_requests.append(req)
 
