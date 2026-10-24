@@ -19,6 +19,7 @@ import pytest
 import pytest_asyncio
 from app.core.config import settings
 from app.core.datetime_utils import utc_now
+from app.core.exceptions import validation_message
 from app.core.rate_limit import limiter
 from app.main import app
 from app.models.agent_model import Agent
@@ -39,7 +40,7 @@ from app.services.core.registration_key_core_service import RegistrationKeyCoreS
 from app.web.template_filters import format_datetime
 from fixtures.factories import make_agent, make_user
 from httpx import ASGITransport, AsyncClient
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError, model_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -376,6 +377,33 @@ async def test_a_form_refused_by_its_schema_reads_as_field_and_reason(
     assert says in resp.text
     for noise in ("validation error for", "input_value", "errors.pydantic.dev"):
         assert noise not in resp.text
+
+
+@pytest.mark.unit
+def test_a_refused_ip_address_is_not_echoed_in_the_message() -> None:
+    """The message reaches a toast, so the refused text is not repeated in it."""
+    payload = "<img src=x onerror=alert(1)>"
+    with pytest.raises(ValidationError) as refused:
+        AgentUpdate(ip_address=payload)
+
+    message = validation_message(refused.value)
+
+    assert message == "ip_address: Value error, not a valid IP address"
+
+
+@pytest.mark.unit
+def test_a_whole_model_refusal_is_its_reason_alone() -> None:
+    class Pair(BaseModel):
+        a: int = 0
+
+        @model_validator(mode="after")
+        def check(self) -> Pair:
+            raise ValueError("a and b disagree")
+
+    with pytest.raises(ValidationError) as refused:
+        Pair()
+
+    assert validation_message(refused.value) == "Value error, a and b disagree"
 
 
 @pytest.mark.integration
