@@ -39,7 +39,7 @@ DEV_WAIT_TIMEOUT      ?= 180
 # Makefile.local (gitignored): copy Makefile.local.example -> Makefile.local and set it.
 # Contributors don't need it — lint/test and the import-linter contracts run without it.
 LUXARCH_REGISTRY ?=
-LUXARCH_VERSION := 0.321.0
+LUXARCH_VERSION := 0.322.0
 LUXARCH_IMAGE    ?= $(LUXARCH_REGISTRY)/luxardolabs/luxarch:$(LUXARCH_VERSION)
 # Dependency-CVE guard (luxaudit) — same private registry as luxarch, mount-only.
 # Scans the pinned poetry.locks against the live advisory feed (see .luxaudit.toml).
@@ -2364,9 +2364,13 @@ TEST_SUITES          := backend agent
 agent_TEST_WORKDIR   := apps/agent
 agent_TEST_SERVICES  :=
 agent_TEST_ENV       := -e PYTHONPATH=/repo/apps/agent \
-                        $(call shared_overlay,/repo/apps/agent/app) \
                         -e HYPOTHESIS_STORAGE_DIRECTORY=/out/.hypothesis
 agent_TEST_FLOOR     := apps/agent/.luxlint.toml
+# The shared SSOT is overlaid on each leg's placeholder app/shared. Its coverage counts once,
+# in the agent suite, which runs shared's tests; the backend suite leaves it out.
+agent_TEST_MOUNTS    := $(call shared_overlay,/repo/apps/agent/app)
+agent_TEST_OVERLAY_COV := 1
+TEST_MOUNTS          := $(call shared_overlay,/repo/apps/backend/app)
 # The suite reads TEST_DATABASE_URL (a name the app never reads, so an exported dev
 # DATABASE__URL can never aim the schema-dropping harness at the dev DB); DATABASE__URL
 # lands anything that builds the real engine on the throwaway DB too. PYTHONPATH points
@@ -2378,10 +2382,9 @@ TEST_ENV      := -e TEST_DATABASE_URL=postgresql+asyncpg://luxswirl_test:luxswir
                  -e LUXSWIRL_INTEGRATION=1 \
                  -e ALLOWED_HOSTS=test,route-smoke \
                  -e PYTHONPATH=/repo/apps/backend:/repo/apps/backend/tests \
-                 $(call shared_overlay,/repo/apps/backend/app) \
                  -e HYPOTHESIS_STORAGE_DIRECTORY=/out/.hypothesis
 
-# luxarch:test-block asset v7 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit test-block`.
+# luxarch:test-block asset v8 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit test-block`.
 # ── Test: THE suite, in the test image, against an isolated stack of real services ───────────────
 # Emitted by `luxarch --emit test-block`; paste below the build core (`luxarch --emit build-core`, v4:
 # it builds with the core's `img_*` helpers and TEST_IMAGE, and the repo's BUILD_ARGS, and quotes every
@@ -2495,10 +2498,11 @@ TEST_ENV      := -e TEST_DATABASE_URL=postgresql+asyncpg://luxswirl_test:luxswir
 #     no other .py or .pyw, never a symlink. A mount over code with content would hide that code
 #     from the suite's coverage. The run refuses an overlay no suite measures, and one two suites measure
 #     (host paths compared as the files they are). It also refuses a pair outside that shape, a
-#     path holding anything but letters, digits and `._/@+-` or a `.` or `..` part (make resolves
+#     path holding anything but letters, digits and `._/@+-` or a `..` part (make resolves
 #     `link/..` after the symlink, docker as text), and a placeholder this checkout lacks (docker
-#     cannot make a mount point inside the read-only mount). A destination is read as docker reads
-#     it: repeated and trailing slashes dropped. Make compares the host paths on this machine, so
+#     cannot make a mount point inside the read-only mount). Both paths are read as docker reads
+#     them: repeated slashes, `.` parts and a trailing slash dropped (luxlint's map writes
+#     `$(SHARED_HOST)/.` when the whole shared directory is the overlay). Make compares the host paths on this machine, so
 #     a DOCKER_HOST on another machine is outside what the run can check.
 #   - Each run's project is named from its own `mktemp -d` token, and refuses to run without one (a
 #     PID repeats across containers and CI runners), and everything mounts the makefile's directory
@@ -2666,9 +2670,11 @@ test: test-reap ## THE suite (each of TEST_SUITES in turn): its own test image, 
 	      || { printf 'REFUSING: %s is %s: name the directory of the migration tests under %s, its last part migrations (tests/migrations)\n' $(call sq,$(call test_suite_var,$(s),MIGRATIONS)) $(call sq,$(call test_suite,$(s),MIGRATIONS)) $(call sq,$(call test_suite,$(s),WORKDIR)); exit 2; }; fi; \
 	  wd=$$(printf '%s\n' /repo/$(call sq,$(call test_suite,$(s),WORKDIR)) | sed -e 's#//*#/#g' -e ':a' -e 's#/\./#/#' -e 'ta' -e 's#/\.$$##' -e 's#/$$##'); own=$(call sq,$(filter 1,$(call test_suite,$(s),OVERLAY_COV))); mnt=; omit=; set -- $(call sqw,$(call test_suite,$(s),MOUNTS)); \
 	  while [ $$# -gt 0 ]; do \
-	    m=$${2:-}; src=$${m%%:*}; dst=$${m#*:}; opt=$${dst#*:}; [ "$$opt" != "$$dst" ] || opt=; dst=$$(printf '%s\n' "$${dst%%:*}" | sed -e 's#//*#/#g' -e 's#\(.\)/$$#\1#'); bad=; \
+	    m=$${2:-}; src=$${m%%:*}; dst=$${m#*:}; opt=$${dst#*:}; [ "$$opt" != "$$dst" ] || opt=; dst=$${dst%%:*}; \
+	    src=$$(printf '%s\n' "$$src" | sed -e 's#//*#/#g' -e ':a' -e 's#/\./#/#' -e 'ta' -e 's#/\.$$##' -e 's#\(.\)/$$#\1#'); \
+	    dst=$$(printf '%s\n' "$$dst" | sed -e 's#//*#/#g' -e ':b' -e 's#/\./#/#' -e 'tb' -e 's#/\.$$##' -e 's#\(.\)/$$#\1#'); bad=; \
 	    [ "$$1" = -v ] || bad=1; case "$$opt" in (''|ro) ;; (*) bad=1;; esac; case "$$src$$dst" in (*[!A-Za-z0-9._/@+-]*) bad=1;; esac; \
-	    case "$$src" in (/*) ;; (*) bad=1;; esac; case "$$dst/" in ("$$wd"/?*/) ;; (*) bad=1;; esac; case "/$$src/ /$$dst/" in (*/../*|*/./*) bad=1;; esac; \
+	    case "$$src" in (/*) ;; (*) bad=1;; esac; case "$$dst/" in ("$$wd"/?*/) ;; (*) bad=1;; esac; case "/$$src/ /$$dst/" in (*/../*) bad=1;; esac; \
 	    [ -z "$$bad" ] || { printf 'REFUSING: %s takes -v <host path>:<path under %s>[:ro] pairs, each path of letters, digits and ._/@+- (the [shared] overlay: $$(call shared_overlay,%s/app)); %s %s is not one\n' $(call sq,$(call test_suite_var,$(s),MOUNTS)) "$$wd" "$$wd" "$$1" "$$m"; exit 2; }; \
 	    ph=$(call sq,$(CURDIR))/"$${dst#/repo/}"; \
 	    [ -e "$$ph" ] || [ -L "$$ph" ] || { printf 'REFUSING: %s mounts over %s, which this checkout does not have: docker cannot make a mount point inside the read-only /repo. Commit the placeholder (a directory: an empty __init__.py in it, as git keeps no empty directory)\n' $(call sq,$(call test_suite_var,$(s),MOUNTS)) "$${dst#/repo/}"; exit 2; }; \
