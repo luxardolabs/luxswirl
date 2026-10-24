@@ -197,7 +197,7 @@ function initChecksChart(timestamps, executedData, succeededData) {
 }
 
 /**
- * Initialize File Descriptors Chart (SWIRL-57)
+ * Initialize File Descriptors Chart
  */
 function initFDChart(timestamps, fdData) {
     const chartEl = document.getElementById('fd-chart');
@@ -223,7 +223,7 @@ function initFDChart(timestamps, fdData) {
 }
 
 /**
- * Initialize Subprocesses Chart (SWIRL-57)
+ * Initialize Subprocesses Chart
  */
 function initSubprocessChart(timestamps, subprocessData) {
     const chartEl = document.getElementById('subprocess-chart');
@@ -273,12 +273,12 @@ function initAgentMetricsCharts() {
         // Create Checks Executed/Succeeded chart
         initChecksChart(timestamps, metricsData.checks_executed, metricsData.checks_succeeded);
 
-        // SWIRL-57: Create File Descriptors chart
+        // Create File Descriptors chart
         if (metricsData.fd_data) {
             initFDChart(timestamps, metricsData.fd_data);
         }
 
-        // SWIRL-57: Create Subprocesses chart
+        // Create Subprocesses chart
         if (metricsData.subprocess_data) {
             initSubprocessChart(timestamps, metricsData.subprocess_data);
         }

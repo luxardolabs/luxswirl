@@ -386,7 +386,7 @@ class AgentHeartbeat(BaseSchema):
         description="Report batches the agent dead-lettered after a permanent refusal",
     )
 
-    # Resource monitoring (SWIRL-57: detect subprocess/FD leaks)
+    # Resource monitoring: detect subprocess/FD leaks
     open_file_descriptors: int | None = Field(
         None, description="Number of open file descriptors"
     )

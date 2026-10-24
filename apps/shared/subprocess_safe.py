@@ -4,7 +4,7 @@ Safe subprocess execution utilities.
 This module provides subprocess execution with guaranteed cleanup to prevent
 resource leaks (file descriptors, zombie processes).
 
-SWIRL-57: Subprocess resource leak fix
+Subprocess resource leak protection
 - All subprocess calls must use timeouts with grace periods
 - Processes must be terminated and reaped on timeout/error
 - No subprocess should outlive its parent task

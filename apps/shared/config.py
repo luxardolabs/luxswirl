@@ -61,11 +61,11 @@ DEFAULT_AGENT_CONFIG = {
     # Global check settings
     "interval": 60,  # Default check interval in seconds
     "enable_self_monitoring": True,
-    # Subprocess execution safety (SWIRL-57: prevent resource leaks)
+    # Subprocess execution safety: prevent resource leaks
     "subprocess_timeout_grace_seconds": 2,  # Extra time beyond check timeout before killing subprocess
     "subprocess_kill_timeout_seconds": 5,  # Max time to wait for process termination after kill
     "subprocess_command_timeout_seconds": 5,  # Timeout for system commands (ip, route, ping-discover)
-    # Resource monitoring (SWIRL-57: detect file descriptor/subprocess leaks)
+    # Resource monitoring: detect file descriptor/subprocess leaks
     "resource_monitoring_enabled": True,  # Enable FD/subprocess tracking
     "resource_check_interval_seconds": 30,  # How often to check resource usage
     "resource_fd_warning_percent": 80,  # Warn when FD usage exceeds this % of ulimit

@@ -1,6 +1,6 @@
 """Integration tests for JobToCheckCoreService.
 
-Focused coverage (LUXSWIRL-127) on materializing monitoring checks from network
+Focused coverage on materializing monitoring checks from network
 scan jobs: the single-check quick-action, the per-host bulk converter, duplicate
 skipping, and the no-result error path.
 """

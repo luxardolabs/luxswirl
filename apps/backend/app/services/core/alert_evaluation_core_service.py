@@ -145,11 +145,11 @@ class AlertEvaluationCoreService:
 
         Stored in `notification_logs.notification_hash` so `_should_send_notification`
         can detect state transitions (key changed → fire) vs steady-state (key same →
-        dedup). See LUXSWIRL-147 for design; LUXSWIRL-146 for the SSL-band semantics
-        this enables.
+        dedup). For SSL the key carries the threshold band, so each band crossed
+        is its own transition.
 
         Format: `<trigger_type>:<state>` for normal evaluations; `parent_down` when the
-        leaf is being suppressed by a downed parent (LUXSWIRL-148).
+        leaf is being suppressed by a downed parent.
         """
         if parent_down:
             return "parent_down"
@@ -365,7 +365,7 @@ class AlertEvaluationCoreService:
         Also fires once on recovery (cert renewed past all thresholds) when the
         most recent notification for this alert+check was in-band, so operators
         see "cert was at 5 days, renewed to 90 days" instead of silence. Gated by
-        `alert.notify_on_recovery` (same flag status_change uses). LUXSWIRL-146.
+        `alert.notify_on_recovery` (same flag status_change uses).
         """
         # Support both single threshold (legacy) and array of thresholds
         days_thresholds = config.get("days_thresholds", [])
@@ -581,12 +581,12 @@ class AlertEvaluationCoreService:
         )
         reason = f"Suppressed: parent check '{parent_name}' is down"
         # Distinct state key so dedup treats "parent down → parent up" as a transition
-        # and the child's real alert state can fire when the parent recovers (LUXSWIRL-148).
+        # and the child's real alert state can fire when the parent recovers.
         state_key = AlertEvaluationCoreService._compute_alert_state_key(
             alert, check_result, parent_down=True
         )
 
-        # LUXSWIRL-148: route the suppression-row write through the same dedup that
+        # Route the suppression-row write through the same dedup that
         # `_fire_alert` uses, so steady-state parent-down doesn't produce one row per
         # check execution. The first time the leaf enters parent-down we write a row
         # for the audit trail; subsequent ticks see the same hash and skip.
@@ -643,7 +643,7 @@ class AlertEvaluationCoreService:
 
         Returns True only on transitions into the suppression state (or first contact).
         Uses the same dedup-relevant lookup as `_should_send_notification` so audit
-        rows aren't duplicated tick-by-tick. See LUXSWIRL-148.
+        rows aren't duplicated tick-by-tick.
         """
         last_notification = await AlertCRUD.get_last_notification_for_dedup(
             db, alert.id, check.id
@@ -684,8 +684,8 @@ class AlertEvaluationCoreService:
             return SendDecision(send=False, is_resend=False, resend_count=0)
 
         # Most recent dedup-relevant notification row (any status that represents
-        # "we already audited this alert+check," not just successful delivery).
-        # See LUXSWIRL-145 for why `sent`-only caused dedup amnesia.
+        # "we already audited this alert+check," not just successful delivery):
+        # counting only `sent` would forget the state each time delivery failed.
         last_notification = await AlertCRUD.get_last_notification_for_dedup(
             db, alert.id, check.id
         )
@@ -743,7 +743,7 @@ class AlertEvaluationCoreService:
     ) -> bool:
         """Whether the alert has left the state `last_notification` recorded."""
         if last_notification.notification_hash is not None:
-            # Hash-based dedup (LUXSWIRL-147). The key encodes the alert's logical
+            # Hash-based dedup. The key encodes the alert's logical
             # state — for SSL it includes the threshold band, for status_change it's
             # up/down, for threshold it's the metric+operator+value tuple. A different
             # key means the alert moved to a new state and the operator should know.
@@ -761,9 +761,9 @@ class AlertEvaluationCoreService:
             )
             return True
 
-        # Legacy fallback for rows written before LUXSWIRL-147 (no hash recorded):
-        # compare check_result.success. Imprecise for metric-based triggers but
-        # better than nothing while the backlog ages out under retention.
+        # A row with no hash recorded falls back to comparing
+        # check_result.success: imprecise for metric-based triggers, and such
+        # rows age out under retention.
         last_check_result = (
             await AlertCRUD.get_check_result_by_id(
                 db, last_notification.check_result_id
@@ -819,7 +819,7 @@ class AlertEvaluationCoreService:
                 "resend_interval_minutes": alert.resend_interval_minutes,
             },
         )
-        # Same state, interval elapsed — this IS a resend (LUXSWIRL-149).
+        # Same state, interval elapsed — this IS a resend.
         # Increment from the prior row's count; if max_resends configured, gate it.
         prior_count = last_notification.resend_count or 0
         next_count = prior_count + 1

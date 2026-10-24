@@ -1,4 +1,4 @@
-"""Unit tests for DISTRIBUTE-mode agent assignment (LUXSWIRL-183).
+"""Unit tests for DISTRIBUTE-mode agent assignment.
 
 Pure constructor tests — ``make_agent``/``make_check`` build transient ORM
 instances, no DB session needed. The invariant under test: the assignment is a

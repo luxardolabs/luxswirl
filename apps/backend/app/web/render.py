@@ -1,6 +1,6 @@
 """Shared HTMX render helpers for web routers.
 
-Web routers must contain ONLY route handlers (LUXSWIRL-172) — the small,
+Web routers must contain ONLY route handlers — the small,
 repeated "render an error/status partial" helpers that used to be duplicated as
 module-level functions in each router live here instead. This module is not a
 router, so it owns these `templates.TemplateResponse`

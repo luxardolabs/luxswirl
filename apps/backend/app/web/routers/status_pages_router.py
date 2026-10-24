@@ -172,7 +172,6 @@ async def delete_status_page(
 
     Status pages cascade through dashboard_items. The cascade runs in the
     maintenance worker on its own session so this request commits in <100ms.
-    See LUXSWIRL-105.
     """
     job = await StatusPagesViewService.enqueue_delete(
         db, status_page_id, owner_id=current_user.id

@@ -158,6 +158,7 @@ A bare `{x}_service.py` (no `core`/`view` qualifier) is a naming violation and w
 ### Other conventions
 
 - **Async throughout** — database queries, HTTP calls, and service/crud methods are `async`. Don't introduce blocking I/O (e.g. `requests`) into the event loop.
+- **No tracker ids in source or docs** — a comment says what the code does and why; the history of a change goes in its commit message. `apps/backend/tests/test_no_tracker_ids_in_source.py` enforces it.
 - **Structured logging** via `app.shared.logger.get_logger(__name__)`; pass fields through `extra=` rather than interpolating them into the message string.
 - **Security**: validate API inputs with Pydantic schemas; rely on the ORM's parameterized queries (never string-concatenate SQL); never log credentials, and name every `extra=` field at the call site (the redactor in `apps/shared/log_redaction.py` masks credentials as a backstop); use list-form `subprocess.run([...])`, never `shell=True` with user input.
 

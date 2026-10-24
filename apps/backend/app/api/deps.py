@@ -9,9 +9,9 @@ the contract of the surface, not a style choice.
 - `app/web/deps` (web): raise a 307 to `/login` or `/`, so a browser lands on a
   page instead of a JSON body in an HTMX swap target.
 
-Keeping both sets in one module is how a web page came to answer a JSON 403 and
-an API route came to answer a redirect (LUXSWIRL-247). A router importing from
-the wrong module now reads wrong at the import line.
+Keeping both sets in one module lets a web page answer a JSON 403 and an API
+route answer a redirect. Apart, a router importing from the wrong module reads
+wrong at the import line.
 
 Home per FLEET-LAYOUT-STANDARD §2: `app/api/deps` for API dependency aliases.
 """

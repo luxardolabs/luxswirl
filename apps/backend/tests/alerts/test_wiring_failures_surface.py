@@ -4,9 +4,7 @@ Both surfaces used to log a warning and carry on, so the form returned success
 while the check was attached to a different set of alerts than the operator had
 just chosen. On a monitoring product that is the worst shape a bug can take: the
 check runs, an outage happens, nothing is notified, and nothing anywhere says
-the wiring never took. These tests fail if either swallow comes back.
-
-See LUXSWIRL-215.
+the wiring never took. These tests fail if either failure is swallowed.
 """
 
 from __future__ import annotations

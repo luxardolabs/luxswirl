@@ -2,7 +2,7 @@
 
 Focus: `process_agent_report` — the agent ingestion path. This is the
 single highest-leverage method in the backend; every check result the
-system stores flows through it. Untested before LUXSWIRL-127.
+system stores flows through it.
 """
 
 from __future__ import annotations
@@ -52,7 +52,7 @@ def _result_payload(*, check_id, **overrides) -> CheckResultCreate:
 
 
 class TestReportBounds:
-    """M-4 (LUXSWIRL-190): the agent report payload is bounded to prevent an
+    """The agent report payload is bounded to prevent an
     unbounded-write DoS from a malicious/compromised agent."""
 
     def test_too_many_checks_rejected(self):

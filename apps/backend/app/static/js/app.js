@@ -126,7 +126,7 @@ export function init() {
         window.location.reload();
     });
 
-    // Maintenance jobs (LUXSWIRL-105): when a backend cascading mutation
+    // Maintenance jobs: when a backend cascading mutation
     // finishes, reload the page so the user sees a clean post-operation state.
     // Fires from partials/maintenance/job_status.html on terminal 'done'.
     window.addEventListener('maintenanceJobDone', () => {

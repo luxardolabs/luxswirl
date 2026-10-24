@@ -1,9 +1,8 @@
-"""Persistence-asserting tests for SchedulerCoreService (LUXSWIRL-127 / -191).
+"""Persistence-asserting tests for SchedulerCoreService.
 
-LUXSWIRL-191: the scheduler ran jobs for ~6 weeks but COMMITTED nothing — leases,
-execution records, last_run, run stats, all rolled back on session close. A
-happy-path test ("the function returned a dict, no exception raised") would have
-stayed green through the entire outage.
+A scheduler that runs jobs but COMMITS nothing — leases, execution records,
+last_run, run stats, all rolled back on session close — passes a happy-path test
+("the function returned a dict, no exception raised") the whole time.
 
 So every test here asserts CROSS-SESSION PERSISTENCE: drive the worker through
 its own committing session, then open a FRESH session (via the `worker_db`
@@ -83,9 +82,8 @@ class TestScheduledRunPersists:
     """`_execute_job` — the scheduled dispatch path."""
 
     async def test_execute_job_commits_record_status_and_stats(self, worker_db):
-        # THE LUXSWIRL-191 REGRESSION. Pre-fix, this entire block was invisible:
-        # _execute_job ran the function and rolled everything back, so every
-        # fresh-session read below found nothing.
+        # If _execute_job ran the function and rolled everything back, every
+        # fresh-session read below would find nothing.
         lease = uuid4()
         key = await _seed_job(
             worker_db,
@@ -178,9 +176,9 @@ class TestScheduledRunPersists:
 
 class TestProcessDueJobsPipeline:
     """`_process_due_jobs` — the poll loop: lease a due job, COMMIT the lease, then
-    dispatch _execute_job. Pre-fix the lease was never committed, so the dispatched
-    task re-opened its own session, found no lease, logged 'Lost lease', and bailed
-    before running — the other half of LUXSWIRL-191."""
+    dispatch _execute_job. An uncommitted lease leaves the dispatched task to
+    re-open its own session, find no lease, log 'Lost lease' and bail before
+    running."""
 
     async def test_due_job_is_leased_committed_dispatched_and_runs(self, worker_db):
         key = await _seed_job(

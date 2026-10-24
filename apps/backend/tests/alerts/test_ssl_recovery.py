@@ -1,6 +1,6 @@
 """Unit tests for AlertEvaluationCoreService._evaluate_ssl_cert_expiry recovery branch.
 
-SSL alerts didn't fire on cert renewal pre-LUXSWIRL-146. The recovery branch
+An SSL alert fires on cert renewal: the recovery branch
 returns True when the cert is currently safe AND the last notification for this
 alert+check was in-band (`ssl:lte:*`), so operators see a recovery signal.
 

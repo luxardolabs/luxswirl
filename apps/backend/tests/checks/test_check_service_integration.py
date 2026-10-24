@@ -183,7 +183,7 @@ class TestCreateCheck:
         assert check.id is not None
 
     async def test_synthetic_create_denied_without_admin(self, db: AsyncSession):
-        """H-1 regression (LUXSWIRL-190): the core service is the authoritative gate.
+        """The core service is the authoritative gate.
         A non-admin actor must be rejected BEFORE AST validation, regardless of the
         entry layer — this is what stops the JSON-API path from bypassing the gate."""
         agent = make_agent()

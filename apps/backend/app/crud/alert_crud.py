@@ -252,9 +252,9 @@ class AlertCRUD:
         Used by `_should_send_notification` to decide whether the current alert
         evaluation represents a new state. Includes `sent`, `failed`, `rate_limited`,
         `suppressed`, and `deduplicated` — anything that proves we already audited
-        this alert+check. Filtering to `sent`-only here caused the dedup memory to
-        reset every time the provider was disabled / rate-limited / failed, producing
-        one notification row per check execution. See LUXSWIRL-145.
+        this alert+check. Filtering to `sent` only would reset the dedup memory
+        every time the provider was disabled / rate-limited / failed, producing one
+        notification row per check execution.
 
         Uses the denormalized `notification_logs.check_id` column so the lookup is a
         single-table index scan — earlier versions joined through `check_results`,

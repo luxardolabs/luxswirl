@@ -72,7 +72,7 @@ class TestCreateProvider:
             )
 
     async def test_webhook_blocks_cloud_metadata_url(self, db: AsyncSession):
-        """M-3 (LUXSWIRL-190): a webhook URL must not reach the cloud-metadata
+        """A webhook URL must not reach the cloud-metadata
         endpoint (SSRF). Rejected at create time."""
         with pytest.raises(ValidationException, match="Invalid provider configuration"):
             await NotificationCoreService.create_provider(

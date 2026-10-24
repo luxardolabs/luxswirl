@@ -244,7 +244,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Security headers middleware (SWIRL-43)
+# Security headers middleware
 app.add_middleware(SecurityHeadersMiddleware)
 
 # Cross-site guard (FLEET-AUTH-SESSION-STANDARD §5): a browser POST/PUT/PATCH/DELETE from

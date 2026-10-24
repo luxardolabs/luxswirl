@@ -39,7 +39,6 @@ Monitor LuxSwirl itself with external tool:
 **Alternative approach** (under consideration):
 
 - Agent-side emergency alerting: Agents could detect server unavailability and send alerts directly via configured notification providers
-- See GitHub issue SWIRL-58 for discussion
 
 ______________________________________________________________________
 

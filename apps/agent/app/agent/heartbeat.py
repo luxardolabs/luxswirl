@@ -173,7 +173,7 @@ class HeartbeatSender:
                     # Get job queue stats
                     job_stats = self.job_processor.get_stats()
 
-                    # Get resource monitoring metrics (SWIRL-57)
+                    # Get resource monitoring metrics
                     resource_metrics = {}
                     if self.config.get("resource_monitoring_enabled", True):
                         try:
@@ -259,7 +259,7 @@ class HeartbeatSender:
                         "dead_letter_count": reporter_metrics.get(
                             "dead_letter_count", 0
                         ),
-                        # Resource monitoring (SWIRL-57)
+                        # Resource monitoring
                         "open_file_descriptors": resource_metrics.get(
                             "open_file_descriptors"
                         ),

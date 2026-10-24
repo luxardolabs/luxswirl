@@ -42,7 +42,7 @@ Stores agent metadata, health/resource telemetry from heartbeats, per-agent conf
 | stored_reports_count                                                                                                                               | INT, NULL                             | Stored reports waiting to send                                                                          |
 | stored_reports_oldest_timestamp                                                                                                                    | FLOAT, NULL                           | Timestamp of oldest stored report                                                                       |
 | dead_letter_count                                                                                                                                  | INT, NULL                             | Report batches the agent dead-lettered: the server refused them as invalid (its 400/422 error envelope) |
-| open_file_descriptors / fd_limit_soft / fd_usage_percent                                                                                           | INT/INT/FLOAT, NULL                   | FD-leak detection (SWIRL-57)                                                                            |
+| open_file_descriptors / fd_limit_soft / fd_usage_percent                                                                                           | INT/INT/FLOAT, NULL                   | FD-leak detection                                                                                       |
 | subprocess_count                                                                                                                                   | INT, NULL                             | Number of child subprocesses                                                                            |
 | config_version                                                                                                                                     | VARCHAR(50), NULL                     | Last known config version from agent                                                                    |
 | checks_updated_at                                                                                                                                  | TIMESTAMPTZ, NULL                     | When checks were last modified (config-change detection)                                                |
@@ -266,7 +266,7 @@ DATABASE__POOL_SIZE=20
 DATABASE__MAX_OVERFLOW=10
 ```
 
-The engine also applies a per-connection `statement_timeout` (5s) and `idle_in_transaction_session_timeout` (30s) so a stray web handler holding a transaction gets killed before it blocks other requests (LUXSWIRL-105). The maintenance worker lifts these per-transaction with `SET LOCAL ... = 0` for cascading mutations.
+The engine also applies a per-connection `statement_timeout` (5s) and `idle_in_transaction_session_timeout` (30s) so a stray web handler holding a transaction gets killed before it blocks other requests. The maintenance worker lifts these per-transaction with `SET LOCAL ... = 0` for cascading mutations.
 
 ## Performance Considerations
 
