@@ -110,15 +110,18 @@ class UserCRUD:
 
     @staticmethod
     async def count_other_active_admins(db: AsyncSession, user_id: UUID) -> int:
-        """Active admins other than `user_id`: the ones who could still sign in."""
+        """Active admins other than `user_id`: the ones who could still sign in.
+
+        Every active admin row is locked until the transaction ends, so two
+        requests each removing a different admin run one after the other: the
+        second reads the first's committed change, not the row as it was.
+        """
         result = await db.execute(
-            select(func.count(User.id)).where(
-                User.role == UserRole.ADMIN,
-                User.is_active.is_(True),
-                User.id != user_id,
-            )
+            select(User.id)
+            .where(User.role == UserRole.ADMIN, User.is_active.is_(True))
+            .with_for_update()
         )
-        return result.scalar_one()
+        return sum(1 for admin_id in result.scalars() if admin_id != user_id)
 
     @staticmethod
     async def count_locked(db: AsyncSession) -> int:
