@@ -3,7 +3,7 @@ name: adversarial-audit
 description: Attack the WHOLE platform, not just a change — take the attack surface from `luxarch --sweep attack-surface`, rank it by this repo's committed audit profile, hand each slice to an independent attacker, verify every break with a second agent, and file each confirmed break in LuxPM with its failing test. Direct it in plain words ("what changed since the last release", "just payments, go deep", "quick"); re-runs attack only what changed. Use for a first full review of an app, on the owner's schedule, or when asked to audit or red-team the platform.
 ---
 
-<!-- luxarch:adversarial-audit-skill asset v4 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit adversarial-audit-skill`. -->
+<!-- luxarch:adversarial-audit-skill asset v5 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit adversarial-audit-skill`. -->
 
 # Adversarial audit: the whole platform
 
@@ -16,8 +16,10 @@ Emitted from luxarch (`luxarch --emit adversarial-audit-skill`); re-emit, never 
 ## 1. Inventory
 
 ```sh
-docker run --rm -v "$PWD":/repo:ro -w /repo <luxarch image> --sweep attack-surface --json > <scratch>/surface.json
+docker run --rm -v <checkout>:/repo:ro -w /repo <luxarch image> --sweep attack-surface --json > <scratch>/surface.json
 ```
+
+`<checkout>` is the checkout's absolute path, written out: inside a worktree Claude Code refuses a mount computed at run time, such as `"$PWD"`.
 
 Also read the text form (the same command without `--json`). Its header lines say how many routes, jobs and entry points there are, the audit state (`attacked` / `stale` / `never` / `retired` slices), the profile state (`profile: none | current | needs re-check (<reasons>)`), and this run's `surface:` counts. Every route or job under `unresolved` is a target in its own right: a surface the guard cannot see is one nobody has checked. A route whose `auth` is `unknown` is attacked as if it were `anon`.
 

@@ -1,6 +1,6 @@
 # Fleet Claude-Code hooks — emitted, never hand-written
 
-Installed by `luxarch --emit hooks | python3 -`. **Do not hand-edit these files.** They are emitted from the pinned guard image so every repo runs the byte-identical set; re-emit to update. `repo.hooks_current` reds when what's committed here has drifted from the pin.
+Installed by `luxarch --emit hooks > <scratch>/install_hooks.py`, then `python3 <scratch>/install_hooks.py` (`<scratch>`: a directory outside the checkout that is yours alone, such as your session's scratchpad; inside a worktree Claude Code refuses generated code piped into `python3`). **Do not hand-edit these files.** They are emitted from the pinned guard image so every repo runs the byte-identical set; re-emit to update. `repo.hooks_current` reds when what's committed here has drifted from the pin.
 
 ## The boundary — why these exist and the rules don't live here
 

@@ -3,13 +3,13 @@ name: fleet-start
 description: Start (or resume after a compact) a working session the fleet way — read this repo's CLAUDE.md and the conduct standard, rehydrate from LuxPM leanly (focus + this repo's open issues, keys and titles only), and restate the six session rules. Run at the start of every session and after every compact.
 ---
 
-<!-- luxarch:fleet-start-skill asset v9 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit fleet-start-skill`. -->
+<!-- luxarch:fleet-start-skill asset v10 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit fleet-start-skill`. -->
 
 # Fleet start
 
 The start-of-session routine for this repo. Emitted from luxarch (`luxarch --emit fleet-start-skill`); re-emit, never hand-edit. Standard: `luxarch --doc FLEET-AGENT-CONDUCT-STANDARD`. This skill points at it and restates nothing but the six rules below.
 
-**`luxarch …` is a Docker image, not a host command.** Run `luxarch --doc X` as `docker run --rm -v "$PWD":/repo -w /repo <image> --doc X`, where `<image>` is the Makefile's pinned `LUXARCH` image (set from `LUXARCH_VERSION`). There is no host install. `luxlint …` and `luxaudit …` are the same, with `LUXLINT` and `LUXAUDIT`.
+**`luxarch …` is a Docker image, not a host command.** Run `luxarch --doc X` as `docker run --rm -v <checkout>:/repo -w /repo <image> --doc X`, where `<checkout>` is the absolute path of the checkout you are in, written out (your issue's worktree when you are in one: inside a worktree Claude Code refuses a mount computed at run time, such as `"$PWD"`), and `<image>` is the Makefile's pinned `LUXARCH` image (set from `LUXARCH_VERSION`). There is no host install. `luxlint …` and `luxaudit …` are the same, with `LUXLINT` and `LUXAUDIT`.
 
 **Which agent are you?** In a repo that hosts a luxios app (a nested `apps/ios/` with its own `CLAUDE.md`, beside the backend), there are two agents. If this machine has no Docker (`command -v docker` prints nothing), you are that app's agent: read its `CLAUDE.md` first, follow the iOS reading below, and leave the root guard gates (`make check`, the luxarch, luxlint and luxaudit images) to the backend agent. Never look for a Docker binary to install.
 

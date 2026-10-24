@@ -82,7 +82,7 @@ pytest_plugins = [
 # fails the session on any registered route nothing reached.
 # ═══════════════════════════════════════════════════════════════════════════
 
-# luxarch:route-smoke asserter v20 — DO NOT edit the marker line above (fw.route_smoke_wired finds it).
+# luxarch:route-smoke asserter v21 — DO NOT edit the marker line above (fw.route_smoke_wired finds it).
 #
 # WHY THIS FILE EXISTS
 # A dependency deprecates an API; your code keeps working (warning only); a later pin makes it RAISE;
@@ -254,12 +254,26 @@ def _patch_route_class(cls, match_full) -> None:  # type: ignore[no-untyped-def]
                     status = int(message.get("status", 0))
                     if status >= 500:
                         _SERVER_ERRORS.setdefault(id(self), set()).add(status)
-                    if 300 <= status < 400:
-                        loc = ""
-                        for k, v in message.get("headers") or ():
-                            if k.lower() == b"location":
-                                loc = v.decode("latin-1", "replace")
-                                break
+                    headers: dict[bytes, str] = {}
+                    for k, v in message.get("headers") or ():
+                        # The first of a repeated header, as a client reads `Location`.
+                        headers.setdefault(k.lower(), v.decode("latin-1", "replace"))
+                    # An htmx request is bounced with 200 + `HX-Redirect` (or `HX-Location`), because
+                    # htmx would follow a 3xx inside its XHR and swap the target page into the
+                    # fragment. The handler did not render either way, so both are redirects.
+                    hx = headers.get(b"hx-redirect") or headers.get(b"hx-location")
+                    if 300 <= status < 400 or (hx and status < 400):
+                        loc = hx or headers.get(b"location", "")
+                        if loc.lstrip().startswith("{"):
+                            # HX-Location's JSON form: {"path": "/login", "target": ...}
+                            import json
+
+                            try:
+                                parsed = json.loads(loc)
+                            except ValueError:
+                                parsed = None
+                            if isinstance(parsed, dict):
+                                loc = str(parsed.get("path", ""))
                         # Query string dropped: `?next=/admin/users` differs per route and would
                         # hide that a dozen routes all bounce to the SAME page.
                         _REDIRECTS.setdefault(id(self), set()).add(
@@ -715,7 +729,14 @@ def pytest_sessionfinish(session, exitstatus) -> None:  # type: ignore[no-untype
         and p_ not in EXPECT_3XX
         and p_ not in EXEMPT
     }
-    if bounced:
+    if bounced and _session_is_narrowed(session):
+        # A whole-suite verdict: a subset may request a route only signed out while the full suite
+        # also requests it signed in.
+        print(
+            f"luxarch route-smoke: not evaluated — {len(bounced)} GET route(s) saw only redirects, "
+            "but this run selected a SUBSET of the suite. Run the full suite to certify."
+        )
+    elif bounced:
         # Group by target. One route redirecting is business logic; a dozen routes redirecting to the
         # SAME page is a gate, and naming that page turns a list of failures into one diagnosis.
         targets: dict[str, int] = {}
@@ -761,8 +782,9 @@ def pytest_sessionfinish(session, exitstatus) -> None:  # type: ignore[no-untype
     # missing route with no exemption reads as untested or absent, while a missing route WITH one
     # reads as a deliberate, reviewed decision.
     #
-    # Deliberately NOT skipped on a narrowed run: a subset selection still REGISTERS every route, so
-    # unlike `missing` this count is meaningful even from one test.
+    # A whole-suite verdict too, so a narrowed run does not give it: a test module may mount a route
+    # for its own duration (a deliberate-500 router for the error handler), and a subset that skips
+    # that module never registers it.
     # Mounts included on purpose: a mount IS a registered surface, so exempting one is legitimate.
     registered_paths = {p for (_h, _m, p, _rid) in entries}
     # `app.mount("/metrics", ...)` serves at `/metrics/`; a redirect from `/metrics` is the normal
@@ -782,7 +804,13 @@ def pytest_sessionfinish(session, exitstatus) -> None:  # type: ignore[no-untype
         )
         for path in paths - registered_paths
     )
-    if stale:
+    if stale and _session_is_narrowed(session):
+        print(
+            f"luxarch route-smoke: not evaluated — {len(stale)} exemption path(s) match no route "
+            "registered by this run, which selected a SUBSET of the suite. Run the full suite to "
+            "certify."
+        )
+    elif stale:
         session.exitstatus = 1
         raise SystemExit(
             "luxarch route-smoke: "
