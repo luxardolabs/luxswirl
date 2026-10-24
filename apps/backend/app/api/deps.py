@@ -104,8 +104,9 @@ AuthenticatedAgentId = Annotated[UUID, Depends(require_agent)]
 
 @dataclass(frozen=True)
 class HeartbeatSender:
-    """Who sent a heartbeat, once authenticated, and with which key."""
+    """A heartbeat and who sent it, once authenticated, and with which key."""
 
+    heartbeat: AgentHeartbeat
     agent_id: UUID
     using_agent_key: bool
 
@@ -117,12 +118,15 @@ async def require_heartbeat_sender(
 ) -> HeartbeatSender:
     """The heartbeat's agent, authenticated by its own key or the registration key.
 
-    Reads the same body the route does (FastAPI parses it once). Yields the id
-    and which key was used; core loads the agent itself.
+    The body is declared here only: a second declaration on the route would be
+    validated again, and each error reported twice. Yields the parsed heartbeat,
+    the id and which key was used; core loads the agent itself.
     """
     agent = await AgentCoreService.get_agent_by_id(db, heartbeat.agent_id)
     using_agent_key = await authenticate_heartbeat(agent, authorization, db)
-    return HeartbeatSender(agent_id=agent.id, using_agent_key=using_agent_key)
+    return HeartbeatSender(
+        heartbeat=heartbeat, agent_id=agent.id, using_agent_key=using_agent_key
+    )
 
 
 AuthenticatedHeartbeat = Annotated[HeartbeatSender, Depends(require_heartbeat_sender)]

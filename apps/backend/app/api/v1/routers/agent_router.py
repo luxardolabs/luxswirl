@@ -23,7 +23,6 @@ from app.core.security import (
 from app.db import get_db
 from app.models.enum_model import AgentApprovalStatus
 from app.schemas.agent_schema import (
-    AgentHeartbeat,
     AgentHeartbeatResponse,
     AgentRegisterRequest,
     AgentRegisterResponse,
@@ -79,17 +78,16 @@ async def register_agent(
 @limiter.limit(settings.security.agent_api_rate_limit)
 async def agent_heartbeat(
     request: Request,
-    heartbeat: AgentHeartbeat,
     sender: AuthenticatedHeartbeat,
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> AgentHeartbeatResponse:
-    """Process agent heartbeat.
+    """Process agent heartbeat (the body is an `AgentHeartbeat`).
 
     The agent's own key applies it. The registration key applies it only for an
     agent with no key yet; for one that has a key it only returns the status.
     """
     return await AgentCoreService.process_heartbeat(
-        db, sender.agent_id, heartbeat, using_agent_key=sender.using_agent_key
+        db, sender.agent_id, sender.heartbeat, using_agent_key=sender.using_agent_key
     )
 
 

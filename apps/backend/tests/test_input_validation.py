@@ -282,6 +282,30 @@ async def test_a_heartbeat_with_a_newline_in_the_hostname_is_refused(
     assert agent.hostname == "web01"
 
 
+@pytest.mark.integration
+async def test_a_refused_heartbeat_names_each_error_once(
+    agent_client: AsyncClient, reg_key: str, db: AsyncSession
+) -> None:
+    agent = make_agent(approval_status="pending", hostname="web01")
+    db.add(agent)
+    await db.flush()
+
+    resp = await agent_client.post(
+        "/api/v1/heartbeat",
+        json={
+            "agent_id": str(agent.id),
+            "timestamp": utc_now().isoformat(),
+            "status": "online",
+            "hostname": "web01\nedge",
+        },
+        headers={"Authorization": f"Bearer {reg_key}"},
+    )
+
+    assert resp.status_code == 422, resp.text
+    locs = [tuple(e["loc"]) for e in resp.json()["detail"]]
+    assert len(locs) == len(set(locs)) == 1, locs
+
+
 @pytest_asyncio.fixture
 async def web_client(db: AsyncSession) -> AsyncIterator[AsyncClient]:
     admin = make_user(role="admin")
@@ -322,6 +346,36 @@ async def test_the_agent_form_refuses_a_value_it_cannot_store(
     assert "updated successfully" not in resp.text
     await db.refresh(agent)
     assert (agent.heartbeat_interval, agent.agent_name) == (30, "keep-me")
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize(
+    ("form", "says"),
+    [
+        (
+            {"agent_name": "web01\nedge"},
+            "agent_name: Value error, must not contain control characters",
+        ),
+        (
+            {"tags": ",".join(f"t{i}" for i in range(101))},
+            "tags: List should have at most 100 items after validation, not 101",
+        ),
+    ],
+)
+async def test_a_form_refused_by_its_schema_reads_as_field_and_reason(
+    web_client: AsyncClient, db: AsyncSession, form: dict[str, str], says: str
+) -> None:
+    """The operator sees which field and why, not pydantic's own report."""
+    agent = make_agent(agent_name="keep-me")
+    db.add(agent)
+    await db.flush()
+
+    resp = await web_client.patch(f"/agents/{agent.id}", data=form)
+
+    assert resp.status_code == 400, resp.text
+    assert says in resp.text
+    for noise in ("validation error for", "input_value", "errors.pydantic.dev"):
+        assert noise not in resp.text
 
 
 @pytest.mark.integration
