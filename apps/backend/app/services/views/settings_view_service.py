@@ -10,7 +10,7 @@ from typing import Any
 from fastapi import Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import ValidationException
+from app.core.exceptions import ValidationException, value_error_message
 from app.schemas.alert_schema import AlertRow, AlertUrls
 from app.schemas.auth_schema import AuthedUser
 from app.schemas.notification_provider_schema import (
@@ -115,7 +115,7 @@ class SettingsViewService:
             return updated_setting, None
 
         except ValueError as e:
-            return None, f"Invalid value format: {str(e)}"
+            return None, f"Invalid value format: {value_error_message(e)}"
 
     @staticmethod
     def _parse_value(value: str, value_type: str | None) -> SettingScalar:

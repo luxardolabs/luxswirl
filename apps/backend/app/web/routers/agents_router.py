@@ -10,7 +10,11 @@ from fastapi import status as http_status
 from fastapi.responses import HTMLResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import AgentNotFoundException, ValidationException
+from app.core.exceptions import (
+    AgentNotFoundException,
+    ValidationException,
+    value_error_message,
+)
 from app.core.query_params import PerPageFilter
 from app.db import get_db
 from app.services.views.agents_view_service import AgentsViewService
@@ -374,7 +378,7 @@ async def generate_key_web(
             db, request, current_user, agent_id
         )
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+        raise HTTPException(status_code=400, detail=value_error_message(e)) from e
     except AgentNotFoundException:
         raise HTTPException(status_code=404, detail="Agent not found") from None
 

@@ -11,6 +11,7 @@ from typing import Any
 from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.exceptions import value_error_message
 from app.schemas.auth_schema import AuthedUser
 from app.schemas.user_schema import UserUpdate
 from app.services.core.auth_core_service import AuthCoreService
@@ -52,7 +53,7 @@ class ProfileViewService:
         try:
             updated_user = await user_service.update_user(db, user.id, update_data)
         except ValueError as e:
-            return "error", str(e)
+            return "error", value_error_message(e)
         if not updated_user:
             return "error", "User not found"
         logger.info(
@@ -85,7 +86,7 @@ class ProfileViewService:
                 db, user.id, current_password, new_password
             )
         except ValueError as e:
-            return "error", str(e)
+            return "error", value_error_message(e)
 
         logger.info(
             "User changed their password via web UI",

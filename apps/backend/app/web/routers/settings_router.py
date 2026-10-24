@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, Form, Query, Request
 from fastapi.responses import HTMLResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.exceptions import value_error_message
 from app.core.query_params import EnabledFilter, GlobalFilter, PerPageFilter
 from app.db import get_db
 from app.services.views.settings_view_service import SettingsViewService
@@ -185,7 +186,7 @@ async def update_setting(
             extra={"setting_key": key},
         )
         return hx_empty_with_toast(
-            f"Validation error: {e}", kind="error", status_code=400
+            f"Validation error: {value_error_message(e)}", kind="error", status_code=400
         )
 
 
@@ -292,7 +293,7 @@ async def update_metrics_timeout(
             db, timeout_str
         )
     except ValueError as e:
-        return settings_error_partial(request, current_user, str(e))
+        return settings_error_partial(request, current_user, value_error_message(e))
     return templates.TemplateResponse(
         request,
         "partials/settings/metrics_card.html",
