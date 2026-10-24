@@ -195,6 +195,34 @@
   .htmx-request.htmx-indicator {
     @apply opacity-100;
   }
+
+  /* A button in flight (its spinner is the request's indicator, or it submits
+     a form that sent one): its icon gives way to the spinner, and a form's
+     submit button takes no second click. A button that sends its own request
+     is disabled by HTMX (hx-disabled-elt). */
+  .btn-busy-only {
+    display: none;
+  }
+
+  .btn-busy-only.htmx-request,
+  form.htmx-request button[type="submit"] > .btn-busy-only {
+    display: inline-flex;
+  }
+
+  button:has(> .btn-busy-only.htmx-request) > .btn-idle-only,
+  form.htmx-request button[type="submit"] > .btn-idle-only {
+    display: none;
+  }
+
+  button:has(> .btn-busy-only.htmx-request),
+  form.htmx-request button[type="submit"] {
+    cursor: wait;
+  }
+
+  form.htmx-request button[type="submit"] {
+    pointer-events: none;
+    opacity: 0.6;
+  }
 }
 
 /* Custom utilities */
