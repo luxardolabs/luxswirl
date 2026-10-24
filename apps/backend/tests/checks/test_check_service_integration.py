@@ -8,26 +8,19 @@ service-layer mocks.
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
 from uuid import uuid4
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession
-
-_tests_root = str(Path(__file__).resolve().parent.parent)
-if _tests_root not in sys.path:
-    sys.path.insert(0, _tests_root)
-
-from app.core.exceptions import (  # noqa: E402
+from app.core.exceptions import (
     AgentNotFoundException,
     AuthorizationException,
     NotFoundException,
     ValidationException,
 )
-from app.schemas.check_schema import CheckCreate, CheckUpdate  # noqa: E402
-from app.services.core.check_core_service import CheckCoreService  # noqa: E402
-from fixtures.factories import make_agent, make_check  # noqa: E402
+from app.schemas.check_schema import CheckCreate, CheckUpdate
+from app.services.core.check_core_service import CheckCoreService
+from fixtures.factories import make_agent, make_check
+from sqlalchemy.ext.asyncio import AsyncSession
 
 pytestmark = pytest.mark.integration
 

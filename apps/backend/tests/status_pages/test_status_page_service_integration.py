@@ -5,21 +5,14 @@ CRUD lifecycle + check/group membership + reordering.
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
 from uuid import uuid4
 
 import pytest
+from app.core.exceptions import NotFoundException
+from app.schemas.status_page_schema import StatusPageCreate, StatusPageUpdate
+from app.services.core.status_page_core_service import StatusPageCoreService
+from fixtures.factories import make_agent, make_check
 from sqlalchemy.ext.asyncio import AsyncSession
-
-_tests_root = str(Path(__file__).resolve().parent.parent)
-if _tests_root not in sys.path:
-    sys.path.insert(0, _tests_root)
-
-from app.core.exceptions import NotFoundException  # noqa: E402
-from app.schemas.status_page_schema import StatusPageCreate, StatusPageUpdate  # noqa: E402
-from app.services.core.status_page_core_service import StatusPageCoreService  # noqa: E402
-from fixtures.factories import make_agent, make_check  # noqa: E402
 
 pytestmark = pytest.mark.integration
 

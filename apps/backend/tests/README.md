@@ -134,17 +134,9 @@ def test_bar_returns_expected_for_simple_input():
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
 import pytest
-
-_tests_root = str(Path(__file__).resolve().parent.parent)
-if _tests_root not in sys.path:
-    sys.path.insert(0, _tests_root)
-
-from crud.foo_crud import FooCRUD  # noqa: E402
-from fixtures.factories import make_agent, make_check  # noqa: E402
+from app.crud.foo_crud import FooCRUD
+from fixtures.factories import make_agent, make_check
 
 pytestmark = pytest.mark.integration
 
