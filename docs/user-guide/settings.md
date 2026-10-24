@@ -388,7 +388,7 @@ New checks inherit these; existing checks are unchanged and users can override p
 - **Block Cloud Metadata Endpoints** (`security.block_cloud_metadata`, bool) — Default **true**. Blocks checks targeting cloud metadata / link-local addresses (169.254.x.x).
 - **Block Private Network Targets** (`security.block_private_networks`, bool) — Default **false**. Blocks RFC 1918 private ranges (10.x, 172.16-31.x, 192.168.x); disabled by default so self-hosted users can monitor internal services.
 
-**How SSRF protection works:** validation runs when a check is created or updated. The target hostname is resolved to IP(s), and each IP is checked against the blocked ranges; blocked targets are rejected with a clear error. Existing checks are not retroactively validated.
+**How SSRF protection works:** when a check is created or updated, every address it connects to (its target, a DNS check's nameserver, a database check's connection string) is resolved to IP(s), and each IP is checked against the blocked ranges; a blocked address is rejected with a clear error. The agent checks again immediately before each connection, so an existing check that now resolves into a blocked range fails at run time.
 
 ### General Settings
 
@@ -569,7 +569,7 @@ Rate limits are expressed as `count/period` strings (e.g. login `10/15minutes`, 
 
 ### Network Protection (SSRF)
 
-Cloud-metadata blocking is on by default; private-network blocking is off by default so self-hosted users can monitor internal services. Enable **Block Private Networks** in cloud/enterprise environments to keep checks from reaching internal services. Changes apply to new check creation/updates immediately.
+Cloud-metadata blocking is on by default; private-network blocking is off by default so self-hosted users can monitor internal services. Enable **Block Private Networks** in cloud/enterprise environments to keep checks from reaching internal services. A change applies to check creation and updates immediately, and reaches every agent with its next heartbeat.
 
 ______________________________________________________________________
 

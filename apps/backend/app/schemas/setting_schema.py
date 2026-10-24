@@ -50,6 +50,13 @@ class SettingResponse(BaseModel):
     )
 
 
+class NetworkProtection(BaseModel):
+    """The SSRF settings (Settings > Security > Network Protection)."""
+
+    block_cloud_metadata: bool
+    block_private_networks: bool
+
+
 class CheckDefaults(BaseModel):
     """Schema for check defaults bundle."""
 

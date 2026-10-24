@@ -15,6 +15,7 @@ from app.models.setting_model import Setting
 from app.schemas.setting_schema import (
     AlertDefaults,
     CheckDefaults,
+    NetworkProtection,
     SettingResponse,
     SettingScalar,
 )
@@ -298,6 +299,18 @@ class SettingsCoreService:
                 ) from None
             except Exception as e:
                 raise ValueError(f"Invalid timezone format: {str(e)}") from e
+
+    @staticmethod
+    async def get_network_protection(db: AsyncSession) -> NetworkProtection:
+        """The SSRF settings that decide which addresses a check may reach."""
+        return NetworkProtection(
+            block_cloud_metadata=await SettingsCoreService.get_setting(
+                db, "security.block_cloud_metadata", True
+            ),
+            block_private_networks=await SettingsCoreService.get_setting(
+                db, "security.block_private_networks", False
+            ),
+        )
 
     @staticmethod
     async def get_check_defaults(db: AsyncSession) -> CheckDefaults:

@@ -10,7 +10,7 @@ from typing import Any
 
 import httpx
 
-from app.shared.ssrf import assert_target_allowed
+from app.checks._ssrf_policy import assert_target_allowed
 
 
 async def ssrf_guarded_send(
@@ -37,12 +37,12 @@ async def ssrf_guarded_send(
     )
     limit = max_redirects if follow_redirects else 0
     for _ in range(limit):
-        assert_target_allowed(str(request.url), block_cloud_metadata=True)
+        assert_target_allowed(str(request.url))
         response = await client.send(request, follow_redirects=False)
         if not response.is_redirect or response.next_request is None:
             return response
         request = response.next_request
         request.extensions["timeout"] = httpx.Timeout(timeout).as_dict()
     # Redirects disabled or limit reached — validate + issue the final hop.
-    assert_target_allowed(str(request.url), block_cloud_metadata=True)
+    assert_target_allowed(str(request.url))
     return await client.send(request, follow_redirects=False)

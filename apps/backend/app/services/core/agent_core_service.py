@@ -40,6 +40,7 @@ from app.schemas.base_schema import storable_tags
 from app.services.core.agent_assignment_core_service import AgentAssignmentCoreService
 from app.services.core.job_core_service import JobCoreService
 from app.services.core.metrics_collector_core_service import MetricsCollectorCoreService
+from app.services.core.settings_core_service import SettingsCoreService
 from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.services.agent")
@@ -734,6 +735,9 @@ class AgentCoreService:
             watchdog_interval=agent.watchdog_interval,
             watchdog_stall_threshold=agent.watchdog_stall_threshold,
             log_level=agent.log_level,
+            block_private_networks=(
+                await SettingsCoreService.get_network_protection(db)
+            ).block_private_networks,
         )
 
     @staticmethod

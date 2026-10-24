@@ -5,9 +5,9 @@ MySQL/MariaDB Check Module - Implements MySQL/MariaDB database health checks.
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
+from app.checks._ssrf_policy import assert_target_allowed
 from app.checks.base import BaseCheck
 from app.shared.logger import get_logger
-from app.shared.ssrf import assert_target_allowed
 
 try:
     import aiomysql
@@ -113,8 +113,8 @@ class MySQLCheck(BaseCheck):
         port = conn_params["port"]
         database = conn_params["database"]
 
-        # SSRF: block a connection host that resolves into the cloud-metadata range.
-        assert_target_allowed(connection_string, block_cloud_metadata=True)
+        # SSRF: block a connection host that resolves into a blocked range.
+        assert_target_allowed(connection_string)
 
         success = False
         connection_latency_ms = None

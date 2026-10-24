@@ -288,6 +288,13 @@ class CheckListResponse(BaseSchema):
     total: int = Field(..., description="Total number of checks")
     enabled_count: int = Field(..., description="Number of enabled checks")
     disabled_count: int = Field(..., description="Number of disabled checks")
+    block_private_networks: bool = Field(
+        False,
+        description=(
+            "Whether the agent refuses private-network addresses when it connects "
+            "(Settings > Security). It always refuses cloud-metadata addresses"
+        ),
+    )
 
 
 class BulkCheckCreateRequest(BaseSchema):

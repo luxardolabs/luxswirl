@@ -98,8 +98,10 @@ class CheckCoreService:
         if not agent:
             raise AgentNotFoundException(str(agent_id))
 
-        # SSRF protection: validate check target against network protection settings
-        await CheckCoreService._validate_target_ssrf(db, data.target)
+        # SSRF protection: every address the check connects to
+        await CheckCoreService._validate_endpoints_ssrf(
+            db, data.target, data.nameserver, data.connection_string
+        )
 
         await CheckCoreService._validate_dependency(
             db, getattr(data, "depends_on_check_id", None), own_check_id=None
@@ -302,31 +304,26 @@ class CheckCoreService:
             )
 
     @staticmethod
-    async def _validate_target_ssrf(db: AsyncSession, target: str) -> None:
-        """Validate a check target against SSRF network protection settings.
+    async def _validate_endpoints_ssrf(
+        db: AsyncSession, *endpoints: str | None
+    ) -> None:
+        """Validate every address a check connects to against the SSRF settings.
 
-        Reads security.block_cloud_metadata and security.block_private_networks
-        settings and validates the target accordingly.
-
-        Args:
-            db: Database session
-            target: The check target URL or host
+        A check reaches its target, and a DNS check also its nameserver and a
+        database check its connection string; each is validated. An empty one
+        is skipped.
 
         Raises:
-            CheckTargetBlockedError: If the target is blocked by SSRF protection
+            CheckTargetBlockedError: If any of them is blocked by SSRF protection
         """
-        block_cloud_metadata = await SettingsCoreService.get_setting(
-            db, "security.block_cloud_metadata", True
-        )
-        block_private_networks = await SettingsCoreService.get_setting(
-            db, "security.block_private_networks", False
-        )
-
-        validate_check_target(
-            target,
-            block_cloud_metadata=block_cloud_metadata,
-            block_private_networks=block_private_networks,
-        )
+        protection = await SettingsCoreService.get_network_protection(db)
+        for endpoint in endpoints:
+            if endpoint:
+                validate_check_target(
+                    endpoint,
+                    block_cloud_metadata=protection.block_cloud_metadata,
+                    block_private_networks=protection.block_private_networks,
+                )
 
     @staticmethod
     async def clone_check(
@@ -529,9 +526,14 @@ class CheckCoreService:
 
         update_data = data.model_dump(exclude_unset=True)
 
-        # SSRF protection: validate new target if it's being changed
-        if "target" in update_data:
-            await CheckCoreService._validate_target_ssrf(db, update_data["target"])
+        # SSRF protection: every address being changed
+        await CheckCoreService._validate_endpoints_ssrf(
+            db,
+            *(
+                update_data.get(field)
+                for field in ("target", "nameserver", "connection_string")
+            ),
+        )
 
         if "depends_on_check_id" in update_data:
             await CheckCoreService._validate_dependency(
