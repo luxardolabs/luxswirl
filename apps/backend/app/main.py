@@ -14,6 +14,7 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from pydantic import ValidationError
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from sqlalchemy.exc import SQLAlchemyError
@@ -294,14 +295,23 @@ async def value_error_handler(request: Request, exc: ValueError) -> Response:
     Web routers used to catch these and render a 400 partial themselves; now
     they propagate here so the handling lives in exactly one place.
     """
+    message = _validation_message(exc) if isinstance(exc, ValidationError) else str(exc)
     get_logger("luxswirl.server").warning(
-        "Value error", extra={"error_message": str(exc)}
+        "Value error", extra={"error_message": message}
     )
     return render_error_response(
         request,
         status.HTTP_400_BAD_REQUEST,
-        str(exc),
+        message,
         error_code="BAD_REQUEST",
+    )
+
+
+def _validation_message(exc: ValidationError) -> str:
+    """A schema refusal as `<field>: <reason>` per error, without the input echoed."""
+    return "; ".join(
+        f"{'.'.join(str(part) for part in err['loc']) or 'value'}: {err['msg']}"
+        for err in exc.errors(include_url=False, include_input=False)
     )
 
 
