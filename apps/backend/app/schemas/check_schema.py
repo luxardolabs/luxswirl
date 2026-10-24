@@ -318,6 +318,12 @@ class BulkCheckCreateRequest(BaseSchema):
     tags: TagList | None = Field(
         None, description="Tags for organizing/filtering checks"
     )
+    resend_notification_after: int | None = Field(
+        None,
+        ge=1,
+        le=100,
+        description="Resend notification if down X times consecutively (NULL = disabled)",
+    )
     expected_status: int | None = Field(
         None, ge=100, le=599, description="Expected HTTP status code"
     )
