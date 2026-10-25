@@ -351,7 +351,8 @@ New checks inherit these; existing checks are unchanged and users can override p
 
 - **Check Results Retention (days)** (`database.retention_days`, int) — Default **90**, range 7–3650.
 - **Compress After (days)** (`database.compress_after_days`, int) — Default **7**, range 1–365.
-- **Artifacts Retention (days)** (`database.artifacts_retention_days`, int) — Default **30**, range 1–365.
+- **Artifacts Retention (days)** (`database.artifacts_retention_days`, int) — Default **30**, range 1–365. Applied by the daily **Cleanup Old Check Artifacts** job.
+- **Notification Logs Retention (days)** (`database.notification_logs_retention_days`, int) — Default **90**, range 0–3650; 0 keeps all. Applied by the daily **Cleanup Old Notification Logs** job.
 - **Hourly Aggregates Retention (days)** (`database.hourly_aggregate_retention_days`, int) — Default **365**, range 30–1825.
 - **Daily Aggregates Retention (days)** (`database.daily_aggregate_retention_days`, int) — Default **1825**, range 90–3650.
 

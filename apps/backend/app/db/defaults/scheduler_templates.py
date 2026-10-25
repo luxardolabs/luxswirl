@@ -43,10 +43,9 @@ DEFAULT_JOB_CONFIGURATIONS: list[dict[str, Any]] = [
         "job_key": "cleanup_notification_logs",
         "function_name": "cleanup_notification_logs",
         "display_name": "Cleanup Old Notification Logs",
-        "description": "Delete notification log records older than 30 days",
+        "description": "Delete notification log records older than the Notification Logs Retention setting",
         "category": CATEGORY_CLEANUP,
         "enabled": True,
-        "parameters": {"days_to_keep": 30},
         "trigger_type": TRIGGER_CRON,
         "cron_expression": "30 2 * * *",  # Daily at 2:30 AM
         "next_run_at": datetime.now(UTC).replace(
@@ -76,10 +75,9 @@ DEFAULT_JOB_CONFIGURATIONS: list[dict[str, Any]] = [
         "job_key": "cleanup_check_artifacts",
         "function_name": "cleanup_check_artifacts",
         "display_name": "Cleanup Old Check Artifacts",
-        "description": "Delete check artifacts (screenshots, logs) older than 30 days",
+        "description": "Delete check artifacts (screenshots, logs) older than the Artifacts Retention setting",
         "category": CATEGORY_CLEANUP,
         "enabled": True,
-        "parameters": {"days_to_keep": 30},
         "trigger_type": TRIGGER_CRON,
         "cron_expression": "30 3 * * *",  # Daily at 3:30 AM
         "next_run_at": datetime.now(UTC).replace(

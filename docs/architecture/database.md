@@ -167,14 +167,14 @@ Three continuous aggregates roll up `check_results` at increasing granularity.
 
 ### Retention Policies
 
-| Table                | Retention                                                            |
-| -------------------- | -------------------------------------------------------------------- |
-| check_results        | **90 days** (default, from `settings.server.default_retention_days`) |
-| agent_metrics        | 30 days                                                              |
-| notification_logs    | 30 days                                                              |
-| check_artifacts      | 30 days                                                              |
-| check_results_hourly | 365 days                                                             |
-| check_results_daily  | 1825 days (5 years)                                                  |
+| Table                | Retention                                                              |
+| -------------------- | ---------------------------------------------------------------------- |
+| check_results        | **90 days** (default, from `settings.server.default_retention_days`)   |
+| agent_metrics        | 30 days                                                                |
+| notification_logs    | **90 days** (`database.notification_logs_retention_days`; 0 keeps all) |
+| check_artifacts      | **30 days** (`database.artifacts_retention_days`)                      |
+| check_results_hourly | 365 days                                                               |
+| check_results_daily  | 1825 days (5 years)                                                    |
 
 ```sql
 -- retention_days defaults to 90

@@ -26,6 +26,7 @@ from app.db import database as _database
 from app.models.check_artifact_model import CheckArtifact
 from app.models.enum_model import CheckArtifactType
 from app.schemas.database_maintenance_schema import TableBloat
+from app.services.core.cleanup_core_service import cleanup_check_artifacts
 from app.services.core.database_maintenance_core_service import (
     DatabaseMaintenanceCoreService,
     vacuum_kind,
@@ -203,7 +204,7 @@ async def test_artifact_retention_deletes_old_keeps_recent(
             )
         await s.commit()
 
-    assert await DatabaseMaintenanceCoreService.enforce_artifact_retention() == 1
+    assert (await cleanup_check_artifacts())["deleted"] == 1
 
     async with worker_db() as s:
         kept = (await s.execute(select(CheckArtifact.created_at))).scalars().all()

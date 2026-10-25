@@ -172,7 +172,10 @@ Retention: 90 days   Today: 2025-11-11
 **Configuring** (Settings → Defaults → Database Settings):
 
 - **Check Results Retention Days** — default 90, range 1–3650.
-- **Notification Logs Retention Days** — default 90, range 1–3650.
+- **Notification Logs Retention Days** — default 90, range 0–3650; 0 keeps every log.
+- **Artifacts Retention Days** — default 30, range 1–365.
+
+Notification logs and artifacts are deleted by the scheduler jobs **Cleanup Old Notification Logs** (daily, 2:30) and **Cleanup Old Check Artifacts** (daily, 3:30), which read these settings.
 
 A change takes effect on the next scheduled run, which drops anything older than the new duration. (Reducing 90 → 30 means the next run drops all data older than 30 days.)
 

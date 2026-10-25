@@ -1,13 +1,15 @@
 """
-Database maintenance: bloat-driven VACUUM, retention, continuous-aggregate refresh.
+Database maintenance: bloat-driven VACUUM and continuous-aggregate refresh.
 
 One cycle:
 
 1. measure bloat on the large tables;
 2. VACUUM FULL a table over 50% bloat or 10,000 dead tuples, plain VACUUM over
    10% or 1,000;
-3. delete check artifacts and notification logs past their retention settings;
-4. refresh the TimescaleDB continuous aggregates.
+3. refresh the TimescaleDB continuous aggregates.
+
+Artifact and notification-log retention are the scheduler's cleanup jobs
+(`cleanup_core_service`), which read the retention settings.
 
 Each step is its own unit of work (`worker_session()` per step, or an AUTOCOMMIT
 connection for VACUUM and the refresh), so one failing step is reported and the
@@ -16,22 +18,18 @@ rest still run. The SQL lives in `DatabaseMaintenanceCRUD`.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 
-from app.core.datetime_utils import utc_now
-from app.crud.artifact_crud import ArtifactCRUD
 from app.crud.database_maintenance_crud import (
     CONTINUOUS_AGGREGATES,
     DatabaseMaintenanceCRUD,
 )
-from app.crud.notification_log_crud import NotificationLogCRUD
 from app.db import worker_session
 from app.schemas.database_maintenance_schema import (
     MaintenanceReport,
     TableBloat,
     VacuumResult,
 )
-from app.services.core.settings_core_service import SettingsCoreService
 from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.background.db_maintenance")
@@ -110,30 +108,6 @@ class DatabaseMaintenanceCoreService:
         )
 
     @staticmethod
-    async def enforce_artifact_retention() -> int:
-        """Delete check artifacts older than `database.artifacts_retention_days`."""
-        async with worker_session() as db:
-            days = await SettingsCoreService.get_setting(
-                db, "database.artifacts_retention_days", 7
-            )
-            return await ArtifactCRUD.delete_older_than(
-                db, utc_now() - timedelta(days=days)
-            )
-
-    @staticmethod
-    async def enforce_notification_retention() -> int:
-        """Delete notification logs older than the retention setting (0 keeps all)."""
-        async with worker_session() as db:
-            days = await SettingsCoreService.get_setting(
-                db, "database.notification_logs_retention_days", 90
-            )
-            if days <= 0:
-                return 0
-            return await NotificationLogCRUD.delete_older_than(
-                db, utc_now() - timedelta(days=days)
-            )
-
-    @staticmethod
     async def run_cycle() -> MaintenanceReport:
         """One full maintenance cycle (see the module docstring)."""
         report = MaintenanceReport(started_at=datetime.now(UTC))
@@ -180,24 +154,6 @@ class DatabaseMaintenanceCoreService:
                 },
             )
 
-        try:
-            report.artifacts_deleted = (
-                await DatabaseMaintenanceCoreService.enforce_artifact_retention()
-            )
-        # swallowed-exceptions: one retention step; reported, the rest still run.
-        except Exception as exc:
-            logger.exception("Error deleting old artifacts")
-            report.failures.append(f"retention:artifacts:{type(exc).__name__}")
-
-        try:
-            report.notifications_deleted = (
-                await DatabaseMaintenanceCoreService.enforce_notification_retention()
-            )
-        # swallowed-exceptions: one retention step; reported, the rest still run.
-        except Exception as exc:
-            logger.exception("Error deleting old notification logs")
-            report.failures.append(f"retention:notifications:{type(exc).__name__}")
-
         for name in CONTINUOUS_AGGREGATES:
             try:
                 await DatabaseMaintenanceCRUD.refresh_continuous_aggregate(name)
@@ -220,8 +176,6 @@ class DatabaseMaintenanceCoreService:
             extra={
                 "total_reclaimed_mb": report.space_reclaimed_mb,
                 "total_duration_seconds": report.duration_seconds,
-                "artifacts_deleted": report.artifacts_deleted,
-                "notifications_deleted": report.notifications_deleted,
                 "aggregates_refreshed": len(report.aggregates_refreshed),
                 "failures": len(report.failures),
             },

@@ -54,8 +54,6 @@ class MaintenanceReport(BaseSchema):
     started_at: datetime = Field(..., description="When the cycle started")
     bloat: list[TableBloat] = Field(default_factory=list)
     vacuums: list[VacuumResult] = Field(default_factory=list)
-    artifacts_deleted: int = 0
-    notifications_deleted: int = 0
     aggregates_refreshed: list[str] = Field(default_factory=list)
     failures: list[str] = Field(default_factory=list)
     duration_seconds: float = 0.0
