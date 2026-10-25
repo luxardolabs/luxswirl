@@ -13,6 +13,7 @@ import pytest
 from app.models.enum_model import JobStatus, JobType
 from app.models.job_model import Job
 from app.schemas.job_schema import JobResultSubmit
+from app.services.core.job_api_core_service import JobApiCoreService
 from app.services.core.job_core_service import JobCoreService
 from fixtures.factories import make_agent
 from sqlalchemy import select
@@ -98,3 +99,50 @@ async def test_a_failed_result_records_its_error(worker_db) -> None:
     stored = await _stored(worker_db, job.id)
     assert (stored.status, stored.error) == (JobStatus.FAILED, "ping missing")
     assert stored.completed_at is not None
+
+
+async def test_a_result_refused_by_a_racing_cancel_returns_the_cancelled_job(
+    worker_db,
+) -> None:
+    """The losing request answers with what is stored, not with what it sent."""
+    job = await _seed(worker_db)
+
+    returned = await _race(
+        worker_db,
+        lambda s: JobCoreService.cancel_job(s, job.id),
+        lambda s: JobCoreService.submit_job_result(s, job.id, _RESULT),
+    )
+
+    assert returned is not None
+    assert (returned.status, returned.result) == (JobStatus.CANCELLED, None)
+
+
+async def test_the_agent_is_told_a_cancelled_job_is_cancelled(worker_db) -> None:
+    job = await _seed(worker_db)
+
+    response = await _race(
+        worker_db,
+        lambda s: JobCoreService.cancel_job(s, job.id),
+        lambda s: JobApiCoreService.submit_job_result(
+            s, job.id, JobResultSubmit(status=JobStatus.FAILED, error="boom")
+        ),
+    )
+
+    assert response is not None
+    assert response.status == JobStatus.CANCELLED
+
+
+async def test_a_second_result_racing_the_first_returns_the_first(worker_db) -> None:
+    job = await _seed(worker_db)
+
+    returned = await _race(
+        worker_db,
+        lambda s: JobCoreService.submit_job_result(s, job.id, _RESULT),
+        lambda s: JobCoreService.submit_job_result(
+            s, job.id, JobResultSubmit(status=JobStatus.COMPLETED, result={"hosts": 9})
+        ),
+    )
+
+    assert (await _stored(worker_db, job.id)).result["hosts"] == 1
+    assert returned.status == JobStatus.COMPLETED
+    assert returned.result["hosts"] == 1

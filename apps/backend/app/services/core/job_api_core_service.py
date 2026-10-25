@@ -95,5 +95,5 @@ class JobApiCoreService:
 
     @staticmethod
     async def cancel_job(db: AsyncSession, job_id: UUID) -> bool:
-        """Cancel a pending job or delete a finished one; False if neither applies."""
+        """Cancel an unfinished job; False if there is no such job or it is finished."""
         return await JobCoreService.cancel_job(db, job_id) is not None

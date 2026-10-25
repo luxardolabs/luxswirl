@@ -249,7 +249,7 @@ class JobCoreService:
             )
             return moved
 
-        job = await JobCoreService.get_job(db, job_id)
+        job = await JobCRUD.get_current(db, job_id)
         if job is not None and job.is_terminal:
             logger.warning(
                 "Ignoring status change for already-terminal job",
@@ -295,7 +295,8 @@ class JobCoreService:
                 db, job_id, JobStatus.FAILED, error=result_data.error or "Unknown error"
             )
         if moved is None:
-            current = await JobCoreService.get_job(db, job_id)
+            # As stored now: another request finished the job first.
+            current = await JobCRUD.get_current(db, job_id)
             logger.warning(
                 "Ignoring result for already-terminal job",
                 extra={
