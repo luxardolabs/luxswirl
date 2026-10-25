@@ -147,6 +147,7 @@ class WebhookNotificationProvider(BaseNotificationProvider):
             "timestamp": context.timestamp,
             "error_message": context.error_message,
             "error_type": context.error_type,
+            "detail": context.detail,
             "http_status_code": context.http_status_code,
             "alert_name": context.alert_name,
             "alert_description": context.alert_description,

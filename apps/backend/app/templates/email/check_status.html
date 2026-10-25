@@ -25,6 +25,12 @@
                 <span class="value"{% if color %} style="color: {{ color }}; font-weight: 600;"{% endif %}>{{ value }}</span>
             </div>
             {% endfor %}
+            {% if detail %}
+            <div class="field">
+                <span class="label">Detail:</span>
+                <span class="value">{{ detail }}</span>
+            </div>
+            {% endif %}
             {% if error_message %}
             <div class="field">
                 <span class="label">Error:</span>

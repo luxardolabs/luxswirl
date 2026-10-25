@@ -38,6 +38,9 @@ class NotificationContext:
     consecutive_failures: int = 0
     custom_subject: str | None = None
     custom_message: str | None = None
+    # What the alert found, said in a line, for a trigger whose news is not the
+    # check's status (an SSL certificate's expiry): shown even on a success.
+    detail: str | None = None
     metadata: dict[str, Any] | None = None
 
     @property
@@ -200,6 +203,7 @@ class BaseNotificationProvider(ABC):
         - {{AGENT}} - Agent name/ID
         - {{TIMESTAMP}} - When check ran
         - {{ERROR_MESSAGE}} - Error details
+        - {{DETAIL}} - What the alert found (an SSL certificate's expiry)
         - {{TYPE}} - Check type
         - {{ALERT}} - Alert name
 
@@ -220,6 +224,7 @@ class BaseNotificationProvider(ABC):
             "{{AGENT}}": context.agent_name or "Unknown Agent",
             "{{TIMESTAMP}}": context.timestamp or "N/A",
             "{{ERROR_MESSAGE}}": context.error_message or "No error",
+            "{{DETAIL}}": context.detail or "N/A",
             "{{TYPE}}": context.check_type,
             "{{ALERT}}": context.alert_name or "Unknown Alert",
             "{{HTTP_STATUS}}": (
@@ -260,6 +265,7 @@ Latency: {{LATENCY}}
 Agent: {{AGENT}}
 Timestamp: {{TIMESTAMP}}
 Error: {{ERROR_MESSAGE}}
+Detail: {{DETAIL}}
 """.strip()
 
     def __repr__(self) -> str:

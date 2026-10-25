@@ -385,8 +385,9 @@ class AlertEvaluationCoreService:
 
         days_until_expiration = ssl_cert.get("days_until_expiration")
         if days_until_expiration is None:
-            # Unable to determine expiration
-            return False
+            # A certificate whose expiry cannot be read is one this alert cannot
+            # watch: say so (state `ssl:unknown`, once) rather than stay silent.
+            return True
 
         max_threshold = max(days_thresholds)
         in_danger_zone = bool(days_until_expiration <= max_threshold)
@@ -395,7 +396,8 @@ class AlertEvaluationCoreService:
             return True
 
         # Cert is currently safe. Fire once if the last notification we sent for
-        # this alert+check was in-band (`ssl:lte:*`) — that's the renewal signal.
+        # this alert+check was in-band (`ssl:lte:*`) or about an unreadable
+        # expiry (`ssl:unknown`): the renewal, or the expiry readable again.
         # No DB hit if the alert doesn't want recovery notifications.
         if not alert.notify_on_recovery:
             return False
@@ -405,7 +407,9 @@ class AlertEvaluationCoreService:
         )
         if last_notification is None or last_notification.notification_hash is None:
             return False
-        return last_notification.notification_hash.startswith("ssl:lte:")
+        return last_notification.notification_hash.startswith("ssl:lte:") or (
+            last_notification.notification_hash == "ssl:unknown"
+        )
 
     @staticmethod
     async def _fire_alert(
@@ -434,8 +438,7 @@ class AlertEvaluationCoreService:
             },
         )
 
-        # Check if this is a recovery notification
-        is_recovery = check_result.success and alert.notify_on_recovery
+        is_recovery = AlertEvaluationCoreService._is_recovery(alert, check_result)
 
         # Recovery notifications bypass parent suppression — operator wants to
         # know a leaf came back even while the parent is still down.
@@ -480,6 +483,42 @@ class AlertEvaluationCoreService:
         )
 
     @staticmethod
+    def _is_recovery(alert: Alert, check_result: CheckResult) -> bool:
+        """Whether this fire tells of a recovery.
+
+        For an SSL expiry alert, only a certificate back out of every band
+        (state `ssl:ok`): the check succeeds while a certificate expires, so
+        its success says nothing. For the others, a successful check.
+        """
+        if not alert.notify_on_recovery:
+            return False
+        if alert.trigger_type == AlertTriggerType.SSL_CERT_EXPIRY:
+            return (
+                AlertEvaluationCoreService._compute_alert_state_key(alert, check_result)
+                == "ssl:ok"
+            )
+        return bool(check_result.success)
+
+    @staticmethod
+    def _ssl_detail(check_result: CheckResult) -> str | None:
+        """What an SSL expiry alert found, in one line, or None without a cert."""
+        metrics = check_result.get_metrics() or {}
+        cert = metrics.get("response", {}).get("ssl_certificate") or {}
+        if not cert:
+            return None
+        days = cert.get("days_until_expiration")
+        if days is None:
+            return (
+                "SSL certificate expiry could not be read "
+                f"(reported as {cert.get('expiration_date')!r})"
+            )
+        if days < 0:
+            return f"SSL certificate expired {-days} day{'s' if days != -1 else ''} ago"
+        if days == 0:
+            return "SSL certificate expires today"
+        return f"SSL certificate expires in {days} day{'s' if days != 1 else ''}"
+
+    @staticmethod
     def _build_notification_context(
         alert: Alert,
         check: Check,
@@ -510,6 +549,11 @@ class AlertEvaluationCoreService:
             is_recovery=is_recovery,
             custom_subject=alert.custom_subject,
             custom_message=alert.custom_message,
+            detail=(
+                AlertEvaluationCoreService._ssl_detail(check_result)
+                if alert.trigger_type == AlertTriggerType.SSL_CERT_EXPIRY
+                else None
+            ),
         )
 
     @staticmethod
