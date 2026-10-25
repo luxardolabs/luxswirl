@@ -37,6 +37,7 @@ from app.models.agent_model import Agent
 from app.models.check_artifact_model import CheckArtifact
 from app.models.check_model import Check
 from app.models.check_result_model import CheckResult
+from app.models.enum_model import AgentApprovalStatus, AssignmentMode
 
 # A row of labelled aggregates (count/sum/avg/percentile over results): SQLAlchemy
 # 2.1 cannot type `func.*` columns, so the row is typed by its arity only.
@@ -225,7 +226,15 @@ class CheckResultCRUD:
             .options(selectinload(Check.agent))
         )
 
-        conditions: list[ColumnElement[bool]] = []
+        # A check pinned to an archived agent is out of use with it. A
+        # replicated or distributed check runs on its pool, whatever its
+        # placeholder agent, so it stays.
+        conditions: list[ColumnElement[bool]] = [
+            or_(
+                Check.assignment_mode != AssignmentMode.MANUAL,
+                Agent.approval_status != AgentApprovalStatus.ARCHIVED,
+            )
+        ]
 
         if check_ids:
             conditions.append(Check.id.in_(check_ids))

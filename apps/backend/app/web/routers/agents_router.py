@@ -43,6 +43,7 @@ async def agents_list_page(
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: CurrentUserWeb,
     active_only: Annotated[bool, Query(description="Show only active agents")] = False,
+    archived: Annotated[bool, Query(description="Show only archived agents")] = False,
     search: Annotated[
         str, Query(description="Search agents by name, hostname, or IP")
     ] = "",
@@ -54,7 +55,7 @@ async def agents_list_page(
 ) -> HTMLResponse:
     """Agents list page — paginated."""
     context = await AgentsViewService.build_agents_list_context(
-        db, request, current_user, active_only, search, hours, page, per_page
+        db, request, current_user, active_only, search, hours, page, per_page, archived
     )
     return templates.TemplateResponse(request, "pages/agents.html", context)
 
@@ -322,6 +323,30 @@ async def enable_agent_web(
     current_user: EditorUserWeb,
 ) -> Response:
     return await AgentsViewService.enable_agent(db, agent_id)
+
+
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
+@router.post(
+    "/agents/{agent_id}/archive-web", include_in_schema=False, name="archive_agent_web"
+)
+async def archive_agent_web(
+    agent_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
+    current_user: EditorUserWeb,
+) -> Response:
+    return await AgentsViewService.archive_agent(db, agent_id)
+
+
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
+@router.post(
+    "/agents/{agent_id}/restore-web", include_in_schema=False, name="restore_agent_web"
+)
+async def restore_agent_web(
+    agent_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
+    current_user: EditorUserWeb,
+) -> Response:
+    return await AgentsViewService.restore_agent(db, agent_id)
 
 
 # ---- Key management (HTMX) ----------------------------------------------

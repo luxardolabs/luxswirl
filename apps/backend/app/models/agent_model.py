@@ -310,7 +310,7 @@ class Agent(UUIDBaseModel):
         str_enum(AgentApprovalStatus, 20),
         nullable=False,
         server_default="pending",
-        comment="Approval status: pending, active, paused, disabled, rejected",
+        comment="Approval status: pending, active, paused, disabled, archived, rejected",
     )
 
     api_key_hash: Mapped[str | None] = mapped_column(

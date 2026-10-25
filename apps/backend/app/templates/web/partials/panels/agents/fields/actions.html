@@ -7,6 +7,8 @@
 {%- set ICO_PAUSE %}<span class="w-3.5 h-3.5 mr-1.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/pause.svg" %}</span>{% endset %}
 {%- set ICO_PLAY %}<span class="w-3.5 h-3.5 mr-1.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/play-circle.svg" %}</span>{% endset %}
 {%- set ICO_BAN %}<span class="w-3.5 h-3.5 mr-1.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/no-symbol.svg" %}</span>{% endset %}
+{%- set ICO_ARCHIVE %}<span class="w-3.5 h-3.5 mr-1.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/archive-box.svg" %}</span>{% endset %}
+{%- set ICO_RESTORE %}<span class="w-3.5 h-3.5 mr-1.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/arrow-uturn-left.svg" %}</span>{% endset %}
 {%- set ICO_TRASH %}<span class="w-3.5 h-3.5 mr-1.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/trash.svg" %}</span>{% endset %}
         <!-- Actions Section -->
         <div class="mb-6 space-y-3">
@@ -20,10 +22,12 @@
             <div class="flex items-center gap-2">
                 {{ confirm_action_btn(icon_svg=ICO_PAUSE, label='Pause', color='orange', hx_post=agent_urls.pause, after='reload', title='Pause agent') }}
                 {{ confirm_action_btn(icon_svg=ICO_BAN, label='Disable', color='gray', hx_post=agent_urls.disable, after='reload', title='Disable agent') }}
+                {{ confirm_action_btn(icon_svg=ICO_ARCHIVE, label='Archive', color='gray', hx_post=agent_urls.archive, after='reload', title='Archive agent: no checks, hidden from lists, history kept') }}
             </div>
             {% elif agent.approval_status == 'paused' %}
             <div>
                 {{ confirm_action_btn(icon_svg=ICO_PLAY, label='Resume', color='green', hx_post=agent_urls.resume, after='reload', title='Resume agent') }}
+                {{ confirm_action_btn(icon_svg=ICO_ARCHIVE, label='Archive', color='gray', hx_post=agent_urls.archive, after='reload', title='Archive agent: no checks, hidden from lists, history kept') }}
                 {% if agent.status_reason %}
                 <p class="text-xs text-dark-text-muted mt-2">Reason: {{ agent.status_reason }}</p>
                 {% endif %}
@@ -31,9 +35,15 @@
             {% elif agent.approval_status == 'disabled' %}
             <div>
                 {{ confirm_action_btn(icon_svg=ICO_CHECK, label='Enable', color='green', hx_post=agent_urls.enable, after='reload', title='Enable agent') }}
+                {{ confirm_action_btn(icon_svg=ICO_ARCHIVE, label='Archive', color='gray', hx_post=agent_urls.archive, after='reload', title='Archive agent: no checks, hidden from lists, history kept') }}
                 {% if agent.status_reason %}
                 <p class="text-xs text-dark-text-muted mt-2">Reason: {{ agent.status_reason }}</p>
                 {% endif %}
+            </div>
+            {% elif agent.approval_status == 'archived' %}
+            <div>
+                {{ confirm_action_btn(icon_svg=ICO_RESTORE, label='Restore', color='green', hx_post=agent_urls.restore, after='reload', title='Restore agent as disabled') }}
+                <p class="text-xs text-dark-text-muted mt-2">Archived: it gets no checks and is hidden from lists. Restoring it makes it disabled; enable it to run its checks again.</p>
             </div>
             {% endif %}
 

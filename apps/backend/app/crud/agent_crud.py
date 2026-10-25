@@ -123,12 +123,20 @@ class AgentCRUD:
         active_window_minutes: int = 10,
         search: str | None = None,
         exclude_pending: bool = False,
+        archived: bool = False,
         skip: int = 0,
         limit: int = 100,
     ) -> tuple[list[Agent], int]:
-        """Paginated list of agents with filters. Returns (agents, total)."""
+        """Paginated list of agents with filters. Returns (agents, total).
+
+        Archived agents are left out, unless `archived`, which lists only them.
+        """
         query = select(Agent).options(selectinload(Agent.checks))
-        conditions = []
+        conditions = [
+            Agent.approval_status == AgentApprovalStatus.ARCHIVED
+            if archived
+            else Agent.approval_status != AgentApprovalStatus.ARCHIVED
+        ]
         if active_only:
             cutoff_time = utc_now() - timedelta(minutes=active_window_minutes)
             conditions.append(Agent.last_seen >= cutoff_time)
@@ -284,10 +292,11 @@ class AgentCRUD:
         Get all admitted agents — those past registration triage.
 
         Returns agents whose approval_status is active, paused, or disabled
-        (i.e. everything except pending and rejected). "Admitted" not
+        (pending, rejected and archived are left out). "Admitted" not
         "approved": only `active` agents are operationally approved — paused
         and disabled agents are blocked from submitting but retain historical
         results, so they belong in result-filter dropdowns (the sole callers).
+        An archived agent is out of use, so it is hidden there too.
 
         Args:
             db: Database session
@@ -297,7 +306,15 @@ class AgentCRUD:
         """
         query = (
             select(Agent)
-            .where(Agent.approval_status.not_in(["pending", "rejected"]))
+            .where(
+                Agent.approval_status.not_in(
+                    [
+                        AgentApprovalStatus.PENDING,
+                        AgentApprovalStatus.REJECTED,
+                        AgentApprovalStatus.ARCHIVED,
+                    ]
+                )
+            )
             .order_by(Agent.agent_name)
         )
         result = await db.execute(query)
