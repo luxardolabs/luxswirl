@@ -86,6 +86,18 @@ class JobCRUD:
             .where(Job.id == job_id, movable, Job.status != status)
             .values(**values)
             .returning(Job)
+            # The row the database returned, never the statement's values
+            # written onto a copy the session already holds (which may be stale).
+            .execution_options(populate_existing=True, synchronize_session=False)
+        )
+        return result.scalar_one_or_none()
+
+    @staticmethod
+    async def get_current(db: AsyncSession, job_id: UUID) -> Job | None:
+        """The job as the database holds it now, refreshing any copy the session has."""
+        result = await db.execute(
+            select(Job)
+            .where(Job.id == job_id)
             .execution_options(populate_existing=True)
         )
         return result.scalar_one_or_none()
