@@ -106,6 +106,12 @@ class HeartbeatSender:
         self.config_version: str | None = None
         self.config_version_known = False
 
+        # The checks are also re-fetched once check_sync_interval has passed
+        # since they were last loaded (at startup, then at each reload), in
+        # case a change reached the server without changing the version.
+        self.check_sync_interval = config.get("check_sync_interval", 60)
+        self.last_check_sync = time.monotonic()
+
         # Agent state (updated by parent)
         self.hostname: str | None = None
         self.ip_address: str | None = None
@@ -311,8 +317,8 @@ class HeartbeatSender:
                             # The SSRF policy every check enforces
                             apply_server_policy(response_data)
 
-                            # Check if config version changed and reload if needed
-                            await self._handle_config_version(response_data)
+                            # Re-fetch the checks if their version changed or a sync is due
+                            await self._sync_checks(response_data)
 
                             # Check if agent has been approved and needs to retrieve agent-specific key
                             await self._handle_agent_approval(response_data)
@@ -538,45 +544,67 @@ class HeartbeatSender:
                         extra={"new_level": new_level},
                     )
 
-    async def _handle_config_version(self, response_data: dict[str, Any]) -> None:
-        """Reload the checks when the server's version of this agent's check
-        list changes.
+    async def _sync_checks(self, response_data: dict[str, Any]) -> None:
+        """Re-fetch the checks when the server's version of this agent's check
+        list changes, or once `check_sync_interval` has passed since the last load.
 
-        The first response sets the baseline (the checks were just loaded at
+        The first version sets the baseline (the checks were just loaded at
         startup); any later change reloads, None included, since a None from
-        a server means the agent's list changed as surely as a new digest.
+        a server means the agent's list changed as surely as a new digest. The
+        interval is the server's (the agent's own, else the server default),
+        checked at each heartbeat, so a sync is at most one heartbeat late.
         """
-        if "config_version" not in response_data:
-            return
-        config_version = response_data["config_version"]
-        if not self.config_version_known:
-            self.config_version = config_version
-            self.config_version_known = True
-            self.logger.debug(
-                "Initial config version set",
-                extra={"config_version": config_version},
-            )
-        elif config_version != self.config_version:
-            self.logger.info(
-                "Config version changed - reloading checks",
-                extra={
-                    "from_version": self.config_version,
-                    "to_version": config_version,
-                },
-            )
-            # Store the new version before reloading so load_checks saves with correct version
-            self.config_version = config_version
-            if self.on_config_reload:
-                await self.on_config_reload()
+        interval = response_data.get("check_sync_interval")
+        if (
+            isinstance(interval, int)
+            and not isinstance(interval, bool)
+            and interval > 0
+        ):
+            if interval != self.check_sync_interval:
                 self.logger.info(
-                    "Reloaded checks from server",
-                    extra={"check_count": len(self.checks)},
+                    "Updating check_sync_interval",
+                    extra={
+                        "from_seconds": self.check_sync_interval,
+                        "to_seconds": interval,
+                    },
                 )
-        else:
-            self.logger.debug(
-                "Config version unchanged",
-                extra={"config_version": config_version},
-            )
+            self.check_sync_interval = interval
+
+        reason: str | None = None
+        if "config_version" in response_data:
+            config_version = response_data["config_version"]
+            if not self.config_version_known:
+                self.config_version = config_version
+                self.config_version_known = True
+                self.logger.debug(
+                    "Initial config version set",
+                    extra={"config_version": config_version},
+                )
+            elif config_version != self.config_version:
+                self.logger.info(
+                    "Config version changed - reloading checks",
+                    extra={
+                        "from_version": self.config_version,
+                        "to_version": config_version,
+                    },
+                )
+                # Store the new version before reloading so load_checks saves with correct version
+                self.config_version = config_version
+                reason = "config version changed"
+        if (
+            reason is None
+            and time.monotonic() - self.last_check_sync >= self.check_sync_interval
+        ):
+            reason = "check sync interval"
+
+        if reason is None or self.on_config_reload is None:
+            return
+        await self.on_config_reload()
+        self.last_check_sync = time.monotonic()
+        self.logger.info(
+            "Reloaded checks from server",
+            extra={"check_count": len(self.checks), "reason": reason},
+        )
 
     async def _handle_agent_approval(self, response_data: dict[str, Any]) -> None:
         """Handle agent approval status and retrieve agent-specific key if needed."""

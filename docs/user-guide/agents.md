@@ -45,7 +45,7 @@ An agent is considered **online** if it has sent a heartbeat within the configur
 - The server sets `last_seen` to its own clock when the heartbeat arrives (never the time the agent claims), so a skewed agent clock cannot keep an agent online; once `last_seen` is older than the threshold, the agent is marked offline.
 - Only the agent's own key updates the agent. An approved agent that has not stored its key yet may heartbeat with the registration key: the server tells it to recover its key and records nothing.
 
-**Heartbeat vs check sync** — the *heartbeat* is how often the agent sends a health/metadata update; the *check sync* is how often the agent polls the server for check-configuration changes.
+**Heartbeat vs check sync** — the *heartbeat* is how often the agent sends a health/metadata update; the *check sync* is how often the agent re-fetches its checks even when nothing announced a change. A change to the agent's checks reaches it at its next heartbeat either way; the check sync is the backstop, checked at each heartbeat, so it is never sooner than the heartbeat interval.
 
 ______________________________________________________________________
 
