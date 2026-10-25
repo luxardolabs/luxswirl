@@ -26,10 +26,14 @@ pytestmark = pytest.mark.unit
 class _Scripted(BaseCheck):
     """Each run() takes the next outcome: True/False, or a float to sleep (a hang)."""
 
-    def __init__(self, config: dict[str, Any], outcomes: list[Any]) -> None:
+    def __init__(
+        self, config: dict[str, Any], outcomes: list[Any], cleanup: float = 0.0
+    ) -> None:
         super().__init__(config)
         self.outcomes = list(outcomes)
+        self.cleanup = cleanup
         self.started: list[float] = []
+        self.ended: list[float] = []
 
     def validate_config(self, config: dict[str, Any]) -> None:
         return None
@@ -37,18 +41,24 @@ class _Scripted(BaseCheck):
     async def run(self) -> dict[str, Any]:
         self.started.append(time.monotonic())
         outcome = self.outcomes.pop(0) if self.outcomes else False
-        if isinstance(outcome, float):
-            await asyncio.sleep(outcome)
-            outcome = True
-        return self.create_result(
-            success=outcome,
-            latency_ms=1.0,
-            error=None if outcome else "down",
-            metrics={"http": {"status": 200 if outcome else 503}},
-        )
+        try:
+            if isinstance(outcome, float):
+                await asyncio.sleep(outcome)
+                outcome = True
+            return self.create_result(
+                success=outcome,
+                latency_ms=1.0,
+                error=None if outcome else "down",
+                metrics={"http": {"status": 200 if outcome else 503}},
+            )
+        finally:
+            if self.cleanup:
+                # e.g. a browser closing after the attempt is cancelled
+                await asyncio.shield(asyncio.sleep(self.cleanup))
+            self.ended.append(time.monotonic())
 
 
-def _check(outcomes: list[Any], **cfg: Any) -> _Scripted:
+def _check(outcomes: list[Any], cleanup: float = 0.0, **cfg: Any) -> _Scripted:
     config = {
         "check_id": "00000000-0000-0000-0000-000000000001",
         "name": "c1",
@@ -60,7 +70,7 @@ def _check(outcomes: list[Any], **cfg: Any) -> _Scripted:
         "retry_interval": 0.05,
         **cfg,
     }
-    return _Scripted(config, outcomes)
+    return _Scripted(config, outcomes, cleanup)
 
 
 def _executor(slots: int = 5) -> tuple[CheckExecutor, asyncio.Queue]:
@@ -189,3 +199,66 @@ async def test_the_wait_between_attempts_holds_no_concurrency_slot() -> None:
 
     names = [r["display_name"] for r in _drain(queue)]
     assert names == ["c2", "c1"]
+
+
+async def test_a_retry_that_waited_for_a_slot_too_long_is_not_started() -> None:
+    """interval 1s, timeout 0.2s: the retry is due at 0.1s, but the only slot is
+    busy until ~0.95s, too late for an attempt to finish before 1s."""
+    executor, queue = _executor(slots=1)
+    check = _check(
+        [False, True], retry_attempts=1, interval=1.0, timeout=0.2, retry_interval=0.1
+    )
+    hog = _check([0.95], name="hog", timeout=5)
+
+    started = time.monotonic()
+    task = asyncio.create_task(executor.run_check(check))
+    await asyncio.sleep(0.02)  # the first attempt has failed; its wait has begun
+    await asyncio.gather(task, executor.run_check(hog))
+
+    assert len(check.started) == 1
+    assert check.ended[-1] - started < 1.0
+    result = next(r for r in _drain(queue) if r["display_name"] == "c1")
+    assert (result["success"], result["metrics"]["attempts"]) == (False, 1)
+
+
+async def test_an_attempt_that_outlasts_its_timeout_counts_its_real_length() -> None:
+    """A timed-out attempt ends when its cleanup does (0.2s + 0.4s here), so a
+    retry is budgeted for that length, and one that could not finish by the next
+    run is not started."""
+    executor, queue = _executor()
+    check = _check(
+        [5.0, 5.0],
+        cleanup=0.4,
+        retry_attempts=1,
+        interval=1.0,
+        timeout=0.2,
+        retry_interval=0.1,
+    )
+
+    started = time.monotonic()
+    await executor.run_check(check)
+
+    assert len(check.started) == 1
+    assert check.ended[-1] - started < 1.0
+    assert _drain(queue)[0]["error"] == "timeout"
+
+
+async def test_a_check_with_no_timeout_still_reports_its_run() -> None:
+    executor, queue = _executor()
+    check = _check([True], timeout=None)
+
+    await executor.run_check(check)
+
+    assert [r["success"] for r in _drain(queue)] == [True]
+
+
+async def test_a_retried_run_is_stamped_with_the_time_it_started() -> None:
+    """Results arrive one interval apart as the server expects, however long a
+    run spent retrying."""
+    executor, queue = _executor()
+    check = _check([False, True], retry_attempts=1, retry_interval=0.3)
+
+    before = time.time()
+    await executor.run_check(check)
+
+    assert _drain(queue)[0]["timestamp"] - before < 0.1
