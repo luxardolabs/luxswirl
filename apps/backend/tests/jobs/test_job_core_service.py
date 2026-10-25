@@ -77,6 +77,7 @@ class TestJobLifecycle:
 
     async def test_status_running_sets_started_at(self, db: AsyncSession):
         job = await svc.create_job(db, self._data())
+        await svc.update_job_status(db, job.id, "assigned")  # dispatched
         updated = await svc.update_job_status(db, job.id, "running")
         assert updated.status == "running"
         assert updated.started_at is not None
@@ -126,7 +127,9 @@ class TestJobLifecycle:
     async def test_a_running_job_can_be_cancelled(self, db: AsyncSession):
         # As the jobs page offers: pending, assigned and running jobs can be cancelled
         job = await svc.create_job(db, self._data())
-        await svc.update_job_status(db, job.id, "running")
+        await svc.update_job_status(db, job.id, "assigned")  # dispatched
+        running = await svc.update_job_status(db, job.id, "running")
+        assert running is not None and running.status == "running"
         cancelled = await svc.cancel_job(db, job.id)
         assert cancelled is not None and cancelled.status == "cancelled"
 

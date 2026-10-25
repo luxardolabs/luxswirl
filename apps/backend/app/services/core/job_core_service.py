@@ -222,9 +222,9 @@ class JobCoreService:
         Update job status.
 
         A finished job (completed, failed, cancelled) keeps its state: a late
-        notice from an agent does not reopen it. Setting the status a job
-        already has changes nothing, so a repeated start keeps its first
-        `started_at`.
+        notice from an agent does not reopen it. Only an assigned job starts
+        running. Setting the status a job already has changes nothing, so a
+        repeated start keeps its first `started_at`.
 
         Args:
             db: Database session
@@ -317,7 +317,7 @@ class JobCoreService:
         """
         Cancel a job.
 
-        Only jobs in 'pending' or 'assigned' status can be cancelled.
+        Jobs in 'pending', 'assigned' or 'running' status can be cancelled.
 
         Args:
             db: Database session

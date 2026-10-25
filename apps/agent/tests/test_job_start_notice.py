@@ -7,6 +7,8 @@ runs and its result is still sent.
 
 from __future__ import annotations
 
+import asyncio
+import time
 from typing import Any
 
 import httpx
@@ -82,3 +84,42 @@ async def test_an_unknown_job_type_sends_no_start_notice() -> None:
     await processor._execute_job({"job_id": _JOB_ID, "job_type": "nope"})
 
     assert seen == [f"POST /api/v1/jobs/{_JOB_ID}/results"]
+
+
+async def _silent_server() -> tuple[asyncio.AbstractServer, int]:
+    """Accepts connections and never answers: a hung server or proxy."""
+
+    async def handle(reader, writer) -> None:
+        await asyncio.sleep(3600)
+
+    server = await asyncio.start_server(handle, "127.0.0.1", 0)
+    return server, server.sockets[0].getsockname()[1]
+
+
+async def test_a_server_that_never_answers_delays_the_job_only_briefly(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The notice has its own short timeout, not the client's (30s by default)."""
+    _Recorded.calls = []
+    monkeypatch.setattr(JobProcessor, "START_NOTICE_TIMEOUT", 0.3)
+    server, port = await _silent_server()
+    processor = JobProcessor({"push_url": f"http://127.0.0.1:{port}/api/v1/reports"})
+    processor.register_job_type(_Recorded)
+    processor.client = httpx.AsyncClient(timeout=30.0)
+    try:
+        started = time.monotonic()
+        await processor._notify_started(_JOB_ID)
+        delay = time.monotonic() - started
+    finally:
+        server.close()
+        await processor.client.aclose()
+
+    assert delay < 1.0, f"the notice held the job back {delay:.1f}s"
+
+
+async def test_a_notice_with_no_client_sends_nothing_and_starts_no_worker() -> None:
+    processor = JobProcessor({"push_url": "http://127.0.0.1:9/api/v1/reports"})
+
+    await processor._notify_started(_JOB_ID)
+
+    assert (processor.worker_task, processor.running) == (None, False)
