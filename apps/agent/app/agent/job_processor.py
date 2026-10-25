@@ -264,6 +264,8 @@ class JobProcessor:
             self.stats["total_failed"] += 1
             return
 
+        await self._notify_started(job_id)
+
         # Execute job with timeout
         try:
             result_data = await asyncio.wait_for(job.run(), timeout=timeout)
@@ -311,6 +313,36 @@ class JobProcessor:
             self.stats["jobs_failed_since_last"] += 1
             self.stats["total_failed"] += 1
 
+    def _job_url(self, job_id: str, action: str) -> str:
+        """The server's URL for `action` (start, results) on one of this agent's jobs."""
+        push_url = self.config.get("push_url", "http://localhost:9000")
+        base_url = push_url.replace("/api/v1/reports", "")
+        return f"{base_url}/api/v1/jobs/{job_id}/{action}"
+
+    async def _notify_started(self, job_id: str) -> None:
+        """Tell the server the job has begun, so it shows as running.
+
+        Best effort: a refused or unreachable notice is logged and the job runs
+        anyway; its result still reaches the server.
+        """
+        try:
+            if not self.client:
+                await self.start()
+            assert self.client is not None
+            response = await self.client.post(self._job_url(job_id, "start"))
+            if response.status_code >= 300:
+                self.logger.warning(
+                    "Server refused the job start notice",
+                    extra={"job_id": job_id, "status_code": response.status_code},
+                )
+        # swallowed-exceptions: the notice is informational; the job must still run and report
+        except Exception:
+            self.logger.warning(
+                "Could not send the job start notice",
+                extra={"job_id": job_id},
+                exc_info=True,
+            )
+
     async def _submit_result(self, job_id: str, result_data: dict[str, Any]) -> None:
         """
         Submit job results to server.
@@ -319,16 +351,7 @@ class JobProcessor:
             job_id: Job UUID
             result_data: Result data (status, result, error)
         """
-        push_url = self.config.get("push_url", "http://localhost:9000")
-
-        # Extract base URL
-        if "/api/v1/reports" in push_url:
-            base_url = push_url.replace("/api/v1/reports", "")
-        else:
-            base_url = push_url
-
-        # Build result submission URL
-        result_url = f"{base_url}/api/v1/jobs/{job_id}/results"
+        result_url = self._job_url(job_id, "results")
 
         try:
             if not self.client:

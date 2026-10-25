@@ -6,13 +6,15 @@ from collections.abc import Sequence
 from datetime import timedelta
 from uuid import UUID
 
-from sqlalchemy import ColumnElement, and_, delete, desc, func, select
+from sqlalchemy import ColumnElement, and_, delete, desc, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.datetime_utils import utc_now
 from app.models.agent_model import Agent
 from app.models.enum_model import JobStatus
 from app.models.job_model import Job
+
+_FINISHED = (JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED)
 
 
 class JobCRUD:
@@ -47,6 +49,35 @@ class JobCRUD:
     @staticmethod
     async def get_by_id(db: AsyncSession, job_id: UUID) -> Job | None:
         result = await db.execute(select(Job).where(Job.id == job_id))
+        return result.scalar_one_or_none()
+
+    @staticmethod
+    async def move_open_job(
+        db: AsyncSession, job_id: UUID, status: JobStatus
+    ) -> Job | None:
+        """Move an unfinished job to `status` in one statement; the moved row.
+
+        None when the job is finished, already in `status`, or absent: the
+        statement's own WHERE holds the check, so a result or cancel landing at
+        the same moment is never overwritten. The start or finish time is
+        stamped once.
+        """
+        values: dict[str, object] = {"status": status}
+        if status == JobStatus.RUNNING:
+            values["started_at"] = func.coalesce(Job.started_at, utc_now())
+        elif status in _FINISHED:
+            values["completed_at"] = func.coalesce(Job.completed_at, utc_now())
+        result = await db.execute(
+            update(Job)
+            .where(
+                Job.id == job_id,
+                Job.status.not_in(_FINISHED),
+                Job.status != status,
+            )
+            .values(**values)
+            .returning(Job)
+            .execution_options(populate_existing=True)
+        )
         return result.scalar_one_or_none()
 
     @staticmethod

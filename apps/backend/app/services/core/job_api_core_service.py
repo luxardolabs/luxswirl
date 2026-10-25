@@ -9,6 +9,7 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.enum_model import JobStatus
 from app.models.job_model import Job
 from app.schemas.job_schema import (
     JobCreate,
@@ -76,6 +77,12 @@ class JobApiCoreService:
     async def get_job(db: AsyncSession, job_id: UUID) -> JobResponse | None:
         """One job, or None if there is no such job."""
         job = await JobCoreService.get_job(db, job_id)
+        return None if job is None else await JobApiCoreService._with_hostname(db, job)
+
+    @staticmethod
+    async def mark_job_started(db: AsyncSession, job_id: UUID) -> JobResponse | None:
+        """The agent began the job: it is running from now; None if there is no such job."""
+        job = await JobCoreService.update_job_status(db, job_id, JobStatus.RUNNING)
         return None if job is None else await JobApiCoreService._with_hostname(db, job)
 
     @staticmethod
