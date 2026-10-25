@@ -55,3 +55,32 @@ def test_a_job_queued_without_the_field_still_rebuilds() -> None:
         BulkCheckCreateRequest(url="https://127.0.0.1/").resend_notification_after
         is None
     )
+
+
+async def test_the_retry_pair_reaches_every_check(db: AsyncSession) -> None:
+    checks = await _bulk_create(db, retry_attempts="3", retry_interval_seconds="15")
+
+    assert [(c.retry_attempts, c.retry_interval_seconds) for c in checks] == [
+        (3, 15),
+        (3, 15),
+    ]
+
+
+async def test_a_blank_retry_pair_gets_the_check_defaults(db: AsyncSession) -> None:
+    """As a single check created without them: 2 retries, 30s apart."""
+    checks = await _bulk_create(db, retry_attempts="", retry_interval_seconds="")
+
+    assert [(c.retry_attempts, c.retry_interval_seconds) for c in checks] == [
+        (2, 30),
+        (2, 30),
+    ]
+
+
+@pytest.mark.parametrize(
+    "form", [{"retry_attempts": "11"}, {"retry_interval_seconds": "0"}]
+)
+async def test_a_retry_value_out_of_range_is_refused(
+    db: AsyncSession, form: dict[str, str]
+) -> None:
+    with pytest.raises(ValueError):
+        await _bulk_create(db, **form)
