@@ -54,7 +54,7 @@ class TestResolveRunnerFilter:
 class TestJobLifecycle:
     @staticmethod
     def _data(**over):
-        d = {"job_type": "network_scan", "params": {}}
+        d = {"job_type": "network_scan", "params": {"subnet": "10.0.0.0/24"}}
         d.update(over)
         return JobCreate(**d)
 

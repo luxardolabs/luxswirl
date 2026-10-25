@@ -197,3 +197,37 @@ async def test_a_resolved_name_is_returned(monkeypatch: pytest.MonkeyPatch) -> N
 
 def test_the_job_names_itself() -> None:
     assert "network_scan" in repr(NetworkScanJob("job-9", {}))
+
+
+@pytest.mark.parametrize(
+    "subnet",
+    ["169.254.169.254/32", "169.254.0.0/24", "169.254.0.0/16", "fe80::/120"],
+)
+def test_a_scan_never_reaches_the_cloud_metadata_range(subnet: str) -> None:
+    """The metadata service serves cloud credentials; no sweep has a use for it."""
+    with pytest.raises(ValidationError, match="cloud metadata"):
+        NetworkScanParams(subnet=subnet)
+
+
+@pytest.mark.parametrize(
+    "subnet", ["192.168.1.0/24", "10.20.0.0/16", "127.0.0.1/32", "169.253.255.0/24"]
+)
+def test_a_scan_of_a_private_network_is_allowed(subnet: str) -> None:
+    """Sweeping the LAN is what scans are for, whatever block_private_networks says."""
+    assert NetworkScanParams(subnet=subnet).subnet == subnet
+
+
+async def test_a_metadata_scan_reaching_the_agent_is_refused_before_any_probe(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    probed: list[str] = []
+
+    async def no_probe(self, ip: str, *_: object, **__: object) -> None:
+        probed.append(ip)
+
+    monkeypatch.setattr(NetworkScanJob, "_scan_single_host", no_probe)
+    job = NetworkScanJob(job_id="j1", params={"subnet": "169.254.169.254/32"})
+
+    with pytest.raises(ValueError, match="cloud metadata"):
+        await job.execute()
+    assert probed == []

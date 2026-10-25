@@ -32,6 +32,7 @@ from app.schemas.job_schema import (
 from app.services.core._job_enrichers import enrich_job_result
 from app.services.core.network_scan_core_service import NetworkScanCoreService
 from app.services.core.settings_core_service import SettingsCoreService
+from app.shared.jobs.network_scan import NetworkScanParams
 from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.services.job")
@@ -70,7 +71,13 @@ class JobCoreService:
 
         Raises:
             AgentNotFoundException: If agent_id is specified but doesn't exist
+            ValidationError: If a network scan's params are refused (a subnet
+                in the cloud metadata range, among others)
         """
+        # Refused here, at once, rather than by the agent when it runs the job.
+        if data.job_type == JobType.NETWORK_SCAN:
+            NetworkScanParams.model_validate(data.params)
+
         # Verify agent exists if agent_id is specified
         if data.agent_id and not await JobCRUD.agent_exists(db, data.agent_id):
             raise AgentNotFoundException(str(data.agent_id))
