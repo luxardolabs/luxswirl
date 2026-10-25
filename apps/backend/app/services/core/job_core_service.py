@@ -282,42 +282,37 @@ class JobCoreService:
             )
             return None
 
-        # A late/stale result must not overwrite a terminal job — e.g. an agent
-        # that picked up a job before it was cancelled and reports back after.
-        # Without this, a cancelled job silently flips to completed.
-        if job.is_terminal:
-            logger.warning(
-                "Ignoring result for already-terminal job",
-                extra={"job_id": str(job_id), "status": job.status},
-            )
-            return job
-
-        # Enrich results using pluggable job-specific enrichment
-        result_to_store = result_data.result or {}
+        # A late/stale result must not overwrite a finished job, such as one
+        # cancelled after its agent picked it up: the move below only matches an
+        # unfinished job, so a cancel landing at the same moment also holds.
         if result_data.status == JobStatus.COMPLETED:
-            result_to_store = enrich_job_result(job.job_type, result_to_store)
-            logger.info(
-                "Enriched results for job",
-                extra={"job_id": str(job_id), "job_type": job.job_type},
-            )
-
-        # Update job with results
-        if result_data.status == JobStatus.COMPLETED:
-            job.complete(result_to_store)
-            logger.info(
-                "Job completed successfully",
-                extra={"job_id": str(job_id)},
+            enriched = enrich_job_result(job.job_type, result_data.result or {})
+            moved = await JobCRUD.move_open_job(
+                db, job_id, JobStatus.COMPLETED, result=enriched
             )
         else:
-            job.fail(result_data.error or "Unknown error")
+            moved = await JobCRUD.move_open_job(
+                db, job_id, JobStatus.FAILED, error=result_data.error or "Unknown error"
+            )
+        if moved is None:
+            current = await JobCoreService.get_job(db, job_id)
+            logger.warning(
+                "Ignoring result for already-terminal job",
+                extra={
+                    "job_id": str(job_id),
+                    "status": current.status if current else None,
+                },
+            )
+            return current
+
+        if moved.status == JobStatus.COMPLETED:
+            logger.info("Job completed successfully", extra={"job_id": str(job_id)})
+        else:
             logger.warning(
                 "Job failed",
                 extra={"job_id": str(job_id), "error_message": result_data.error},
             )
-
-        job = await JobCRUD.save_job(db, job)
-
-        return job
+        return moved
 
     @staticmethod
     async def cancel_job(db: AsyncSession, job_id: UUID) -> Job | None:
@@ -333,23 +328,18 @@ class JobCoreService:
         Returns:
             Cancelled job or None if not found/cannot be cancelled
         """
-        job = await JobCoreService.get_job(db, job_id)
-        if not job:
-            return None
-
-        if job.status not in ("pending", "assigned", "running"):
+        # One statement that only matches an unfinished job, so a result
+        # landing at the same moment is never overwritten.
+        cancelled = await JobCRUD.move_open_job(db, job_id, JobStatus.CANCELLED)
+        if cancelled is None:
             logger.warning(
                 "Cannot cancel job in current status",
-                extra={"job_id": str(job_id), "status": job.status},
+                extra={"job_id": str(job_id)},
             )
             return None
 
-        job.cancel()
-        job = await JobCRUD.save_job(db, job)
-
         logger.info("Job cancelled", extra={"job_id": str(job_id)})
-
-        return job
+        return cancelled
 
     @staticmethod
     async def delete_job(db: AsyncSession, job_id: UUID) -> None:
