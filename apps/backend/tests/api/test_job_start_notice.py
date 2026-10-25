@@ -143,3 +143,17 @@ async def test_a_running_job_can_still_be_cancelled(
 
     assert cancelled is not None
     assert cancelled.status == JobStatus.CANCELLED
+
+
+async def test_a_job_not_yet_dispatched_stays_pending(
+    client: AsyncClient, db: AsyncSession
+) -> None:
+    """Dispatch only sends pending jobs, so one marked running before it was
+    dispatched would never reach the agent and look running forever."""
+    job = await _job(db, JobStatus.PENDING)
+
+    resp = await _start(client, job)
+
+    assert resp.status_code == 200
+    await db.refresh(job)
+    assert (job.status, job.started_at) == (JobStatus.PENDING, None)

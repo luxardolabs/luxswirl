@@ -28,6 +28,9 @@ class JobProcessor:
     - Queue statistics for heartbeat reporting
     """
 
+    # The longest a job waits on its start notice before it runs anyway.
+    START_NOTICE_TIMEOUT = 5.0
+
     def __init__(self, config: dict[str, Any]):
         """
         Initialize job processor.
@@ -322,14 +325,20 @@ class JobProcessor:
     async def _notify_started(self, job_id: str) -> None:
         """Tell the server the job has begun, so it shows as running.
 
-        Best effort: a refused or unreachable notice is logged and the job runs
-        anyway; its result still reaches the server.
+        Best effort: a refused, unreachable or slow notice is logged and the job
+        runs anyway, held back at most START_NOTICE_TIMEOUT seconds; its result
+        still reaches the server.
         """
+        if self.client is None:
+            self.logger.warning(
+                "No server client; job start notice not sent",
+                extra={"job_id": job_id},
+            )
+            return
         try:
-            if not self.client:
-                await self.start()
-            assert self.client is not None
-            response = await self.client.post(self._job_url(job_id, "start"))
+            response = await self.client.post(
+                self._job_url(job_id, "start"), timeout=self.START_NOTICE_TIMEOUT
+            )
             if response.status_code >= 300:
                 self.logger.warning(
                     "Server refused the job start notice",

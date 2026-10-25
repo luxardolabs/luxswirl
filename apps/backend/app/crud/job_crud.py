@@ -57,23 +57,22 @@ class JobCRUD:
     ) -> Job | None:
         """Move an unfinished job to `status` in one statement; the moved row.
 
-        None when the job is finished, already in `status`, or absent: the
-        statement's own WHERE holds the check, so a result or cancel landing at
-        the same moment is never overwritten. The start or finish time is
-        stamped once.
+        None when the job is finished, already in `status`, cannot move there
+        from where it is (only an assigned job, one dispatched to its agent,
+        starts running), or is absent: the statement's own WHERE holds the
+        check, so a result or cancel landing at the same moment is never
+        overwritten. The start or finish time is stamped once.
         """
         values: dict[str, object] = {"status": status}
+        movable = Job.status.not_in(_FINISHED)
         if status == JobStatus.RUNNING:
             values["started_at"] = func.coalesce(Job.started_at, utc_now())
+            movable = Job.status == JobStatus.ASSIGNED
         elif status in _FINISHED:
             values["completed_at"] = func.coalesce(Job.completed_at, utc_now())
         result = await db.execute(
             update(Job)
-            .where(
-                Job.id == job_id,
-                Job.status.not_in(_FINISHED),
-                Job.status != status,
-            )
+            .where(Job.id == job_id, movable, Job.status != status)
             .values(**values)
             .returning(Job)
             .execution_options(populate_existing=True)
