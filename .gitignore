@@ -140,3 +140,6 @@ Makefile.local
 .claude/.*.lock
 .claude/.*.tmp
 .claude/.*.unreadable-*
+
+# Claude Code hook session state (luxarch --emit hooks)
+.claude/.release-guides-read.json
