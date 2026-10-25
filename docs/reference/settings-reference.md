@@ -68,13 +68,14 @@ Defaults for background jobs and network discovery scans.
 
 Data retention and compression policies for check results and aggregates.
 
-| Key                                        | Default | Type | Allowed / Validation | Description                                                                                 |
-| ------------------------------------------ | ------- | ---- | -------------------- | ------------------------------------------------------------------------------------------- |
-| `database.retention_days`                  | 90      | int  | 7–3650               | Keep check results for this many days before deletion. Older data is automatically removed. |
-| `database.compress_after_days`             | 7       | int  | 1–365                | Compress check results older than this many days. Compression saves 80-90% space.           |
-| `database.artifacts_retention_days`        | 30      | int  | 1–365                | Keep check artifacts (screenshots, logs) for this many days before deletion.                |
-| `database.hourly_aggregate_retention_days` | 365     | int  | 30–1825              | Keep hourly aggregated metrics for this many days (1 year default).                         |
-| `database.daily_aggregate_retention_days`  | 1825    | int  | 90–3650              | Keep daily aggregated metrics for this many days (5 years default).                         |
+| Key                                         | Default | Type | Allowed / Validation | Description                                                                                 |
+| ------------------------------------------- | ------- | ---- | -------------------- | ------------------------------------------------------------------------------------------- |
+| `database.retention_days`                   | 90      | int  | 7–3650               | Keep check results for this many days before deletion. Older data is automatically removed. |
+| `database.compress_after_days`              | 7       | int  | 1–365                | Compress check results older than this many days. Compression saves 80-90% space.           |
+| `database.artifacts_retention_days`         | 30      | int  | 1–365                | Keep check artifacts (screenshots, logs) for this many days before deletion.                |
+| `database.notification_logs_retention_days` | 90      | int  | 0–3650               | Keep notification log records for this many days before deletion. 0 keeps all.              |
+| `database.hourly_aggregate_retention_days`  | 365     | int  | 30–1825              | Keep hourly aggregated metrics for this many days (1 year default).                         |
+| `database.daily_aggregate_retention_days`   | 1825    | int  | 90–3650              | Keep daily aggregated metrics for this many days (5 years default).                         |
 
 ### security
 

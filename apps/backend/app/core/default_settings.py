@@ -258,6 +258,16 @@ DEFAULT_SETTINGS: list[dict[str, Any]] = [
         "validation": {"min": 1, "max": 365},
     },
     {
+        "key": "database.notification_logs_retention_days",
+        "category": "database",
+        "subcategory": None,
+        "value": 90,
+        "type": "int",
+        "display_name": "Notification Logs Retention (days)",
+        "description": "Keep notification log records for this many days before deletion. 0 keeps all.",
+        "validation": {"min": 0, "max": 3650},
+    },
+    {
         "key": "database.hourly_aggregate_retention_days",
         "category": "database",
         "subcategory": None,
