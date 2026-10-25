@@ -17,6 +17,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
+from ..ssrf import CLOUD_METADATA_NETWORKS
 from ..subprocess_safe import get_subprocess_config, run_subprocess_no_output
 from .base import BaseJob
 
@@ -65,16 +66,27 @@ class NetworkScanParams(BaseModel):
     @field_validator("subnet")
     @classmethod
     def validate_subnet(cls, v: str) -> str:
-        """Validate CIDR notation."""
+        """Validate CIDR notation, size, and that it stays out of cloud metadata.
+
+        A scan may sweep private networks (that is its purpose, so the
+        block-private-networks setting does not apply), but never the cloud
+        metadata / link-local range, which serves cloud credentials.
+        """
         try:
             network = ipaddress.ip_network(v, strict=False)
-            if network.num_addresses > 65536:
-                raise ValueError(
-                    f"Network too large ({network.num_addresses} hosts). Maximum is 65536 (/16)"
-                )
-            return v
         except ValueError as e:
             raise ValueError(f"Invalid subnet CIDR notation: {e}") from e
+        if network.num_addresses > 65536:
+            raise ValueError(
+                f"Network too large ({network.num_addresses} hosts). Maximum is 65536 (/16)"
+            )
+        for blocked in CLOUD_METADATA_NETWORKS:
+            if network.version == blocked.version and network.overlaps(blocked):
+                raise ValueError(
+                    f"{network} overlaps {blocked}, the cloud metadata / link-local "
+                    "range, which network scans never reach"
+                )
+        return v
 
     @field_validator("ports")
     @classmethod
