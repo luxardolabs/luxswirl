@@ -231,3 +231,41 @@ async def test_a_metadata_scan_reaching_the_agent_is_refused_before_any_probe(
     with pytest.raises(ValueError, match="cloud metadata"):
         await job.execute()
     assert probed == []
+
+
+@pytest.mark.parametrize(
+    "subnet",
+    [
+        "::ffff:169.254.169.254/128",  # IPv4-mapped: a dual-stack socket reaches it
+        "::ffff:169.254.169.0/120",
+        "::ffff:a9fe:0/112",  # the whole mapped 169.254.0.0/16
+        "64:ff9b::a9fe:a9fe/128",  # NAT64
+        "2002:a9fe:a9fe::/112",  # 6to4
+    ],
+)
+def test_an_ipv6_form_carrying_a_metadata_address_is_refused(subnet: str) -> None:
+    with pytest.raises(ValidationError, match="cloud metadata"):
+        NetworkScanParams(subnet=subnet)
+
+
+@pytest.mark.parametrize(
+    "subnet", ["::ffff:192.168.1.0/120", "64:ff9b::a00:0/120", "2002:c0a8:100::/120"]
+)
+def test_an_ipv6_form_carrying_a_lan_address_is_allowed(subnet: str) -> None:
+    assert NetworkScanParams(subnet=subnet).subnet == subnet
+
+
+async def test_a_mapped_metadata_scan_is_refused_before_any_probe(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    probed: list[str] = []
+
+    async def no_probe(self, ip: str, *_: object, **__: object) -> None:
+        probed.append(ip)
+
+    monkeypatch.setattr(NetworkScanJob, "_scan_single_host", no_probe)
+    job = NetworkScanJob(job_id="j1", params={"subnet": "::ffff:169.254.169.254/128"})
+
+    with pytest.raises(ValueError, match="cloud metadata"):
+        await job.execute()
+    assert probed == []

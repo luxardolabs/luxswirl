@@ -17,7 +17,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
-from ..ssrf import CLOUD_METADATA_NETWORKS
+from ..ssrf import network_cloud_metadata_overlap
 from ..subprocess_safe import get_subprocess_config, run_subprocess_no_output
 from .base import BaseJob
 
@@ -80,12 +80,12 @@ class NetworkScanParams(BaseModel):
             raise ValueError(
                 f"Network too large ({network.num_addresses} hosts). Maximum is 65536 (/16)"
             )
-        for blocked in CLOUD_METADATA_NETWORKS:
-            if network.version == blocked.version and network.overlaps(blocked):
-                raise ValueError(
-                    f"{network} overlaps {blocked}, the cloud metadata / link-local "
-                    "range, which network scans never reach"
-                )
+        blocked = network_cloud_metadata_overlap(network)
+        if blocked is not None:
+            raise ValueError(
+                f"{network} reaches {blocked}, the cloud metadata / link-local "
+                "range, which network scans never reach"
+            )
         return v
 
     @field_validator("ports")

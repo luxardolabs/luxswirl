@@ -6,4 +6,4 @@ paths = ["apps/agent/app"]
 [test]
 # The whole percent of branch coverage `make test` last measured for the agent
 # suite. It is raised as tests land and never lowered.
-coverage_min = 53
+coverage_min = 54

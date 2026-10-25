@@ -121,6 +121,50 @@ def _embedded_ipv4(
     return None
 
 
+# IPv6 prefixes whose addresses carry an IPv4 one (as _embedded_ipv4 reads it).
+_IPV4_CARRIERS = (
+    ipaddress.ip_network("::ffff:0:0/96"),  # IPv4-mapped
+    ipaddress.ip_network("2002::/16"),  # 6to4
+    _NAT64,
+)
+
+
+def network_cloud_metadata_overlap(
+    network: ipaddress.IPv4Network | ipaddress.IPv6Network,
+) -> ipaddress.IPv4Network | ipaddress.IPv6Network | None:
+    """The cloud-metadata range `network` reaches, or None.
+
+    Directly, or through the part of an IPv6 network that carries IPv4
+    addresses (mapped, 6to4, NAT64): the addresses of such a part carry one
+    contiguous IPv4 range, read from its first and last address.
+    """
+    for blocked in CLOUD_METADATA_NETWORKS:
+        if network.version == blocked.version and network.overlaps(blocked):
+            return blocked
+    if not isinstance(network, ipaddress.IPv6Network):
+        return None
+    for carrier in _IPV4_CARRIERS:
+        if not network.overlaps(carrier):
+            continue
+        first = ipaddress.IPv6Address(
+            max(int(network.network_address), int(carrier.network_address))
+        )
+        last = ipaddress.IPv6Address(
+            min(int(network.broadcast_address), int(carrier.broadcast_address))
+        )
+        low, high = _embedded_ipv4(first), _embedded_ipv4(last)
+        if low is None or high is None:
+            continue
+        for blocked in CLOUD_METADATA_NETWORKS:
+            if (
+                blocked.version == 4
+                and int(low) <= int(blocked.broadcast_address)
+                and int(high) >= int(blocked.network_address)
+            ):
+                return blocked
+    return None
+
+
 def resolve_host(host: str) -> list[str]:
     """Resolve a hostname (or pass a literal IP through) to a list of IP strings.
 
