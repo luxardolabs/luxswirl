@@ -2,6 +2,7 @@
 
 The column is a plain VARCHAR (no native enum, no CHECK constraint), so the new
 status needs no schema change; only the column comment that lists the statuses.
+Downgrading makes every archived agent disabled, a status the earlier code reads.
 
 Revision ID: 8a4e2c7b1f90
 Revises: 5d1f0c2a9e47
@@ -38,4 +39,8 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    op.execute(
+        "UPDATE agents SET approval_status = 'disabled' "
+        "WHERE approval_status = 'archived'"
+    )
     _comment(OLD, NEW)

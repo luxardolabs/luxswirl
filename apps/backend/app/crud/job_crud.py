@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.datetime_utils import utc_now
 from app.models.agent_model import Agent
-from app.models.enum_model import JobStatus
+from app.models.enum_model import AgentApprovalStatus, JobStatus
 from app.models.job_model import Job
 
 _FINISHED = (JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED)
@@ -221,7 +221,15 @@ class JobCRUD:
         agents_query = (
             select(Agent)
             .where(Agent.id.in_(agent_ids))
-            .where(Agent.approval_status.not_in(["pending", "rejected"]))
+            .where(
+                Agent.approval_status.not_in(
+                    [
+                        AgentApprovalStatus.PENDING,
+                        AgentApprovalStatus.REJECTED,
+                        AgentApprovalStatus.ARCHIVED,
+                    ]
+                )
+            )
             .order_by(Agent.agent_name)
         )
         agents_result = await db.execute(agents_query)

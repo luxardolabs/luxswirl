@@ -44,7 +44,7 @@ An agent is considered **online** if it has sent a heartbeat within the configur
 - Each heartbeat includes agent metadata (CPU, memory, queue depth, etc.).
 - Default interval is 60 seconds (configurable per agent).
 - The server sets `last_seen` to its own clock when the heartbeat arrives (never the time the agent claims), so a skewed agent clock cannot keep an agent online; once `last_seen` is older than the threshold, the agent is marked offline.
-- Only the agent's own key updates the agent. An approved agent that has not stored its key yet may heartbeat with the registration key: the server tells it to recover its key and records nothing.
+- Only the agent's own key updates the agent; the registration key updates only a pending agent. An approved agent that has not stored its key yet may heartbeat with the registration key: the server tells it to recover its key and records nothing.
 
 **Heartbeat vs check sync** — the *heartbeat* is how often the agent sends a health/metadata update; the *check sync* is how often the agent re-fetches its checks even when nothing announced a change. A change to the agent's checks reaches it at its next heartbeat either way; the check sync is the backstop, checked at each heartbeat, so it is never sooner than the heartbeat interval.
 
@@ -107,7 +107,9 @@ A yellow **N dead-lettered** badge next to the approval status means the server 
 - it leaves the agent list, the agent pickers and the dashboard filters, and the dashboard no longer shows the checks pinned to it (a replicate or distribute check stays, since it runs on its other agents);
 - the agent, its checks and their stored results are kept.
 
-Tick **Archived** above the agent list to see the archived agents. **Restore** makes an archived agent **Disabled**, so it runs nothing until you **Enable** it.
+The stale-agent cleanup never deletes an archived agent, and `/metrics` stops exporting it. Tick **Archived** above the agent list to see the archived agents. **Restore** is the only way out of Archived: it makes the agent **Disabled**, so it runs nothing until you **Enable** it.
+
+Each action applies only from the states it is offered in: Approve a pending or rejected agent, Reject a pending one, Pause an active one, Resume a paused one, Disable an active or paused one, Enable a disabled one.
 
 ### Statistics grid
 

@@ -126,6 +126,8 @@ agent_up = Gauge(
     ["agent"],
     registry=registry,
 )
+# The agent labels the last refresh exported, so the next one drops any gone.
+_agent_up_labels: set[str] = set()
 
 agent_last_seen = Gauge(
     "luxswirl_agent_last_seen",
@@ -462,13 +464,20 @@ class MetricsCollectorCoreService:
         agents = await AgentCRUD.get_liveness_rows(db)
 
         # Update agent_up metric for each agent based on current time
+        labels: set[str] = set()
         for agent_id, agent_name, last_seen in agents:
             # Online when last_seen is within the configured threshold
             elapsed = (utc_now() - last_seen).total_seconds()
             is_up = elapsed < timeout_seconds
-            agent_up.labels(agent=agent_label(agent_name, agent_id)).set(
-                1 if is_up else 0
-            )
+            label = agent_label(agent_name, agent_id)
+            labels.add(label)
+            agent_up.labels(agent=label).set(1 if is_up else 0)
+        # An agent archived, deleted or renamed since the last scrape is no
+        # longer exported, so nothing reads it as down.
+        for gone in _agent_up_labels - labels:
+            agent_up.remove(gone)
+        _agent_up_labels.clear()
+        _agent_up_labels.update(labels)
 
     @staticmethod
     def update_system_metrics(metrics: dict[str, Any]) -> None:
