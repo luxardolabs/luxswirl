@@ -438,7 +438,7 @@ class CheckManager:
             "check_type": check_type,
             "target": check_cfg.get("target"),
             "interval": check_cfg.get("interval_seconds", 60),
-            "timeout": check_cfg.get("timeout_seconds", 5),
+            "timeout": check_cfg.get("timeout_seconds") or 5,
             "enabled": check_cfg.get("enabled", True),
             # Read by the executor: retries after a failed attempt, and the wait between.
             "retry_attempts": check_cfg.get("retry_attempts") or 0,

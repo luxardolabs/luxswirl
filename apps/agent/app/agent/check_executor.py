@@ -61,18 +61,22 @@ class CheckExecutor:
 
         A failed attempt is tried again up to `retry_attempts` times,
         `retry_interval` seconds apart, while the next attempt can still finish
-        before the check's next scheduled run (`interval`). `timeout` applies to
-        each attempt. The run reports its last attempt's result, with the number
-        of attempts in `metrics.attempts`: a check that recovers on a retry is one
+        before the check's next scheduled run (`interval`): an attempt is expected
+        to last its timeout, or as long as the longest one so far (a cancelled
+        check's cleanup counts), and that is checked again once it has a slot.
+        `timeout` applies to each attempt. The run reports its last attempt's
+        result once, stamped with the time the run started, with the number of
+        attempts in `metrics.attempts`: a check that recovers on a retry is one
         success. The wait between attempts holds no concurrency slot.
 
         Args:
             check: The check to run
         """
-        timeout = float(check.config.get("timeout", 10))
+        timeout = float(check.config.get("timeout") or 10)
         retries = max(0, int(check.config.get("retry_attempts") or 0))
         retry_interval = float(check.config.get("retry_interval", 30))
-        next_run = time.monotonic() + float(check.config.get("interval", 60))
+        started_at = time.time()
+        next_run = time.monotonic() + float(check.config.get("interval") or 60)
         self.logger.debug(
             "Running check",
             extra={"check_name": check.name},
@@ -82,40 +86,60 @@ class CheckExecutor:
         # Use UUIDv7 (time-ordered) for better database performance with time-series data
         result_id = uuid7()
 
-        attempts = 0
-        while True:
-            attempts += 1
-            result = await self._attempt(check, timeout)
-            if result["success"] or attempts > retries:
-                break
-            if time.monotonic() + retry_interval + timeout > next_run:
+        attempts = 1
+        longest = 0.0
+        result, longest = await self._attempt(check, timeout, longest, None)
+        while not result["success"] and attempts <= retries:
+            if time.monotonic() + retry_interval + longest > next_run:
                 break
             await asyncio.sleep(retry_interval)
+            retried, longest = await self._attempt(check, timeout, longest, next_run)
+            if retried is None:  # its slot came too late to finish before next_run
+                break
+            result = retried
+            attempts += 1
 
         metrics = result.get("metrics")
         result["metrics"] = {
             **(metrics if isinstance(metrics, dict) else {}),
             "attempts": attempts,
         }
-        await self._record(check, result, str(result_id))
+        await self._record(check, result, str(result_id), started_at)
 
-    async def _attempt(self, check: BaseCheck, timeout: float) -> dict[str, Any]:
-        """One try of the check inside a concurrency slot; a failure is a result."""
+    async def _attempt(
+        self,
+        check: BaseCheck,
+        timeout: float,
+        longest: float,
+        finish_by: float | None,
+    ) -> tuple[dict[str, Any] | None, float]:
+        """One try of the check inside a concurrency slot; a failure is a result.
+
+        Returns the result (None when, once in its slot, an attempt expected to
+        last `longest` could not finish by `finish_by`) and the longest attempt so
+        far, this one included.
+        """
         async with self.semaphore:
+            begun = time.monotonic()
+            if finish_by is not None and begun + longest > finish_by:
+                return None, longest
             try:
-                return await asyncio.wait_for(check.run(), timeout=timeout)
+                result = await asyncio.wait_for(check.run(), timeout=timeout)
             except TimeoutError:
                 self.logger.warning(
                     "Check timed out",
                     extra={"check_name": check.name},
                 )
-                return self._failure(check, "timeout")
+                result = self._failure(check, "timeout")
             except Exception as e:
                 self.logger.exception(
                     "Check failed with exception",
                     extra={"check_name": check.name},
                 )
-                return self._failure(check, str(e))
+                result = self._failure(check, str(e))
+            # wait_for returns after a cancelled check's cleanup, so this is
+            # how long an attempt really holds the check.
+            return result, max(longest, timeout, time.monotonic() - begun)
 
     @staticmethod
     def _failure(check: BaseCheck, error: str) -> dict[str, Any]:
@@ -130,7 +154,11 @@ class CheckExecutor:
         }
 
     async def _record(
-        self, check: BaseCheck, result: dict[str, Any], result_id: str
+        self,
+        check: BaseCheck,
+        result: dict[str, Any],
+        result_id: str,
+        started_at: float,
     ) -> None:
         """Count the run, stamp the agent's metadata, and queue it for reporting."""
         self.metrics["checks_executed"] += 1
@@ -149,7 +177,7 @@ class CheckExecutor:
         result["result_id"] = result_id  # UUID for artifact linking
         result["agent_id"] = str(agent_id) if agent_id != "unknown" else "unknown"
         result["agent_run_id"] = self.run_id
-        result["timestamp"] = time.time()
+        result["timestamp"] = started_at
 
         self.last_state[check.name] = result
         await self.result_queue.put(result)

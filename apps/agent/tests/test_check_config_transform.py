@@ -68,3 +68,7 @@ def test_a_check_with_no_retry_settings_is_tried_once() -> None:
     cfg = _transform(_server_check())
 
     assert (cfg["retry_attempts"], cfg["retry_interval"]) == (0, 30)
+
+
+def test_a_check_with_no_stored_timeout_gets_the_default() -> None:
+    assert _transform(_server_check(timeout_seconds=None))["timeout"] == 5
