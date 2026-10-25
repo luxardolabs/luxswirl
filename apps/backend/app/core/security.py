@@ -20,6 +20,7 @@ from app.core.datetime_utils import utc_now
 from app.core.safe_redirect import safe_redirect_target
 from app.crud import admin_bootstrap_crud
 from app.db import get_db
+from app.models.enum_model import AgentApprovalStatus
 from app.schemas.auth_schema import CurrentUserDTO
 from app.services.core.auth_core_service import AuthCoreService
 from app.services.core.registration_key_core_service import (
@@ -31,6 +32,15 @@ if TYPE_CHECKING:
     from app.models.agent_model import Agent
 
 logger = get_logger("luxswirl.security")
+
+# Why an agent that is not active is refused, as it is told.
+_REFUSED_STATUS_DETAIL = {
+    AgentApprovalStatus.PENDING: "Agent registration pending approval",
+    AgentApprovalStatus.REJECTED: "Agent registration was rejected",
+    AgentApprovalStatus.DISABLED: "Agent access has been disabled",
+    AgentApprovalStatus.PAUSED: "Agent is paused",
+    AgentApprovalStatus.ARCHIVED: "Agent is archived",
+}
 
 
 # ========================================================================
@@ -520,7 +530,7 @@ async def verify_agent_token(
     4. If agent has no key (newly approved):
        - This shouldn't happen - keys are auto-generated on approval
        - Return 401 and instruct to call /get-api-key endpoint
-    5. Check agent approval_status (pending, rejected, disabled, paused)
+    5. Check agent approval_status: only an active agent is let in
 
     Args:
         agent: The already-resolved agent to authenticate
@@ -598,26 +608,14 @@ async def verify_agent_token(
             detail="Agent has no API key. Contact administrator to regenerate key.",
         )
 
-    # Check approval status
-    if agent.approval_status == "pending":
+    # Only an active agent is let in; any other status, one added later
+    # included, is refused.
+    if agent.approval_status != AgentApprovalStatus.ACTIVE:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Agent registration pending approval",
-        )
-    elif agent.approval_status == "rejected":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Agent registration was rejected",
-        )
-    elif agent.approval_status == "disabled":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Agent access has been disabled",
-        )
-    elif agent.approval_status == "paused":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Agent is paused",
+            detail=_REFUSED_STATUS_DETAIL.get(
+                agent.approval_status, "Agent is not active"
+            ),
         )
 
     return token

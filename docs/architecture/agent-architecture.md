@@ -256,7 +256,7 @@ Each heartbeat carries `dead_letter_count`. The server stores it on `Agent.dead_
 class Agent(UUIDBaseModel):
     agent_name: Mapped[str | None]    # unique friendly name (set on approval)
     tags: Mapped[str | None]          # comma-separated key:value tags
-    approval_status: Mapped[str]      # pending | active | paused | disabled | rejected
+    approval_status: Mapped[str]      # pending | active | paused | disabled | archived | rejected
 
     # Per-agent API key (shipped)
     api_key_hash: Mapped[str | None]        # bcrypt hash of the agent's key

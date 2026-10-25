@@ -32,7 +32,8 @@ Two distinct keys are involved:
 | **Pending**  | Waiting for admin approval | Cannot execute checks; shown in the pending section at the top |
 | **Active**   | Approved and operational   | Executes checks and reports results normally                   |
 | **Paused**   | Temporarily suspended      | Continues running but does not execute checks                  |
-| **Disabled** | Permanently disabled       | Inactive; does not appear in most views                        |
+| **Disabled** | Stopped until enabled      | Does not execute checks; still listed                          |
+| **Archived** | Out of use, kept           | Does not execute checks; hidden from lists; history kept       |
 | **Rejected** | Denied access              | Cannot communicate with the server                             |
 
 ### Online / offline status
@@ -79,7 +80,7 @@ Shows all approved agents, paginated, with rich performance metrics. Two control
 
 - **Status indicator** — pulsing green dot (online) or red dot (offline); a yellow border warns if the agent has been offline longer than the threshold.
 - **Agent name** — links to the agent detail page.
-- **Status badge** — Active, Paused, or Disabled.
+- **Status badge** — Active, Paused, Disabled or Archived.
 - **Tags** — agent-level tags (e.g. `production`, `us-east-1`), inherited by all checks on the agent. Tags are admin-managed: the tags an agent declares are kept only while it is pending, as a suggestion for approval; after approval only an admin changes them (**Edit**), and a tag change takes effect on the agent's next check sync. An agent has at most 100 tags, each at most 100 characters.
 - **Metadata row** — hostname (monospace), heartbeat interval, and check-sync interval.
 
@@ -96,7 +97,17 @@ A yellow **N dead-lettered** badge next to the approval status means the server 
 
 ### Deleting an agent
 
-**Delete** is at the bottom of the agent's **Edit** panel. Deleting removes the agent, every check it owns and their stored results, plus any results it reported for other agents' checks, and it cannot be undone. Clicking **Delete** shows how many checks and stored results go with it, then asks for the agent's name (its hostname if it has no name); the delete runs only when the typed name matches. To stop an agent while keeping its checks and history, **Pause** or **Disable** it instead.
+**Delete** is at the bottom of the agent's **Edit** panel. Deleting removes the agent, every check it owns and their stored results, plus any results it reported for other agents' checks, and it cannot be undone. Clicking **Delete** shows how many checks and stored results go with it, then asks for the agent's name (its hostname if it has no name); the delete runs only when the typed name matches. To stop an agent while keeping its checks and history, **Pause**, **Disable** or **Archive** it instead.
+
+### Archiving an agent
+
+**Archive** (in the agent's **Edit** panel, for an active, paused or disabled agent) puts an agent out of use without deleting anything:
+
+- the server refuses it, so it runs no checks, reports nothing and raises no alerts;
+- it leaves the agent list, the agent pickers and the dashboard filters, and the dashboard no longer shows the checks pinned to it (a replicate or distribute check stays, since it runs on its other agents);
+- the agent, its checks and their stored results are kept.
+
+Tick **Archived** above the agent list to see the archived agents. **Restore** makes an archived agent **Disabled**, so it runs nothing until you **Enable** it.
 
 ### Statistics grid
 

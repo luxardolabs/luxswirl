@@ -58,6 +58,13 @@ def _recovery_secret_digest(secret: str) -> str:
 # Compared against when no digest is on record, so a refusal does the same work.
 _NO_SECRET_DIGEST = "0" * 64
 
+# The statuses an agent can be archived from: admitted and not yet archived.
+_ARCHIVABLE = (
+    AgentApprovalStatus.ACTIVE,
+    AgentApprovalStatus.PAUSED,
+    AgentApprovalStatus.DISABLED,
+)
+
 
 class AgentCoreService:
     """Service for agent operations."""
@@ -325,6 +332,7 @@ class AgentCoreService:
         offset: int = 0,
         limit: int = 100,
         exclude_pending: bool = False,
+        archived: bool = False,
     ) -> tuple[list[AgentResponse], int]:
         """A page of agents in their API shape, and the total that match."""
         agents, total = await AgentCoreService.list_agents(
@@ -334,6 +342,7 @@ class AgentCoreService:
             offset=offset,
             limit=limit,
             exclude_pending=exclude_pending,
+            archived=archived,
         )
         return [AgentCoreService.to_response(agent) for agent in agents], total
 
@@ -484,9 +493,10 @@ class AgentCoreService:
         offset: int = 0,
         limit: int = 100,
         exclude_pending: bool = False,
+        archived: bool = False,
     ) -> tuple[Sequence[Agent], int]:
         """
-        List agents with pagination.
+        List agents with pagination; archived agents only when `archived`.
 
         Args:
             db: Database session
@@ -496,6 +506,7 @@ class AgentCoreService:
             offset: Pagination offset
             limit: Pagination limit
             exclude_pending: Exclude agents with pending/rejected approval status
+            archived: List only archived agents (otherwise they are left out)
 
         Returns:
             Tuple of (agents list, total count)
@@ -506,6 +517,7 @@ class AgentCoreService:
             active_window_minutes=active_window_minutes,
             search=search,
             exclude_pending=exclude_pending,
+            archived=archived,
             skip=offset,
             limit=limit,
         )
@@ -1053,6 +1065,71 @@ class AgentCoreService:
         return AgentOption.model_validate(agent)
 
     @staticmethod
+    async def archive_agent(db: AsyncSession, agent_id: UUID) -> AgentOption:
+        """
+        Archive an admitted agent: it gets no checks and is hidden from lists,
+        while the agent, its checks and their history are kept.
+
+        Args:
+            db: Database session
+            agent_id: Agent UUID
+
+        Returns:
+            Updated agent
+
+        Raises:
+            AgentNotFoundException: If agent not found
+            ValidationException: If the agent is pending, rejected or archived
+        """
+        agent = await AgentCoreService.get_agent_by_id(db, agent_id)
+        if agent.approval_status not in _ARCHIVABLE:
+            raise ValidationException(
+                f"Only an active, paused or disabled agent can be archived; "
+                f"this one is {agent.approval_status}"
+            )
+
+        agent.approval_status = AgentApprovalStatus.ARCHIVED
+        agent.status_reason = None
+        agent.status_changed_at = utc_now()
+
+        await AgentCRUD.save_agent(db, agent)
+        logger.info("Archived agent", extra={"agent_id": str(agent_id)})
+
+        return AgentOption.model_validate(agent)
+
+    @staticmethod
+    async def restore_agent(db: AsyncSession, agent_id: UUID) -> AgentOption:
+        """
+        Restore an archived agent as disabled, so it runs nothing until enabled.
+
+        Args:
+            db: Database session
+            agent_id: Agent UUID
+
+        Returns:
+            Updated agent
+
+        Raises:
+            AgentNotFoundException: If agent not found
+            ValidationException: If the agent is not archived
+        """
+        agent = await AgentCoreService.get_agent_by_id(db, agent_id)
+        if agent.approval_status != AgentApprovalStatus.ARCHIVED:
+            raise ValidationException(
+                f"Only an archived agent can be restored; this one is "
+                f"{agent.approval_status}"
+            )
+
+        agent.approval_status = AgentApprovalStatus.DISABLED
+        agent.status_reason = None
+        agent.status_changed_at = utc_now()
+
+        await AgentCRUD.save_agent(db, agent)
+        logger.info("Restored agent", extra={"agent_id": str(agent_id)})
+
+        return AgentOption.model_validate(agent)
+
+    @staticmethod
     async def force_reload(db: AsyncSession, agent_id: UUID) -> AgentOption:
         """
         Force agent config reload by updating checks_updated_at.
@@ -1126,7 +1203,7 @@ class AgentCoreService:
         """
         Get all admitted agents (active, paused, or disabled).
 
-        Excludes pending and rejected. See AgentCRUD.get_admitted_agents for
+        Excludes pending, rejected and archived. See AgentCRUD.get_admitted_agents for
         why "admitted" rather than "approved".
 
         Args:

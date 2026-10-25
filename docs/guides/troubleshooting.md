@@ -145,6 +145,7 @@ ______________________________________________________________________
 - **Pending**: New agent awaiting admin approval → Click "Approve"
 - **Paused**: Admin paused agent → Click "Resume"
 - **Disabled**: Admin disabled agent → Click "Enable"
+- **Archived**: Admin archived agent (hidden from the agent list; tick "Archived" to see it) → Click "Restore", then "Enable"
 - **Rejected**: Admin rejected agent → Delete and re-register
 
 ______________________________________________________________________

@@ -484,6 +484,8 @@ class AgentUrls:
     resume: str
     disable: str
     enable: str
+    archive: str
+    restore: str
     delete: str
     delete_impact: str
     update: str

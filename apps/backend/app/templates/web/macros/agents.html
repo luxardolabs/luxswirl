@@ -13,7 +13,7 @@
                     <h2 class="text-xl font-bold text-dark-text-primary">
                         {{ item.agent.agent_name or item.agent.id }}
                     </h2>
-                    {% set approval_variant_map = {'pending': 'warning', 'active': 'success', 'paused': 'info', 'disabled': 'neutral', 'rejected': 'danger'} %}
+                    {% set approval_variant_map = {'pending': 'warning', 'active': 'success', 'paused': 'info', 'disabled': 'neutral', 'archived': 'neutral', 'rejected': 'danger'} %}
                     {% if item.agent.approval_status %}
                     {{ badge(item.agent.approval_status|title, approval_variant_map.get(item.agent.approval_status, 'neutral')) }}
                     {% endif %}

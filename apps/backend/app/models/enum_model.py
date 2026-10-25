@@ -186,6 +186,8 @@ class AgentApprovalStatus(StrEnum):
     ACTIVE = "active"
     PAUSED = "paused"
     DISABLED = "disabled"
+    # Out of use but kept: no checks, hidden from lists, history kept, restorable.
+    ARCHIVED = "archived"
     REJECTED = "rejected"
 
 

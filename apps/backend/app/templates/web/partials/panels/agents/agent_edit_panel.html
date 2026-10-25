@@ -2,7 +2,7 @@
 {% from 'macros/buttons.html' import btn_save, btn_cancel_text %}
 {% from 'macros/panels.html' import panel_wrapper, panel_header, panel_content %}
 
-{%- set approval_variant_map = {'pending': 'warning', 'active': 'success', 'paused': 'info', 'disabled': 'neutral', 'rejected': 'danger'} -%}
+{%- set approval_variant_map = {'pending': 'warning', 'active': 'success', 'paused': 'info', 'disabled': 'neutral', 'archived': 'neutral', 'rejected': 'danger'} -%}
 {%- set extra_left -%}
     {% if agent.approval_status %}{{ badge(agent.approval_status|title, approval_variant_map.get(agent.approval_status, 'neutral')) }}{% endif %}
 {%- endset -%}

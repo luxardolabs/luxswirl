@@ -73,6 +73,8 @@ def build_agent_urls(request: Request, agent_id: UUID) -> AgentUrls:
         resume=u("resume_agent_web"),
         disable=u("disable_agent_web"),
         enable=u("enable_agent_web"),
+        archive=u("archive_agent_web"),
+        restore=u("restore_agent_web"),
         delete=u("delete_agent_web"),
         delete_impact=u("agent_delete_impact"),
         update=u("update_agent_web"),
@@ -126,6 +128,7 @@ class AgentsViewService:
         limit: int = 20,
         offset: int = 0,
         exclude_pending: bool = False,
+        archived: bool = False,
     ) -> tuple[list[AgentData], int]:
         """
         Get agents with their check counts.
@@ -138,6 +141,7 @@ class AgentsViewService:
             limit: Max results per page
             offset: Pagination offset
             exclude_pending: Exclude agents with pending/rejected approval status
+            archived: List only archived agents (otherwise they are left out)
 
         Returns:
             Tuple of (agent data list, total count)
@@ -150,6 +154,7 @@ class AgentsViewService:
             limit=limit,
             offset=offset,
             exclude_pending=exclude_pending,
+            archived=archived,
         )
 
         # One query each for the whole page's check counts and metrics.
@@ -405,6 +410,20 @@ class AgentsViewService:
         )
 
     @staticmethod
+    async def archive_agent(db: AsyncSession, agent_id: UUID) -> HTMLResponse:
+        agent = await AgentCoreService.archive_agent(db, agent_id)
+        return hx_empty_with_toast(
+            f"Agent '{AgentsViewService._display_name(agent.agent_name, agent.hostname, agent.id)}' archived"
+        )
+
+    @staticmethod
+    async def restore_agent(db: AsyncSession, agent_id: UUID) -> HTMLResponse:
+        agent = await AgentCoreService.restore_agent(db, agent_id)
+        return hx_empty_with_toast(
+            f"Agent '{AgentsViewService._display_name(agent.agent_name, agent.hostname, agent.id)}' restored as disabled"
+        )
+
+    @staticmethod
     async def force_reload(db: AsyncSession, agent_id: UUID) -> HTMLResponse:
         await AgentCoreService.force_reload(db, agent_id)
         logger.info("Forced config reload for agent", extra={"agent_id": str(agent_id)})
@@ -474,8 +493,9 @@ class AgentsViewService:
         hours: int,
         page: int,
         per_page: int | None,
+        archived: bool = False,
     ) -> dict[str, Any]:
-        """Full /agents page context."""
+        """Full /agents page context; the archived agents only, when `archived`."""
         if per_page is None:
             per_page = await SettingsCoreService.get_setting(
                 db, "general.default_page_size", 50
@@ -495,6 +515,7 @@ class AgentsViewService:
             limit=per_page,
             offset=offset,
             exclude_pending=True,
+            archived=archived,
         )
         pagination = build_pagination(
             page=page,
@@ -502,6 +523,7 @@ class AgentsViewService:
             total=total,
             filters={
                 "active_only": active_only,
+                "archived": archived,
                 "search": search,
                 "hours": hours,
             },
@@ -516,6 +538,7 @@ class AgentsViewService:
                 for a in pending_agents
             ],
             "active_only": active_only,
+            "archived": archived,
             "search": search,
             "hours": hours,
             "pagination": pagination,
