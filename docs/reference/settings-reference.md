@@ -118,7 +118,7 @@ Controls which network targets a health check may point at, to prevent Server-Si
 
 | Key                               | Default | Type | Allowed / Validation | Description                                                                                                                                                                                                                                              |
 | --------------------------------- | ------- | ---- | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `security.block_cloud_metadata`   | true    | bool | —                    | Block checks from targeting cloud metadata and link-local addresses (169.254.x.x). Prevents metadata exfiltration in cloud/container environments.                                                                                                       |
+| `security.block_cloud_metadata`   | true    | bool | —                    | Block checks from targeting cloud metadata and link-local addresses (169.254.x.x, fe80::/10, fd00:ec2::254, 100.100.100.200). Prevents metadata exfiltration in cloud/container environments.                                                            |
 | `security.block_private_networks` | false   | bool | —                    | Block checks from targeting private and internal addresses: RFC 1918 (10.x, 172.16-31.x, 192.168.x), IPv6 unique-local, loopback (127.x, ::1), 0.0.0.0 and CGNAT (100.64.x). Disabled by default since most self-hosted users monitor internal services. |
 
 ### general
