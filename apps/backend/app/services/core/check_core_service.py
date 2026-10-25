@@ -34,6 +34,7 @@ from app.models.check_model import Check
 from app.models.enum_model import AssignmentMode, BulkCheckOutcome, CheckType
 from app.schemas.agent_schema import AgentCreate
 from app.schemas.check_schema import (
+    DEFAULT_RETRY_INTERVAL_SECONDS,
     AgentCheckCounts,
     BulkCheckCreateRequest,
     BulkCheckCreateResponse,
@@ -1122,11 +1123,11 @@ class CheckCoreService:
                     verify_ssl=req.verify_ssl,
                     resend_notification_after=req.resend_notification_after,
                     retry_attempts=req.retry_attempts,
-                    # Unset keeps CheckCreate's own default, as the single form does.
-                    **(
-                        {"retry_interval_seconds": req.retry_interval_seconds}
-                        if req.retry_interval_seconds is not None
-                        else {}
+                    # Unset takes CheckCreate's own default, as the single form does.
+                    retry_interval_seconds=(
+                        DEFAULT_RETRY_INTERVAL_SECONDS
+                        if req.retry_interval_seconds is None
+                        else req.retry_interval_seconds
                     ),
                 )
 

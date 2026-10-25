@@ -75,13 +75,13 @@ class JobCRUD:
             values["result"] = result
         if error is not None:
             values["error"] = error
-        movable = Job.status.not_in(_FINISHED)
+        movable: ColumnElement[bool] = Job.status.not_in(_FINISHED)
         if status == JobStatus.RUNNING:
             values["started_at"] = func.coalesce(Job.started_at, utc_now())
             movable = Job.status == JobStatus.ASSIGNED
         elif status in _FINISHED:
             values["completed_at"] = func.coalesce(Job.completed_at, utc_now())
-        result = await db.execute(
+        moved = await db.execute(
             update(Job)
             .where(Job.id == job_id, movable, Job.status != status)
             .values(**values)
@@ -90,7 +90,7 @@ class JobCRUD:
             # written onto a copy the session already holds (which may be stale).
             .execution_options(populate_existing=True, synchronize_session=False)
         )
-        return result.scalar_one_or_none()
+        return moved.scalar_one_or_none()
 
     @staticmethod
     async def get_current(db: AsyncSession, job_id: UUID) -> Job | None:

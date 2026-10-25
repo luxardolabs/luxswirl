@@ -88,7 +88,8 @@ class CheckExecutor:
 
         attempts = 1
         longest = 0.0
-        result, longest = await self._attempt(check, timeout, longest, None)
+        async with self.semaphore:
+            result, longest = await self._run(check, timeout, longest)
         while not result["success"] and attempts <= retries:
             if time.monotonic() + retry_interval + longest > next_run:
                 break
@@ -111,35 +112,44 @@ class CheckExecutor:
         check: BaseCheck,
         timeout: float,
         longest: float,
-        finish_by: float | None,
+        finish_by: float,
     ) -> tuple[dict[str, Any] | None, float]:
-        """One try of the check inside a concurrency slot; a failure is a result.
+        """One retry of the check inside a concurrency slot.
 
         Returns the result (None when, once in its slot, an attempt expected to
         last `longest` could not finish by `finish_by`) and the longest attempt so
         far, this one included.
         """
         async with self.semaphore:
-            begun = time.monotonic()
-            if finish_by is not None and begun + longest > finish_by:
+            if time.monotonic() + longest > finish_by:
                 return None, longest
-            try:
-                result = await asyncio.wait_for(check.run(), timeout=timeout)
-            except TimeoutError:
-                self.logger.warning(
-                    "Check timed out",
-                    extra={"check_name": check.name},
-                )
-                result = self._failure(check, "timeout")
-            except Exception as e:
-                self.logger.exception(
-                    "Check failed with exception",
-                    extra={"check_name": check.name},
-                )
-                result = self._failure(check, str(e))
-            # wait_for returns after a cancelled check's cleanup, so this is
-            # how long an attempt really holds the check.
-            return result, max(longest, timeout, time.monotonic() - begun)
+            return await self._run(check, timeout, longest)
+
+    async def _run(
+        self, check: BaseCheck, timeout: float, longest: float
+    ) -> tuple[dict[str, Any], float]:
+        """Run the check once, in a slot the caller holds; a failure is a result.
+
+        Returns the result and the longest attempt so far, this one included.
+        """
+        begun = time.monotonic()
+        try:
+            result = await asyncio.wait_for(check.run(), timeout=timeout)
+        except TimeoutError:
+            self.logger.warning(
+                "Check timed out",
+                extra={"check_name": check.name},
+            )
+            result = self._failure(check, "timeout")
+        except Exception as e:
+            self.logger.exception(
+                "Check failed with exception",
+                extra={"check_name": check.name},
+            )
+            result = self._failure(check, str(e))
+        # wait_for returns after a cancelled check's cleanup, so this is
+        # how long an attempt really holds the check.
+        return result, max(longest, timeout, time.monotonic() - begun)
 
     @staticmethod
     def _failure(check: BaseCheck, error: str) -> dict[str, Any]:

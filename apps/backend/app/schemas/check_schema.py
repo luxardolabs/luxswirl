@@ -29,6 +29,9 @@ from app.schemas.base_schema import (
 HttpMethodField = Annotated[HttpMethod | None, BeforeValidator(upper_or_none)]
 DnsRecordTypeField = Annotated[DnsRecordType | None, BeforeValidator(upper_or_none)]
 
+# Seconds between a check's retries when none is given.
+DEFAULT_RETRY_INTERVAL_SECONDS = 30
+
 
 class CheckBase(BaseSchema):
     """Base schema for Check with common fields."""
@@ -63,7 +66,7 @@ class CheckCreate(CheckBase):
         description="Number of retry attempts for a single check execution before marking as failed",
     )
     retry_interval_seconds: int = Field(
-        30,
+        DEFAULT_RETRY_INTERVAL_SECONDS,
         ge=1,
         le=300,
         description="Retry interval in seconds (Heartbeat Retry Interval)",
