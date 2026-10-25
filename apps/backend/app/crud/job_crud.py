@@ -4,6 +4,7 @@ Job CRUD - database queries for job operations.
 
 from collections.abc import Sequence
 from datetime import timedelta
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import ColumnElement, and_, delete, desc, func, select, update
@@ -53,7 +54,12 @@ class JobCRUD:
 
     @staticmethod
     async def move_open_job(
-        db: AsyncSession, job_id: UUID, status: JobStatus
+        db: AsyncSession,
+        job_id: UUID,
+        status: JobStatus,
+        *,
+        result: dict[str, Any] | None = None,
+        error: str | None = None,
     ) -> Job | None:
         """Move an unfinished job to `status` in one statement; the moved row.
 
@@ -61,9 +67,14 @@ class JobCRUD:
         from where it is (only an assigned job, one dispatched to its agent,
         starts running), or is absent: the statement's own WHERE holds the
         check, so a result or cancel landing at the same moment is never
-        overwritten. The start or finish time is stamped once.
+        overwritten. The start or finish time is stamped once; a completed
+        job stores its `result`, a failed one its `error`.
         """
         values: dict[str, object] = {"status": status}
+        if result is not None:
+            values["result"] = result
+        if error is not None:
+            values["error"] = error
         movable = Job.status.not_in(_FINISHED)
         if status == JobStatus.RUNNING:
             values["started_at"] = func.coalesce(Job.started_at, utc_now())
