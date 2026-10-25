@@ -45,7 +45,7 @@ async def _reloads(versions: list[str | None]) -> int:
         on_agent_approved=None,
     )
     for version in versions:
-        await sender._handle_config_version({"config_version": version})
+        await sender._sync_checks({"config_version": version})
     return len(reloads)
 
 
