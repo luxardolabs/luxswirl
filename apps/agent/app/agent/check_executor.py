@@ -3,7 +3,8 @@ Agent check execution management.
 
 Handles the execution of individual checks including:
 - Concurrency control via semaphore
-- Timeout handling
+- Timeout handling, per attempt
+- Retries of a failing check, reported as one run
 - Metrics tracking (success/failure rates)
 - Result queue management
 """
@@ -56,12 +57,22 @@ class CheckExecutor:
 
     async def run_check(self, check: BaseCheck) -> None:
         """
-        Run a single check and collect the result.
+        Run a check, retrying a failure, and report the run once.
+
+        A failed attempt is tried again up to `retry_attempts` times,
+        `retry_interval` seconds apart, while the next attempt can still finish
+        before the check's next scheduled run (`interval`). `timeout` applies to
+        each attempt. The run reports its last attempt's result, with the number
+        of attempts in `metrics.attempts`: a check that recovers on a retry is one
+        success. The wait between attempts holds no concurrency slot.
 
         Args:
             check: The check to run
         """
-        check_timeout = check.config.get("timeout", 10)
+        timeout = float(check.config.get("timeout", 10))
+        retries = max(0, int(check.config.get("retry_attempts") or 0))
+        retry_interval = float(check.config.get("retry_interval", 30))
+        next_run = time.monotonic() + float(check.config.get("interval", 60))
         self.logger.debug(
             "Running check",
             extra={"check_name": check.name},
@@ -71,97 +82,77 @@ class CheckExecutor:
         # Use UUIDv7 (time-ordered) for better database performance with time-series data
         result_id = uuid7()
 
-        try:
-            async with self.semaphore:
-                result = await asyncio.wait_for(check.run(), timeout=check_timeout)
+        attempts = 0
+        while True:
+            attempts += 1
+            result = await self._attempt(check, timeout)
+            if result["success"] or attempts > retries:
+                break
+            if time.monotonic() + retry_interval + timeout > next_run:
+                break
+            await asyncio.sleep(retry_interval)
 
-                # Update internal metrics
-                self.metrics["checks_executed"] += 1
-                if result["success"]:
-                    self.metrics["checks_succeeded"] += 1
-                    self.check_stats[check.name]["successes"] += 1
-                else:
-                    self.metrics["checks_failed"] += 1
-                    self.check_stats[check.name]["failures"] += 1
+        metrics = result.get("metrics")
+        result["metrics"] = {
+            **(metrics if isinstance(metrics, dict) else {}),
+            "attempts": attempts,
+        }
+        await self._record(check, result, str(result_id))
 
-                # Update check stats
-                self.check_stats[check.name]["total_runs"] += 1
-                if result.get("latency_ms"):
-                    self.check_stats[check.name]["total_latency"] += result[
-                        "latency_ms"
-                    ]
-
-                # Add agent metadata to the result
-                agent_id = self.config.get("agent_id", "unknown")
-                result["result_id"] = str(result_id)  # UUID for artifact linking
-                result["agent_id"] = (
-                    str(agent_id) if agent_id != "unknown" else "unknown"
+    async def _attempt(self, check: BaseCheck, timeout: float) -> dict[str, Any]:
+        """One try of the check inside a concurrency slot; a failure is a result."""
+        async with self.semaphore:
+            try:
+                return await asyncio.wait_for(check.run(), timeout=timeout)
+            except TimeoutError:
+                self.logger.warning(
+                    "Check timed out",
+                    extra={"check_name": check.name},
                 )
-                result["agent_run_id"] = self.run_id
-                result["timestamp"] = time.time()
+                return self._failure(check, "timeout")
+            except Exception as e:
+                self.logger.exception(
+                    "Check failed with exception",
+                    extra={"check_name": check.name},
+                )
+                return self._failure(check, str(e))
 
-                # Store the last state
-                self.last_state[check.name] = result
+    @staticmethod
+    def _failure(check: BaseCheck, error: str) -> dict[str, Any]:
+        return {
+            "check_id": str(check.check_id),
+            "display_name": check.name,
+            "check_type": check.config["check_type"],
+            "target": check.config["target"],
+            "success": False,
+            "latency_ms": None,
+            "error": error,
+        }
 
-                # Put in queue for reporting
-                await self.result_queue.put(result)
-
-                # Track maximum queue size
-                if self.result_queue.qsize() > self.metrics["result_queue_max_size"]:
-                    self.metrics["result_queue_max_size"] = self.result_queue.qsize()
-
-        except TimeoutError:
-            self.logger.warning(
-                "Check timed out",
-                extra={"check_name": check.name},
-            )
-            self.metrics["checks_executed"] += 1
+    async def _record(
+        self, check: BaseCheck, result: dict[str, Any], result_id: str
+    ) -> None:
+        """Count the run, stamp the agent's metadata, and queue it for reporting."""
+        self.metrics["checks_executed"] += 1
+        if result["success"]:
+            self.metrics["checks_succeeded"] += 1
+            self.check_stats[check.name]["successes"] += 1
+        else:
             self.metrics["checks_failed"] += 1
-            self.check_stats[check.name]["total_runs"] += 1
             self.check_stats[check.name]["failures"] += 1
 
-            # Create timeout result
-            agent_id = self.config.get("agent_id", "unknown")
-            result = {
-                "check_id": str(check.check_id),
-                "display_name": check.name,
-                "check_type": check.config["check_type"],
-                "target": check.config["target"],
-                "success": False,
-                "latency_ms": None,
-                "error": "timeout",
-                "agent_id": str(agent_id) if agent_id != "unknown" else "unknown",
-                "agent_run_id": self.run_id,
-                "timestamp": time.time(),
-            }
+        self.check_stats[check.name]["total_runs"] += 1
+        if result.get("latency_ms"):
+            self.check_stats[check.name]["total_latency"] += result["latency_ms"]
 
-            self.last_state[check.name] = result
-            await self.result_queue.put(result)
+        agent_id = self.config.get("agent_id", "unknown")
+        result["result_id"] = result_id  # UUID for artifact linking
+        result["agent_id"] = str(agent_id) if agent_id != "unknown" else "unknown"
+        result["agent_run_id"] = self.run_id
+        result["timestamp"] = time.time()
 
-        except Exception as e:
-            self.logger.exception(
-                "Check failed with exception",
-                extra={"check_name": check.name},
-            )
-            self.metrics["checks_executed"] += 1
-            self.metrics["checks_failed"] += 1
-            self.check_stats[check.name]["total_runs"] += 1
-            self.check_stats[check.name]["failures"] += 1
+        self.last_state[check.name] = result
+        await self.result_queue.put(result)
 
-            # Create error result
-            agent_id = self.config.get("agent_id", "unknown")
-            result = {
-                "check_id": str(check.check_id),
-                "display_name": check.name,
-                "check_type": check.config["check_type"],
-                "target": check.config["target"],
-                "success": False,
-                "latency_ms": None,
-                "error": str(e),
-                "agent_id": str(agent_id) if agent_id != "unknown" else "unknown",
-                "agent_run_id": self.run_id,
-                "timestamp": time.time(),
-            }
-
-            self.last_state[check.name] = result
-            await self.result_queue.put(result)
+        if self.result_queue.qsize() > self.metrics["result_queue_max_size"]:
+            self.metrics["result_queue_max_size"] = self.result_queue.qsize()
