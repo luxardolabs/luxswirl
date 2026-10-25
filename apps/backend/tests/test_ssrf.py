@@ -36,6 +36,24 @@ def test_assert_ip_allowed_blocks_ipv6_link_local():
         assert_ip_allowed("fe80::1")
 
 
+@pytest.mark.parametrize(
+    "ip",
+    [
+        "fd00:ec2::254",  # AWS IMDS over IPv6
+        "100.100.100.200",  # Alibaba Cloud
+        "::ffff:100.100.100.200",
+    ],
+)
+def test_assert_ip_allowed_blocks_metadata_outside_link_local(ip):
+    with pytest.raises(SsrfBlockedError, match="cloud metadata"):
+        assert_ip_allowed(ip)
+
+
+@pytest.mark.parametrize("ip", ["fd00:ec2::253", "100.100.100.201"])
+def test_assert_ip_allowed_allows_the_metadata_addresses_neighbours(ip):
+    assert_ip_allowed(ip)  # private, allowed by default
+
+
 def test_assert_ip_allowed_allows_public_ip():
     assert_ip_allowed("8.8.8.8")  # no raise
 

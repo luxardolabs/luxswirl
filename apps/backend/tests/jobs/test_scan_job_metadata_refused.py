@@ -34,6 +34,14 @@ async def test_a_scan_of_the_metadata_range_is_refused(db: AsyncSession) -> None
         await _create(db, "169.254.169.0/24")
 
 
+@pytest.mark.parametrize("subnet", ["100.100.100.0/24", "fd00:ec2::/112"])
+async def test_a_scan_reaching_a_metadata_address_outside_link_local_is_refused(
+    db: AsyncSession, subnet: str
+) -> None:
+    with pytest.raises(ValidationError, match="cloud metadata"):
+        await _create(db, subnet)
+
+
 async def test_a_scan_of_a_private_lan_is_created(db: AsyncSession) -> None:
     job = await _create(db, "192.168.1.0/24")
 

@@ -30,6 +30,8 @@ logger = get_logger("luxswirl.security.ssrf")
 CLOUD_METADATA_NETWORKS = [
     ipaddress.ip_network("169.254.0.0/16"),  # AWS/GCP/Azure IMDS + link-local
     ipaddress.ip_network("fe80::/10"),  # IPv6 link-local
+    ipaddress.ip_network("fd00:ec2::254/128"),  # AWS IMDS over IPv6
+    ipaddress.ip_network("100.100.100.200/32"),  # Alibaba Cloud metadata
 ]
 
 # Private and internal networks — where most self-hosted targets live, and the
