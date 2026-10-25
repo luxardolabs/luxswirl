@@ -1121,6 +1121,13 @@ class CheckCoreService:
                     http_method=req.http_method,
                     verify_ssl=req.verify_ssl,
                     resend_notification_after=req.resend_notification_after,
+                    retry_attempts=req.retry_attempts,
+                    # Unset keeps CheckCreate's own default, as the single form does.
+                    **(
+                        {"retry_interval_seconds": req.retry_interval_seconds}
+                        if req.retry_interval_seconds is not None
+                        else {}
+                    ),
                 )
 
                 # Create the check

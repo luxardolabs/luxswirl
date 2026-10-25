@@ -1393,8 +1393,8 @@ class ChecksViewService:
         timeout_seconds_int = (
             ChecksViewService.parse_optional_int(timeout_seconds) or 10
         )
-        ChecksViewService.parse_optional_int(retry_attempts)
-        ChecksViewService.parse_optional_int(retry_interval_seconds)
+        retries = ChecksViewService.parse_optional_int(retry_attempts)
+        retry_interval = ChecksViewService.parse_optional_int(retry_interval_seconds)
         resend_after = ChecksViewService.parse_optional_int(resend_notification_after)
 
         # The form posts the method as text; an unknown one is refused here (ValueError),
@@ -1416,6 +1416,8 @@ class ChecksViewService:
                 http_method=http_method_enum,
                 verify_ssl=verify_ssl,
                 resend_notification_after=resend_after,
+                retry_attempts=retries,
+                retry_interval_seconds=retry_interval,
             )
             bulk_requests.append(req)
 

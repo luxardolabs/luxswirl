@@ -324,6 +324,12 @@ class BulkCheckCreateRequest(BaseSchema):
         le=100,
         description="Resend notification if down X times consecutively (NULL = disabled)",
     )
+    retry_attempts: int | None = Field(
+        None, ge=0, le=10, description="Retries after a failed attempt"
+    )
+    retry_interval_seconds: int | None = Field(
+        None, ge=1, le=300, description="Seconds between retries (unset: the default)"
+    )
     expected_status: int | None = Field(
         None, ge=100, le=599, description="Expected HTTP status code"
     )
