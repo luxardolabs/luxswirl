@@ -56,3 +56,15 @@ async def test_the_configured_verb_reaches_the_http_check(
     await check.run()
 
     assert sent == ["POST"]
+
+
+def test_the_retry_settings_reach_the_executor() -> None:
+    cfg = _transform(_server_check(retry_attempts=3, retry_interval_seconds=15))
+
+    assert (cfg["retry_attempts"], cfg["retry_interval"]) == (3, 15)
+
+
+def test_a_check_with_no_retry_settings_is_tried_once() -> None:
+    cfg = _transform(_server_check())
+
+    assert (cfg["retry_attempts"], cfg["retry_interval"]) == (0, 30)

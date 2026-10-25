@@ -440,6 +440,9 @@ class CheckManager:
             "interval": check_cfg.get("interval_seconds", 60),
             "timeout": check_cfg.get("timeout_seconds", 5),
             "enabled": check_cfg.get("enabled", True),
+            # Read by the executor: retries after a failed attempt, and the wait between.
+            "retry_attempts": check_cfg.get("retry_attempts") or 0,
+            "retry_interval": check_cfg.get("retry_interval_seconds") or 30,
         }
 
         # Only add type-specific fields if they exist (not None)
