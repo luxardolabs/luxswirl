@@ -53,9 +53,16 @@ class AgentCRUD:
 
     @staticmethod
     async def get_stale_agent_names(db: AsyncSession, cutoff: datetime) -> list[str]:
-        """Return names of agents whose last_seen is older than cutoff."""
+        """Return names of agents whose last_seen is older than cutoff.
+
+        An archived agent is kept whatever its age: it is refused heartbeats,
+        so its last_seen only grows older.
+        """
         result = await db.execute(
-            select(Agent.agent_name).where(Agent.last_seen < cutoff)
+            select(Agent.agent_name).where(
+                Agent.last_seen < cutoff,
+                Agent.approval_status != AgentApprovalStatus.ARCHIVED,
+            )
         )
         return [name for name in result.scalars().all() if name]
 
@@ -78,9 +85,17 @@ class AgentCRUD:
 
     @staticmethod
     async def delete_stale_agents(db: AsyncSession, cutoff: datetime) -> int:
-        """Delete agents with last_seen older than cutoff; the number deleted."""
+        """Delete agents with last_seen older than cutoff; the number deleted.
+
+        An archived agent is kept, as in `get_stale_agent_names`.
+        """
         result = await db.execute(
-            delete(Agent).where(Agent.last_seen < cutoff).returning(Agent.id)
+            delete(Agent)
+            .where(
+                Agent.last_seen < cutoff,
+                Agent.approval_status != AgentApprovalStatus.ARCHIVED,
+            )
+            .returning(Agent.id)
         )
         return len(result.all())
 
@@ -198,9 +213,13 @@ class AgentCRUD:
     async def get_liveness_rows(
         db: AsyncSession,
     ) -> list[tuple[UUID, str | None, datetime]]:
-        """(id, agent_name, last_seen) for every agent; the name may be unset."""
+        """(id, agent_name, last_seen) for every agent not archived; the name may be unset."""
         # unbounded-reads: one agent_up gauge per agent: the whole fleet, three narrow columns
-        result = await db.execute(select(Agent.id, Agent.agent_name, Agent.last_seen))
+        result = await db.execute(
+            select(Agent.id, Agent.agent_name, Agent.last_seen).where(
+                Agent.approval_status != AgentApprovalStatus.ARCHIVED
+            )
+        )
         return [(agent_id, name, last_seen) for agent_id, name, last_seen in result]
 
     @staticmethod

@@ -515,7 +515,7 @@ The JSON API under `/api/v1` is the agent protocol: it carries agents' registrat
 /api/v1
 ├── POST   /agents/register                 Register (registration key)
 ├── POST   /agents/{agent_id}/recover-key   Recover the agent key (registration key + recovery secret)
-├── POST   /heartbeat                       Heartbeat (agent key; registration key only until the agent has one)
+├── POST   /heartbeat                       Heartbeat (agent key; the registration key updates only a pending agent)
 ├── GET    /checks?agent_id={id}            Fetch this agent's checks (agent key)
 ├── POST   /reports                         Submit a batch of results (agent key)
 ├── POST   /jobs/{job_id}/start             Report a job started: it is running (the job's agent key)

@@ -58,12 +58,27 @@ def _recovery_secret_digest(secret: str) -> str:
 # Compared against when no digest is on record, so a refusal does the same work.
 _NO_SECRET_DIGEST = "0" * 64
 
-# The statuses an agent can be archived from: admitted and not yet archived.
+# The statuses each operator action moves an agent from. Restore is the only
+# way out of archived, so no other action takes an archived agent.
+_APPROVABLE = (AgentApprovalStatus.PENDING, AgentApprovalStatus.REJECTED)
+_DISABLEABLE = (AgentApprovalStatus.ACTIVE, AgentApprovalStatus.PAUSED)
 _ARCHIVABLE = (
     AgentApprovalStatus.ACTIVE,
     AgentApprovalStatus.PAUSED,
     AgentApprovalStatus.DISABLED,
 )
+
+
+def _require_status(
+    agent: Agent, allowed: tuple[AgentApprovalStatus, ...], verb: str
+) -> None:
+    """Refuse the action unless the agent is in one of the `allowed` statuses."""
+    if agent.approval_status not in allowed:
+        raise ValidationException(
+            f"An agent can be {verb} only when "
+            f"{' or '.join(str(status) for status in allowed)}; "
+            f"this one is {agent.approval_status}"
+        )
 
 
 class AgentCoreService:
@@ -692,21 +707,21 @@ class AgentCoreService:
         registration key every install holds.
 
         The heartbeat is applied (identity, liveness, health, a metric row)
-        when the agent's own key sent it, or when the agent has no key yet (a
-        pending agent, whose only credential is the registration key). A
-        registration-key heartbeat for an agent that HAS its own key writes
-        nothing: it only reads the status back, which is how an approved agent
-        that has not stored its key yet learns to recover it. Jobs go only to
-        the agent's own key.
+        when the agent's own key sent it, or when the agent is pending (its
+        only credential is the registration key). Any other registration-key
+        heartbeat writes nothing: it only reads the status back, which is how
+        an approved agent that has not stored its key yet learns to recover
+        it, and an agent whose key was revoked is not rewritten by whoever
+        holds the shared key. Jobs go only to the agent's own key.
         """
         agent = await AgentCoreService.get_agent_by_id(db, agent_id)
-        if using_agent_key or not agent.api_key_hash:
+        if using_agent_key or agent.approval_status == AgentApprovalStatus.PENDING:
             agent = await AgentCoreService.update_from_heartbeat(
                 db, agent_id, heartbeat
             )
         else:
             logger.info(
-                "Registration-key heartbeat for an agent with its own key: "
+                "Registration-key heartbeat for an agent that is not pending: "
                 "status returned, nothing applied",
                 extra={"agent_id": str(agent.id)},
             )
@@ -908,6 +923,7 @@ class AgentCoreService:
 
         if agent.approval_status == "active":
             raise ValueError("Agent is already approved")
+        _require_status(agent, _APPROVABLE, "approved")
 
         # Generate agent-specific API key
         api_key = f"luxswirl_ak_{secrets.token_hex(16)}"
@@ -944,6 +960,7 @@ class AgentCoreService:
             AgentNotFoundException: If agent not found
         """
         agent = await AgentCoreService.get_agent_by_id(db, agent_id)
+        _require_status(agent, (AgentApprovalStatus.PENDING,), "rejected")
 
         agent.approval_status = AgentApprovalStatus.REJECTED
         agent.status_reason = reason
@@ -973,6 +990,7 @@ class AgentCoreService:
             AgentNotFoundException: If agent not found
         """
         agent = await AgentCoreService.get_agent_by_id(db, agent_id)
+        _require_status(agent, (AgentApprovalStatus.ACTIVE,), "paused")
 
         agent.approval_status = AgentApprovalStatus.PAUSED
         agent.status_reason = reason
@@ -999,6 +1017,7 @@ class AgentCoreService:
             AgentNotFoundException: If agent not found
         """
         agent = await AgentCoreService.get_agent_by_id(db, agent_id)
+        _require_status(agent, (AgentApprovalStatus.PAUSED,), "resumed")
 
         agent.approval_status = AgentApprovalStatus.ACTIVE
         agent.status_reason = None
@@ -1028,6 +1047,7 @@ class AgentCoreService:
             AgentNotFoundException: If agent not found
         """
         agent = await AgentCoreService.get_agent_by_id(db, agent_id)
+        _require_status(agent, _DISABLEABLE, "disabled")
 
         agent.approval_status = AgentApprovalStatus.DISABLED
         agent.status_reason = reason
@@ -1054,6 +1074,7 @@ class AgentCoreService:
             AgentNotFoundException: If agent not found
         """
         agent = await AgentCoreService.get_agent_by_id(db, agent_id)
+        _require_status(agent, (AgentApprovalStatus.DISABLED,), "enabled")
 
         agent.approval_status = AgentApprovalStatus.ACTIVE
         agent.status_reason = None
@@ -1082,11 +1103,7 @@ class AgentCoreService:
             ValidationException: If the agent is pending, rejected or archived
         """
         agent = await AgentCoreService.get_agent_by_id(db, agent_id)
-        if agent.approval_status not in _ARCHIVABLE:
-            raise ValidationException(
-                f"Only an active, paused or disabled agent can be archived; "
-                f"this one is {agent.approval_status}"
-            )
+        _require_status(agent, _ARCHIVABLE, "archived")
 
         agent.approval_status = AgentApprovalStatus.ARCHIVED
         agent.status_reason = None
@@ -1114,11 +1131,7 @@ class AgentCoreService:
             ValidationException: If the agent is not archived
         """
         agent = await AgentCoreService.get_agent_by_id(db, agent_id)
-        if agent.approval_status != AgentApprovalStatus.ARCHIVED:
-            raise ValidationException(
-                f"Only an archived agent can be restored; this one is "
-                f"{agent.approval_status}"
-            )
+        _require_status(agent, (AgentApprovalStatus.ARCHIVED,), "restored")
 
         agent.approval_status = AgentApprovalStatus.DISABLED
         agent.status_reason = None

@@ -39,6 +39,20 @@ from app.models.check_model import Check
 from app.models.check_result_model import CheckResult
 from app.models.enum_model import AgentApprovalStatus, AssignmentMode
 
+
+def _in_use() -> ColumnElement[bool]:
+    """The checks the dashboard lists: all but those pinned to an archived agent.
+
+    A check pinned to an archived agent is out of use with it. A replicated or
+    distributed check runs on its pool, whatever its placeholder agent, so it
+    stays. For a query that joins Agent on Check.agent_id.
+    """
+    return or_(
+        Check.assignment_mode != AssignmentMode.MANUAL,
+        Agent.approval_status != AgentApprovalStatus.ARCHIVED,
+    )
+
+
 # A row of labelled aggregates (count/sum/avg/percentile over results): SQLAlchemy
 # 2.1 cannot type `func.*` columns, so the row is typed by its arity only.
 type AggregateRow = Row[*tuple[Any, ...]]
@@ -226,15 +240,7 @@ class CheckResultCRUD:
             .options(selectinload(Check.agent))
         )
 
-        # A check pinned to an archived agent is out of use with it. A
-        # replicated or distributed check runs on its pool, whatever its
-        # placeholder agent, so it stays.
-        conditions: list[ColumnElement[bool]] = [
-            or_(
-                Check.assignment_mode != AssignmentMode.MANUAL,
-                Agent.approval_status != AgentApprovalStatus.ARCHIVED,
-            )
-        ]
+        conditions: list[ColumnElement[bool]] = [_in_use()]
 
         if check_ids:
             conditions.append(Check.id.in_(check_ids))
@@ -526,13 +532,14 @@ class CheckResultCRUD:
         cutoff_recent = utc_now() - timedelta(minutes=5)
         cutoff_24h = utc_now() - timedelta(hours=24)
 
-        # Total checks
-        total_checks_result = await db.execute(select(func.count(Check.id)))
+        # Total checks: those the dashboard lists (see _in_use)
+        in_use = select(func.count(Check.id)).join(Agent, Check.agent_id == Agent.id)
+        total_checks_result = await db.execute(in_use.where(_in_use()))
         total_checks = total_checks_result.scalar_one()
 
         # Enabled checks
         enabled_checks_result = await db.execute(
-            select(func.count(Check.id)).where(Check.enabled.is_(True))
+            in_use.where(_in_use(), Check.enabled.is_(True))
         )
         enabled_checks = enabled_checks_result.scalar_one()
 
