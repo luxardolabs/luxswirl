@@ -54,6 +54,7 @@ Latency: {{LATENCY}}
 Agent: {{AGENT}}
 Timestamp: {{TIMESTAMP}}
 Error: {{ERROR_MESSAGE}}
+Detail: {{DETAIL}}
 ```
 
 **Gmail example** (create an [app password](https://myaccount.google.com/apppasswords) first):
@@ -104,6 +105,7 @@ Sends an HTTP POST with the full check/alert context — the bridge to Slack, Di
   "timestamp": "2024-01-15T14:32:01Z",
   "error_message": "Connection timeout after 30 seconds",
   "error_type": "timeout",
+  "detail": null,
   "http_status_code": null,
   "alert_name": "API Down",
   "alert_description": "Alerts when production API fails",
@@ -112,7 +114,7 @@ Sends an HTTP POST with the full check/alert context — the bridge to Slack, Di
 }
 ```
 
-`status` is `success`, `error`, `no_data` (a No Data alert: the check stopped reporting) or `offline` (an Agent Offline alert, whose `check_name` is `Agent <name>` and `check_type` is `agent`).
+`detail` is what the alert found when its news is not the check's status (an SSL Certificate Expiry alert: "SSL certificate expires in 5 days"), else null. `status` is `success`, `error`, `no_data` (a No Data alert: the check stopped reporting) or `offline` (an Agent Offline alert, whose `check_name` is `Agent <name>` and `check_type` is `agent`).
 
 **Examples:**
 
@@ -203,6 +205,7 @@ Subjects and messages support `{{VARIABLE}}` substitution:
 | `{{STATUS}}`          | "UP" / "DOWN" / "NO DATA" / "OFFLINE" |     | `{{TYPE}}`        | Check type       |
 | `{{LATENCY}}`         | Response time                         |     | `{{ALERT}}`       | Alert name       |
 | `{{ERROR_MESSAGE}}`   | Error details                         |     | `{{HTTP_STATUS}}` | HTTP status code |
+| `{{DETAIL}}`          | What the alert found (SSL expiry)     |     |                   |                  |
 
 **Substitution rules:** variables are **case-sensitive** (`{{NAME}}`, not `{{name}}`); a null/missing value renders as `N/A` / `No error` / `Unknown` as appropriate; everything is coerced to string; values are **not** HTML-escaped.
 

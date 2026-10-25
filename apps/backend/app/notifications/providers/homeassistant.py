@@ -157,6 +157,7 @@ class HomeAssistantNotificationProvider(BaseNotificationProvider):
                 "alert": {
                     "name": context.alert_name,
                     "description": context.alert_description,
+                    "detail": context.detail,
                     "consecutive_failures": context.consecutive_failures,
                 },
                 # Metadata

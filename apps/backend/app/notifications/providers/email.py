@@ -208,6 +208,7 @@ class EmailNotificationProvider(BaseNotificationProvider):
                 ("Timestamp", context.timestamp, None),
             ],
             error_message=None if context.success else context.error_message,
+            detail=context.detail,
             http_status_code=context.http_status_code,
         )
 

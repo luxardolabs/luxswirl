@@ -54,6 +54,8 @@ Triggers when an SSL certificate expires within a selected number of days. Appli
 
 - **Day thresholds** (checkboxes, multi-select): 7, 14, 21, 30, 60, 90. Fires when the cert is within ANY selected threshold.
 - **Escalation bands:** each selected threshold is a band; a new notification fires the moment the cert crosses into a *tighter* band, regardless of `resend_interval`. Within a band, `resend_interval` controls re-notification. One recovery notification fires when the cert is renewed past all thresholds (`notify_on_recovery`, default true).
+- **Unreadable expiry:** when a certificate is reported but its expiry date cannot be read, the alert fires once (state `ssl:unknown`) saying so and quoting the date it got, since it cannot watch that certificate. A recovery fires when the expiry can be read again and is outside every band.
+- **What it says:** every SSL notification carries a detail line ("SSL certificate expires in 5 days", "expired 3 days ago", "could not be read"), shown in the email, sent as `detail` to webhooks and Home Assistant, and available to templates as `{{DETAIL}}`. Only the renewal is a recovery; a warning while the HTTPS check itself succeeds is not.
 
 With `thresholds: [7, 14, 30]` and no resend interval, a cert aging from 60 days to expiry produces:
 
@@ -67,6 +69,7 @@ With `thresholds: [7, 14, 30]` and no resend interval, a cert aging from 60 days
 | 7              | crossed into 7-day band  | **fires** (critical)         |
 | 3              | still in 7-day band      | skip                         |
 | renewed to 90  | back to safe             | **fires** (recovery)         |
+| unreadable     | `ssl:unknown`            | **fires** once               |
 
 If you set `resend_interval_minutes: 1440` (one day), the operator also gets a reminder every 24 hours within the current band. **Best practice:** select multiple thresholds (30, 14, 7) for escalating signals; add a resend interval only if you want daily/weekly nags between escalations.
 
