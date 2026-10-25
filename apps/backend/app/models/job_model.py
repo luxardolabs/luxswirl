@@ -225,28 +225,6 @@ class Job(Base, TimestampMixin):
         self.status = JobStatus.ASSIGNED
         self.assigned_at = utc_now()
 
-    def start(self) -> None:
-        """Mark job as started."""
-        self.status = JobStatus.RUNNING
-        self.started_at = utc_now()
-
-    def complete(self, result: dict[str, Any]) -> None:
-        """Mark job as completed with result."""
-        self.status = JobStatus.COMPLETED
-        self.completed_at = utc_now()
-        self.result = result
-
-    def fail(self, error: str) -> None:
-        """Mark job as failed with error message."""
-        self.status = JobStatus.FAILED
-        self.completed_at = utc_now()
-        self.error = error
-
-    def cancel(self) -> None:
-        """Cancel the job."""
-        self.status = JobStatus.CANCELLED
-        self.completed_at = utc_now()
-
     def set_expiration(self, retention_days: int = 7) -> None:
         """Set expiration timestamp based on retention policy."""
         self.expires_at = utc_now() + timedelta(days=retention_days)
