@@ -123,10 +123,16 @@ class TestJobLifecycle:
         assert out is not None
         assert out.status == "cancelled"
 
-    async def test_cannot_cancel_running_job(self, db: AsyncSession):
-        # guard: only pending/assigned jobs can be cancelled
+    async def test_a_running_job_can_be_cancelled(self, db: AsyncSession):
+        # As the jobs page offers: pending, assigned and running jobs can be cancelled
         job = await svc.create_job(db, self._data())
         await svc.update_job_status(db, job.id, "running")
+        cancelled = await svc.cancel_job(db, job.id)
+        assert cancelled is not None and cancelled.status == "cancelled"
+
+    async def test_a_finished_job_cannot_be_cancelled(self, db: AsyncSession):
+        job = await svc.create_job(db, self._data())
+        await svc.update_job_status(db, job.id, "completed")
         assert await svc.cancel_job(db, job.id) is None
 
     async def test_cancel_unknown_job_returns_none(self, db: AsyncSession):

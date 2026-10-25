@@ -17,7 +17,6 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.core.datetime_utils import utc_now
 from app.core.exceptions import AgentNotFoundException
 from app.crud.job_crud import JobCRUD
 from app.models.enum_model import SERVER_RUNNER, JobStatus, JobType
@@ -222,38 +221,33 @@ class JobCoreService:
         """
         Update job status.
 
+        A finished job (completed, failed, cancelled) keeps its state: a late
+        notice from an agent does not reopen it. Setting the status a job
+        already has changes nothing, so a repeated start keeps its first
+        `started_at`.
+
         Args:
             db: Database session
             job_id: Job UUID
             status: New status
 
         Returns:
-            Updated job or None if not found
+            The job (updated, or as it was) or None if not found
         """
+        moved = await JobCRUD.move_open_job(db, job_id, JobStatus(status))
+        if moved is not None:
+            logger.info(
+                "Job status changed",
+                extra={"job_id": str(job_id), "to_status": status},
+            )
+            return moved
+
         job = await JobCoreService.get_job(db, job_id)
-        if not job:
-            return None
-
-        old_status = job.status
-        job.status = status
-
-        # Update timestamps based on status
-        if status == "running" and not job.started_at:
-            job.start()
-        elif status in ("completed", "failed", "cancelled") and not job.completed_at:
-            job.completed_at = utc_now()
-
-        job = await JobCRUD.save_job(db, job)
-
-        logger.info(
-            "Job status changed",
-            extra={
-                "job_id": str(job_id),
-                "from_status": old_status,
-                "to_status": status,
-            },
-        )
-
+        if job is not None and job.is_terminal:
+            logger.warning(
+                "Ignoring status change for already-terminal job",
+                extra={"job_id": str(job_id), "status": job.status},
+            )
         return job
 
     @staticmethod
@@ -336,7 +330,7 @@ class JobCoreService:
         if not job:
             return None
 
-        if job.status not in ("pending", "assigned"):
+        if job.status not in ("pending", "assigned", "running"):
             logger.warning(
                 "Cannot cancel job in current status",
                 extra={"job_id": str(job_id), "status": job.status},

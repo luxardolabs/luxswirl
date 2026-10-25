@@ -518,6 +518,7 @@ The JSON API under `/api/v1` is the agent protocol: it carries agents' registrat
 ├── POST   /heartbeat                       Heartbeat (agent key; registration key only until the agent has one)
 ├── GET    /checks?agent_id={id}            Fetch this agent's checks (agent key)
 ├── POST   /reports                         Submit a batch of results (agent key)
+├── POST   /jobs/{job_id}/start             Report a job started: it is running (the job's agent key)
 ├── POST   /jobs/{job_id}/results           Submit a job's results (the job's agent key)
 └── POST   /artifacts                       Upload an artifact for one of its checks (agent key)
 
