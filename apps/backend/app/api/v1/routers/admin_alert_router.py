@@ -77,7 +77,7 @@ async def admin_create_alert(
     principal: ApiEditor,
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> AdminAlertDetail:
-    return await AdminAlertCoreService.create_alert(db, data)
+    return await AdminAlertCoreService.create_alert(db, principal.user.role, data)
 
 
 @router.patch("/{alert_id}", response_model=AdminAlertDetail, name="admin_update_alert")
@@ -164,7 +164,9 @@ async def admin_set_alert_checks(
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> AlertMappingChange:
     """Make exactly these checks the ones a non-global alert watches."""
-    return await AdminAlertCoreService.set_checks(db, alert_id, data)
+    return await AdminAlertCoreService.set_checks(
+        db, principal.user.role, alert_id, data
+    )
 
 
 @router.post(
@@ -182,9 +184,14 @@ async def admin_snooze_alert_check(
     data: AdminAlertSnooze | None = None,
 ) -> AlertCheckSnooze:
     """Hold back this alert's notifications for this check (15 minutes unless
-    `minutes` says otherwise; a running snooze is extended)."""
+    `minutes` says otherwise; a running snooze is extended, to at most a day
+    from now)."""
     return await AdminAlertCoreService.snooze(
-        db, alert_id, check_id, (data or AdminAlertSnooze()).minutes
+        db,
+        principal.user.username,
+        alert_id,
+        check_id,
+        (data or AdminAlertSnooze()).minutes,
     )
 
 
@@ -202,5 +209,7 @@ async def admin_unsnooze_alert_check(
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> Response:
     """Resume this alert's notifications for this check now."""
-    await AdminAlertCoreService.unsnooze(db, alert_id, check_id)
+    await AdminAlertCoreService.unsnooze(
+        db, principal.user.username, alert_id, check_id
+    )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
