@@ -55,7 +55,7 @@ async def _approved(db: AsyncSession, tags: list[str]) -> tuple[Agent, str]:
     agent = make_agent(approval_status="pending", tags=tags)
     db.add(agent)
     await db.flush()
-    _, key = await AgentCoreService.approve_agent(db, agent.id)
+    _, key = await AgentCoreService.approve_agent(db, agent.id, actor_is_admin=True)
     return agent, key
 
 
@@ -133,7 +133,9 @@ async def test_an_admins_tag_change_takes_effect_on_the_next_check_list(
     await _db_replicate_check(db, owner)
     assert "s3cretpw" not in await _checks_text(client, agent, key)
 
-    await AgentCoreService.update_agent(db, agent.id, AgentUpdate(tags=["role:db"]))
+    await AgentCoreService.update_agent(
+        db, agent.id, AgentUpdate(tags=["role:db"]), actor_is_admin=True
+    )
 
     assert "s3cretpw" in await _checks_text(client, agent, key)
     # ...and the agent's own heartbeat does not undo it.
@@ -162,6 +164,6 @@ async def test_a_pending_agents_registered_tags_are_kept_as_its_initial_tags(
     await db.refresh(agent)
     assert agent.tags == ["role:web", "region:us"]
 
-    await AgentCoreService.approve_agent(db, agent_id)
+    await AgentCoreService.approve_agent(db, agent_id, actor_is_admin=True)
     await db.refresh(agent)
     assert agent.tags == ["role:web", "region:us"]

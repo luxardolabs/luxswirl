@@ -113,8 +113,10 @@ async def test_only_restore_moves_an_archived_agent(
     db: AsyncSession, transition: str
 ) -> None:
     agent = await _agent(db, approval_status="archived")
+    # approve_agent also judges who approves; an admin is the widest reach.
+    extra = {"actor_is_admin": True} if transition == "approve_agent" else {}
     with contextlib.suppress(ValidationException, ValueError):
-        await getattr(AgentCoreService, transition)(db, agent.id)
+        await getattr(AgentCoreService, transition)(db, agent.id, **extra)
     assert await _status(db, agent.id) == "archived", (
         f"{transition} moved an archived agent out of archived"
     )
@@ -264,7 +266,7 @@ async def _reg_key_heartbeat_onto_archived(
     )
     agent = await _agent(db, approval_status="pending", last_seen=_OLD)
     agent_id = agent.id
-    await AgentCoreService.approve_agent(db, agent_id)
+    await AgentCoreService.approve_agent(db, agent_id, actor_is_admin=True)
     await AgentCoreService.archive_agent(db, agent_id)
     if revoke:
         await AgentCoreService.revoke_agent_key(db, agent_id)

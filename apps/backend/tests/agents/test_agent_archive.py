@@ -62,7 +62,7 @@ async def _check(db: AsyncSession, agent_id: UUID, **overrides: Any) -> Check:
 async def _approved_with_check(db: AsyncSession) -> tuple[Agent, str, Check]:
     agent = await _agent(db, approval_status="pending")
     check = await _check(db, agent.id)
-    _, key = await AgentCoreService.approve_agent(db, agent.id)
+    _, key = await AgentCoreService.approve_agent(db, agent.id, actor_is_admin=True)
     return agent, key, check
 
 

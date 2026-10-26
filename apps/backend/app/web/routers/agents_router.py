@@ -141,6 +141,7 @@ async def update_agent_web(
             "watchdog_stall_threshold": watchdog_stall_threshold,
             "log_level": log_level,
         },
+        current_user,
     )
     return agent_status_message(request, kind, message, status)
 
@@ -198,7 +199,7 @@ async def delete_agent_web(
     # back on any exception.
     try:
         job = await AgentsViewService.enqueue_delete(
-            db, agent_id, confirm_name, owner_id=current_user.id
+            db, agent_id, confirm_name, current_user
         )
     except ValidationException as e:
         response = agent_status_message(
@@ -258,7 +259,7 @@ async def approve_agent_web(
     current_user: EditorUserWeb,
 ) -> Response:
     """Approve agent via web UI (auto-generates API key)."""
-    return await AgentsViewService.approve_agent(db, agent_id)
+    return await AgentsViewService.approve_agent(db, agent_id, current_user)
 
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)

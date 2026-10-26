@@ -56,7 +56,7 @@ async def _agent_with_stored_method(db: AsyncSession, method: str):
         ]
     )
     await db.flush()
-    _, key = await AgentCoreService.approve_agent(db, agent.id)
+    _, key = await AgentCoreService.approve_agent(db, agent.id, actor_is_admin=True)
     return agent, key
 
 

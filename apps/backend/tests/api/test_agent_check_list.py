@@ -41,7 +41,7 @@ async def agent_with_key(db: AsyncSession) -> tuple[str, str, set[str]]:
     checks = [make_check(agent_id=agent.id) for _ in range(2)]
     db.add_all(checks)
     await db.flush()
-    _, key = await AgentCoreService.approve_agent(db, agent.id)
+    _, key = await AgentCoreService.approve_agent(db, agent.id, actor_is_admin=True)
     return str(agent.id), key, {str(c.id) for c in checks}
 
 

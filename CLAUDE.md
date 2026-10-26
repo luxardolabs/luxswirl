@@ -182,7 +182,7 @@ Available check types (in `apps/agent/app/checks/`):
 
 **Synthetic Check Security (IMPORTANT):**
 
-- **Admin Role Required**: Only admins create/modify synthetic checks, through the web UI — enforced in the core service (`CheckCoreService.create_check/update_check/clone_check`), not just the web layer.
+- **Admin Role Required**: Only admins create, change, move, enable/disable or delete a synthetic check, by any path (single, bulk, dependents, import, admin API), enforced in the core services (`CheckCoreService`, `CheckDependencyCoreService`), not just the web layer. An agent change that alters where one runs (a rename or retag that moves the agent into or out of a synthetic check's selector, approving an agent one already matches) or deletes one (deleting an agent that owns it) is an admin's too (`AgentCoreService`); other agent edits stay with editors.
 - **Arbitrary Code Execution**: Runs user-provided Python scripts using `exec()` with Playwright
 - **AST Validation**: Scripts validated to block obvious attacks (eval, exec, os, subprocess, etc.)
 - **Security Audit Logging**: All operations logged with `SECURITY AUDIT` prefix

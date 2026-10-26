@@ -73,7 +73,7 @@ async def _register(client: AsyncClient, reg_key: str) -> tuple[UUID, str]:
 
 
 async def _approve(db: AsyncSession, agent_id: UUID) -> str:
-    _, key = await AgentCoreService.approve_agent(db, agent_id)
+    _, key = await AgentCoreService.approve_agent(db, agent_id, actor_is_admin=True)
     return key
 
 

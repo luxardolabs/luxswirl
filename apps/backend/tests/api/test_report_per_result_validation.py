@@ -45,7 +45,7 @@ async def approved(db: AsyncSession) -> tuple[UUID, str]:
     agent = make_agent(approval_status="pending")
     db.add(agent)
     await db.flush()
-    _, key = await AgentCoreService.approve_agent(db, agent.id)
+    _, key = await AgentCoreService.approve_agent(db, agent.id, actor_is_admin=True)
     return agent.id, key
 
 
