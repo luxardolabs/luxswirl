@@ -22,6 +22,9 @@ from app.schemas.check_schema import DashboardCheck, DashboardCheckAgent, Dashbo
 from app.schemas.pagination_schema import build_pagination
 from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.check_core_service import CheckCoreService
+from app.services.core.check_dependency_core_service import (
+    CheckDependencyCoreService,
+)
 from app.services.core.check_result_core_service import CheckResultCoreService
 from app.services.core.settings_core_service import SettingsCoreService
 from app.shared.logger import get_logger
@@ -225,7 +228,7 @@ class StatusViewService:
         stats_map = await CheckResultCoreService.get_24h_stats_batch(
             db, filtered_check_ids
         )
-        dependent_counts = await CheckCoreService.count_dependents_bulk(
+        dependent_counts = await CheckDependencyCoreService.count_dependents_bulk(
             db, filtered_check_ids
         )
 

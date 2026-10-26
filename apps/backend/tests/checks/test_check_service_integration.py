@@ -19,6 +19,9 @@ from app.core.exceptions import (
 )
 from app.schemas.check_schema import CheckCreate, CheckUpdate
 from app.services.core.check_core_service import CheckCoreService
+from app.services.core.check_dependency_core_service import (
+    CheckDependencyCoreService,
+)
 from fixtures.factories import make_agent, make_check
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -383,16 +386,20 @@ class TestDeleteCheck:
 class TestValidateDependency:
     async def test_none_is_ok(self, db: AsyncSession):
         # None means "no parent" — no validation needed
-        await CheckCoreService._validate_dependency(db, None, own_check_id=uuid4())
+        await CheckDependencyCoreService.validate_dependency(
+            db, None, own_check_id=uuid4()
+        )
 
     async def test_self_reference_rejected(self, db: AsyncSession):
         own = uuid4()
         with pytest.raises(ValidationException, match="cannot depend on itself"):
-            await CheckCoreService._validate_dependency(db, own, own_check_id=own)
+            await CheckDependencyCoreService.validate_dependency(
+                db, own, own_check_id=own
+            )
 
     async def test_nonexistent_parent_rejected(self, db: AsyncSession):
         with pytest.raises(ValidationException, match="not found"):
-            await CheckCoreService._validate_dependency(
+            await CheckDependencyCoreService.validate_dependency(
                 db, uuid4(), own_check_id=uuid4()
             )
 
@@ -408,7 +415,7 @@ class TestValidateDependency:
         await db.flush()
 
         with pytest.raises(ValidationException, match="already has a parent"):
-            await CheckCoreService._validate_dependency(
+            await CheckDependencyCoreService.validate_dependency(
                 db, parent.id, own_check_id=uuid4()
             )
 
@@ -430,7 +437,7 @@ class TestDependencyQueries:
             db.add(make_check(agent_id=agent.id, depends_on_check_id=parent.id))
         await db.flush()
 
-        children = await CheckCoreService.list_dependents(db, parent.id)
+        children = await CheckDependencyCoreService.list_dependents(db, parent.id)
         assert len(children) == 3
 
     async def test_list_eligible_parents_excludes_dependents(self, db: AsyncSession):
@@ -453,7 +460,7 @@ class TestDependencyQueries:
         # eligible because it has one. Verify that's enforced.
         from app.crud.check_crud import CheckCRUD
 
-        candidates = await CheckCoreService.list_eligible_parents(
+        candidates = await CheckDependencyCoreService.list_eligible_parents(
             db, exclude_check_id=None
         )
         candidate_ids = [c.id for c in candidates]

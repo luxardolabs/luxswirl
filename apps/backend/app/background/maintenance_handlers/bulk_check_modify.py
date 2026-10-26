@@ -44,15 +44,17 @@ async def handle(db: AsyncSession, job: MaintenanceJob) -> None:
         db=db,
         check_ids=check_ids,
         update_data=update_data,
-        new_agent_id=new_agent_id,
+        new_agent_id=UUID(new_agent_id) if new_agent_id else None,
         actor_is_admin=await UserCoreService.is_active_admin(db, job.owner_id),
     )
 
-    if alert_id:
+    # Alerts go on the checks the modify changed: never on one it refused.
+    changed = result["changed_ids"]
+    if alert_id and changed:
         if alert_id == "__clear__":
-            await AlertCoreService.bulk_clear_from_checks(db, check_ids)
+            await AlertCoreService.bulk_clear_from_checks(db, changed)
         else:
-            await AlertCoreService.bulk_assign_to_checks(db, UUID(alert_id), check_ids)
+            await AlertCoreService.bulk_assign_to_checks(db, UUID(alert_id), changed)
 
     logger.info(
         "Bulk modify complete",

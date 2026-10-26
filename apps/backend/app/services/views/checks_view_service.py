@@ -40,6 +40,9 @@ from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.alert_core_service import AlertCoreService
 from app.services.core.check_api_core_service import CheckApiCoreService
 from app.services.core.check_core_service import CheckCoreService
+from app.services.core.check_dependency_core_service import (
+    CheckDependencyCoreService,
+)
 from app.services.core.maintenance_job_core_service import MaintenanceJobCoreService
 from app.services.core.settings_core_service import SettingsCoreService
 from app.services.views._job_status import build_job_status_context
@@ -243,9 +246,12 @@ class ChecksViewService:
         db: AsyncSession,
         parent_check_id: UUID,
         dependent_ids: list[str],
+        current_user: AuthedUser,
     ) -> tuple[int, int]:
         ids = [UUID(i) for i in dependent_ids if i]
-        return await CheckCoreService.set_dependents(db, parent_check_id, ids)
+        return await CheckDependencyCoreService.set_dependents(
+            db, parent_check_id, ids, actor_is_admin=current_user.role == UserRole.ADMIN
+        )
 
     @staticmethod
     async def get_check_create_form_data(db: AsyncSession) -> dict[str, Any]:
@@ -384,7 +390,7 @@ class ChecksViewService:
             "alerts": form_data["alerts"],
             "available_check_tags": await CheckCoreService.get_all_check_tags(db),
             "available_tags": await AgentCoreService.list_agent_tags(db),
-            "eligible_parent_checks": await CheckCoreService.list_eligible_parent_rows(
+            "eligible_parent_checks": await CheckDependencyCoreService.list_eligible_parent_rows(
                 db
             ),
             "check_type_options": options_for(CheckType),
@@ -414,7 +420,7 @@ class ChecksViewService:
             "assigned_alert_ids": form_data["assigned_alert_ids"],
             "available_check_tags": await CheckCoreService.get_all_check_tags(db),
             "available_tags": await AgentCoreService.list_agent_tags(db),
-            "eligible_parent_checks": await CheckCoreService.list_eligible_parent_rows(
+            "eligible_parent_checks": await CheckDependencyCoreService.list_eligible_parent_rows(
                 db, exclude_check_id=check.id
             ),
             "mode_title": mode_title,
@@ -444,7 +450,7 @@ class ChecksViewService:
             ),
             "available_check_tags": await CheckCoreService.get_all_check_tags(db),
             "available_tags": await AgentCoreService.list_agent_tags(db),
-            "eligible_parent_checks": await CheckCoreService.list_eligible_parent_rows(
+            "eligible_parent_checks": await CheckDependencyCoreService.list_eligible_parent_rows(
                 db, exclude_check_id=check.id
             ),
             "mode": "clone",
@@ -881,12 +887,15 @@ class ChecksViewService:
 
     @staticmethod
     async def toggle_check_handler(
-        db: AsyncSession, request: Request, check_id: UUID
+        db: AsyncSession, request: Request, check_id: UUID, current_user: AuthedUser
     ) -> dict[str, Any]:
         """Toggle enabled flag, return context for the toggle-button partial."""
         check = await CheckApiCoreService.get_check_view(db, check_id)
         updated_check = await CheckCoreService.update_check_with_alerts(
-            db, check.id, CheckUpdate(enabled=not check.enabled)
+            db,
+            check.id,
+            CheckUpdate(enabled=not check.enabled),
+            actor_is_admin=current_user.role == UserRole.ADMIN,
         )
         logger.info(
             "Toggled check",

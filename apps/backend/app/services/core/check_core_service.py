@@ -28,7 +28,6 @@ from app.core.synthetic_guard import (
     validate_script,
 )
 from app.crud.check_crud import CheckCRUD
-from app.crud.check_result_crud import CheckResultCRUD
 from app.models.agent_model import Agent
 from app.models.check_model import Check
 from app.models.enum_model import (
@@ -52,6 +51,9 @@ from app.schemas.check_schema import (
 from app.schemas.import_export_schema import CheckExport
 from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.alert_core_service import AlertCoreService
+from app.services.core.check_dependency_core_service import (
+    CheckDependencyCoreService,
+)
 from app.services.core.settings_core_service import SettingsCoreService
 from app.shared.logger import get_logger
 
@@ -124,7 +126,7 @@ class CheckCoreService:
             db, data.target, data.nameserver, data.connection_string
         )
 
-        await CheckCoreService._validate_dependency(
+        await CheckDependencyCoreService.validate_dependency(
             db, getattr(data, "depends_on_check_id", None), own_check_id=None
         )
 
@@ -185,145 +187,6 @@ class CheckCoreService:
             extra={"check_name": check.fully_qualified_name, "check_id": str(check.id)},
         )
         return check
-
-    @staticmethod
-    async def count_dependents_bulk(
-        db: AsyncSession, parent_check_ids: list[UUID]
-    ) -> dict[UUID, int]:
-        return await CheckCRUD.count_dependents_bulk(db, parent_check_ids)
-
-    @staticmethod
-    async def set_dependents(
-        db: AsyncSession,
-        parent_check_id: UUID,
-        child_check_ids: list[UUID],
-    ) -> tuple[int, int]:
-        """Replace the set of children that depend on a parent.
-
-        Returns (added, removed). Children that already have a different parent
-        are reparented to this one. Children that are themselves parents are
-        rejected to preserve the single-level rule.
-        """
-        parent = await CheckCRUD.get_by_id(db, parent_check_id)
-        if parent is None:
-            raise ValidationException(f"Parent check {parent_check_id} not found")
-        if parent.depends_on_check_id is not None:
-            raise ValidationException(
-                "Selected parent already has its own parent (single-level only)"
-            )
-
-        desired = set(child_check_ids)
-        if parent_check_id in desired:
-            raise ValidationException("A check cannot depend on itself")
-
-        children = await CheckCRUD.get_checks_by_ids(db, list(desired))
-        by_id = {c.id: c for c in children}
-        missing = desired - by_id.keys()
-        if missing:
-            raise ValidationException(f"Check {next(iter(missing))} not found")
-        already_parents = await CheckCRUD.parents_among(db, list(desired))
-        if already_parents:
-            name = by_id[next(iter(already_parents))].display_name
-            raise ValidationException(
-                f"Check '{name}' is itself a parent — single-level only"
-            )
-
-        current_children = await CheckCRUD.list_dependents(db, parent_check_id)
-        by_id.update({c.id: c for c in current_children})
-        current = {c.id for c in current_children}
-        to_add = desired - current
-        to_remove = current - desired
-
-        await CheckCRUD.set_parent(
-            db,
-            parent_check_id,
-            attach=[by_id[cid] for cid in to_add],
-            detach=[by_id[cid] for cid in to_remove],
-        )
-        logger.info(
-            "Bulk updated check dependents",
-            extra={
-                "parent_check_id": str(parent_check_id),
-                "added": len(to_add),
-                "removed": len(to_remove),
-            },
-        )
-        return len(to_add), len(to_remove)
-
-    @staticmethod
-    async def list_dependents(db: AsyncSession, parent_check_id: UUID) -> list[Check]:
-        """Checks that depend on the given parent.
-
-        The predicate is a plain column equality, so the query does it rather
-        than loading every check and filtering in Python.
-        """
-        return list(await CheckCRUD.list_dependents(db, parent_check_id))
-
-    @staticmethod
-    async def list_potential_dependents(
-        db: AsyncSession, parent_check_id: UUID
-    ) -> list[Check]:
-        """Checks that *could* become children of this parent.
-
-        Excludes: the parent itself, any check that already has children, and
-        the parent's chain ancestor (none in single-level v1, so trivial).
-        """
-        return await CheckCRUD.list_non_parents(db, parent_check_id)
-
-    @staticmethod
-    async def get_dependency_info(db: AsyncSession, check_id: UUID) -> dict[str, Any]:
-        """Bundle of parent + parent's latest result + dependent count for UI display."""
-        check = await CheckCRUD.get_by_id(db, check_id)
-        if check is None:
-            return {
-                "parent_check": None,
-                "parent_latest_result": None,
-                "dependent_count": 0,
-            }
-
-        parent_check = None
-        parent_latest_result = None
-        if check.depends_on_check_id is not None:
-            parent_check = await CheckCRUD.get_by_id(db, check.depends_on_check_id)
-            parent_latest_result = await CheckResultCRUD.get_latest_result_for_check(
-                db, check.depends_on_check_id
-            )
-
-        dependent_count = await CheckCRUD.count_dependents(db, check_id)
-
-        return {
-            "parent_check": parent_check,
-            "parent_latest_result": parent_latest_result,
-            "dependent_count": dependent_count,
-        }
-
-    @staticmethod
-    async def list_eligible_parents(
-        db: AsyncSession, exclude_check_id: UUID | None = None
-    ) -> list[Check]:
-        """Checks that may be selected as a parent (excludes those already with a parent)."""
-        return await CheckCRUD.list_without_parent(db, exclude_check_id)
-
-    @staticmethod
-    async def _validate_dependency(
-        db: AsyncSession,
-        depends_on_check_id: UUID | None,
-        own_check_id: UUID | None,
-    ) -> None:
-        if depends_on_check_id is None:
-            return
-
-        if own_check_id is not None and depends_on_check_id == own_check_id:
-            raise ValidationException("A check cannot depend on itself")
-
-        parent = await CheckCRUD.get_by_id(db, depends_on_check_id)
-        if parent is None:
-            raise ValidationException(f"Parent check {depends_on_check_id} not found")
-
-        if parent.depends_on_check_id is not None:
-            raise ValidationException(
-                "Single-level dependencies only — the selected parent already has a parent"
-            )
 
     @staticmethod
     async def _validate_endpoints_ssrf(
@@ -563,7 +426,7 @@ class CheckCoreService:
         )
 
         if "depends_on_check_id" in update_data:
-            await CheckCoreService._validate_dependency(
+            await CheckDependencyCoreService.validate_dependency(
                 db, update_data["depends_on_check_id"], own_check_id=check.id
             )
 
@@ -608,10 +471,12 @@ class CheckCoreService:
                 },
             )
 
-        # The script the check will run, new or kept, is validated whenever the
-        # check is synthetic after this update.
+        # A script is validated when it is set, and when a check becomes synthetic
+        # with the script it already holds. A change that leaves a synthetic
+        # check's script alone (disabling it, say) does not re-judge it.
         script = update_data.get("script_code", check.script_code)
-        if check_type == SYNTHETIC and script:
+        script_now_runs = "script_code" in update_data or check.check_type != SYNTHETIC
+        if check_type == SYNTHETIC and script and script_now_runs:
             validate_script(
                 script,
                 action="UPDATE",
@@ -721,26 +586,6 @@ class CheckCoreService:
             offset=offset,
         )
         return [CheckInDB.model_validate(c) for c in checks], total
-
-    @staticmethod
-    async def list_eligible_parent_rows(
-        db: AsyncSession, exclude_check_id: UUID | None = None
-    ) -> dict[str, list[CheckInDB]]:
-        """Eligible parent checks, grouped by agent name.
-
-        Grouped HERE because the agent name comes from `check.agent`, a
-        relationship: the rows are eager-loaded inside this session, and a
-        schema that carried the relationship would lazy-load it outside one.
-        """
-        grouped: dict[str, list[CheckInDB]] = {}
-        for c in await CheckCoreService.list_eligible_parents(
-            db, exclude_check_id=exclude_check_id
-        ):
-            agent_name = (
-                c.agent.agent_name if c.agent and c.agent.agent_name else "unknown"
-            )
-            grouped.setdefault(agent_name, []).append(CheckInDB.model_validate(c))
-        return grouped
 
     @staticmethod
     async def check_counts_by_agent(
@@ -1062,6 +907,7 @@ class CheckCoreService:
         success_count = 0
         failure_count = 0
         errors = []
+        changed: list[UUID] = []
         affected_agents = set()  # Track agents that need config_version update
 
         # One query for the whole selection, and one for the target agent —
@@ -1109,6 +955,7 @@ class CheckCoreService:
                     # No need to track agent here as update_check already handles it
 
                 success_count += 1
+                changed.append(check_id)
 
             except Exception as e:
                 logger.warning(
@@ -1142,6 +989,7 @@ class CheckCoreService:
             "success_count": success_count,
             "failure_count": failure_count,
             "errors": errors,
+            "changed_ids": changed,
         }
 
     @staticmethod

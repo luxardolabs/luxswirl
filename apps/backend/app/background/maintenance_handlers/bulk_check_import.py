@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.maintenance_job_model import MaintenanceJob
 from app.services.core.check_core_service import CheckCoreService
 from app.services.core.maintenance_job_core_service import MaintenanceJobCoreService
+from app.services.core.user_core_service import UserCoreService
 from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.maintenance.bulk_check_import")
@@ -52,7 +53,11 @@ async def handle(db: AsyncSession, job: MaintenanceJob) -> None:
     checks = [raw if isinstance(raw, dict) else {"name": None} for raw in checks_data]
     # The upload route is admin-only (AdminUserWeb), so the job acts as admin.
     result = await CheckCoreService.bulk_import_checks(
-        db, agent_id, checks, overwrite=(mode == "replace"), actor_is_admin=True
+        db,
+        agent_id,
+        checks,
+        overwrite=(mode == "replace"),
+        actor_is_admin=await UserCoreService.is_active_admin(db, job.owner_id),
     )
 
     logger.info(
