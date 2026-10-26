@@ -17,6 +17,7 @@ from app.api.v1.routers import (
     admin_check_router,
     admin_identity_router,
     admin_maintenance_job_router,
+    admin_registration_key_router,
     agent_router,
     artifact_router,
     check_router,
@@ -44,6 +45,9 @@ admin_api_router.include_router(admin_check_router.router)  # Checks
 admin_api_router.include_router(
     admin_check_result_router.router
 )  # Check results, history, summary
+admin_api_router.include_router(
+    admin_registration_key_router.router
+)  # Agent registration keys
 admin_api_router.include_router(
     admin_maintenance_job_router.router
 )  # Background job status

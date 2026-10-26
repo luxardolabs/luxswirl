@@ -9,7 +9,7 @@ import bcrypt
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.datetime_utils import utc_now
-from app.core.exceptions import NotFoundException
+from app.core.exceptions import NotFoundException, ValidationException
 from app.crud.registration_key_crud import RegistrationKeyCRUD
 from app.models.registration_key_model import RegistrationKey
 from app.schemas.registration_key_schema import (
@@ -140,6 +140,18 @@ class RegistrationKeyCoreService:
         return [RegistrationKeyResponse.model_validate(k) for k in keys], total
 
     @staticmethod
+    async def get_key(db: AsyncSession, key_id: UUID) -> RegistrationKeyResponse:
+        """One registration key's metadata, usage and status; never the key.
+
+        Raises:
+            NotFoundException: If key not found
+        """
+        key = await RegistrationKeyCRUD.get_by_id(db, key_id)
+        if not key:
+            raise NotFoundException(f"Registration key not found: {key_id}")
+        return RegistrationKeyResponse.model_validate(key)
+
+    @staticmethod
     async def revoke_key(
         db: AsyncSession,
         key_id: UUID,
@@ -160,10 +172,14 @@ class RegistrationKeyCoreService:
 
         Raises:
             NotFoundException: If key not found
+            ValidationException: If the key is already revoked: its revocation
+                (when, by whom, why) stands as recorded
         """
         key = await RegistrationKeyCRUD.get_by_id(db, key_id)
         if not key:
             raise NotFoundException(f"Registration key not found: {key_id}")
+        if key.revoked_at is not None:
+            raise ValidationException(f"Registration key {key.name} is already revoked")
 
         # Revoke key
         key.revoked_at = utc_now()
