@@ -47,6 +47,21 @@ def refuse_control_chars(value: str) -> str:
     return value
 
 
+# What a note that spans lines may hold of the control characters.
+_NOTE_WHITESPACE = frozenset("\n\r\t")
+
+
+def refuse_control_chars_in_notes(value: str) -> str:
+    """Refuse a control character other than a line break or tab (a NUL, ESC,
+    a bidi override...) in text that may span lines."""
+    if any(
+        c not in _NOTE_WHITESPACE and unicodedata.category(c) in _REFUSED_CATEGORIES
+        for c in value
+    ):
+        raise ValueError("must not contain control characters")
+    return value
+
+
 def blank_to_none(value: object) -> object:
     """An empty or all-space string is unset."""
     if isinstance(value, str) and not value.strip():
@@ -67,6 +82,9 @@ def canonical_ip(value: str | None) -> str | None:
 
 PlainText = Annotated[str, AfterValidator(refuse_control_chars)]
 """Free text an input sets on one line: a name, a hostname, a version."""
+
+NoteText = Annotated[str, AfterValidator(refuse_control_chars_in_notes)]
+"""Free text that may span lines: a description, a reason."""
 
 IpAddressText = Annotated[
     str | None, BeforeValidator(blank_to_none), AfterValidator(canonical_ip)

@@ -52,6 +52,28 @@ class RegistrationKeyCRUD:
         )
 
     @staticmethod
+    async def revoke(
+        db: AsyncSession,
+        key_id: UUID,
+        *,
+        revoked_by: str | None,
+        reason: str | None,
+    ) -> RegistrationKey | None:
+        """Revoke the key if it is not revoked yet, in one statement; the
+        revoked row, or None if it was already revoked (or is gone). Two revokes
+        at once cannot both win: the second finds revoked_at set."""
+        return await db.scalar(
+            update(RegistrationKey)
+            .where(
+                RegistrationKey.id == key_id,
+                RegistrationKey.revoked_at.is_(None),
+            )
+            .values(revoked_at=utc_now(), revoked_by=revoked_by, revoked_reason=reason)
+            .returning(RegistrationKey)
+            .execution_options(populate_existing=True)
+        )
+
+    @staticmethod
     async def get_by_id(db: AsyncSession, key_id: UUID) -> RegistrationKey | None:
         """Fetch a registration key by id."""
         result = await db.execute(

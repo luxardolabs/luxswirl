@@ -8,7 +8,6 @@ from uuid import UUID
 import bcrypt
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.datetime_utils import utc_now
 from app.core.exceptions import NotFoundException, ValidationException
 from app.crud.registration_key_crud import RegistrationKeyCRUD
 from app.models.registration_key_model import RegistrationKey
@@ -178,26 +177,20 @@ class RegistrationKeyCoreService:
         key = await RegistrationKeyCRUD.get_by_id(db, key_id)
         if not key:
             raise NotFoundException(f"Registration key not found: {key_id}")
-        if key.revoked_at is not None:
+        revoked = await RegistrationKeyCRUD.revoke(
+            db, key_id, revoked_by=revoked_by, reason=data.reason
+        )
+        if revoked is None:
             raise ValidationException(f"Registration key {key.name} is already revoked")
-
-        # Revoke key
-        key.revoked_at = utc_now()
-        key.revoked_by = revoked_by
-        key.revoked_reason = data.reason
-
-        key = await RegistrationKeyCRUD.save_key(db, key)
-
         logger.info(
             "Revoked registration key",
             extra={
-                "key_name": key.name,
-                "key_id": str(key.id),
+                "key_name": revoked.name,
+                "key_id": str(revoked.id),
                 "reason": data.reason,
             },
         )
-
-        return RegistrationKeyResponse.model_validate(key)
+        return RegistrationKeyResponse.model_validate(revoked)
 
     @staticmethod
     async def delete_key(
@@ -226,10 +219,17 @@ class RegistrationKeyCoreService:
                 "Hard deleted registration key",
                 extra={"key_name": key.name, "key_id": str(key.id)},
             )
+        elif key.revoked_at is not None:
+            # Already revoked: its revocation (when, by whom, why) stands.
+            logger.info(
+                "Registration key already revoked; kept as recorded",
+                extra={"key_name": key.name, "key_id": str(key.id)},
+            )
         else:
             # Soft delete (revoke)
-            key.revoked_at = utc_now()
-            key.revoked_reason = "Deleted by admin"
+            await RegistrationKeyCRUD.revoke(
+                db, key_id, revoked_by=None, reason="Deleted by admin"
+            )
             logger.info(
                 "Soft deleted (revoked) registration key",
                 extra={"key_name": key.name, "key_id": str(key.id)},
