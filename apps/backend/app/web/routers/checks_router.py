@@ -336,7 +336,7 @@ async def bulk_action(
         message,
         toast_kind,
     ) = await ChecksViewService.execute_bulk_action(
-        db, action, select_all, agent, enabled, tag, check_ids
+        db, action, select_all, agent, enabled, tag, check_ids, current_user
     )
     oob_context = await StatusViewService.build_oob_status_context(
         db, request, current_user

@@ -912,16 +912,54 @@ class CheckCoreService:
         return len(affected_agents)
 
     @staticmethod
+    async def _bulk_permitted(
+        db: AsyncSession, check_ids: list[UUID], *, actor_is_admin: bool
+    ) -> tuple[list[UUID], list[str]]:
+        """The ids an actor may change in bulk, and one error per id refused.
+
+        A synthetic check is an admin's to change in any way (`update_check`),
+        so a non-admin's bulk action leaves each one alone and reports it.
+        """
+        if actor_is_admin or not check_ids:
+            return check_ids, []
+        checks = await CheckCRUD.get_with_agent_by_ids(db, check_ids)
+        synthetic = {check.id for check in checks if check.check_type == SYNTHETIC}
+        return (
+            [check_id for check_id in check_ids if check_id not in synthetic],
+            [
+                f"Check {check_id}: synthetic checks require admin privileges"
+                for check_id in check_ids
+                if check_id in synthetic
+            ],
+        )
+
+    @staticmethod
+    def _with_refused(outcome: dict[str, Any], refused: list[str]) -> dict[str, Any]:
+        """`outcome` with the checks refused before it ran counted as failures."""
+        return {
+            "success_count": outcome["success_count"],
+            "failure_count": outcome["failure_count"] + len(refused),
+            "errors": [*refused, *outcome["errors"]],
+        }
+
+    @staticmethod
     async def bulk_set_enabled(
-        db: AsyncSession, check_ids: list[UUID], *, enabled: bool
+        db: AsyncSession, check_ids: list[UUID], *, enabled: bool, actor_is_admin: bool
     ) -> dict[str, Any]:
         """Enable or disable `check_ids`: an in-place UPDATE, safe in a request.
+
+        A non-admin's synthetic checks are left alone and counted as failures.
 
         Returns:
             {"success_count", "failure_count", "errors"}
         """
+        check_ids, refused = await CheckCoreService._bulk_permitted(
+            db, check_ids, actor_is_admin=actor_is_admin
+        )
         if not check_ids:
-            return {"success_count": 0, "failure_count": 0, "errors": []}
+            return CheckCoreService._with_refused(
+                {"success_count": 0, "failure_count": 0, "errors": []}, refused
+            )
         # swallowed-exceptions: a DB failure is reported as failures; the savepoint keeps the caller's session committable, which is what delivers that report
         try:
             async with db.begin_nested():
@@ -929,29 +967,42 @@ class CheckCoreService:
                 await CheckCoreService._touch_agents_of(db, check_ids)
         except SQLAlchemyError as e:
             logger.exception("Failed to bulk-toggle checks", extra={"enabled": enabled})
-            return {
-                "success_count": 0,
-                "failure_count": len(check_ids),
-                "errors": [str(e)],
-            }
+            return CheckCoreService._with_refused(
+                {
+                    "success_count": 0,
+                    "failure_count": len(check_ids),
+                    "errors": [str(e)],
+                },
+                refused,
+            )
         logger.info(
             "Bulk toggle complete",
             extra={"enabled": enabled, "success_count": success_count},
         )
-        return CheckCoreService._bulk_outcome(check_ids, success_count)
+        return CheckCoreService._with_refused(
+            CheckCoreService._bulk_outcome(check_ids, success_count), refused
+        )
 
     @staticmethod
-    async def bulk_delete(db: AsyncSession, check_ids: list[UUID]) -> dict[str, Any]:
+    async def bulk_delete(
+        db: AsyncSession, check_ids: list[UUID], *, actor_is_admin: bool
+    ) -> dict[str, Any]:
         """Delete `check_ids`, cascading through their results.
 
         The cascade is long, so this runs only in the maintenance worker (the
-        bulk_check_delete job), never inside a web request.
+        bulk_check_delete job), never inside a web request. A non-admin's
+        synthetic checks are left alone and counted as failures.
 
         Returns:
             {"success_count", "failure_count", "errors"}
         """
+        check_ids, refused = await CheckCoreService._bulk_permitted(
+            db, check_ids, actor_is_admin=actor_is_admin
+        )
         if not check_ids:
-            return {"success_count": 0, "failure_count": 0, "errors": []}
+            return CheckCoreService._with_refused(
+                {"success_count": 0, "failure_count": 0, "errors": []}, refused
+            )
         # swallowed-exceptions: a DB failure is reported as failures; the savepoint keeps the worker's session committable, which is what delivers that report
         try:
             async with db.begin_nested():
@@ -959,16 +1010,21 @@ class CheckCoreService:
                 success_count = await CheckCRUD.bulk_delete_by_ids(db, check_ids)
         except SQLAlchemyError as e:
             logger.exception("Failed to bulk-delete checks")
-            return {
-                "success_count": 0,
-                "failure_count": len(check_ids),
-                "errors": [str(e)],
-            }
+            return CheckCoreService._with_refused(
+                {
+                    "success_count": 0,
+                    "failure_count": len(check_ids),
+                    "errors": [str(e)],
+                },
+                refused,
+            )
         logger.info(
             "Bulk deleted checks",
             extra={"success_count": success_count, "affected_agent_count": affected},
         )
-        return CheckCoreService._bulk_outcome(check_ids, success_count)
+        return CheckCoreService._with_refused(
+            CheckCoreService._bulk_outcome(check_ids, success_count), refused
+        )
 
     @staticmethod
     def _bulk_outcome(check_ids: list[UUID], success_count: int) -> dict[str, Any]:
@@ -987,6 +1043,8 @@ class CheckCoreService:
         check_ids: list[UUID],
         update_data: CheckUpdate,
         new_agent_id: UUID | None = None,
+        *,
+        actor_is_admin: bool,
     ) -> dict[str, Any]:
         """
         Bulk modify multiple checks.
@@ -1036,13 +1094,18 @@ class CheckCoreService:
                     if not new_agent:
                         raise ValueError(new_agent_error or "Target agent not found")
 
+                    # Moving a synthetic check runs its script somewhere new.
+                    if check.check_type == SYNTHETIC:
+                        require_admin_actor(actor_is_admin=actor_is_admin)
                     # Track both old and new agents for config sync
                     affected_agents.add(check.agent)
                     affected_agents.add(new_agent)
                     CheckCoreService._move_check_to_agent(check, new_agent, update_data)
                 else:
                     # Just update in place (update_check handles checks_updated_at)
-                    await CheckCoreService.update_check(db, check.id, update_data)
+                    await CheckCoreService.update_check(
+                        db, check.id, update_data, actor_is_admin=actor_is_admin
+                    )
                     # No need to track agent here as update_check already handles it
 
                 success_count += 1

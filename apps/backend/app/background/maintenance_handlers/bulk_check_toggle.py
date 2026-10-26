@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.maintenance_job_model import MaintenanceJob
 from app.services.core.check_core_service import CheckCoreService
+from app.services.core.user_core_service import UserCoreService
 from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.maintenance.bulk_check_toggle")
@@ -31,7 +32,10 @@ async def handle(db: AsyncSession, job: MaintenanceJob) -> None:
         extra={"count": len(check_ids), "job_id": str(job.id)},
     )
     result = await CheckCoreService.bulk_set_enabled(
-        db, check_ids, enabled=(action == "enable")
+        db,
+        check_ids,
+        enabled=(action == "enable"),
+        actor_is_admin=await UserCoreService.is_active_admin(db, job.owner_id),
     )
     logger.info(
         "Bulk %s complete",

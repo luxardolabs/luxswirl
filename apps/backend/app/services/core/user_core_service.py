@@ -98,6 +98,14 @@ class UserCoreService:
         user = await self.get_user_by_id(db, user_id)
         return UserResponse.model_validate(user) if user else None
 
+    @staticmethod
+    async def is_active_admin(db: AsyncSession, user_id: UUID | None) -> bool:
+        """Whether `user_id` is, right now, an active admin (a job's owner, say)."""
+        if user_id is None:
+            return False
+        user = await UserCRUD.get_by_id(db, user_id)
+        return user is not None and user.is_active and user.role == UserRole.ADMIN
+
     async def get_user_by_id(self, db: AsyncSession, user_id: UUID) -> User | None:
         """
         Get user by ID.
