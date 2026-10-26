@@ -31,15 +31,13 @@ router = APIRouter(prefix="/agents", tags=["Admin API: Agents"])
 
 LIMIT = settings.security.admin_api_rate_limit
 
-Db = Annotated[AsyncSession, Depends(get_db, scope="function")]
-
 
 @router.get("", response_model=AgentPage, name="admin_list_agents")
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_list_agents(
     request: Request,
     principal: ApiUser,
-    db: Db,
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     page: Annotated[int, Query(ge=1, le=MAX_PAGE)] = 1,
     per_page: Annotated[int, Query(ge=1, le=200)] = 50,
     search: Annotated[str | None, Query(max_length=255)] = None,
@@ -61,7 +59,10 @@ async def admin_list_agents(
 @router.get("/{agent_id}", response_model=AgentResponse, name="admin_get_agent")
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_get_agent(
-    request: Request, agent_id: UUID, principal: ApiUser, db: Db
+    request: Request,
+    agent_id: UUID,
+    principal: ApiUser,
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> AgentResponse:
     return await AdminAgentCoreService.get_agent(db, agent_id)
 
@@ -73,7 +74,7 @@ async def admin_update_agent(
     agent_id: UUID,
     data: AdminAgentUpdate,
     principal: ApiEditor,
-    db: Db,
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> AgentResponse:
     """Change the agent's name, tags or configuration (the fields sent)."""
     return await AdminAgentCoreService.update_agent(
@@ -89,7 +90,10 @@ async def admin_update_agent(
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_delete_agent(
-    request: Request, agent_id: UUID, principal: ApiEditor, db: Db
+    request: Request,
+    agent_id: UUID,
+    principal: ApiEditor,
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> MaintenanceJobResponse:
     """Delete the agent, its checks and their results in the background.
 
@@ -108,7 +112,10 @@ async def admin_delete_agent(
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_approve_agent(
-    request: Request, agent_id: UUID, principal: ApiEditor, db: Db
+    request: Request,
+    agent_id: UUID,
+    principal: ApiEditor,
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> AgentResponse:
     """Admit a pending or rejected agent; it fetches its key itself."""
     return await AdminAgentCoreService.act(db, principal.user.role, agent_id, "approve")
@@ -122,7 +129,7 @@ async def admin_reject_agent(
     request: Request,
     agent_id: UUID,
     principal: ApiEditor,
-    db: Db,
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     data: AdminAgentReason | None = None,
 ) -> AgentResponse:
     return await AdminAgentCoreService.act(
@@ -138,7 +145,7 @@ async def admin_pause_agent(
     request: Request,
     agent_id: UUID,
     principal: ApiEditor,
-    db: Db,
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     data: AdminAgentReason | None = None,
 ) -> AgentResponse:
     return await AdminAgentCoreService.act(
@@ -151,7 +158,10 @@ async def admin_pause_agent(
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_resume_agent(
-    request: Request, agent_id: UUID, principal: ApiEditor, db: Db
+    request: Request,
+    agent_id: UUID,
+    principal: ApiEditor,
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> AgentResponse:
     return await AdminAgentCoreService.act(db, principal.user.role, agent_id, "resume")
 
@@ -164,7 +174,7 @@ async def admin_disable_agent(
     request: Request,
     agent_id: UUID,
     principal: ApiEditor,
-    db: Db,
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     data: AdminAgentReason | None = None,
 ) -> AgentResponse:
     return await AdminAgentCoreService.act(
@@ -177,7 +187,10 @@ async def admin_disable_agent(
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_enable_agent(
-    request: Request, agent_id: UUID, principal: ApiEditor, db: Db
+    request: Request,
+    agent_id: UUID,
+    principal: ApiEditor,
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> AgentResponse:
     return await AdminAgentCoreService.act(db, principal.user.role, agent_id, "enable")
 
@@ -187,7 +200,10 @@ async def admin_enable_agent(
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_archive_agent(
-    request: Request, agent_id: UUID, principal: ApiEditor, db: Db
+    request: Request,
+    agent_id: UUID,
+    principal: ApiEditor,
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> AgentResponse:
     """Retire the agent: it gets no checks, while it and its history are kept."""
     return await AdminAgentCoreService.act(db, principal.user.role, agent_id, "archive")
@@ -198,7 +214,10 @@ async def admin_archive_agent(
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_restore_agent(
-    request: Request, agent_id: UUID, principal: ApiEditor, db: Db
+    request: Request,
+    agent_id: UUID,
+    principal: ApiEditor,
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> AgentResponse:
     """Bring an archived agent back as disabled."""
     return await AdminAgentCoreService.act(db, principal.user.role, agent_id, "restore")
@@ -211,7 +230,10 @@ async def admin_restore_agent(
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_force_reload_agent(
-    request: Request, agent_id: UUID, principal: ApiEditor, db: Db
+    request: Request,
+    agent_id: UUID,
+    principal: ApiEditor,
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> AgentResponse:
     """Make the agent fetch its checks again on its next sync."""
     return await AdminAgentCoreService.act(
@@ -230,7 +252,10 @@ async def admin_force_reload_agent(
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_generate_agent_key(
-    request: Request, agent_id: UUID, principal: ApiEditor, db: Db
+    request: Request,
+    agent_id: UUID,
+    principal: ApiEditor,
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> AgentKey:
     """A first key for an agent with none, shown this once."""
     return await AdminAgentCoreService.generate_key(db, agent_id)
@@ -244,7 +269,10 @@ async def admin_generate_agent_key(
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_regenerate_agent_key(
-    request: Request, agent_id: UUID, principal: ApiEditor, db: Db
+    request: Request,
+    agent_id: UUID,
+    principal: ApiEditor,
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> AgentKey:
     """A new key, shown this once; the old one stops working now."""
     return await AdminAgentCoreService.regenerate_key(db, agent_id)
@@ -257,7 +285,10 @@ async def admin_regenerate_agent_key(
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_revoke_agent_key(
-    request: Request, agent_id: UUID, principal: ApiEditor, db: Db
+    request: Request,
+    agent_id: UUID,
+    principal: ApiEditor,
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> Response:
     """Revoke the agent's key: it cannot connect until it has another."""
     await AdminAgentCoreService.revoke_key(db, agent_id)
