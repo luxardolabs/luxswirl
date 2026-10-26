@@ -140,7 +140,7 @@ An agent is addressed by its own id. Reads take any token; every change takes an
 | `POST`   | `/api/v1/admin/agents/{id}/key/regenerate` | editor | A new key in place of the current one, which stops working; `201`, shown once                     |
 | `DELETE` | `/api/v1/admin/agents/{id}/key`            | editor | Revoke the key: the agent cannot connect until it has another; `204`                              |
 
-The agent reports its own `agent_run_id`, `ip_address` and `version`: a change to them, or to any field the edit form does not have, is a `422`. `reject`, `pause` and `disable` take an optional `{"reason": "..."}`, kept as `status_reason`. An action the agent's status does not allow (approving an active agent, resuming one that is not paused) is a `422`. `approve` returns no key: the agent fetches its own with its recovery secret, as after a web approval. `key` on an agent that has one is a `400`; use `key/regenerate`.
+The agent reports its own `agent_run_id`, `ip_address` and `version`: a change to them, or to any field the edit form does not have, is a `422`, and a name another agent already has is a `409`. `reject`, `pause` and `disable` take an optional `{"reason": "..."}`, kept as `status_reason`. An action the agent's status does not allow (approving an active agent, resuming one that is not paused) is a `422`. `approve` returns no key: the agent fetches its own with its recovery secret, as after a web approval. `key` on an agent that has one is a `400`; use `key/regenerate`.
 
 A delete is refused when queued and judged again when it runs: if its owner is no longer an active editor or admin by then, the job fails and nothing is deleted. Poll it at `/api/v1/admin/maintenance-jobs/{id}`.
 

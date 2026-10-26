@@ -16,7 +16,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.datetime_utils import utc_now
-from app.core.exceptions import AgentNotFoundException, ValidationException
+from app.core.exceptions import (
+    AgentNotFoundException,
+    DuplicateResourceException,
+    ValidationException,
+)
 from app.models.enum_model import MaintenanceJobKind, UserRole
 from app.schemas.agent_schema import (
     AgentOption,
@@ -711,3 +715,5 @@ class AgentsViewService:
             return "success", "Agent updated successfully!", 200
         except AgentNotFoundException:
             return "error", f"Agent not found: {agent_id}", 404
+        except DuplicateResourceException as e:
+            return "error", e.message, 409
