@@ -166,7 +166,7 @@ An alert rule is addressed by its own id. Reads take any token, and every change
 | `GET`    | `/api/v1/admin/alerts`                            | any    | One page of alerts; `is_enabled`, `is_global`                                                           |
 | `GET`    | `/api/v1/admin/alerts/{id}`                       | any    | One alert, with its `notification_provider_ids` and `check_ids`                                         |
 | `POST`   | `/api/v1/admin/alerts`                            | editor | Create one, with its providers and, unless global, its checks; `201`                                    |
-| `PATCH`  | `/api/v1/admin/alerts/{id}`                       | editor | Change the fields sent; one left out is unchanged                                                       |
+| `PATCH`  | `/api/v1/admin/alerts/{id}`                       | editor | Change the fields sent; one left out is unchanged, one sent as `null` is cleared                        |
 | `DELETE` | `/api/v1/admin/alerts/{id}`                       | editor | Delete it: it notifies no one again; `204`                                                              |
 | `POST`   | `/api/v1/admin/alerts/{id}/enable`, `/disable`    | editor | Turn it on or off                                                                                       |
 | `PUT`    | `/api/v1/admin/alerts/{id}/providers`             | editor | `{"notification_provider_ids": [...]}` becomes the whole set; returns `{"added", "removed"}`            |
@@ -174,7 +174,20 @@ An alert rule is addressed by its own id. Reads take any token, and every change
 | `POST`   | `/api/v1/admin/alerts/{id}/checks/{check}/snooze` | any    | Hold back its notifications for that check: `{"minutes"}`, 1-1440, default 15, extends a running snooze |
 | `DELETE` | `/api/v1/admin/alerts/{id}/checks/{check}/snooze` | any    | Resume them now; `204`                                                                                  |
 
-An unknown provider or check id is a `422` that names it. A global alert reaches checks by its filters as they are created, so it takes no `check_ids` (`422`). A replacement keeps what stays: a kept check keeps its snooze, and a kept provider keeps its mapping. Snoozing a check the alert does not watch is a `404`.
+An unknown provider or check id is a `422` that names it. A global alert reaches checks by its filters as they are created, so it takes no `check_ids` (`422`), and whether an alert is global is fixed when it is created. A replacement keeps what stays: a kept check keeps its snooze, and a kept provider keeps its mapping. A provider deleted elsewhere drops out of the alert's `notification_provider_ids`. Attaching an alert to a synthetic check, or detaching one, is an admin's (`403`).
+
+`trigger_config` must fit `trigger_type` (`422` names the field). It is stored in the form evaluation reads, with defaults filled in:
+
+| `trigger_type`                      | `trigger_config`                                                                               |
+| ----------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `status_change`, `repeated_failure` | `on_status` (`["error"]`, or `"success"`), `consecutive_failures` (1-100, default 1)           |
+| `threshold`                         | `value` (a number, required), `operator` (`>`, `>=`, `<`, `<=`, `==`), `metric` (`latency_ms`) |
+| `ssl_cert_expiry`                   | `days_thresholds` (1 to 10 whole numbers of days, 1-365, default `[30]`)                       |
+| `no_data`, `agent_offline`          | `missed_intervals` (1-100, default 3)                                                          |
+
+Each also takes `check_filters` (`agent_ids`, `check_types`, `check_names`, `tags`) for a global alert. A `PATCH` with a new `trigger_type` must send its `trigger_config`; a `trigger_config` sent alone is held to the alert's type. A field sent as `null` is cleared (`description`, `resend_interval_minutes`, `max_resends`, the templates); a required field cannot be (`422`).
+
+A snooze, however often repeated, ends at most a day from now; each one is logged with the token's user. Snoozing a check the alert does not watch is a `404`.
 
 ## OpenAPI document
 

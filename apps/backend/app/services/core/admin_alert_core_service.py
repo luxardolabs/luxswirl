@@ -3,7 +3,9 @@ Admin alert core service - alert rules as the admin API serves them.
 
 Every provider and check an alert is given is proved to exist first, so an
 unknown id is a 422 naming it, never a foreign-key failure. A soft-deleted
-alert is not found.
+alert is not found. Attaching an alert to a synthetic check, or detaching one,
+changes how that check is watched, so it is an admin's, as every change to a
+synthetic check is. A snooze is logged with who asked for it.
 """
 
 from uuid import UUID
@@ -11,6 +13,8 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ValidationException
+from app.core.synthetic_guard import SYNTHETIC, require_admin_actor
+from app.models.enum_model import UserRole
 from app.schemas.admin_alert_schema import (
     AdminAlertChecks,
     AdminAlertCreate,
@@ -21,10 +25,14 @@ from app.schemas.admin_alert_schema import (
     AlertPage,
 )
 from app.schemas.alert_schema import AlertCheckSnooze, AlertUpdate
+from app.schemas.alert_trigger_config_schema import normalized_trigger_config
 from app.schemas.pagination_schema import build_pagination
 from app.services.core.alert_core_service import AlertCoreService
 from app.services.core.check_core_service import CheckCoreService
 from app.services.core.notification_core_service import NotificationCoreService
+from app.shared.logger import get_logger
+
+logger = get_logger("luxswirl.services.admin_alert")
 
 
 class AdminAlertCoreService:
@@ -40,11 +48,17 @@ class AdminAlertCoreService:
             )
 
     @staticmethod
-    async def _require_checks(db: AsyncSession, check_ids: list[UUID]) -> None:
-        found = {c.id for c in await CheckCoreService.get_checks_by_ids(db, check_ids)}
+    async def _require_checks(
+        db: AsyncSession, role: UserRole, check_ids: list[UUID]
+    ) -> None:
+        """Every check exists; a synthetic one among them needs an admin."""
+        checks = await CheckCoreService.get_checks_by_ids(db, check_ids)
+        found = {c.id for c in checks}
         missing = [c for c in dict.fromkeys(check_ids) if c not in found]
         if missing:
             raise ValidationException(f"No check has the id {missing[0]}")
+        if any(c.check_type == SYNTHETIC for c in checks):
+            require_admin_actor(actor_is_admin=role == UserRole.ADMIN)
 
     @staticmethod
     async def get_alert(db: AsyncSession, alert_id: UUID) -> AdminAlertDetail:
@@ -79,12 +93,12 @@ class AdminAlertCoreService:
 
     @staticmethod
     async def create_alert(
-        db: AsyncSession, data: AdminAlertCreate
+        db: AsyncSession, role: UserRole, data: AdminAlertCreate
     ) -> AdminAlertDetail:
         await AdminAlertCoreService._require_providers(
             db, data.notification_provider_ids
         )
-        await AdminAlertCoreService._require_checks(db, data.check_ids)
+        await AdminAlertCoreService._require_checks(db, role, data.check_ids)
         payload = data.model_dump()
         payload["notification_provider_ids"] = list(
             dict.fromkeys(data.notification_provider_ids)
@@ -99,6 +113,16 @@ class AdminAlertCoreService:
     async def update_alert(
         db: AsyncSession, alert_id: UUID, data: AdminAlertUpdate
     ) -> AdminAlertDetail:
+        if data.trigger_config is not None and data.trigger_type is None:
+            # A new config alone is held to the trigger the alert already has.
+            alert = await AlertCoreService.get_alert_by_id(db, alert_id)
+            try:
+                config = normalized_trigger_config(
+                    alert.trigger_type, data.trigger_config
+                )
+            except ValueError as e:
+                raise ValidationException(str(e)) from None
+            data = data.model_copy(update={"trigger_config": config})
         await AlertCoreService.update_alert_response(db, alert_id, data)
         return await AdminAlertCoreService.get_alert(db, alert_id)
 
@@ -131,10 +155,13 @@ class AdminAlertCoreService:
 
     @staticmethod
     async def set_checks(
-        db: AsyncSession, alert_id: UUID, data: AdminAlertChecks
+        db: AsyncSession, role: UserRole, alert_id: UUID, data: AdminAlertChecks
     ) -> AlertMappingChange:
         await AlertCoreService.get_alert_by_id(db, alert_id)
-        await AdminAlertCoreService._require_checks(db, data.check_ids)
+        _, current = await AlertCoreService.get_mapped_ids(db, alert_id)
+        # The checks gained and lost are judged; one kept is not touched.
+        changed = list(set(current) ^ set(data.check_ids))
+        await AdminAlertCoreService._require_checks(db, role, changed)
         added, removed = await AlertCoreService.set_checks(
             db, alert_id, list(dict.fromkeys(data.check_ids))
         )
@@ -142,14 +169,38 @@ class AdminAlertCoreService:
 
     @staticmethod
     async def snooze(
-        db: AsyncSession, alert_id: UUID, check_id: UUID, minutes: int
+        db: AsyncSession,
+        username: str,
+        alert_id: UUID,
+        check_id: UUID,
+        minutes: int,
     ) -> AlertCheckSnooze:
         await AlertCoreService.get_alert_by_id(db, alert_id)
-        return await AlertCoreService.snooze_alert_check(
+        snooze = await AlertCoreService.snooze_alert_check(
             db, alert_id, check_id, minutes
         )
+        logger.info(
+            "Alert snoozed through the admin API",
+            extra={
+                "username": username,
+                "alert_id": str(alert_id),
+                "check_id": str(check_id),
+                "snoozed_until": snooze.snoozed_until.isoformat(),
+            },
+        )
+        return snooze
 
     @staticmethod
-    async def unsnooze(db: AsyncSession, alert_id: UUID, check_id: UUID) -> None:
+    async def unsnooze(
+        db: AsyncSession, username: str, alert_id: UUID, check_id: UUID
+    ) -> None:
         await AlertCoreService.get_alert_by_id(db, alert_id)
         await AlertCoreService.unsnooze_alert_check(db, alert_id, check_id)
+        logger.info(
+            "Alert unsnoozed through the admin API",
+            extra={
+                "username": username,
+                "alert_id": str(alert_id),
+                "check_id": str(check_id),
+            },
+        )

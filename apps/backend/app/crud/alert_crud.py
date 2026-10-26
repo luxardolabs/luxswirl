@@ -6,6 +6,7 @@ from collections.abc import Sequence
 from uuid import UUID
 
 from sqlalchemy import and_, delete, func, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -15,6 +16,7 @@ from app.models.alert_notification_mapping_model import AlertNotificationMapping
 from app.models.check_result_model import CheckResult
 from app.models.enum_model import AlertTriggerType, NotificationStatus
 from app.models.notification_log_model import NotificationLog
+from app.models.notification_provider_model import NotificationProvider
 
 # Statuses that represent "alert evaluation already produced an audit row for this state."
 # Used by `get_last_notification_for_dedup` to recover dedup memory across provider-disabled,
@@ -387,11 +389,30 @@ class AlertCRUD:
 
     @staticmethod
     async def list_provider_ids(db: AsyncSession, alert_id: UUID) -> list[UUID]:
-        """The providers `alert_id` notifies, in id order."""
+        """The live providers `alert_id` notifies, in id order: a deleted
+        provider's mapping notifies no one, so it is not one of them."""
         result = await db.execute(
             select(AlertNotificationMapping.notification_provider_id)
-            .where(AlertNotificationMapping.alert_id == alert_id)
+            .join(
+                NotificationProvider,
+                NotificationProvider.id
+                == AlertNotificationMapping.notification_provider_id,
+            )
+            .where(
+                AlertNotificationMapping.alert_id == alert_id,
+                NotificationProvider.deleted_at.is_(None),
+            )
             .order_by(AlertNotificationMapping.notification_provider_id)
+        )
+        return list(result.scalars().all())
+
+    @staticmethod
+    async def list_mapped_provider_ids(db: AsyncSession, alert_id: UUID) -> list[UUID]:
+        """Every provider `alert_id` has a mapping to, deleted ones included."""
+        result = await db.execute(
+            select(AlertNotificationMapping.notification_provider_id).where(
+                AlertNotificationMapping.alert_id == alert_id
+            )
         )
         return list(result.scalars().all())
 
@@ -413,7 +434,7 @@ class AlertCRUD:
 
         A provider kept keeps its mapping row, and with it its enabled state.
         """
-        current = set(await AlertCRUD.list_provider_ids(db, alert_id))
+        current = set(await AlertCRUD.list_mapped_provider_ids(db, alert_id))
         wanted = set(provider_ids)
         removed = current - wanted
         if removed:
@@ -423,14 +444,25 @@ class AlertCRUD:
                     AlertNotificationMapping.notification_provider_id.in_(removed),
                 )
             )
-        db.add_all(
-            AlertNotificationMapping(
-                alert_id=alert_id, notification_provider_id=provider_id, is_enabled=True
+        added = wanted - current
+        if added:
+            # A concurrent replacement may insert the same pair first: one row stays.
+            await db.execute(
+                pg_insert(AlertNotificationMapping)
+                .values(
+                    [
+                        {
+                            "alert_id": alert_id,
+                            "notification_provider_id": provider_id,
+                            "is_enabled": True,
+                        }
+                        for provider_id in added
+                    ]
+                )
+                .on_conflict_do_nothing(constraint="uq_alert_notification")
             )
-            for provider_id in wanted - current
-        )
         await db.flush()
-        return len(wanted - current), len(removed)
+        return len(added), len(removed)
 
     @staticmethod
     async def replace_check_mappings(
@@ -450,12 +482,21 @@ class AlertCRUD:
                     AlertCheckMapping.check_id.in_(removed),
                 )
             )
-        db.add_all(
-            AlertCheckMapping(alert_id=alert_id, check_id=check_id, is_enabled=True)
-            for check_id in wanted - current
-        )
+        added = wanted - current
+        if added:
+            # A concurrent replacement may insert the same pair first: one row stays.
+            await db.execute(
+                pg_insert(AlertCheckMapping)
+                .values(
+                    [
+                        {"alert_id": alert_id, "check_id": check_id, "is_enabled": True}
+                        for check_id in added
+                    ]
+                )
+                .on_conflict_do_nothing(constraint="uq_alert_check")
+            )
         await db.flush()
-        return len(wanted - current), len(removed)
+        return len(added), len(removed)
 
     @staticmethod
     async def add_check_mapping(

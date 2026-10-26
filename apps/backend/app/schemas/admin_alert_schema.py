@@ -12,7 +12,17 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.schemas.alert_schema import AlertCreate, AlertResponse, AlertUpdate
+from app.schemas.alert_trigger_config_schema import normalized_trigger_config
 from app.schemas.paginated_response_schema import PaginatedResponse
+
+# Fields every alert has: a change may set them, never clear them.
+_REQUIRED = (
+    "name",
+    "trigger_type",
+    "trigger_config",
+    "is_enabled",
+    "notify_on_recovery",
+)
 
 # The most providers, and checks, one alert is given in one request.
 MAX_PROVIDERS = 100
@@ -37,11 +47,40 @@ class AdminAlertCreate(AlertCreate):
             )
         return self
 
+    @model_validator(mode="after")
+    def _config_fits_trigger(self) -> Self:
+        self.trigger_config = normalized_trigger_config(
+            self.trigger_type, self.trigger_config
+        )
+        return self
+
 
 class AdminAlertUpdate(AlertUpdate):
-    """A change to an alert: the fields sent; a field left out is unchanged."""
+    """A change to an alert: the fields sent; a field left out is unchanged, and
+    one sent as null is cleared (a required one cannot be).
+
+    Whether an alert is global is fixed when it is created, as in the web UI:
+    flipping it would strand or orphan its check mappings. A new trigger type
+    comes with its config, which is validated against it.
+    """
 
     model_config = ConfigDict(extra="forbid")
+
+    @model_validator(mode="after")
+    def _a_change_the_alert_can_hold(self) -> Self:
+        sent = self.model_fields_set
+        if "is_global" in sent:
+            raise ValueError("Whether an alert is global is fixed when it is created")
+        cleared = [f for f in _REQUIRED if f in sent and getattr(self, f) is None]
+        if cleared:
+            raise ValueError(f"These fields cannot be null: {', '.join(cleared)}")
+        if "trigger_type" in sent and "trigger_config" not in sent:
+            raise ValueError("A new trigger_type needs its trigger_config")
+        if self.trigger_type is not None and self.trigger_config is not None:
+            self.trigger_config = normalized_trigger_config(
+                self.trigger_type, self.trigger_config
+            )
+        return self
 
 
 class AdminAlertDetail(AlertResponse):

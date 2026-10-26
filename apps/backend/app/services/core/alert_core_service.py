@@ -28,6 +28,23 @@ from app.shared.logger import get_logger
 logger = get_logger("luxswirl.services.alert")
 
 
+# Alert columns that are never null: an update leaves them when sent empty.
+_REQUIRED_ALERT_FIELDS = frozenset(
+    {
+        "name",
+        "trigger_type",
+        "trigger_config",
+        "is_enabled",
+        "is_global",
+        "notify_on_recovery",
+    }
+)
+
+# The longest an alert-check pair stays snoozed, from now, however often it is
+# snoozed again.
+MAX_SNOOZE = timedelta(days=1)
+
+
 class AlertCoreService:
     """Service for alert configuration operations."""
 
@@ -243,29 +260,12 @@ class AlertCoreService:
         """
         alert = await AlertCoreService.get_alert_by_id(db, alert_id)
 
-        # Update fields
-        if data.name is not None:
-            alert.name = data.name
-        if data.description is not None:
-            alert.description = data.description
-        if data.trigger_type is not None:
-            alert.trigger_type = data.trigger_type
-        if data.trigger_config is not None:
-            alert.trigger_config = data.trigger_config
-        if data.is_enabled is not None:
-            alert.is_enabled = data.is_enabled
-        if data.is_global is not None:
-            alert.is_global = data.is_global
-        if data.notify_on_recovery is not None:
-            alert.notify_on_recovery = data.notify_on_recovery
-        if data.resend_interval_minutes is not None:
-            alert.resend_interval_minutes = data.resend_interval_minutes
-        if data.max_resends is not None:
-            alert.max_resends = data.max_resends
-        if data.custom_subject is not None:
-            alert.custom_subject = data.custom_subject
-        if data.custom_message is not None:
-            alert.custom_message = data.custom_message
+        # A field sent is written; a nullable one sent as null is cleared. A
+        # required one sent as null is left as it is (a form leaves it empty).
+        for field, value in data.model_dump(exclude_unset=True).items():
+            if value is None and field in _REQUIRED_ALERT_FIELDS:
+                continue
+            setattr(alert, field, value)
 
         alert = await AlertCRUD.save_alert(db, alert)
 
@@ -564,6 +564,8 @@ class AlertCoreService:
         else:
             # Not currently snoozed - start from now
             new_snooze_time = now + timedelta(minutes=minutes)
+        # However often it is extended, a snooze ends within MAX_SNOOZE.
+        new_snooze_time = min(new_snooze_time, now + MAX_SNOOZE)
 
         # Update the mapping
         mapping.snoozed_until = new_snooze_time
