@@ -8,6 +8,7 @@ hold it (a viewer, a page any signed-in user loads), it goes through
 """
 
 import re
+from typing import overload
 
 _MASK = "***"
 # A URL's userinfo: everything between the scheme and the last `@` of the authority.
@@ -21,6 +22,10 @@ _PAIR = re.compile(rf"(?i)(?<![\w.-])({_KEYS})(\s*=\s*)({_VALUE})")
 _ODBC_PAIR = re.compile(rf"(?i)(?<![\w.-])({_KEYS})(\s*=\s*)(\{{[^}}]*\}}|[^;]*)")
 
 
+@overload
+def mask_credentials(value: str) -> str: ...
+@overload
+def mask_credentials(value: None) -> None: ...
 def mask_credentials(value: str | None) -> str | None:
     """`value` with every credential it carries replaced by `***`."""
     if not value:
