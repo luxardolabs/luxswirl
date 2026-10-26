@@ -2,6 +2,7 @@
 CheckResult CRUD - database queries for check result operations.
 """
 
+import math
 from collections.abc import Sequence
 from datetime import datetime, timedelta
 from typing import Any
@@ -657,7 +658,9 @@ class CheckResultCRUD:
         - <= 4h: 1-minute buckets
         - <= 8h: 2-minute buckets
         - <= 24h: 5-minute buckets
-        - > 24h: 30-minute or 1-hour buckets
+        - <= 72h: 30-minute buckets
+        - > 72h: 1-hour buckets, wider past 500 hours so the whole range fits
+          the 500-bucket cap
 
         Returns:
             List of result rows with bucket_time, success, latency_ms, error, metrics
@@ -673,7 +676,7 @@ class CheckResultCRUD:
         elif hours <= 72:
             bucket = timedelta(minutes=30)
         else:
-            bucket = timedelta(hours=1)
+            bucket = timedelta(hours=math.ceil(hours / 500))
 
         history_query = text(
             """
@@ -795,6 +798,23 @@ class CheckResultCRUD:
             .options(defer(CheckResult.response_data))
         )
         return list(result.scalars().all()), int(total or 0)
+
+    @staticmethod
+    async def get_result_of_check(
+        db: AsyncSession, check_id: UUID, check_result_id: UUID
+    ) -> CheckResult | None:
+        """`check_result_id` among `check_id`'s results. The agent chooses a
+        result's id, so the same id can name a result of another check."""
+        query = (
+            select(CheckResult)
+            .where(
+                CheckResult.check_id == check_id,
+                CheckResult.id == check_result_id,
+            )
+            .limit(1)
+        )
+        result = await db.execute(query)
+        return result.scalar_one_or_none()
 
     @staticmethod
     async def get_check_result_by_id(

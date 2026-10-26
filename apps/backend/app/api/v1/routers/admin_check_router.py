@@ -30,6 +30,7 @@ from app.schemas.admin_check_schema import (
     CheckPage,
     DependentsChange,
 )
+from app.schemas.admin_page_schema import MAX_PAGE
 from app.schemas.check_schema import CheckResponse
 from app.schemas.maintenance_job_schema import MaintenanceJobResponse
 from app.services.core.admin_check_core_service import AdminCheckCoreService
@@ -45,7 +46,7 @@ async def admin_list_checks(
     request: Request,
     principal: ApiUser,
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
-    page: Annotated[int, Query(ge=1)] = 1,
+    page: Annotated[int, Query(ge=1, le=MAX_PAGE)] = 1,
     per_page: Annotated[int, Query(ge=1, le=200)] = 50,
     agent_id: AgentIdFilter = None,
     check_type: CheckTypeFilter = None,
