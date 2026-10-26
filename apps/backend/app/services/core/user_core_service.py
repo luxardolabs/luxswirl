@@ -99,6 +99,18 @@ class UserCoreService:
         return UserResponse.model_validate(user) if user else None
 
     @staticmethod
+    async def is_active_editor(db: AsyncSession, user_id: UUID | None) -> bool:
+        """Whether `user_id` is, right now, an active editor or admin."""
+        if user_id is None:
+            return False
+        user = await UserCRUD.get_by_id(db, user_id)
+        return (
+            user is not None
+            and user.is_active
+            and user.role in (UserRole.EDITOR, UserRole.ADMIN)
+        )
+
+    @staticmethod
     async def is_active_admin(db: AsyncSession, user_id: UUID | None) -> bool:
         """Whether `user_id` is, right now, an active admin (a job's owner, say)."""
         if user_id is None:

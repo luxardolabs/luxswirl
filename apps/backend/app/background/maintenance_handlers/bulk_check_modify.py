@@ -12,7 +12,10 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.background.maintenance_handlers._bulk_outcome import record_outcome
+from app.background.maintenance_handlers._bulk_outcome import (
+    finish,
+    require_owner_may_edit,
+)
 from app.models.maintenance_job_model import MaintenanceJob
 from app.schemas.check_schema import CheckUpdate
 from app.services.core.alert_core_service import AlertCoreService
@@ -34,6 +37,7 @@ async def handle(db: AsyncSession, job: MaintenanceJob) -> None:
         return
 
     check_ids = [UUID(c) if isinstance(c, str) else c for c in raw_ids]
+    await require_owner_may_edit(db, job)
 
     logger.info(
         "Bulk modifying checks",
@@ -65,4 +69,4 @@ async def handle(db: AsyncSession, job: MaintenanceJob) -> None:
             "job_id": str(job.id),
         },
     )
-    await record_outcome(db, job, "Modified", result)
+    await finish(db, job, "Modified", result, fail_when_nothing_done=False)

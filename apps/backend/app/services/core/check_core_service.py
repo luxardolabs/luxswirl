@@ -73,6 +73,21 @@ class CheckCoreService:
     """Service for check operations."""
 
     @staticmethod
+    async def get_admitted_agent(db: AsyncSession, agent_id: UUID) -> Agent:
+        """The agent, if it takes checks: the agents the web UI's picker offers.
+
+        Raises:
+            AgentNotFoundException: no such agent.
+            ValidationException: it is awaiting approval, refused or archived.
+        """
+        agent = await AgentCoreService.get_agent_by_id(db, agent_id)
+        if agent.approval_status in _NOT_ADMITTED:
+            raise ValidationException(
+                f"Agent {agent.agent_name} is {agent.approval_status}: it takes no checks"
+            )
+        return agent
+
+    @staticmethod
     async def get_check_by_id(
         db: AsyncSession, check_id: UUID, include_script_code: bool = False
     ) -> Check:
@@ -110,16 +125,7 @@ class CheckCoreService:
             data: Check creation data
             skip_config_update: If True, don't update agent.checks_updated_at (for internal/system checks)
         """
-        # Get agent
-        agent = await AgentCoreService.get_agent_by_id(db, agent_id)
-        if not agent:
-            raise AgentNotFoundException(str(agent_id))
-        # The same agents the web UI's picker offers: one awaiting approval,
-        # refused or archived takes no checks.
-        if agent.approval_status in _NOT_ADMITTED:
-            raise ValidationException(
-                f"Agent {agent.agent_name} is {agent.approval_status}: it takes no checks"
-            )
+        agent = await CheckCoreService.get_admitted_agent(db, agent_id)
 
         # SSRF protection: every address the check connects to
         await CheckCoreService._validate_endpoints_ssrf(

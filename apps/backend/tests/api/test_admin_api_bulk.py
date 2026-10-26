@@ -456,3 +456,43 @@ async def test_an_editor_cannot_attach_a_synthetic_dependent(
         select(Check.depends_on_check_id).where(Check.id == synthetic_id)
     )
     assert parent_of is None
+
+
+@pytest.mark.parametrize("approval_status", ["pending", "rejected", "archived"])
+async def test_a_bulk_move_to_an_agent_that_takes_no_checks_is_refused(
+    db: AsyncSession, client: AsyncClient, approval_status: str
+) -> None:
+    editor = await _as(db, "editor")
+    check = await _check(db, await _agent(db))
+    target = make_agent(approval_status=approval_status)
+    db.add(target)
+    await db.flush()
+
+    resp = await client.post(
+        f"{CHECKS}/bulk/modify",
+        json={"check_ids": [str(check.id)], "agent_id": str(target.id)},
+        headers=editor,
+    )
+
+    assert resp.status_code == 422, resp.text
+    assert await _jobs(db) == 0
+
+
+async def test_the_admin_openapi_names_the_new_schemas_plainly(
+    db: AsyncSession, client: AsyncClient
+) -> None:
+    viewer = await _as(db, "viewer")
+
+    doc = (await client.get("/api/v1/admin/openapi.json", headers=viewer)).json()
+
+    names = set(doc["components"]["schemas"])
+    assert not [n for n in names if "__" in n], sorted(names)
+    assert {
+        "AdminBulkChecks",
+        "AdminBulkModify",
+        "BulkCheckResult",
+        "MaintenanceJobResponse",
+        "AdminCheckDependents",
+        "DependentsChange",
+    } <= names
+    assert f"{JOBS}/{{job_id}}" in doc["paths"]

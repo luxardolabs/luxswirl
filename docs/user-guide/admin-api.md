@@ -87,7 +87,7 @@ Each takes `{"check_ids": [...]}`, 1 to 10,000 ids; a modify adds the fields to 
 | `POST` | `/api/v1/admin/checks/bulk/delete`  | editor | Delete them and their results in the background; `202` with the job                                                       |
 | `POST` | `/api/v1/admin/checks/bulk/modify`  | editor | Set `interval_seconds`, `timeout_seconds`, `retry_attempts`, move to `agent_id`, or assign `alert_id`; `202` with the job |
 
-The whole selection is judged before anything runs: an id no check has refuses it (`422`), and so does a synthetic check in the selection of anyone but an admin (`403`). Nothing is changed or queued. A modify must set at least one field, and none to `null`. An unknown `agent_id` or `alert_id` is a `404`.
+The whole selection is judged before anything runs: an id no check has refuses it (`422`), and so does a synthetic check in the selection of anyone but an admin (`403`). Nothing is changed or queued. A modify must set at least one field, and none to `null`. An unknown `agent_id` or `alert_id` is a `404`, and moving checks to an agent awaiting approval, rejected or archived is a `422`.
 
 ### Background jobs
 
@@ -95,7 +95,9 @@ The whole selection is judged before anything runs: an id no check has refuses i
 | ------ | ------------------------------------- | ---- | --------------------------------- |
 | `GET`  | `/api/v1/admin/maintenance-jobs/{id}` | any  | The job's `status` and `progress` |
 
-`status` goes `queued` → `running` → `done` or `failed` (with `error`). Once a bulk job has run, `progress` holds `success_count`, `failure_count` and the first 50 `errors`, so a check deleted before the job ran shows as a failure rather than disappearing.
+`status` goes `queued` → `running` → `done` or `failed`. Once a bulk job has run, done or failed, `progress` holds `success_count`, `failure_count` and the first 50 `errors`, so a check deleted before the job ran shows as a failure rather than disappearing. A job that changed no check is `failed`.
+
+A job runs after the request that queued it, so its owner is judged again when it runs: if they are no longer an active editor or admin, the job fails and changes nothing. A failed job's `error` is a summary, never the database statement or a credential; the full error is in the server log.
 
 ### Dependents
 

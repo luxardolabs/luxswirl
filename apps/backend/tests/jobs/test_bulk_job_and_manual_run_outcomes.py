@@ -29,7 +29,7 @@ from app.models.enum_model import (
 from app.models.maintenance_job_model import MaintenanceJob
 from app.models.scheduler_model import JobConfiguration, JobExecution
 from app.services.core.scheduler_core_service import SchedulerCoreService
-from fixtures.factories import make_agent, make_check
+from fixtures.factories import make_agent, make_check, make_user
 from sqlalchemy import select, text
 
 pytestmark = pytest.mark.integration
@@ -47,14 +47,19 @@ async def _seed_check(maker, *, enabled: bool = True):
 
 
 async def _job(maker, kind: MaintenanceJobKind, params: dict) -> MaintenanceJob:
-    job = MaintenanceJob(
-        id=uuid4(),
-        kind=kind,
-        target_id=None,
-        params=params,
-        status=MaintenanceJobStatus.QUEUED,
-    )
+    """A queued job, owned by an editor (a job runs only for one who may edit)."""
+    owner = make_user(role="editor")
     async with maker() as s:
+        s.add(owner)
+        await s.flush()
+        job = MaintenanceJob(
+            id=uuid4(),
+            kind=kind,
+            target_id=None,
+            params=params,
+            owner_id=owner.id,
+            status=MaintenanceJobStatus.QUEUED,
+        )
         s.add(job)
         await s.commit()
     return job

@@ -15,6 +15,7 @@ from app.background.maintenance_handlers import (
     bulk_check_modify,
     bulk_check_toggle,
 )
+from app.background.maintenance_worker import JobFailed
 from app.models.check_model import Check
 from app.models.enum_model import MaintenanceJobKind
 from app.models.maintenance_job_model import MaintenanceJob
@@ -114,7 +115,7 @@ async def test_a_bulk_move_moves_a_synthetic_check_only_for_an_admin(
     assert moved is changed
 
 
-async def test_a_job_with_no_owner_or_a_deactivated_admin_owner_acts_as_no_admin(
+async def test_a_job_with_no_owner_or_a_deactivated_admin_owner_changes_nothing(
     db: AsyncSession,
 ) -> None:
     s = await _setup(db, "admin")
@@ -128,5 +129,6 @@ async def test_a_job_with_no_owner_or_a_deactivated_admin_owner_acts_as_no_admin
             action="disable",
             check_ids=_ids(s),
         )
-        await bulk_check_toggle.handle(db, job)
+        with pytest.raises(JobFailed, match="may no longer change checks"):
+            await bulk_check_toggle.handle(db, job)
         assert (await _fresh(db, s["synthetic"])).enabled is True
