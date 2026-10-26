@@ -3,6 +3,9 @@ Admin API check router - checks, addressed by their own id.
 
 Reads take any API token; writes take an editor's or an admin's. A synthetic
 check is an admin's alone, which the core service enforces.
+
+The bulk routes are declared before the `/{check_id}/...` ones, which would
+otherwise take `bulk` as a check id.
 """
 
 from typing import Annotated
@@ -17,12 +20,18 @@ from app.core.query_params import AgentIdFilter, CheckTypeFilter
 from app.core.rate_limit import api_token_rate_limit_key, limiter
 from app.db import get_db
 from app.schemas.admin_check_schema import (
+    AdminBulkChecks,
+    AdminBulkModify,
     AdminCheckClone,
     AdminCheckCreate,
+    AdminCheckDependents,
     AdminCheckUpdate,
+    BulkCheckResult,
     CheckPage,
+    DependentsChange,
 )
 from app.schemas.check_schema import CheckResponse
+from app.schemas.maintenance_job_schema import MaintenanceJobResponse
 from app.services.core.admin_check_core_service import AdminCheckCoreService
 
 router = APIRouter(prefix="/checks", tags=["Admin API: Checks"])
@@ -55,6 +64,81 @@ async def admin_list_checks(
         enabled_only=enabled_only,
         tag=tag,
         search=search,
+    )
+
+
+@router.post(
+    "/bulk/enable", response_model=BulkCheckResult, name="admin_bulk_enable_checks"
+)
+@limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
+async def admin_bulk_enable_checks(
+    request: Request,
+    data: AdminBulkChecks,
+    principal: ApiEditor,
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
+) -> BulkCheckResult:
+    """Enable every check named, now."""
+    return await AdminCheckCoreService.bulk_set_enabled(
+        db, principal.user.role, data, enabled=True
+    )
+
+
+@router.post(
+    "/bulk/disable", response_model=BulkCheckResult, name="admin_bulk_disable_checks"
+)
+@limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
+async def admin_bulk_disable_checks(
+    request: Request,
+    data: AdminBulkChecks,
+    principal: ApiEditor,
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
+) -> BulkCheckResult:
+    """Disable every check named, now."""
+    return await AdminCheckCoreService.bulk_set_enabled(
+        db, principal.user.role, data, enabled=False
+    )
+
+
+@router.post(
+    "/bulk/delete",
+    response_model=MaintenanceJobResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    name="admin_bulk_delete_checks",
+)
+@limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
+async def admin_bulk_delete_checks(
+    request: Request,
+    data: AdminBulkChecks,
+    principal: ApiEditor,
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
+) -> MaintenanceJobResponse:
+    """Delete every check named, and its results, in the background.
+
+    Poll `/api/v1/admin/maintenance-jobs/{id}` for the outcome.
+    """
+    return await AdminCheckCoreService.enqueue_bulk_delete(
+        db, principal.user.role, principal.user.id, data
+    )
+
+
+@router.post(
+    "/bulk/modify",
+    response_model=MaintenanceJobResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    name="admin_bulk_modify_checks",
+)
+@limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
+async def admin_bulk_modify_checks(
+    request: Request,
+    data: AdminBulkModify,
+    principal: ApiEditor,
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
+) -> MaintenanceJobResponse:
+    """Change, move to another agent, or assign an alert to every check named,
+    in the background. Poll `/api/v1/admin/maintenance-jobs/{id}` for the outcome.
+    """
+    return await AdminCheckCoreService.enqueue_bulk_modify(
+        db, principal.user.role, principal.user.id, data
     )
 
 
@@ -159,4 +243,41 @@ async def admin_disable_check(
 ) -> CheckResponse:
     return await AdminCheckCoreService.set_enabled(
         db, principal.user.role, check_id, enabled=False
+    )
+
+
+@router.get(
+    "/{check_id}/dependents",
+    response_model=list[CheckResponse],
+    name="admin_list_check_dependents",
+)
+@limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
+async def admin_list_check_dependents(
+    request: Request,
+    check_id: UUID,
+    principal: ApiUser,
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
+) -> list[CheckResponse]:
+    """The checks that depend on this one."""
+    return await AdminCheckCoreService.list_dependents(
+        db, principal.user.role, check_id
+    )
+
+
+@router.put(
+    "/{check_id}/dependents",
+    response_model=DependentsChange,
+    name="admin_set_check_dependents",
+)
+@limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
+async def admin_set_check_dependents(
+    request: Request,
+    check_id: UUID,
+    data: AdminCheckDependents,
+    principal: ApiEditor,
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
+) -> DependentsChange:
+    """Make exactly these checks depend on this one; any other is detached."""
+    return await AdminCheckCoreService.set_dependents(
+        db, principal.user.role, check_id, data
     )

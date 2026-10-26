@@ -13,6 +13,7 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.background.maintenance_handlers._bulk_outcome import record_outcome
 from app.models.maintenance_job_model import MaintenanceJob
 from app.services.core.check_core_service import CheckCoreService
 from app.services.core.user_core_service import UserCoreService
@@ -40,6 +41,7 @@ async def handle(db: AsyncSession, job: MaintenanceJob) -> None:
         "Bulk deleted checks",
         extra={"result": result, "job_id": str(job.id)},
     )
+    await record_outcome(db, job, "Deleted", result)
     # The core reports a failed statement as failures rather than raising (its
     # savepoint keeps the session usable), so a job that changed nothing must
     # fail itself, or the worker finalises it as done. A partial result (some

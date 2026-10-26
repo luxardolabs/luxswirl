@@ -14,6 +14,7 @@ from fastapi import APIRouter
 from app.api.v1.routers import (
     admin_check_router,
     admin_identity_router,
+    admin_maintenance_job_router,
     agent_router,
     artifact_router,
     check_router,
@@ -37,6 +38,9 @@ admin_api_router = APIRouter(prefix="/admin")
 
 admin_api_router.include_router(admin_identity_router.router)  # Who am I, OpenAPI
 admin_api_router.include_router(admin_check_router.router)  # Checks
+admin_api_router.include_router(
+    admin_maintenance_job_router.router
+)  # Background job status
 
 api_router = APIRouter(prefix="/api/v1")
 api_router.include_router(agent_api_router)

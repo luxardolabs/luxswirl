@@ -76,6 +76,38 @@ A create or change refuses what the web UI refuses, with the same message: an ad
 
 A viewer's token reads no credential in a check: the user and password of any URL in `target` or `connection_string` read `***` (`postgresql://***@db:5432/app`), as does any `password=` value, and a synthetic check's `script_code` is left out. An editor's or an admin's token reads them as stored.
 
+### Bulk actions
+
+Each takes `{"check_ids": [...]}`, 1 to 10,000 ids; a modify adds the fields to change.
+
+| Method | Path                                | Role   | Does                                                                                                                      |
+| ------ | ----------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------- |
+| `POST` | `/api/v1/admin/checks/bulk/enable`  | editor | Enable them now; returns `{"success_count", "failure_count", "errors"}`                                                   |
+| `POST` | `/api/v1/admin/checks/bulk/disable` | editor | Disable them now; same answer                                                                                             |
+| `POST` | `/api/v1/admin/checks/bulk/delete`  | editor | Delete them and their results in the background; `202` with the job                                                       |
+| `POST` | `/api/v1/admin/checks/bulk/modify`  | editor | Set `interval_seconds`, `timeout_seconds`, `retry_attempts`, move to `agent_id`, or assign `alert_id`; `202` with the job |
+
+The whole selection is judged before anything runs: an id no check has refuses it (`422`), and so does a synthetic check in the selection of anyone but an admin (`403`). Nothing is changed or queued. A modify must set at least one field, and none to `null`. An unknown `agent_id` or `alert_id` is a `404`.
+
+### Background jobs
+
+| Method | Path                                  | Role | Returns                           |
+| ------ | ------------------------------------- | ---- | --------------------------------- |
+| `GET`  | `/api/v1/admin/maintenance-jobs/{id}` | any  | The job's `status` and `progress` |
+
+`status` goes `queued` → `running` → `done` or `failed` (with `error`). Once a bulk job has run, `progress` holds `success_count`, `failure_count` and the first 50 `errors`, so a check deleted before the job ran shows as a failure rather than disappearing.
+
+### Dependents
+
+A check can depend on one parent; while the parent is failing, the dependent's alerts are suppressed (see [Alerts → Dependency suppression](alerts.md#dependency-suppression)).
+
+| Method | Path                                   | Role   | Does                                                                             |
+| ------ | -------------------------------------- | ------ | -------------------------------------------------------------------------------- |
+| `GET`  | `/api/v1/admin/checks/{id}/dependents` | any    | The checks that depend on this one (masked for a viewer, as above)               |
+| `PUT`  | `/api/v1/admin/checks/{id}/dependents` | editor | `{"dependent_ids": [...]}` becomes the whole set; returns `{"added", "removed"}` |
+
+A replacement refuses a parent that has its own parent, a dependent that is itself a parent, and a check depending on itself (`422`). Attaching or detaching a synthetic check is an admin's.
+
 ## OpenAPI document
 
 `/api/v1/admin/openapi.json` describes every admin-API route, with the bearer scheme declared. It is served to any token holder in every environment, so a client generator or an AI agent can read it. The app-wide `/docs` and `/openapi.json` stay off in production.

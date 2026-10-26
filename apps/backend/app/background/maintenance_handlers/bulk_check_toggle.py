@@ -7,6 +7,7 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.background.maintenance_handlers._bulk_outcome import record_outcome
 from app.models.maintenance_job_model import MaintenanceJob
 from app.services.core.check_core_service import CheckCoreService
 from app.services.core.user_core_service import UserCoreService
@@ -45,6 +46,9 @@ async def handle(db: AsyncSession, job: MaintenanceJob) -> None:
             "failure_count": result["failure_count"],
             "job_id": str(job.id),
         },
+    )
+    await record_outcome(
+        db, job, "Enabled" if action == "enable" else "Disabled", result
     )
     # The core reports a failed statement as failures rather than raising (its
     # savepoint keeps the session usable), so a job that changed nothing must

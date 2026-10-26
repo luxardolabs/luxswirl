@@ -12,6 +12,7 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.background.maintenance_handlers._bulk_outcome import record_outcome
 from app.models.maintenance_job_model import MaintenanceJob
 from app.schemas.check_schema import CheckUpdate
 from app.services.core.alert_core_service import AlertCoreService
@@ -64,3 +65,4 @@ async def handle(db: AsyncSession, job: MaintenanceJob) -> None:
             "job_id": str(job.id),
         },
     )
+    await record_outcome(db, job, "Modified", result)
