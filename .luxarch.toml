@@ -213,6 +213,19 @@ require_dep = ["AdminUserWeb", "require_admin_web"]
 prefix = "/database-health"
 require_dep = ["AdminUserWeb", "require_admin_web"]
 
+# The agent protocol: every route takes the agent's own key, or (register,
+# recover-key, a pending agent's heartbeat) the registration key, through one
+# of these dependencies.
+[[target.authz.signature]]
+prefix = "/api/v1/agent/"
+require_dep = [
+  "AuthenticatedAgentId",
+  "AuthenticatedHeartbeat",
+  "ReportingAgentId",
+  "UploadingAgentId",
+  "AgentOwnedJobId",
+]
+
 # A check's configuration is a promise to the operator: every field the form
 # offers has to reach the agent that runs the check, or the setting is inert.
 # This repo has shipped that bug twice (a field named max_retries while handlers

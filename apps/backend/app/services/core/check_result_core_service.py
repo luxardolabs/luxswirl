@@ -199,7 +199,7 @@ class CheckResultCoreService:
                     if check_type == "internal":
                         logger.warning(
                             "Ignoring internal check from agent - "
-                            "agent health metrics should be sent via /api/v1/heartbeat",
+                            "agent health metrics should be sent via /api/v1/agent/heartbeat",
                             extra={
                                 "display_name": display_name,
                                 "agent_name": agent.agent_name,

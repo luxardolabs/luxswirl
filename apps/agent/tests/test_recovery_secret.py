@@ -26,7 +26,7 @@ pytestmark = pytest.mark.unit
 
 REG_KEY = "luxswirl_rk_shared"
 SECRET = "luxswirl_rs_" + "ab" * 32
-PUSH_URL = "https://server.example/api/v1/reports"
+SERVER_URL = "https://server.example"
 
 
 class Server:
@@ -38,7 +38,7 @@ class Server:
 
     def handle(self, request: httpx.Request) -> httpx.Response:
         self.requests.append(request)
-        if request.url.path == "/api/v1/agents/register":
+        if request.url.path == "/api/v1/agent/register":
             agent_id = uuid4()
             self.registered.append(agent_id)
             return httpx.Response(
@@ -72,7 +72,7 @@ async def server() -> AsyncIterator[Server]:
 
 
 def _registration(creds: AgentCredentials) -> tuple[AgentRegistration, dict[str, Any]]:
-    config: dict[str, Any] = {"push_url": PUSH_URL, "auth_key": REG_KEY}
+    config: dict[str, Any] = {"server_url": SERVER_URL, "auth_key": REG_KEY}
     if creds.agent_id is not None:
         config["agent_id"] = creds.agent_id
     registration = AgentRegistration(config, creds)
@@ -137,7 +137,7 @@ async def test_recovery_sends_the_secret_and_keeps_it(
     assert await registration.recover_agent_key()
 
     sent = server.requests[-1]
-    assert sent.url.path == f"/api/v1/agents/{agent_id}/recover-key"
+    assert sent.url.path == f"/api/v1/agent/{agent_id}/recover-key"
     assert sent.headers["Authorization"] == f"Bearer {REG_KEY}"
     assert sent.headers["X-Agent-Recovery-Secret"] == SECRET
     assert SECRET not in str(sent.url)
@@ -162,7 +162,7 @@ async def test_credentials_without_a_secret_register_afresh_instead_of_recoverin
     assert not await registration.recover_agent_key()
 
     assert not any(r.url.path.endswith("/recover-key") for r in server.requests)
-    assert [r.url.path for r in server.requests] == ["/api/v1/agents/register"]
+    assert [r.url.path for r in server.requests] == ["/api/v1/agent/register"]
     new_id = server.registered[0]
     assert config["agent_id"] == new_id != old_id
     reloaded = AgentCredentials(str(path))
@@ -182,7 +182,7 @@ async def test_startup_re_registers_credentials_that_can_never_get_a_key(
 
     assert await registration.ensure_recoverable()
 
-    assert [r.url.path for r in server.requests] == ["/api/v1/agents/register"]
+    assert [r.url.path for r in server.requests] == ["/api/v1/agent/register"]
     assert creds.recovery_secret == SECRET
 
 

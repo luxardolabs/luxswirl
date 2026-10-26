@@ -32,6 +32,7 @@ from app.agent.lifecycle import LifecycleManager
 from app.agent.registration import AgentRegistration
 from app.agent.reporter import Reporter
 from app.agent.result_processor import ResultProcessor
+from app.agent.server_api import server_origin
 from app.checks.base import BaseCheck
 from app.shared.jobs.base import BaseJob
 from app.shared.logger import get_logger
@@ -42,6 +43,8 @@ class LuxSwirlAgent:
 
     def __init__(self, config: dict[str, Any]):
         self.config = config
+        # Fail at startup, not on the first request, on an unusable server address.
+        self.config["server_url"] = server_origin(config.get("server_url", ""))
         self.logger = get_logger("luxswirl.agent")
         self.interval = config.get("interval", 60)
         self.checks: list[BaseCheck] = []

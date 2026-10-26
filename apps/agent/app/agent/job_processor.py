@@ -12,6 +12,7 @@ from typing import Any
 
 import httpx
 
+from app.agent import server_api
 from app.shared.jobs.base import BaseJob
 from app.shared.logger import get_logger
 
@@ -318,9 +319,7 @@ class JobProcessor:
 
     def _job_url(self, job_id: str, action: str) -> str:
         """The server's URL for `action` (start, results) on one of this agent's jobs."""
-        push_url = self.config.get("push_url", "http://localhost:9000")
-        base_url = push_url.replace("/api/v1/reports", "")
-        return f"{base_url}/api/v1/jobs/{job_id}/{action}"
+        return server_api.job_url(self.config, job_id, action)
 
     async def _notify_started(self, job_id: str) -> None:
         """Tell the server the job has begun, so it shows as running.

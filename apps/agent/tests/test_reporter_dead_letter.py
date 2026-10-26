@@ -42,7 +42,7 @@ Handler = Callable[[httpx.Request], httpx.Response]
 async def _reporter(tmp_path: Path, handler: Handler, **overrides: Any) -> Reporter:
     config: dict[str, Any] = {
         "agent_id": "a1",
-        "push_url": "https://server.example/api/v1/reports",
+        "server_url": "https://server.example",
         "auth_key": "k1",
         "report_storage_path": str(tmp_path),
         "report_max_retries": 2,
@@ -298,7 +298,7 @@ async def test_the_heartbeat_carries_dead_letter_count() -> None:
     sender = HeartbeatSender(
         config={
             "agent_id": "a1",
-            "push_url": "https://server.example/api/v1/reports",
+            "server_url": "https://server.example",
             "auth_key": "k1",
             "resource_monitoring_enabled": False,
         },

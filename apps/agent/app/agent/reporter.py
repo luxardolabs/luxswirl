@@ -20,6 +20,7 @@ from typing import Any, NamedTuple
 
 import httpx
 
+from app.agent import server_api
 from app.agent.dead_letter import (
     CREATE_DEAD_LETTERS,
     Delivery,
@@ -68,7 +69,7 @@ class Reporter:
         self.logger = get_logger("luxswirl.reporter")
 
         # Get reporter-specific config
-        self.push_url = config.get("push_url")
+        self.reports_url = server_api.reports_url(config)
         self.auth_key = config.get("auth_key")
         # Note: agent_id read from config dynamically to support late registration
 
@@ -502,10 +503,6 @@ class Reporter:
         if not batch:
             return True
 
-        if not self.push_url:
-            self.logger.warning("No push URL configured, not sending results")
-            return False
-
         return await self._deliver(batch) is Delivery.SENT
 
     async def _deliver(self, batch: list[dict[str, Any]]) -> Delivery:
@@ -610,11 +607,6 @@ class Reporter:
             The outcome, the last HTTP status (None for a network error), and
             the server's error detail, scrubbed and truncated.
         """
-        push_url = self.push_url
-        if not push_url:
-            self.logger.warning("No push URL configured, not sending results")
-            return Delivery.TRANSIENT, None, ""
-
         agent_id = self.config.get("agent_id", "unknown")
         payload = {
             "agent_id": str(agent_id) if agent_id != "unknown" else "unknown",
@@ -624,7 +616,7 @@ class Reporter:
 
         self.logger.info(
             "Attempting to send batch",
-            extra={"batch_size": len(batch), "push_url": self.push_url},
+            extra={"batch_size": len(batch), "reports_url": self.reports_url},
         )
 
         status_code: int | None = None
@@ -642,7 +634,7 @@ class Reporter:
                 if not self.client:
                     await self.start()
                 assert self.client is not None
-                resp = await self.client.post(push_url, json=payload)
+                resp = await self.client.post(self.reports_url, json=payload)
             except httpx.RequestError:
                 self.logger.warning(
                     "Connection error while sending results", exc_info=True

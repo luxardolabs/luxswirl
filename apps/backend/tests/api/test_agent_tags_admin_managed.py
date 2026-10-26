@@ -1,7 +1,7 @@
 """An agent's tags are admin-managed once it is approved.
 
 Tags decide which replicate and distribute checks an agent is handed by
-GET /api/v1/checks, and so which credential-bearing targets it sees and which
+GET /api/v1/agent/checks, and so which credential-bearing targets it sees and which
 checks it may report on. An agent declares tags at registration and may update
 them by heartbeat while pending, as a suggestion the admin sees when approving.
 From approval on, its heartbeat's tags never change its row; only an admin does.
@@ -73,7 +73,7 @@ async def _db_replicate_check(db: AsyncSession, owner: Agent) -> None:
 
 async def _checks_text(client: AsyncClient, agent: Agent, key: str) -> str:
     resp = await client.get(
-        "/api/v1/checks",
+        "/api/v1/agent/checks",
         params={"agent_id": str(agent.id)},
         headers={"Authorization": f"Bearer {key}"},
     )
@@ -85,7 +85,7 @@ async def _heartbeat(
     client: AsyncClient, agent_id: UUID, key: str, tags: list[str]
 ) -> None:
     resp = await client.post(
-        "/api/v1/heartbeat",
+        "/api/v1/agent/heartbeat",
         json={
             "agent_id": str(agent_id),
             "timestamp": utc_now().isoformat(),
@@ -148,7 +148,7 @@ async def test_a_pending_agents_registered_tags_are_kept_as_its_initial_tags(
     """Registration stores the declared tags; a pending agent's heartbeat may
     still update its suggestion, and approval keeps what is there."""
     resp = await client.post(
-        "/api/v1/agents/register",
+        "/api/v1/agent/register",
         json={"hostname": "edge-01", "tags": ["role:web", "region:eu"]},
         headers={"Authorization": f"Bearer {registration_token}"},
     )

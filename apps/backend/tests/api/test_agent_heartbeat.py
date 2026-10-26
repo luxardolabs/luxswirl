@@ -1,4 +1,4 @@
-"""POST /api/v1/heartbeat authenticates through AuthenticatedHeartbeat.
+"""POST /api/v1/agent/heartbeat authenticates through AuthenticatedHeartbeat.
 
 The agent's own key applies the heartbeat and dispatches jobs. The registration
 key, shared by every install, applies a heartbeat only for an agent that has no
@@ -73,7 +73,7 @@ async def test_the_agent_key_is_accepted(
     agent_id, key = approved
 
     resp = await client.post(
-        "/api/v1/heartbeat",
+        "/api/v1/agent/heartbeat",
         json=_beat(agent_id),
         headers={"Authorization": f"Bearer {key}"},
     )
@@ -89,7 +89,7 @@ async def test_the_registration_key_is_accepted_but_told_to_recover(
     agent_id, _ = approved
 
     resp = await client.post(
-        "/api/v1/heartbeat",
+        "/api/v1/agent/heartbeat",
         json=_beat(agent_id),
         headers={"Authorization": f"Bearer {registration_token}"},
     )
@@ -105,7 +105,7 @@ async def test_a_wrong_key_is_refused(
     agent_id, _ = approved
 
     resp = await client.post(
-        "/api/v1/heartbeat",
+        "/api/v1/agent/heartbeat",
         json=_beat(agent_id),
         headers={"Authorization": "Bearer nope"},
     )
@@ -117,7 +117,7 @@ async def test_an_unknown_agent_is_not_found(
     client: AsyncClient, registration_token: str
 ) -> None:
     resp = await client.post(
-        "/api/v1/heartbeat",
+        "/api/v1/agent/heartbeat",
         json=_beat(str(uuid4())),
         headers={"Authorization": f"Bearer {registration_token}"},
     )
@@ -133,7 +133,7 @@ async def test_dead_letter_count_is_stored_on_the_agent(
     agent_id, key = approved
 
     resp = await client.post(
-        "/api/v1/heartbeat",
+        "/api/v1/agent/heartbeat",
         json={**_beat(agent_id), "dead_letter_count": 4},
         headers={"Authorization": f"Bearer {key}"},
     )
@@ -154,7 +154,7 @@ async def test_the_run_id_is_stored_from_the_heartbeat(
     run_id = "6f1c2a0e-1111-4222-8333-444455556666"
 
     resp = await client.post(
-        "/api/v1/heartbeat",
+        "/api/v1/agent/heartbeat",
         json={**_beat(agent_id), "agent_run_id": run_id},
         headers={"Authorization": f"Bearer {key}"},
     )
@@ -190,7 +190,7 @@ async def test_registration_key_cannot_rewrite_an_approved_agents_row(
     )
 
     resp = await client.post(
-        "/api/v1/heartbeat",
+        "/api/v1/agent/heartbeat",
         json={
             **_beat(agent_id),
             "timestamp": (utc_now() + timedelta(days=365)).isoformat(),
@@ -225,7 +225,7 @@ async def test_registration_key_still_drives_an_agent_without_a_key(
     await db.flush()
 
     resp = await client.post(
-        "/api/v1/heartbeat",
+        "/api/v1/agent/heartbeat",
         json={**_beat(str(agent.id)), "hostname": "after"},
         headers={"Authorization": f"Bearer {registration_token}"},
     )
@@ -244,7 +244,7 @@ async def test_heartbeat_timestamp_cannot_pin_last_seen_in_the_future(
     agent_id, key = approved
 
     resp = await client.post(
-        "/api/v1/heartbeat",
+        "/api/v1/agent/heartbeat",
         json={
             **_beat(agent_id),
             "timestamp": (utc_now() + timedelta(days=365)).isoformat(),

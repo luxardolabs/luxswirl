@@ -10,10 +10,10 @@ from uuid import UUID
 
 import httpx
 
+from app.agent import server_api
 from app.agent.credentials import AgentCredentials
 from app.agent.http_client import server_client
 from app.shared.logger import get_logger
-from app.shared.url_security import validate_server_url
 
 logger = get_logger("luxswirl.agent.registration")
 
@@ -43,24 +43,8 @@ class AgentRegistration:
         Returns:
             True if registration successful, False otherwise
         """
-        push_url = self.config.get("push_url", "http://localhost:9000")
-
-        # Validate URL security (enforce HTTPS for external servers)
-        try:
-            validate_server_url(push_url)
-        except ValueError:
-            self.logger.exception("URL validation failed")
-            return False
-
         auth_key = self.config.get("auth_key")
-
-        # Extract base URL
-        if "/api/v1" in push_url:
-            base_url = push_url.split("/api/v1")[0]
-        else:
-            base_url = push_url.rstrip("/")
-
-        register_url = f"{base_url}/api/v1/agents/register"
+        register_url = server_api.register_url(self.config)
 
         # Build registration payload
         payload = {
@@ -170,7 +154,6 @@ class AgentRegistration:
             await self._register_afresh()
             return False
 
-        push_url = self.config.get("push_url", "http://localhost:9000")
         agent_id = self.config.get("agent_id")
         registration_key = self.config.get(
             "auth_key"
@@ -184,13 +167,7 @@ class AgentRegistration:
             self.logger.error("Cannot recover key: no registration key")
             return False
 
-        # Extract base URL
-        if "/api/v1" in push_url:
-            base_url = push_url.split("/api/v1")[0]
-        else:
-            base_url = push_url.rstrip("/")
-
-        recovery_url = f"{base_url}/api/v1/agents/{agent_id}/recover-key"
+        recovery_url = server_api.recover_key_url(self.config, agent_id)
 
         headers = {
             "Authorization": f"Bearer {registration_key}",

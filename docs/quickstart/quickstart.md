@@ -143,7 +143,7 @@ The agent authenticates to the server with a **registration key**. You create th
    docker compose up -d luxswirl_agent
    ```
 
-The bundled agent reaches the server over the internal Docker network at `http://luxswirl_server:9000/api/v1/reports` (the `LUXSWIRL_SERVER_URL` default).
+The bundled agent reaches the server over the internal Docker network at `http://luxswirl_server:9000` (the `LUXSWIRL_SERVER_URL` default).
 
 **Verify the agent connected**: navigate to the **Agents** page (sidebar).
 
@@ -390,13 +390,12 @@ Deploy agents in different regions or networks.
 1. **Deploy agent on another server**:
 
 ```bash
-# On remote server. Note: LUXSWIRL_SERVER_URL is the FULL reports endpoint,
-# ending in /api/v1/reports.
+# On remote server. LUXSWIRL_SERVER_URL is the server's address, with no path.
 docker run -d \
   --name luxswirl-agent-us-east \
   --restart unless-stopped \
   -e LUXSWIRL_AGENT_ID=us-east-agent \
-  -e LUXSWIRL_SERVER_URL=https://server.example.com:9000/api/v1/reports \
+  -e LUXSWIRL_SERVER_URL=https://server.example.com:9000 \
   -e LUXSWIRL_AUTH_KEY=your_registration_key_here \
   -v luxswirl_agent_data:/app/data \
   ghcr.io/luxardolabs/luxswirl-agent:2026.09.0

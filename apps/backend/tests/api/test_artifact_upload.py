@@ -1,7 +1,7 @@
 """Artifact upload authenticates as the agent, and only for that agent's checks.
 
-POST /api/v1/artifacts takes the uploading agent's OWN key, exactly like
-POST /api/v1/reports: the registration key, another agent's key, or no key at
+POST /api/v1/agent/artifacts takes the uploading agent's OWN key, exactly like
+POST /api/v1/agent/reports: the registration key, another agent's key, or no key at
 all are refused before anything is written. The artifact's check must be one
 the assignment model gives that agent (its manual check, or a replicate /
 distribute check its selector matches); another agent's check is refused.
@@ -93,7 +93,9 @@ async def test_the_agent_key_uploads_for_its_own_check(
     check = await _check(db, agent.id)
 
     resp = await client.post(
-        "/api/v1/artifacts", json=_payload(agent.id, check.id), headers=_bearer(key)
+        "/api/v1/agent/artifacts",
+        json=_payload(agent.id, check.id),
+        headers=_bearer(key),
     )
 
     assert resp.status_code == 201, resp.text
@@ -112,7 +114,7 @@ async def test_the_registration_key_is_refused(
     )
 
     resp = await client.post(
-        "/api/v1/artifacts",
+        "/api/v1/agent/artifacts",
         json=_payload(agent.id, check.id),
         headers=_bearer(reg_key),
     )
@@ -125,7 +127,9 @@ async def test_no_key_is_refused(client: AsyncClient, db: AsyncSession) -> None:
     agent, _ = await _approved_agent(db)
     check = await _check(db, agent.id)
 
-    resp = await client.post("/api/v1/artifacts", json=_payload(agent.id, check.id))
+    resp = await client.post(
+        "/api/v1/agent/artifacts", json=_payload(agent.id, check.id)
+    )
 
     assert resp.status_code == 401, resp.text
     assert await _stored_for(db, check.id) == []
@@ -139,7 +143,7 @@ async def test_another_agents_check_is_refused(
     their_check = await _check(db, theirs.id)
 
     resp = await client.post(
-        "/api/v1/artifacts",
+        "/api/v1/agent/artifacts",
         json=_payload(mine.id, their_check.id),
         headers=_bearer(my_key),
     )
@@ -157,7 +161,7 @@ async def test_claiming_to_be_another_agent_with_my_key_is_refused(
     their_check = await _check(db, theirs.id)
 
     resp = await client.post(
-        "/api/v1/artifacts",
+        "/api/v1/agent/artifacts",
         json=_payload(theirs.id, their_check.id),
         headers=_bearer(my_key),
     )
@@ -176,7 +180,7 @@ async def test_an_agent_without_its_own_key_is_refused(
     check = await _check(db, agent.id)
 
     resp = await client.post(
-        "/api/v1/artifacts",
+        "/api/v1/agent/artifacts",
         json=_payload(agent.id, check.id),
         headers=_bearer("anything"),
     )
@@ -193,7 +197,9 @@ async def test_a_paused_agent_is_refused_even_with_its_key(
     await db.flush()
 
     resp = await client.post(
-        "/api/v1/artifacts", json=_payload(agent.id, check.id), headers=_bearer(key)
+        "/api/v1/agent/artifacts",
+        json=_payload(agent.id, check.id),
+        headers=_bearer(key),
     )
 
     assert resp.status_code == 403, resp.text
@@ -206,10 +212,12 @@ async def test_an_unknown_agent_or_check_is_not_found(
     agent, key = await _approved_agent(db)
 
     unknown_agent = await client.post(
-        "/api/v1/artifacts", json=_payload(uuid4(), uuid4()), headers=_bearer(key)
+        "/api/v1/agent/artifacts", json=_payload(uuid4(), uuid4()), headers=_bearer(key)
     )
     unknown_check = await client.post(
-        "/api/v1/artifacts", json=_payload(agent.id, uuid4()), headers=_bearer(key)
+        "/api/v1/agent/artifacts",
+        json=_payload(agent.id, uuid4()),
+        headers=_bearer(key),
     )
 
     assert unknown_agent.status_code == 404, unknown_agent.text
@@ -236,10 +244,12 @@ async def test_a_replicate_check_selecting_the_agent_is_its_own(
     )
 
     ok = await client.post(
-        "/api/v1/artifacts", json=_payload(agent.id, selected.id), headers=_bearer(key)
+        "/api/v1/agent/artifacts",
+        json=_payload(agent.id, selected.id),
+        headers=_bearer(key),
     )
     refused = await client.post(
-        "/api/v1/artifacts",
+        "/api/v1/agent/artifacts",
         json=_payload(agent.id, not_selected.id),
         headers=_bearer(key),
     )
@@ -266,7 +276,7 @@ async def test_an_artifact_cannot_be_pinned_on_another_checks_result(
     await db.flush()
 
     resp = await client.post(
-        "/api/v1/artifacts",
+        "/api/v1/agent/artifacts",
         json=_payload(
             mine.id,
             my_check.id,

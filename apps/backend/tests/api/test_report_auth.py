@@ -1,6 +1,6 @@
 """Report submission authenticates in ReportingAgentId.
 
-POST /api/v1/reports takes only the agent's own key: the registration key, a
+POST /api/v1/agent/reports takes only the agent's own key: the registration key, a
 wrong key, or an agent that has no key yet are all refused before anything is
 written.
 """
@@ -46,7 +46,7 @@ async def test_the_agent_key_submits(client: AsyncClient, db: AsyncSession) -> N
     _, key = await AgentCoreService.approve_agent(db, agent.id)
 
     resp = await client.post(
-        "/api/v1/reports",
+        "/api/v1/agent/reports",
         json=_report(str(agent.id)),
         headers={"Authorization": f"Bearer {key}"},
     )
@@ -62,7 +62,7 @@ async def test_an_agent_without_its_own_key_is_refused(
     await db.flush()
 
     resp = await client.post(
-        "/api/v1/reports",
+        "/api/v1/agent/reports",
         json=_report(str(agent.id)),
         headers={"Authorization": "Bearer anything"},
     )
@@ -72,7 +72,7 @@ async def test_an_agent_without_its_own_key_is_refused(
 
 async def test_an_unknown_agent_is_not_found(client: AsyncClient) -> None:
     resp = await client.post(
-        "/api/v1/reports",
+        "/api/v1/agent/reports",
         json=_report(str(uuid4())),
         headers={"Authorization": "Bearer anything"},
     )

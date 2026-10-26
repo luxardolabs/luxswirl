@@ -69,7 +69,7 @@ async def test_the_reporter_fits_every_result_it_queues(tmp_path) -> None:
     reporter = Reporter(
         {
             "agent_id": "a1",
-            "push_url": "https://server.example/api/v1/reports",
+            "server_url": "https://server.example",
             "auth_key": "k1",
             "report_storage_path": str(tmp_path),
         }

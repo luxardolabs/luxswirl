@@ -43,7 +43,7 @@ docker compose --env-file .env.prod up -d    # or: make prod-up
 docker compose -f compose.agent.yaml up -d
 
 # Features:
-# - Connects to https://dev.example.com:9000/api/v1/reports
+# - Connects to https://dev.example.com:9000
 # - Uses registration key for initial auth
 # - Network mode: host (can ping local services)
 # - Persistent data storage
@@ -202,7 +202,7 @@ See `nginx/conf.d/luxswirl.conf` for the full nginx configuration.
 
 **Check:**
 
-1. Agent has correct server URL: `https://dev.example.com:9000/api/v1/reports`
+1. Agent has correct server URL: `https://dev.example.com:9000`
 1. Registration key is valid
 1. Agent can reach server: `docker exec luxswirl_agent curl -f https://dev.example.com:9000/health`
 

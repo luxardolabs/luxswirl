@@ -117,7 +117,7 @@
                 credentials file next to its key. A registration key alone recovers nothing.
             </p>
             <div class="p-3 bg-dark-bg-tertiary rounded text-xs font-mono text-dark-text-muted">
-                POST /api/v1/agents/{{ agent.id }}/recover-key<br/>
+                POST /api/v1/agent/{{ agent.id }}/recover-key<br/>
                 Authorization: Bearer &lt;registration_key&gt;<br/>
                 X-Agent-Recovery-Secret: &lt;recovery_secret&gt;
             </div>

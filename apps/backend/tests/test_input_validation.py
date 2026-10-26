@@ -249,7 +249,7 @@ async def test_registration_with_a_newline_in_the_hostname_is_refused(
     before = len((await db.execute(select(Agent.id))).all())
 
     resp = await agent_client.post(
-        "/api/v1/agents/register",
+        "/api/v1/agent/register",
         json={"hostname": "web01\nedge"},
         headers={"Authorization": f"Bearer {reg_key}"},
     )
@@ -268,7 +268,7 @@ async def test_a_heartbeat_with_a_newline_in_the_hostname_is_refused(
     await db.flush()
 
     resp = await agent_client.post(
-        "/api/v1/heartbeat",
+        "/api/v1/agent/heartbeat",
         json={
             "agent_id": str(agent.id),
             "timestamp": utc_now().isoformat(),
@@ -292,7 +292,7 @@ async def test_a_refused_heartbeat_names_each_error_once(
     await db.flush()
 
     resp = await agent_client.post(
-        "/api/v1/heartbeat",
+        "/api/v1/agent/heartbeat",
         json={
             "agent_id": str(agent.id),
             "timestamp": utc_now().isoformat(),
@@ -458,7 +458,7 @@ async def test_an_approved_agents_heartbeat_is_never_refused_over_its_tags(
     agent, key = approved
 
     resp = await agent_client.post(
-        "/api/v1/heartbeat",
+        "/api/v1/agent/heartbeat",
         json=_beat(agent.id, tags=tags),
         headers={"Authorization": f"Bearer {key}"},
     )
@@ -483,7 +483,7 @@ async def test_a_pending_agents_over_limit_tags_are_not_stored(
 
     with caplog.at_level(logging.WARNING, logger="luxswirl.services.agent"):
         resp = await agent_client.post(
-            "/api/v1/heartbeat",
+            "/api/v1/agent/heartbeat",
             json=_beat(agent.id, tags=tags),
             headers={"Authorization": f"Bearer {reg_key}"},
         )
@@ -503,7 +503,7 @@ async def test_a_pending_agents_tags_within_the_limits_are_stored(
     await db.flush()
 
     resp = await agent_client.post(
-        "/api/v1/heartbeat",
+        "/api/v1/agent/heartbeat",
         json=_beat(agent.id, tags=["prod", "web"]),
         headers={"Authorization": f"Bearer {reg_key}"},
     )
@@ -518,7 +518,7 @@ async def test_registration_with_an_empty_ip_address_stores_it_unset(
     agent_client: AsyncClient, reg_key: str, db: AsyncSession
 ) -> None:
     resp = await agent_client.post(
-        "/api/v1/agents/register",
+        "/api/v1/agent/register",
         json={"hostname": "blank-ip", "ip_address": ""},
         headers={"Authorization": f"Bearer {reg_key}"},
     )
@@ -533,7 +533,7 @@ async def test_registration_with_a_nel_in_the_hostname_is_refused(
     agent_client: AsyncClient, reg_key: str
 ) -> None:
     resp = await agent_client.post(
-        "/api/v1/agents/register",
+        "/api/v1/agent/register",
         json={"hostname": "web01\u0085edge"},
         headers={"Authorization": f"Bearer {reg_key}"},
     )

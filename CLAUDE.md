@@ -66,7 +66,7 @@ The system is designed as a professional SaaS platform with:
 - Pydantic Settings for type-safe configuration
 - SQLAlchemy 2.0 with async support
 - TimescaleDB hypertables for efficient time-series storage
-- A versioned agent protocol under `/api/v1`
+- A versioned agent protocol under `/api/v1/agent`
 - Proper error handling and validation
 - Prometheus metrics export
 
@@ -135,7 +135,7 @@ Web UI:    web/routers/     →  services/views/ →  services/core/  →  crud/
 ### Three-component runtime
 
 1. **luxswirl_agent** (`apps/agent/`) — Runs health checks. Entry: `apps/agent/app/main.py` (`python -m app.main`). Pushes results to server via HTTP. Built as its own image.
-1. **luxswirl_server** (`apps/backend/`) — FastAPI app: agent protocol at `/api/v1`, web dashboard at `/dashboard`, Prometheus at `/metrics`. Entry: `apps/backend/app/main.py` (`uvicorn app.main:app`). Built as its own image.
+1. **luxswirl_server** (`apps/backend/`) — FastAPI app: agent protocol at `/api/v1/agent`, web dashboard at `/dashboard`, Prometheus at `/metrics`. Entry: `apps/backend/app/main.py` (`uvicorn app.main:app`). Built as its own image.
 1. **TimescaleDB** — PostgreSQL extension. Automatic partitioning, configurable retention, continuous aggregates. Schema lives in `apps/backend/app/models/*_model.py`; DDL helpers live in `apps/backend/app/crud/timescale_crud.py`.
 
 ### Web UI
@@ -321,18 +321,20 @@ See `docs/architecture/backend.md` for the full layering rules and naming conven
 
 The JSON API is the agent protocol. Operators manage agents, checks, alerts, notification providers, registration keys, users and jobs through the web UI.
 
-### Agent protocol (`/api/v1`)
+### Agent protocol (`/api/v1/agent`)
 
-| Method | Path                                    | Auth                               | Purpose                                  |
-| ------ | --------------------------------------- | ---------------------------------- | ---------------------------------------- |
-| `POST` | `/api/v1/agents/register`               | Registration key                   | Register a new agent (pending approval)  |
-| `POST` | `/api/v1/agents/{agent_id}/recover-key` | Registration key + recovery secret | Issue a fresh agent key to a known agent |
-| `POST` | `/api/v1/heartbeat`                     | Agent key or registration key      | Report liveness and self-metrics         |
-| `GET`  | `/api/v1/checks?agent_id={id}`          | Agent key                          | The checks this agent should run         |
-| `POST` | `/api/v1/reports`                       | Agent key                          | Submit a batch of check results          |
-| `POST` | `/api/v1/jobs/{job_id}/start`           | Key of the job's own agent         | Report a job started (it is running)     |
-| `POST` | `/api/v1/jobs/{job_id}/results`         | Key of the job's own agent         | Submit a job's results                   |
-| `POST` | `/api/v1/artifacts`                     | Agent key                          | Upload an artifact for one of its checks |
+| Method | Path                                   | Auth                               | Purpose                                  |
+| ------ | -------------------------------------- | ---------------------------------- | ---------------------------------------- |
+| `POST` | `/api/v1/agent/register`               | Registration key                   | Register a new agent (pending approval)  |
+| `POST` | `/api/v1/agent/{agent_id}/recover-key` | Registration key + recovery secret | Issue a fresh agent key to a known agent |
+| `POST` | `/api/v1/agent/heartbeat`              | Agent key or registration key      | Report liveness and self-metrics         |
+| `GET`  | `/api/v1/agent/checks?agent_id={id}`   | Agent key                          | The checks this agent should run         |
+| `POST` | `/api/v1/agent/reports`                | Agent key                          | Submit a batch of check results          |
+| `POST` | `/api/v1/agent/jobs/{job_id}/start`    | Key of the job's own agent         | Report a job started (it is running)     |
+| `POST` | `/api/v1/agent/jobs/{job_id}/results`  | Key of the job's own agent         | Submit a job's results                   |
+| `POST` | `/api/v1/agent/artifacts`              | Agent key                          | Upload an artifact for one of its checks |
+
+The agent builds every one of these from `LUXSWIRL_SERVER_URL`, the server's address with no path (`apps/agent/app/agent/server_api.py`), and refuses to start on one that carries a path, credentials or an invalid port.
 
 ### Infrastructure
 

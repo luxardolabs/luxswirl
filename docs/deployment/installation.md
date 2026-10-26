@@ -335,8 +335,8 @@ services:
       # Required — generated via Settings → Registration Keys after first login.
       # Compose hard-fails this service if unset.
       - LUXSWIRL_AUTH_KEY=${LUXSWIRL_AUTH_KEY:?must be set — generate via the server UI}
-      # Full reports endpoint, ending in /api/v1/reports.
-      - LUXSWIRL_SERVER_URL=http://luxswirl_server:9000/api/v1/reports
+      # The server's address, with no path.
+      - LUXSWIRL_SERVER_URL=http://luxswirl_server:9000
     volumes:
       - ./data/agent:/app/data
 
@@ -408,7 +408,7 @@ curl http://localhost:9000/health
 
 # Check agent connection (view logs)
 sudo docker compose --env-file .env.prod logs luxswirl_agent
-# The agent fetches its checks from GET /api/v1/checks?agent_id=<id>
+# The agent fetches its checks from GET /api/v1/agent/checks?agent_id=<id>
 ```
 
 **Next step**: [Configure reverse proxy](#reverse-proxy-setup-https) for HTTPS access.
@@ -590,8 +590,8 @@ WorkingDirectory=/opt/luxswirl/apps/agent
 Environment="PATH=/opt/luxswirl/venv/bin"
 Environment="PYTHONPATH=/opt/luxswirl/apps/agent"
 EnvironmentFile=/opt/luxswirl/.env
-# Full reports endpoint, ending in /api/v1/reports.
-Environment="LUXSWIRL_SERVER_URL=http://localhost:9000/api/v1/reports"
+# The server's address, with no path.
+Environment="LUXSWIRL_SERVER_URL=http://localhost:9000"
 Environment="LUXSWIRL_AGENT_ID=default-agent"
 # LUXSWIRL_AUTH_KEY must be set (in .env) — generate it via Settings →
 # Registration Keys in the server UI after first login.
@@ -1226,7 +1226,7 @@ sudo docker compose exec luxswirl_agent curl http://luxswirl_server:9000/health
 **Common issues**:
 
 1. **Authentication failed**: `LUXSWIRL_AUTH_KEY` is missing, mistyped, or expired. Create a fresh key in **Settings → Registration Keys**, update it in `.env`, and restart the agent.
-1. **Wrong server URL**: `LUXSWIRL_SERVER_URL` must be the full reports endpoint ending in `/api/v1/reports`.
+1. **Wrong server URL**: `LUXSWIRL_SERVER_URL` must be the server's address, with no path (`https://server.example.com:9000`); the agent refuses to start on one with a path.
 1. **Network isolation**: Ensure the agent can reach the server (check firewall, DNS).
 
 ### Database Performance Issues

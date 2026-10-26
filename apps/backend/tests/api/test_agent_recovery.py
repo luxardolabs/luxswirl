@@ -63,7 +63,7 @@ async def reg_key(db: AsyncSession) -> str:
 async def _register(client: AsyncClient, reg_key: str) -> tuple[UUID, str]:
     """Register over the API, as the agent does: its id and recovery secret."""
     resp = await client.post(
-        "/api/v1/agents/register",
+        "/api/v1/agent/register",
         json={"hostname": "recovery-host"},
         headers={"Authorization": f"Bearer {reg_key}"},
     )
@@ -89,7 +89,7 @@ async def _recover(
         headers["Authorization"] = f"Bearer {bearer}"
     if secret is not None:
         headers[SECRET_HEADER] = secret
-    return await client.post(f"/api/v1/agents/{agent_id}/recover-key", headers=headers)
+    return await client.post(f"/api/v1/agent/{agent_id}/recover-key", headers=headers)
 
 
 async def test_registration_returns_a_secret_stored_only_as_its_hash(
@@ -119,7 +119,7 @@ async def test_the_right_secret_recovers_a_working_key(
     assert new_key and new_key != old_key
     assert secret not in resp.text
     report = await client.post(
-        "/api/v1/reports",
+        "/api/v1/agent/reports",
         json={
             "agent_id": str(agent_id),
             "timestamp": "2026-10-22T10:00:00Z",
@@ -147,7 +147,7 @@ async def test_the_wrong_secret_is_refused(
     assert guess not in caplog.text
     # The refused attempt rotated nothing: the agent's key still works.
     still = await client.post(
-        "/api/v1/reports",
+        "/api/v1/agent/reports",
         json={
             "agent_id": str(agent_id),
             "timestamp": "2026-10-22T10:00:00Z",
@@ -265,7 +265,7 @@ async def test_the_secret_in_the_query_string_is_not_read(
     await _approve(db, agent_id)
 
     resp = await client.post(
-        f"/api/v1/agents/{agent_id}/recover-key",
+        f"/api/v1/agent/{agent_id}/recover-key",
         params={"recovery_secret": secret, SECRET_HEADER: secret},
         headers={"Authorization": f"Bearer {reg_key}"},
     )

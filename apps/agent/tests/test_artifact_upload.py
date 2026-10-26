@@ -1,6 +1,6 @@
 """The agent uploads artifacts as itself: its own key and its own id.
 
-The server authenticates POST /api/v1/artifacts like a report, by the agent
+The server authenticates POST /api/v1/agent/artifacts like a report, by the agent
 named in the body proving its own key, so the upload must carry both.
 """
 
@@ -61,7 +61,7 @@ async def test_the_upload_carries_the_agent_id_and_its_own_key(
 ) -> None:
     config: dict[str, Any] = {
         "agent_id": "agent-1",
-        "push_url": "https://server.example/api/v1/reports",
+        "server_url": "https://server.example",
         "auth_key": "luxswirl_ak_own",
         "report_storage_path": str(tmp_path),
     }
@@ -74,7 +74,7 @@ async def test_the_upload_carries_the_agent_id_and_its_own_key(
 
     assert len(seen) == 1
     body = json.loads(seen[0].content)
-    assert str(seen[0].url) == "https://server.example/api/v1/artifacts"
+    assert str(seen[0].url) == "https://server.example/api/v1/agent/artifacts"
     assert seen[0].headers["Authorization"] == "Bearer luxswirl_ak_own"
     assert body["agent_id"] == "agent-1"
     assert body["check_id"] == "c1"

@@ -97,7 +97,7 @@ services:
       # Required: generate via Settings → Registration Keys in the server UI
       # after first login, then set this value in .env.<env>.
       - LUXSWIRL_AUTH_KEY=${LUXSWIRL_AUTH_KEY:?must be set — generate via server UI after first admin login}
-      - LUXSWIRL_SERVER_URL=http://luxswirl_server${STACK_SUFFIX:-}:9000/api/v1/reports
+      - LUXSWIRL_SERVER_URL=http://luxswirl_server${STACK_SUFFIX:-}:9000
     env_file:
       - .env.${ENV:?set ENV in .env.<env> — it names the file to load}
     restart: unless-stopped
@@ -148,7 +148,7 @@ services:
       # a required `:?` variable: compose interpolates every service in the
       # file, so a required value here would break `up` for the dev, prod and
       # test invocations that never start this profile.
-      - LUXSWIRL_SERVER_URL=${LUXSWIRL_SERVER_URL:-https://luxswirl.example.com:9000/api/v1/reports}
+      - LUXSWIRL_SERVER_URL=${LUXSWIRL_SERVER_URL:-https://luxswirl.example.com:9000}
     network_mode: host
     restart: always
 

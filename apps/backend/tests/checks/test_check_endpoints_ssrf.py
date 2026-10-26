@@ -213,7 +213,7 @@ async def test_the_checks_list_carries_the_private_network_setting(
     await _private_networks(db, blocked)
 
     resp = await client.get(
-        "/api/v1/checks",
+        "/api/v1/agent/checks",
         params={"agent_id": agent_id},
         headers={"Authorization": f"Bearer {key}"},
     )
@@ -230,7 +230,7 @@ async def test_the_heartbeat_response_carries_the_private_network_setting(
     await _private_networks(db, blocked)
 
     resp = await client.post(
-        "/api/v1/heartbeat",
+        "/api/v1/agent/heartbeat",
         json={
             "agent_id": agent_id,
             "timestamp": utc_now().isoformat(),

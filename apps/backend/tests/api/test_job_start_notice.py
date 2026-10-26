@@ -1,4 +1,4 @@
-"""`POST /api/v1/jobs/{job_id}/start`: the job's own agent says it began the job.
+"""`POST /api/v1/agent/jobs/{job_id}/start`: the job's own agent says it began the job.
 
 The job moves from assigned to running with `started_at` stamped, so an
 operator can tell a job the agent never picked up from one that started and
@@ -64,7 +64,7 @@ async def _job(db: AsyncSession, status: JobStatus = JobStatus.ASSIGNED) -> Job:
 
 async def _start(client: AsyncClient, job: Job, key: str | None = _KEY_A):
     headers = {"Authorization": f"Bearer {key}"} if key else {}
-    return await client.post(f"/api/v1/jobs/{job.id}/start", headers=headers)
+    return await client.post(f"/api/v1/agent/jobs/{job.id}/start", headers=headers)
 
 
 async def test_the_jobs_agent_starting_it_makes_it_running(
@@ -126,7 +126,7 @@ async def test_only_the_jobs_own_agent_may_start_it(
 
 async def test_an_unknown_job_is_not_found(client: AsyncClient) -> None:
     resp = await client.post(
-        "/api/v1/jobs/00000000-0000-0000-0000-000000000000/start",
+        "/api/v1/agent/jobs/00000000-0000-0000-0000-000000000000/start",
         headers={"Authorization": f"Bearer {_KEY_A}"},
     )
 

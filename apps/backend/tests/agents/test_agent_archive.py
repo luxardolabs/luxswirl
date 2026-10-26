@@ -146,7 +146,7 @@ async def test_an_archived_agent_gets_no_checks_with_its_own_key(
     await AgentCoreService.archive_agent(db, agent.id)
 
     resp = await client.get(
-        "/api/v1/checks",
+        "/api/v1/agent/checks",
         params={"agent_id": str(agent.id)},
         headers={"Authorization": f"Bearer {key}"},
     )
@@ -162,7 +162,7 @@ async def test_an_archived_agent_heartbeat_is_refused(
     await AgentCoreService.archive_agent(db, agent.id)
 
     resp = await client.post(
-        "/api/v1/heartbeat",
+        "/api/v1/agent/heartbeat",
         json={
             "agent_id": str(agent.id),
             "timestamp": utc_now().isoformat(),
@@ -181,7 +181,7 @@ async def test_an_archived_agent_cannot_report(
     await AgentCoreService.archive_agent(db, agent.id)
 
     resp = await client.post(
-        "/api/v1/reports",
+        "/api/v1/agent/reports",
         json={
             "agent_id": str(agent.id),
             "checks": [
@@ -210,13 +210,13 @@ async def test_a_restored_agent_is_still_refused_until_enabled(
     await AgentCoreService.restore_agent(db, agent.id)
 
     refused = await client.get(
-        "/api/v1/checks",
+        "/api/v1/agent/checks",
         params={"agent_id": str(agent.id)},
         headers={"Authorization": f"Bearer {key}"},
     )
     await AgentCoreService.enable_agent(db, agent.id)
     served = await client.get(
-        "/api/v1/checks",
+        "/api/v1/agent/checks",
         params={"agent_id": str(agent.id)},
         headers={"Authorization": f"Bearer {key}"},
     )
