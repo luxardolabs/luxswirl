@@ -24,7 +24,7 @@ from app.models.check_model import Check
 from app.models.enum_model import MaintenanceJobKind
 from app.models.maintenance_job_model import MaintenanceJob
 from app.models.status_page_model import StatusPage
-from fixtures.factories import make_agent, make_alert, make_check
+from fixtures.factories import make_agent, make_alert, make_check, make_user
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -38,7 +38,12 @@ async def _job(
     target_id: UUID | None = None,
     params: dict[str, object] | None = None,
 ) -> MaintenanceJob:
-    job = MaintenanceJob(kind=kind, target_id=target_id, params=params or {})
+    owner = make_user(role="editor")
+    db.add(owner)
+    await db.flush()
+    job = MaintenanceJob(
+        kind=kind, target_id=target_id, params=params or {}, owner_id=owner.id
+    )
     db.add(job)
     await db.flush()
     return job

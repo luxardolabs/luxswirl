@@ -13,7 +13,10 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.background.maintenance_handlers._bulk_outcome import record_outcome
+from app.background.maintenance_handlers._bulk_outcome import (
+    finish,
+    require_owner_may_edit,
+)
 from app.models.maintenance_job_model import MaintenanceJob
 from app.services.core.check_core_service import CheckCoreService
 from app.services.core.user_core_service import UserCoreService
@@ -28,6 +31,7 @@ async def handle(db: AsyncSession, job: MaintenanceJob) -> None:
         logger.info("bulk_check_delete with empty check_ids — nothing to do")
         return
     check_ids = [UUID(c) if isinstance(c, str) else c for c in raw_ids]
+    await require_owner_may_edit(db, job)
     logger.info(
         "Bulk deleting checks (cascade)",
         extra={"count": len(check_ids), "job_id": str(job.id)},
@@ -41,10 +45,8 @@ async def handle(db: AsyncSession, job: MaintenanceJob) -> None:
         "Bulk deleted checks",
         extra={"result": result, "job_id": str(job.id)},
     )
-    await record_outcome(db, job, "Deleted", result)
     # The core reports a failed statement as failures rather than raising (its
-    # savepoint keeps the session usable), so a job that changed nothing must
-    # fail itself, or the worker finalises it as done. A partial result (some
-    # checks already gone) completes with its counts logged above.
-    if result["success_count"] == 0 and result["failure_count"]:
-        raise RuntimeError("; ".join(result["errors"]))
+    # savepoint keeps the session usable), so a job that changed nothing fails
+    # itself, or the worker would finalise it as done. A partial result (some
+    # checks already gone) completes; either way its counts are kept.
+    await finish(db, job, "Deleted", result, fail_when_nothing_done=True)

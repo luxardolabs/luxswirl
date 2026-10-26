@@ -36,7 +36,6 @@ from app.schemas.admin_check_schema import (
 from app.schemas.check_schema import CheckResponse
 from app.schemas.maintenance_job_schema import MaintenanceJobResponse
 from app.schemas.pagination_schema import build_pagination
-from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.alert_core_service import AlertCoreService
 from app.services.core.check_api_core_service import CheckApiCoreService
 from app.services.core.check_core_service import CheckCoreService
@@ -214,7 +213,7 @@ class AdminCheckCoreService:
         ids = data.ids
         await AdminCheckCoreService._judge_selection(db, role, ids)
         if data.agent_id is not None:
-            await AgentCoreService.get_agent_by_id(db, data.agent_id)
+            await CheckCoreService.get_admitted_agent(db, data.agent_id)
         if data.alert_id is not None:
             await AlertCoreService.get_alert_by_id(db, data.alert_id)
         return await MaintenanceJobCoreService.enqueue(

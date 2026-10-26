@@ -14,6 +14,7 @@ import asyncio
 import contextlib
 from collections.abc import Awaitable, Callable
 from datetime import datetime, timedelta
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import text
@@ -58,6 +59,18 @@ async def _claim_one() -> MaintenanceJob | None:
         return await MaintenanceJobCoreService.mark_running(db, job.id)
 
 
+class JobFailed(RuntimeError):
+    """A handler's refusal or failure, with the progress to keep beside it.
+
+    The handler's session rolls back when it raises, so progress it wrote there
+    is lost; the worker stores this one with the failure instead.
+    """
+
+    def __init__(self, message: str, progress: dict[str, Any] | None = None) -> None:
+        super().__init__(message)
+        self.progress = progress
+
+
 async def _run_handler(job: MaintenanceJob) -> None:
     """Dispatch to the registered handler in a fresh session.
 
@@ -76,8 +89,15 @@ async def _run_handler(job: MaintenanceJob) -> None:
         await handler(db, job)
 
 
-async def _finalize(job_id: UUID, success: bool, error: str | None = None) -> None:
+async def _finalize(
+    job_id: UUID,
+    success: bool,
+    error: str | None = None,
+    progress: dict[str, Any] | None = None,
+) -> None:
     async with worker_session() as db:
+        if progress is not None:
+            await MaintenanceJobCoreService.update_progress(db, job_id, progress)
         if success:
             await MaintenanceJobCoreService.mark_done(db, job_id)
         else:
@@ -111,7 +131,12 @@ async def process_next_job() -> bool:
             "Maintenance job handler failed",
             extra={"job_id": str(job.id), "kind": job.kind},
         )
-        await _finalize(job.id, success=False, error=str(e))
+        await _finalize(
+            job.id,
+            success=False,
+            error=str(e),
+            progress=e.progress if isinstance(e, JobFailed) else None,
+        )
     else:
         await _finalize(job.id, success=True)
         logger.info(

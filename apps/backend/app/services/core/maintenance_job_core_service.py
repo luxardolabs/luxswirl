@@ -5,6 +5,7 @@ Web routes call `enqueue()` and `get_by_id()`. The worker calls `claim_next()`,
 and `delete_old_terminal()`.
 """
 
+import re
 from datetime import datetime
 from typing import Any
 from uuid import UUID
@@ -16,9 +17,13 @@ from app.crud.maintenance_job_crud import MaintenanceJobCRUD
 from app.models.enum_model import MaintenanceJobKind
 from app.models.maintenance_job_model import MaintenanceJob
 from app.schemas.maintenance_job_schema import MaintenanceJobResponse
+from app.shared.log_redaction import scrub_text
 from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.services.maintenance_job")
+
+# Where a SQLAlchemy error's text starts its statement and parameters.
+_SQL_DETAIL = re.compile(r"\[SQL: |\[parameters: ")
 
 
 class MaintenanceJobCoreService:
@@ -100,7 +105,14 @@ class MaintenanceJobCoreService:
 
     @staticmethod
     async def mark_failed(db: AsyncSession, job_id: UUID, error: str) -> None:
-        await MaintenanceJobCRUD.mark_failed(db, job_id, error)
+        """Fail the job with `error` as anyone who polls it may read it.
+
+        A database error's text carries the statement and its parameters (a
+        check's target or script among them): those are cut, and any
+        credential left is masked. The full error is in the worker's log.
+        """
+        summary = scrub_text(_SQL_DETAIL.split(error, maxsplit=1)[0].strip())
+        await MaintenanceJobCRUD.mark_failed(db, job_id, summary or "Job failed")
 
     @staticmethod
     async def update_progress(
