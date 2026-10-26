@@ -77,9 +77,9 @@ deps = [
 [target.rbac]
 # Admin-tier surfaces: settings (including users), registration keys, and the
 # agent approval/lifecycle actions. require_admin_web (AdminUserWeb) is the
-# role gate.
+# web's role gate; require_api_admin (ApiAdmin) is the admin API's.
 admin_url_patterns = ["/settings", "/registration-keys", "/users"]
-require_names = ["require_admin_web", "AdminUserWeb"]
+require_names = ["require_admin_web", "AdminUserWeb", "require_api_admin", "ApiAdmin"]
 
 # AUDIT confirmations — rules examined and found genuinely N/A, recorded so the
 # next reader knows they were adjudicated rather than overlooked:
