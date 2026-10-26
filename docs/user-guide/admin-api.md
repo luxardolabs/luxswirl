@@ -15,8 +15,11 @@ The token list shows each token's name, its first characters (`lsw_` and 8 more)
 A token stops working when any of these is true:
 
 - it is revoked, or past its expiry;
-- its user is deactivated or locked out;
-- its user is deleted (the token is deleted with them).
+- its user changes their password, or an admin resets it (every token of that user is revoked, as their sessions end);
+- its user must change their password before using LuxSwirl again;
+- its user is deactivated, or deleted (the token is deleted with them).
+
+A login lockout (too many wrong passwords) does not stop a token: the lockout guards the password, and anyone who knows a username can trigger one.
 
 A token carries its user's role at the time of each request, so changing a user's role changes what their tokens may do.
 

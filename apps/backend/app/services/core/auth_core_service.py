@@ -17,6 +17,7 @@ from app.crud.session_crud import SessionCRUD
 from app.crud.user_crud import UserCRUD
 from app.models.session_model import Session
 from app.schemas.auth_schema import CurrentUserResponse, SessionResponse
+from app.services.core.api_token_core_service import ApiTokenCoreService
 from app.services.core.settings_core_service import SettingsCoreService
 from app.shared.logger import get_logger
 
@@ -521,6 +522,8 @@ class AuthCoreService:
                 "session_count": session_count,
             },
         )
+        # A token minted from a stolen session must not outlive it either.
+        await ApiTokenCoreService.revoke_all_for_user(db, user.id, "password_changed")
 
         logger.info(
             "Password changed",
@@ -569,6 +572,8 @@ class AuthCoreService:
         user.must_change_password = force_change
         user.failed_login_attempts = 0
         user.locked_until = None
+        # A reset answers a compromised account: its API tokens stop with it.
+        await ApiTokenCoreService.revoke_all_for_user(db, user.id, "password_reset")
 
         logger.info(
             "Password reset",

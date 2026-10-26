@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import Field
+from pydantic import Field, field_validator
 
 from app.core.datetime_utils import utc_now
 from app.models.enum_model import UserRole
@@ -21,6 +21,14 @@ class ApiTokenCreate(BaseSchema):
     expires_in_days: int | None = Field(
         None, ge=1, le=3650, description="Days until it stops working; None = never"
     )
+
+    @field_validator("name")
+    @classmethod
+    def _printable(cls, name: str) -> str:
+        # A NUL is refused by Postgres mid-insert; the rest would garble the list.
+        if any(ord(c) < 32 or ord(c) == 127 for c in name):
+            raise ValueError("A token name cannot contain control characters")
+        return name
 
 
 class ApiTokenResponse(TimestampSchema):

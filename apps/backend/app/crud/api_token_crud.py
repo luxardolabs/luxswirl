@@ -5,7 +5,7 @@ API token CRUD - database queries for users' admin-API tokens.
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.api_token_model import ApiToken
@@ -32,6 +32,18 @@ class ApiTokenCRUD:
     async def mark_revoked(db: AsyncSession, token: ApiToken, at: datetime) -> None:
         token.revoked_at = at
         await db.flush()
+
+    @staticmethod
+    async def revoke_all_for_user(db: AsyncSession, user_id: UUID, at: datetime) -> int:
+        """Revoke every unrevoked token of `user_id`; the number revoked."""
+        result = await db.execute(
+            update(ApiToken)
+            .where(ApiToken.user_id == user_id)
+            .where(ApiToken.revoked_at.is_(None))
+            .values(revoked_at=at)
+            .returning(ApiToken.id)
+        )
+        return len(result.all())
 
     # ── Reads ─────────────────────────────────────────────────────────────────
 
