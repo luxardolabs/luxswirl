@@ -364,7 +364,7 @@ The `/metrics` endpoint exposes:
 - `luxswirl_check_last_execution_time` - Timestamp of last execution
 - `luxswirl_agent_up` - Whether agent is reporting (1/0)
 
-All metrics include labels: `agent`, `check`, `type`, `target`
+All metrics include labels: `agent`, `check`, `type`, `target` (the target with any credential masked)
 
 ## Security
 

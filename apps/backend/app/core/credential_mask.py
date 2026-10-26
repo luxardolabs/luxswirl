@@ -12,10 +12,13 @@ import re
 _MASK = "***"
 # A URL's userinfo: everything between the scheme and the last `@` of the authority.
 _USERINFO = re.compile(r"(?<=://)[^/?#]*@")
-# A key=value password, as libpq, ODBC and query strings write one.
-_PASSWORD_PAIR = re.compile(
-    r"(?i)\b(password|passwd|pwd)(\s*=\s*)('[^']*'|\"[^\"]*\"|[^\s;&]+)"
-)
+# The keys a secret goes by, in a libpq or ODBC string or a URL's query.
+_KEYS = r"(?:ssl)?password|passwd|pwd|secret|token|access_token|api_?key"
+# A value: braced (ODBC), quoted, or bare with backslash escapes (libpq).
+_VALUE = r"\{[^}]*\}|'(?:\\.|[^'])*'|\"(?:\\.|[^\"])*\"|(?:\\.|[^\s;&#])+"
+_PAIR = re.compile(rf"(?i)(?<![\w.-])({_KEYS})(\s*=\s*)({_VALUE})")
+# An ODBC string (`;`-separated): a bare value runs to the `;`, spaces included.
+_ODBC_PAIR = re.compile(rf"(?i)(?<![\w.-])({_KEYS})(\s*=\s*)(\{{[^}}]*\}}|[^;]*)")
 
 
 def mask_credentials(value: str | None) -> str | None:
@@ -23,4 +26,5 @@ def mask_credentials(value: str | None) -> str | None:
     if not value:
         return value
     masked = _USERINFO.sub(f"{_MASK}@", value)
-    return _PASSWORD_PAIR.sub(rf"\1\2{_MASK}", masked)
+    pair = _ODBC_PAIR if ";" in masked and "://" not in masked else _PAIR
+    return pair.sub(rf"\1\2{_MASK}", masked)
