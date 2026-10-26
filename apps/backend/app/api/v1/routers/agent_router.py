@@ -15,14 +15,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import (
     AuthenticatedHeartbeat,
+    KeyedRegistration,
     RecoveryRegistrationKeyRequired,
-    RegistrationKeyRequired,
 )
 from app.db import get_db
 from app.models.enum_model import AgentApprovalStatus
 from app.schemas.agent_schema import (
     AgentHeartbeatResponse,
-    AgentRegisterRequest,
     AgentRegisterResponse,
 )
 from app.schemas.registration_key_schema import AgentKeyRecoveryResponse
@@ -45,8 +44,7 @@ agent_ops_router = APIRouter(tags=["Agent Operations"])
     name="register_agent",
 )
 async def register_agent(
-    data: AgentRegisterRequest,
-    _key: RegistrationKeyRequired,
+    data: KeyedRegistration,
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> AgentRegisterResponse:
     agent, recovery_secret = await AgentCoreService.register_agent(

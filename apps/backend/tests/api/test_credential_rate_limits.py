@@ -23,6 +23,8 @@ from app.core.rate_limit import limiter
 from app.main import app
 from app.models.enum_model import JobStatus, JobType
 from app.models.job_model import Job
+from app.schemas.registration_key_schema import RegistrationKeyCreate
+from app.services.core.registration_key_core_service import RegistrationKeyCoreService
 from fixtures.factories import make_agent
 from httpx import ASGITransport, AsyncClient
 from limits import parse
@@ -149,3 +151,65 @@ async def test_wrong_keys_are_refused_then_limited(
 
     assert set(statuses[:allowed]) == {401}, sorted(set(statuses))
     assert statuses[allowed] == 429, statuses[allowed]
+
+
+# ── The registration key, wherever it is checked ─────────────────────────────
+
+
+@pytest_asyncio.fixture
+async def registration_key(db: AsyncSession) -> str:
+    _, token = await RegistrationKeyCoreService.create_key(
+        db, RegistrationKeyCreate(name="rate-limit"), created_by="tests"
+    )
+    return token
+
+
+def _beat(agent_id: UUID) -> dict[str, object]:
+    return {
+        "agent_id": str(agent_id),
+        "timestamp": utc_now().isoformat(),
+        "status": "online",
+    }
+
+
+async def test_a_pending_agent_heartbeating_with_the_right_key_spends_nothing(
+    client: AsyncClient, db: AsyncSession, registration_key: str
+) -> None:
+    agent = make_agent(approval_status="pending")
+    db.add(agent)
+    await db.flush()
+    allowed = parse(settings.security.registration_rate_limit).amount
+    auth = {"Authorization": f"Bearer {registration_key}"}
+
+    statuses = [
+        (
+            await client.post(
+                "/api/v1/agent/heartbeat", json=_beat(agent.id), headers=auth
+            )
+        ).status_code
+        for _ in range(allowed * 3)
+    ]
+
+    assert set(statuses) == {200}, statuses
+
+
+async def test_malformed_registrations_do_not_spend_the_budget(
+    client: AsyncClient, registration_key: str
+) -> None:
+    """A body that fails validation is refused before the limit counts it or
+    the key is checked, so a well-formed registration still goes through."""
+    allowed = parse(settings.security.registration_rate_limit).amount
+    auth = {"Authorization": f"Bearer {registration_key}"}
+
+    malformed = [
+        (
+            await client.post("/api/v1/agent/register", json=[1, 2], headers=auth)
+        ).status_code
+        for _ in range(allowed)
+    ]
+    good = await client.post(
+        "/api/v1/agent/register", json={"hostname": "ok"}, headers=auth
+    )
+
+    assert set(malformed) == {422}, malformed
+    assert good.status_code == 201, good.text

@@ -35,7 +35,7 @@ from app.core.security import (
 )
 from app.db import get_db
 from app.models.enum_model import UserRole
-from app.schemas.agent_schema import AgentHeartbeat
+from app.schemas.agent_schema import AgentHeartbeat, AgentRegisterRequest
 from app.schemas.api_token_schema import ApiPrincipal
 from app.schemas.check_artifact_schema import CheckArtifactCreate
 from app.schemas.check_result_schema import AgentReportSubmission
@@ -54,15 +54,21 @@ from app.services.core.job_core_service import JobCoreService
 @limiter.limit(settings.security.registration_rate_limit)
 async def require_registration_key(
     request: Request,
+    registration: AgentRegisterRequest,
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     authorization: Annotated[str | None, Header()] = None,
-) -> None:
-    """Passes once the caller has presented a valid registration key."""
+) -> AgentRegisterRequest:
+    """The registration, once the caller has presented a valid registration key.
+
+    The body is declared here, as for heartbeats and reports: a malformed one
+    is refused before the limit counts it or the key is checked.
+    """
     await verify_registration_token(authorization, db)
+    return registration
 
 
-# A request authenticated by the registration key (agent registration).
-RegistrationKeyRequired = Annotated[None, Depends(require_registration_key)]
+# A registration authenticated by the registration key.
+KeyedRegistration = Annotated[AgentRegisterRequest, Depends(require_registration_key)]
 
 
 @limiter.limit(settings.security.registration_rate_limit)
