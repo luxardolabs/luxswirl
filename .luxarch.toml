@@ -68,6 +68,10 @@ deps = [
   "get_current_user_web",
   "require_admin_web",
   "require_editor_web",
+  # The admin API: a user's API token (app/api/deps.py).
+  "require_api_user",
+  "require_api_editor",
+  "require_api_admin",
 ]
 
 [target.rbac]

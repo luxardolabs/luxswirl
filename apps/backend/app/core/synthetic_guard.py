@@ -33,7 +33,7 @@ SYNTHETIC = "synthetic"
 
 
 def require_admin_actor(*, actor_is_admin: bool) -> None:
-    """Refuse a non-admin actor. API Bearer tokens are admin-equivalent.
+    """Refuse a non-admin actor.
 
     Raises:
         AuthorizationException: if the actor is not an admin.

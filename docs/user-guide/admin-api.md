@@ -49,6 +49,33 @@ curl -H "Authorization: Bearer lsw_..." https://luxswirl.example.com/api/v1/admi
 
 A missing, unknown, revoked or expired token gets `401` with `WWW-Authenticate: Bearer`. A valid token whose user lacks the role a route needs gets `403`. A browser session cookie does not authenticate the admin API.
 
+## Checks
+
+A check is addressed by its own id. Reads take any token; writes take an editor's or an admin's, and a synthetic check is an admin's alone.
+
+| Method   | Path                                | Role   | Does                                                                               |
+| -------- | ----------------------------------- | ------ | ---------------------------------------------------------------------------------- |
+| `GET`    | `/api/v1/admin/checks`              | any    | One page of checks (see below)                                                     |
+| `GET`    | `/api/v1/admin/checks/{id}`         | any    | One check                                                                          |
+| `POST`   | `/api/v1/admin/checks`              | editor | Create a check: the check's fields plus `agent_id`; `201`                          |
+| `PATCH`  | `/api/v1/admin/checks/{id}`         | editor | Change the fields sent                                                             |
+| `DELETE` | `/api/v1/admin/checks/{id}`         | editor | Delete it; `204`                                                                   |
+| `POST`   | `/api/v1/admin/checks/{id}/clone`   | editor | Copy it; the body (optional) holds fields to change and a target `agent_id`; `201` |
+| `POST`   | `/api/v1/admin/checks/{id}/enable`  | editor | Enable it                                                                          |
+| `POST`   | `/api/v1/admin/checks/{id}/disable` | editor | Disable it                                                                         |
+
+The list takes `page` (from 1) and `per_page` (1-200, default 50), and filters `agent_id`, `check_type`, `tag`, `search` (name or target), `enabled_only` and `include_internal` (the agents' self-monitoring checks, left out by default). It answers with the page envelope every admin-API list uses:
+
+```json
+{"items": [...], "total": 120, "page": 1, "per_page": 50, "total_pages": 3, "has_next": true}
+```
+
+Walk the pages with `page` until `has_next` is false.
+
+A create or change refuses what the web UI refuses, with the same message: an address the network protection blocks, an unknown agent (`404`), an invalid field (`422`).
+
+A viewer's token reads a database check's `connection_string` with its password masked (`postgresql://monitor:***@db:5432/app`) and never a synthetic check's `script_code`. An editor's or an admin's token reads both.
+
 ## OpenAPI document
 
 `/api/v1/admin/openapi.json` describes every admin-API route, with the bearer scheme declared. It is served to any token holder in every environment, so a client generator or an AI agent can read it. The app-wide `/docs` and `/openapi.json` stay off in production.
