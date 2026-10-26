@@ -1538,24 +1538,24 @@
         },
         {
           "rule": "fw.route_dep_matches_surface",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.180.0",
-          "violations": 2,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
-          "fix": "Annotate the handler with the dependency the surface requires (or an Annotated alias whose Depends target is it). A bare `CurrentUser` proves WHO is calling, not that they may reach this surface \u2014 and because this rule covers reads too, it is what stops the IDOR shape: a GET that takes a bare user, reads an id from the path and returns someone else's row. If a route genuinely belongs to a different surface, its prefix should say so.",
+          "fix": "",
           "example": ""
         },
         {
           "rule": "fw.credential_routes_limited",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.215.0",
-          "violations": 6,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
-          "fix": "attach a per-route limit keyed on the real client \u2014 `@limiter.limit(...)` with a trusted-proxy-aware key function. ON PYTHON 3.14+ THAT DECORATOR ALSO NEEDS THE SANCTIONED SLOWAPI CARVE-OUT, or your suite stops COLLECTING: slowapi 0.1.10 calls the deprecated `asyncio.iscoroutinefunction` inside `Limiter.limit`, so under the canonical `filterwarnings = error` the warning is raised at DECORATION time \u2014 at import of any module holding a limited route, before a single test runs. Take the row from `--doc FLEET-RATE-LIMIT-STANDARD` \u00a74 verbatim; do NOT reach for the broad `ignore::DeprecationWarning:slowapi.extension`, which \u00a74 measured as harmful. `--doc FLEET-RATE-LIMIT-STANDARD` \u00a73: a login endpoint cannot key on the authenticated identity, because the credential is what is being verified, so per-route plus per-IP is the honest fallback. An unlimited credential route takes unlimited guessing against every account from one address. If this route genuinely needs no limit, or your limiter has a name this rule does not recognise, put it in `[allowlist].credential_route_limited = [{ function, evidence }]` \u2014 or escalate, so the recognised set grows for the whole fleet rather than one repo carrying a waiver.",
+          "fix": "",
           "example": ""
         },
         {
@@ -1989,8 +1989,8 @@
         }
       ],
       "summary": {
-        "PASS": 160,
-        "FAIL": 2,
+        "PASS": 162,
+        "FAIL": 0,
         "XFAIL": 0,
         "XPASS": 0,
         "INERT": 18
@@ -2880,12 +2880,12 @@
     }
   },
   "summary": {
-    "PASS": 235,
-    "FAIL": 2,
+    "PASS": 237,
+    "FAIL": 0,
     "XFAIL": 0,
     "XPASS": 0,
     "INERT": 21
   },
-  "commit": "77a16e6223699ff4c87f153bd6da6ca8f5aeb9d0",
-  "generated_at": "2026-10-26T11:33:15Z"
+  "commit": "74afdadd2a8ab083d72a39d8d70dd41ea181d8d9",
+  "generated_at": "2026-10-26T12:35:35Z"
 }

@@ -80,7 +80,7 @@ allow = [
 [test]
 # The backend coverage floor (test.coverage_floor_set): a whole percent of the branch
 # coverage `make test` measures (emitted test block). It only ever goes up.
-coverage_min = 81
+coverage_min = 82
 
 # Warnings the canonical pytest config (filterwarnings = error) must let through.
 # Tracked debt, never blanket: each needs a reason, and it goes away when upstream
