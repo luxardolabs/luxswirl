@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import NotFoundException
 from app.models.maintenance_job_model import MaintenanceJob
 from app.services.core.agent_core_service import AgentCoreService
+from app.services.core.user_core_service import UserCoreService
 from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.maintenance.agent_delete")
@@ -28,7 +29,11 @@ async def handle(db: AsyncSession, job: MaintenanceJob) -> None:
     )
 
     try:
-        await AgentCoreService.delete_agent(db, agent_id)
+        await AgentCoreService.delete_agent(
+            db,
+            agent_id,
+            actor_is_admin=await UserCoreService.is_active_admin(db, job.owner_id),
+        )
     except NotFoundException:
         logger.warning(
             "Agent already gone — marking job done",

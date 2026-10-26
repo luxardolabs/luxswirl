@@ -63,7 +63,7 @@ async def upload(db):
     agent = make_agent(approval_status="pending")
     db.add(agent)
     await db.flush()
-    _, key = await AgentCoreService.approve_agent(db, agent.id)
+    _, key = await AgentCoreService.approve_agent(db, agent.id, actor_is_admin=True)
     check = make_check(agent_id=agent.id, check_type="synthetic")
     db.add(check)
     await db.flush()

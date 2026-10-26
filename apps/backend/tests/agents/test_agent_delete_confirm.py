@@ -94,7 +94,7 @@ async def test_the_count_is_what_the_cascade_removes(db: AsyncSession) -> None:
     await db.flush()
 
     shown = await CheckResultCoreService.count_deleted_with_agent(db, doomed.id)
-    await AgentCoreService.delete_agent(db, doomed.id)
+    await AgentCoreService.delete_agent(db, doomed.id, actor_is_admin=True)
 
     assert shown == 4
     assert await _results_of(db, doomed.id) == 0

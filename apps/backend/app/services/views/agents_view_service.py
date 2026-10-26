@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.datetime_utils import utc_now
 from app.core.exceptions import AgentNotFoundException, ValidationException
-from app.models.enum_model import MaintenanceJobKind
+from app.models.enum_model import MaintenanceJobKind, UserRole
 from app.schemas.agent_schema import (
     AgentOption,
     AgentResponse,
@@ -306,7 +306,7 @@ class AgentsViewService:
         db: AsyncSession,
         agent_id: UUID,
         confirm_name: str,
-        owner_id: UUID | None = None,
+        current_user: AuthedUser,
     ) -> MaintenanceJobResponse:
         """Enqueue an agent_delete maintenance job; returns the job row.
 
@@ -321,11 +321,15 @@ class AgentsViewService:
         )
         if _confirm_key(confirm_name) != expected:
             raise ValidationException(f"Type {expected} exactly to delete this agent.")
+        # Refused now, as well as when the job runs, so the form says so.
+        await AgentCoreService.require_may_delete(
+            db, agent_id, actor_is_admin=current_user.role == UserRole.ADMIN
+        )
         return await MaintenanceJobCoreService.enqueue(
             db,
             kind=MaintenanceJobKind.AGENT_DELETE,
             target_id=agent_id,
-            owner_id=owner_id,
+            owner_id=current_user.id,
         )
 
     # Agent lifecycle actions. Each of these owns BOTH the core call and the HTMX
@@ -354,9 +358,13 @@ class AgentsViewService:
         return agent_name or hostname or str(agent_id)
 
     @staticmethod
-    async def approve_agent(db: AsyncSession, agent_id: UUID) -> HTMLResponse:
+    async def approve_agent(
+        db: AsyncSession, agent_id: UUID, current_user: AuthedUser
+    ) -> HTMLResponse:
         """Approve an agent (auto-generating its API key) and report it."""
-        agent, _api_key = await AgentCoreService.approve_agent(db, agent_id)
+        agent, _api_key = await AgentCoreService.approve_agent(
+            db, agent_id, actor_is_admin=current_user.role == UserRole.ADMIN
+        )
         logger.info("Agent approved via web", extra={"agent_id": str(agent_id)})
         return hx_empty_with_toast(
             f"Agent '{AgentsViewService._display_name(agent.agent_name, agent.hostname, agent.id)}' approved successfully",
@@ -611,7 +619,10 @@ class AgentsViewService:
 
     @staticmethod
     async def handle_update_agent_form(
-        db: AsyncSession, agent_id: UUID, form_kwargs: dict[str, Any]
+        db: AsyncSession,
+        agent_id: UUID,
+        form_kwargs: dict[str, Any],
+        current_user: AuthedUser,
     ) -> tuple[str, str, int]:
         """
         Apply an agent-update form. Returns (kind, message, status):
@@ -686,7 +697,12 @@ class AgentsViewService:
                 update_dict["log_level"] = ll if ll else None
 
             update_data = AgentUpdate(**update_dict)
-            await AgentCoreService.update_agent_response(db, agent_id, update_data)
+            await AgentCoreService.update_agent_response(
+                db,
+                agent_id,
+                update_data,
+                actor_is_admin=current_user.role == UserRole.ADMIN,
+            )
             await AgentsViewService.force_reload(db, agent_id)
             logger.info(
                 "Updated agent via web UI",

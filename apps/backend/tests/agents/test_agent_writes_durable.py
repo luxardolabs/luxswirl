@@ -48,14 +48,17 @@ async def test_create_update_and_delete_are_committed(worker_db) -> None:
 
     async with worker_db() as s:
         await AgentCoreService.update_agent(
-            s, created.id, AgentUpdate(agent_name="renamed-agent")
+            s,
+            created.id,
+            AgentUpdate(agent_name="renamed-agent"),
+            actor_is_admin=True,
         )
         await s.commit()
     stored = await _stored(worker_db, created.id)
     assert stored is not None and stored.agent_name == "renamed-agent"
 
     async with worker_db() as s:
-        await AgentCoreService.delete_agent(s, created.id)
+        await AgentCoreService.delete_agent(s, created.id, actor_is_admin=True)
         await s.commit()
     assert await _stored(worker_db, created.id) is None
 
@@ -126,7 +129,7 @@ async def test_an_approval_is_committed_with_a_key(worker_db) -> None:
     agent_id = await _seed(worker_db, approval_status=AgentApprovalStatus.PENDING)
 
     async with worker_db() as s:
-        await AgentCoreService.approve_agent(s, agent_id)
+        await AgentCoreService.approve_agent(s, agent_id, actor_is_admin=True)
         await s.commit()
 
     stored = await _stored(worker_db, agent_id)

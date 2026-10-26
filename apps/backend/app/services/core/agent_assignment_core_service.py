@@ -15,10 +15,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.datetime_utils import utc_now
 from app.core.exceptions import AgentNotFoundException
 from app.core.liveness import handed_off, handed_off_at
+from app.core.synthetic_guard import SYNTHETIC
 from app.crud.agent_crud import AgentCRUD
 from app.crud.check_crud import CheckCRUD
 from app.models.agent_model import Agent
 from app.models.check_model import Check
+from app.models.enum_model import AssignmentMode
 from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.services.agent_assignment")
@@ -196,6 +198,29 @@ class AgentAssignmentCoreService:
             raise AgentNotFoundException(str(agent_id))
         checks = await AgentAssignmentCoreService.get_reportable_checks(db, agent)
         return any(check.id == check_id for check in checks)
+
+    @staticmethod
+    async def synthetic_checks_reaching(db: AsyncSession, agent: Agent) -> set[UUID]:
+        """The synthetic checks `agent` is placed to run, as it stands now.
+
+        Its own manual ones, and every replicate or distribute one whose selector
+        it matches (a distribute check's turn moves within its pool, so the whole
+        pool is reached). A synthetic check runs arbitrary code, so changing this
+        set is an admin's, as changing the check itself is.
+        """
+        candidates = await CheckCRUD.list_assignment_candidates(db, agent.id)
+        return {
+            check.id
+            for check in candidates
+            if check.check_type == SYNTHETIC
+            and (
+                check.agent_id == agent.id
+                if check.assignment_mode == AssignmentMode.MANUAL
+                else AgentAssignmentCoreService.agent_matches_selector(
+                    agent, check.agent_selector
+                )
+            )
+        }
 
     @staticmethod
     async def get_checks_for_agent(

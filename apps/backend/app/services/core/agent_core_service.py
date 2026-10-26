@@ -22,7 +22,9 @@ from app.core.exceptions import (
     DuplicateResourceException,
     ValidationException,
 )
+from app.core.synthetic_guard import SYNTHETIC, require_admin_actor
 from app.crud.agent_crud import AgentCRUD
+from app.crud.check_crud import CheckCRUD
 from app.models.agent_metric_model import AgentMetric
 from app.models.agent_model import Agent
 from app.models.enum_model import AgentApprovalStatus
@@ -312,11 +314,13 @@ class AgentCoreService:
 
     @staticmethod
     async def update_agent_response(
-        db: AsyncSession, agent_id: UUID, data: AgentUpdate
+        db: AsyncSession, agent_id: UUID, data: AgentUpdate, *, actor_is_admin: bool
     ) -> AgentResponse:
         """Update an agent and return it in its API shape."""
         return AgentCoreService.to_response(
-            await AgentCoreService.update_agent(db, agent_id, data)
+            await AgentCoreService.update_agent(
+                db, agent_id, data, actor_is_admin=actor_is_admin
+            )
         )
 
     @staticmethod
@@ -464,7 +468,7 @@ class AgentCoreService:
 
     @staticmethod
     async def update_agent(
-        db: AsyncSession, agent_id: UUID, data: AgentUpdate
+        db: AsyncSession, agent_id: UUID, data: AgentUpdate, *, actor_is_admin: bool
     ) -> Agent:
         """
         Update an agent.
@@ -486,8 +490,22 @@ class AgentCoreService:
 
         # Update fields
         update_data = data.model_dump(exclude_unset=True)
+        # A new name or new tags can put the agent in (or take it out of) a
+        # synthetic check's selector: that change of where code runs is an admin's.
+        placement_changes = not actor_is_admin and bool(
+            {"agent_name", "tags"} & update_data.keys()
+        )
+        before = (
+            await AgentAssignmentCoreService.synthetic_checks_reaching(db, agent)
+            if placement_changes
+            else set()
+        )
         for field, value in update_data.items():
             setattr(agent, field, value)
+        if placement_changes and before != (
+            await AgentAssignmentCoreService.synthetic_checks_reaching(db, agent)
+        ):
+            require_admin_actor(actor_is_admin=actor_is_admin)
 
         agent.updated_at = utc_now()
 
@@ -768,18 +786,43 @@ class AgentCoreService:
         )
 
     @staticmethod
-    async def delete_agent(db: AsyncSession, agent_id: UUID) -> None:
+    async def require_may_delete(
+        db: AsyncSession, agent_id: UUID, *, actor_is_admin: bool
+    ) -> None:
+        """Refuse a non-admin the delete of an agent that owns synthetic checks
+        (they cascade with it, and removing one is an admin's).
+
+        Raises:
+            AuthorizationException: the agent owns synthetic checks and the
+                actor is not an admin.
+        """
+        if actor_is_admin:
+            return
+        owned = await CheckCRUD.list_for_agent(db, agent_id)
+        if any(check.check_type == SYNTHETIC for check in owned):
+            require_admin_actor(actor_is_admin=actor_is_admin)
+
+    @staticmethod
+    async def delete_agent(
+        db: AsyncSession, agent_id: UUID, *, actor_is_admin: bool
+    ) -> None:
         """
         Delete an agent (and cascade delete checks and results).
 
         Args:
             db: Database session
             agent_id: Agent UUID
+            actor_is_admin: Whether the actor is an admin; only an admin
+                deletes an agent that owns synthetic checks
 
         Raises:
             AgentNotFoundException: If agent not found
+            AuthorizationException: See `require_may_delete`
         """
         agent = await AgentCoreService.get_agent_by_id(db, agent_id)
+        await AgentCoreService.require_may_delete(
+            db, agent_id, actor_is_admin=actor_is_admin
+        )
 
         await AgentCRUD.delete_agent(db, agent)
 
@@ -902,7 +945,7 @@ class AgentCoreService:
 
     @staticmethod
     async def approve_agent(
-        db: AsyncSession, agent_id: UUID
+        db: AsyncSession, agent_id: UUID, *, actor_is_admin: bool
     ) -> tuple[AgentOption, str]:
         """
         Approve a pending agent and generate its API key.
@@ -924,6 +967,10 @@ class AgentCoreService:
         if agent.approval_status == "active":
             raise ValueError("Agent is already approved")
         _require_status(agent, _APPROVABLE, "approved")
+        # Approval starts every synthetic check the agent's name or tags already
+        # match: putting that code on a new host is an admin's.
+        if await AgentAssignmentCoreService.synthetic_checks_reaching(db, agent):
+            require_admin_actor(actor_is_admin=actor_is_admin)
 
         # Generate agent-specific API key
         api_key = f"luxswirl_ak_{secrets.token_hex(16)}"

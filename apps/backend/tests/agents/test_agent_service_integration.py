@@ -117,6 +117,7 @@ class TestUpdateAgent:
             db,
             a.id,
             AgentUpdate(agent_name="after", hostname="new-host"),
+            actor_is_admin=True,
         )
         assert updated.agent_name == "after"
         assert updated.hostname == "new-host"
@@ -124,7 +125,10 @@ class TestUpdateAgent:
     async def test_missing_agent_raises(self, db: AsyncSession):
         with pytest.raises(AgentNotFoundException):
             await AgentCoreService.update_agent(
-                db, uuid4(), AgentUpdate(agent_name="x")
+                db,
+                uuid4(),
+                AgentUpdate(agent_name="x"),
+                actor_is_admin=True,
             )
 
 
@@ -143,7 +147,9 @@ class TestApprovalWorkflow:
         pending, _ = await AgentCoreService.register_agent(db, hostname="h")
         assert (await _stored(db, pending.id)).approval_status == "pending"
 
-        approved, plaintext_key = await AgentCoreService.approve_agent(db, pending.id)
+        approved, plaintext_key = await AgentCoreService.approve_agent(
+            db, pending.id, actor_is_admin=True
+        )
         assert approved.id == pending.id
         agent = await _stored(db, pending.id)
         assert agent.approval_status == "active"
@@ -159,7 +165,7 @@ class TestApprovalWorkflow:
         db.add(a)
         await db.flush()
         with pytest.raises(ValueError, match="already approved"):
-            await AgentCoreService.approve_agent(db, a.id)
+            await AgentCoreService.approve_agent(db, a.id, actor_is_admin=True)
 
     async def test_reject_pending_agent(self, db: AsyncSession):
         pending, _ = await AgentCoreService.register_agent(db, hostname="h")
@@ -209,7 +215,9 @@ class TestApiKeyManagement:
         self, db: AsyncSession
     ):
         pending, _ = await AgentCoreService.register_agent(db, hostname="h")
-        _, original_key = await AgentCoreService.approve_agent(db, pending.id)
+        _, original_key = await AgentCoreService.approve_agent(
+            db, pending.id, actor_is_admin=True
+        )
         original_hash = (await _stored(db, pending.id)).api_key_hash
 
         _, new_key = await AgentCoreService.regenerate_agent_key(db, pending.id)
@@ -224,7 +232,7 @@ class TestApiKeyManagement:
 
     async def test_revoke_clears_hash(self, db: AsyncSession):
         pending, _ = await AgentCoreService.register_agent(db, hostname="h")
-        await AgentCoreService.approve_agent(db, pending.id)
+        await AgentCoreService.approve_agent(db, pending.id, actor_is_admin=True)
         assert (await _stored(db, pending.id)).api_key_hash is not None
 
         await AgentCoreService.revoke_agent_key(db, pending.id)
@@ -264,7 +272,7 @@ class TestDeleteAgent:
         await db.flush()
         agent_id = a.id
 
-        await AgentCoreService.delete_agent(db, agent_id)
+        await AgentCoreService.delete_agent(db, agent_id, actor_is_admin=True)
 
         from app.crud.agent_crud import AgentCRUD
 
@@ -272,4 +280,4 @@ class TestDeleteAgent:
 
     async def test_missing_agent_raises(self, db: AsyncSession):
         with pytest.raises(AgentNotFoundException):
-            await AgentCoreService.delete_agent(db, uuid4())
+            await AgentCoreService.delete_agent(db, uuid4(), actor_is_admin=True)
