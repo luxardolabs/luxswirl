@@ -29,8 +29,8 @@
     </td>
 
     <!-- Target -->
-    <td class="text-dark-text-secondary text-sm max-w-xs truncate" title="{{ log.check_target }}">
-        {{ log.check_target }}
+    <td class="text-dark-text-secondary text-sm max-w-xs truncate" title="{{ log.check_target|mask_credentials }}">
+        {{ log.check_target|mask_credentials }}
     </td>
 
     <!-- Check Result (Up/Down) -->

@@ -67,8 +67,8 @@
                             <div class="font-medium text-dark-text-primary truncate" title="{{ c.display_name }}">
                                 {{ c.display_name }}
                             </div>
-                            <div class="text-xs font-mono text-dark-text-muted truncate" title="{{ c.target }}">
-                                {{ c.target }}
+                            <div class="text-xs font-mono text-dark-text-muted truncate" title="{{ c.target|mask_credentials }}">
+                                {{ c.target|mask_credentials }}
                             </div>
                         </div>
                         <div class="text-xs text-dark-text-muted whitespace-nowrap">

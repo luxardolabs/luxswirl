@@ -12,7 +12,7 @@
         data-check-name="{{ check.display_name }}"
         data-check-type="{{ check.check_type }}"
         data-agent-id="{{ check.agent.id }}"
-        data-target="{{ check.target }}"
+        data-target="{{ check.target|mask_credentials }}"
     >
         {% if is_added %}
             {% set added_svg %}<span class="w-3.5 h-3.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/check.svg" %}</span>{% endset %}
@@ -44,7 +44,7 @@
                     {{ meta_tag(t, 'success') }}
                     {% endfor %}
                 {% endif %}
-                <span class="text-xs font-mono text-dark-text-secondary truncate">{{ check.target }}</span>
+                <span class="text-xs font-mono text-dark-text-secondary truncate">{{ check.target|mask_credentials }}</span>
             </div>
         </div>
         <div class="flex-shrink-0">

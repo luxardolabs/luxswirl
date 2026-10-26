@@ -153,7 +153,7 @@
                                             {{ meta_tag(tag, 'success') }}
                                             {% endfor %}
                                         {% endif %}
-                                        <span class="text-xs font-mono text-dark-text-secondary truncate">{{ check.target }}</span>
+                                        <span class="text-xs font-mono text-dark-text-secondary truncate">{{ check.target|mask_credentials }}</span>
                                     </div>
                                 </div>
                                 <div class="flex items-center gap-2 flex-shrink-0">
@@ -203,7 +203,7 @@
                                             {{ meta_tag(tag, 'success') }}
                                             {% endfor %}
                                         {% endif %}
-                                        <span class="text-xs font-mono text-dark-text-secondary truncate">{{ check.target }}</span>
+                                        <span class="text-xs font-mono text-dark-text-secondary truncate">{{ check.target|mask_credentials }}</span>
                                     </div>
                                 </div>
                                 <div class="flex items-center gap-2 flex-shrink-0">
@@ -253,7 +253,7 @@
                                 {{ meta_tag(t, 'success') }}
                                 {% endfor %}
                             {% endif %}
-                            <span class="text-xs font-mono text-dark-text-secondary truncate">{{ check.target }}</span>
+                            <span class="text-xs font-mono text-dark-text-secondary truncate">{{ check.target|mask_credentials }}</span>
                         </div>
                     {% else %}
                         <span class="font-medium text-dark-text-primary">Check #{{ item.check_id }}</span>

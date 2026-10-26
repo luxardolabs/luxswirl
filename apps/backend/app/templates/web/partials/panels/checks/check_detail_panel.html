@@ -12,12 +12,12 @@
             <div class="flex items-start justify-between gap-4 mb-2">
                 <div class="flex-1 min-w-0">
                     <h3 class="text-2xl font-bold text-dark-text-primary mb-1 truncate" title="{{ check.display_name }}">{{ check.display_name }}</h3>
-                    <div class="flex items-center gap-1.5 text-sm font-mono text-dark-text-muted min-w-0" title="{{ check.target }}">
-                        <span class="truncate">{{ check.target }}</span>
+                    <div class="flex items-center gap-1.5 text-sm font-mono text-dark-text-muted min-w-0" title="{{ check.target|mask_credentials }}">
+                        <span class="truncate">{{ check.target|mask_credentials }}</span>
                         {% if check.target.startswith('http://') or check.target.startswith('https://') %}
-                        <a href="{{ check.target }}" target="_blank" rel="noopener noreferrer"
+                        <a href="{{ check.target|mask_credentials }}" target="_blank" rel="noopener noreferrer"
                            class="inline-flex items-center text-brand-400 hover:text-brand-300 transition-colors flex-shrink-0"
-                           title="Open {{ check.target }} in a new tab">
+                           title="Open {{ check.target|mask_credentials }} in a new tab">
                             <span class="w-3.5 h-3.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/arrow-top-right-on-square.svg" %}</span>
                         </a>
                         {% endif %}

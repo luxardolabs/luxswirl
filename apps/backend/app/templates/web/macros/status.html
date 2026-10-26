@@ -83,8 +83,8 @@
     <div class="flex items-center justify-between gap-3">
         <!-- Left side: Target, Type, Tags -->
         <div class="flex items-center gap-2 min-w-0 flex-1">
-            <span class="text-xs font-mono text-dark-text-secondary truncate" title="{{ row.target }}">
-                {{ row.target }}
+            <span class="text-xs font-mono text-dark-text-secondary truncate" title="{{ row.target|mask_credentials }}">
+                {{ row.target|mask_credentials }}
             </span>
             <span class="px-2 py-0.5 text-xs font-medium rounded bg-dark-bg-tertiary text-dark-text-muted flex items-center gap-1 flex-shrink-0">
                 {{ check_type_icon(row.check_type) }}
