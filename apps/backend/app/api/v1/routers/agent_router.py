@@ -10,15 +10,13 @@ so routes do not catch it explicitly.
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, Request, status
+from fastapi import APIRouter, Depends, Header, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import AuthenticatedHeartbeat
-from app.core.config import settings
-from app.core.rate_limit import limiter
-from app.core.security import (
-    verify_recovery_registration_key,
-    verify_registration_token,
+from app.api.deps import (
+    AuthenticatedHeartbeat,
+    RecoveryRegistrationKeyRequired,
+    RegistrationKeyRequired,
 )
 from app.db import get_db
 from app.models.enum_model import AgentApprovalStatus
@@ -46,14 +44,11 @@ agent_ops_router = APIRouter(tags=["Agent Operations"])
     description="Register a new agent for approval using registration key. Returns agent UUID to store locally.",
     name="register_agent",
 )
-@limiter.limit(settings.security.registration_rate_limit)
 async def register_agent(
-    request: Request,
     data: AgentRegisterRequest,
+    _key: RegistrationKeyRequired,
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
-    authorization: Annotated[str | None, Header()] = None,
 ) -> AgentRegisterResponse:
-    await verify_registration_token(authorization, db)
     agent, recovery_secret = await AgentCoreService.register_agent(
         db=db,
         hostname=data.hostname or "",
@@ -75,9 +70,7 @@ async def register_agent(
     summary="Agent heartbeat",
     name="agent_heartbeat",
 )
-@limiter.limit(settings.security.agent_api_rate_limit)
 async def agent_heartbeat(
-    request: Request,
     sender: AuthenticatedHeartbeat,
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> AgentHeartbeatResponse:
@@ -102,17 +95,14 @@ async def agent_heartbeat(
     response_model=AgentKeyRecoveryResponse,
     name="recover_agent_key",
 )
-@limiter.limit(settings.security.registration_rate_limit)
 async def recover_agent_key(
-    request: Request,
     agent_id: UUID,
+    _key: RecoveryRegistrationKeyRequired,
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
-    authorization: Annotated[str | None, Header()] = None,
     recovery_secret: Annotated[
         str | None, Header(alias="X-Agent-Recovery-Secret")
     ] = None,
 ) -> AgentKeyRecoveryResponse:
-    await verify_recovery_registration_key(agent_id, authorization, db)
     new_key = await AgentCoreService.recover_agent_key(db, agent_id, recovery_secret)
 
     return AgentKeyRecoveryResponse(

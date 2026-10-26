@@ -7,12 +7,10 @@ This router only handles HTTP concerns (request/response, status codes, etc.).
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import AgentOwnedJobId
-from app.core.config import settings
-from app.core.rate_limit import limiter
 from app.db import get_db
 from app.schemas.base_schema import ErrorResponse
 from app.schemas.job_schema import (
@@ -34,9 +32,7 @@ router = APIRouter(prefix="/jobs", tags=["Jobs"])
     },
     name="start_job",
 )
-@limiter.limit(settings.security.agent_api_rate_limit)
 async def start_job(
-    request: Request,
     owned_job_id: AgentOwnedJobId,
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> JobResponse:
@@ -60,9 +56,7 @@ async def start_job(
     },
     name="submit_job_results",
 )
-@limiter.limit(settings.security.agent_api_rate_limit)
 async def submit_job_results(
-    request: Request,
     owned_job_id: AgentOwnedJobId,
     result_data: JobResultSubmit,
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],

@@ -219,10 +219,12 @@ require_dep = ["AdminUserWeb", "require_admin_web"]
 
 # The agent protocol: every route takes the agent's own key, or (register,
 # recover-key, a pending agent's heartbeat) the registration key, through one
-# of these dependencies.
+# of these dependencies; each carries the route's rate limit.
 [[target.authz.signature]]
 prefix = "/api/v1/agent/"
 require_dep = [
+  "RegistrationKeyRequired",
+  "RecoveryRegistrationKeyRequired",
   "AuthenticatedAgentId",
   "AuthenticatedHeartbeat",
   "ReportingAgentId",

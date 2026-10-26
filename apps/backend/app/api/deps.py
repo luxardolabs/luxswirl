@@ -21,14 +21,17 @@ from dataclasses import dataclass
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import Depends, Header, HTTPException, status
+from fastapi import Depends, Header, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.exceptions import AgentNotFoundException
+from app.core.rate_limit import limiter
 from app.core.security import (
     authenticate_heartbeat,
     verify_agent_token,
+    verify_recovery_registration_key,
+    verify_registration_token,
 )
 from app.db import get_db
 from app.models.enum_model import UserRole
@@ -40,8 +43,50 @@ from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.api_token_core_service import ApiTokenCoreService
 from app.services.core.job_core_service import JobCoreService
 
+# ── The agent protocol: the agent's own key, or the registration key ─────────
+#
+# Each dependency that checks a key carries the route's rate limit itself.
+# FastAPI resolves dependencies before the handler, so a limit on the handler
+# never sees a request refused here: the key could be guessed without limit.
+# Limited here, every call counts, the refused ones included.
 
+
+@limiter.limit(settings.security.registration_rate_limit)
+async def require_registration_key(
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
+    authorization: Annotated[str | None, Header()] = None,
+) -> None:
+    """Passes once the caller has presented a valid registration key."""
+    await verify_registration_token(authorization, db)
+
+
+# A request authenticated by the registration key (agent registration).
+RegistrationKeyRequired = Annotated[None, Depends(require_registration_key)]
+
+
+@limiter.limit(settings.security.registration_rate_limit)
+async def require_recovery_registration_key(
+    request: Request,
+    agent_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
+    authorization: Annotated[str | None, Header()] = None,
+) -> None:
+    """Passes once a key recovery for `agent_id` has presented a valid
+    registration key; a refusal is audited. The agent's own recovery secret is
+    the other half, checked in core."""
+    await verify_recovery_registration_key(agent_id, authorization, db)
+
+
+# A key recovery authenticated by the registration key (path parameter agent_id).
+RecoveryRegistrationKeyRequired = Annotated[
+    None, Depends(require_recovery_registration_key)
+]
+
+
+@limiter.limit(settings.security.agent_api_rate_limit)
 async def require_job_owner(
+    request: Request,
     job_id: UUID,
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     authorization: Annotated[str | None, Header()] = None,
@@ -80,7 +125,9 @@ async def require_job_owner(
 AgentOwnedJobId = Annotated[UUID, Depends(require_job_owner)]
 
 
+@limiter.limit(settings.security.agent_api_rate_limit)
 async def require_agent(
+    request: Request,
     agent_id: UUID,
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     authorization: Annotated[str | None, Header()] = None,
@@ -114,7 +161,9 @@ class HeartbeatSender:
     using_agent_key: bool
 
 
+@limiter.limit(settings.security.agent_api_rate_limit)
 async def require_heartbeat_sender(
+    request: Request,
     heartbeat: AgentHeartbeat,
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     authorization: Annotated[str | None, Header()] = None,
@@ -135,7 +184,9 @@ async def require_heartbeat_sender(
 AuthenticatedHeartbeat = Annotated[HeartbeatSender, Depends(require_heartbeat_sender)]
 
 
+@limiter.limit(settings.security.agent_api_rate_limit)
 async def require_reporting_agent(
+    request: Request,
     report: AgentReportSubmission,
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     authorization: Annotated[str | None, Header()] = None,
@@ -169,7 +220,9 @@ async def require_reporting_agent(
 ReportingAgentId = Annotated[UUID, Depends(require_reporting_agent)]
 
 
+@limiter.limit(settings.security.agent_api_rate_limit)
 async def require_uploading_agent(
+    request: Request,
     artifact: CheckArtifactCreate,
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     authorization: Annotated[str | None, Header()] = None,
