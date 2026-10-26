@@ -732,6 +732,10 @@ class AgentCoreService:
         it, and an agent whose key was revoked is not rewritten by whoever
         holds the shared key. Jobs go only to the agent's own key.
         """
+        # Locked, so the pending check below and an approval of the same agent
+        # never interleave: the tags a pending agent suggests land either before
+        # approval judges them, or not at all.
+        await AgentCRUD.lock(db, agent_id)
         agent = await AgentCoreService.get_agent_by_id(db, agent_id)
         if using_agent_key or agent.approval_status == AgentApprovalStatus.PENDING:
             agent = await AgentCoreService.update_from_heartbeat(
@@ -962,6 +966,8 @@ class AgentCoreService:
             ValueError: If agent is already active
         """
 
+        # Locked against a heartbeat that would change the tags judged below.
+        await AgentCRUD.lock(db, agent_id)
         agent = await AgentCoreService.get_agent_by_id(db, agent_id)
 
         if agent.approval_status == "active":
