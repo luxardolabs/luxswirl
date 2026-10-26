@@ -157,6 +157,25 @@ The keys agents register with. Every route takes an admin's token, as the web UI
 
 The token's user is recorded as `created_by` and `revoked_by`. A key revoked once stays revoked as first recorded: revoking it again is a `422`. A revoked key is kept, not deleted, so its usage and revocation stay on record. An approved agent keeps working after the key it registered with is revoked, since it uses its own key. A pending agent, or one that has not fetched its own key yet, uses the registration key for its heartbeat and key recovery, so it needs another registration key.
 
+## Alerts
+
+An alert rule is addressed by its own id. Reads take any token, and every change takes an editor's. Snoozing takes any token, as any signed-in user may snooze in the web UI. A deleted alert is not found. See [Alerts](alerts.md) for the triggers and their `trigger_config`.
+
+| Method   | Path                                              | Role   | Does                                                                                                    |
+| -------- | ------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------- |
+| `GET`    | `/api/v1/admin/alerts`                            | any    | One page of alerts; `is_enabled`, `is_global`                                                           |
+| `GET`    | `/api/v1/admin/alerts/{id}`                       | any    | One alert, with its `notification_provider_ids` and `check_ids`                                         |
+| `POST`   | `/api/v1/admin/alerts`                            | editor | Create one, with its providers and, unless global, its checks; `201`                                    |
+| `PATCH`  | `/api/v1/admin/alerts/{id}`                       | editor | Change the fields sent; one left out is unchanged                                                       |
+| `DELETE` | `/api/v1/admin/alerts/{id}`                       | editor | Delete it: it notifies no one again; `204`                                                              |
+| `POST`   | `/api/v1/admin/alerts/{id}/enable`, `/disable`    | editor | Turn it on or off                                                                                       |
+| `PUT`    | `/api/v1/admin/alerts/{id}/providers`             | editor | `{"notification_provider_ids": [...]}` becomes the whole set; returns `{"added", "removed"}`            |
+| `PUT`    | `/api/v1/admin/alerts/{id}/checks`                | editor | `{"check_ids": [...]}` becomes the whole set of a non-global alert's checks                             |
+| `POST`   | `/api/v1/admin/alerts/{id}/checks/{check}/snooze` | any    | Hold back its notifications for that check: `{"minutes"}`, 1-1440, default 15, extends a running snooze |
+| `DELETE` | `/api/v1/admin/alerts/{id}/checks/{check}/snooze` | any    | Resume them now; `204`                                                                                  |
+
+An unknown provider or check id is a `422` that names it. A global alert reaches checks by its filters as they are created, so it takes no `check_ids` (`422`). A replacement keeps what stays: a kept check keeps its snooze, and a kept provider keeps its mapping. Snoozing a check the alert does not watch is a `404`.
+
 ## OpenAPI document
 
 `/api/v1/admin/openapi.json` describes every admin-API route, with the bearer scheme declared. It is served to any token holder in every environment, so a client generator or an AI agent can read it. The app-wide `/docs` and `/openapi.json` stay off in production.

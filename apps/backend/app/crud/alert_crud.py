@@ -386,6 +386,78 @@ class AlertCRUD:
         await db.delete(alert)
 
     @staticmethod
+    async def list_provider_ids(db: AsyncSession, alert_id: UUID) -> list[UUID]:
+        """The providers `alert_id` notifies, in id order."""
+        result = await db.execute(
+            select(AlertNotificationMapping.notification_provider_id)
+            .where(AlertNotificationMapping.alert_id == alert_id)
+            .order_by(AlertNotificationMapping.notification_provider_id)
+        )
+        return list(result.scalars().all())
+
+    @staticmethod
+    async def list_check_ids(db: AsyncSession, alert_id: UUID) -> list[UUID]:
+        """The checks `alert_id` is mapped to, in id order."""
+        result = await db.execute(
+            select(AlertCheckMapping.check_id)
+            .where(AlertCheckMapping.alert_id == alert_id)
+            .order_by(AlertCheckMapping.check_id)
+        )
+        return list(result.scalars().all())
+
+    @staticmethod
+    async def replace_provider_mappings(
+        db: AsyncSession, alert_id: UUID, provider_ids: Sequence[UUID]
+    ) -> tuple[int, int]:
+        """Make `provider_ids` exactly the alert's providers; (added, removed).
+
+        A provider kept keeps its mapping row, and with it its enabled state.
+        """
+        current = set(await AlertCRUD.list_provider_ids(db, alert_id))
+        wanted = set(provider_ids)
+        removed = current - wanted
+        if removed:
+            await db.execute(
+                delete(AlertNotificationMapping).where(
+                    AlertNotificationMapping.alert_id == alert_id,
+                    AlertNotificationMapping.notification_provider_id.in_(removed),
+                )
+            )
+        db.add_all(
+            AlertNotificationMapping(
+                alert_id=alert_id, notification_provider_id=provider_id, is_enabled=True
+            )
+            for provider_id in wanted - current
+        )
+        await db.flush()
+        return len(wanted - current), len(removed)
+
+    @staticmethod
+    async def replace_check_mappings(
+        db: AsyncSession, alert_id: UUID, check_ids: Sequence[UUID]
+    ) -> tuple[int, int]:
+        """Make `check_ids` exactly the alert's checks; (added, removed).
+
+        A check kept keeps its mapping row, and with it any snooze on it.
+        """
+        current = set(await AlertCRUD.list_check_ids(db, alert_id))
+        wanted = set(check_ids)
+        removed = current - wanted
+        if removed:
+            await db.execute(
+                delete(AlertCheckMapping).where(
+                    AlertCheckMapping.alert_id == alert_id,
+                    AlertCheckMapping.check_id.in_(removed),
+                )
+            )
+        db.add_all(
+            AlertCheckMapping(alert_id=alert_id, check_id=check_id, is_enabled=True)
+            for check_id in wanted - current
+        )
+        await db.flush()
+        return len(wanted - current), len(removed)
+
+    @staticmethod
     async def add_check_mapping(
         db: AsyncSession, alert_id: UUID, check_id: UUID
     ) -> AlertCheckMapping:
