@@ -1538,13 +1538,13 @@
         },
         {
           "rule": "fw.route_dep_matches_surface",
-          "status": "PASS",
+          "status": "FAIL",
           "since": "0.180.0",
-          "violations": 0,
+          "violations": 2,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
-          "fix": "",
+          "fix": "Annotate the handler with the dependency the surface requires (or an Annotated alias whose Depends target is it). A bare `CurrentUser` proves WHO is calling, not that they may reach this surface \u2014 and because this rule covers reads too, it is what stops the IDOR shape: a GET that takes a bare user, reads an id from the path and returns someone else's row. If a route genuinely belongs to a different surface, its prefix should say so.",
           "example": ""
         },
         {
@@ -1989,8 +1989,8 @@
         }
       ],
       "summary": {
-        "PASS": 162,
-        "FAIL": 0,
+        "PASS": 161,
+        "FAIL": 1,
         "XFAIL": 0,
         "XPASS": 0,
         "INERT": 18
@@ -2880,12 +2880,12 @@
     }
   },
   "summary": {
-    "PASS": 237,
-    "FAIL": 0,
+    "PASS": 236,
+    "FAIL": 1,
     "XFAIL": 0,
     "XPASS": 0,
     "INERT": 21
   },
-  "commit": "78e5a5a1a248ce0800128e0850df33e103bd3a1a",
-  "generated_at": "2026-10-26T00:49:16Z"
+  "commit": "7adeadafe27b06d051865be1ece4d7f71b91c95f",
+  "generated_at": "2026-10-26T01:18:25Z"
 }
