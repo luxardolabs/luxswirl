@@ -16,7 +16,9 @@ from app.core.datetime_utils import utc_now
 from app.core.ssl_expiry import ssl_expiry_fields
 from app.core.synthetic_timings import build_synthetic_view
 from app.schemas.check_result_schema import RecentCheckResult
-from app.services.core.check_core_service import CheckCoreService
+from app.services.core.check_dependency_core_service import (
+    CheckDependencyCoreService,
+)
 from app.services.core.check_result_core_service import CheckResultCoreService
 from app.services.core.settings_core_service import SettingsCoreService
 from app.shared.logger import get_logger
@@ -526,7 +528,9 @@ class CheckDetailViewService:
                     for artifact in artifacts_models
                 ]
 
-        dependency_info = await CheckCoreService.get_dependency_info(db, check_id)
+        dependency_info = await CheckDependencyCoreService.get_dependency_info(
+            db, check_id
+        )
 
         latest_metrics = history[0]["additional_data"] if history else {}
         return {

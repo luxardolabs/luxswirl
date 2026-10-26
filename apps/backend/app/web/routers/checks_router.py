@@ -204,7 +204,9 @@ async def toggle_check(
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> HTMLResponse:
     """Toggle check enabled/disabled status."""
-    context = await ChecksViewService.toggle_check_handler(db, request, check_id)
+    context = await ChecksViewService.toggle_check_handler(
+        db, request, check_id, current_user
+    )
     return templates.TemplateResponse(
         request, "partials/checks/toggle_button.html", context
     )
@@ -280,7 +282,9 @@ async def update_dependents(
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     dependent_ids: Annotated[list[str], Form(default_factory=list)],
 ) -> HTMLResponse:
-    added, removed = await ChecksViewService.set_dependents(db, check_id, dependent_ids)
+    added, removed = await ChecksViewService.set_dependents(
+        db, check_id, dependent_ids, current_user
+    )
     msg = f"Updated dependents: +{added} −{removed}"
     return hx_empty_with_toast(
         msg, extra_events={"closeSidePanel": {}, "refreshPage": {}}

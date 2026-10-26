@@ -11,7 +11,9 @@ from __future__ import annotations
 import pytest
 from app.core.exceptions import ValidationException
 from app.services.core.agent_assignment_core_service import AgentAssignmentCoreService
-from app.services.core.check_core_service import CheckCoreService
+from app.services.core.check_dependency_core_service import (
+    CheckDependencyCoreService,
+)
 from fixtures.factories import make_agent, make_check
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -115,13 +117,15 @@ async def test_dependency_pickers(db: AsyncSession) -> None:
 
     eligible = {
         c.display_name
-        for c in await CheckCoreService.list_eligible_parents(db, free.id)
+        for c in await CheckDependencyCoreService.list_eligible_parents(db, free.id)
     }
     assert eligible == {"parent", "other_parent"}
 
     potential = {
         c.display_name
-        for c in await CheckCoreService.list_potential_dependents(db, parent.id)
+        for c in await CheckDependencyCoreService.list_potential_dependents(
+            db, parent.id
+        )
     }
     # Not itself, and not a check that is already someone's parent.
     assert potential == {"free", "child"}
@@ -141,7 +145,9 @@ async def test_set_dependents_adds_removes_and_refuses_a_parent(
     b.depends_on_check_id = parent.id
     await db.flush()
 
-    added, removed = await CheckCoreService.set_dependents(db, parent.id, [a.id])
+    added, removed = await CheckDependencyCoreService.set_dependents(
+        db, parent.id, [a.id], actor_is_admin=True
+    )
 
     assert (added, removed) == (1, 1)
     assert a.depends_on_check_id == parent.id
@@ -155,4 +161,6 @@ async def test_set_dependents_adds_removes_and_refuses_a_parent(
     await db.flush()
     # `a` is now a parent itself, so it cannot become anyone's child.
     with pytest.raises(ValidationException, match="itself a parent"):
-        await CheckCoreService.set_dependents(db, fresh.id, [a.id])
+        await CheckDependencyCoreService.set_dependents(
+            db, fresh.id, [a.id], actor_is_admin=True
+        )

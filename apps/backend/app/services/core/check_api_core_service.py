@@ -21,6 +21,9 @@ from app.schemas.check_schema import (
 from app.services.core.agent_assignment_core_service import AgentAssignmentCoreService
 from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.check_core_service import CheckCoreService
+from app.services.core.check_dependency_core_service import (
+    CheckDependencyCoreService,
+)
 from app.services.core.settings_core_service import SettingsCoreService
 
 
@@ -92,7 +95,7 @@ class CheckApiCoreService:
         """The checks that could depend on `parent_check_id`, for its panel."""
         return [
             CheckView.model_validate(check)
-            for check in await CheckCoreService.list_potential_dependents(
+            for check in await CheckDependencyCoreService.list_potential_dependents(
                 db, parent_check_id
             )
         ]

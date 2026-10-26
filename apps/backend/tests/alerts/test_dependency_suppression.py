@@ -2,7 +2,7 @@
 
 Covers:
 - AlertEvaluationCoreService._handle_parent_suppression (cascade gate)
-- CheckCoreService._validate_dependency (single-level + self-ref rules)
+- CheckDependencyCoreService.validate_dependency (single-level + self-ref rules)
 
 CRUD calls are mocked; no database fixture required.
 """
@@ -16,7 +16,9 @@ from uuid import uuid4
 import pytest
 from app.core.exceptions import ValidationException
 from app.services.core.alert_evaluation_core_service import AlertEvaluationCoreService
-from app.services.core.check_core_service import CheckCoreService
+from app.services.core.check_dependency_core_service import (
+    CheckDependencyCoreService,
+)
 
 pytestmark = pytest.mark.unit  # all tests in this module are pure-logic
 
@@ -218,7 +220,7 @@ async def test_suppression_transition_from_other_state_writes_log(written):
 @pytest.mark.asyncio
 async def test_validate_dependency_none_is_ok():
     db = AsyncMock()
-    await CheckCoreService._validate_dependency(db, None, own_check_id=uuid4())
+    await CheckDependencyCoreService.validate_dependency(db, None, own_check_id=uuid4())
 
 
 @pytest.mark.asyncio
@@ -226,7 +228,7 @@ async def test_validate_dependency_rejects_self_reference():
     db = AsyncMock()
     own = uuid4()
     with pytest.raises(ValidationException, match="cannot depend on itself"):
-        await CheckCoreService._validate_dependency(db, own, own_check_id=own)
+        await CheckDependencyCoreService.validate_dependency(db, own, own_check_id=own)
 
 
 @pytest.mark.asyncio
@@ -239,7 +241,9 @@ async def test_validate_dependency_rejects_missing_parent():
         ),
         pytest.raises(ValidationException, match="not found"),
     ):
-        await CheckCoreService._validate_dependency(db, uuid4(), own_check_id=uuid4())
+        await CheckDependencyCoreService.validate_dependency(
+            db, uuid4(), own_check_id=uuid4()
+        )
 
 
 @pytest.mark.asyncio
@@ -253,7 +257,9 @@ async def test_validate_dependency_rejects_two_level_chain():
         ),
         pytest.raises(ValidationException, match="Single-level"),
     ):
-        await CheckCoreService._validate_dependency(db, parent.id, own_check_id=uuid4())
+        await CheckDependencyCoreService.validate_dependency(
+            db, parent.id, own_check_id=uuid4()
+        )
 
 
 @pytest.mark.asyncio
@@ -264,4 +270,6 @@ async def test_validate_dependency_accepts_valid_parent():
         "app.services.core.check_core_service.CheckCRUD.get_by_id",
         AsyncMock(return_value=parent),
     ):
-        await CheckCoreService._validate_dependency(db, parent.id, own_check_id=uuid4())
+        await CheckDependencyCoreService.validate_dependency(
+            db, parent.id, own_check_id=uuid4()
+        )

@@ -14,6 +14,9 @@ from app.crud.check_crud import CheckCRUD
 from app.models.check_model import Check
 from app.schemas.check_schema import CheckCreate, CheckUpdate
 from app.services.core.check_core_service import CheckCoreService
+from app.services.core.check_dependency_core_service import (
+    CheckDependencyCoreService,
+)
 from app.services.views.checks_view_service import ChecksViewService
 from fixtures.factories import make_agent, make_check, make_user
 from sqlalchemy import func, select, text
@@ -326,7 +329,7 @@ class TestDependencyInfo:
         db.add(child)
         await db.flush()
 
-        info = await CheckCoreService.get_dependency_info(db, child.id)
+        info = await CheckDependencyCoreService.get_dependency_info(db, child.id)
         # Just confirm the call returns a dict shape — exact contents vary
         # by implementation but it should include parent info
         assert isinstance(info, dict)

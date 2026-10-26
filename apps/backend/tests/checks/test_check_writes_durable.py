@@ -12,6 +12,9 @@ from app.models.agent_model import Agent
 from app.models.check_model import Check
 from app.schemas.check_schema import CheckCreate, CheckUpdate
 from app.services.core.check_core_service import CheckCoreService
+from app.services.core.check_dependency_core_service import (
+    CheckDependencyCoreService,
+)
 from fixtures.factories import make_agent, make_check
 from sqlalchemy import select
 
@@ -77,7 +80,9 @@ async def test_dependents_are_attached_and_detached_durably(worker_db) -> None:
     _, (parent, a, b) = await _seed(worker_db, 3)
 
     async with worker_db() as s:
-        assert await CheckCoreService.set_dependents(s, parent.id, [a.id, b.id]) == (
+        assert await CheckDependencyCoreService.set_dependents(
+            s, parent.id, [a.id, b.id], actor_is_admin=True
+        ) == (
             2,
             0,
         )
@@ -87,7 +92,9 @@ async def test_dependents_are_attached_and_detached_durably(worker_db) -> None:
         assert stored is not None and stored.depends_on_check_id == parent.id
 
     async with worker_db() as s:
-        assert await CheckCoreService.set_dependents(s, parent.id, [a.id]) == (0, 1)
+        assert await CheckDependencyCoreService.set_dependents(
+            s, parent.id, [a.id], actor_is_admin=True
+        ) == (0, 1)
         await s.commit()
     stored_a = await _stored(worker_db, a.id)
     stored_b = await _stored(worker_db, b.id)
