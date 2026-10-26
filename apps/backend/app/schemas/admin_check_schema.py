@@ -10,7 +10,7 @@ cannot be set to null.
 from typing import Self
 from uuid import UUID
 
-from pydantic import ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.schemas.check_schema import CheckCreate, CheckResponse, CheckUpdate
 from app.schemas.paginated_response_schema import PaginatedResponse
@@ -60,3 +60,73 @@ class AdminCheckClone(AdminCheckUpdate):
 
 class CheckPage(PaginatedResponse[CheckResponse]):
     """One page of checks."""
+
+
+# The most checks one bulk request names.
+BULK_MAX = 10_000
+
+
+class AdminBulkChecks(BaseModel):
+    """The checks a bulk action applies to, by id."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    check_ids: list[UUID] = Field(..., min_length=1, max_length=BULK_MAX)
+
+    @property
+    def ids(self) -> list[UUID]:
+        """`check_ids` once each, in the order sent."""
+        return list(dict.fromkeys(self.check_ids))
+
+
+class AdminBulkModify(AdminBulkChecks):
+    """What a bulk modify changes on every check it names: at least one field."""
+
+    interval_seconds: int | None = Field(None, gt=0, le=86400)
+    timeout_seconds: int | None = Field(None, gt=0, le=300)
+    retry_attempts: int | None = Field(None, ge=0, le=10)
+    agent_id: UUID | None = Field(None, description="Move the checks to this agent")
+    alert_id: UUID | None = Field(None, description="Assign this alert to the checks")
+
+    @model_validator(mode="after")
+    def _changes_something(self) -> Self:
+        if not self.model_fields_set - {"check_ids"}:
+            raise ValueError("A bulk modify needs at least one field to change")
+        cleared = [
+            f for f in self.model_fields_set - {"check_ids"} if getattr(self, f) is None
+        ]
+        if cleared:
+            raise ValueError(f"These fields cannot be null: {', '.join(cleared)}")
+        return self
+
+    def update_fields(self) -> CheckUpdate:
+        """The per-check field changes, as the bulk modify job applies them."""
+        return CheckUpdate(
+            **self.model_dump(
+                include={"interval_seconds", "timeout_seconds", "retry_attempts"},
+                exclude_unset=True,
+            )
+        )
+
+
+class BulkCheckResult(BaseModel):
+    """What a bulk action did: every check named is a success or a failure."""
+
+    success_count: int
+    failure_count: int
+    errors: list[str]
+
+
+class AdminCheckDependents(BaseModel):
+    """The whole set of checks that depend on a check; any other is detached."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    dependent_ids: list[UUID] = Field(default_factory=list, max_length=BULK_MAX)
+
+
+class DependentsChange(BaseModel):
+    """How many dependents a replacement attached and detached."""
+
+    added: int
+    removed: int

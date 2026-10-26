@@ -345,7 +345,9 @@ Authenticated by a user's API token (`Authorization: Bearer lsw_...`, created in
 | `GET`  | `/api/v1/admin/me`           | any  | The token's user, their role, and the token |
 | `GET`  | `/api/v1/admin/openapi.json` | any  | The admin API's OpenAPI document            |
 
-Checks (`/api/v1/admin/checks`, by id): `GET` list (the `PaginatedResponse` page envelope; filters agent_id, check_type, tag, search, enabled_only) and `GET /{id}` for any token; `POST`, `PATCH /{id}`, `DELETE /{id}`, `POST /{id}/clone`, `/enable`, `/disable` for an editor, and for an admin alone on a synthetic check. A viewer's token sees every credential in `target` and `connection_string` masked and no `script_code` (`AdminCheckCoreService.mask_credentials`).
+Checks (`/api/v1/admin/checks`, by id): `GET` list (the `PaginatedResponse` page envelope; filters agent_id, check_type, tag, search, enabled_only) and `GET /{id}` for any token; `POST`, `PATCH /{id}`, `DELETE /{id}`, `POST /{id}/clone`, `/enable`, `/disable` for an editor, and for an admin alone on a synthetic check. A viewer's token sees every credential in `target` and `connection_string` masked and no `script_code` (`AdminCheckCoreService._response`, through `core/credential_mask.py`).
+
+Bulk (`/api/v1/admin/checks/bulk/{enable,disable,delete,modify}`, editor, 1 to 10,000 `check_ids`): enable and disable run now, while delete and modify queue a maintenance job and answer `202` with it. The whole selection is judged first (`AdminCheckCoreService._judge_selection`): an unknown id is a 422, and a synthetic check in a non-admin's selection is a 403, with nothing changed or queued. The bulk job handlers record their counts and first errors in the job's `progress` (`maintenance_handlers/_bulk_outcome.py`), which `GET /api/v1/admin/maintenance-jobs/{id}` (any token) returns. Dependents: `GET`/`PUT /api/v1/admin/checks/{id}/dependents` (PUT replaces the whole set, editor).
 
 ### Infrastructure
 
