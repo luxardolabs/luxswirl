@@ -31,7 +31,12 @@ from app.crud.check_crud import CheckCRUD
 from app.crud.check_result_crud import CheckResultCRUD
 from app.models.agent_model import Agent
 from app.models.check_model import Check
-from app.models.enum_model import AssignmentMode, BulkCheckOutcome, CheckType
+from app.models.enum_model import (
+    AgentApprovalStatus,
+    AssignmentMode,
+    BulkCheckOutcome,
+    CheckType,
+)
 from app.schemas.agent_schema import AgentCreate
 from app.schemas.check_schema import (
     DEFAULT_RETRY_INTERVAL_SECONDS,
@@ -51,6 +56,15 @@ from app.services.core.settings_core_service import SettingsCoreService
 from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.services.check")
+
+# Agents that take no checks: awaiting approval, refused, or out of use.
+_NOT_ADMITTED = frozenset(
+    {
+        AgentApprovalStatus.PENDING,
+        AgentApprovalStatus.REJECTED,
+        AgentApprovalStatus.ARCHIVED,
+    }
+)
 
 
 class CheckCoreService:
@@ -98,6 +112,12 @@ class CheckCoreService:
         agent = await AgentCoreService.get_agent_by_id(db, agent_id)
         if not agent:
             raise AgentNotFoundException(str(agent_id))
+        # The same agents the web UI's picker offers: one awaiting approval,
+        # refused or archived takes no checks.
+        if agent.approval_status in _NOT_ADMITTED:
+            raise ValidationException(
+                f"Agent {agent.agent_name} is {agent.approval_status}: it takes no checks"
+            )
 
         # SSRF protection: every address the check connects to
         await CheckCoreService._validate_endpoints_ssrf(
@@ -143,7 +163,8 @@ class CheckCoreService:
             agent_selector=(
                 data.agent_selector if hasattr(data, "agent_selector") else None
             ),
-            script_code=data.script_code if hasattr(data, "script_code") else None,
+            # Only a synthetic check keeps a script, so none is stored unvalidated.
+            script_code=data.script_code if data.check_type == SYNTHETIC else None,
             depends_on_check_id=getattr(data, "depends_on_check_id", None),
         )
 
@@ -512,6 +533,9 @@ class CheckCoreService:
             ),
             agent_selector=override_fields.get("agent_selector", source.agent_selector),
             script_code=override_fields.get("script_code", source.script_code),
+            depends_on_check_id=override_fields.get(
+                "depends_on_check_id", source.depends_on_check_id
+            ),
         )
 
     @staticmethod
@@ -523,7 +547,9 @@ class CheckCoreService:
         actor_is_admin: bool = False,
     ) -> Check:
         """Update a check."""
-        check = await CheckCoreService.get_check_by_id(db, check_id)
+        check = await CheckCoreService.get_check_by_id(
+            db, check_id, include_script_code=True
+        )
 
         update_data = data.model_dump(exclude_unset=True)
 
@@ -544,14 +570,15 @@ class CheckCoreService:
         # The check type after this update, which decides which config fields apply.
         check_type = update_data.get("check_type", check.check_type)
 
-        # Authz (OWASP API5): turning a check INTO a synthetic one, or changing an
-        # existing synthetic check's script, both put arbitrary code on an agent host.
-        changing_to_synthetic = update_data.get("check_type") == SYNTHETIC
-        changing_synthetic_script = check.check_type == SYNTHETIC and bool(
-            update_data.get("script_code")
-        )
-        if changing_to_synthetic or changing_synthetic_script:
+        # Authz (OWASP API5): a synthetic check runs arbitrary code on an agent
+        # host, so turning a check into one, or changing one in any way (its
+        # script, its target, which agents run it, whether it runs), is an
+        # admin's alone.
+        if SYNTHETIC in (check.check_type, check_type):
             require_admin_actor(actor_is_admin=actor_is_admin)
+        if check_type != SYNTHETIC:
+            # Only a synthetic check keeps a script.
+            update_data["script_code"] = None
 
         # Pops every config name out of update_data, so what is left is columns.
         config_updates = take_config_updates(update_data, check_type)
@@ -581,9 +608,12 @@ class CheckCoreService:
                 },
             )
 
-        if check_type == SYNTHETIC and update_data.get("script_code"):
+        # The script the check will run, new or kept, is validated whenever the
+        # check is synthetic after this update.
+        script = update_data.get("script_code", check.script_code)
+        if check_type == SYNTHETIC and script:
             validate_script(
-                update_data["script_code"],
+                script,
                 action="UPDATE",
                 check_id=check_id,
                 check_name=check.display_name,
@@ -847,9 +877,13 @@ class CheckCoreService:
         }
 
     @staticmethod
-    async def delete_check(db: AsyncSession, check_id: UUID) -> None:
-        """Delete a check."""
+    async def delete_check(
+        db: AsyncSession, check_id: UUID, *, actor_is_admin: bool = False
+    ) -> None:
+        """Delete a check; a synthetic one only for an admin."""
         check = await CheckCoreService.get_check_by_id(db, check_id)
+        if check.check_type == SYNTHETIC:
+            require_admin_actor(actor_is_admin=actor_is_admin)
 
         # Get agent before deleting check
         await CheckCRUD.load_agent(db, check)
