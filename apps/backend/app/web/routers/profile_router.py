@@ -3,6 +3,7 @@ Profile router — web UI for user profile management.
 """
 
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, Form, Request, Response
 from fastapi.responses import HTMLResponse
@@ -38,7 +39,52 @@ async def profile_panel(
     return templates.TemplateResponse(
         request,
         "partials/profile_panel.html",
-        ProfileViewService.build_panel_context(request, user),
+        await ProfileViewService.build_panel_context(db, request, user),
+    )
+
+
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
+@router.post(
+    "/profile/api-tokens",
+    response_class=HTMLResponse,
+    include_in_schema=False,
+    name="create_api_token",
+)
+async def create_api_token(
+    request: Request,
+    user: CurrentUserWeb,
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
+    name: Annotated[str, Form()],
+    expires_in_days: Annotated[str | None, Form()] = None,
+) -> HTMLResponse:
+    """Create an API token for the user; it is shown this once."""
+    return templates.TemplateResponse(
+        request,
+        "partials/profile/api_tokens.html",
+        await ProfileViewService.create_api_token(
+            db, request, user, name, expires_in_days
+        ),
+    )
+
+
+# route-smoke: requested by the route-table sweep (tests/route_smoke)
+@router.post(
+    "/profile/api-tokens/{token_id}/revoke",
+    response_class=HTMLResponse,
+    include_in_schema=False,
+    name="revoke_api_token",
+)
+async def revoke_api_token(
+    request: Request,
+    token_id: UUID,
+    user: CurrentUserWeb,
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
+) -> HTMLResponse:
+    """Revoke one of the user's API tokens."""
+    return templates.TemplateResponse(
+        request,
+        "partials/profile/api_tokens.html",
+        await ProfileViewService.revoke_api_token(db, request, user, token_id),
     )
 
 

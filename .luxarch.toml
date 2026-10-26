@@ -226,6 +226,12 @@ require_dep = [
   "AgentOwnedJobId",
 ]
 
+# The admin API: every route takes a user's API token, through the dependency
+# for the role it requires.
+[[target.authz.signature]]
+prefix = "/api/v1/admin/"
+require_dep = ["ApiUser", "ApiEditor", "ApiAdmin"]
+
 # A check's configuration is a promise to the operator: every field the form
 # offers has to reach the agent that runs the check, or the setting is inert.
 # This repo has shipped that bug twice (a field named max_retries while handlers

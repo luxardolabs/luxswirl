@@ -96,6 +96,13 @@
                 {{ btn_password(extra_classes='w-full') }}
             </form>
         </div>
+
+        <!-- API Tokens Section -->
+        <div class="pt-4 border-t border-dark-border">
+            <h3 class="text-sm font-medium text-dark-text-secondary mb-1">API Tokens</h3>
+            <p class="text-xs text-dark-text-muted mb-3">For scripts and tools calling the admin API. A token acts as you, with your role.</p>
+            {% include "partials/profile/api_tokens.html" %}
+        </div>
     </div>
     {% endcall %}
 {% endcall %}

@@ -1,7 +1,8 @@
 """Every JSON route lives under its surface's prefix.
 
 The JSON API has one prefix per caller, each with its own credential:
-`/api/v1/agent` is the agent protocol (registration key or agent key). A route
+`/api/v1/agent` is the agent protocol (registration key or agent key), and
+`/api/v1/admin` the admin API (a user's API token). A route
 mounted anywhere else under `/api` belongs to no surface, so no authz row
 (`[[target.authz.signature]]` in .luxarch.toml) and no reader of the API knows
 which credential guards it.
@@ -12,7 +13,7 @@ from __future__ import annotations
 from _route_table import iter_routes
 from app.main import app
 
-SURFACES = ("/api/v1/agent/",)
+SURFACES = ("/api/v1/agent/", "/api/v1/admin/")
 
 # The agent protocol: exactly what the agent calls (apps/agent/app/agent/server_api.py).
 AGENT_PROTOCOL = {

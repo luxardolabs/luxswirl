@@ -505,7 +505,7 @@ ______________________________________________________________________
 
 ### Agent Protocol
 
-The JSON API's agent protocol, under `/api/v1/agent`, it carries agents' registration, heartbeats, check lists, results and artifacts. Operators manage agents, checks, alerts, notification providers, registration keys, users and status pages through the web UI.
+The JSON API's agent protocol, under `/api/v1/agent`, carries agents' registration, heartbeats, check lists, results and artifacts. The admin API, under `/api/v1/admin`, takes a user's API token and acts as that user (see `docs/user-guide/admin-api.md`). Operators manage agents, checks, alerts, notification providers, registration keys, users and status pages through the web UI.
 
 **Versioning**: every agent endpoint lives under `/api/v1/agent`. **Authentication**: `Authorization: Bearer <key>` — a registration key to register, a registration key plus the agent's recovery secret (header `X-Agent-Recovery-Secret`) to recover, the agent's own key for its check list, reports, job results and artifacts. **Response format**: JSON.
 
