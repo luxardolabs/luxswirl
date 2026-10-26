@@ -207,3 +207,55 @@ async def test_an_unknown_key_is_404(db: AsyncSession, client: AsyncClient) -> N
     revoke = await client.post(f"{KEYS}/{missing}/revoke", headers=admin)
 
     assert (read.status_code, revoke.status_code) == (404, 404)
+
+
+# ── Text a key's name, notes and revocation reason may hold ──────────────────
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"name": "nul\x00byte"},
+        {"name": "evil\nline"},
+        {"name": "bidi‮abc"},
+        {"name": "esc\x1b[31mred"},
+        {"name": "x", "description": "notes\x00here"},
+    ],
+)
+async def test_control_characters_are_refused_not_a_server_error(
+    db: AsyncSession, client: AsyncClient, body: dict[str, object]
+) -> None:
+    admin = await _as(db, "admin")
+
+    resp = await client.post(KEYS, json=body, headers=admin)
+
+    assert resp.status_code == 422, resp.text
+    assert "$2b$" not in resp.text
+
+
+async def test_a_description_may_span_lines(
+    db: AsyncSession, client: AsyncClient
+) -> None:
+    admin = await _as(db, "admin")
+
+    resp = await client.post(
+        KEYS, json={"name": "lines", "description": "one\ntwo\tthree"}, headers=admin
+    )
+
+    assert resp.status_code == 201, resp.text
+    assert resp.json()["description"] == "one\ntwo\tthree"
+
+
+async def test_a_revoke_reason_with_a_nul_is_refused(
+    db: AsyncSession, client: AsyncClient
+) -> None:
+    admin = await _as(db, "admin")
+    created = await _create(client, admin, "nul-reason")
+
+    resp = await client.post(
+        f"{KEYS}/{created['id']}/revoke", json={"reason": "bad\x00"}, headers=admin
+    )
+
+    assert resp.status_code == 422, resp.text
+    kept = (await client.get(f"{KEYS}/{created['id']}", headers=admin)).json()
+    assert kept["status"] == "active"
