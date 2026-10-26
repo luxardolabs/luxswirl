@@ -23,6 +23,9 @@
                         {% endif %}
                     </div>
                 </div>
+                {# Every action here is an EditorUserWeb endpoint; this panel opens
+                   from the CurrentUserWeb dashboard, so a viewer is offered none. #}
+                {% if current_user.role in ('admin', 'editor') %}
                 <div class="flex items-center gap-2 flex-shrink-0">
                     <!-- Pause/Enable Toggle -->
                     {{ toggle_switch(check.enabled, size='sm',
@@ -46,12 +49,9 @@
                     {{ icon_edit(hx_get=check_urls.edit_form, hx_target='#panel-container') }}
 
                     <!-- Delete -->
-                    {# Deleting a check is an EditorUserWeb endpoint; this panel
-                       opens from the CurrentUserWeb dashboard. #}
-                    {% if current_user.role in ('admin', 'editor') %}
                     {{ delete_icon_button(delete_url=check_urls.delete, target_id='check-' ~ check.id) }}
-                    {% endif %}
                 </div>
+                {% endif %}
             </div>
             <!-- Type and interval chips on second row -->
             <div class="flex items-center justify-between gap-2">

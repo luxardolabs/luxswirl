@@ -18,6 +18,7 @@ from uuid import UUID
 from prometheus_client import CollectorRegistry, Counter, Gauge, generate_latest
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.credential_mask import mask_credentials
 from app.core.datetime_utils import utc_now
 from app.crud.agent_crud import AgentCRUD
 from app.crud.check_result_crud import CheckResultCRUD
@@ -316,7 +317,7 @@ class MetricsCollectorCoreService:
             "agent": agent_label(agent.agent_name, agent.id),
             "check": check.display_name,
             "type": check.check_type,
-            "target": check.target,
+            "target": mask_credentials(check.target),
         }
 
         # Core check metrics
@@ -333,7 +334,7 @@ class MetricsCollectorCoreService:
             http_labels = {
                 "agent": agent_label(agent.agent_name, agent.id),
                 "check": check.display_name,
-                "target": check.target,
+                "target": mask_credentials(check.target),
                 "code": str(result.http_status_code),
             }
             check_http_status_code.labels(**http_labels).set(1)
@@ -346,7 +347,7 @@ class MetricsCollectorCoreService:
             dns_labels = {
                 "agent": agent_label(agent.agent_name, agent.id),
                 "check": check.display_name,
-                "target": check.target,
+                "target": mask_credentials(check.target),
             }
             dns = metrics_data["dns"]
 
@@ -364,7 +365,7 @@ class MetricsCollectorCoreService:
                 "agent": agent_label(agent.agent_name, agent.id),
                 "check": check.display_name,
                 "type": check.check_type,
-                "target": check.target,
+                "target": mask_credentials(check.target),
             }
             db_metrics = metrics_data[check.check_type]
 

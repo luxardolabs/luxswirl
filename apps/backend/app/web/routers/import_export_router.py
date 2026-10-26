@@ -65,9 +65,12 @@ async def import_export_form(
 async def export_checks(
     agent_id: Annotated[UUID, Path(description="Agent ID")],
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
+    current_user: AdminUserWeb,
 ) -> Response:
     """
-    Export all checks for an agent as JSON download.
+    Export all checks for an agent as JSON download (an admin's, as import is:
+    the file carries every stored value, credentials included, so that an
+    import recreates the checks as they were).
 
     AgentNotFoundException (a LuxSwirlException) propagates to the global handler,
     which renders it content-negotiated — the router does not hand-roll an error body.

@@ -15,6 +15,7 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.credential_mask import mask_credentials
 from app.core.datetime_utils import utc_now
 from app.crud.alert_crud import AlertCRUD
 from app.crud.check_result_crud import CheckResultCRUD
@@ -530,7 +531,7 @@ class AlertEvaluationCoreService:
         return NotificationContext(
             check_name=check.display_name,
             check_type=check.check_type,
-            target=check.target,
+            target=mask_credentials(check.target),
             agent_id=check_result.agent.id if check_result.agent else None,
             agent_name=(
                 (check_result.agent.hostname or check_result.agent.agent_name)

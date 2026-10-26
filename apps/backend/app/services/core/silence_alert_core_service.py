@@ -32,6 +32,7 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.credential_mask import mask_credentials
 from app.core.datetime_utils import utc_now
 from app.core.liveness import (
     DEFAULT_CHECK_INTERVAL_SECONDS,
@@ -386,7 +387,7 @@ class SilenceAlertCoreService:
         return NotificationContext(
             check_name=check.display_name,
             check_type=check.check_type,
-            target=check.target,
+            target=mask_credentials(check.target),
             agent_id=agent.id if agent else None,
             agent_name=(agent.hostname or agent.agent_name) if agent else None,
             status="success" if recovered else "no_data",
