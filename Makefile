@@ -39,7 +39,7 @@ DEV_WAIT_TIMEOUT      ?= 180
 # Makefile.local (gitignored): copy Makefile.local.example -> Makefile.local and set it.
 # Contributors don't need it — lint/test and the import-linter contracts run without it.
 LUXARCH_REGISTRY ?=
-LUXARCH_VERSION := 0.324.0
+LUXARCH_VERSION := 0.325.0
 LUXARCH_IMAGE    ?= $(LUXARCH_REGISTRY)/luxardolabs/luxarch:$(LUXARCH_VERSION)
 # Dependency-CVE guard (luxaudit) — same private registry as luxarch, mount-only.
 # Scans the pinned poetry.locks against the live advisory feed (see .luxaudit.toml).
@@ -2762,7 +2762,22 @@ migration-check: test-build ## Verify alembic migrations match the models — `a
 # `|| true` on the run: --json exits non-zero when the repo is red — a red repo still has a
 # valid, committable status. `set -e` so a failed stamp aborts (never a false "wrote").
 STAMP = python3 -c 'import json,sys,os; d=json.load(open(sys.argv[1])); g=d.get("guard"); g==sys.argv[3] or sys.exit(f"status: {sys.argv[1]} holds {g!r} output, expected {sys.argv[3]!r}; refusing to stamp"); d["commit"]=os.environ["SHA"]; d["generated_at"]=os.environ["TS"]; json.dump(d,open(sys.argv[2],"w"),indent=2)'
-GUARD_RUN = docker run --rm -v $(PWD):/repo
+# luxarch:guard-run asset v1 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit guard-run`.
+# ── GUARD_RUN: how every guard sees this checkout ───────────────────────────────────────────────────
+# Emitted by `luxarch --emit guard-run`; paste it above the targets that run the guards (`status:`, and
+# `arch:` / `lint:` / `audit:` where they run a guard image).
+#
+# Agents work in linked worktrees (`.claude/worktrees/<ISSUE-KEY>`). A worktree's `.git` is a file
+# pointing into the MAIN checkout's `.git`, and the hooks keep their session state (the heartbeat) in
+# the main checkout's `.claude/`. A guard that mounts only the worktree at /repo can read neither:
+# every rule that reads git or the heartbeat goes INERT there, and `make status` run in a worktree
+# commits those INERT verdicts as the repo's record. So GUARD_RUN also mounts the main checkout,
+# read-only, at its own path, where the worktree's `.git` file points. In the main checkout itself
+# there is nothing more to mount. Not covered: a worktree whose `.git` names its gitdir by a RELATIVE
+# path (`worktree.useRelativePaths`), which resolves from /repo to somewhere else; its git-reading
+# rules stay INERT. Claude Code writes absolute pointers.
+GUARD_MAIN := $(shell d=$$(git -C "$(CURDIR)" rev-parse --path-format=absolute --git-common-dir 2>/dev/null) && [ "$$(basename "$$d")" = .git ] && dirname "$$d")
+GUARD_RUN = docker run --rm -v "$(CURDIR)":/repo $(if $(filter-out $(CURDIR),$(GUARD_MAIN)),-v "$(GUARD_MAIN)":"$(GUARD_MAIN)":ro)
 
 # LUXARCH_STATUS_WRITE=1 tells luxarch that THIS run is the one writing the
 # snapshot, so repo.guard_status_current does not judge the files it is about to
