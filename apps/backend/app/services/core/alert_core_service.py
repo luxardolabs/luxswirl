@@ -306,6 +306,41 @@ class AlertCoreService:
         )
 
     @staticmethod
+    async def get_mapped_ids(
+        db: AsyncSession, alert_id: UUID
+    ) -> tuple[list[UUID], list[UUID]]:
+        """The alert's (provider ids, check ids)."""
+        return (
+            await AlertCRUD.list_provider_ids(db, alert_id),
+            await AlertCRUD.list_check_ids(db, alert_id),
+        )
+
+    @staticmethod
+    async def set_providers(
+        db: AsyncSession, alert_id: UUID, provider_ids: list[UUID]
+    ) -> tuple[int, int]:
+        """Make `provider_ids` exactly the alert's providers; (added, removed)."""
+        await AlertCoreService.get_alert_by_id(db, alert_id)
+        return await AlertCRUD.replace_provider_mappings(db, alert_id, provider_ids)
+
+    @staticmethod
+    async def set_checks(
+        db: AsyncSession, alert_id: UUID, check_ids: list[UUID]
+    ) -> tuple[int, int]:
+        """Make `check_ids` exactly a non-global alert's checks; (added, removed).
+
+        Raises:
+            ValidationException: The alert is global: it reaches checks by its
+                filters as they are created, not by a list.
+        """
+        alert = await AlertCoreService.get_alert_by_id(db, alert_id)
+        if alert.is_global:
+            raise ValidationException(
+                "A global alert reaches checks by its filters; it takes no check list"
+            )
+        return await AlertCRUD.replace_check_mappings(db, alert_id, check_ids)
+
+    @staticmethod
     async def add_check(
         db: AsyncSession,
         alert_id: UUID,

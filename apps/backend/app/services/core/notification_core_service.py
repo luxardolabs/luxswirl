@@ -49,6 +49,13 @@ class NotificationCoreService:
         return NotificationProviderInDB.model_validate(provider)
 
     @staticmethod
+    async def existing_provider_ids(
+        db: AsyncSession, provider_ids: list[UUID]
+    ) -> set[UUID]:
+        """Which of `provider_ids` are live (not deleted) providers."""
+        return set(await NotificationProviderCRUD.get_by_ids(db, provider_ids))
+
+    @staticmethod
     async def get_provider_by_id(
         db: AsyncSession,
         provider_id: UUID,
