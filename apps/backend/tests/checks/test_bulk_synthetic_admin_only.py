@@ -129,6 +129,6 @@ async def test_a_job_with_no_owner_or_a_deactivated_admin_owner_changes_nothing(
             action="disable",
             check_ids=_ids(s),
         )
-        with pytest.raises(JobFailed, match="may no longer change checks"):
+        with pytest.raises(JobFailed, match="no longer an active editor or admin"):
             await bulk_check_toggle.handle(db, job)
         assert (await _fresh(db, s["synthetic"])).enabled is True

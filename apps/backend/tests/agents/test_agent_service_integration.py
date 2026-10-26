@@ -12,6 +12,7 @@ import pytest
 from app.core.exceptions import (
     AgentNotFoundException,
     DuplicateResourceException,
+    ValidationException,
 )
 from app.models.agent_model import Agent
 from app.schemas.agent_schema import AgentCreate, AgentUpdate
@@ -164,7 +165,7 @@ class TestApprovalWorkflow:
         a = make_agent(approval_status="active")
         db.add(a)
         await db.flush()
-        with pytest.raises(ValueError, match="already approved"):
+        with pytest.raises(ValidationException, match="already approved"):
             await AgentCoreService.approve_agent(db, a.id, actor_is_admin=True)
 
     async def test_reject_pending_agent(self, db: AsyncSession):

@@ -9,6 +9,7 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.background.maintenance_handlers._job_owner import require_owner_may_edit
 from app.core.exceptions import NotFoundException
 from app.models.maintenance_job_model import MaintenanceJob
 from app.services.core.agent_core_service import AgentCoreService
@@ -23,6 +24,7 @@ async def handle(db: AsyncSession, job: MaintenanceJob) -> None:
         raise ValueError("agent_delete job requires target_id")
 
     agent_id: UUID = job.target_id
+    await require_owner_may_edit(db, job)
     logger.info(
         "Deleting agent (cascade)",
         extra={"agent_id": str(agent_id), "job_id": str(job.id)},

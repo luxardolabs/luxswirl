@@ -125,6 +125,25 @@ The results page reads the last 24 hours unless `since` and `until` (ISO 8601; a
 
 Each result carries `success`, `latency_ms`, `error`, `error_type`, `http_status_code`, `http_response_time_ms` and the check type's own `metrics` (DNS records, row counts, response headers, ...). A viewer's token reads every `error` with its credentials masked, as above, and no `response_data`. Of `metrics` it reads only what the check detail panel shows (the `dns`, `mysql`, `postgres` and `synthetic` sections and `response.ssl_certificate`), every text in them masked the same way: an HTTP check's response headers, cookies among them, are an editor's to read.
 
+## Agents
+
+An agent is addressed by its own id. Reads take any token; every change takes an editor's or an admin's, as in the web UI. A change that moves a synthetic check to another host (a rename or retag into or out of its selector, an approval it already matches) or removes one (deleting the agent that runs it) is an admin's (`403`).
+
+| Method   | Path                                       | Role   | Does                                                                                              |
+| -------- | ------------------------------------------ | ------ | ------------------------------------------------------------------------------------------------- |
+| `GET`    | `/api/v1/admin/agents`                     | any    | One page of agents; `search` (name, hostname, address), `archived`, `exclude_pending`             |
+| `GET`    | `/api/v1/admin/agents/{id}`                | any    | One agent; `has_api_key` says whether it has a key, never the key or its hash                     |
+| `PATCH`  | `/api/v1/admin/agents/{id}`                | editor | Change its name, tags and configuration: the web edit form's fields                               |
+| `DELETE` | `/api/v1/admin/agents/{id}`                | editor | Delete it, its checks and their results in the background; `202` with the job                     |
+| `POST`   | `/api/v1/admin/agents/{id}/{action}`       | editor | `approve`, `reject`, `pause`, `resume`, `disable`, `enable`, `archive`, `restore`, `force-reload` |
+| `POST`   | `/api/v1/admin/agents/{id}/key`            | editor | A first key for an agent with none; `201` with `api_key`, shown this once                         |
+| `POST`   | `/api/v1/admin/agents/{id}/key/regenerate` | editor | A new key in place of the current one, which stops working; `201`, shown once                     |
+| `DELETE` | `/api/v1/admin/agents/{id}/key`            | editor | Revoke the key: the agent cannot connect until it has another; `204`                              |
+
+The agent reports its own `agent_run_id`, `ip_address` and `version`: a change to them, or to any field the edit form does not have, is a `422`. `reject`, `pause` and `disable` take an optional `{"reason": "..."}`, kept as `status_reason`. An action the agent's status does not allow (approving an active agent, resuming one that is not paused) is a `422`. `approve` returns no key: the agent fetches its own with its recovery secret, as after a web approval. `key` on an agent that has one is a `400`; use `key/regenerate`.
+
+A delete is refused when queued and judged again when it runs: if its owner is no longer an active editor or admin by then, the job fails and nothing is deleted. Poll it at `/api/v1/admin/maintenance-jobs/{id}`.
+
 ## OpenAPI document
 
 `/api/v1/admin/openapi.json` describes every admin-API route, with the bearer scheme declared. It is served to any token holder in every environment, so a client generator or an AI agent can read it. The app-wide `/docs` and `/openapi.json` stay off in production.

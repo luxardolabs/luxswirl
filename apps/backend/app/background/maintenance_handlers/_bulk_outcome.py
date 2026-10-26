@@ -1,9 +1,7 @@
-"""What a bulk check job checks before it runs, and keeps after.
+"""What a bulk check job keeps when it has run.
 
-A job runs after the request that queued it, so its owner is judged again
-when it runs: one no longer an active editor or admin changes nothing. Its
-outcome (counts and first errors) is kept on the job for whoever polls it,
-whether the job is done or failed.
+Its outcome (counts and first errors) is kept on the job for whoever polls
+it, whether the job is done or failed.
 """
 
 from typing import Any
@@ -13,18 +11,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.background.maintenance_worker import JobFailed
 from app.models.maintenance_job_model import MaintenanceJob
 from app.services.core.maintenance_job_core_service import MaintenanceJobCoreService
-from app.services.core.user_core_service import UserCoreService
 
 # The most per-check errors a job keeps; the counts are always whole.
 _ERRORS_KEPT = 50
-
-
-async def require_owner_may_edit(db: AsyncSession, job: MaintenanceJob) -> None:
-    """Refuse the job unless its owner is, now, an active editor or admin."""
-    if not await UserCoreService.is_active_editor(db, job.owner_id):
-        raise JobFailed(
-            "The job's owner may no longer change checks; nothing was changed"
-        )
 
 
 async def finish(
