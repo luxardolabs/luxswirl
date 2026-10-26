@@ -69,7 +69,7 @@ def _sender() -> HeartbeatSender:
     return HeartbeatSender(
         config={
             "agent_id": "a1",
-            "push_url": "https://server.example",
+            "server_url": "https://server.example",
             "auth_key": "k",
             "heartbeat_interval": 60,
             "resource_monitoring_enabled": False,

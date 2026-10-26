@@ -23,6 +23,7 @@ from typing import Any
 import httpx
 from cryptography.fernet import Fernet, InvalidToken
 
+from app.agent import server_api
 from app.agent.credentials import AgentCredentials
 from app.agent.http_client import server_client
 from app.checks._ssrf_policy import apply_server_policy, block_private_networks
@@ -247,17 +248,8 @@ class CheckManager:
             self.logger.warning("No agent_id configured, cannot fetch checks")
             return []
 
-        push_url = self.config.get("push_url", "http://localhost:9000")
         auth_key = self.config.get("auth_key")
-
-        # Extract base URL
-        if "/api/v1" in push_url:
-            base_url = push_url.split("/api/v1")[0]
-        else:
-            base_url = push_url.rstrip("/")
-
-        # Build API URL with agent_id as query parameter
-        api_url = f"{base_url}/api/v1/checks?agent_id={agent_id}"
+        api_url = server_api.checks_url(self.config)
 
         headers = {}
         if auth_key:
@@ -265,7 +257,12 @@ class CheckManager:
 
         try:
             client = server_client()
-            response = await client.get(api_url, headers=headers, timeout=10.0)
+            response = await client.get(
+                api_url,
+                params={"agent_id": str(agent_id)},
+                headers=headers,
+                timeout=10.0,
+            )
             response.raise_for_status()
             data = response.json()
 

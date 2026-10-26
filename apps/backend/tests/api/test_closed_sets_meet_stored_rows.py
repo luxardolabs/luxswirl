@@ -70,7 +70,7 @@ async def test_the_agent_still_fetches_its_checks(
     agent, key = await _agent_with_stored_method(db, method)
 
     resp = await client.get(
-        "/api/v1/checks",
+        "/api/v1/agent/checks",
         params={"agent_id": str(agent.id)},
         headers={"Authorization": f"Bearer {key}"},
     )

@@ -24,7 +24,7 @@ pytestmark = pytest.mark.unit
         "http://127.0.0.1:9000",
         "http://[::1]:9000",
         "http://server:9000",
-        "http://luxswirl_server:9000/api/v1/reports",
+        "http://luxswirl_server:9000",
         "http://luxswirl-server:9000",
         "http://10.0.0.5:9000",
         "http://172.16.0.1",

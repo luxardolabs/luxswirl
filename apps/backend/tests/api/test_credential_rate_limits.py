@@ -1,6 +1,6 @@
 """Credential routes refuse past their limit, not just declare one.
 
-`POST /api/v1/agents/{id}/recover-key` bcrypt-checks a submitted registration
+`POST /api/v1/agent/{id}/recover-key` bcrypt-checks a submitted registration
 key on every call. Unlimited, one address could guess keys forever; it now
 shares the registration limit (5/hour per IP), and the sixth attempt is a 429
 whatever the key, because a guess that fails still counts.
@@ -40,7 +40,7 @@ async def test_key_recovery_refuses_once_the_limit_is_spent(
     client: AsyncClient,
 ) -> None:
     allowed = parse(settings.security.registration_rate_limit).amount
-    url = f"/api/v1/agents/{uuid4()}/recover-key"
+    url = f"/api/v1/agent/{uuid4()}/recover-key"
     headers = {"Authorization": "Bearer not-a-real-registration-key"}
 
     statuses = [

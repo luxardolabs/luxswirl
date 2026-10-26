@@ -78,7 +78,7 @@ All endpoints are accessible via `https://luxswirl.example.com`:
 
 ### Agent Endpoints
 
-Agents reach the server under `/api/v1` (registration, heartbeats, their check list, result reports). Point each agent's `LUXSWIRL_SERVER_URL` at `https://luxswirl.example.com/api/v1/reports`.
+Agents reach the server under `/api/v1/agent` (registration, heartbeats, their check list, result reports). Point each agent's `LUXSWIRL_SERVER_URL` at `https://luxswirl.example.com`.
 
 ### Monitoring Endpoints
 
@@ -120,13 +120,13 @@ proxy_set_header X-Forwarded-Proto $scheme;
 Agents should connect to the server via:
 
 ```bash
-LUXSWIRL_SERVER_URL=https://luxswirl.example.com/api/v1/reports
+LUXSWIRL_SERVER_URL=https://luxswirl.example.com
 ```
 
 **Note**: Internal Docker agents use the internal URL:
 
 ```bash
-LUXSWIRL_SERVER_URL=http://luxswirl_server:9000/api/v1/reports
+LUXSWIRL_SERVER_URL=http://luxswirl_server:9000
 ```
 
 ## Deployment

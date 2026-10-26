@@ -39,7 +39,7 @@ agent_ops_router = APIRouter(tags=["Agent Operations"])
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
 @agent_ops_router.post(
-    "/agents/register",
+    "/register",
     response_model=AgentRegisterResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Register new agent",
@@ -92,7 +92,7 @@ async def agent_heartbeat(
 
 
 @agent_ops_router.post(
-    "/agents/{agent_id}/recover-key",
+    "/{agent_id}/recover-key",
     summary="Recover agent API key",
     description=(
         "Agent calls this with the registration key AND its own recovery secret "

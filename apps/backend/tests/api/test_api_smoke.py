@@ -117,13 +117,13 @@ class TestHealthRoutes:
 class TestAuthGating:
     async def test_missing_token_returns_401(self, authed_client, upload):
         payload, _ = upload
-        resp = await authed_client.post("/api/v1/artifacts", json=payload)
+        resp = await authed_client.post("/api/v1/agent/artifacts", json=payload)
         assert resp.status_code == 401
 
     async def test_wrong_token_returns_401(self, authed_client, upload):
         payload, _ = upload
         resp = await authed_client.post(
-            "/api/v1/artifacts",
+            "/api/v1/agent/artifacts",
             json=payload,
             headers={"Authorization": "Bearer wrong-token"},
         )
@@ -132,7 +132,7 @@ class TestAuthGating:
     async def test_the_agent_key_passes_the_gate(self, authed_client, upload):
         payload, key = upload
         resp = await authed_client.post(
-            "/api/v1/artifacts",
+            "/api/v1/agent/artifacts",
             json=payload,
             headers={"Authorization": f"Bearer {key}"},
         )
@@ -144,7 +144,7 @@ class TestAuthGating:
         payload, key = upload
         # Missing "Bearer " prefix
         resp = await authed_client.post(
-            "/api/v1/artifacts",
+            "/api/v1/agent/artifacts",
             json=payload,
             headers={"Authorization": key},
         )

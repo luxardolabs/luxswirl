@@ -26,7 +26,7 @@ async def _reloads(versions: list[str | None]) -> int:
     sender = HeartbeatSender(
         config={
             "agent_id": "a1",
-            "push_url": "https://s.example/api/v1/reports",
+            "server_url": "https://s.example",
             "auth_key": "k",
         },
         metrics={

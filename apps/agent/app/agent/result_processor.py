@@ -14,6 +14,7 @@ import time
 from datetime import UTC, datetime
 from typing import Any
 
+from app.agent import server_api
 from app.agent.http_client import server_client
 from app.agent.reporter import Reporter
 from app.shared.logger import get_logger
@@ -155,19 +156,7 @@ class ResultProcessor:
 
         # IMPORTANT: Use try/finally to ensure artifacts are ALWAYS removed
         try:
-            # Get server URL and auth
-            push_url = self.config.get("push_url", "http://localhost:9000")
-            if not push_url:
-                self.logger.warning("No push_url configured, cannot upload artifacts")
-                return  # artifacts will be removed in finally block below
-
-            # Extract base URL
-            if "/api/v1" in push_url:
-                base_url = push_url.split("/api/v1")[0]
-            else:
-                base_url = push_url.rstrip("/")
-
-            artifact_url = f"{base_url}/api/v1/artifacts"
+            artifact_url = server_api.artifacts_url(self.config)
             auth_key = self.config.get("auth_key")
 
             # Prepare headers

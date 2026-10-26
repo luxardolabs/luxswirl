@@ -270,7 +270,7 @@ async def _reg_key_heartbeat_onto_archived(
         await AgentCoreService.revoke_agent_key(db, agent_id)
 
     resp = await client.post(
-        "/api/v1/heartbeat",
+        "/api/v1/agent/heartbeat",
         json={
             "agent_id": str(agent_id),
             "timestamp": utc_now().isoformat(),

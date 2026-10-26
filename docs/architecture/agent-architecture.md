@@ -8,7 +8,7 @@ LuxSwirl supports three check assignment modes to handle different monitoring sc
 1. **REPLICATE** - Same check runs from every agent matching the selector (multi-region monitoring, redundancy).
 1. **DISTRIBUTE** - Checks are split across the agents matching the selector (load sharing, HA).
 
-The assignment logic lives in `apps/backend/app/services/core/agent_assignment_core_service.py` (`AgentAssignmentCoreService`). Agents fetch their work via `GET /api/v1/checks?agent_id={agent_id}` (`apps/backend/app/api/v1/routers/check_router.py`), which calls `AgentAssignmentCoreService.check_list_for_agent`, and that calls `get_checks_for_agent(db, agent)`.
+The assignment logic lives in `apps/backend/app/services/core/agent_assignment_core_service.py` (`AgentAssignmentCoreService`). Agents fetch their work via `GET /api/v1/agent/checks?agent_id={agent_id}` (`apps/backend/app/api/v1/routers/check_router.py`), which calls `AgentAssignmentCoreService.check_list_for_agent`, and that calls `get_checks_for_agent(db, agent)`.
 
 ## Use Cases
 
@@ -209,7 +209,7 @@ Selector keys:
 
 `Agent.tags` is a comma-separated string (`apps/backend/app/models/agent_model.py`).
 
-Tags are admin-managed. An agent declares tags at registration, and its heartbeat may update them while it is pending, as a suggestion the admin sees when approving. From approval on, a heartbeat's tags never change the row (`AgentCoreService._apply_heartbeat`); only an admin does, through the agent's Edit panel. Tags decide which replicate and distribute checks GET `/api/v1/checks` hands the agent and which it may report on, so an agent must not be able to retag itself into another group's checks.
+Tags are admin-managed. An agent declares tags at registration, and its heartbeat may update them while it is pending, as a suggestion the admin sees when approving. From approval on, a heartbeat's tags never change the row (`AgentCoreService._apply_heartbeat`); only an admin does, through the agent's Edit panel. Tags decide which replicate and distribute checks GET `/api/v1/agent/checks` hands the agent and which it may report on, so an agent must not be able to retag itself into another group's checks.
 
 **Tag format:** `key:value` pairs, comma-separated
 
@@ -222,7 +222,7 @@ Examples:
 
 ## Result Reporting
 
-The agent's reporter (`apps/agent/app/agent/reporter.py`) batches check results and POSTs them to `/api/v1/reports`. Before a result is queued it is fitted to the server's per-result limits (`apps/agent/app/agent/result_limits.py`): an `error` over 4,000 characters or a `response_data` over 65,535 is truncated with a `... [truncated]` marker, and an `http_status_code` outside 100-599 (a real server can answer 999) is sent as `null`, with the code itself in `metrics.http_status_code_raw`.
+The agent's reporter (`apps/agent/app/agent/reporter.py`) batches check results and POSTs them to `/api/v1/agent/reports`. Before a result is queued it is fitted to the server's per-result limits (`apps/agent/app/agent/result_limits.py`): an `error` over 4,000 characters or a `response_data` over 65,535 is truncated with a `... [truncated]` marker, and an `http_status_code` outside 100-599 (a real server can answer 999) is sent as `null`, with the code itself in `metrics.http_status_code_raw`.
 
 The server validates each result in a report on its own. One it still cannot store is counted in `results_failed` and logged (the result and the failing fields, never the values), like a result for a check the agent was not assigned; the rest of the report is stored. Only a bad envelope (an invalid `agent_id`, more than 10,000 results, a result that is not a JSON object) refuses the whole report with 422.
 
@@ -268,9 +268,9 @@ class Agent(UUIDBaseModel):
 
 Agents authenticate with keys, never a user session:
 
-1. **Per-agent API keys** — each agent has its own key, stored as a bcrypt hash in `Agent.api_key_hash` (with `api_key_created_at` / `api_key_last_used`). Agent-facing endpoints (e.g. `GET /api/v1/checks?agent_id={agent_id}`) authenticate the agent via `verify_agent_token`, which also enforces the agent's `approval_status`. This enables per-agent revocation and isolation.
+1. **Per-agent API keys** — each agent has its own key, stored as a bcrypt hash in `Agent.api_key_hash` (with `api_key_created_at` / `api_key_last_used`). Agent-facing endpoints (e.g. `GET /api/v1/agent/checks?agent_id={agent_id}`) authenticate the agent via `verify_agent_token`, which also enforces the agent's `approval_status`. This enables per-agent revocation and isolation.
 
-1. **Shared registration keys** — created by an admin under **Settings → API Keys & Metrics** (`RegistrationKeyCoreService`); the plaintext key is shown once at creation and stored only as a hash. An agent presents one to register (`POST /api/v1/agents/register`) and to recover its own key (`POST /api/v1/agents/{agent_id}/recover-key`).
+1. **Shared registration keys** — created by an admin under **Settings → API Keys & Metrics** (`RegistrationKeyCoreService`); the plaintext key is shown once at creation and stored only as a hash. An agent presents one to register (`POST /api/v1/agent/register`) and to recover its own key (`POST /api/v1/agent/{agent_id}/recover-key`).
 
 1. **Per-agent recovery secrets** — registration returns each agent a random recovery secret once; the server stores only its SHA-256 digest (`Agent.recovery_secret_hash`). recover-key needs the registration key **and** that agent's secret (header `X-Agent-Recovery-Secret`), compared in constant time, so one install holding the shared registration key cannot take over another agent by its id. An unknown agent, a missing secret and a wrong one are refused identically (401); every recovery, granted or refused, is logged as a `SECURITY AUDIT` event without the secret. Agents registered before recovery secrets existed have no digest and cannot recover: they register again and are approved again.
 

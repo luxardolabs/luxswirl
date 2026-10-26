@@ -1,4 +1,4 @@
-"""POST /api/v1/reports validates each result on its own.
+"""POST /api/v1/agent/reports validates each result on its own.
 
 A report carries up to thousands of results. One the server cannot store (an
 HTTP status outside 100-599, an error text over the limit) is counted in
@@ -90,14 +90,14 @@ async def test_one_odd_result_does_not_refuse_the_whole_report(
     headers = {"Authorization": f"Bearer {key}"}
 
     control = await client.post(
-        "/api/v1/reports",
+        "/api/v1/agent/reports",
         json={"agent_id": str(agent_id), "checks": [_wire_result(good_check.id)]},
         headers=headers,
     )
     assert control.status_code == 202, control.text
 
     resp = await client.post(
-        "/api/v1/reports",
+        "/api/v1/agent/reports",
         json={
             "agent_id": str(agent_id),
             "checks": [
@@ -136,7 +136,7 @@ async def test_a_garbage_envelope_is_still_refused(
         body.pop("agent_id")
 
     resp = await client.post(
-        "/api/v1/reports", json=body, headers={"Authorization": f"Bearer {key}"}
+        "/api/v1/agent/reports", json=body, headers={"Authorization": f"Bearer {key}"}
     )
 
     assert resp.status_code == 422, resp.text
@@ -149,7 +149,7 @@ async def test_more_results_than_the_cap_are_refused(
     agent_id, key = approved
 
     resp = await client.post(
-        "/api/v1/reports",
+        "/api/v1/agent/reports",
         json={"agent_id": str(agent_id), "checks": [{}] * 10001},
         headers={"Authorization": f"Bearer {key}"},
     )

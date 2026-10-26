@@ -38,7 +38,7 @@ def test_a_yaml_file_is_loaded_with_its_environment_expanded(
     monkeypatch.setenv("LS_KEY", "k3y")
     path = tmp_path / "agent.yml"
     path.write_text(
-        "push_url: http://${LS_HOST}:9000/api/v1/reports\n"
+        "server_url: http://${LS_HOST}:9000\n"
         "auth_key: $LS_KEY\n"
         "checks:\n"
         "  - name: web\n"
@@ -48,7 +48,7 @@ def test_a_yaml_file_is_loaded_with_its_environment_expanded(
 
     config = load_config_file(path)
 
-    assert config["push_url"] == "http://monitor.internal:9000/api/v1/reports"
+    assert config["server_url"] == "http://monitor.internal:9000"
     assert config["auth_key"] == "k3y"
     assert config["checks"][0]["tags"] == ["k3y", "plain"]
     assert config["interval"] == 30
@@ -100,7 +100,7 @@ def test_a_missing_or_unsupported_file_is_refused(tmp_path, name, error) -> None
 def _agent(**overrides):
     config = {
         "agent_name": "edge",
-        "push_url": "http://luxswirl_server:9000/api/v1/reports",
+        "server_url": "http://luxswirl_server:9000",
         "checks": [
             {"name": "web", "check_type": "http", "target": "https://example.com"},
             {"name": "db", "check_type": "tcp", "target": "db", "port": 5432},
@@ -117,8 +117,8 @@ def test_a_runnable_agent_config_is_valid() -> None:
 @pytest.mark.parametrize(
     "config",
     [
-        {"agent_name": "edge", "checks": []},  # no push_url
-        _agent(push_url="http://monitor.example.com/api/v1/reports"),
+        {"agent_name": "edge", "checks": []},  # no server_url
+        _agent(server_url="http://monitor.example.com"),
         _agent(checks="web"),
         _agent(
             checks=[

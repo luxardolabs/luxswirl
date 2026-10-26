@@ -163,7 +163,7 @@ ______________________________________________________________________
 ├─────────────────────────────────────────────────────────────┤
 │                                                             │
 │  ┌────────────────────────────────────────────────────┐    │
-│  │              API Layer (/api/v1)                   │    │
+│  │           API Layer (/api/v1/agent)                │    │
 │  │                                                    │    │
 │  │  ┌──────────┐  ┌──────────┐  ┌──────────┐       │    │
 │  │  │  Agents  │  │  Checks  │  │ Results  │       │    │
@@ -257,7 +257,7 @@ ______________________________________________________________________
      │  [{result1}, ...]    │                      │
      └──────────────────────┘                      │
      │                                              │
-     │  3. POST /api/v1/reports                    │
+     │  3. POST /api/v1/agent/reports              │
      │     Authorization: Bearer <token>           │
      ├────────────────────────────────────────────>│
      │                                              │
@@ -505,16 +505,16 @@ ______________________________________________________________________
 
 ### Agent Protocol
 
-The JSON API under `/api/v1` is the agent protocol: it carries agents' registration, heartbeats, check lists, results and artifacts. Operators manage agents, checks, alerts, notification providers, registration keys, users and status pages through the web UI.
+The JSON API's agent protocol, under `/api/v1/agent`, it carries agents' registration, heartbeats, check lists, results and artifacts. Operators manage agents, checks, alerts, notification providers, registration keys, users and status pages through the web UI.
 
-**Versioning**: every agent endpoint lives under `/api/v1`. **Authentication**: `Authorization: Bearer <key>` — a registration key to register, a registration key plus the agent's recovery secret (header `X-Agent-Recovery-Secret`) to recover, the agent's own key for its check list, reports, job results and artifacts. **Response format**: JSON.
+**Versioning**: every agent endpoint lives under `/api/v1/agent`. **Authentication**: `Authorization: Bearer <key>` — a registration key to register, a registration key plus the agent's recovery secret (header `X-Agent-Recovery-Secret`) to recover, the agent's own key for its check list, reports, job results and artifacts. **Response format**: JSON.
 
 ### API Endpoint Structure
 
 ```
-/api/v1
-├── POST   /agents/register                 Register (registration key)
-├── POST   /agents/{agent_id}/recover-key   Recover the agent key (registration key + recovery secret)
+/api/v1/agent
+├── POST   /register                        Register (registration key)
+├── POST   /{agent_id}/recover-key          Recover the agent key (registration key + recovery secret)
 ├── POST   /heartbeat                       Heartbeat (agent key; the registration key updates only a pending agent)
 ├── GET    /checks?agent_id={id}            Fetch this agent's checks (agent key)
 ├── POST   /reports                         Submit a batch of results (agent key)
@@ -611,7 +611,7 @@ ______________________________________________________________________
 
 ```python
 # Agent fetches its check configs from the server (agent_id as query param)
-GET /api/v1/checks?agent_id={agent_id}
+GET /api/v1/agent/checks?agent_id={agent_id}
 Authorization: Bearer {agent_token}
 # Returns: {"checks": [ ...check configurations... ]}
 ```
@@ -668,7 +668,7 @@ async def execute_check(check):
 **5. Reporting**:
 
 ```python
-POST /api/v1/reports
+POST /api/v1/agent/reports
 Authorization: Bearer {agent_token}
 Content-Type: application/json
 
@@ -717,7 +717,7 @@ ______________________________________________________________________
 **Agent API** (Bearer token):
 
 ```
-1. Agent → POST /api/v1/agents/register (with LUXSWIRL_AUTH_KEY)
+1. Agent → POST /api/v1/agent/register (with LUXSWIRL_AUTH_KEY)
 2. Server → Generate unique API key for agent
 3. Agent → Stores API key (encrypted at rest)
 4. Subsequent requests → Authorization: Bearer {api_key}

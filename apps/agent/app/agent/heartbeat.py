@@ -22,6 +22,7 @@ from typing import TYPE_CHECKING, Any
 import httpx
 import psutil
 
+from app.agent import server_api
 from app.agent.http_client import server_client
 from app.checks._ssrf_policy import apply_server_policy
 from app.shared.logger import get_logger
@@ -123,24 +124,12 @@ class HeartbeatSender:
         """Send periodic heartbeat to server with agent health metrics."""
         self.logger.info("Starting heartbeat sender")
 
-        # Get server URL from config
-        push_url = self.config.get("push_url", "http://localhost:9000")
-        if not push_url:
-            self.logger.warning("No push_url configured, heartbeat disabled")
-            return
-
         agent_id = self.config.get("agent_id")
         if not agent_id:
             self.logger.warning("No agent_id configured, heartbeat disabled")
             return
 
-        # Extract base URL
-        if "/api/v1" in push_url:
-            base_url = push_url.split("/api/v1")[0]
-        else:
-            base_url = push_url.rstrip("/")
-
-        heartbeat_url = f"{base_url}/api/v1/heartbeat"
+        heartbeat_url = server_api.heartbeat_url(self.config)
 
         try:
             while not self._stop.is_set():
@@ -656,20 +645,7 @@ class HeartbeatSender:
             )
             return
 
-        push_url = self.config.get("push_url", "http://localhost:9000")
-        if not push_url:
-            self.logger.warning(
-                "No push_url configured, cannot send shutdown heartbeat"
-            )
-            return
-
-        # Extract base URL
-        if "/api/v1" in push_url:
-            base_url = push_url.split("/api/v1")[0]
-        else:
-            base_url = push_url.rstrip("/")
-
-        heartbeat_url = f"{base_url}/api/v1/heartbeat"
+        heartbeat_url = server_api.heartbeat_url(self.config)
 
         try:
             # Calculate final uptime

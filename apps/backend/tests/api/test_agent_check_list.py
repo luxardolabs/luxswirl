@@ -1,4 +1,4 @@
-"""GET /api/v1/checks: an agent fetches the checks it should run.
+"""GET /api/v1/agent/checks: an agent fetches the checks it should run.
 
 The route now authenticates through `AuthenticatedAgentId` and hands core the
 agent's id, so no ORM agent crosses the seam.
@@ -51,7 +51,7 @@ async def test_the_agent_lists_its_checks_with_its_key(
     agent_id, key, check_ids = agent_with_key
 
     resp = await client.get(
-        "/api/v1/checks",
+        "/api/v1/agent/checks",
         params={"agent_id": agent_id},
         headers={"Authorization": f"Bearer {key}"},
     )
@@ -66,7 +66,7 @@ async def test_a_wrong_key_is_refused(
     agent_id, _, _ = agent_with_key
 
     resp = await client.get(
-        "/api/v1/checks",
+        "/api/v1/agent/checks",
         params={"agent_id": agent_id},
         headers={"Authorization": "Bearer not-the-key"},
     )
@@ -76,7 +76,7 @@ async def test_a_wrong_key_is_refused(
 
 async def test_an_unknown_agent_is_not_found(client: AsyncClient) -> None:
     resp = await client.get(
-        "/api/v1/checks",
+        "/api/v1/agent/checks",
         params={"agent_id": str(uuid4())},
         headers={"Authorization": "Bearer anything"},
     )

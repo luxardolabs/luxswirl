@@ -25,7 +25,7 @@ def _sender(reloads: list[int]) -> HeartbeatSender:
     return HeartbeatSender(
         config={
             "agent_id": "a1",
-            "push_url": "https://s.example/api/v1/reports",
+            "server_url": "https://s.example",
             "auth_key": "k",
         },
         metrics={

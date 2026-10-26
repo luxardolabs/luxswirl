@@ -149,7 +149,7 @@ async def test_the_checks_list_sets_the_policy() -> None:
     manager = CheckManager(
         config={
             "agent_id": "a1",
-            "push_url": "https://server.example/api/v1/reports",
+            "server_url": "https://server.example",
             "auth_key": "k",
         },
         cache_file=Path("/nonexistent"),
@@ -173,7 +173,7 @@ async def test_a_heartbeat_response_sets_the_policy() -> None:
     sender = HeartbeatSender(
         config={
             "agent_id": "a1",
-            "push_url": "https://server.example/api/v1/reports",
+            "server_url": "https://server.example",
             "auth_key": "k",
         },
         metrics={
@@ -275,7 +275,7 @@ async def test_an_agent_restarted_offline_keeps_the_servers_policy(
 ) -> None:
     config = {
         "agent_id": "a1",
-        "push_url": "https://server.example/api/v1/reports",
+        "server_url": "https://server.example",
         "auth_key": "k",
     }
     cache = tmp_path / "checks_cache.json"

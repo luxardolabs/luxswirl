@@ -41,7 +41,7 @@ def _sender(auth_key: str) -> HeartbeatSender:
     return HeartbeatSender(
         config={
             "agent_id": "a1",
-            "push_url": "https://server.example/api/v1/reports",
+            "server_url": "https://server.example",
             "auth_key": auth_key,
         },
         metrics={
@@ -68,7 +68,9 @@ async def test_shutdown_heartbeat_uses_the_shared_client_and_leaves_it_open(
 
     await _sender("k1").send_shutdown_heartbeat("run-1")
 
-    assert [str(r.url) for r in seen] == ["https://server.example/api/v1/heartbeat"]
+    assert [str(r.url) for r in seen] == [
+        "https://server.example/api/v1/agent/heartbeat"
+    ]
     assert not shared.is_closed
 
 

@@ -845,7 +845,7 @@ docker compose logs luxswirl_server
 curl -v https://server.example.com:9000/health
 
 # Check server logs for incoming requests
-docker compose logs luxswirl_server | grep "POST /api/v1/reports"
+docker compose logs luxswirl_server | grep "POST /api/v1/agent/reports"
 
 # Verify registration key
 # Settings → Registration Keys in web UI

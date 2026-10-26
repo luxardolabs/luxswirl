@@ -68,7 +68,7 @@ Synthetic checks execute arbitrary Python code. Administrators can run any code 
 - Audit logging
 - UI warning banner
 
-**Authorization model**: Synthetic checks are created and edited only through the web UI, which enforces the user's RBAC role (`viewer`/`editor`/`admin`). The JSON API under `/api/v1` is the agent protocol and offers no route that creates or edits checks.
+**Authorization model**: Synthetic checks are created and edited only through the web UI, which enforces the user's RBAC role (`viewer`/`editor`/`admin`). The JSON API's agent protocol (`/api/v1/agent`) offers no route that creates or edits checks.
 
 **Recommendations**:
 
@@ -115,7 +115,7 @@ LuxSwirl does **not** use CSRF tokens. Cross-site request forgery is prevented b
 - Session cookies are set with `SameSite=Lax` — modern browsers (Chrome 80+, Firefox 79+, Safari 13+, all 2020+) refuse to attach the cookie to cross-site `POST` / `PUT` / `PATCH` / `DELETE` requests, defeating CSRF before the request reaches our backend.
 - Session cookies are set with `Secure=True` in production, restricting them to HTTPS.
 - Session cookies are `HttpOnly`, so JavaScript on a compromised page cannot read or exfiltrate them.
-- Agent-protocol endpoints (`/api/v1/*`) authenticate via `Authorization: Bearer <key>` headers, not cookies — browsers never auto-attach those cross-site, so those endpoints are CSRF-immune by design.
+- Agent-protocol endpoints (`/api/v1/agent/*`) authenticate via `Authorization: Bearer <key>` headers, not cookies — browsers never auto-attach those cross-site, so those endpoints are CSRF-immune by design.
 - Content-Security-Policy includes `frame-ancestors 'none'`, preventing the application from being embedded in malicious iframes.
 
 This is the same model used across Luxardo Labs FastAPI portals. Token-based CSRF (the older pattern) added significant code complexity without meaningfully improving on what browser cookie attributes already provide.

@@ -38,7 +38,7 @@ def _processor(handler) -> tuple[JobProcessor, list[str]]:
         _Recorded.calls.append(request.url.path.rsplit("/", 1)[-1])
         return handler(request)
 
-    processor = JobProcessor({"push_url": "http://server.test/api/v1/reports"})
+    processor = JobProcessor({"server_url": "http://server.test"})
     processor.register_job_type(_Recorded)
     processor.client = httpx.AsyncClient(transport=httpx.MockTransport(recording))
     return processor, seen
@@ -51,8 +51,8 @@ async def test_the_start_notice_goes_before_the_job_runs() -> None:
     await processor._execute_job({"job_id": _JOB_ID, "job_type": "recorded"})
 
     assert seen == [
-        f"POST /api/v1/jobs/{_JOB_ID}/start",
-        f"POST /api/v1/jobs/{_JOB_ID}/results",
+        f"POST /api/v1/agent/jobs/{_JOB_ID}/start",
+        f"POST /api/v1/agent/jobs/{_JOB_ID}/results",
     ]
     assert _Recorded.calls == ["start", "run", "results"]
 
@@ -73,7 +73,7 @@ async def test_a_failed_start_notice_still_runs_the_job(answer: str) -> None:
     await processor._execute_job({"job_id": _JOB_ID, "job_type": "recorded"})
 
     assert "run" in _Recorded.calls
-    assert seen[-1] == f"POST /api/v1/jobs/{_JOB_ID}/results"
+    assert seen[-1] == f"POST /api/v1/agent/jobs/{_JOB_ID}/results"
     assert processor.stats["total_completed"] == 1
 
 
@@ -83,7 +83,7 @@ async def test_an_unknown_job_type_sends_no_start_notice() -> None:
 
     await processor._execute_job({"job_id": _JOB_ID, "job_type": "nope"})
 
-    assert seen == [f"POST /api/v1/jobs/{_JOB_ID}/results"]
+    assert seen == [f"POST /api/v1/agent/jobs/{_JOB_ID}/results"]
 
 
 async def _silent_server() -> tuple[asyncio.AbstractServer, int]:
@@ -103,7 +103,7 @@ async def test_a_server_that_never_answers_delays_the_job_only_briefly(
     _Recorded.calls = []
     monkeypatch.setattr(JobProcessor, "START_NOTICE_TIMEOUT", 0.3)
     server, port = await _silent_server()
-    processor = JobProcessor({"push_url": f"http://127.0.0.1:{port}/api/v1/reports"})
+    processor = JobProcessor({"server_url": f"http://127.0.0.1:{port}"})
     processor.register_job_type(_Recorded)
     processor.client = httpx.AsyncClient(timeout=30.0)
     try:
@@ -118,7 +118,7 @@ async def test_a_server_that_never_answers_delays_the_job_only_briefly(
 
 
 async def test_a_notice_with_no_client_sends_nothing_and_starts_no_worker() -> None:
-    processor = JobProcessor({"push_url": "http://127.0.0.1:9/api/v1/reports"})
+    processor = JobProcessor({"server_url": "http://127.0.0.1:9"})
 
     await processor._notify_started(_JOB_ID)
 

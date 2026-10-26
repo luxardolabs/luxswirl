@@ -49,7 +49,7 @@ async def test_recover_key_refuses_an_inactive_agent(
     )
 
     resp = await client.post(
-        f"/api/v1/agents/{agent.id}/recover-key",
+        f"/api/v1/agent/{agent.id}/recover-key",
         headers={
             "Authorization": f"Bearer {token}",
             "X-Agent-Recovery-Secret": secret,

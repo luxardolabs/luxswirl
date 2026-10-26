@@ -27,9 +27,9 @@ services:
     restart: unless-stopped
 
     environment:
-      # Required: full reports endpoint, ending in /api/v1/reports
+      # Required: the server's address, with no path
       # (HTTPS for external servers, HTTP allowed for internal)
-      LUXSWIRL_SERVER_URL: "https://server.example.com:9000/api/v1/reports"
+      LUXSWIRL_SERVER_URL: "https://server.example.com:9000"
 
       # Required: registration key from the server
       # (Settings → Registration Keys). The container will not start without it.
@@ -73,7 +73,7 @@ The agent registers as **pending**. An admin approves it on the **Agents** page.
 docker compose logs -f luxswirl_agent
 ```
 
-The agent connects to the server using `LUXSWIRL_AUTH_KEY`, then fetches its assigned checks from `GET /api/v1/checks?agent_id=<agent-id>`. Once it appears **Online** on the server's **Agents** page, it is connected.
+The agent connects to the server using `LUXSWIRL_AUTH_KEY`, then fetches its assigned checks from `GET /api/v1/agent/checks?agent_id=<agent-id>`. Once it appears **Online** on the server's **Agents** page, it is connected.
 
 ### 5. Add Checks
 
@@ -99,7 +99,7 @@ services:
     restart: unless-stopped
 
     environment:
-      LUXSWIRL_SERVER_URL: "https://server.example.com:9000/api/v1/reports"
+      LUXSWIRL_SERVER_URL: "https://server.example.com:9000"
       LUXSWIRL_AUTH_KEY: "your-registration-key"
 
     volumes:
@@ -130,7 +130,7 @@ services:
     restart: unless-stopped
 
     environment:
-      LUXSWIRL_SERVER_URL: "https://server.example.com:9000/api/v1/reports"
+      LUXSWIRL_SERVER_URL: "https://server.example.com:9000"
       LUXSWIRL_AUTH_KEY: "your-registration-key"
 
     volumes:
@@ -164,7 +164,7 @@ services:
     restart: unless-stopped
 
     environment:
-      LUXSWIRL_SERVER_URL: "https://server.example.com:9000/api/v1/reports"
+      LUXSWIRL_SERVER_URL: "https://server.example.com:9000"
       LUXSWIRL_AUTH_KEY: "your-registration-key"
 
     volumes:
@@ -194,7 +194,7 @@ services:
     restart: unless-stopped
 
     environment:
-      LUXSWIRL_SERVER_URL: "https://server.example.com:9000/api/v1/reports"
+      LUXSWIRL_SERVER_URL: "https://server.example.com:9000"
       LUXSWIRL_AUTH_KEY: "registration-key-web"
       LUXSWIRL_AGENT_ID: "web-cluster-01"
 
@@ -208,7 +208,7 @@ services:
     restart: unless-stopped
 
     environment:
-      LUXSWIRL_SERVER_URL: "https://server.example.com:9000/api/v1/reports"
+      LUXSWIRL_SERVER_URL: "https://server.example.com:9000"
       LUXSWIRL_AUTH_KEY: "registration-key-db"
       LUXSWIRL_AGENT_ID: "db-cluster-01"
 
@@ -224,14 +224,14 @@ volumes:
 
 ### Environment Variables
 
-| Variable                                 | Required | Default                                      | Description                                                                     |
-| ---------------------------------------- | -------- | -------------------------------------------- | ------------------------------------------------------------------------------- |
-| `LUXSWIRL_SERVER_URL`                    | **Yes**  | `http://luxswirl_server:9000/api/v1/reports` | Full reports endpoint, ending in `/api/v1/reports` (HTTPS for external servers) |
-| `LUXSWIRL_AUTH_KEY`                      | **Yes**  | -                                            | Registration key from server (agent will not start without it)                  |
-| `LUXSWIRL_AGENT_ID`                      | No       | `<hostname>-agent`                           | Agent id / display name                                                         |
-| `LOG_LEVEL`                              | No       | `DEBUG`                                      | Logging level (`DEBUG`, `INFO`, `WARNING`, `ERROR`)                             |
-| `LUXSWIRL_DISABLE_CREDENTIAL_ENCRYPTION` | No       | `false`                                      | Disable credential encryption (testing only)                                    |
-| `LUXSWIRL_ALLOW_INSECURE_HTTP`           | No       | `false`                                      | Allow HTTP for external servers (testing only)                                  |
+| Variable                                 | Required | Default                       | Description                                                     |
+| ---------------------------------------- | -------- | ----------------------------- | --------------------------------------------------------------- |
+| `LUXSWIRL_SERVER_URL`                    | **Yes**  | `http://luxswirl_server:9000` | The server's address, with no path (HTTPS for external servers) |
+| `LUXSWIRL_AUTH_KEY`                      | **Yes**  | -                             | Registration key from server (agent will not start without it)  |
+| `LUXSWIRL_AGENT_ID`                      | No       | `<hostname>-agent`            | Agent id / display name                                         |
+| `LOG_LEVEL`                              | No       | `DEBUG`                       | Logging level (`DEBUG`, `INFO`, `WARNING`, `ERROR`)             |
+| `LUXSWIRL_DISABLE_CREDENTIAL_ENCRYPTION` | No       | `false`                       | Disable credential encryption (testing only)                    |
+| `LUXSWIRL_ALLOW_INSECURE_HTTP`           | No       | `false`                       | Allow HTTP for external servers (testing only)                  |
 
 ### Volume Mounts
 
@@ -273,7 +273,7 @@ services:
       start_period: 10s
 
     environment:
-      LUXSWIRL_SERVER_URL: "https://server.example.com:9000/api/v1/reports"
+      LUXSWIRL_SERVER_URL: "https://server.example.com:9000"
       LUXSWIRL_AUTH_KEY: "your-registration-key"
 
     volumes:
@@ -341,7 +341,7 @@ services:
         max-file: "3"
 
     environment:
-      LUXSWIRL_SERVER_URL: "https://server.example.com:9000/api/v1/reports"
+      LUXSWIRL_SERVER_URL: "https://server.example.com:9000"
       LUXSWIRL_AUTH_KEY: "your-registration-key"
 
     volumes:
@@ -489,7 +489,7 @@ See [Agent Credential Encryption](../architecture/security-credentials.md) for d
 
 **Symptom:** after upgrading, an agent that had not yet received its agent key logs `No recovery secret stored ... registering again; approve the new agent`, and a new pending agent appears in the server UI.
 
-**Cause:** key recovery (`POST /api/v1/agents/{agent_id}/recover-key`) now needs the agent's own recovery secret as well as the registration key. The secret is issued at registration, so an agent registered before this version has none, and the server has no digest to check it against: such an agent can never recover a key.
+**Cause:** key recovery (`POST /api/v1/agent/{agent_id}/recover-key`) now needs the agent's own recovery secret as well as the registration key. The secret is issued at registration, so an agent registered before this version has none, and the server has no digest to check it against: such an agent can never recover a key.
 
 **Solution:** approve the new registration in the server UI and delete the old, superseded agent. An agent that already holds its agent key keeps running on it; it only needs to register again if it ever loses that key (for example after deleting its credentials), and then it is approved like a new agent.
 
@@ -644,7 +644,7 @@ services:
       - 8.8.4.4
 
     environment:
-      LUXSWIRL_SERVER_URL: "https://server.example.com:9000/api/v1/reports"
+      LUXSWIRL_SERVER_URL: "https://server.example.com:9000"
       LUXSWIRL_AUTH_KEY: "your-registration-key"
 ```
 
@@ -664,7 +664,7 @@ services:
       - monitoring
 
     environment:
-      LUXSWIRL_SERVER_URL: "https://server.example.com:9000/api/v1/reports"
+      LUXSWIRL_SERVER_URL: "https://server.example.com:9000"
       LUXSWIRL_AUTH_KEY: "your-registration-key"
 ```
 
@@ -676,7 +676,7 @@ Not currently supported. Agents connect to single server URL.
 
 ```yaml
 environment:
-  LUXSWIRL_SERVER_URL: "https://server-lb.example.com:9000/api/v1/reports"
+  LUXSWIRL_SERVER_URL: "https://server-lb.example.com:9000"
 ```
 
 ## Docker Swarm / Kubernetes
@@ -696,7 +696,7 @@ services:
         max_attempts: 3
 
     environment:
-      LUXSWIRL_SERVER_URL: "https://server.example.com:9000/api/v1/reports"
+      LUXSWIRL_SERVER_URL: "https://server.example.com:9000"
       LUXSWIRL_AUTH_KEY: "your-registration-key"
 
     volumes:

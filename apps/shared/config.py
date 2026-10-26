@@ -21,15 +21,10 @@ from .url_security import validate_server_url
 DEFAULT_AGENT_CONFIG = {
     "agent_name": os.environ.get("LUXSWIRL_AGENT_ID", f"{socket.gethostname()}-agent"),
     "auth_key": os.environ.get("LUXSWIRL_AUTH_KEY", ""),
-    # Server URL for check results submission
-    # Format: http(s)://host:port/api/v1/reports
-    # This URL is used as the base for both check results AND heartbeat endpoints:
-    #   - Check results: {push_url} (POST)
-    #   - Heartbeats: {base}/api/v1/agents/{agent_name}/heartbeat (POST)
-    # Default uses luxswirl_server which is the service name in docker-compose
-    "push_url": os.environ.get(
-        "LUXSWIRL_SERVER_URL", "http://luxswirl_server:9000/api/v1/reports"
-    ),
+    # The server's address: http(s)://host:port, no path. The agent protocol is
+    # under {server_url}/api/v1/agent (app/agent/server_api.py). The default is
+    # the server's service name in docker-compose.
+    "server_url": os.environ.get("LUXSWIRL_SERVER_URL", "http://luxswirl_server:9000"),
     # Reporting configuration
     "report_interval": 10,
     "report_batch_size": 5000,
@@ -228,13 +223,13 @@ def _validate_agent_config(config: dict[str, Any]) -> None:
     Raises:
         ValueError: If the configuration is invalid
     """
-    required_fields = ["agent_name", "push_url", "checks"]
+    required_fields = ["agent_name", "server_url", "checks"]
     for field in required_fields:
         if field not in config:
             raise ValueError(f"Missing required field: {field}")
 
-    # Validate push_url security
-    validate_server_url(config["push_url"])
+    # Validate server_url security
+    validate_server_url(config["server_url"])
 
     # Validate checks
     if not isinstance(config["checks"], list):

@@ -68,7 +68,7 @@ async def test_a_request_without_browser_headers_passes(routed: AsyncClient) -> 
     # The agent and webhooks send neither Origin nor Sec-Fetch-Site: the request
     # reaches the route, which refuses the unknown registration key itself.
     r = await routed.post(
-        "/api/v1/agents/register",
+        "/api/v1/agent/register",
         json={"hostname": "x"},
         headers={"Authorization": "Bearer not-a-registration-key"},
     )

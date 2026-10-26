@@ -11,7 +11,7 @@ Two consequences, both of which bit this suite on the 0.136 -> 0.141 bump:
 - Iterating `app.routes` flat sees ~29 entries instead of ~224. A check built
   on it does not fail; it silently stops checking.
 - Reading `route.path` without the wrapper's prefix yields `/checks`, not
-  `/api/v1/checks` — a path that matches nothing.
+  `/api/v1/agent/checks` — a path that matches nothing.
 
 This lives in one place so the route-name test and the route-smoke sweep cannot
 drift apart again. It mirrors the traversal in the emitted route-smoke asserter

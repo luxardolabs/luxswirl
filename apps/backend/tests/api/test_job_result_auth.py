@@ -1,4 +1,4 @@
-"""`POST /api/v1/jobs/{job_id}/results` accepts results only from the job's own agent.
+"""`POST /api/v1/agent/jobs/{job_id}/results` accepts results only from the job's own agent.
 
 The route used to WRITE the result first and check the caller afterwards, and
 only when the job had an agent: a job with no `agent_id` (or whose agent was
@@ -73,7 +73,7 @@ async def world(db: AsyncSession) -> dict[str, object]:
 async def _post(client: AsyncClient, job: Job, key: str | None) -> int:
     headers = {"Authorization": f"Bearer {key}"} if key else {}
     resp = await client.post(
-        f"/api/v1/jobs/{job.id}/results", json=_RESULT, headers=headers
+        f"/api/v1/agent/jobs/{job.id}/results", json=_RESULT, headers=headers
     )
     return resp.status_code
 
@@ -112,7 +112,7 @@ async def test_another_agents_key_is_refused(
 
 async def test_an_unknown_job_is_not_found(client: AsyncClient) -> None:
     resp = await client.post(
-        "/api/v1/jobs/00000000-0000-0000-0000-000000000000/results",
+        "/api/v1/agent/jobs/00000000-0000-0000-0000-000000000000/results",
         json=_RESULT,
         headers={"Authorization": f"Bearer {_KEY_A}"},
     )
