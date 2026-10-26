@@ -483,6 +483,7 @@ class AgentCoreService:
 
         Raises:
             AgentNotFoundException: If agent not found
+            DuplicateResourceException: If another agent already has the new name
         """
         agent = await AgentCoreService.get_agent_by_id(db, agent_id)
         if not agent:
@@ -490,6 +491,13 @@ class AgentCoreService:
 
         # Update fields
         update_data = data.model_dump(exclude_unset=True)
+        new_name = update_data.get("agent_name")
+        if new_name is not None and new_name != agent.agent_name:
+            taken = await AgentCoreService.get_agent_by_name(db, new_name)
+            if taken is not None and taken.id != agent.id:
+                raise DuplicateResourceException(
+                    f"Agent with name '{new_name}' already exists"
+                )
         # A new name or new tags can put the agent in (or take it out of) a
         # synthetic check's selector: that change of where code runs is an admin's.
         placement_changes = not actor_is_admin and bool(

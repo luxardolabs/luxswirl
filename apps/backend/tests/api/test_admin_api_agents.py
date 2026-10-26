@@ -219,6 +219,38 @@ async def test_an_update_changes_only_what_the_edit_form_does(
     assert await _status(db, agent.id) == "pending"
 
 
+async def test_a_rename_to_another_agents_name_is_a_conflict(
+    db: AsyncSession, client: AsyncClient
+) -> None:
+    editor = await _as(db, "editor")
+    taken = await _agent(db, agent_name=f"taken-{uuid4().hex[:8]}")
+    agent = await _agent(db, agent_name=f"mine-{uuid4().hex[:8]}")
+    taken_name, mine = taken.agent_name, agent.agent_name
+
+    clash = await client.patch(
+        f"{AGENTS}/{agent.id}", json={"agent_name": taken_name}, headers=editor
+    )
+    same = await client.patch(
+        f"{AGENTS}/{agent.id}", json={"agent_name": mine}, headers=editor
+    )
+
+    assert clash.status_code == 409, clash.text
+    assert same.status_code == 200, same.text
+
+
+async def test_the_documented_update_example_is_accepted(
+    db: AsyncSession, client: AsyncClient
+) -> None:
+    editor = await _as(db, "editor")
+    agent = await _agent(db)
+    doc = (await client.get("/api/v1/admin/openapi.json", headers=editor)).json()
+    example = doc["components"]["schemas"]["AdminAgentUpdate"]["example"]
+
+    resp = await client.patch(f"{AGENTS}/{agent.id}", json=example, headers=editor)
+
+    assert resp.status_code == 200, resp.text
+
+
 async def test_an_editor_retag_that_moves_a_synthetic_check_is_refused(
     db: AsyncSession, client: AsyncClient
 ) -> None:

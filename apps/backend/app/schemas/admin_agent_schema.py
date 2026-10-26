@@ -20,7 +20,17 @@ _AGENT_REPORTED = ("agent_run_id", "ip_address", "version")
 class AdminAgentUpdate(AgentUpdate):
     """A change to an agent: its name, tags and configuration, as the edit form."""
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(
+        extra="forbid",
+        json_schema_extra={
+            "example": {
+                "agent_name": "prod-web-01",
+                "tags": ["production", "web"],
+                "heartbeat_interval": 30,
+                "log_level": "INFO",
+            }
+        },
+    )
 
     @model_validator(mode="after")
     def _agent_reported_untouched(self) -> Self:
