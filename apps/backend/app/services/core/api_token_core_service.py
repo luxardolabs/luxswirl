@@ -2,10 +2,14 @@
 API token core service - users' bearer tokens for the admin API.
 
 A token acts as its user. It authenticates only while it is unrevoked and
-unexpired AND its user is active and not locked, and it carries the user's
-role, so the admin API grants exactly what the web UI grants that user.
+unexpired AND its user is active and owes no password change, and it carries
+the user's role, so the admin API grants exactly what the web UI grants that
+user. A login lockout does not stop it: the lockout guards the password, and
+anyone who knows a username can trigger one. A password change or reset
+revokes the user's tokens, as it ends their sessions.
 """
 
+import hashlib
 import secrets
 from datetime import timedelta
 from uuid import UUID
@@ -25,7 +29,6 @@ from app.schemas.api_token_schema import (
     ApiWhoAmIResponse,
 )
 from app.schemas.auth_schema import CurrentUserDTO
-from app.services.core.auth_core_service import AuthCoreService
 from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.services.api_tokens")
@@ -34,6 +37,10 @@ TOKEN_PREFIX = "lsw_"
 TOKEN_BYTES = 32
 # What the token list shows of each token: the prefix and 8 more characters.
 DISPLAY_LENGTH = 12
+
+
+def _hash(plaintext: str) -> str:
+    return hashlib.sha256(plaintext.encode("utf-8")).hexdigest()
 
 
 class ApiTokenCoreService:
@@ -48,7 +55,7 @@ class ApiTokenCoreService:
         token = ApiToken(
             user_id=user_id,
             name=data.name,
-            token_hash=AuthCoreService.hash_token(plaintext),
+            token_hash=_hash(plaintext),
             token_prefix=plaintext[:DISPLAY_LENGTH],
             expires_at=(
                 utc_now() + timedelta(days=data.expires_in_days)
@@ -107,13 +114,27 @@ class ApiTokenCoreService:
         )
 
     @staticmethod
+    async def revoke_all_for_user(db: AsyncSession, user_id: UUID, reason: str) -> int:
+        """Revoke every token of `user_id` (a password change or reset)."""
+        count = await ApiTokenCRUD.revoke_all_for_user(db, user_id, utc_now())
+        if count:
+            logger.info(
+                "SECURITY AUDIT: API tokens revoked",
+                extra={
+                    "event": "api_tokens_revoked",
+                    "user_id": str(user_id),
+                    "token_count": count,
+                    "reason": reason,
+                },
+            )
+        return count
+
+    @staticmethod
     async def authenticate(db: AsyncSession, plaintext: str) -> ApiPrincipal | None:
         """Who `plaintext` acts as, or None when it authenticates nobody."""
         if not plaintext.startswith(TOKEN_PREFIX):
             return None
-        token = await ApiTokenCRUD.get_by_hash(
-            db, AuthCoreService.hash_token(plaintext)
-        )
+        token = await ApiTokenCRUD.get_by_hash(db, _hash(plaintext))
         now = utc_now()
         if (
             token is None
@@ -122,7 +143,7 @@ class ApiTokenCoreService:
         ):
             return None
         user = await UserCRUD.get_by_id(db, token.user_id)
-        if user is None or not user.is_active or user.is_locked:
+        if user is None or not user.is_active or user.must_change_password:
             return None
         await ApiTokenCRUD.mark_used(db, token, now)
         return ApiPrincipal(

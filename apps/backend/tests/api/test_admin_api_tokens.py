@@ -18,7 +18,7 @@ from app.api.deps import require_api_admin, require_api_editor
 from app.core.config import settings
 from app.core.datetime_utils import utc_now
 from app.core.exceptions import NotFoundException
-from app.core.rate_limit import limiter
+from app.core.rate_limit import api_token_rate_limit_key, limiter
 from app.crud.api_token_crud import ApiTokenCRUD
 from app.main import app
 from app.models.enum_model import UserRole
@@ -30,6 +30,7 @@ from fastapi import HTTPException
 from fixtures.factories import make_user
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.requests import Request
 
 pytestmark = pytest.mark.integration
 
@@ -143,18 +144,14 @@ async def test_an_expired_token_is_refused(
     assert (await client.get(ME, headers=_bearer(plaintext))).status_code == 401
 
 
-@pytest.mark.parametrize("state", ["inactive", "locked"])
-async def test_a_token_of_an_inactive_or_locked_user_is_refused(
-    db: AsyncSession, client: AsyncClient, state: str
+async def test_a_token_of_a_deactivated_user_is_refused(
+    db: AsyncSession, client: AsyncClient
 ) -> None:
     user = await _user(db)
     _, plaintext = await _token(db, user)
     assert (await client.get(ME, headers=_bearer(plaintext))).status_code == 200
 
-    if state == "locked":
-        user.locked_until = utc_now() + timedelta(hours=1)
-    else:
-        user.is_active = False
+    user.is_active = False
     await db.flush()
 
     assert (await client.get(ME, headers=_bearer(plaintext))).status_code == 401
@@ -240,3 +237,93 @@ async def test_deleting_a_user_deletes_their_tokens(
         is None
     )
     assert (await client.get(ME, headers=_bearer(plaintext))).status_code == 401
+
+
+async def test_changing_a_password_revokes_the_users_tokens(
+    db: AsyncSession, client: AsyncClient
+) -> None:
+    # A token minted from a hijacked session must not outlive the password
+    # change that ends the session.
+    user = await _user(db)
+    _, plaintext = await _token(db, user)
+
+    await AuthCoreService().change_password(
+        db, user.id, "TestPass123!", "N3w-Strong-Passw0rd!x"
+    )
+    await db.flush()
+
+    assert (await client.get(ME, headers=_bearer(plaintext))).status_code == 401
+
+
+async def test_an_admin_password_reset_revokes_the_users_tokens(
+    db: AsyncSession, client: AsyncClient
+) -> None:
+    user = await _user(db, role="editor")
+    _, plaintext = await _token(db, user)
+
+    await AuthCoreService().reset_password(
+        db, user.id, "R3set-Strong-Passw0rd!", force_change=False
+    )
+    await db.flush()
+
+    assert (await client.get(ME, headers=_bearer(plaintext))).status_code == 401
+
+
+async def test_a_user_who_must_change_their_password_gets_no_api_access(
+    db: AsyncSession, client: AsyncClient
+) -> None:
+    user = await _user(db)
+    _, plaintext = await _token(db, user)
+    user.must_change_password = True
+    await db.flush()
+
+    assert (await client.get(ME, headers=_bearer(plaintext))).status_code == 401
+
+
+async def test_failed_logins_by_a_stranger_do_not_switch_off_a_users_tokens(
+    db: AsyncSession, client: AsyncClient
+) -> None:
+    # The login lockout guards the password; a token is not the password.
+    user = await _user(db, role="editor")
+    _, plaintext = await _token(db, user)
+    auth = AuthCoreService()
+    for _ in range(AuthCoreService.MAX_FAILED_ATTEMPTS):
+        assert await auth.authenticate_user(db, user.username, "wrong") is None
+    await db.flush()
+    await db.refresh(user)
+    assert user.is_locked
+
+    assert (await client.get(ME, headers=_bearer(plaintext))).status_code == 200
+
+
+async def test_the_admin_openapi_document_holds_only_the_admin_apis_schemas(
+    db: AsyncSession, client: AsyncClient
+) -> None:
+    user = await _user(db, role="viewer")
+    _, plaintext = await _token(db, user)
+
+    doc = (await client.get(OPENAPI, headers=_bearer(plaintext))).json()
+
+    schemas = set(doc.get("components", {}).get("schemas", {}))
+    assert "ApiWhoAmIResponse" in schemas
+    assert not {s for s in schemas if s.startswith(("Agent", "Check", "Job"))}
+    assert "HealthResponse" not in schemas
+
+
+@pytest.mark.parametrize("name", ["a\x00b", "tab\there", "line\nbreak", "del\x7f"])
+def test_a_token_name_with_a_control_character_is_refused(name: str) -> None:
+    with pytest.raises(ValueError):
+        ApiTokenCreate(name=name)
+
+
+def _request(authorization: str) -> Request:
+    return Request(
+        {"type": "http", "headers": [(b"authorization", authorization.encode())]}
+    )
+
+
+def test_the_rate_limit_key_is_not_the_stored_token_hash() -> None:
+    # The limiter's storage and its log line must not hold the database value.
+    key = api_token_rate_limit_key(_request("Bearer lsw_abc"))
+    assert AuthCoreService.hash_token("lsw_abc") not in key
+    assert key == api_token_rate_limit_key(_request("Bearer  lsw_abc "))

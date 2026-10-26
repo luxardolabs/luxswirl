@@ -24,11 +24,13 @@ def api_token_rate_limit_key(request: Request) -> str:
     """slowapi key function for the admin API: the calling token, by its hash.
 
     The route's dependency has already authenticated the token when the limit
-    is checked, so every bucket is one real token. The hash, not the token, is
-    what the limiter's storage keeps.
+    is checked, so every bucket is one real token. The limiter's storage and
+    its log lines keep a digest of the token under this key's own label: never
+    the token, nor the hash the database stores.
     """
     _, _, token = request.headers.get("authorization", "").partition(" ")
-    return "api-token:" + hashlib.sha256(token.strip().encode("utf-8")).hexdigest()
+    digest = hashlib.sha256(b"rate-limit:" + token.strip().encode("utf-8"))
+    return "api-token:" + digest.hexdigest()
 
 
 # Global limiter — imported by routers that need @limiter.limit(...) decorators.
