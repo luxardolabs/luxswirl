@@ -1,6 +1,6 @@
 {
   "guard": "luxarch",
-  "guard_version": "0.325.0",
+  "guard_version": "0.326.0",
   "repo": "/repo",
   "targets": [
     {
@@ -1549,13 +1549,13 @@
         },
         {
           "rule": "fw.credential_routes_limited",
-          "status": "PASS",
+          "status": "FAIL",
           "since": "0.215.0",
-          "violations": 0,
+          "violations": 6,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
-          "fix": "",
+          "fix": "attach a per-route limit keyed on the real client \u2014 `@limiter.limit(...)` with a trusted-proxy-aware key function. ON PYTHON 3.14+ THAT DECORATOR ALSO NEEDS THE SANCTIONED SLOWAPI CARVE-OUT, or your suite stops COLLECTING: slowapi 0.1.10 calls the deprecated `asyncio.iscoroutinefunction` inside `Limiter.limit`, so under the canonical `filterwarnings = error` the warning is raised at DECORATION time \u2014 at import of any module holding a limited route, before a single test runs. Take the row from `--doc FLEET-RATE-LIMIT-STANDARD` \u00a74 verbatim; do NOT reach for the broad `ignore::DeprecationWarning:slowapi.extension`, which \u00a74 measured as harmful. `--doc FLEET-RATE-LIMIT-STANDARD` \u00a73: a login endpoint cannot key on the authenticated identity, because the credential is what is being verified, so per-route plus per-IP is the honest fallback. An unlimited credential route takes unlimited guessing against every account from one address. If this route genuinely needs no limit, or your limiter has a name this rule does not recognise, put it in `[allowlist].credential_route_limited = [{ function, evidence }]` \u2014 or escalate, so the recognised set grows for the whole fleet rather than one repo carrying a waiver.",
           "example": ""
         },
         {
@@ -1989,8 +1989,8 @@
         }
       ],
       "summary": {
-        "PASS": 161,
-        "FAIL": 1,
+        "PASS": 160,
+        "FAIL": 2,
         "XFAIL": 0,
         "XPASS": 0,
         "INERT": 18
@@ -2880,12 +2880,12 @@
     }
   },
   "summary": {
-    "PASS": 236,
-    "FAIL": 1,
+    "PASS": 235,
+    "FAIL": 2,
     "XFAIL": 0,
     "XPASS": 0,
     "INERT": 21
   },
-  "commit": "4af5dba96187419a44cfca0f0b053a32e427a005",
-  "generated_at": "2026-10-26T10:32:25Z"
+  "commit": "ea13cddc05fecd3c9d433eb6c03e8c1f0f874336",
+  "generated_at": "2026-10-26T11:05:21Z"
 }
