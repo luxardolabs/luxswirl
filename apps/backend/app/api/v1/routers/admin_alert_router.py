@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import ApiEditor, ApiUser
 from app.core.config import settings
+from app.core.query_params import EnabledFilter, GlobalFilter
 from app.core.rate_limit import api_token_rate_limit_key, limiter
 from app.db import get_db
 from app.schemas.admin_alert_schema import (
@@ -43,8 +44,8 @@ async def admin_list_alerts(
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     page: Annotated[int, Query(ge=1, le=MAX_PAGE)] = 1,
     per_page: Annotated[int, Query(ge=1, le=200)] = 50,
-    is_enabled: bool | None = None,
-    is_global: bool | None = None,
+    is_enabled: EnabledFilter = None,
+    is_global: GlobalFilter = None,
 ) -> AlertPage:
     """One page of alerts, filtered by `is_enabled` and `is_global`."""
     return await AdminAlertCoreService.list_alerts(

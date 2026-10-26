@@ -296,6 +296,22 @@ async def test_a_deleted_provider_drops_out_and_the_list_round_trips(
 # ── Edits ────────────────────────────────────────────────────────────────────
 
 
+async def test_an_empty_filter_reads_as_all(
+    db: AsyncSession, client: AsyncClient
+) -> None:
+    viewer = await _as(db, "viewer")
+    off = await _alert(db, is_enabled=False)
+
+    resp = await client.get(
+        ALERTS,
+        params={"is_enabled": "", "is_global": "", "per_page": 200},
+        headers=viewer,
+    )
+
+    assert resp.status_code == 200, resp.text
+    assert str(off) in {a["id"] for a in resp.json()["items"]}
+
+
 async def test_whether_an_alert_is_global_is_fixed(
     db: AsyncSession, client: AsyncClient
 ) -> None:
