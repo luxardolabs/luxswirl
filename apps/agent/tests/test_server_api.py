@@ -1,8 +1,8 @@
 """The agent reaches the server only at `server_url` + the agent protocol's paths.
 
-`server_url` is the server's address with no path; a URL that carries one (the
-old `.../api/v1/reports` form) would put every request on a path the server
-does not serve, so the agent refuses it at startup.
+`server_url` is the server's address with no path; a URL that carries one
+(`.../api/v1/reports`) would put every request on a path the server does not
+serve, so the agent refuses it at startup.
 """
 
 from __future__ import annotations

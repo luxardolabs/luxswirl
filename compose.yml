@@ -144,11 +144,12 @@ services:
       - .env.${ENV:?set ENV in .env.<env> — it names the file to load}
     environment:
       - LUXSWIRL_AUTH_KEY=${LUXSWIRL_AUTH_KEY:?must be set — generate via server UI}
-      # A standalone node MUST override this in its .env.<env>. It cannot be
+      # The remote server's address, from this node's .env.<env>. It cannot be
       # a required `:?` variable: compose interpolates every service in the
       # file, so a required value here would break `up` for the dev, prod and
-      # test invocations that never start this profile.
-      - LUXSWIRL_SERVER_URL=${LUXSWIRL_SERVER_URL:-https://luxswirl.example.com:9000}
+      # test invocations that never start this profile. Left unset, it reaches
+      # the agent empty and the agent refuses to start, naming the variable.
+      - LUXSWIRL_SERVER_URL=${LUXSWIRL_SERVER_URL:-}
     network_mode: host
     restart: always
 
