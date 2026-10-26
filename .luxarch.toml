@@ -223,7 +223,7 @@ require_dep = ["AdminUserWeb", "require_admin_web"]
 [[target.authz.signature]]
 prefix = "/api/v1/agent/"
 require_dep = [
-  "RegistrationKeyRequired",
+  "KeyedRegistration",
   "RecoveryRegistrationKeyRequired",
   "AuthenticatedAgentId",
   "AuthenticatedHeartbeat",
