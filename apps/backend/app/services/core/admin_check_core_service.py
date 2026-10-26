@@ -8,11 +8,11 @@ userinfo of any URL in `target` or `connection_string` and any `password=` /
 `pwd=` value are masked, and the synthetic `script_code` is left out.
 """
 
-import re
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.credential_mask import mask_credentials
 from app.models.check_model import Check
 from app.models.enum_model import UserRole
 from app.schemas.admin_check_schema import (
@@ -25,22 +25,6 @@ from app.schemas.check_schema import CheckResponse
 from app.schemas.pagination_schema import build_pagination
 from app.services.core.check_api_core_service import CheckApiCoreService
 from app.services.core.check_core_service import CheckCoreService
-
-_MASK = "***"
-# A URL's userinfo: everything between the scheme and the last `@` of the authority.
-_USERINFO = re.compile(r"(?<=://)[^/?#]*@")
-# A key=value password, as libpq, ODBC and query strings write one.
-_PASSWORD_PAIR = re.compile(
-    r"(?i)\b(password|passwd|pwd)(\s*=\s*)('[^']*'|\"[^\"]*\"|[^\s;&]+)"
-)
-
-
-def mask_credentials(value: str | None) -> str | None:
-    """`value` with every credential it carries replaced by `***`."""
-    if not value:
-        return value
-    masked = _USERINFO.sub(f"{_MASK}@", value)
-    return _PASSWORD_PAIR.sub(rf"\1\2{_MASK}", masked)
 
 
 class AdminCheckCoreService:

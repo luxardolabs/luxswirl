@@ -21,7 +21,7 @@ from app.web.check_form import (
     CheckUpdateFields,
     OptionalIdForm,
 )
-from app.web.deps import CurrentUserWeb, EditorUserWeb
+from app.web.deps import EditorUserWeb
 from app.web.hx_responses import hx_empty_with_toast
 from app.web.render import bulk_oob_response, error_partial, job_status_oob_response
 from app.web.templates import templates
@@ -43,7 +43,7 @@ router = APIRouter(tags=["Web UI - Checks"])
 async def assignment_mode_selector(
     request: Request,
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
-    current_user: CurrentUserWeb,
+    current_user: EditorUserWeb,
     assignment_mode: Annotated[str, Query()] = "manual",
 ) -> HTMLResponse:
     """Return assignment selector UI based on mode."""
@@ -67,7 +67,7 @@ async def assignment_mode_selector(
 async def create_form(
     request: Request,
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
-    current_user: CurrentUserWeb,
+    current_user: EditorUserWeb,
 ) -> HTMLResponse:
     """Get the create form for a new check."""
     context = await ChecksViewService.build_create_form_context(
@@ -87,7 +87,7 @@ async def create_form(
 async def edit_form(
     request: Request,
     check_id: Annotated[UUID, Path(description="Check UUID")],
-    current_user: CurrentUserWeb,
+    current_user: EditorUserWeb,
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> Response:
     """Get the edit form for an existing check."""
@@ -112,7 +112,7 @@ async def edit_form(
 async def clone_form(
     request: Request,
     check_id: Annotated[UUID, Path(description="Check UUID to clone")],
-    current_user: CurrentUserWeb,
+    current_user: EditorUserWeb,
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> Response:
     """Get the clone form for an existing check."""

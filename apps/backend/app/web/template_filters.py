@@ -9,6 +9,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from jinja2 import Environment
 
+from app.core.credential_mask import mask_credentials
 from app.schemas.pagination_schema import paginated_url
 from app.shared.logger import get_logger
 
@@ -300,6 +301,8 @@ def register_filters(jinja_env: Environment) -> None:
     jinja_env.filters["format_datetime"] = format_datetime
     jinja_env.filters["humanize_number"] = humanize_number
     jinja_env.filters["timeago"] = timeago
+    # A check target shown on a page: never the password it may carry.
+    jinja_env.filters["mask_credentials"] = mask_credentials
     jinja_env.globals["static_version"] = _compute_static_version()
     # paginated_url is universal (every paginated page uses the same URL
     # construction); registering as a global avoids per-template imports.
