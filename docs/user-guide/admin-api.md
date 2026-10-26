@@ -144,6 +144,19 @@ The agent reports its own `agent_run_id`, `ip_address` and `version`: a change t
 
 A delete is refused when queued and judged again when it runs: if its owner is no longer an active editor or admin by then, the job fails and nothing is deleted. Poll it at `/api/v1/admin/maintenance-jobs/{id}`.
 
+## Registration keys
+
+The keys agents register with. Every route takes an admin's token, as the web UI's Registration Keys page does.
+
+| Method | Path                                          | Does                                                                          |
+| ------ | --------------------------------------------- | ----------------------------------------------------------------------------- |
+| `GET`  | `/api/v1/admin/registration-keys`             | One page of keys, newest first; revoked ones only with `include_revoked=true` |
+| `GET`  | `/api/v1/admin/registration-keys/{id}`        | One key: name, notes, usage, `status`; never the key or its hash              |
+| `POST` | `/api/v1/admin/registration-keys`             | `{"name", "description"?}`; `201` with the plaintext `key`, shown only now    |
+| `POST` | `/api/v1/admin/registration-keys/{id}/revoke` | `{"reason"?}`: no agent registers or recovers its key with it again           |
+
+The token's user is recorded as `created_by` and `revoked_by`. A key revoked once stays revoked as first recorded: revoking it again is a `422`. A revoked key is kept, not deleted, so its usage and revocation stay on record. An approved agent keeps working after the key it registered with is revoked, since it uses its own key. A pending agent, or one that has not fetched its own key yet, uses the registration key for its heartbeat and key recovery, so it needs another registration key.
+
 ## OpenAPI document
 
 `/api/v1/admin/openapi.json` describes every admin-API route, with the bearer scheme declared. It is served to any token holder in every environment, so a client generator or an AI agent can read it. The app-wide `/docs` and `/openapi.json` stay off in production.
