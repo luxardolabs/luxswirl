@@ -776,8 +776,8 @@ class CheckResultCRUD:
         since: datetime,
         until: datetime,
         *,
+        skip: int,
         limit: int,
-        offset: int,
     ) -> tuple[list[CheckResult], int]:
         """One page of `check_id`'s results in [since, until], newest first, and
         how many the window holds. `response_data` is left unloaded."""
@@ -794,7 +794,7 @@ class CheckResultCRUD:
             .where(window)
             .order_by(desc(CheckResult.timestamp), desc(CheckResult.id))
             .limit(limit)
-            .offset(offset)
+            .offset(skip)
             .options(defer(CheckResult.response_data))
         )
         return list(result.scalars().all()), int(total or 0)

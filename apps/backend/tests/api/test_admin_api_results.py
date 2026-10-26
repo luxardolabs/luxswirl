@@ -127,6 +127,23 @@ async def test_since_and_until_bound_the_window(
     assert [r["id"] for r in resp.json()["items"]] == [str(old.id)]
 
 
+async def test_an_empty_since_or_until_reads_as_absent(
+    db: AsyncSession, client: AsyncClient
+) -> None:
+    viewer = await _as(db, "viewer")
+    check = await _check(db)
+    await _result(db, check, 5)
+
+    resp = await client.get(
+        f"{CHECKS}/{check.id}/results",
+        params={"since": "", "until": ""},
+        headers=viewer,
+    )
+
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["total"] == 1
+
+
 @pytest.mark.parametrize(
     ("since_hours", "until_hours"),
     [(1, 2), (24 * 32, 0), (5, 5)],

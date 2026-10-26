@@ -524,13 +524,13 @@ class CheckResultCoreService:
         since: datetime,
         until: datetime,
         *,
+        skip: int,
         limit: int,
-        offset: int,
     ) -> tuple[list[CheckResult], int]:
         """One page of the check's results in [since, until], newest first, and
         the window's count. Delegates to CRUD."""
         return await CheckResultCRUD.list_page_for_check(
-            db, check_id, since, until, limit=limit, offset=offset
+            db, check_id, since, until, skip=skip, limit=limit
         )
 
     @staticmethod
