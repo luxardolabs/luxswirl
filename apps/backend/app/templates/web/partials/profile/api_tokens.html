@@ -1,0 +1,67 @@
+{# The profile panel's API tokens: a newly created token shown once, the list,
+   and the create form. Swapped whole into #api-tokens by create and revoke.
+   Vars: current_user, tokens [{token, revoke_url}], create_url,
+         created_token (plaintext, once) or none, created_name, error or none. #}
+{% from 'macros/form_fields.html' import input, select %}
+{% from 'macros/buttons.html' import btn_create, btn_copy, confirm_action_btn %}
+{%- set ICO_REVOKE %}<span class="w-3.5 h-3.5 mr-1.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/no-symbol.svg" %}</span>{% endset %}
+<div id="api-tokens" class="space-y-4">
+    {% if error %}
+        {% with kind="error", message=error %}{% include "partials/profile/status_message.html" %}{% endwith %}
+    {% endif %}
+
+    {% if created_token %}
+    <div class="p-4 bg-orange-500/10 border-2 border-orange-500 rounded-lg space-y-3">
+        <p class="text-sm font-semibold text-orange-400">Copy "{{ created_name }}" now: it is shown only this once.</p>
+        <div class="relative">
+            <div class="input font-mono text-xs bg-dark-bg-tertiary border-2 border-brand-500 pr-24 break-all">
+                <span id="api-token-value" class="select-all">{{ created_token }}</span>
+            </div>
+            {{ btn_copy(extra_classes='absolute right-2 top-1/2 -translate-y-1/2 px-3 py-1 text-sm', extra_attrs='type="button" data-copy-source="api-token-value"') }}
+        </div>
+        <p class="text-xs text-dark-text-muted">Send it as <code>Authorization: Bearer &lt;token&gt;</code> to <code>/api/v1/admin</code>. It acts as you, with your role.</p>
+    </div>
+    {% endif %}
+
+    {% if tokens %}
+    <ul class="space-y-2">
+        {% for row in tokens %}
+        <li class="p-3 bg-dark-bg-tertiary rounded-lg border border-dark-border flex items-start justify-between gap-3">
+            <div class="min-w-0 space-y-1 text-xs">
+                <p class="text-sm font-medium text-dark-text-primary truncate">{{ row.token.name }}</p>
+                <p class="font-mono text-dark-text-muted">{{ row.token.token_prefix }}…</p>
+                <p class="text-dark-text-muted">
+                    Created {{ row.token.created_at|format_datetime("%b %d, %Y") }}
+                    · {% if row.token.last_used_at %}last used {{ row.token.last_used_at|format_datetime("%b %d, %Y %I:%M%p") }}{% else %}never used{% endif %}
+                    · {% if row.token.is_expired %}<span class="text-red-400">expired</span>{% elif row.token.expires_at %}expires {{ row.token.expires_at|format_datetime("%b %d, %Y") }}{% else %}never expires{% endif %}
+                </p>
+            </div>
+            {{ confirm_action_btn(icon_svg=ICO_REVOKE, label='Revoke', color='red',
+                hx_post=row.revoke_url, hx_target='#api-tokens', hx_swap='outerHTML',
+                title='Revoke: anything using this token stops working') }}
+        </li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <p class="text-xs text-dark-text-muted">No API tokens yet.</p>
+    {% endif %}
+
+    <form hx-post="{{ create_url }}" hx-target="#api-tokens" hx-swap="outerHTML" class="space-y-3">
+        <div class="grid grid-cols-3 gap-3">
+            <div class="col-span-2">
+                <label class="label text-sm" for="api_token_name">Name <span class="text-red-400">*</span></label>
+                {{ input(name="name", id="api_token_name", placeholder="Terraform, CI, ...", required=true, class="input w-full", extra_attrs='maxlength="100"') }}
+            </div>
+            <div>
+                <label class="label text-sm" for="api_token_expiry">Expires</label>
+                {% call select(name="expires_in_days", id="api_token_expiry", class="input w-full") %}
+                    <option value="30">30 days</option>
+                    <option value="90" selected>90 days</option>
+                    <option value="365">1 year</option>
+                    <option value="">Never</option>
+                {% endcall %}
+            </div>
+        </div>
+        {{ btn_create(label='Create API Token', extra_classes='w-full') }}
+    </form>
+</div>

@@ -3,17 +3,22 @@ Profile view service — context building for the user-profile UI.
 
 Wraps user-update + change-password flows. Returns view-friendly
 (kind, message) tuples that the router renders via the shared
-`partials/profile/status_message.html` template.
+`partials/profile/status_message.html` template. Also the panel's API tokens
+(`partials/profile/api_tokens.html`): create, shown once, list and revoke.
 """
 
 from typing import Any
+from uuid import UUID
 
 from fastapi import Request
+from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import value_error_message
+from app.core.exceptions import NotFoundException, value_error_message
+from app.schemas.api_token_schema import ApiTokenCreate
 from app.schemas.auth_schema import AuthedUser
 from app.schemas.user_schema import UserUpdate
+from app.services.core.api_token_core_service import ApiTokenCoreService
 from app.services.core.auth_core_service import AuthCoreService
 from app.services.core.user_core_service import UserCoreService
 from app.shared.logger import get_logger
@@ -25,16 +30,89 @@ class ProfileViewService:
     """View-layer wrapper for /profile endpoints."""
 
     @staticmethod
-    def build_panel_context(
-        request: Request, current_user: AuthedUser
+    async def build_panel_context(
+        db: AsyncSession, request: Request, current_user: AuthedUser
     ) -> dict[str, Any]:
         """Initial-load panel context."""
         return {
-            "request": request,
-            "current_user": current_user,
+            **await ProfileViewService.api_tokens_context(db, request, current_user),
             "update_url": str(request.app.url_path_for("update_profile")),
             "change_password_url": str(request.app.url_path_for("web_change_password")),
         }
+
+    @staticmethod
+    async def api_tokens_context(
+        db: AsyncSession,
+        request: Request,
+        current_user: AuthedUser,
+        created_token: str | None = None,
+        created_name: str | None = None,
+        error: str | None = None,
+    ) -> dict[str, Any]:
+        """The API tokens section: the user's tokens, and one just created."""
+        tokens = await ApiTokenCoreService.list_tokens(db, current_user.id)
+        return {
+            "request": request,
+            "current_user": current_user,
+            "tokens": [
+                {
+                    "token": token,
+                    "revoke_url": str(
+                        request.app.url_path_for(
+                            "revoke_api_token", token_id=str(token.id)
+                        )
+                    ),
+                }
+                for token in tokens
+            ],
+            "create_url": str(request.app.url_path_for("create_api_token")),
+            "created_token": created_token,
+            "created_name": created_name,
+            "error": error,
+        }
+
+    @staticmethod
+    async def create_api_token(
+        db: AsyncSession,
+        request: Request,
+        current_user: AuthedUser,
+        name: str,
+        expires_in_days: str | None,
+    ) -> dict[str, Any]:
+        """Create a token for the user; the section, showing it this once."""
+        try:
+            data = ApiTokenCreate(
+                name=name,
+                expires_in_days=int(expires_in_days) if expires_in_days else None,
+            )
+        except ValidationError, ValueError:
+            return await ProfileViewService.api_tokens_context(
+                db,
+                request,
+                current_user,
+                error="A token needs a name of at most 100 characters, and an expiry of 1 to 3650 days or never",
+            )
+        token, plaintext = await ApiTokenCoreService.create_token(
+            db, current_user.id, data
+        )
+        return await ProfileViewService.api_tokens_context(
+            db, request, current_user, created_token=plaintext, created_name=token.name
+        )
+
+    @staticmethod
+    async def revoke_api_token(
+        db: AsyncSession, request: Request, current_user: AuthedUser, token_id: UUID
+    ) -> dict[str, Any]:
+        """Revoke one of the user's tokens (an admin's: anyone's); the section."""
+        try:
+            await ApiTokenCoreService.revoke_token(
+                db, token_id, current_user.id, current_user.role
+            )
+        except NotFoundException:
+            return await ProfileViewService.api_tokens_context(
+                db, request, current_user, error="That API token no longer exists"
+            )
+        return await ProfileViewService.api_tokens_context(db, request, current_user)
 
     @staticmethod
     async def update_profile(

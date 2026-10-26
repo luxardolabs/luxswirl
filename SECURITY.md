@@ -101,6 +101,7 @@ Public status pages support administrator-supplied custom CSS for branding (`sta
 **At Rest**:
 
 - ✅ Password hashing (bcrypt)
+- ✅ Admin-API tokens stored as SHA-256 hashes only, shown once at creation
 - ✅ Credential encryption (Fernet AES-128)
 
 **In Transit**:
@@ -115,7 +116,7 @@ LuxSwirl does **not** use CSRF tokens. Cross-site request forgery is prevented b
 - Session cookies are set with `SameSite=Lax` — modern browsers (Chrome 80+, Firefox 79+, Safari 13+, all 2020+) refuse to attach the cookie to cross-site `POST` / `PUT` / `PATCH` / `DELETE` requests, defeating CSRF before the request reaches our backend.
 - Session cookies are set with `Secure=True` in production, restricting them to HTTPS.
 - Session cookies are `HttpOnly`, so JavaScript on a compromised page cannot read or exfiltrate them.
-- Agent-protocol endpoints (`/api/v1/agent/*`) authenticate via `Authorization: Bearer <key>` headers, not cookies — browsers never auto-attach those cross-site, so those endpoints are CSRF-immune by design.
+- Agent-protocol endpoints (`/api/v1/agent/*`) authenticate via `Authorization: Bearer <key>` headers, not cookies — browsers never auto-attach those cross-site, so those endpoints are CSRF-immune by design. The admin API (`/api/v1/admin/*`) is the same: it takes a user's API token as a bearer header and ignores the session cookie.
 - Content-Security-Policy includes `frame-ancestors 'none'`, preventing the application from being embedded in malicious iframes.
 
 This is the same model used across Luxardo Labs FastAPI portals. Token-based CSRF (the older pattern) added significant code complexity without meaningfully improving on what browser cookie attributes already provide.

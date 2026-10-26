@@ -7,6 +7,7 @@ from app.models.agent_model import Agent
 from app.models.alert_check_mapping_model import AlertCheckMapping
 from app.models.alert_model import Alert
 from app.models.alert_notification_mapping_model import AlertNotificationMapping
+from app.models.api_token_model import ApiToken
 from app.models.base_model import Base, BaseModel, SoftDeleteMixin, TimestampMixin
 from app.models.check_artifact_model import CheckArtifact
 from app.models.check_model import Check
@@ -66,6 +67,7 @@ __all__ = [
     "RegistrationKey",
     "User",
     "Session",
+    "ApiToken",
     # Enums
     "AgentApprovalStatus",
     "AgentStatus",

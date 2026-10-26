@@ -31,10 +31,13 @@ from app.core.security import (
     verify_agent_token,
 )
 from app.db import get_db
+from app.models.enum_model import UserRole
 from app.schemas.agent_schema import AgentHeartbeat
+from app.schemas.api_token_schema import ApiPrincipal
 from app.schemas.check_artifact_schema import CheckArtifactCreate
 from app.schemas.check_result_schema import AgentReportSubmission
 from app.services.core.agent_core_service import AgentCoreService
+from app.services.core.api_token_core_service import ApiTokenCoreService
 from app.services.core.job_core_service import JobCoreService
 
 
@@ -198,3 +201,59 @@ async def require_uploading_agent(
 
 # The id of the agent whose own key authenticated this artifact upload.
 UploadingAgentId = Annotated[UUID, Depends(require_uploading_agent)]
+
+
+# ── The admin API: a user's API token, with that user's role ─────────────────
+#
+# Every token is 32 random bytes, so a guess is not worth rate-limiting at the
+# refusal; each route's limit is per token (`api_token_rate_limit_key`). There
+# is no auth-disabled mode here: a request with no token acts as nobody.
+
+
+async def require_api_user(
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
+    authorization: Annotated[str | None, Header()] = None,
+) -> ApiPrincipal:
+    """The user whose unrevoked, unexpired API token authenticated this request."""
+    scheme, _, token = (authorization or "").partition(" ")
+    principal = (
+        await ApiTokenCoreService.authenticate(db, token.strip())
+        if scheme.lower() == "bearer"
+        else None
+    )
+    if principal is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="A valid API token is required (Authorization: Bearer lsw_...)",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return principal
+
+
+async def require_api_editor(
+    principal: Annotated[ApiPrincipal, Depends(require_api_user)],
+) -> ApiPrincipal:
+    """An API token whose user is an editor or an admin."""
+    if principal.user.role not in (UserRole.ADMIN, UserRole.EDITOR):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Editor or Admin access required",
+        )
+    return principal
+
+
+async def require_api_admin(
+    principal: Annotated[ApiPrincipal, Depends(require_api_user)],
+) -> ApiPrincipal:
+    """An API token whose user is an admin."""
+    if principal.user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required"
+        )
+    return principal
+
+
+# Who an admin-API request acts as, by the role its route requires.
+ApiUser = Annotated[ApiPrincipal, Depends(require_api_user)]
+ApiEditor = Annotated[ApiPrincipal, Depends(require_api_editor)]
+ApiAdmin = Annotated[ApiPrincipal, Depends(require_api_admin)]

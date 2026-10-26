@@ -319,7 +319,7 @@ See `docs/architecture/backend.md` for the full layering rules and naming conven
 
 ## API Endpoints
 
-The JSON API is the agent protocol. Operators manage agents, checks, alerts, notification providers, registration keys, users and jobs through the web UI.
+The JSON API has two surfaces, each with its own prefix and credential: the agent protocol (`/api/v1/agent`) and the admin API (`/api/v1/admin`). Operators manage agents, checks, alerts, notification providers, registration keys, users and jobs through the web UI.
 
 ### Agent protocol (`/api/v1/agent`)
 
@@ -335,6 +335,15 @@ The JSON API is the agent protocol. Operators manage agents, checks, alerts, not
 | `POST` | `/api/v1/agent/artifacts`              | Agent key                          | Upload an artifact for one of its checks |
 
 The agent builds every one of these from `LUXSWIRL_SERVER_URL`, the server's address with no path (`apps/agent/app/agent/server_api.py`), and refuses to start on one that carries a path, credentials or an invalid port.
+
+### Admin API (`/api/v1/admin`)
+
+Authenticated by a user's API token (`Authorization: Bearer lsw_...`, created in the My Account panel), which acts as that user with their role: `ApiUser` / `ApiEditor` / `ApiAdmin` in `app/api/deps.py`, rate-limited per token. See `docs/user-guide/admin-api.md`.
+
+| Method | Path                         | Role | Purpose                                     |
+| ------ | ---------------------------- | ---- | ------------------------------------------- |
+| `GET`  | `/api/v1/admin/me`           | any  | The token's user, their role, and the token |
+| `GET`  | `/api/v1/admin/openapi.json` | any  | The admin API's OpenAPI document            |
 
 ### Infrastructure
 

@@ -193,6 +193,14 @@ class SecuritySettings(BaseSettings):
             "behind one NAT address are not throttled"
         ),
     )
+    admin_api_rate_limit: str = Field(
+        default="300/minute",
+        description=(
+            "Rate limit per API token on the admin API (/api/v1/admin). Keyed "
+            "on the token, not the address, so scripts behind one address do "
+            "not share a bucket"
+        ),
+    )
     registration_rate_limit: str = Field(
         default="5/hour",
         description="Rate limit for agent registration per IP",
