@@ -123,7 +123,7 @@ Any token reads them.
 
 The results page reads the last 24 hours unless `since` and `until` (ISO 8601; a time with no zone is UTC) say otherwise. The window must run forward and span at most 31 days (`422`). It takes `page` and `per_page` (1-200, default 50). `hours` runs from 1 to 720. A result is read through its own check: one of another check is a `404`.
 
-Each result carries `success`, `latency_ms`, `error`, `error_type`, `http_status_code`, `http_response_time_ms` and the check type's own `metrics` (DNS records, row counts, ...). A viewer's token reads every `error` with its credentials masked, as above, and no `response_data`.
+Each result carries `success`, `latency_ms`, `error`, `error_type`, `http_status_code`, `http_response_time_ms` and the check type's own `metrics` (DNS records, row counts, response headers, ...). A viewer's token reads every `error` with its credentials masked, as above, and no `response_data`. Of `metrics` it reads only what the check detail panel shows (the `dns`, `mysql`, `postgres` and `synthetic` sections and `response.ssl_certificate`), every text in them masked the same way: an HTTP check's response headers, cookies among them, are an editor's to read.
 
 ## OpenAPI document
 

@@ -22,6 +22,7 @@ from app.schemas.admin_check_result_schema import (
     CheckResultPage,
     CheckSummary,
 )
+from app.schemas.admin_page_schema import MAX_PAGE
 from app.services.core.admin_check_result_core_service import (
     AdminCheckResultCoreService,
 )
@@ -47,7 +48,7 @@ async def admin_list_check_results(
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     since: datetime | None = None,
     until: datetime | None = None,
-    page: Annotated[int, Query(ge=1)] = 1,
+    page: Annotated[int, Query(ge=1, le=MAX_PAGE)] = 1,
     per_page: Annotated[int, Query(ge=1, le=200)] = 50,
 ) -> CheckResultPage:
     """One page of the check's results, newest first: the last 24 hours unless

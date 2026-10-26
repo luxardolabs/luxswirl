@@ -534,6 +534,13 @@ class CheckResultCoreService:
         )
 
     @staticmethod
+    async def get_result_of_check(
+        db: AsyncSession, check_id: UUID, check_result_id: UUID
+    ) -> CheckResult | None:
+        """One of the check's results by id, or None. Delegates to CRUD."""
+        return await CheckResultCRUD.get_result_of_check(db, check_id, check_result_id)
+
+    @staticmethod
     async def get_latest_result_row(
         db: AsyncSession, check_id: UUID
     ) -> CheckResult | None:

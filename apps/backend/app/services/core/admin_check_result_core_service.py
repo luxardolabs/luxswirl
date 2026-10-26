@@ -4,7 +4,11 @@ Admin check result core service - a check's results as the admin API serves them
 Each method takes the caller's role and first proves the check exists (404).
 A viewer reads every `error` with its credentials masked, as a check's target
 is, and never a result's `response_data`: the web UI never shows it, and a
-response body can hold anything the monitored service sent.
+response body can hold anything the monitored service sent. Of `metrics`, a
+viewer reads only the sections the web UI's detail panel shows, every string
+in them masked: an HTTP check's metrics also carry every response header the
+monitored service sent (a session cookie among them), and a synthetic check's
+carry the raw errors its `error` is made from.
 """
 
 import json
@@ -47,6 +51,35 @@ def _metrics(raw: str | None) -> dict[str, Any] | None:
     return decoded if isinstance(decoded, dict) else None
 
 
+# The metrics sections the detail panel shows; of `response`, only the
+# certificate.
+_VIEWER_SECTIONS = ("dns", "mysql", "postgres", "synthetic")
+
+
+def _masked(value: Any) -> Any:
+    """`value` with every string in it, at any depth, credential-masked."""
+    if isinstance(value, str):
+        return mask_credentials(value)
+    if isinstance(value, dict):
+        return {key: _masked(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_masked(item) for item in value]
+    return value
+
+
+def _viewer_metrics(metrics: dict[str, Any] | None) -> dict[str, Any] | None:
+    """What of `metrics` a viewer reads: the panel's sections, masked."""
+    if not metrics:
+        return metrics
+    shown: dict[str, Any] = {
+        key: metrics[key] for key in _VIEWER_SECTIONS if key in metrics
+    }
+    response = metrics.get("response")
+    if isinstance(response, dict) and "ssl_certificate" in response:
+        shown["response"] = {"ssl_certificate": response["ssl_certificate"]}
+    return _masked(shown)
+
+
 def _utc(moment: datetime) -> datetime:
     """`moment` as an aware UTC time; a naive one is taken to be UTC."""
     return moment.replace(tzinfo=UTC) if moment.tzinfo is None else moment
@@ -61,6 +94,7 @@ class AdminCheckResultCoreService:
 
     @staticmethod
     def _result(row: CheckResult, role: UserRole) -> AdminCheckResult:
+        metrics = _metrics(row.metrics)
         return AdminCheckResult(
             id=row.id,
             check_id=row.check_id,
@@ -72,7 +106,7 @@ class AdminCheckResultCoreService:
             error_type=row.error_type,
             http_status_code=row.http_status_code,
             http_response_time_ms=row.http_response_time_ms,
-            metrics=_metrics(row.metrics),
+            metrics=_viewer_metrics(metrics) if role == UserRole.VIEWER else metrics,
         )
 
     @staticmethod
@@ -113,8 +147,8 @@ class AdminCheckResultCoreService:
     ) -> AdminCheckResultDetail:
         """One result of the check, whole; one of another check is not found."""
         await CheckCoreService.get_check_by_id(db, check_id)
-        row = await CheckResultCoreService.get_check_result_by_id(db, result_id)
-        if row is None or row.check_id != check_id:
+        row = await CheckResultCoreService.get_result_of_check(db, check_id, result_id)
+        if row is None:
             raise NotFoundException(f"Check {check_id} has no result {result_id}")
         artifacts = await CheckResultCoreService.get_artifacts_for_result(
             db, check_id, row.id, row.timestamp

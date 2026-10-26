@@ -305,3 +305,113 @@ async def test_hours_outside_a_month_are_refused(
     )
 
     assert resp.status_code == 422
+
+
+# ── Metrics: what a viewer reads of them ─────────────────────────────────────
+
+HTTP_METRICS = {
+    "response": {
+        "status_code": 200,
+        "headers": {"set-cookie": "sessionid=LIVE-SESSION-abc123; HttpOnly"},
+        "ssl_certificate": {"days_until_expiry": 40, "issuer": "Example CA"},
+    }
+}
+
+
+async def test_a_viewer_reads_no_response_headers_but_the_certificate(
+    db: AsyncSession, client: AsyncClient
+) -> None:
+    viewer = await _as(db, "viewer")
+    editor = await _as(db, "editor")
+    check = await _check(db)
+    await _result(db, check, 5, metrics=json.dumps(HTTP_METRICS))
+
+    seen = await client.get(f"{CHECKS}/{check.id}/results", headers=viewer)
+    full = await client.get(f"{CHECKS}/{check.id}/results", headers=editor)
+
+    assert "LIVE-SESSION-abc123" not in seen.text
+    assert seen.json()["items"][0]["metrics"] == {
+        "response": {"ssl_certificate": HTTP_METRICS["response"]["ssl_certificate"]}
+    }
+    assert full.json()["items"][0]["metrics"] == HTTP_METRICS
+
+
+async def test_a_viewer_reads_a_synthetic_checks_errors_masked_in_metrics(
+    db: AsyncSession, client: AsyncClient
+) -> None:
+    viewer = await _as(db, "viewer")
+    check = await _check(db)
+    metrics = {"synthetic": {"status": "failure", "errors": [DSN_ERROR], "steps": []}}
+    result = await _result(
+        db, check, 5, success=False, error=DSN_ERROR, metrics=json.dumps(metrics)
+    )
+
+    page = await client.get(f"{CHECKS}/{check.id}/results", headers=viewer)
+    one = await client.get(f"{CHECKS}/{check.id}/results/{result.id}", headers=viewer)
+    summary = await client.get(f"{CHECKS}/{check.id}/summary", headers=viewer)
+
+    for resp in (page, one, summary):
+        assert "s3cret-pw" not in resp.text
+    assert page.json()["items"][0]["metrics"]["synthetic"]["errors"] == [
+        "connect to postgresql://***@db.internal:5432/app failed"
+    ]
+
+
+# ── Edges ────────────────────────────────────────────────────────────────────
+
+
+async def test_a_month_of_history_reaches_the_newest_hour(
+    db: AsyncSession, client: AsyncClient
+) -> None:
+    viewer = await _as(db, "viewer")
+    check = await _check(db)
+    for hour in range(700):
+        db.add(
+            make_check_result(
+                check_id=check.id,
+                agent_id=check.agent_id,
+                timestamp=utc_now() - timedelta(hours=hour, minutes=1),
+            )
+        )
+    await db.flush()
+
+    resp = await client.get(
+        f"{CHECKS}/{check.id}/history", params={"hours": 720}, headers=viewer
+    )
+
+    points = resp.json()["points"]
+    assert len(points) <= 500
+    newest = max(p["bucket_time"] for p in points)
+    oldest = min(p["bucket_time"] for p in points)
+    assert newest > (utc_now() - timedelta(hours=3)).isoformat()
+    assert oldest < (utc_now() - timedelta(hours=690)).isoformat()
+
+
+async def test_a_result_id_two_checks_share_reads_through_each(
+    db: AsyncSession, client: AsyncClient
+) -> None:
+    viewer = await _as(db, "viewer")
+    a, b = await _check(db), await _check(db)
+    shared = uuid4()
+    await _result(db, a, 5, id=shared, latency_ms=1.0)
+    await _result(db, b, 10, id=shared, latency_ms=2.0)
+
+    ra = await client.get(f"{CHECKS}/{a.id}/results/{shared}", headers=viewer)
+    rb = await client.get(f"{CHECKS}/{b.id}/results/{shared}", headers=viewer)
+
+    assert (ra.status_code, rb.status_code) == (200, 200)
+    assert (ra.json()["check_id"], rb.json()["check_id"]) == (str(a.id), str(b.id))
+
+
+@pytest.mark.parametrize("path", ["/{id}/results", ""])
+async def test_a_page_past_any_result_set_is_refused_not_a_server_error(
+    db: AsyncSession, client: AsyncClient, path: str
+) -> None:
+    viewer = await _as(db, "viewer")
+    check = await _check(db)
+
+    resp = await client.get(
+        CHECKS + path.format(id=check.id), params={"page": 10**19}, headers=viewer
+    )
+
+    assert resp.status_code == 422, resp.text
