@@ -306,8 +306,17 @@ async def test_the_admin_openapi_document_holds_only_the_admin_apis_schemas(
 
     schemas = set(doc.get("components", {}).get("schemas", {}))
     assert "ApiWhoAmIResponse" in schemas
-    assert not {s for s in schemas if s.startswith(("Agent", "Check", "Job"))}
-    assert "HealthResponse" not in schemas
+    # The agent protocol's and the app's own schemas belong to other documents.
+    assert not schemas & {
+        "AgentHeartbeat",
+        "AgentRegisterRequest",
+        "AgentReportSubmission",
+        "CheckArtifactCreate",
+        "JobResultSubmit",
+        "AgentKeyRecoveryResponse",
+        "HealthResponse",
+        "ApiInfoResponse",
+    }
 
 
 @pytest.mark.parametrize("name", ["a\x00b", "tab\there", "line\nbreak", "del\x7f"])

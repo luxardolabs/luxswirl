@@ -44,6 +44,7 @@ from app.core.rate_limit import limiter
 from app.core.same_origin import SameOriginMiddleware
 from app.core.secrets import resolve_runtime_secrets
 from app.core.security_headers import SecurityHeadersMiddleware
+from app.core.synthetic_security import SyntheticSecurityError
 from app.core.trusted_host import AllowedHostsMiddleware
 from app.db import worker_session
 from app.db.database import close_db, init_db
@@ -303,6 +304,19 @@ async def value_error_handler(request: Request, exc: ValueError) -> Response:
         status.HTTP_400_BAD_REQUEST,
         message,
         error_code="BAD_REQUEST",
+    )
+
+
+@app.exception_handler(SyntheticSecurityError)
+async def synthetic_security_error_handler(
+    request: Request, exc: SyntheticSecurityError
+) -> Response:
+    """A synthetic script the security validation refuses: a client error (422)."""
+    return render_error_response(
+        request,
+        status.HTTP_422_UNPROCESSABLE_CONTENT,
+        str(exc),
+        error_code="VALIDATION_ERROR",
     )
 
 

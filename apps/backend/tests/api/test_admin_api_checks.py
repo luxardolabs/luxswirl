@@ -156,7 +156,7 @@ async def test_a_viewer_never_sees_a_database_password_or_a_script(
     ).text
     hidden = (await client.get(f"{CHECKS}/{script.id}", headers=viewer)).json()
 
-    assert seen["connection_string"] == "postgresql://monitor:***@db.internal:5432/app"
+    assert seen["connection_string"] == "postgresql://***@db.internal:5432/app"
     assert "s3cret-pw" not in listed and "secret_script" not in listed
     assert hidden["script_code"] is None
     full = (await client.get(f"{CHECKS}/{pg.id}", headers=editor)).json()

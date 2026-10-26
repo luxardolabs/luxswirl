@@ -51,7 +51,7 @@ A missing, unknown, revoked or expired token gets `401` with `WWW-Authenticate: 
 
 ## Checks
 
-A check is addressed by its own id. Reads take any token; writes take an editor's or an admin's, and a synthetic check is an admin's alone.
+A check is addressed by its own id. Reads take any token; writes take an editor's or an admin's. Any write to a synthetic check (create, change, clone, enable, disable, delete) is an admin's alone, and only a synthetic check keeps a `script_code`.
 
 | Method   | Path                                | Role   | Does                                                                               |
 | -------- | ----------------------------------- | ------ | ---------------------------------------------------------------------------------- |
@@ -64,7 +64,7 @@ A check is addressed by its own id. Reads take any token; writes take an editor'
 | `POST`   | `/api/v1/admin/checks/{id}/enable`  | editor | Enable it                                                                          |
 | `POST`   | `/api/v1/admin/checks/{id}/disable` | editor | Disable it                                                                         |
 
-The list takes `page` (from 1) and `per_page` (1-200, default 50), and filters `agent_id`, `check_type`, `tag`, `search` (name or target), `enabled_only` and `include_internal` (the agents' self-monitoring checks, left out by default). It answers with the page envelope every admin-API list uses:
+The list takes `page` (from 1) and `per_page` (1-200, default 50), and filters `agent_id`, `check_type`, `tag`, `search` (name or target) and `enabled_only`. It answers with the page envelope every admin-API list uses:
 
 ```json
 {"items": [...], "total": 120, "page": 1, "per_page": 50, "total_pages": 3, "has_next": true}
@@ -72,9 +72,9 @@ The list takes `page` (from 1) and `per_page` (1-200, default 50), and filters `
 
 Walk the pages with `page` until `has_next` is false.
 
-A create or change refuses what the web UI refuses, with the same message: an address the network protection blocks, an unknown agent (`404`), an invalid field (`422`).
+A create or change refuses what the web UI refuses, with the same message: an address the network protection blocks, an unknown agent (`404`), an agent awaiting approval, rejected or archived, a synthetic script the security validation refuses, a field the API does not take, a required field set to `null`, or an invalid value (`422`). A clone keeps its source's dependency unless the body sets `depends_on_check_id`.
 
-A viewer's token reads a database check's `connection_string` with its password masked (`postgresql://monitor:***@db:5432/app`) and never a synthetic check's `script_code`. An editor's or an admin's token reads both.
+A viewer's token reads no credential in a check: the user and password of any URL in `target` or `connection_string` read `***` (`postgresql://***@db:5432/app`), as does any `password=` value, and a synthetic check's `script_code` is left out. An editor's or an admin's token reads them as stored.
 
 ## OpenAPI document
 

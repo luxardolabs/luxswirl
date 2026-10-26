@@ -3,23 +3,44 @@ Admin check core service - checks as the admin API serves them.
 
 Each method takes the caller's role. Writes go through CheckCoreService, which
 already refuses a synthetic check to a non-admin and every address the SSRF
-policy refuses. A viewer is shown a check without what the web UI's edit form
-holds back from them: the database password in `connection_string`, and the
-synthetic `script_code`.
+policy refuses. A viewer is shown a check with no credential in it: the
+userinfo of any URL in `target` or `connection_string` and any `password=` /
+`pwd=` value are masked, and the synthetic `script_code` is left out.
 """
 
+import re
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.check_model import Check
 from app.models.enum_model import UserRole
-from app.schemas.admin_check_schema import AdminCheckClone, AdminCheckCreate, CheckPage
-from app.schemas.check_schema import CheckResponse, CheckUpdate
+from app.schemas.admin_check_schema import (
+    AdminCheckClone,
+    AdminCheckCreate,
+    AdminCheckUpdate,
+    CheckPage,
+)
+from app.schemas.check_schema import CheckResponse
 from app.schemas.pagination_schema import build_pagination
 from app.services.core.check_api_core_service import CheckApiCoreService
 from app.services.core.check_core_service import CheckCoreService
-from app.shared.log_redaction import scrub_text
+
+_MASK = "***"
+# A URL's userinfo: everything between the scheme and the last `@` of the authority.
+_USERINFO = re.compile(r"(?<=://)[^/?#]*@")
+# A key=value password, as libpq, ODBC and query strings write one.
+_PASSWORD_PAIR = re.compile(
+    r"(?i)\b(password|passwd|pwd)(\s*=\s*)('[^']*'|\"[^\"]*\"|[^\s;&]+)"
+)
+
+
+def mask_credentials(value: str | None) -> str | None:
+    """`value` with every credential it carries replaced by `***`."""
+    if not value:
+        return value
+    masked = _USERINFO.sub(f"{_MASK}@", value)
+    return _PASSWORD_PAIR.sub(rf"\1\2{_MASK}", masked)
 
 
 class AdminCheckCoreService:
@@ -33,11 +54,8 @@ class AdminCheckCoreService:
         if role == UserRole.VIEWER:
             return response.model_copy(
                 update={
-                    "connection_string": (
-                        scrub_text(response.connection_string)
-                        if response.connection_string
-                        else None
-                    ),
+                    "target": mask_credentials(response.target),
+                    "connection_string": mask_credentials(response.connection_string),
                     "script_code": None,
                 }
             )
@@ -64,9 +82,8 @@ class AdminCheckCoreService:
         enabled_only: bool = False,
         tag: str | None = None,
         search: str | None = None,
-        include_internal: bool = False,
     ) -> CheckPage:
-        """One page of checks, filtered; internal (agent self-monitoring) ones only on request."""
+        """One page of checks, filtered."""
         page = max(1, page)
         checks, total = await CheckCoreService.list_checks(
             db,
@@ -75,7 +92,6 @@ class AdminCheckCoreService:
             enabled_only=enabled_only,
             tag=tag,
             search=search,
-            exclude_internal=not include_internal,
             limit=per_page,
             offset=(page - 1) * per_page,
         )
@@ -105,7 +121,7 @@ class AdminCheckCoreService:
 
     @staticmethod
     async def update_check(
-        db: AsyncSession, role: UserRole, check_id: UUID, data: CheckUpdate
+        db: AsyncSession, role: UserRole, check_id: UUID, data: AdminCheckUpdate
     ) -> CheckResponse:
         await CheckCoreService.update_check(
             db, check_id, data, actor_is_admin=role == UserRole.ADMIN
@@ -117,7 +133,7 @@ class AdminCheckCoreService:
         db: AsyncSession, role: UserRole, check_id: UUID, *, enabled: bool
     ) -> CheckResponse:
         return await AdminCheckCoreService.update_check(
-            db, role, check_id, CheckUpdate(enabled=enabled)
+            db, role, check_id, AdminCheckUpdate(enabled=enabled)
         )
 
     @staticmethod
@@ -135,5 +151,7 @@ class AdminCheckCoreService:
         return await AdminCheckCoreService._reloaded(db, clone.id, role)
 
     @staticmethod
-    async def delete_check(db: AsyncSession, check_id: UUID) -> None:
-        await CheckCoreService.delete_check(db, check_id)
+    async def delete_check(db: AsyncSession, role: UserRole, check_id: UUID) -> None:
+        await CheckCoreService.delete_check(
+            db, check_id, actor_is_admin=role == UserRole.ADMIN
+        )

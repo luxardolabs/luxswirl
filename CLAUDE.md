@@ -345,7 +345,7 @@ Authenticated by a user's API token (`Authorization: Bearer lsw_...`, created in
 | `GET`  | `/api/v1/admin/me`           | any  | The token's user, their role, and the token |
 | `GET`  | `/api/v1/admin/openapi.json` | any  | The admin API's OpenAPI document            |
 
-Checks (`/api/v1/admin/checks`, by id): `GET` list (the `PaginatedResponse` page envelope; filters agent_id, check_type, tag, search, enabled_only, include_internal) and `GET /{id}` for any token; `POST`, `PATCH /{id}`, `DELETE /{id}`, `POST /{id}/clone`, `/enable`, `/disable` for an editor. A viewer's token sees `connection_string` masked and no `script_code` (`AdminCheckCoreService`).
+Checks (`/api/v1/admin/checks`, by id): `GET` list (the `PaginatedResponse` page envelope; filters agent_id, check_type, tag, search, enabled_only) and `GET /{id}` for any token; `POST`, `PATCH /{id}`, `DELETE /{id}`, `POST /{id}/clone`, `/enable`, `/disable` for an editor, and for an admin alone on a synthetic check. A viewer's token sees every credential in `target` and `connection_string` masked and no `script_code` (`AdminCheckCoreService.mask_credentials`).
 
 ### Infrastructure
 

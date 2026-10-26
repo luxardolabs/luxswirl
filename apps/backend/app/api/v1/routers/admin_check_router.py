@@ -16,8 +16,13 @@ from app.core.config import settings
 from app.core.query_params import AgentIdFilter, CheckTypeFilter
 from app.core.rate_limit import api_token_rate_limit_key, limiter
 from app.db import get_db
-from app.schemas.admin_check_schema import AdminCheckClone, AdminCheckCreate, CheckPage
-from app.schemas.check_schema import CheckResponse, CheckUpdate
+from app.schemas.admin_check_schema import (
+    AdminCheckClone,
+    AdminCheckCreate,
+    AdminCheckUpdate,
+    CheckPage,
+)
+from app.schemas.check_schema import CheckResponse
 from app.services.core.admin_check_core_service import AdminCheckCoreService
 
 router = APIRouter(prefix="/checks", tags=["Admin API: Checks"])
@@ -38,7 +43,6 @@ async def admin_list_checks(
     enabled_only: bool = False,
     tag: Annotated[str | None, Query(max_length=100)] = None,
     search: Annotated[str | None, Query(max_length=255)] = None,
-    include_internal: bool = False,
 ) -> CheckPage:
     """One page of checks: filter by agent, type, tag, enabled, or a name/target search."""
     return await AdminCheckCoreService.list_checks(
@@ -51,7 +55,6 @@ async def admin_list_checks(
         enabled_only=enabled_only,
         tag=tag,
         search=search,
-        include_internal=include_internal,
     )
 
 
@@ -87,7 +90,7 @@ async def admin_create_check(
 async def admin_update_check(
     request: Request,
     check_id: UUID,
-    data: CheckUpdate,
+    data: AdminCheckUpdate,
     principal: ApiEditor,
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> CheckResponse:
@@ -106,7 +109,7 @@ async def admin_delete_check(
     principal: ApiEditor,
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> Response:
-    await AdminCheckCoreService.delete_check(db, check_id)
+    await AdminCheckCoreService.delete_check(db, principal.user.role, check_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
