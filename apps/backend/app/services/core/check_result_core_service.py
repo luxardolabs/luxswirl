@@ -518,6 +518,29 @@ class CheckResultCoreService:
         ]
 
     @staticmethod
+    async def list_results_page(
+        db: AsyncSession,
+        check_id: UUID,
+        since: datetime,
+        until: datetime,
+        *,
+        limit: int,
+        offset: int,
+    ) -> tuple[list[CheckResult], int]:
+        """One page of the check's results in [since, until], newest first, and
+        the window's count. Delegates to CRUD."""
+        return await CheckResultCRUD.list_page_for_check(
+            db, check_id, since, until, limit=limit, offset=offset
+        )
+
+    @staticmethod
+    async def get_latest_result_row(
+        db: AsyncSession, check_id: UUID
+    ) -> CheckResult | None:
+        """The check's most recent result, whole. Delegates to CRUD."""
+        return await CheckResultCRUD.get_latest_result_for_check(db, check_id)
+
+    @staticmethod
     async def get_check_result_by_id(
         db: AsyncSession,
         check_result_id: UUID,
