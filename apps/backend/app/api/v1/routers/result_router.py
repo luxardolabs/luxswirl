@@ -11,14 +11,11 @@ from fastapi import (
     APIRouter,
     BackgroundTasks,
     Depends,
-    Request,
     status,
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import ReportingAgentId
-from app.core.config import settings
-from app.core.rate_limit import limiter
 from app.db import get_db
 from app.schemas.check_result_schema import (
     AgentReportResponse,
@@ -37,9 +34,7 @@ router = APIRouter(tags=["Check Results"])
     description="Submit check results from an agent",
     name="submit_report",
 )
-@limiter.limit(settings.security.agent_api_rate_limit)
 async def submit_report(
-    request: Request,
     report: AgentReportSubmission,
     _agent_id: ReportingAgentId,
     background_tasks: BackgroundTasks,

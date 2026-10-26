@@ -7,12 +7,10 @@ This router only handles HTTP concerns.
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import AuthenticatedAgentId
-from app.core.config import settings
-from app.core.rate_limit import limiter
 from app.db import get_db
 from app.schemas.base_schema import ErrorResponse
 from app.schemas.check_schema import CheckListResponse
@@ -36,9 +34,7 @@ logger = get_logger("luxswirl.api.checks")
     },
     name="list_checks",
 )
-@limiter.limit(settings.security.agent_api_rate_limit)
 async def list_checks(
-    request: Request,
     agent_id: AuthenticatedAgentId,
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> CheckListResponse:

@@ -187,7 +187,8 @@ class SecuritySettings(BaseSettings):
         default="600/minute",
         description=(
             "Rate limit per IP on the agent-authenticated routes (heartbeat, "
-            "reports, check list, job results). Each request bcrypt-checks the "
+            "reports, check list, job start and results, artifacts), one budget "
+            "per key-checking dependency. Each request bcrypt-checks the "
             "agent's key, so this bounds key guessing; it sits well above real "
             "agent traffic (a report every 10 s, plus polling) so many agents "
             "behind one NAT address are not throttled"

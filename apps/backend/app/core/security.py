@@ -490,11 +490,9 @@ async def verify_recovery_registration_key(
 ) -> None:
     """The registration-key half of an agent's key recovery, audited.
 
-    Called in the recover-key route BODY, not as a dependency: the route's rate
-    limit wraps the body, so a refusal raised from a dependency would never be
-    counted and the key could be guessed without limit. The other half, the
-    agent's own recovery secret, is checked in core. A refusal here is a failed
-    recovery, so it is a SECURITY AUDIT line like the ones core writes.
+    The other half, the agent's own recovery secret, is checked in core. A
+    refusal here is a failed recovery, so it is a SECURITY AUDIT line like the
+    ones core writes.
     """
     try:
         await verify_registration_token(authorization, db)

@@ -93,12 +93,12 @@ Authentication, rate limiting, password policy, and SSRF network protection. The
 
 #### Rate Limiting
 
-| Key                                | Default        | Type   | Allowed / Validation | Description                                                                     |
-| ---------------------------------- | -------------- | ------ | -------------------- | ------------------------------------------------------------------------------- |
-| `security.rate_limit_enabled`      | true           | bool   | —                    | Enable rate limiting on authentication endpoints to prevent brute-force attacks |
-| `security.login_rate_limit`        | `10/15minutes` | string | format: count/period | Rate limit for login attempts per IP address (e.g., `10/15minutes`)             |
-| `security.api_rate_limit`          | `100/minute`   | string | format: count/period | Rate limit for general API requests per IP address (e.g., `100/minute`)         |
-| `security.registration_rate_limit` | `5/hour`       | string | format: count/period | Rate limit for agent registration per IP address (e.g., `5/hour`)               |
+| Key                                | Default        | Type   | Allowed / Validation | Description                                                                        |
+| ---------------------------------- | -------------- | ------ | -------------------- | ---------------------------------------------------------------------------------- |
+| `security.rate_limit_enabled`      | true           | bool   | —                    | Enable rate limiting on authentication endpoints to prevent brute-force attacks    |
+| `security.login_rate_limit`        | `10/15minutes` | string | format: count/period | Rate limit for login attempts per IP address (e.g., `10/15minutes`)                |
+| `security.api_rate_limit`          | `100/minute`   | string | format: count/period | Rate limit for general API requests per IP address (e.g., `100/minute`)            |
+| `security.registration_rate_limit` | `5/hour`       | string | format: count/period | Rate limit for agent registration and key recovery per IP address (e.g., `5/hour`) |
 
 #### Password Complexity
 
@@ -226,9 +226,9 @@ There is no shared API token. Agents authenticate with a registration key and th
 | `SECURITY__RATE_LIMIT_ENABLED`          | `true`                                                                    | Enable rate limiting on auth endpoints                                                                                                                                                                              |
 | `SECURITY__LOGIN_RATE_LIMIT`            | `10/15minutes`                                                            | Login rate limit per IP (`count/period`)                                                                                                                                                                            |
 | `SECURITY__API_RATE_LIMIT`              | `100/minute`                                                              | API rate limit per IP (`count/period`)                                                                                                                                                                              |
-| `SECURITY__AGENT_API_RATE_LIMIT`        | `600/minute`                                                              | Per-IP limit on agent-authenticated routes (heartbeat, reports, check list, job results); bounds agent-key guessing                                                                                                 |
+| `SECURITY__AGENT_API_RATE_LIMIT`        | `600/minute`                                                              | Per-IP limit on agent-authenticated routes (heartbeat, reports, check list, job start and results, artifacts); counts refused keys too, so it bounds agent-key guessing                                             |
 | `SECURITY__ADMIN_API_RATE_LIMIT`        | `300/minute`                                                              | Admin API (`/api/v1/admin`) rate limit per API token (`count/period`)                                                                                                                                               |
-| `SECURITY__REGISTRATION_RATE_LIMIT`     | `5/hour`                                                                  | Agent registration rate limit per IP (`count/period`)                                                                                                                                                               |
+| `SECURITY__REGISTRATION_RATE_LIMIT`     | `5/hour`                                                                  | Agent registration and key recovery rate limit per IP (`count/period`); counts refused keys too                                                                                                                     |
 | `SECURITY__TRUSTED_PROXY_NETWORKS`      | `["127.0.0.0/8","::1/128","10.0.0.0/8","172.16.0.0/12","192.168.0.0/16"]` | JSON list of trusted reverse-proxy CIDRs. `X-Forwarded-For` is honored only when the direct TCP peer is within one of these networks (used for rate-limiting + audit client IP).                                    |
 | `SECURITY__SESSION_COOKIE_NAME`         | `luxswirl_session`                                                        | Session cookie name (make unique if multiple apps share a subdomain)                                                                                                                                                |
 | `SECURITY__SESSION_COOKIE_HTTPONLY`     | `true`                                                                    | HTTPOnly flag (blocks JS access)                                                                                                                                                                                    |
