@@ -767,6 +767,36 @@ class CheckResultCRUD:
         return result.scalar_one_or_none()
 
     @staticmethod
+    async def list_page_for_check(
+        db: AsyncSession,
+        check_id: UUID,
+        since: datetime,
+        until: datetime,
+        *,
+        limit: int,
+        offset: int,
+    ) -> tuple[list[CheckResult], int]:
+        """One page of `check_id`'s results in [since, until], newest first, and
+        how many the window holds. `response_data` is left unloaded."""
+        window = and_(
+            CheckResult.check_id == check_id,
+            CheckResult.timestamp >= since,
+            CheckResult.timestamp <= until,
+        )
+        total = await db.scalar(
+            select(func.count()).select_from(CheckResult).where(window)
+        )
+        result = await db.execute(
+            select(CheckResult)
+            .where(window)
+            .order_by(desc(CheckResult.timestamp), desc(CheckResult.id))
+            .limit(limit)
+            .offset(offset)
+            .options(defer(CheckResult.response_data))
+        )
+        return list(result.scalars().all()), int(total or 0)
+
+    @staticmethod
     async def get_check_result_by_id(
         db: AsyncSession, check_result_id: UUID
     ) -> CheckResult | None:

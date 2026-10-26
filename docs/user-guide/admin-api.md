@@ -110,6 +110,21 @@ A check can depend on one parent; while the parent is failing, the dependent's a
 
 A replacement refuses a parent that has its own parent, a dependent that is itself a parent, and a check depending on itself (`422`). Attaching or detaching a synthetic check is an admin's.
 
+### Results, history and summary
+
+Any token reads them.
+
+| Method | Path                                         | Returns                                                                                             |
+| ------ | -------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `GET`  | `/api/v1/admin/checks/{id}/results`          | One page of the check's results, newest first, in the page envelope                                 |
+| `GET`  | `/api/v1/admin/checks/{id}/results/{result}` | One result whole: its `response_data` and its artifacts' metadata (name, type, size, not the bytes) |
+| `GET`  | `/api/v1/admin/checks/{id}/history`          | `points`: the results over the last `hours` (default 24), in time buckets, at most 500              |
+| `GET`  | `/api/v1/admin/checks/{id}/summary`          | `total`, `successful`, `uptime_percent` and latency over the last `hours`, and the `latest` result  |
+
+The results page reads the last 24 hours unless `since` and `until` (ISO 8601; a time with no zone is UTC) say otherwise. The window must run forward and span at most 31 days (`422`). It takes `page` and `per_page` (1-200, default 50). `hours` runs from 1 to 720. A result is read through its own check: one of another check is a `404`.
+
+Each result carries `success`, `latency_ms`, `error`, `error_type`, `http_status_code`, `http_response_time_ms` and the check type's own `metrics` (DNS records, row counts, ...). A viewer's token reads every `error` with its credentials masked, as above, and no `response_data`.
+
 ## OpenAPI document
 
 `/api/v1/admin/openapi.json` describes every admin-API route, with the bearer scheme declared. It is served to any token holder in every environment, so a client generator or an AI agent can read it. The app-wide `/docs` and `/openapi.json` stay off in production.
