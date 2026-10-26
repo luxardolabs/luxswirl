@@ -7,10 +7,8 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.background.maintenance_handlers._bulk_outcome import (
-    finish,
-    require_owner_may_edit,
-)
+from app.background.maintenance_handlers._bulk_outcome import finish
+from app.background.maintenance_handlers._job_owner import require_owner_may_edit
 from app.models.maintenance_job_model import MaintenanceJob
 from app.services.core.check_core_service import CheckCoreService
 from app.services.core.user_core_service import UserCoreService

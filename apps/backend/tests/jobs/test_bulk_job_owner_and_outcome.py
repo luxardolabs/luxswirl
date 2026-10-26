@@ -109,7 +109,7 @@ async def test_a_bulk_delete_runs_only_for_an_owner_who_may_still_edit(
     row = await _row(worker_db, job_id)
     if not deleted:
         assert row.status == MaintenanceJobStatus.FAILED
-        assert "may no longer change checks" in (row.error or "")
+        assert "no longer an active editor or admin" in (row.error or "")
 
 
 async def test_a_bulk_delete_of_vanished_checks_fails_with_its_counts(

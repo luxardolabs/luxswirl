@@ -963,7 +963,8 @@ class AgentCoreService:
 
         Raises:
             AgentNotFoundException: If agent not found
-            ValueError: If agent is already active
+            ValidationException: If the agent is already active, or in a
+                status it cannot be approved from
         """
 
         # Locked against a heartbeat that would change the tags judged below.
@@ -971,7 +972,7 @@ class AgentCoreService:
         agent = await AgentCoreService.get_agent_by_id(db, agent_id)
 
         if agent.approval_status == "active":
-            raise ValueError("Agent is already approved")
+            raise ValidationException("Agent is already approved")
         _require_status(agent, _APPROVABLE, "approved")
         # Approval starts every synthetic check the agent's name or tags already
         # match: putting that code on a new host is an admin's.
