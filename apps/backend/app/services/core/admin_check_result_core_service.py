@@ -48,7 +48,7 @@ def _metrics(raw: str | None) -> dict[str, Any] | None:
         decoded = json.loads(raw)
     except ValueError:
         return None
-    return decoded if isinstance(decoded, dict) else None
+    return dict(decoded) if isinstance(decoded, dict) else None
 
 
 # The metrics sections the detail panel shows; of `response`, only the
@@ -56,15 +56,20 @@ def _metrics(raw: str | None) -> dict[str, Any] | None:
 _VIEWER_SECTIONS = ("dns", "mysql", "postgres", "synthetic")
 
 
-def _masked(value: Any) -> Any:
-    """`value` with every string in it, at any depth, credential-masked."""
+def _masked(value: object) -> object:
+    """`value` (decoded JSON) with every string in it, at any depth, masked."""
     if isinstance(value, str):
         return mask_credentials(value)
     if isinstance(value, dict):
-        return {key: _masked(item) for key, item in value.items()}
+        return _masked_mapping(value)
     if isinstance(value, list):
         return [_masked(item) for item in value]
     return value
+
+
+def _masked_mapping(mapping: dict[str, object]) -> dict[str, object]:
+    """`mapping` with every string in its values, at any depth, masked."""
+    return {key: _masked(item) for key, item in mapping.items()}
 
 
 def _viewer_metrics(metrics: dict[str, Any] | None) -> dict[str, Any] | None:
@@ -77,7 +82,7 @@ def _viewer_metrics(metrics: dict[str, Any] | None) -> dict[str, Any] | None:
     response = metrics.get("response")
     if isinstance(response, dict) and "ssl_certificate" in response:
         shown["response"] = {"ssl_certificate": response["ssl_certificate"]}
-    return _masked(shown)
+    return _masked_mapping(shown)
 
 
 def _utc(moment: datetime) -> datetime:
@@ -134,7 +139,7 @@ class AdminCheckResultCoreService:
             raise ValidationException("The window spans at most 31 days")
         page = max(1, page)
         rows, total = await CheckResultCoreService.list_results_page(
-            db, check_id, start, end, limit=per_page, offset=(page - 1) * per_page
+            db, check_id, start, end, skip=(page - 1) * per_page, limit=per_page
         )
         return CheckResultPage.of(
             [AdminCheckResultCoreService._result(row, role) for row in rows],

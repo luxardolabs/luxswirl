@@ -5,7 +5,6 @@ Every route reads, so any API token may call it; a viewer's reads are masked
 by the core service.
 """
 
-from datetime import datetime
 from typing import Annotated
 from uuid import UUID
 
@@ -14,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import ApiUser
 from app.core.config import settings
+from app.core.query_params import SinceFilter, UntilFilter
 from app.core.rate_limit import api_token_rate_limit_key, limiter
 from app.db import get_db
 from app.schemas.admin_check_result_schema import (
@@ -46,8 +46,8 @@ async def admin_list_check_results(
     check_id: UUID,
     principal: ApiUser,
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
-    since: datetime | None = None,
-    until: datetime | None = None,
+    since: SinceFilter = None,
+    until: UntilFilter = None,
     page: Annotated[int, Query(ge=1, le=MAX_PAGE)] = 1,
     per_page: Annotated[int, Query(ge=1, le=200)] = 50,
 ) -> CheckResultPage:

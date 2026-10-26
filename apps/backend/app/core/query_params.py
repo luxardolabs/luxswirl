@@ -16,6 +16,7 @@ else — the value arrives already validated and normalized. The ``empty_to_none
 validator is exported for the rare param that also needs a custom ``alias=``.
 """
 
+from datetime import datetime
 from typing import Annotated
 from uuid import UUID
 
@@ -125,4 +126,14 @@ ActiveFilter = Annotated[
     bool | None,
     BeforeValidator(empty_to_none),
     Query(description="Filter by active status"),
+]
+SinceFilter = Annotated[
+    datetime | None,
+    BeforeValidator(empty_to_none),
+    Query(description="From this time (ISO 8601; no zone is UTC)"),
+]
+UntilFilter = Annotated[
+    datetime | None,
+    BeforeValidator(empty_to_none),
+    Query(description="Up to this time (ISO 8601; no zone is UTC)"),
 ]
