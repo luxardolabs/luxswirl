@@ -19,7 +19,13 @@ from app.core.exceptions import (
     CheckNotFoundException,
 )
 from app.core.synthetic_security import SyntheticSecurityError
-from app.models.enum_model import CheckType, HttpMethod, MaintenanceJobKind, options_for
+from app.models.enum_model import (
+    CheckType,
+    HttpMethod,
+    MaintenanceJobKind,
+    UserRole,
+    options_for,
+)
 from app.schemas.auth_schema import AuthedUser
 from app.schemas.check_schema import (
     BulkCheckCreateRequest,
@@ -1037,6 +1043,7 @@ class ChecksViewService:
         enabled: str,
         tag: str,
         check_ids: list[UUID],
+        current_user: AuthedUser,
     ) -> tuple[int, int, str, str]:
         """
         Run a synchronous bulk enable/disable and return
@@ -1058,7 +1065,10 @@ class ChecksViewService:
         )
 
         result = await CheckCoreService.bulk_set_enabled(
-            db, check_ids_to_process, enabled=(action == "enable")
+            db,
+            check_ids_to_process,
+            enabled=(action == "enable"),
+            actor_is_admin=current_user.role == UserRole.ADMIN,
         )
         logger.info(
             "Bulk action complete",

@@ -15,7 +15,7 @@ from app.models.check_model import Check
 from app.schemas.check_schema import CheckCreate, CheckUpdate
 from app.services.core.check_core_service import CheckCoreService
 from app.services.views.checks_view_service import ChecksViewService
-from fixtures.factories import make_agent, make_check
+from fixtures.factories import make_agent, make_check, make_user
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -37,7 +37,9 @@ class TestBulkAction:
             db.add(c)
         await db.flush()
 
-        result = await CheckCoreService.bulk_delete(db, [c.id for c in checks])
+        result = await CheckCoreService.bulk_delete(
+            db, [c.id for c in checks], actor_is_admin=True
+        )
         assert result["success_count"] == 3
         assert result["failure_count"] == 0
         # All gone
@@ -53,7 +55,7 @@ class TestBulkAction:
         await db.flush()
 
         result = await CheckCoreService.bulk_set_enabled(
-            db, [c.id for c in checks], enabled=False
+            db, [c.id for c in checks], enabled=False, actor_is_admin=True
         )
         assert result["success_count"] == 2
 
@@ -70,7 +72,7 @@ class TestBulkAction:
         await db.flush()
 
         result = await CheckCoreService.bulk_set_enabled(
-            db, [c.id for c in checks], enabled=True
+            db, [c.id for c in checks], enabled=True, actor_is_admin=True
         )
         assert result["success_count"] == 2
 
@@ -88,7 +90,7 @@ class TestBulkAction:
         # The free-form action string arrives from the web form; the view
         # refuses one it does not know rather than guessing.
         success, failure, message, kind = await ChecksViewService.execute_bulk_action(
-            db, "vaporize", "false", None, "all", "", [check.id]
+            db, "vaporize", "false", None, "all", "", [check.id], make_user()
         )
         assert (success, failure, kind) == (0, 0, "warning")
         assert "Unknown action" in message
@@ -97,8 +99,13 @@ class TestBulkAction:
 
     async def test_empty_input_returns_zero(self, db: AsyncSession):
         empty = {"success_count": 0, "failure_count": 0, "errors": []}
-        assert await CheckCoreService.bulk_delete(db, []) == empty
-        assert await CheckCoreService.bulk_set_enabled(db, [], enabled=True) == empty
+        assert await CheckCoreService.bulk_delete(db, [], actor_is_admin=True) == empty
+        assert (
+            await CheckCoreService.bulk_set_enabled(
+                db, [], enabled=True, actor_is_admin=True
+            )
+            == empty
+        )
 
     async def test_delete_bumps_agent_checks_updated_at(self, db: AsyncSession):
         """Deleting a check must bump the agent's checks_updated_at so the
@@ -110,7 +117,7 @@ class TestBulkAction:
         db.add(check)
         await db.flush()
 
-        await CheckCoreService.bulk_delete(db, [check.id])
+        await CheckCoreService.bulk_delete(db, [check.id], actor_is_admin=True)
         await db.flush()
         await db.refresh(agent)
         assert agent.checks_updated_at is not None
@@ -135,6 +142,7 @@ class TestBulkModify:
             db,
             [c.id for c in checks],
             CheckUpdate(interval_seconds=120),
+            actor_is_admin=True,
         )
         assert result["success_count"] == 3
 
@@ -146,6 +154,7 @@ class TestBulkModify:
             db,
             [uuid4()],
             CheckUpdate(interval_seconds=30),
+            actor_is_admin=True,
         )
         # Service catches per-check exceptions and counts failures
         assert result["failure_count"] >= 1
@@ -165,6 +174,7 @@ class TestBulkModify:
             [check.id],
             CheckUpdate(display_name=check.display_name),
             new_agent_id=agent_b.id,
+            actor_is_admin=True,
         )
         assert result["success_count"] == 1
 
@@ -346,10 +356,12 @@ class TestBulkFailureLeavesTheSessionUsable:
 
         if operation == "toggle":
             result = await CheckCoreService.bulk_set_enabled(
-                db, [check.id], enabled=False
+                db, [check.id], enabled=False, actor_is_admin=True
             )
         else:
-            result = await CheckCoreService.bulk_delete(db, [check.id])
+            result = await CheckCoreService.bulk_delete(
+                db, [check.id], actor_is_admin=True
+            )
 
         assert result["success_count"] == 0
         assert result["failure_count"] == 1
@@ -370,7 +382,9 @@ class TestBulkCountsAddUp:
         db.add(check)
         await db.flush()
 
-        result = await CheckCoreService.bulk_delete(db, [check.id, uuid4(), uuid4()])
+        result = await CheckCoreService.bulk_delete(
+            db, [check.id, uuid4(), uuid4()], actor_is_admin=True
+        )
 
         assert result["success_count"] == 1
         assert result["failure_count"] == 2
