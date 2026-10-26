@@ -15,7 +15,7 @@ from app.services.views.notification_providers_view_service import (
     NotificationProvidersViewService,
 )
 from app.shared.logger import get_logger
-from app.web.deps import CurrentUserWeb, EditorUserWeb
+from app.web.deps import EditorUserWeb
 from app.web.hx_responses import hx_close_panel_and_refresh, hx_empty_with_toast
 from app.web.templates import templates
 
@@ -31,7 +31,7 @@ router = APIRouter(tags=["Web UI - Notification Providers"], include_in_schema=F
 )
 async def create_provider_form(
     request: Request,
-    current_user: CurrentUserWeb,
+    current_user: EditorUserWeb,
     provider_type: ProviderTypeFilter = None,
 ) -> HTMLResponse:
     """HTMX partial — empty 'new provider' form (or type selector)."""
@@ -54,7 +54,7 @@ async def edit_provider_form(
     request: Request,
     provider_id: UUID,
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
-    current_user: CurrentUserWeb,
+    current_user: EditorUserWeb,
 ) -> HTMLResponse:
     """HTMX partial — populated edit form."""
     return templates.TemplateResponse(
