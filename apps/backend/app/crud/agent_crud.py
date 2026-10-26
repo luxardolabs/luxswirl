@@ -109,6 +109,18 @@ class AgentCRUD:
         return list(result.scalars().all())
 
     @staticmethod
+    async def lock(db: AsyncSession, agent_id: UUID) -> None:
+        """Hold `agent_id`'s row until the transaction ends, and reload it as
+        stored now: a second writer of the same row waits rather than writing
+        under a decision this one is about to make."""
+        await db.execute(
+            select(Agent)
+            .where(Agent.id == agent_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+
+    @staticmethod
     async def get_by_id_with_checks(db: AsyncSession, agent_id: UUID) -> Agent | None:
         """Fetch agent by id with checks loaded."""
         result = await db.execute(
