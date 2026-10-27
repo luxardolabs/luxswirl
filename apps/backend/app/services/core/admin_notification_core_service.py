@@ -155,7 +155,7 @@ class AdminNotificationCoreService:
         per_page: int,
         status: NotificationStatus | None = None,
         alert_id: UUID | None = None,
-        provider_id: UUID | None = None,
+        notification_provider_id: UUID | None = None,
         search: str | None = None,
     ) -> NotificationLogPage:
         """One page of notification attempts, newest first."""
@@ -164,7 +164,7 @@ class AdminNotificationCoreService:
             db,
             status=status.value if status else None,
             alert_id=alert_id,
-            notification_provider_id=provider_id,
+            notification_provider_id=notification_provider_id,
             search=search,
             limit=per_page,
             offset=(page - 1) * per_page,

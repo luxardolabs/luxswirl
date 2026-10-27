@@ -196,7 +196,6 @@ async def test_bad_header_value_leaks_into_log(
         await db.flush()
 
         tested = await client.post(f"{PROVIDERS}/{provider.id}/test", headers=editor)
-        print("TEST ROUTE:", tested.text)
 
         ctx = NotificationContext(
             check_name="c",
@@ -213,15 +212,15 @@ async def test_bad_header_value_leaks_into_log(
             check_result_id=None,
             check_result_timestamp=None,
         )
-        print("STORED:", rows[0].status, rows[0].error_message)
         await db.flush()
         logs = await client.get(
             LOGS, params={"alert_id": str(alert.id)}, headers=viewer
         )
-        print("VIEWER LOG:", logs.text)
     finally:
         server.close()
         await server.wait_closed()
 
     assert logs.status_code == 200
     assert HDR_SECRET not in logs.text, logs.text
+    assert HDR_SECRET not in tested.text, tested.text
+    assert all(HDR_SECRET not in (row.error_message or "") for row in rows)

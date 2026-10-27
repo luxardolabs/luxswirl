@@ -309,7 +309,7 @@ async def test_the_log_filters_read_empty_as_absent(
 
     resp = await client.get(
         LOGS,
-        params={"status": "", "alert_id": "", "provider_id": ""},
+        params={"status": "", "alert_id": "", "notification_provider_id": ""},
         headers=viewer,
     )
 

@@ -212,7 +212,7 @@ A provider's `config` holds its credentials: an SMTP password, a webhook URL who
 | ------ | --------------------------------- | ---- | ----------------------------------------------- |
 | `GET`  | `/api/v1/admin/notification-logs` | any  | One page of notification attempts, newest first |
 
-Filters: `status` (`sent`, `failed`, `retrying`, `rate_limited`, `deduplicated`, `suppressed`), `alert_id`, `provider_id`, and `search` over alert, provider and check names. Each row's `error_message` has every URL in it cut to its host, and its `check_target` has any credential masked, as the web UI's log page shows them to anyone signed in.
+Filters: `status` (`sent`, `failed`, `retrying`, `rate_limited`, `deduplicated`, `suppressed`), `alert_id`, `notification_provider_id`, and `search` over alert, provider and check names. Each row's `error_message` has every URL in it cut to its host, and its `check_target` has any credential masked, as the web UI's log page shows them to anyone signed in.
 
 ## OpenAPI document
 

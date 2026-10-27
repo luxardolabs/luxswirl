@@ -35,17 +35,17 @@ async def admin_list_notification_logs(
     per_page: Annotated[int, Query(ge=1, le=200)] = 50,
     status: NotifStatusFilter = None,
     alert_id: AlertIdFilter = None,
-    provider_id: ProviderIdFilter = None,
+    notification_provider_id: ProviderIdFilter = None,
     search: Annotated[str | None, Query(max_length=255)] = None,
 ) -> NotificationLogPage:
     """One page of notification attempts, newest first, filtered by `status`,
-    `alert_id`, `provider_id` or a `search` of alert, provider and check names."""
+    `alert_id`, `notification_provider_id` or a `search` of alert, provider and check names."""
     return await AdminNotificationCoreService.list_logs(
         db,
         page=page,
         per_page=per_page,
         status=status,
         alert_id=alert_id,
-        provider_id=provider_id,
+        notification_provider_id=notification_provider_id,
         search=search,
     )
