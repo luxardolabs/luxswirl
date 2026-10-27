@@ -189,6 +189,31 @@ Each also takes `check_filters` (`agent_ids`, `check_types`, `check_names`, `tag
 
 A snooze, however often repeated, ends at most a day from now; each one is logged with the token's user. Snoozing a check the alert does not watch is a `404`.
 
+## Notification providers
+
+Where alerts send their notifications. Reads take any token; every change takes an editor's, as in the web UI.
+
+| Method   | Path                                                           | Role   | Does                                                                  |
+| -------- | -------------------------------------------------------------- | ------ | --------------------------------------------------------------------- |
+| `GET`    | `/api/v1/admin/notification-providers`                         | any    | One page of providers; `provider_type`                                |
+| `GET`    | `/api/v1/admin/notification-providers/types`                   | any    | Each provider type and the `config` fields it takes                   |
+| `GET`    | `/api/v1/admin/notification-providers/{id}`                    | any    | One provider                                                          |
+| `POST`   | `/api/v1/admin/notification-providers`                         | editor | `{"provider_type", "friendly_name", "config", ...}`; `201`            |
+| `PATCH`  | `/api/v1/admin/notification-providers/{id}`                    | editor | Change the fields sent; a `config` sent replaces the stored one whole |
+| `DELETE` | `/api/v1/admin/notification-providers/{id}`                    | editor | Delete it: it is sent nothing again; `204`                            |
+| `POST`   | `/api/v1/admin/notification-providers/{id}/enable`, `/disable` | editor | Turn it on or off                                                     |
+| `POST`   | `/api/v1/admin/notification-providers/{id}/test`               | editor | Send it a test notification now; returns `{"success", "error"}`       |
+
+A provider's `config` holds its credentials: an SMTP password, a webhook URL whose path can itself be the credential, request headers. A viewer's token reads every provider with `config` set to `null`; an editor's reads it as stored. A `config` that does not fit its type is refused, and a field cannot be set to `null`. A failed test's `error` names the HTTP status, never the endpoint's URL.
+
+## Notification logs
+
+| Method | Path                              | Role | Returns                                         |
+| ------ | --------------------------------- | ---- | ----------------------------------------------- |
+| `GET`  | `/api/v1/admin/notification-logs` | any  | One page of notification attempts, newest first |
+
+Filters: `status` (`sent`, `failed`, `retrying`, `rate_limited`, `deduplicated`, `suppressed`), `alert_id`, `provider_id`, and `search` over alert, provider and check names. Each row's `error_message` has every URL in it cut to its host, and its `check_target` has any credential masked, as the web UI's log page shows them to anyone signed in.
+
 ## OpenAPI document
 
 `/api/v1/admin/openapi.json` describes every admin-API route, with the bearer scheme declared. It is served to any token holder in every environment, so a client generator or an AI agent can read it. The app-wide `/docs` and `/openapi.json` stay off in production.
