@@ -10,7 +10,11 @@ from __future__ import annotations
 from uuid import uuid4
 
 import pytest
-from app.core.exceptions import AgentNotFoundException
+from app.core.exceptions import (
+    AgentNotFoundException,
+    JobNotFoundException,
+    ValidationException,
+)
 from app.schemas.job_schema import JobCreate, JobResultSubmit
 from app.services.core.job_core_service import JobCoreService
 from fixtures.factories import make_agent
@@ -58,11 +62,67 @@ class TestJobLifecycle:
         d.update(over)
         return JobCreate(**d)
 
-    async def test_create_server_job_is_pending(self, db: AsyncSession):
-        job = await svc.create_job(db, self._data())
+    @staticmethod
+    async def _on_agent(db: AsyncSession, **over):
+        agent = make_agent()
+        db.add(agent)
+        await db.flush()
+        return TestJobLifecycle._data(agent_id=agent.id, **over)
+
+    async def test_create_agent_job_is_pending(self, db: AsyncSession):
+        job = await svc.create_job(db, await self._on_agent(db))
         assert job.status == "pending"
-        assert job.agent_id is None  # NULL agent_id = server runner
         assert job.expires_at is not None
+
+    @pytest.mark.parametrize("job_type", ["network_scan", "network_discover"])
+    async def test_a_job_that_needs_an_agent_is_refused_on_the_server(
+        self, db: AsyncSession, job_type: str
+    ):
+        # No server runner executes these: such a job would sit pending forever.
+        with pytest.raises(ValidationException, match="agent"):
+            await svc.create_job(db, self._data(job_type=job_type, agent_id=None))
+
+    async def test_a_scan_is_stored_with_its_params_as_validated(
+        self, db: AsyncSession
+    ):
+        data = await self._on_agent(
+            db, params={"subnet": "10.0.0.0/24", "ports": [22], "unknown": "x"}
+        )
+        job = await svc.create_job(db, data)
+        assert job.params == {
+            "subnet": "10.0.0.0/24",
+            "timeout": 10,
+            "ports": [22],
+            "max_concurrent": 100,
+        }
+
+    async def test_a_discover_job_drops_params_it_does_not_take(self, db: AsyncSession):
+        data = await self._on_agent(
+            db, job_type="network_discover", params={"subnet": "x" * 10_000}
+        )
+        job = await svc.create_job(db, data)
+        assert job.params == {}
+
+    @pytest.mark.parametrize(
+        "params",
+        [
+            {},
+            {"subnet": "not-a-subnet"},
+            {"subnet": "169.254.0.0/16"},
+            {"subnet": "10.0.0.0/24", "timeout": 0},
+            {"subnet": "10.0.0.0/24", "ports": [70000]},
+        ],
+    )
+    async def test_bad_scan_params_are_a_validation_error(
+        self, db: AsyncSession, params: dict
+    ):
+        data = await self._on_agent(db, params=params)
+        with pytest.raises(ValidationException, match="params"):
+            await svc.create_job(db, data)
+
+    async def test_deleting_an_unknown_job_is_not_found(self, db: AsyncSession):
+        with pytest.raises(JobNotFoundException):
+            await svc.delete_job(db, uuid4())
 
     async def test_create_job_with_valid_agent(self, db: AsyncSession):
         agent = make_agent()
@@ -76,14 +136,14 @@ class TestJobLifecycle:
             await svc.create_job(db, self._data(agent_id=uuid4()))
 
     async def test_status_running_sets_started_at(self, db: AsyncSession):
-        job = await svc.create_job(db, self._data())
+        job = await svc.create_job(db, await self._on_agent(db))
         await svc.update_job_status(db, job.id, "assigned")  # dispatched
         updated = await svc.update_job_status(db, job.id, "running")
         assert updated.status == "running"
         assert updated.started_at is not None
 
     async def test_status_completed_sets_completed_at(self, db: AsyncSession):
-        job = await svc.create_job(db, self._data())
+        job = await svc.create_job(db, await self._on_agent(db))
         updated = await svc.update_job_status(db, job.id, "completed")
         assert updated.completed_at is not None
 
@@ -91,7 +151,7 @@ class TestJobLifecycle:
         assert await svc.update_job_status(db, uuid4(), "running") is None
 
     async def test_submit_completed_stores_result_data(self, db: AsyncSession):
-        job = await svc.create_job(db, self._data())
+        job = await svc.create_job(db, await self._on_agent(db))
         out = await svc.submit_job_result(
             db,
             job.id,
@@ -106,7 +166,7 @@ class TestJobLifecycle:
         assert out.result.get("discovered_hosts") == [{"ip": "10.0.0.7"}]
 
     async def test_submit_failed_result(self, db: AsyncSession):
-        job = await svc.create_job(db, self._data())
+        job = await svc.create_job(db, await self._on_agent(db))
         out = await svc.submit_job_result(
             db, job.id, JobResultSubmit(status="failed", error="boom")
         )
@@ -119,14 +179,14 @@ class TestJobLifecycle:
         assert out is None
 
     async def test_cancel_pending_job(self, db: AsyncSession):
-        job = await svc.create_job(db, self._data())
+        job = await svc.create_job(db, await self._on_agent(db))
         out = await svc.cancel_job(db, job.id)
         assert out is not None
         assert out.status == "cancelled"
 
     async def test_a_running_job_can_be_cancelled(self, db: AsyncSession):
         # As the jobs page offers: pending, assigned and running jobs can be cancelled
-        job = await svc.create_job(db, self._data())
+        job = await svc.create_job(db, await self._on_agent(db))
         await svc.update_job_status(db, job.id, "assigned")  # dispatched
         running = await svc.update_job_status(db, job.id, "running")
         assert running is not None and running.status == "running"
@@ -134,7 +194,7 @@ class TestJobLifecycle:
         assert cancelled is not None and cancelled.status == "cancelled"
 
     async def test_a_finished_job_cannot_be_cancelled(self, db: AsyncSession):
-        job = await svc.create_job(db, self._data())
+        job = await svc.create_job(db, await self._on_agent(db))
         await svc.update_job_status(db, job.id, "completed")
         assert await svc.cancel_job(db, job.id) is None
 
@@ -144,7 +204,7 @@ class TestJobLifecycle:
     async def test_late_result_does_not_resurrect_cancelled_job(self, db: AsyncSession):
         # ADVERSARIAL: a job is cancelled, then a (stale) result arrives from the
         # agent that had already picked it up. It must NOT flip back to completed.
-        job = await svc.create_job(db, self._data())
+        job = await svc.create_job(db, await self._on_agent(db))
         await svc.cancel_job(db, job.id)
         out = await svc.submit_job_result(
             db, job.id, JobResultSubmit(status="completed", result={})

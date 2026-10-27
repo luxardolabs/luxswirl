@@ -214,6 +214,15 @@ class JobType(StrEnum):
     NETWORK_DISCOVER = "network_discover"
 
 
+class ScanCheckKind(StrEnum):
+    """The checks a network scan's hosts can become, one kind per request."""
+
+    PING = "ping"  # one ping check per host
+    WEB = "web"  # one HTTP check per web port
+    SSH = "ssh"  # one TCP check per SSH port
+    DATABASE = "database"  # one TCP check per database port
+
+
 SERVER_RUNNER = "server"
 """UI/URL token for the server runner — a job with no assigned agent.
 

@@ -14,10 +14,15 @@ from collections.abc import Sequence
 from typing import Any
 from uuid import UUID
 
+from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.core.exceptions import AgentNotFoundException
+from app.core.exceptions import (
+    AgentNotFoundException,
+    JobNotFoundException,
+    ValidationException,
+)
 from app.crud.job_crud import JobCRUD
 from app.models.enum_model import SERVER_RUNNER, JobStatus, JobType
 from app.models.job_model import Job
@@ -32,10 +37,18 @@ from app.schemas.job_schema import (
 from app.services.core._job_enrichers import enrich_job_result
 from app.services.core.network_scan_core_service import NetworkScanCoreService
 from app.services.core.settings_core_service import SettingsCoreService
-from app.shared.jobs.network_scan import NetworkScanParams
+from app.shared.jobs.base import BaseJob
+from app.shared.jobs.network_discover import NetworkDiscoverJob
+from app.shared.jobs.network_scan import NetworkScanJob
 from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.services.job")
+
+# The job class behind each job type: its params schema, runner and labels.
+JOB_CLASSES: dict[JobType, type[BaseJob]] = {
+    JobType.NETWORK_SCAN: NetworkScanJob,
+    JobType.NETWORK_DISCOVER: NetworkDiscoverJob,
+}
 
 
 class JobCoreService:
@@ -51,6 +64,25 @@ class JobCoreService:
         if token == SERVER_RUNNER:
             return None, True
         return UUID(token), False
+
+    @staticmethod
+    def validated_params(job_type: JobType, params: dict[str, Any]) -> dict[str, Any]:
+        """`params` held to the job type's schema, with its defaults filled in.
+
+        A key the schema does not name is dropped.
+
+        Raises:
+            ValidationException: If the params do not meet the schema
+        """
+        try:
+            parsed = JOB_CLASSES[job_type].params_schema.model_validate(params)
+        except ValidationError as e:
+            problems = "; ".join(
+                f"{'.'.join(str(part) for part in err['loc']) or 'params'}: {err['msg']}"
+                for err in e.errors(include_input=False)
+            )
+            raise ValidationException(f"Invalid {job_type} params: {problems}") from e
+        return parsed.model_dump(mode="json")
 
     @staticmethod
     async def create_job(
@@ -71,12 +103,16 @@ class JobCoreService:
 
         Raises:
             AgentNotFoundException: If agent_id is specified but doesn't exist
-            ValidationError: If a network scan's params are refused (a subnet
-                in the cloud metadata range, among others)
+            ValidationException: If the job type needs an agent and none is
+                named, or its params are refused (a scan subnet in the cloud
+                metadata range, among others)
         """
         # Refused here, at once, rather than by the agent when it runs the job.
-        if data.job_type == JobType.NETWORK_SCAN:
-            NetworkScanParams.model_validate(data.params)
+        if JOB_CLASSES[data.job_type].requires_agent and data.agent_id is None:
+            raise ValidationException(
+                f"A {data.job_type} job runs on an agent: name its agent_id"
+            )
+        params = JobCoreService.validated_params(data.job_type, data.params)
 
         # Verify agent exists if agent_id is specified
         if data.agent_id and not await JobCRUD.agent_exists(db, data.agent_id):
@@ -86,7 +122,7 @@ class JobCoreService:
         job = Job(
             job_type=data.job_type,
             agent_id=data.agent_id,
-            params=data.params,
+            params=params,
             priority=data.priority,
             tags=data.tags,
             created_by=created_by,
@@ -352,11 +388,11 @@ class JobCoreService:
             job_id: Job UUID
 
         Raises:
-            Exception: If job not found
+            JobNotFoundException: If there is no such job
         """
         job = await JobCoreService.get_job(db, job_id)
         if not job:
-            raise Exception(f"Job not found: {job_id}")
+            raise JobNotFoundException(job_id)
 
         await JobCRUD.delete_job(db, job)
 

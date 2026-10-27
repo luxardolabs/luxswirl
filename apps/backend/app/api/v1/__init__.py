@@ -17,6 +17,7 @@ from app.api.v1.routers import (
     admin_check_result_router,
     admin_check_router,
     admin_identity_router,
+    admin_job_router,
     admin_maintenance_job_router,
     admin_notification_log_router,
     admin_notification_provider_router,
@@ -66,6 +67,9 @@ admin_api_router.include_router(admin_status_page_router.router)  # Status pages
 admin_api_router.include_router(admin_setting_router.router)  # Settings
 admin_api_router.include_router(admin_scheduler_router.router)  # Scheduled jobs
 admin_api_router.include_router(admin_user_router.router)  # User accounts
+admin_api_router.include_router(
+    admin_job_router.router
+)  # Agent jobs (network scan, discover)
 admin_api_router.include_router(
     admin_maintenance_job_router.router
 )  # Background job status

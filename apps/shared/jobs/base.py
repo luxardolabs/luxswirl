@@ -9,6 +9,8 @@ import time
 from abc import ABC, abstractmethod
 from typing import Any
 
+from pydantic import BaseModel
+
 from ..logger import get_logger
 
 
@@ -22,6 +24,19 @@ class BaseJob(ABC):
 
     # Job type identifier (must be overridden in subclasses)
     job_type: str = "base"
+
+    # The parameters the job takes; the server validates them when the job is created.
+    params_schema: type[BaseModel] = BaseModel
+
+    # True when only an agent can run the job: no server runner executes it.
+    requires_agent: bool = False
+
+    # The longest the whole job may run.
+    default_timeout_seconds: int = 300
+
+    # Display metadata
+    display_name: str = "Job"
+    display_description: str = ""
 
     def __init__(self, job_id: str, params: dict[str, Any]):
         """

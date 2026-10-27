@@ -7,11 +7,11 @@ the operator at once, and keeps the job out of the queue.
 from __future__ import annotations
 
 import pytest
+from app.core.exceptions import ValidationException
 from app.models.enum_model import JobType
 from app.schemas.job_schema import JobCreate
 from app.services.core.job_core_service import JobCoreService
 from fixtures.factories import make_agent
-from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 pytestmark = pytest.mark.integration
@@ -30,7 +30,7 @@ async def _create(db: AsyncSession, subnet: str):
 
 
 async def test_a_scan_of_the_metadata_range_is_refused(db: AsyncSession) -> None:
-    with pytest.raises(ValidationError, match="cloud metadata"):
+    with pytest.raises(ValidationException, match="cloud metadata"):
         await _create(db, "169.254.169.0/24")
 
 
@@ -38,7 +38,7 @@ async def test_a_scan_of_the_metadata_range_is_refused(db: AsyncSession) -> None
 async def test_a_scan_reaching_a_metadata_address_outside_link_local_is_refused(
     db: AsyncSession, subnet: str
 ) -> None:
-    with pytest.raises(ValidationError, match="cloud metadata"):
+    with pytest.raises(ValidationException, match="cloud metadata"):
         await _create(db, subnet)
 
 
