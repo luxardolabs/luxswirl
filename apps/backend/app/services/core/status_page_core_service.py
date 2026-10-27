@@ -161,15 +161,11 @@ class StatusPageCoreService:
             if existing:
                 raise _slug_taken(data.slug)
 
-        # Update fields
-        update_data = data.model_dump(exclude_unset=True)
-        for field, value in update_data.items():
-            setattr(status_page, field, value)
-
-        status_page.updated_at = utc_now()
+        changes = {**data.model_dump(exclude_unset=True), "updated_at": utc_now()}
         try:
-            status_page = await StatusPageCRUD.save_page(db, status_page)
+            status_page = await StatusPageCRUD.update_page(db, status_page, changes)
         except IntegrityError as e:
+            # Another request took the slug between the check and the write.
             raise _slug_taken(data.slug or "") from e
 
         logger.info(

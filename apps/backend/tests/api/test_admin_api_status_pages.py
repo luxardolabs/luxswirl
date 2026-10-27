@@ -353,6 +353,28 @@ async def test_items_for_an_unknown_page_are_404(
     assert resp.status_code == 404
 
 
+async def test_a_page_naming_too_many_checks_is_refused_before_any_query(
+    db: AsyncSession, client: AsyncClient
+) -> None:
+    editor = await _as(db, "editor")
+    # 33,000 ids would pass the bind-parameter limit of one IN (...) lookup.
+    groups = [
+        {
+            "type": "group",
+            "name": f"g{i}",
+            "checks": [str(uuid4()) for _ in range(1000)],
+        }
+        for i in range(33)
+    ]
+
+    created = await client.post(
+        PAGES, json={"name": "x", "slug": _slug(), "items": groups}, headers=editor
+    )
+
+    assert created.status_code == 422, created.text[:300]
+    assert "at most 10000 checks" in created.text
+
+
 # ── Slugs ───────────────────────────────────────────────────────────────────
 
 
@@ -391,6 +413,31 @@ async def test_the_web_path_also_gives_a_taken_slug_its_conflict(
         await StatusPageCoreService.update_status_page(
             db, other.id, StatusPageUpdate(slug=slug)
         )
+
+
+async def test_a_slug_lost_to_a_race_leaves_the_session_usable(
+    db: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    taken = _slug()
+    await StatusPageCoreService.create_status_page(
+        db, StatusPageCreate(name="a", slug=taken)
+    )
+    other = await StatusPageCoreService.create_status_page(
+        db, StatusPageCreate(name="b", slug=_slug())
+    )
+
+    async def _not_seen(_db: AsyncSession, _slug: str) -> None:
+        return None  # the other request commits between the check and the write
+
+    monkeypatch.setattr(
+        StatusPageCoreService, "get_status_page_by_slug", staticmethod(_not_seen)
+    )
+    with pytest.raises(DuplicateResourceException):
+        await StatusPageCoreService.update_status_page(
+            db, other.id, StatusPageUpdate(slug=taken)
+        )
+
+    assert int(await db.scalar(select(func.count()).select_from(StatusPage)) or 0) >= 2
 
 
 # ── Delete ──────────────────────────────────────────────────────────────────
