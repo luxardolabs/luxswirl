@@ -9,6 +9,7 @@ from typing import Any
 import httpx
 from fastapi.encoders import jsonable_encoder
 
+from app.core.credential_mask import mask_url_paths
 from app.notifications.providers.base import (
     BaseNotificationProvider,
     NotificationContext,
@@ -58,7 +59,7 @@ class HomeAssistantNotificationProvider(BaseNotificationProvider):
             logger.warning(
                 "URL doesn't appear to be a Home Assistant webhook endpoint "
                 "(expected format: https://your-ha.com/api/webhook/webhook-id)",
-                extra={"url": url},
+                extra={"url": mask_url_paths(url)},
             )
 
     async def send(self, context: NotificationContext) -> bool:
@@ -97,7 +98,7 @@ class HomeAssistantNotificationProvider(BaseNotificationProvider):
 
             logger.info(
                 "Home Assistant notification sent successfully",
-                extra={"url": url, "status_code": response.status_code},
+                extra={"url": mask_url_paths(url), "status_code": response.status_code},
             )
             return True
 

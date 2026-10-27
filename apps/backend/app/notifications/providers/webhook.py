@@ -10,6 +10,7 @@ import httpx
 from fastapi.encoders import jsonable_encoder
 
 from app.core.check_target_validator import validate_check_target
+from app.core.credential_mask import mask_url_paths
 from app.notifications.providers.base import (
     BaseNotificationProvider,
     NotificationContext,
@@ -116,7 +117,7 @@ class WebhookNotificationProvider(BaseNotificationProvider):
 
             logger.info(
                 "Webhook notification sent successfully",
-                extra={"url": url, "status_code": response.status_code},
+                extra={"url": mask_url_paths(url), "status_code": response.status_code},
             )
             return True
 
