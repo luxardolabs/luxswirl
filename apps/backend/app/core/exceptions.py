@@ -75,6 +75,15 @@ class StatusPageNotFoundException(NotFoundException):
         )
 
 
+class SchedulerJobNotFoundException(NotFoundException):
+    """Raised when no scheduled job has the key."""
+
+    def __init__(self, job_key: str):
+        super().__init__(
+            message=f"Job {job_key} not found", details={"job_key": job_key}
+        )
+
+
 class DuplicateResourceException(LuxSwirlException):
     """Raised when attempting to create a duplicate resource."""
 

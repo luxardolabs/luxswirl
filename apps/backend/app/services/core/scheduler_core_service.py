@@ -16,6 +16,7 @@ from zoneinfo import ZoneInfo
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.exceptions import SchedulerJobNotFoundException
 from app.crud.scheduler_crud import JobConfigurationCRUD, JobExecutionCRUD
 from app.db import worker_session
 from app.models.enum_model import SchedulerExecutionStatus
@@ -364,6 +365,41 @@ class SchedulerCoreService:
             jobs = await JobConfigurationCRUD.get_all_ordered(db)
             return [SchedulerJobResponse.model_validate(job) for job in jobs]
 
+    async def get_job(self, job_key: str) -> SchedulerJobResponse:
+        """One job configuration.
+
+        Raises:
+            SchedulerJobNotFoundException: If job not found
+        """
+        async with worker_session() as db:
+            job = await JobConfigurationCRUD.get_by_job_key(db, job_key)
+            if not job:
+                raise SchedulerJobNotFoundException(job_key)
+            return SchedulerJobResponse.model_validate(job)
+
+    async def set_job_enabled(
+        self, job_key: str, enabled: bool
+    ) -> SchedulerJobResponse:
+        """Turn a job on or off; asking twice changes nothing more. A job turned
+        back on is scheduled from now, not from a run time that has passed.
+
+        Raises:
+            SchedulerJobNotFoundException: If job not found
+        """
+        async with worker_session() as db:
+            job = await JobConfigurationCRUD.get_by_job_key(db, job_key)
+            if not job:
+                raise SchedulerJobNotFoundException(job_key)
+            if job.enabled != enabled:
+                job.enabled = enabled
+                if enabled:
+                    job.next_run_at = self._calculate_next_run(job)
+                job = await JobConfigurationCRUD.save_job(db, job)
+                logger.info(
+                    "Set job enabled", extra={"job_key": job_key, "enabled": enabled}
+                )
+            return SchedulerJobResponse.model_validate(job)
+
     async def toggle_job(self, job_key: str) -> SchedulerJobResponse:
         """
         Toggle a job's enabled status.
@@ -375,13 +411,13 @@ class SchedulerCoreService:
             The updated job
 
         Raises:
-            ValueError: If job not found
+            SchedulerJobNotFoundException: If job not found
         """
         async with worker_session() as db:
             job = await JobConfigurationCRUD.get_by_job_key(db, job_key)
 
             if not job:
-                raise ValueError(f"Job {job_key} not found")
+                raise SchedulerJobNotFoundException(job_key)
 
             job.enabled = not job.enabled
             job = await JobConfigurationCRUD.save_job(db, job)
@@ -405,13 +441,13 @@ class SchedulerCoreService:
             recorded either way.
 
         Raises:
-            ValueError: If job not found
+            SchedulerJobNotFoundException: If job not found
         """
         async with worker_session() as db:
             job = await JobConfigurationCRUD.get_by_job_key(db, job_key)
 
             if not job:
-                raise ValueError(f"Job {job_key} not found")
+                raise SchedulerJobNotFoundException(job_key)
 
             logger.info(
                 "Synchronously executing job",
@@ -521,13 +557,13 @@ class SchedulerCoreService:
             The updated job
 
         Raises:
-            ValueError: If job not found
+            SchedulerJobNotFoundException: If job not found
         """
         async with worker_session() as db:
             job = await JobConfigurationCRUD.get_by_job_key(db, job_key)
 
             if not job:
-                raise ValueError(f"Job {job_key} not found")
+                raise SchedulerJobNotFoundException(job_key)
 
             old_enabled = job.enabled
 
@@ -558,13 +594,13 @@ class SchedulerCoreService:
             Tuple of (job, executions)
 
         Raises:
-            ValueError: If job not found
+            SchedulerJobNotFoundException: If job not found
         """
         async with worker_session() as db:
             job = await JobConfigurationCRUD.get_by_job_key(db, job_key)
 
             if not job:
-                raise ValueError(f"Job {job_key} not found")
+                raise SchedulerJobNotFoundException(job_key)
 
             executions = await JobExecutionCRUD.get_by_job_key(db, job_key, limit=limit)
             return SchedulerJobResponse.model_validate(job), [

@@ -245,6 +245,22 @@ The runtime settings the web UI's Settings pages show, addressed by key. Every r
 
 A value must be of the setting's `type` (a number is not a string, and `true` is not a number) and meet its `validation` (`min`, `max`, `enum`); anything else is a `422`, and nothing changes. Setting or resetting a setting applies what it governs, as the web UI does: a `database.*` retention or compression setting moves its TimescaleDB policy, and `general.timezone`, `general.date_format` and `general.time_format` change how dates are shown. `metrics.bearer_token` is generated, never set to a value (`422`): it reads as `********` when set and `""` when not, with `generated: true`; a reset clears it, so `/metrics` refuses every token until a new one is generated.
 
+## Scheduler
+
+The scheduled jobs the web UI's Scheduler page shows, addressed by `job_key`. Every route takes an admin's token.
+
+| Method | Path                                             | Does                                                                        |
+| ------ | ------------------------------------------------ | --------------------------------------------------------------------------- |
+| `GET`  | `/api/v1/admin/scheduler/jobs`                   | Every job: its schedule, state and run statistics                           |
+| `GET`  | `/api/v1/admin/scheduler/jobs/{job_key}`         | One job                                                                     |
+| `GET`  | `/api/v1/admin/scheduler/jobs/{job_key}/history` | Its newest runs, newest first; `limit` 1-200 (default 50)                   |
+| `POST` | `/api/v1/admin/scheduler/jobs/{job_key}/enable`  | Turn it on, scheduled from now; turning on a job already on changes nothing |
+| `POST` | `/api/v1/admin/scheduler/jobs/{job_key}/disable` | Turn it off                                                                 |
+| `POST` | `/api/v1/admin/scheduler/jobs/{job_key}/run`     | Run it now and answer when it ends                                          |
+| `POST` | `/api/v1/admin/scheduler/jobs/{job_key}/reset`   | Clear its retry count and failures, and turn it on                          |
+
+A run is recorded in the job's history either way. A run that fails is still a `200`: its `status` is `failed` and its `error` says why. An unknown `job_key` is a `404`.
+
 ## OpenAPI document
 
 `/api/v1/admin/openapi.json` describes every admin-API route, with the bearer scheme declared. It is served to any token holder in every environment, so a client generator or an AI agent can read it. The app-wide `/docs` and `/openapi.json` stay off in production.
