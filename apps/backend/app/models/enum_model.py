@@ -265,6 +265,13 @@ class MaintenanceJobKind(StrEnum):
     STATUS_PAGE_DELETE = "status_page_delete"
 
 
+class ImportMode(StrEnum):
+    """What an import does with a check whose name the agent already has."""
+
+    MERGE = "merge"  # keep the agent's check; skip the imported one
+    REPLACE = "replace"  # overwrite the agent's check with the imported one
+
+
 # ============================================================================
 # Alerts
 # ============================================================================

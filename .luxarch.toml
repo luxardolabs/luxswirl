@@ -15,7 +15,7 @@ declared = [
   "AgentApprovalStatus", "AgentStatus", "AlertTriggerType",
   "ArtifactContentType", "AssignmentMode", "BulkCheckOutcome",
   "CheckArtifactType", "CheckErrorType", "CheckHealthStatus", "CheckType",
-  "DnsRecordType", "HttpMethod", "JobStatus", "JobType", "MaintenanceJobKind",
+  "DnsRecordType", "HttpMethod", "ImportMode", "JobStatus", "JobType", "MaintenanceJobKind",
   "MaintenanceJobStatus", "NotificationProviderType", "NotificationStatus",
   "RegistrationKeyStatus", "ScanCheckKind", "SchedulerExecutionStatus", "SchedulerJobCategory",
   "SchedulerTriggerType", "SettingCategory", "SettingValueType", "UserRole",

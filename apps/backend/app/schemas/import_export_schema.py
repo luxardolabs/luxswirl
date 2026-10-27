@@ -5,6 +5,8 @@ Pydantic models for the bulk import/export endpoints. Lives in schemas/ per
 the layered architecture standard (no BaseModel subclasses inside routers).
 """
 
+from uuid import UUID
+
 from pydantic import BaseModel, Field
 
 from app.models.enum_model import CheckType
@@ -28,3 +30,13 @@ class CheckExport(BaseModel):
     json_path: str | None = None
     expected_value: str | None = None
     tags: TagList | None = None
+
+
+class CheckExportDocument(BaseModel):
+    """An agent's checks, exported: the document an import takes back."""
+
+    agent_id: UUID
+    agent_name: str | None
+    agent_hostname: str | None
+    total_checks: int
+    checks: list[CheckExport]

@@ -17,6 +17,7 @@ from app.core.check_target_validator import CheckTargetBlockedError
 from app.core.exceptions import (
     AgentNotFoundException,
     CheckNotFoundException,
+    ValidationException,
 )
 from app.core.synthetic_security import SyntheticSecurityError
 from app.models.enum_model import (
@@ -43,6 +44,7 @@ from app.services.core.check_core_service import CheckCoreService
 from app.services.core.check_dependency_core_service import (
     CheckDependencyCoreService,
 )
+from app.services.core.check_transfer_core_service import CheckTransferCoreService
 from app.services.core.maintenance_job_core_service import MaintenanceJobCoreService
 from app.services.core.settings_core_service import SettingsCoreService
 from app.services.views._job_status import build_job_status_context
@@ -699,25 +701,20 @@ class ChecksViewService:
             form_kwargs.get("retry_interval_seconds", ""),
             form_kwargs.get("resend_notification_after", ""),
         )
-        job = await MaintenanceJobCoreService.enqueue(
-            db,
-            kind=MaintenanceJobKind.BULK_CHECK_CREATE,
-            target_id=form_kwargs["agent_id"],
-            params={
-                "agent_id": str(form_kwargs["agent_id"]),
-                "requests": [r.model_dump(mode="json") for r in bulk_requests],
-                "alert_ids": [str(a) for a in form_kwargs.get("alert_ids", [])],
-            },
-            owner_id=current_user.id,
-        )
-        logger.info(
-            "Enqueued bulk_check_create maintenance job",
-            extra={
-                "agent_id": str(form_kwargs["agent_id"]),
-                "count": len(bulk_requests),
-                "job_id": str(job.id),
-            },
-        )
+        try:
+            job = await CheckTransferCoreService.enqueue_bulk_create(
+                db,
+                current_user.id,
+                form_kwargs["agent_id"],
+                bulk_requests,
+                list(form_kwargs.get("alert_ids", [])),
+            )
+        except AgentNotFoundException as e:
+            return ChecksViewService.error_response(request, current_user, str(e), 404)
+        except ValidationException as e:
+            return ChecksViewService.error_response(
+                request, current_user, e.message, 400
+            )
         return ChecksViewService.job_status_response(request, current_user, job)
 
     @staticmethod

@@ -7,12 +7,18 @@ refused (422), never silently dropped, and a field every check must have
 cannot be set to null.
 """
 
-from typing import Self
+from typing import Any, Self
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from app.schemas.check_schema import CheckCreate, CheckResponse, CheckUpdate
+from app.models.enum_model import ImportMode
+from app.schemas.check_schema import (
+    BulkCheckCreateRequest,
+    CheckCreate,
+    CheckResponse,
+    CheckUpdate,
+)
 from app.schemas.paginated_response_schema import PaginatedResponse
 
 # Fields every check has: a change may set them, never clear them.
@@ -130,3 +136,29 @@ class DependentsChange(BaseModel):
 
     added: int
     removed: int
+
+
+class AdminBulkCreate(BaseModel):
+    """One check per URL on an agent, each given the alerts named."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    agent_id: UUID = Field(..., description="The agent the new checks run on")
+    items: list[BulkCheckCreateRequest] = Field(..., min_length=1, max_length=BULK_MAX)
+    alert_ids: list[UUID] = Field(default_factory=list, max_length=100)
+
+
+class AdminCheckImport(BaseModel):
+    """Checks to import onto an agent, in the export's form.
+
+    Each entry is validated when the import runs: one that is not a check is
+    that entry's error, never a refusal of the rest.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    mode: ImportMode = Field(
+        ImportMode.MERGE,
+        description="`merge` skips a check whose name the agent has; `replace` overwrites it",
+    )
+    checks: list[dict[str, Any]] = Field(..., min_length=1, max_length=BULK_MAX)

@@ -42,8 +42,11 @@ async def finish(
         "total": total,
         "success_count": done,
         "failure_count": failed,
-        "errors": result["errors"][:_ERRORS_KEPT],
+        "errors": [
+            MaintenanceJobCoreService.readable_error(e)
+            for e in result["errors"][:_ERRORS_KEPT]
+        ],
     }
     if fail_when_nothing_done and done == 0 and failed:
-        raise JobFailed("; ".join(result["errors"]), progress)
+        raise JobFailed("; ".join(progress["errors"]), progress)
     await MaintenanceJobCoreService.update_progress(db, job.id, progress)

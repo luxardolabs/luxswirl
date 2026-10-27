@@ -17,6 +17,7 @@ from app.background.maintenance_handlers import (
     bulk_check_import,
     bulk_check_modify,
 )
+from app.background.maintenance_worker import JobFailed
 from app.core.config import settings
 from app.core.exceptions import AuthorizationException
 from app.core.rate_limit import limiter
@@ -207,7 +208,8 @@ async def test_an_import_job_owned_by_a_non_admin_cannot_rewrite_a_synthetic(
     )
     db.add(job)
     await db.flush()
-    await bulk_check_import.handle(db, job)
+    with pytest.raises(JobFailed, match="no longer an active admin"):
+        await bulk_check_import.handle(db, job)
     after = await _fresh(db, Check, s["synthetic"])
     assert after.target == "https://a.example"
 

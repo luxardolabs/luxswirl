@@ -104,14 +104,19 @@ class MaintenanceJobCoreService:
         await MaintenanceJobCRUD.mark_done(db, job_id)
 
     @staticmethod
-    async def mark_failed(db: AsyncSession, job_id: UUID, error: str) -> None:
-        """Fail the job with `error` as anyone who polls it may read it.
+    def readable_error(error: str) -> str:
+        """`error` as anyone who polls a job may read it.
 
         A database error's text carries the statement and its parameters (a
         check's target or script among them): those are cut, and any
         credential left is masked. The full error is in the worker's log.
         """
-        summary = scrub_text(_SQL_DETAIL.split(error, maxsplit=1)[0].strip())
+        return scrub_text(_SQL_DETAIL.split(error, maxsplit=1)[0].strip())
+
+    @staticmethod
+    async def mark_failed(db: AsyncSession, job_id: UUID, error: str) -> None:
+        """Fail the job with `error` as anyone who polls it may read it."""
+        summary = MaintenanceJobCoreService.readable_error(error)
         await MaintenanceJobCRUD.mark_failed(db, job_id, summary or "Job failed")
 
     @staticmethod

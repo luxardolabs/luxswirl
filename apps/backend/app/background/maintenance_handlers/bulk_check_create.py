@@ -5,12 +5,19 @@ job.params expects {
     "requests": [BulkCheckCreateRequest dict, ...],
     "alert_ids": ["uuid", ...] | [],
 }.
+
+The job runs for its owner only while they may still edit, and keeps what it
+made (counts and first errors) on the job.
 """
 
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.background.maintenance_handlers._bulk_outcome import finish
+from app.background.maintenance_handlers._job_owner import require_owner_may_edit
+from app.core.credential_mask import mask_credentials
+from app.models.enum_model import BulkCheckOutcome
 from app.models.maintenance_job_model import MaintenanceJob
 from app.schemas.check_schema import BulkCheckCreateRequest
 from app.services.core.alert_core_service import AlertCoreService
@@ -30,6 +37,8 @@ async def handle(db: AsyncSession, job: MaintenanceJob) -> None:
     if not raw_requests:
         logger.info("bulk_check_create with empty requests — nothing to do")
         return
+
+    await require_owner_may_edit(db, job)
 
     agent_id = UUID(agent_id_raw) if isinstance(agent_id_raw, str) else agent_id_raw
     requests = [BulkCheckCreateRequest(**r) for r in raw_requests]
@@ -60,4 +69,19 @@ async def handle(db: AsyncSession, job: MaintenanceJob) -> None:
             "failed": result.failed,
             "job_id": str(job.id),
         },
+    )
+    await finish(
+        db,
+        job,
+        "Created",
+        {
+            "success_count": result.succeeded,
+            "failure_count": result.failed,
+            "errors": [
+                f"{mask_credentials(r.url)}: {r.error or 'not created'}"
+                for r in result.results
+                if r.status == BulkCheckOutcome.FAILED
+            ],
+        },
+        fail_when_nothing_done=True,
     )
