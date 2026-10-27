@@ -97,6 +97,28 @@ class SchedulerJobBusyException(LuxSwirlException):
         )
 
 
+class JobNotFoundException(NotFoundException):
+    """Raised when no agent job has the id."""
+
+    def __init__(self, job_id: object):
+        super().__init__(
+            message=f"Job not found: {job_id}", details={"job_id": str(job_id)}
+        )
+
+
+class JobFinishedException(LuxSwirlException):
+    """Raised when a job asked to change has already finished."""
+
+    status_code = 409
+    error_code = "JOB_FINISHED"
+
+    def __init__(self, job_id: object):
+        super().__init__(
+            message=f"Job {job_id} has already finished",
+            details={"job_id": str(job_id)},
+        )
+
+
 class UserNotFoundException(NotFoundException):
     """Raised when no user has the id."""
 

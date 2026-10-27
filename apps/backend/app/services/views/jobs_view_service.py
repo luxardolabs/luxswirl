@@ -23,17 +23,9 @@ from app.schemas.pagination_schema import build_pagination, paginated_url
 from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.check_core_service import CheckCoreService
 from app.services.core.job_api_core_service import JobApiCoreService
-from app.services.core.job_core_service import JobCoreService
+from app.services.core.job_core_service import JOB_CLASSES, JobCoreService
 from app.services.core.settings_core_service import SettingsCoreService
-from app.shared.jobs.base import BaseJob
-from app.shared.jobs.network_discover import NetworkDiscoverJob
-from app.shared.jobs.network_scan import NetworkScanJob
 from app.shared.logger import get_logger
-
-_JOB_REGISTRY: dict[str, type[BaseJob]] = {
-    "network_scan": NetworkScanJob,
-    "network_discover": NetworkDiscoverJob,
-}
 
 logger = get_logger("luxswirl.web.services.jobs")
 
@@ -258,42 +250,40 @@ class JobsViewService:
 
         Raises ValueError if job_type is not registered.
         """
-        job_class = _JOB_REGISTRY.get(job_type)
-        if not job_class:
-            raise ValueError(f"Unknown job type: {job_type}")
+        try:
+            job_class = JOB_CLASSES[JobType(job_type)]
+        except ValueError:
+            raise ValueError(f"Unknown job type: {job_type}") from None
 
         params: dict[str, Any] = {}
-        if hasattr(job_class, "params_schema"):
-            schema_json = job_class.params_schema.model_json_schema()
-            properties = schema_json.get("properties", {})
+        schema_json = job_class.params_schema.model_json_schema()
+        properties = schema_json.get("properties", {})
 
-            for field_name, field_info in properties.items():
-                field_type = field_info.get("type")
-                if field_name in form_data:
-                    value = form_data.get(field_name)
-                    if field_type == "integer":
-                        params[field_name] = int(value) if value else 0
-                    elif field_type == "boolean":
-                        params[field_name] = value == "on" or value == "true"
-                    elif field_type == "array":
-                        if value:
-                            items_type = field_info.get("items", {}).get("type")
-                            if items_type == "integer":
-                                params[field_name] = [
-                                    int(v.strip())
-                                    for v in value.split(",")
-                                    if v.strip()
-                                ]
-                            else:
-                                params[field_name] = [
-                                    v.strip() for v in value.split(",") if v.strip()
-                                ]
+        for field_name, field_info in properties.items():
+            field_type = field_info.get("type")
+            if field_name in form_data:
+                value = form_data.get(field_name)
+                if field_type == "integer":
+                    params[field_name] = int(value) if value else 0
+                elif field_type == "boolean":
+                    params[field_name] = value == "on" or value == "true"
+                elif field_type == "array":
+                    if value:
+                        items_type = field_info.get("items", {}).get("type")
+                        if items_type == "integer":
+                            params[field_name] = [
+                                int(v.strip()) for v in value.split(",") if v.strip()
+                            ]
                         else:
-                            params[field_name] = []
+                            params[field_name] = [
+                                v.strip() for v in value.split(",") if v.strip()
+                            ]
                     else:
-                        params[field_name] = value
-                elif "default" in field_info:
-                    params[field_name] = field_info["default"]
+                        params[field_name] = []
+                else:
+                    params[field_name] = value
+            elif "default" in field_info:
+                params[field_name] = field_info["default"]
 
         return params
 
@@ -304,18 +294,14 @@ class JobsViewService:
         each registered job class.
         """
         job_types: dict[str, dict[str, Any]] = {}
-        for jt, job_class in _JOB_REGISTRY.items():
-            schema_json = (
-                job_class.params_schema.model_json_schema()
-                if hasattr(job_class, "params_schema")
-                else {}
-            )
-            job_types[jt] = {
-                "name": jt,
-                "display_name": getattr(job_class, "display_name", jt),
-                "display_description": getattr(job_class, "display_description", ""),
-                "timeout_seconds": getattr(job_class, "default_timeout_seconds", 300),
-                "requires_agent": getattr(job_class, "requires_agent", False),
+        for jt, job_class in JOB_CLASSES.items():
+            schema_json = job_class.params_schema.model_json_schema()
+            job_types[jt.value] = {
+                "name": jt.value,
+                "display_name": job_class.display_name,
+                "display_description": job_class.display_description,
+                "timeout_seconds": job_class.default_timeout_seconds,
+                "requires_agent": job_class.requires_agent,
                 "schema": schema_json,
                 "properties": schema_json.get("properties", {}),
                 "required": schema_json.get("required", []),

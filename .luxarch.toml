@@ -17,7 +17,7 @@ declared = [
   "CheckArtifactType", "CheckErrorType", "CheckHealthStatus", "CheckType",
   "DnsRecordType", "HttpMethod", "JobStatus", "JobType", "MaintenanceJobKind",
   "MaintenanceJobStatus", "NotificationProviderType", "NotificationStatus",
-  "RegistrationKeyStatus", "SchedulerExecutionStatus", "SchedulerJobCategory",
+  "RegistrationKeyStatus", "ScanCheckKind", "SchedulerExecutionStatus", "SchedulerJobCategory",
   "SchedulerTriggerType", "SettingCategory", "SettingValueType", "UserRole",
 ]
 labelled = ["UserRole", "CheckType"]

@@ -32,7 +32,12 @@ async def _agent(db):
 
 async def _scan_job(db, result: dict):
     job = await JobCoreService.create_job(
-        db, JobCreate(job_type="network_scan", params={"subnet": "192.168.1.0/24"})
+        db,
+        JobCreate(
+            job_type="network_scan",
+            agent_id=(await _agent(db)).id,
+            params={"subnet": "192.168.1.0/24"},
+        ),
     )
     job.result = result
     await db.flush()

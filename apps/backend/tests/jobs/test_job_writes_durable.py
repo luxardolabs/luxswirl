@@ -14,6 +14,7 @@ from app.models.enum_model import JobStatus
 from app.models.job_model import Job
 from app.schemas.job_schema import JobCreate, JobResultSubmit
 from app.services.core.job_core_service import JobCoreService
+from fixtures.factories import make_agent
 from sqlalchemy import select
 
 pytestmark = pytest.mark.integration
@@ -21,8 +22,16 @@ pytestmark = pytest.mark.integration
 
 async def _create(maker) -> UUID:
     async with maker() as s:
+        agent = make_agent()
+        s.add(agent)
+        await s.flush()
         job = await JobCoreService.create_job(
-            s, JobCreate(job_type="network_scan", params={"subnet": "10.0.0.0/30"})
+            s,
+            JobCreate(
+                job_type="network_scan",
+                agent_id=agent.id,
+                params={"subnet": "10.0.0.0/30"},
+            ),
         )
         await s.commit()
         return job.id
