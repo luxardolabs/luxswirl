@@ -12,7 +12,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import ApiEditor, ApiUser
+from app.api.deps import ApiEditor, ApiUser, require_scope
 from app.core.config import settings
 from app.core.query_params import AgentIdFilter, JobStatusFilter, JobTypeFilter
 from app.core.rate_limit import api_token_rate_limit_key, limiter
@@ -28,7 +28,11 @@ from app.schemas.admin_page_schema import MAX_PAGE
 from app.schemas.job_schema import JobResponse
 from app.services.core.admin_job_core_service import AdminJobCoreService
 
-router = APIRouter(prefix="/jobs", tags=["Admin API: Jobs"])
+router = APIRouter(
+    prefix="/jobs",
+    tags=["Admin API: Jobs"],
+    dependencies=[Depends(require_scope("jobs"))],
+)
 
 LIMIT = settings.security.admin_api_rate_limit
 

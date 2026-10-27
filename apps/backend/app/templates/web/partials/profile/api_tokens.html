@@ -1,6 +1,6 @@
 {# The profile panel's API tokens: a newly created token shown once, the list,
    and the create form. Swapped whole into #api-tokens by create and revoke.
-   Vars: current_user, tokens [{token, revoke_url}], create_url,
+   Vars: current_user, tokens [{token, access, revoke_url}], create_url,
          created_token (plaintext, once) or none, created_name, error or none. #}
 {% from 'macros/form_fields.html' import input, select %}
 {% from 'macros/buttons.html' import btn_create, btn_copy, confirm_action_btn %}
@@ -19,7 +19,7 @@
             </div>
             {{ btn_copy(extra_classes='absolute right-2 top-1/2 -translate-y-1/2 px-3 py-1 text-sm', extra_attrs='type="button" data-copy-source="api-token-value"') }}
         </div>
-        <p class="text-xs text-dark-text-muted">Send it as <code>Authorization: Bearer &lt;token&gt;</code> to <code>/api/v1/admin</code>. It acts as you, with your role.</p>
+        <p class="text-xs text-dark-text-muted">Send it as <code>Authorization: Bearer &lt;token&gt;</code> to <code>/api/v1/admin</code>. It acts as you, with your role, narrowed to the access you gave it.</p>
     </div>
     {% endif %}
 
@@ -29,7 +29,8 @@
         <li class="p-3 bg-dark-bg-tertiary rounded-lg border border-dark-border flex items-start justify-between gap-3">
             <div class="min-w-0 space-y-1 text-xs">
                 <p class="text-sm font-medium text-dark-text-primary truncate">{{ row.token.name }}</p>
-                <p class="font-mono text-dark-text-muted">{{ row.token.token_prefix }}…</p>
+                <p class="font-mono text-dark-text-muted">{{ row.token.token_prefix }}…
+                    · <span class="font-sans">{% if row.access == 'read' %}read only{% elif row.access == 'write' %}read and write{% elif row.access == 'full' %}full access{% else %}{{ row.token.scopes|join(', ') }}{% endif %}</span></p>
                 <p class="text-dark-text-muted">
                     Created {{ row.token.created_at|format_datetime("%b %d, %Y") }}
                     · {% if row.token.last_used_at %}last used {{ row.token.last_used_at|format_datetime("%b %d, %Y %I:%M%p") }}{% else %}never used{% endif %}
@@ -47,7 +48,7 @@
     {% endif %}
 
     <form hx-post="{{ create_url }}" hx-target="#api-tokens" hx-swap="outerHTML" class="space-y-3">
-        <div class="grid grid-cols-3 gap-3">
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div class="col-span-2">
                 <label class="label text-sm" for="api_token_name">Name <span class="text-red-400">*</span></label>
                 {{ input(name="name", id="api_token_name", placeholder="Terraform, CI, ...", required=true, class="input w-full", extra_attrs='maxlength="100"') }}
@@ -59,6 +60,14 @@
                     <option value="90" selected>90 days</option>
                     <option value="365">1 year</option>
                     <option value="">Never</option>
+                {% endcall %}
+            </div>
+            <div>
+                <label class="label text-sm" for="api_token_access">Access</label>
+                {% call select(name="access", id="api_token_access", class="input w-full") %}
+                    <option value="read" selected>Read only</option>
+                    <option value="write">Read and write</option>
+                    <option value="full">Full (your role)</option>
                 {% endcall %}
             </div>
         </div>

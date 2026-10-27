@@ -57,7 +57,7 @@ async def _user(
     db.add(user)
     await db.flush()
     _, plaintext = await ApiTokenCoreService.create_token(
-        db, user.id, ApiTokenCreate(name=role)
+        db, user.id, ApiTokenCreate(name=role, scopes=["*"])
     )
     return user, {"Authorization": f"Bearer {plaintext}"}
 

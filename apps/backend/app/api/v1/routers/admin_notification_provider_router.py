@@ -11,7 +11,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import ApiEditor, ApiUser
+from app.api.deps import ApiEditor, ApiUser, require_scope
 from app.core.config import settings
 from app.core.query_params import ProviderTypeFilter
 from app.core.rate_limit import api_token_rate_limit_key, limiter
@@ -30,7 +30,9 @@ from app.services.core.admin_notification_core_service import (
 )
 
 router = APIRouter(
-    prefix="/notification-providers", tags=["Admin API: Notification providers"]
+    prefix="/notification-providers",
+    tags=["Admin API: Notification providers"],
+    dependencies=[Depends(require_scope("notifications"))],
 )
 
 LIMIT = settings.security.admin_api_rate_limit

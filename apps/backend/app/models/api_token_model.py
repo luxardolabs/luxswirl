@@ -5,7 +5,7 @@ API token model - a user's bearer credential for the admin API.
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import ForeignKey, Index, String, Uuid
+from sqlalchemy import ARRAY, ForeignKey, Index, String, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base_model import UUIDBaseModel
@@ -15,8 +15,8 @@ class ApiToken(UUIDBaseModel):
     """
     API token model - one of a user's tokens for `/api/v1/admin`.
 
-    A token acts as its user: the same role, and refused once the user is
-    inactive or locked. Only the SHA-256 of the token is stored; the plaintext
+    A token acts as its user, narrowed by its scopes: it may do what both the
+    user's role and its scopes allow, and is refused once the user is inactive. Only the SHA-256 of the token is stored; the plaintext
     is shown once, at creation.
     """
 
@@ -48,6 +48,12 @@ class ApiToken(UUIDBaseModel):
         String(12),
         nullable=False,
         comment="The token's first characters, to recognise it in a list",
+    )
+
+    scopes: Mapped[list[str]] = mapped_column(
+        ARRAY(String(64)),
+        nullable=False,
+        comment="What the token may do: family:action scopes narrowing its user's role",
     )
 
     last_used_at: Mapped[datetime | None] = mapped_column(

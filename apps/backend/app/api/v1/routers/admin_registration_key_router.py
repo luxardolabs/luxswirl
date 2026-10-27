@@ -10,7 +10,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import ApiAdmin
+from app.api.deps import ApiAdmin, require_scope
 from app.core.config import settings
 from app.core.rate_limit import api_token_rate_limit_key, limiter
 from app.db import get_db
@@ -26,7 +26,11 @@ from app.services.core.admin_registration_key_core_service import (
     AdminRegistrationKeyCoreService,
 )
 
-router = APIRouter(prefix="/registration-keys", tags=["Admin API: Registration keys"])
+router = APIRouter(
+    prefix="/registration-keys",
+    tags=["Admin API: Registration keys"],
+    dependencies=[Depends(require_scope("registration_keys", admin_writes=True))],
+)
 
 LIMIT = settings.security.admin_api_rate_limit
 

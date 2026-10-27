@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.rate_limit import limiter
 from app.db import get_db
+from app.models.enum_model import ApiTokenAccess
 from app.services.views.profile_view_service import ProfileViewService
 from app.shared.logger import get_logger
 from app.web.deps import CurrentUserWeb
@@ -56,13 +57,14 @@ async def create_api_token(
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     name: Annotated[str, Form()],
     expires_in_days: Annotated[str | None, Form()] = None,
+    access: Annotated[ApiTokenAccess, Form()] = ApiTokenAccess.READ,
 ) -> HTMLResponse:
     """Create an API token for the user; it is shown this once."""
     return templates.TemplateResponse(
         request,
         "partials/profile/api_tokens.html",
         await ProfileViewService.create_api_token(
-            db, request, user, name, expires_in_days
+            db, request, user, name, expires_in_days, access
         ),
     )
 

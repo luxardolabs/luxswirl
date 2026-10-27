@@ -12,7 +12,7 @@ required = true
 
 [target.enums]
 declared = [
-  "AgentApprovalStatus", "AgentStatus", "AlertTriggerType",
+  "AgentApprovalStatus", "AgentStatus", "AlertTriggerType", "ApiTokenAccess",
   "ArtifactContentType", "AssignmentMode", "BulkCheckOutcome",
   "CheckArtifactType", "CheckErrorType", "CheckHealthStatus", "CheckType",
   "DnsRecordType", "HttpMethod", "ImportMode", "JobStatus", "JobType", "MaintenanceJobKind",

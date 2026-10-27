@@ -361,6 +361,14 @@ class SettingValueType(StrEnum):
     DICT = "dict"
 
 
+class ApiTokenAccess(StrEnum):
+    """The scope presets the web form offers a new API token."""
+
+    READ = "read"  # *:read
+    WRITE = "write"  # *:read and *:write
+    FULL = "full"  # *: everything the user's role allows
+
+
 class UserRole(StrEnum):
     """Role granted to a user account; controls authorization."""
 

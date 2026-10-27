@@ -12,7 +12,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import ApiEditor, ApiUser
+from app.api.deps import ApiEditor, ApiUser, require_scope
 from app.core.config import settings
 from app.core.rate_limit import api_token_rate_limit_key, limiter
 from app.db import get_db
@@ -27,7 +27,11 @@ from app.schemas.agent_schema import AgentResponse
 from app.schemas.maintenance_job_schema import MaintenanceJobResponse
 from app.services.core.admin_agent_core_service import AdminAgentCoreService
 
-router = APIRouter(prefix="/agents", tags=["Admin API: Agents"])
+router = APIRouter(
+    prefix="/agents",
+    tags=["Admin API: Agents"],
+    dependencies=[Depends(require_scope("agents"))],
+)
 
 LIMIT = settings.security.admin_api_rate_limit
 

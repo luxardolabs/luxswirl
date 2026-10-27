@@ -57,6 +57,7 @@ async def _user(db: AsyncSession, **overrides):
 
 
 async def _token(db: AsyncSession, user, **create) -> tuple[str, str]:
+    create.setdefault("scopes", ["*"])
     data = ApiTokenCreate(name=create.pop("name", "script"), **create)
     token, plaintext = await ApiTokenCoreService.create_token(db, user.id, data)
     return str(token.id), plaintext
@@ -322,7 +323,7 @@ async def test_the_admin_openapi_document_holds_only_the_admin_apis_schemas(
 @pytest.mark.parametrize("name", ["a\x00b", "tab\there", "line\nbreak", "del\x7f"])
 def test_a_token_name_with_a_control_character_is_refused(name: str) -> None:
     with pytest.raises(ValueError):
-        ApiTokenCreate(name=name)
+        ApiTokenCreate(name=name, scopes=["*"])
 
 
 def _request(authorization: str) -> Request:

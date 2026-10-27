@@ -9,7 +9,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import ApiUser
+from app.api.deps import ApiUser, require_scope
 from app.core.config import settings
 from app.core.query_params import AlertIdFilter, NotifStatusFilter, ProviderIdFilter
 from app.core.rate_limit import api_token_rate_limit_key, limiter
@@ -20,7 +20,11 @@ from app.services.core.admin_notification_core_service import (
     AdminNotificationCoreService,
 )
 
-router = APIRouter(prefix="/notification-logs", tags=["Admin API: Notification logs"])
+router = APIRouter(
+    prefix="/notification-logs",
+    tags=["Admin API: Notification logs"],
+    dependencies=[Depends(require_scope("notifications"))],
+)
 
 LIMIT = settings.security.admin_api_rate_limit
 

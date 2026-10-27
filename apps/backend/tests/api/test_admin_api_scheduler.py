@@ -66,7 +66,7 @@ async def _as(maker, role: str) -> dict[str, str]:
         s.add(user)
         await s.flush()
         _, plaintext = await ApiTokenCoreService.create_token(
-            s, user.id, ApiTokenCreate(name=role)
+            s, user.id, ApiTokenCreate(name=role, scopes=["*"])
         )
         await s.commit()
     return {"Authorization": f"Bearer {plaintext}"}
