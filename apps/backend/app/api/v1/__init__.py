@@ -18,6 +18,8 @@ from app.api.v1.routers import (
     admin_check_router,
     admin_identity_router,
     admin_maintenance_job_router,
+    admin_notification_log_router,
+    admin_notification_provider_router,
     admin_registration_key_router,
     agent_router,
     artifact_router,
@@ -43,6 +45,12 @@ admin_api_router = APIRouter(prefix="/admin")
 admin_api_router.include_router(admin_identity_router.router)  # Who am I, OpenAPI
 admin_api_router.include_router(admin_agent_router.router)  # Agents
 admin_api_router.include_router(admin_alert_router.router)  # Alert rules
+admin_api_router.include_router(
+    admin_notification_provider_router.router
+)  # Where alerts send
+admin_api_router.include_router(
+    admin_notification_log_router.router
+)  # Every notification attempt
 admin_api_router.include_router(admin_check_router.router)  # Checks
 admin_api_router.include_router(
     admin_check_result_router.router
