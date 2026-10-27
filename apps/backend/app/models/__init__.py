@@ -34,6 +34,7 @@ from app.models.enum_model import (
 )
 from app.models.job_model import Job
 from app.models.maintenance_job_model import MaintenanceJob
+from app.models.mcp_tool_call_model import MCPToolCall
 from app.models.notification_log_model import NotificationLog
 from app.models.notification_provider_model import NotificationProvider
 from app.models.registration_key_model import RegistrationKey
@@ -61,6 +62,7 @@ __all__ = [
     "NotificationLog",
     "Job",
     "MaintenanceJob",
+    "MCPToolCall",
     "JobConfiguration",
     "JobExecution",
     "Setting",
