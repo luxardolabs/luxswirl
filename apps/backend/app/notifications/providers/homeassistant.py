@@ -9,6 +9,7 @@ from typing import Any
 import httpx
 from fastapi.encoders import jsonable_encoder
 
+from app.core.check_target_validator import validate_check_target
 from app.core.credential_mask import mask_url_paths
 from app.notifications.providers.base import (
     BaseNotificationProvider,
@@ -49,6 +50,10 @@ class HomeAssistantNotificationProvider(BaseNotificationProvider):
 
         # Validate URL format
         url = config["post_url"]
+        # The same network policy as a webhook and a check target: a private
+        # address is fine, a cloud metadata endpoint is not. Raises
+        # CheckTargetBlockedError (a ValueError).
+        validate_check_target(url, block_cloud_metadata=True)
         if not url.startswith(("http://", "https://")):
             raise ValueError(
                 f"Invalid Home Assistant URL: {url}. Must start with http:// or https://"
@@ -78,6 +83,8 @@ class HomeAssistantNotificationProvider(BaseNotificationProvider):
         try:
             # Build request
             url = self.config["post_url"]
+            # Re-validate at send time: defends against DNS rebinding between config and send.
+            validate_check_target(url, block_cloud_metadata=True)
             timeout = self.config.get("timeout", 10)
             verify_ssl = self.config.get("verify_ssl", True)
 

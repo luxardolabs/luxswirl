@@ -26,6 +26,7 @@ from app.schemas.notification_provider_schema import (
     NotificationProviderInDB,
     NotificationProviderUpdate,
 )
+from app.shared.log_redaction import scrub_text
 from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.services.notification")
@@ -161,6 +162,7 @@ class NotificationCoreService:
             provider_type=data.provider_type,
             friendly_name=data.friendly_name,
             config=data.config,
+            is_enabled=data.is_enabled,
             is_default_enabled=data.is_default_enabled,
             rate_limit_count=data.rate_limit_count,
             rate_limit_window_minutes=data.rate_limit_window_minutes,
@@ -230,10 +232,11 @@ class NotificationCoreService:
         if data.is_default_enabled is not None:
             provider.is_default_enabled = data.is_default_enabled
 
-        if data.rate_limit_count is not None:
+        # A rate limit sent as null is removed; one left out is unchanged.
+        if "rate_limit_count" in data.model_fields_set:
             provider.rate_limit_count = data.rate_limit_count
 
-        if data.rate_limit_window_minutes is not None:
+        if "rate_limit_window_minutes" in data.model_fields_set:
             provider.rate_limit_window_minutes = data.rate_limit_window_minutes
 
         provider = await NotificationProviderCRUD.save_provider(db, provider)
@@ -469,7 +472,9 @@ class NotificationCoreService:
         if isinstance(error, httpx.HTTPStatusError):
             response = error.response
             return f"HTTP {response.status_code} {response.reason_phrase}".strip()
-        detail = mask_url_paths(str(error)) or ""
+        # The text can also carry a header or token the request was sent with
+        # (an httpx protocol error quotes the offending header value).
+        detail = scrub_text(mask_url_paths(str(error)) or "")
         return f"{type(error).__name__}: {detail}" if detail else type(error).__name__
 
     @staticmethod

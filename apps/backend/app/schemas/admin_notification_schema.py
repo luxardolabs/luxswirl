@@ -61,6 +61,10 @@ class AdminProviderCreate(NotificationProviderCreate):
     model_config = ConfigDict(extra="forbid")
 
 
+# What a change may clear with null: a provider's rate limit.
+_CLEARABLE = frozenset({"rate_limit_count", "rate_limit_window_minutes"})
+
+
 class AdminProviderUpdate(NotificationProviderUpdate):
     """A change to a provider: the fields sent; a config is replaced whole."""
 
@@ -68,7 +72,9 @@ class AdminProviderUpdate(NotificationProviderUpdate):
 
     @model_validator(mode="after")
     def _none_cleared(self) -> Self:
-        cleared = [f for f in self.model_fields_set if getattr(self, f) is None]
+        cleared = [
+            f for f in self.model_fields_set - _CLEARABLE if getattr(self, f) is None
+        ]
         if cleared:
             raise ValueError(
                 f"These fields cannot be null: {', '.join(sorted(cleared))}"
