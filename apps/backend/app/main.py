@@ -37,6 +37,7 @@ from app.background.maintenance_worker import (
 )
 from app.cli import bootstrap_on_startup
 from app.core.config import settings
+from app.core.display_settings import update_display_settings
 from app.core.exceptions import LuxSwirlException, value_error_message
 from app.core.logging_config import configure_logging
 from app.core.logging_options import logging_options
@@ -81,7 +82,6 @@ from app.web.routers.settings_router import router as settings_router
 from app.web.routers.status_pages_router import router as status_pages_router
 from app.web.routers.status_router import router as status_router
 from app.web.routers.users_router import router as web_users_router
-from app.web.template_filters import update_settings_cache
 
 # The fleet logging setup, once per process, before anything is served. At import
 # time, so the uvicorn --reload worker (which re-imports this module) gets it too.
@@ -137,7 +137,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
         # Load general settings and update template filter cache
         general_settings = await SettingsCoreService.get_general_settings(db)
-        update_settings_cache(
+        update_display_settings(
             timezone=general_settings.get("timezone"),
             date_format=general_settings.get("date_format"),
             time_format=general_settings.get("time_format"),

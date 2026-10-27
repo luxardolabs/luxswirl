@@ -47,6 +47,12 @@ class SettingCRUD:
         return set(result.scalars())
 
     @staticmethod
+    async def list_all(db: AsyncSession) -> Sequence[Setting]:
+        # unbounded-reads: the settings catalogue (one row per default)
+        result = await db.execute(select(Setting).order_by(Setting.key))
+        return result.scalars().all()
+
+    @staticmethod
     async def list_by_category(db: AsyncSession, category: str) -> Sequence[Setting]:
         result = await db.execute(
             select(Setting).where(Setting.category == category).order_by(Setting.key)

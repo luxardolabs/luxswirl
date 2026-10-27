@@ -9,8 +9,10 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.default_settings import DEFAULT_SETTINGS
-from app.core.exceptions import NotFoundException
+from app.core.display_settings import update_display_settings
+from app.core.exceptions import NotFoundException, ValidationException
 from app.crud.setting_crud import SettingCRUD
+from app.models.enum_model import SettingValueType
 from app.models.setting_model import Setting
 from app.schemas.setting_schema import (
     AlertDefaults,
@@ -19,11 +21,48 @@ from app.schemas.setting_schema import (
     SettingResponse,
     SettingScalar,
 )
+from app.services.core.timescale_core_service import TimescaleCoreService
 from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.services.settings")
 
 _T = TypeVar("_T")
+
+# Settings whose value is generated, never set to a chosen one. Each is a
+# secret, so every read outside the setting's own use shows it masked.
+GENERATED_KEYS = frozenset({"metrics.bearer_token"})
+
+# The display preference each display setting sets.
+_DISPLAY_KEYS = {
+    "general.timezone": "timezone",
+    "general.date_format": "date_format",
+    "general.time_format": "time_format",
+}
+
+# The TimescaleDB policy each database setting sets: (relation, policy).
+_POLICIES = {
+    "database.retention_days": ("check_results", "retention"),
+    "database.compress_after_days": ("check_results", "compression"),
+    "database.hourly_aggregate_retention_days": ("check_results_hourly", "retention"),
+    "database.daily_aggregate_retention_days": ("check_results_daily", "retention"),
+}
+
+
+def _fits_type(value: SettingScalar, value_type: object) -> bool:
+    """Whether `value` is of the setting's stored type (a bool is no number)."""
+    if isinstance(value, bool):
+        return value_type == SettingValueType.BOOL
+    if value_type == SettingValueType.INT:
+        return isinstance(value, int)
+    if value_type == SettingValueType.FLOAT:
+        return isinstance(value, int | float)
+    if value_type == SettingValueType.STRING:
+        return isinstance(value, str)
+    if value_type == SettingValueType.LIST:
+        return isinstance(value, list)
+    if value_type == SettingValueType.DICT:
+        return isinstance(value, dict)
+    return False
 
 
 class SettingsCoreService:
@@ -92,6 +131,18 @@ class SettingsCoreService:
         return None if setting is None else SettingResponse.model_validate(setting)
 
     @staticmethod
+    async def list_settings(
+        db: AsyncSession, category: str | None = None
+    ) -> list[SettingResponse]:
+        """Every setting by key, or one category's."""
+        rows = (
+            await SettingCRUD.list_all(db)
+            if category is None
+            else await SettingCRUD.list_by_category(db, category)
+        )
+        return [SettingResponse.model_validate(setting) for setting in rows]
+
+    @staticmethod
     async def get_settings_by_category(
         db: AsyncSession,
         category: str,
@@ -144,11 +195,60 @@ class SettingsCoreService:
         setting.set_typed_value(new_value)
         setting = await SettingCRUD.save_setting(db, setting)
 
-        logger.info(
-            "Updated setting",
-            extra={"setting_key": key, "new_value": new_value},
-        )
+        # The key alone: a value can be a secret (the metrics bearer token).
+        logger.info("Updated setting", extra={"setting_key": key})
         return SettingResponse.model_validate(setting)
+
+    @staticmethod
+    async def set_setting(
+        db: AsyncSession, key: str, new_value: SettingScalar
+    ) -> SettingResponse:
+        """Set a setting to a chosen value, by any path, and apply what it governs.
+
+        The value must be of the setting's stored type and meet its validation
+        rules. A generated setting (the metrics bearer token) is not set this way.
+
+        Raises:
+            NotFoundException: No setting has the key.
+            ValidationException: The value does not fit the setting.
+        """
+        setting = await SettingCRUD.get_by_key(db, key)
+        if not setting:
+            raise NotFoundException(f"Setting with key '{key}' not found")
+        if key in GENERATED_KEYS:
+            raise ValidationException(f"{key} is generated, not set to a value")
+        stored: object = setting.value
+        value_type = stored.get("type") if isinstance(stored, dict) else None
+        if not _fits_type(new_value, value_type):
+            raise ValidationException(f"{key} takes a {value_type} value")
+        if value_type == SettingValueType.FLOAT and isinstance(new_value, int):
+            new_value = float(new_value)
+        try:
+            SettingsCoreService._validate_value(new_value, setting.validation)
+        except ValueError as e:
+            raise ValidationException(str(e)) from None
+        updated = await SettingsCoreService.update_setting(db, key, new_value)
+        await SettingsCoreService._apply(db, key, new_value)
+        return updated
+
+    @staticmethod
+    async def _apply(db: AsyncSession, key: str, value: SettingScalar) -> None:
+        """Make what the setting governs follow its new value."""
+        preference = _DISPLAY_KEYS.get(key)
+        if preference is not None and isinstance(value, str):
+            update_display_settings(**{preference: value})
+        policy = _POLICIES.get(key)
+        if policy is None or isinstance(value, bool) or not isinstance(value, int):
+            return
+        relation, kind = policy
+        if kind == "compression":
+            await TimescaleCoreService.update_compression_policy(db, relation, value)
+        else:
+            await TimescaleCoreService.update_retention_policy(db, relation, value)
+        logger.info(
+            "Updated TimescaleDB policy",
+            extra={"setting_key": key, "relation": relation, "days": value},
+        )
 
     @staticmethod
     async def reset_setting(
@@ -183,11 +283,9 @@ class SettingsCoreService:
             default_value = stored_default
         setting.set_typed_value(default_value)
         setting = await SettingCRUD.save_setting(db, setting)
+        await SettingsCoreService._apply(db, key, default_value)
 
-        logger.info(
-            "Reset setting to default",
-            extra={"setting_key": key, "default_value": default_value},
-        )
+        logger.info("Reset setting to default", extra={"setting_key": key})
         return SettingResponse.model_validate(setting)
 
     @staticmethod
@@ -270,14 +368,18 @@ class SettingsCoreService:
         if not isinstance(validation, dict):
             return  # No rules (NULL, or the JSON null literal) - nothing to check
 
-        # Min/max validation
-        if "min" in validation and value < validation["min"]:
-            raise ValueError(f"Value {value} is less than minimum {validation['min']}")
-
-        if "max" in validation and value > validation["max"]:
-            raise ValueError(
-                f"Value {value} is greater than maximum {validation['max']}"
-            )
+        # Min/max validation, for a number (any other value is no number)
+        if "min" in validation or "max" in validation:
+            if isinstance(value, bool) or not isinstance(value, int | float):
+                raise ValueError(f"Value {value!r} is not a number")
+            if "min" in validation and value < validation["min"]:
+                raise ValueError(
+                    f"Value {value} is less than minimum {validation['min']}"
+                )
+            if "max" in validation and value > validation["max"]:
+                raise ValueError(
+                    f"Value {value} is greater than maximum {validation['max']}"
+                )
 
         # Enum validation
         if "enum" in validation and value not in validation["enum"]:

@@ -33,13 +33,8 @@ from app.services.core.alert_core_service import AlertCoreService
 from app.services.core.notification_core_service import NotificationCoreService
 from app.services.core.registration_key_core_service import RegistrationKeyCoreService
 from app.services.core.settings_core_service import SettingsCoreService
-from app.services.core.timescale_core_service import TimescaleCoreService
 from app.services.core.user_core_service import UserCoreService
-from app.shared.logger import get_logger
-from app.web.template_filters import update_settings_cache
 from app.web.templates import templates
-
-logger = get_logger("luxswirl.web.services.settings")
 
 
 def build_setting_urls(request: Request, key: str) -> SettingUrls:
@@ -99,23 +94,16 @@ class SettingsViewService:
             value_type = setting.value.get("type")
             parsed_value = SettingsViewService._parse_value(value, value_type)
 
-            # Update setting
-            updated_setting = await SettingsCoreService.update_setting(
+            # Set it; the core applies what the setting governs.
+            updated_setting = await SettingsCoreService.set_setting(
                 db, key, parsed_value
             )
-
-            # Update template filter cache if needed
-            SettingsViewService._update_template_cache_if_needed(key, parsed_value)
-
-            # Update TimescaleDB policies if database setting was changed
-            await SettingsViewService._update_timescale_policies_if_needed(
-                db, key, parsed_value
-            )
-
             return updated_setting, None
 
         except ValueError as e:
             return None, f"Invalid value format: {value_error_message(e)}"
+        except ValidationException as e:
+            return None, e.message
 
     @staticmethod
     def _parse_value(value: str, value_type: str | None) -> SettingScalar:
@@ -137,90 +125,6 @@ class SettingsViewService:
             return value.lower() in ("true", "1", "yes", "on")
         else:
             return value
-
-    @staticmethod
-    def _update_template_cache_if_needed(key: str, parsed_value: SettingScalar) -> None:
-        """
-        Update template filter cache if display setting was changed.
-
-        Args:
-            key: Setting key
-            parsed_value: New value
-
-        Raises:
-            ValidationException: A display setting's value is not a string.
-        """
-        if key in ("general.timezone", "general.date_format", "general.time_format"):
-            if not isinstance(parsed_value, str):
-                raise ValidationException(
-                    f"{key} must be a string", details={"setting_key": key}
-                )
-            if key == "general.timezone":
-                update_settings_cache(timezone=parsed_value)
-            elif key == "general.date_format":
-                update_settings_cache(date_format=parsed_value)
-            elif key == "general.time_format":
-                update_settings_cache(time_format=parsed_value)
-            logger.info(
-                "Updated template filter cache",
-                extra={"setting_key": key},
-            )
-
-    @staticmethod
-    async def _update_timescale_policies_if_needed(
-        db: AsyncSession,
-        key: str,
-        parsed_value: SettingScalar,
-    ) -> None:
-        """
-        Update TimescaleDB policies if database setting was changed.
-
-        Args:
-            db: Database session
-            key: Setting key
-            parsed_value: New value (days)
-
-        Raises:
-            ValidationException: A database setting's value is not a whole number.
-        """
-        if key.startswith("database."):
-            if isinstance(parsed_value, bool) or not isinstance(parsed_value, int):
-                raise ValidationException(
-                    f"{key} must be a whole number of days",
-                    details={"setting_key": key},
-                )
-            if key == "database.retention_days":
-                await TimescaleCoreService.update_retention_policy(
-                    db, "check_results", parsed_value
-                )
-                logger.info(
-                    "Updated check_results retention policy",
-                    extra={"retention_days": parsed_value},
-                )
-            elif key == "database.compress_after_days":
-                await TimescaleCoreService.update_compression_policy(
-                    db, "check_results", parsed_value
-                )
-                logger.info(
-                    "Updated check_results compression policy",
-                    extra={"compression_days": parsed_value},
-                )
-            elif key == "database.hourly_aggregate_retention_days":
-                await TimescaleCoreService.update_retention_policy(
-                    db, "check_results_hourly", parsed_value
-                )
-                logger.info(
-                    "Updated check_results_hourly retention policy",
-                    extra={"retention_days": parsed_value},
-                )
-            elif key == "database.daily_aggregate_retention_days":
-                await TimescaleCoreService.update_retention_policy(
-                    db, "check_results_daily", parsed_value
-                )
-                logger.info(
-                    "Updated check_results_daily retention policy",
-                    extra={"retention_days": parsed_value},
-                )
 
     @staticmethod
     async def get_grouped_security_settings(
@@ -245,32 +149,31 @@ class SettingsViewService:
         return dict(sorted(security_groups.items()))
 
     @staticmethod
-    async def reset_setting_with_cache_update(
+    async def reset_setting_card(
         db: AsyncSession,
+        request: Request,
+        current_user: AuthedUser,
         key: str,
-    ) -> SettingResponse:
+    ) -> tuple[dict[str, Any], str]:
         """
-        Reset a setting to its default value and update template cache if needed.
+        Reset a setting to its default (the core applies what it governs).
 
         Args:
             db: Database session
+            request: The request, for the card's links
+            current_user: Who is signed in
             key: Setting key
 
         Returns:
-            Updated setting object
+            The refreshed card's context, and the toast to show.
         """
-        updated_setting = await SettingsCoreService.reset_setting(db, key)
-
-        # Update template filter cache if display setting was reset
-        if key in ("general.timezone", "general.date_format", "general.time_format"):
-            reset_value = updated_setting.value.get("value")
-            SettingsViewService._update_template_cache_if_needed(key, reset_value)
-            logger.info(
-                "Reset template filter cache to default",
-                extra={"setting_key": key, "reset_value": reset_value},
-            )
-
-        return updated_setting
+        setting = await SettingsCoreService.reset_setting(db, key)
+        return (
+            SettingsViewService.build_setting_card_context(
+                request, current_user, setting
+            ),
+            f"Setting '{setting.display_name}' reset to default",
+        )
 
     @staticmethod
     async def update_metrics_timeout(
