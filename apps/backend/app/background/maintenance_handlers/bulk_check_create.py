@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.background.maintenance_handlers._bulk_outcome import finish
 from app.background.maintenance_handlers._job_owner import require_owner_may_edit
 from app.core.credential_mask import mask_credentials
+from app.core.exceptions import NotFoundException
 from app.models.enum_model import BulkCheckOutcome
 from app.models.maintenance_job_model import MaintenanceJob
 from app.schemas.check_schema import BulkCheckCreateRequest
@@ -54,13 +55,23 @@ async def handle(db: AsyncSession, job: MaintenanceJob) -> None:
 
     result = await CheckCoreService.bulk_create_checks(db, agent_id, requests)
 
-    if alert_ids and result.results:
-        check_ids = [r.check_id for r in result.results if r.check_id]
+    # An alert deleted since the job was queued is reported, not assigned.
+    alert_errors: list[str] = []
+    check_ids = [r.check_id for r in result.results if r.check_id]
+    if check_ids:
         for alert_id_str in alert_ids:
-            if alert_id_str:
-                await AlertCoreService.bulk_assign_to_checks(
-                    db, UUID(alert_id_str), check_ids
+            if not alert_id_str:
+                continue
+            try:
+                await AlertCoreService.get_alert_by_id(db, UUID(alert_id_str))
+            except NotFoundException:
+                alert_errors.append(
+                    f"Alert {alert_id_str} no longer exists; it was not assigned"
                 )
+                continue
+            await AlertCoreService.bulk_assign_to_checks(
+                db, UUID(alert_id_str), check_ids
+            )
 
     logger.info(
         "Bulk create complete",
@@ -81,7 +92,8 @@ async def handle(db: AsyncSession, job: MaintenanceJob) -> None:
                 f"{mask_credentials(r.url)}: {r.error or 'not created'}"
                 for r in result.results
                 if r.status == BulkCheckOutcome.FAILED
-            ],
+            ]
+            + alert_errors,
         },
         fail_when_nothing_done=True,
     )

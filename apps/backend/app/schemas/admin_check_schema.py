@@ -7,7 +7,7 @@ refused (422), never silently dropped, and a field every check must have
 cannot be set to null.
 """
 
-from typing import Any, Self
+from typing import Self
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -19,6 +19,7 @@ from app.schemas.check_schema import (
     CheckResponse,
     CheckUpdate,
 )
+from app.schemas.import_export_schema import CheckExport
 from app.schemas.paginated_response_schema import PaginatedResponse
 
 # Fields every check has: a change may set them, never clear them.
@@ -138,21 +139,28 @@ class DependentsChange(BaseModel):
     removed: int
 
 
+class AdminBulkCreateItem(BulkCheckCreateRequest):
+    """One URL to make a check from; a field it does not take is refused."""
+
+    model_config = ConfigDict(extra="forbid")
+
+
 class AdminBulkCreate(BaseModel):
     """One check per URL on an agent, each given the alerts named."""
 
     model_config = ConfigDict(extra="forbid")
 
     agent_id: UUID = Field(..., description="The agent the new checks run on")
-    items: list[BulkCheckCreateRequest] = Field(..., min_length=1, max_length=BULK_MAX)
+    items: list[AdminBulkCreateItem] = Field(..., min_length=1, max_length=BULK_MAX)
     alert_ids: list[UUID] = Field(default_factory=list, max_length=100)
 
 
 class AdminCheckImport(BaseModel):
     """Checks to import onto an agent, in the export's form.
 
-    Each entry is validated when the import runs: one that is not a check is
-    that entry's error, never a refusal of the rest.
+    Every entry is held to that form here, so one the import cannot take is a
+    422 naming it and nothing is queued. A check the database then refuses
+    when the job runs is that entry's error, never the rest's.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -161,4 +169,4 @@ class AdminCheckImport(BaseModel):
         ImportMode.MERGE,
         description="`merge` skips a check whose name the agent has; `replace` overwrites it",
     )
-    checks: list[dict[str, Any]] = Field(..., min_length=1, max_length=BULK_MAX)
+    checks: list[CheckExport] = Field(..., min_length=1, max_length=BULK_MAX)

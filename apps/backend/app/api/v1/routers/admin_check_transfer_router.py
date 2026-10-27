@@ -57,6 +57,6 @@ async def admin_import_agent_checks(
     """Import checks onto the agent in the background. Poll
     `/api/v1/admin/maintenance-jobs/{id}` for the outcome.
     """
-    return await CheckTransferCoreService.enqueue_import(
+    return await CheckTransferCoreService.enqueue_import_checks(
         db, principal.user.id, agent_id, data.mode, data.checks
     )

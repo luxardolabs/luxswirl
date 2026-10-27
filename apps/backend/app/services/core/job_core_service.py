@@ -18,6 +18,7 @@ from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.core.error_summary import validation_summary
 from app.core.exceptions import (
     AgentNotFoundException,
     JobNotFoundException,
@@ -82,11 +83,9 @@ class JobCoreService:
         try:
             parsed = JOB_CLASSES[job_type].params_schema.model_validate(params)
         except ValidationError as e:
-            problems = "; ".join(
-                f"{'.'.join(str(part) for part in err['loc']) or 'params'}: {err['msg']}"
-                for err in e.errors(include_input=False)
-            )
-            raise ValidationException(f"Invalid {job_type} params: {problems}") from e
+            raise ValidationException(
+                f"Invalid {job_type} params: {validation_summary(e)}"
+            ) from e
         return parsed.model_dump(mode="json")
 
     @staticmethod
