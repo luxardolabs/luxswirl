@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import AgentNotFoundException
 from app.db import get_db
+from app.models.enum_model import ImportMode
 from app.services.views.import_export_view_service import ImportExportViewService
 from app.shared.logger import get_logger
 from app.web.deps import AdminUserWeb
@@ -69,8 +70,7 @@ async def export_checks(
 ) -> Response:
     """
     Export all checks for an agent as JSON download (an admin's, as import is:
-    the file carries every stored value, credentials included, so that an
-    import recreates the checks as they were).
+    the file carries each check's target, credentials included).
 
     AgentNotFoundException (a LuxSwirlException) propagates to the global handler,
     which renders it content-negotiated — the router does not hand-roll an error body.
@@ -89,7 +89,7 @@ async def import_checks(
     request: Request,
     agent_id: Annotated[UUID, Path(description="Agent ID")],
     file: Annotated[UploadFile, File()],
-    mode: Annotated[str, Form()],  # "merge" or "replace"
+    mode: Annotated[ImportMode, Form()],
     current_user: AdminUserWeb,
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> Response:

@@ -6,7 +6,6 @@ and orchestrating the import process with proper error handling.
 """
 
 import json
-from collections.abc import Sequence
 from io import BytesIO
 from typing import Any
 from uuid import UUID
@@ -17,14 +16,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.content_disposition import content_disposition
 from app.core.datetime_utils import utc_now
-from app.core.exceptions import AgentNotFoundException
-from app.models.enum_model import MaintenanceJobKind
-from app.schemas.agent_schema import AgentResponse
+from app.core.exceptions import AgentNotFoundException, ValidationException
+from app.models.enum_model import ImportMode
 from app.schemas.auth_schema import AuthedUser
-from app.schemas.check_schema import CheckInDB
 from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.check_core_service import CheckCoreService
-from app.services.core.maintenance_job_core_service import MaintenanceJobCoreService
+from app.services.core.check_transfer_core_service import CheckTransferCoreService
 from app.services.views._job_status import build_job_status_context
 from app.shared.logger import get_logger
 from app.web.templates import templates
@@ -34,48 +31,6 @@ logger = get_logger("luxswirl.web.services.import_export")
 
 class ImportExportViewService:
     """Service for check import/export operations."""
-
-    @staticmethod
-    def export_checks_to_dict(
-        checks: Sequence[CheckInDB], agent: AgentResponse
-    ) -> dict[str, Any]:
-        """
-        Transform checks to export format.
-
-        Args:
-            checks: The agent's checks, as schemas
-            agent: The agent, as a schema
-
-        Returns:
-            Dict with export data (agent info + checks array)
-        """
-        export_checks = []
-        for check in checks:
-            export_checks.append(
-                {
-                    "name": check.display_name,
-                    "check_type": check.check_type,
-                    "target": check.target,
-                    "interval": check.interval_seconds or 60,
-                    "timeout": check.timeout_seconds or 5,
-                    "retry_attempts": check.retry_attempts or 2,
-                    "enabled": check.enabled,
-                    "description": check.description,
-                    "http_method": check.http_method,
-                    "expected_status": check.expected_status,
-                    "json_path": check.json_path,
-                    "expected_value": check.expected_value,
-                    "tags": check.tags,
-                }
-            )
-
-        return {
-            "agent_id": str(agent.id),
-            "agent_name": agent.agent_name,
-            "agent_hostname": agent.hostname,
-            "total_checks": len(export_checks),
-            "checks": export_checks,
-        }
 
     @staticmethod
     async def build_panel_context(
@@ -109,12 +64,10 @@ class ImportExportViewService:
 
         Raises AgentNotFoundException if the agent is gone.
         """
-        agent = await AgentCoreService.get_agent(db, agent_id)
-        if not agent:
-            raise AgentNotFoundException(str(agent_id))
-        checks = await CheckCoreService.list_agent_checks(db, agent_id)
-        export_data = ImportExportViewService.export_checks_to_dict(checks, agent)
-        json_bytes = BytesIO(json.dumps(export_data, indent=2).encode())
+        document = await CheckTransferCoreService.export_document(db, agent_id)
+        json_bytes = BytesIO(
+            json.dumps(document.model_dump(mode="json"), indent=2).encode()
+        )
         # Filename stamp: machine output, so it stays here — but UTC and sortable.
         # `datetime.now()` here was naive server-local time.
         filename = f"{agent_id}-checks-{utc_now().strftime('%Y%m%d_%H%M%S')}.json"
@@ -145,7 +98,7 @@ class ImportExportViewService:
         current_user: AuthedUser,
         agent_id: UUID,
         content: bytes,
-        mode: str,
+        mode: ImportMode,
     ) -> Response:
         """Parse + structurally validate the upload, enqueue a bulk_check_import
         job, and return the polling partial.
@@ -156,10 +109,6 @@ class ImportExportViewService:
         before the response is sent, so the job is visible when the client polls.
         """
         try:
-            agent = await AgentCoreService.get_agent(db, agent_id)
-            if not agent:
-                raise AgentNotFoundException(str(agent_id))
-
             try:
                 data = json.loads(content)
             except json.JSONDecodeError as e:
@@ -167,31 +116,18 @@ class ImportExportViewService:
                     request, current_user, f"Invalid JSON file: {e}", 400
                 )
 
-            checks_data = data.get("checks", [])
-            if not checks_data:
+            checks_data = data.get("checks") if isinstance(data, dict) else None
+            if not checks_data or not isinstance(checks_data, list):
                 return ImportExportViewService._import_result_response(
                     request, current_user, "No checks found in file", 400
                 )
 
-            job = await MaintenanceJobCoreService.enqueue(
-                db,
-                kind=MaintenanceJobKind.BULK_CHECK_IMPORT,
-                target_id=agent_id,
-                params={
-                    "agent_id": str(agent_id),
-                    "mode": mode,
-                    "checks": checks_data,
-                },
-                owner_id=current_user.id,
-            )
-            logger.info(
-                "Enqueued bulk_check_import maintenance job",
-                extra={
-                    "agent_id": str(agent_id),
-                    "check_count": len(checks_data),
-                    "mode": mode,
-                    "job_id": str(job.id),
-                },
+            # An entry that is not an object is that entry's error when the job runs.
+            entries = [
+                c if isinstance(c, dict) else {"name": None} for c in checks_data
+            ]
+            job = await CheckTransferCoreService.enqueue_import(
+                db, current_user.id, agent_id, mode, entries
             )
             return templates.TemplateResponse(
                 request,
@@ -201,6 +137,10 @@ class ImportExportViewService:
         except AgentNotFoundException:
             return ImportExportViewService._import_result_response(
                 request, current_user, f"Agent '{agent_id}' not found", 404
+            )
+        except ValidationException as e:
+            return ImportExportViewService._import_result_response(
+                request, current_user, e.message, 400
             )
         # swallowed-exceptions: the import surface renders the failure back to
         # the operator with the reason, which is the handling.

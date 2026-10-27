@@ -12,14 +12,19 @@ from app.background.maintenance_handlers.bulk_check_import import handle
 from app.models.enum_model import MaintenanceJobKind
 from app.models.maintenance_job_model import MaintenanceJob
 from app.services.core.check_core_service import CheckCoreService
-from fixtures.factories import make_agent, make_check
+from fixtures.factories import make_agent, make_check, make_user
 from sqlalchemy.ext.asyncio import AsyncSession
 
 pytestmark = pytest.mark.integration
 
 
 async def _job(db: AsyncSession, params: dict[str, object]) -> MaintenanceJob:
-    job = MaintenanceJob(kind=MaintenanceJobKind.BULK_CHECK_IMPORT, params=params)
+    owner = make_user(role="admin")
+    db.add(owner)
+    await db.flush()
+    job = MaintenanceJob(
+        kind=MaintenanceJobKind.BULK_CHECK_IMPORT, params=params, owner_id=owner.id
+    )
     db.add(job)
     await db.flush()
     return job

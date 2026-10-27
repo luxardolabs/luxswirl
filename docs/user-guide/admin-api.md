@@ -89,15 +89,34 @@ Each takes `{"check_ids": [...]}`, 1 to 10,000 ids; a modify adds the fields to 
 
 The whole selection is judged before anything runs: an id no check has refuses it (`422`), and so does a synthetic check in the selection of anyone but an admin (`403`). Nothing is changed or queued. A modify must set at least one field, and none to `null`. An unknown `agent_id` or `alert_id` is a `404`, and moving checks to an agent awaiting approval, rejected or archived is a `422`.
 
+### Bulk create
+
+| Method | Path                               | Role   | Does                                                                 |
+| ------ | ---------------------------------- | ------ | -------------------------------------------------------------------- |
+| `POST` | `/api/v1/admin/checks/bulk/create` | editor | One check per URL on an agent, in the background; `202` with the job |
+
+It takes `{"agent_id", "items": [...], "alert_ids"?}`: 1 to 10,000 items, each `{"url", "display_name"?, "interval_seconds"?, "timeout_seconds"?, "retry_attempts"?, "retry_interval_seconds"?, "expected_status"?, "http_method"?, "verify_ssl"?, "enabled"?, "tags"?, "resend_notification_after"?}`. The type of each check comes from its URL's scheme: `http://` and `https://` make an HTTP check, a URL with no scheme is taken as `https://`, and another scheme names the check type (`tcp://host:port`); a URL that names a synthetic check is that item's failure. Every check made is given each alert in `alert_ids`. An unknown agent is a `404`; an agent that is not approved, or an alert that does not exist, is a `422`, and nothing is queued.
+
+### Export and import
+
+An agent's checks, out and back in. Both take an admin's token, as the web UI's import/export panel does: an export carries every check's target, credentials included.
+
+| Method | Path                                      | Does                                                                   |
+| ------ | ----------------------------------------- | ---------------------------------------------------------------------- |
+| `GET`  | `/api/v1/admin/agents/{id}/checks/export` | The agent's checks: the same document as the web download              |
+| `POST` | `/api/v1/admin/agents/{id}/checks/import` | `{"mode"?, "checks": [...]}`, in the export's form; `202` with the job |
+
+An import takes 1 to 10,000 checks. `mode` is `merge` (the default: a check whose name the agent already has is skipped) or `replace` (it is overwritten). Each entry is validated when the job runs, and one that is not a valid check is that entry's error, never a refusal of the rest. An export carries a check's name, type, target, interval, timeout, retries, enabled, description, HTTP method, expected status, JSON path and value, and tags; settings particular to a type (a database query and connection string, a DNS nameserver, a synthetic script) are not in it yet.
+
 ### Background jobs
 
 | Method | Path                                  | Role | Returns                           |
 | ------ | ------------------------------------- | ---- | --------------------------------- |
 | `GET`  | `/api/v1/admin/maintenance-jobs/{id}` | any  | The job's `status` and `progress` |
 
-`status` goes `queued` → `running` → `done` or `failed`. Once a bulk job has run, done or failed, `progress` holds `success_count`, `failure_count` and the first 50 `errors`, so a check deleted before the job ran shows as a failure rather than disappearing. A job that changed no check is `failed`.
+`status` goes `queued` → `running` → `done` or `failed`. Once a bulk job has run, done or failed, `progress` holds `success_count`, `failure_count` and the first 50 `errors`, so a check deleted before the job ran shows as a failure rather than disappearing. A job that changed no check is `failed`. An import's `progress` holds `created`, `updated`, `skipped`, `failure_count` and the first 50 `errors`.
 
-A job runs after the request that queued it, so its owner is judged again when it runs: if they are no longer an active editor or admin, the job fails and changes nothing. A failed job's `error` is a summary, never the database statement or a credential; the full error is in the server log.
+A job runs after the request that queued it, so its owner is judged again when it runs: if they no longer hold the role the request needed (an active editor or admin; an active admin for an import), the job fails and changes nothing. An import onto an agent deleted since fails the same way. A failed job's `error`, and every error in `progress`, is a summary, never the database statement or a credential; the full error is in the server log.
 
 ### Dependents
 

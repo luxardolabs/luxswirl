@@ -21,6 +21,7 @@ from app.core.rate_limit import api_token_rate_limit_key, limiter
 from app.db import get_db
 from app.schemas.admin_check_schema import (
     AdminBulkChecks,
+    AdminBulkCreate,
     AdminBulkModify,
     AdminCheckClone,
     AdminCheckCreate,
@@ -34,6 +35,7 @@ from app.schemas.admin_page_schema import MAX_PAGE
 from app.schemas.check_schema import CheckResponse
 from app.schemas.maintenance_job_schema import MaintenanceJobResponse
 from app.services.core.admin_check_core_service import AdminCheckCoreService
+from app.services.core.check_transfer_core_service import CheckTransferCoreService
 
 router = APIRouter(prefix="/checks", tags=["Admin API: Checks"])
 
@@ -140,6 +142,27 @@ async def admin_bulk_modify_checks(
     """
     return await AdminCheckCoreService.enqueue_bulk_modify(
         db, principal.user.role, principal.user.id, data
+    )
+
+
+@router.post(
+    "/bulk/create",
+    response_model=MaintenanceJobResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    name="admin_bulk_create_checks",
+)
+@limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
+async def admin_bulk_create_checks(
+    request: Request,
+    data: AdminBulkCreate,
+    principal: ApiEditor,
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
+) -> MaintenanceJobResponse:
+    """Create one check per URL on an agent, in the background. Poll
+    `/api/v1/admin/maintenance-jobs/{id}` for the outcome.
+    """
+    return await CheckTransferCoreService.enqueue_bulk_create(
+        db, principal.user.id, data.agent_id, data.items, data.alert_ids
     )
 
 
