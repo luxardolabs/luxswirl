@@ -20,6 +20,7 @@ from app.schemas.auth_schema import AuthedUser
 from app.schemas.maintenance_job_schema import MaintenanceJobResponse
 from app.schemas.pagination_schema import build_pagination
 from app.schemas.status_page_schema import (
+    ALLOWED_TIME_RANGES,
     DashboardItemUrls,
     StatusPageCreate,
     StatusPageInDB,
@@ -35,10 +36,6 @@ from app.services.views._dashboard_render import DashboardRender
 from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.web.services.status_pages")
-
-# Status-bar windows surfaced to the UI. Used to validate user input on
-# create/update, and to resolve the time_range query param in the public view.
-ALLOWED_TIME_RANGES: list[int] = [30, 60, 120, 240, 480, 1440]
 
 
 def _normalize_status_bar_minutes(minutes: int | None) -> int:

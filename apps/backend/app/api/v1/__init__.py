@@ -21,6 +21,7 @@ from app.api.v1.routers import (
     admin_notification_log_router,
     admin_notification_provider_router,
     admin_registration_key_router,
+    admin_status_page_router,
     agent_router,
     artifact_router,
     check_router,
@@ -58,6 +59,7 @@ admin_api_router.include_router(
 admin_api_router.include_router(
     admin_registration_key_router.router
 )  # Agent registration keys
+admin_api_router.include_router(admin_status_page_router.router)  # Status pages
 admin_api_router.include_router(
     admin_maintenance_job_router.router
 )  # Background job status
