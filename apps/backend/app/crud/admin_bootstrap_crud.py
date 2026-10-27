@@ -30,7 +30,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 # isort: split
 # --- EDIT THIS: your user model. The fleet home is app/models/user_model.py, class User.
+from sqlalchemy import update
+
 from app.core.datetime_utils import utc_now
+from app.models.api_token_model import ApiToken
 from app.models.enum_model import UserRole
 from app.models.session_model import Session
 from app.models.user_model import User
@@ -78,6 +81,12 @@ def _store_password(
 # session table deletes the user's rows here instead. It runs in the same transaction as the new hash.
 async def _end_sessions(db: AsyncSession, user: User) -> None:
     await db.execute(delete(Session).where(Session.user_id == user.id))
+    # An API token signs in as the user too: it ends with the sessions.
+    await db.execute(
+        update(ApiToken)
+        .where(ApiToken.user_id == user.id, ApiToken.revoked_at.is_(None))
+        .values(revoked_at=utc_now())
+    )
 
 
 # --- EDIT THIS: the stored hash, for checking the current password on a change.
