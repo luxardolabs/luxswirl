@@ -2410,13 +2410,13 @@
       },
       {
         "rule": "repo.agent_instructions_resolve",
-        "status": "FAIL",
+        "status": "PASS",
         "since": "0.280.0",
-        "violations": 1,
+        "violations": 0,
         "deferred": false,
         "inert": false,
         "inert_reason": "",
-        "fix": "repoint each dead link at the file it meant (the finding names same-named files, any case), or delete the sentence if what it pointed at is gone; fix a `luxarch --doc` / `--playbook` name against `luxarch --docs`. An instruction file is the one document every agent reads and nothing else validates.",
+        "fix": "",
         "example": ""
       },
       {
@@ -2872,20 +2872,20 @@
       }
     ],
     "summary": {
-      "PASS": 68,
-      "FAIL": 1,
+      "PASS": 69,
+      "FAIL": 0,
       "XFAIL": 0,
       "XPASS": 0,
       "INERT": 1
     }
   },
   "summary": {
-    "PASS": 234,
-    "FAIL": 3,
+    "PASS": 235,
+    "FAIL": 2,
     "XFAIL": 0,
     "XPASS": 0,
     "INERT": 21
   },
-  "commit": "31eb12f6a20b13652a2d190bd5a667a643dcdd5d",
-  "generated_at": "2026-10-27T14:19:52Z"
+  "commit": "a76ff1fe24805f007092a63ab894b6419d36bd1c",
+  "generated_at": "2026-10-27T14:25:33Z"
 }

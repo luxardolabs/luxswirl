@@ -17,6 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from sqlalchemy.exc import SQLAlchemyError
+from starlette.routing import Route
 
 from app.api import api_router
 from app.api.v1.routers.metrics_router import router as metrics_router
@@ -387,7 +388,11 @@ _APP_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=str(_APP_DIR / "static")), name="static")
 
 # MCP server for AI agents: authenticates by the user's lsw_ API token (app/mcp/).
-app.mount("/mcp", create_mcp_app())
+# Served at /mcp exactly as well as under it: a client configured without the
+# trailing slash would otherwise get a redirect, which many drop the token across.
+_mcp_app = create_mcp_app()
+app.router.routes.append(Route("/mcp", endpoint=_mcp_app, methods=["POST"]))
+app.mount("/mcp", _mcp_app)
 
 # Include routers
 app.include_router(metrics_router)  # Prometheus metrics (root level /metrics)

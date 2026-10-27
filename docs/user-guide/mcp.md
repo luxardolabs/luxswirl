@@ -4,7 +4,7 @@ LuxSwirl serves the [Model Context Protocol](https://modelcontextprotocol.io) at
 
 ## Connecting
 
-The server speaks Streamable HTTP at `https://<your LuxSwirl>/mcp/`. An agent authenticates with a personal API token, the same `lsw_` token the [admin API](admin-api.md) takes, created in **My Account** → **API Tokens**:
+The server speaks Streamable HTTP at `https://<your LuxSwirl>/mcp` (with or without the trailing slash), POST only: it is stateless and answers in JSON, so it opens no event stream. An agent authenticates with a personal API token, the same `lsw_` token the [admin API](admin-api.md) takes, created in **My Account** → **API Tokens**:
 
 ```json
 {
@@ -51,7 +51,7 @@ A refused call comes back as a tool error whose text starts `FORBIDDEN:` and nam
 | Limit           | Value                                                                                                                     |
 | --------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | Calls per token | The admin API's per-token limit (`security.admin_api_rate_limit`, 300 a minute by default); then `429` with `Retry-After` |
-| Failed tokens   | 10 a minute per client address, before the token is checked; a token proven in the last minute is not counted             |
+| Failed tokens   | 10 refused tokens a minute per client address; then `429` until the minute is out. A valid token is never counted         |
 
 A missing, unknown, revoked or expired token gets `401` with a `WWW-Authenticate: Bearer` challenge; the answer is the same for each, so it does not tell which.
 

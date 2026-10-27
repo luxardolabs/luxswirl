@@ -62,14 +62,29 @@ class KeyedLimiter:
         stats = self.strategy.get_window_stats(self.limit, surface, client)
         return max(1, int(stats.reset_time - time.time()))
 
+    def over_limit(self, surface: str, client: str) -> int | None:
+        """Seconds to wait when `client` is already at the limit; None while under it.
+
+        Counts nothing: for a limit on failures, counted with `count` once one fails.
+        """
+        if self.strategy.test(self.limit, surface, client):
+            return None
+        stats = self.strategy.get_window_stats(self.limit, surface, client)
+        return max(1, int(stats.reset_time - time.time()))
+
+    def count(self, surface: str, client: str) -> None:
+        """Count one event (a failure) against `client`."""
+        self.strategy.hit(self.limit, surface, client)
+
     def reset(self) -> None:
         """Forget every count (the test suite's reset, as `limiter.reset()`)."""
         self.storage.reset()
 
 
-# Credential attempts one client may make per minute on a credential surface that is
+# Failed credentials one client may present per minute on a credential surface that is
 # not a route this limiter can decorate (the /mcp mount authenticates in its own ASGI
-# middleware). Counted before the check; a token proven in the last minute skips it.
+# middleware). Only a refused token counts; a client at the limit is refused before
+# its token is looked up.
 credential_attempts = KeyedLimiter(RateLimitItemPerMinute(10))
 # Requests one API token may make per minute over /mcp: the admin API's own budget.
 mcp_token_calls = KeyedLimiter(parse(settings.security.admin_api_rate_limit))

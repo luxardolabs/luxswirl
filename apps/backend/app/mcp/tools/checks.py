@@ -19,6 +19,7 @@ from app.mcp.tools._base import (
     choice,
     page_args,
     principal,
+    text_arg,
 )
 from app.mcp.validators import (
     MCPValidationError,
@@ -87,9 +88,14 @@ TOOLS: list[Tool] = [
                     "type": "boolean",
                     "description": "Only enabled checks",
                 },
-                "tag": {"type": "string", "description": "Only checks with this tag"},
+                "tag": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "description": "Only checks with this tag",
+                },
                 "search": {
                     "type": "string",
+                    "maxLength": 255,
                     "description": "Match the check's name or target",
                 },
             },
@@ -215,8 +221,8 @@ async def handle_list_checks(arguments: dict[str, Any]) -> list[TextContent]:
             enabled_only=bool_arg(
                 arguments.get("enabled_only"), "enabled_only", default=False
             ),
-            tag=arguments.get("tag") or None,
-            search=arguments.get("search") or None,
+            tag=text_arg(arguments.get("tag"), "tag", max_length=100),
+            search=text_arg(arguments.get("search"), "search", max_length=255),
         )
     )
 
