@@ -12,7 +12,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import ApiEditor, ApiUser, require_scope
+from app.api.deps import ApiEditor, ApiUser, require_scope, require_scopes
 from app.core.config import settings
 from app.core.rate_limit import api_token_rate_limit_key, limiter
 from app.db import get_db
@@ -91,6 +91,8 @@ async def admin_update_agent(
     response_model=MaintenanceJobResponse,
     status_code=status.HTTP_202_ACCEPTED,
     name="admin_delete_agent",
+    # The agent's checks are deleted with it.
+    dependencies=[Depends(require_scopes("checks:write"))],
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_delete_agent(
@@ -247,12 +249,17 @@ async def admin_force_reload_agent(
 
 # ── The agent's own key ──────────────────────────────────────────────────────
 
+# An agent key reads every one of the agent's checks, credentials included, and
+# reports their results: issuing one takes an admin's scopes on both families.
+AGENT_KEY_SCOPES = ("agents:admin", "checks:admin")
+
 
 @router.post(
     "/{agent_id}/key",
     response_model=AgentKey,
     status_code=status.HTTP_201_CREATED,
     name="admin_generate_agent_key",
+    dependencies=[Depends(require_scopes(*AGENT_KEY_SCOPES))],
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_generate_agent_key(
@@ -270,6 +277,7 @@ async def admin_generate_agent_key(
     response_model=AgentKey,
     status_code=status.HTTP_201_CREATED,
     name="admin_regenerate_agent_key",
+    dependencies=[Depends(require_scopes(*AGENT_KEY_SCOPES))],
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_regenerate_agent_key(

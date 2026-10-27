@@ -14,14 +14,13 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import ApiEditor, ApiUser, require_scope
+from app.api.deps import ApiEditor, ApiUser, ScopedBulkCreate, require_scope
 from app.core.config import settings
 from app.core.query_params import AgentIdFilter, CheckTypeFilter
 from app.core.rate_limit import api_token_rate_limit_key, limiter
 from app.db import get_db
 from app.schemas.admin_check_schema import (
     AdminBulkChecks,
-    AdminBulkCreate,
     AdminBulkModify,
     AdminCheckClone,
     AdminCheckCreate,
@@ -158,7 +157,7 @@ async def admin_bulk_modify_checks(
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_bulk_create_checks(
     request: Request,
-    data: AdminBulkCreate,
+    data: ScopedBulkCreate,
     principal: ApiEditor,
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> MaintenanceJobResponse:

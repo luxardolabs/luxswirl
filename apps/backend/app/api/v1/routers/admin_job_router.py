@@ -12,7 +12,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import ApiEditor, ApiUser, require_scope
+from app.api.deps import ApiEditor, ApiUser, require_scope, require_scopes
 from app.core.config import settings
 from app.core.query_params import AgentIdFilter, JobStatusFilter, JobTypeFilter
 from app.core.rate_limit import api_token_rate_limit_key, limiter
@@ -133,6 +133,7 @@ async def admin_delete_agent_job(
     response_model=JobChecksCreated,
     status_code=status.HTTP_201_CREATED,
     name="admin_create_checks_from_job",
+    dependencies=[Depends(require_scopes("checks:write"))],
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_create_checks_from_job(
