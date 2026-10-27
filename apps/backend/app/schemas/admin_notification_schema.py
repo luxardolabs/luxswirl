@@ -49,7 +49,7 @@ class ProviderPage(PaginatedResponse[AdminProvider]):
 class ProviderTypeInfo(BaseModel):
     """A provider type and the config fields it takes."""
 
-    type: str
+    type: NotificationProviderType
     name: str
     description: str
     config_schema: dict[str, Any]
