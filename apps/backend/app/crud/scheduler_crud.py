@@ -153,6 +153,29 @@ class JobConfigurationCRUD:
         return result.scalar_one_or_none()
 
     @staticmethod
+    async def take_lease(
+        db: AsyncSession,
+        job_key: str,
+        lease_token: UUID,
+        now: datetime,
+        expires_at: datetime,
+    ) -> bool:
+        """Lease the job to `lease_token` unless a live lease holds it, in one
+        statement: of two callers at once, one gets it. False when it is held
+        (or no job has the key)."""
+        result = await db.execute(
+            update(JobConfiguration)
+            .where(
+                JobConfiguration.job_key == job_key,
+                JobConfiguration.lease_expires_at.is_(None)
+                | (JobConfiguration.lease_expires_at <= now),
+            )
+            .values(lease_token=lease_token, lease_expires_at=expires_at)
+            .returning(JobConfiguration.id)
+        )
+        return result.first() is not None
+
+    @staticmethod
     async def release_lease(db: AsyncSession, job_key: str, lease_token: UUID) -> bool:
         """Clear the lease only while `lease_token` still holds it, in one statement.
 

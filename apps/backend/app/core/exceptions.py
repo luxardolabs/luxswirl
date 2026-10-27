@@ -84,6 +84,19 @@ class SchedulerJobNotFoundException(NotFoundException):
         )
 
 
+class SchedulerJobBusyException(LuxSwirlException):
+    """Raised when a job is asked to run while a run of it holds its lease."""
+
+    status_code = 409
+    error_code = "JOB_RUNNING"
+
+    def __init__(self, job_key: str):
+        super().__init__(
+            message=f"Job {job_key} is running; try again when it ends",
+            details={"job_key": job_key},
+        )
+
+
 class DuplicateResourceException(LuxSwirlException):
     """Raised when attempting to create a duplicate resource."""
 

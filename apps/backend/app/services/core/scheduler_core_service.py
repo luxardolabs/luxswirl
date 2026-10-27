@@ -16,7 +16,10 @@ from zoneinfo import ZoneInfo
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import SchedulerJobNotFoundException
+from app.core.exceptions import (
+    SchedulerJobBusyException,
+    SchedulerJobNotFoundException,
+)
 from app.crud.scheduler_crud import JobConfigurationCRUD, JobExecutionCRUD
 from app.db import worker_session
 from app.models.enum_model import SchedulerExecutionStatus
@@ -442,7 +445,34 @@ class SchedulerCoreService:
 
         Raises:
             SchedulerJobNotFoundException: If job not found
+            SchedulerJobBusyException: A run of the job (scheduled or by hand)
+                holds its lease.
         """
+        lease_token = await self._lease_for_manual_run(job_key)
+        try:
+            return await self._run_leased_by_hand(job_key)
+        finally:
+            async with worker_session() as db:
+                await JobConfigurationCRUD.release_lease(db, job_key, lease_token)
+
+    async def _lease_for_manual_run(self, job_key: str) -> UUID:
+        """Take the job's lease, as the scheduler does for a due job, so no other
+        run starts while this one runs; committed before the run begins."""
+        async with worker_session() as db:
+            job = await JobConfigurationCRUD.get_by_job_key(db, job_key)
+            if not job:
+                raise SchedulerJobNotFoundException(job_key)
+            lease_token = uuid4()
+            now = datetime.now(UTC)
+            expires_at = now + timedelta(seconds=job.max_runtime_seconds * 2)
+            if not await JobConfigurationCRUD.take_lease(
+                db, job_key, lease_token, now, expires_at
+            ):
+                raise SchedulerJobBusyException(job_key)
+            return lease_token
+
+    async def _run_leased_by_hand(self, job_key: str) -> SchedulerRunResult:
+        """Run a job this call holds the lease of, and record the run."""
         async with worker_session() as db:
             job = await JobConfigurationCRUD.get_by_job_key(db, job_key)
 
