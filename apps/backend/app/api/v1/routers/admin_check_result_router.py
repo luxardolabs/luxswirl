@@ -11,7 +11,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import ApiUser
+from app.api.deps import ApiUser, require_scope
 from app.core.config import settings
 from app.core.query_params import SinceFilter, UntilFilter
 from app.core.rate_limit import api_token_rate_limit_key, limiter
@@ -27,7 +27,11 @@ from app.services.core.admin_check_result_core_service import (
     AdminCheckResultCoreService,
 )
 
-router = APIRouter(prefix="/checks", tags=["Admin API: Check results"])
+router = APIRouter(
+    prefix="/checks",
+    tags=["Admin API: Check results"],
+    dependencies=[Depends(require_scope("checks"))],
+)
 
 LIMIT = settings.security.admin_api_rate_limit
 

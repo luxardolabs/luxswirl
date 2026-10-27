@@ -60,7 +60,7 @@ async def _as(db: AsyncSession, role: str) -> dict[str, str]:
     db.add(user)
     await db.flush()
     _, plaintext = await ApiTokenCoreService.create_token(
-        db, user.id, ApiTokenCreate(name=role)
+        db, user.id, ApiTokenCreate(name=role, scopes=["*"])
     )
     return {"Authorization": f"Bearer {plaintext}"}
 

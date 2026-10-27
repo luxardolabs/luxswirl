@@ -1,10 +1,10 @@
 """
 API token core service - users' bearer tokens for the admin API.
 
-A token acts as its user. It authenticates only while it is unrevoked and
-unexpired AND its user is active and owes no password change, and it carries
-the user's role, so the admin API grants exactly what the web UI grants that
-user. A login lockout does not stop it: the lockout guards the password, and
+A token acts as its user, narrowed by its scopes (app/core/authorization):
+it may do what both the user's role and its scopes allow, never more than
+the web UI grants that user. It authenticates only while it is unrevoked and
+unexpired AND its user is active and owes no password change. A login lockout does not stop it: the lockout guards the password, and
 anyone who knows a username can trigger one. A password change or reset
 revokes the user's tokens, as it ends their sessions.
 """
@@ -21,7 +21,7 @@ from app.core.exceptions import NotFoundException
 from app.crud.api_token_crud import ApiTokenCRUD
 from app.crud.user_crud import UserCRUD
 from app.models.api_token_model import ApiToken
-from app.models.enum_model import UserRole
+from app.models.enum_model import ApiTokenAccess, UserRole
 from app.schemas.api_token_schema import (
     ApiPrincipal,
     ApiTokenCreate,
@@ -37,6 +37,13 @@ TOKEN_PREFIX = "lsw_"
 TOKEN_BYTES = 32
 # What the token list shows of each token: the prefix and 8 more characters.
 DISPLAY_LENGTH = 12
+
+# The scopes each of the web form's access choices grants.
+ACCESS_SCOPES: dict[ApiTokenAccess, list[str]] = {
+    ApiTokenAccess.READ: ["*:read"],
+    ApiTokenAccess.WRITE: ["*:read", "*:write"],
+    ApiTokenAccess.FULL: ["*"],
+}
 
 
 def _hash(plaintext: str) -> str:
@@ -57,6 +64,7 @@ class ApiTokenCoreService:
             name=data.name,
             token_hash=_hash(plaintext),
             token_prefix=plaintext[:DISPLAY_LENGTH],
+            scopes=data.scopes,
             expires_at=(
                 utc_now() + timedelta(days=data.expires_in_days)
                 if data.expires_in_days
@@ -71,6 +79,7 @@ class ApiTokenCoreService:
                 "user_id": str(user_id),
                 "token_id": str(token.id),
                 "token_name": token.name,
+                "scopes": token.scopes,
                 "expires_at": str(token.expires_at),
             },
         )
@@ -151,7 +160,21 @@ class ApiTokenCoreService:
             token_id=token.id,
             token_name=token.name,
             token_expires_at=token.expires_at,
+            scopes=tuple(token.scopes),
         )
+
+    @staticmethod
+    def scopes_for(access: ApiTokenAccess) -> list[str]:
+        """The scopes a token created with the web form's `access` choice holds."""
+        return list(ACCESS_SCOPES[access])
+
+    @staticmethod
+    def access_of(scopes: list[str]) -> ApiTokenAccess | None:
+        """The access choice `scopes` match, or None for any other scope set."""
+        for access, granted in ACCESS_SCOPES.items():
+            if sorted(granted) == sorted(scopes):
+                return access
+        return None
 
     @staticmethod
     def who_am_i(principal: ApiPrincipal) -> ApiWhoAmIResponse:
@@ -163,4 +186,5 @@ class ApiTokenCoreService:
             token_id=principal.token_id,
             token_name=principal.token_name,
             token_expires_at=principal.token_expires_at,
+            token_scopes=list(principal.scopes),
         )

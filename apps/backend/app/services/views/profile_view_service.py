@@ -15,6 +15,7 @@ from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import NotFoundException, value_error_message
+from app.models.enum_model import ApiTokenAccess
 from app.schemas.api_token_schema import ApiTokenCreate
 from app.schemas.auth_schema import AuthedUser
 from app.schemas.user_schema import UserUpdate
@@ -57,6 +58,7 @@ class ProfileViewService:
             "tokens": [
                 {
                     "token": token,
+                    "access": ApiTokenCoreService.access_of(token.scopes),
                     "revoke_url": str(
                         request.app.url_path_for(
                             "revoke_api_token", token_id=str(token.id)
@@ -78,12 +80,14 @@ class ProfileViewService:
         current_user: AuthedUser,
         name: str,
         expires_in_days: str | None,
+        access: ApiTokenAccess,
     ) -> dict[str, Any]:
         """Create a token for the user; the section, showing it this once."""
         try:
             data = ApiTokenCreate(
                 name=name,
                 expires_in_days=int(expires_in_days) if expires_in_days else None,
+                scopes=ApiTokenCoreService.scopes_for(access),
             )
         except ValidationError, ValueError:
             return await ProfileViewService.api_tokens_context(

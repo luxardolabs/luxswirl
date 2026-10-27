@@ -338,7 +338,7 @@ The agent builds every one of these from `LUXSWIRL_SERVER_URL`, the server's add
 
 ### Admin API (`/api/v1/admin`)
 
-Authenticated by a user's API token (`Authorization: Bearer lsw_...`, created in the My Account panel), which acts as that user with their role: `ApiUser` / `ApiEditor` / `ApiAdmin` in `app/api/deps.py`, rate-limited per token. See `docs/user-guide/admin-api.md`.
+Authenticated by a user's API token (`Authorization: Bearer lsw_...`, created in the My Account panel), which acts as that user with their role: `ApiUser` / `ApiEditor` / `ApiAdmin` in `app/api/deps.py`, rate-limited per token. A token's scopes narrow the role: the fleet's `family:action` vocabulary with wildcards, ported from LuxPM (`app/core/authorization/scopes.py`); each admin router declares its family with `dependencies=[Depends(require_scope(<family>[, admin_writes=True]))]` (read for GET/HEAD, else write, or admin on an admin-only router). Tokens made in the web form are read only, read and write, or full (`ApiTokenCoreService.ACCESS_SCOPES`). See `docs/user-guide/admin-api.md`.
 
 | Method | Path                         | Role | Purpose                                     |
 | ------ | ---------------------------- | ---- | ------------------------------------------- |

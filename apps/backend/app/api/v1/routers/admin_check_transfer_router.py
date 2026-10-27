@@ -12,7 +12,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import ApiAdmin
+from app.api.deps import ApiAdmin, require_scope
 from app.core.config import settings
 from app.core.rate_limit import api_token_rate_limit_key, limiter
 from app.db import get_db
@@ -21,7 +21,11 @@ from app.schemas.import_export_schema import CheckExportDocument
 from app.schemas.maintenance_job_schema import MaintenanceJobResponse
 from app.services.core.check_transfer_core_service import CheckTransferCoreService
 
-router = APIRouter(prefix="/agents/{agent_id}/checks", tags=["Admin API: Checks"])
+router = APIRouter(
+    prefix="/agents/{agent_id}/checks",
+    tags=["Admin API: Checks"],
+    dependencies=[Depends(require_scope("checks", admin_writes=True))],
+)
 
 LIMIT = settings.security.admin_api_rate_limit
 

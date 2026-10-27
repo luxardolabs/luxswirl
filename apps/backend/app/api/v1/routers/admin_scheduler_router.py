@@ -7,9 +7,9 @@ admin.
 
 from typing import Annotated
 
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, Depends, Query, Request
 
-from app.api.deps import ApiAdmin
+from app.api.deps import ApiAdmin, require_scope
 from app.core.config import settings
 from app.core.rate_limit import api_token_rate_limit_key, limiter
 from app.schemas.scheduler_schema import (
@@ -19,7 +19,11 @@ from app.schemas.scheduler_schema import (
 )
 from app.services.core.admin_scheduler_core_service import AdminSchedulerCoreService
 
-router = APIRouter(prefix="/scheduler/jobs", tags=["Admin API: Scheduler"])
+router = APIRouter(
+    prefix="/scheduler/jobs",
+    tags=["Admin API: Scheduler"],
+    dependencies=[Depends(require_scope("scheduler", admin_writes=True))],
+)
 
 LIMIT = settings.security.admin_api_rate_limit
 

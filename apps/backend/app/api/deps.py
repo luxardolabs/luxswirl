@@ -17,6 +17,7 @@ Home per FLEET-LAYOUT-STANDARD §2: `app/api/deps` for API dependency aliases.
 """
 
 import contextlib
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Annotated
 from uuid import UUID
@@ -24,6 +25,7 @@ from uuid import UUID
 from fastapi import Depends, Header, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.authorization import scope_grants
 from app.core.config import settings
 from app.core.exceptions import AgentNotFoundException
 from app.core.rate_limit import limiter
@@ -316,3 +318,37 @@ async def require_api_admin(
 ApiUser = Annotated[ApiPrincipal, Depends(require_api_user)]
 ApiEditor = Annotated[ApiPrincipal, Depends(require_api_editor)]
 ApiAdmin = Annotated[ApiPrincipal, Depends(require_api_admin)]
+
+
+# ── The admin API's scope gate: a token's scopes narrow its user's role ──────
+#
+# Each admin router names its scope family (app/core/authorization/scopes.py).
+# A read (GET, HEAD) needs `<family>:read`; any other method needs
+# `<family>:write`, or `<family>:admin` on a router every route of which is an
+# admin's. The role dependency on the route still applies: a scope never
+# widens what the user's role allows.
+
+_READ_METHODS = frozenset({"GET", "HEAD"})
+
+
+def require_scope(
+    family: str, *, admin_writes: bool = False
+) -> Callable[..., Awaitable[None]]:
+    """The dependency that refuses a token whose scopes do not grant the call."""
+
+    async def require_token_scope(
+        request: Request,
+        principal: Annotated[ApiPrincipal, Depends(require_api_user)],
+    ) -> None:
+        if request.method in _READ_METHODS:
+            action = "read"
+        else:
+            action = "admin" if admin_writes else "write"
+        required = f"{family}:{action}"
+        if not scope_grants(principal.scopes, required):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"This API token's scopes do not grant {required}",
+            )
+
+    return require_token_scope

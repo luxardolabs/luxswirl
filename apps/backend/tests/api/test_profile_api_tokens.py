@@ -84,7 +84,7 @@ async def test_a_token_revoked_in_the_profile_panel_stops_working(
 ) -> None:
     client, user = browser
     token, plaintext = await ApiTokenCoreService.create_token(
-        db, user.id, ApiTokenCreate(name="retired-token")
+        db, user.id, ApiTokenCreate(name="retired-token", scopes=["*"])
     )
 
     revoked = await client.post(f"/profile/api-tokens/{token.id}/revoke")
@@ -102,7 +102,7 @@ async def test_a_user_cannot_revoke_another_users_token_from_the_panel(
     db.add(other)
     await db.flush()
     token, plaintext = await ApiTokenCoreService.create_token(
-        db, other.id, ApiTokenCreate(name="theirs")
+        db, other.id, ApiTokenCreate(name="theirs", scopes=["*"])
     )
 
     response = await client.post(f"/profile/api-tokens/{token.id}/revoke")
@@ -129,4 +129,38 @@ async def test_a_bad_token_form_creates_nothing(
     response = await client.post("/profile/api-tokens", data=form)
 
     assert response.status_code in (200, 422)
+    assert await ApiTokenCoreService.list_tokens(db, user.id) == []
+
+
+@pytest.mark.parametrize(
+    ("access", "scopes", "shown"),
+    [
+        (None, ["*:read"], "read only"),
+        ("read", ["*:read"], "read only"),
+        ("write", ["*:read", "*:write"], "read and write"),
+        ("full", ["*"], "full access"),
+    ],
+)
+async def test_the_access_chosen_is_the_token_s_scopes(
+    db: AsyncSession, browser, access: str | None, scopes: list[str], shown: str
+) -> None:
+    client, user = browser
+    form = {"name": "agent", **({"access": access} if access else {})}
+
+    created = await client.post("/profile/api-tokens", data=form)
+
+    assert created.status_code == 200, created.text
+    (token,) = await ApiTokenCoreService.list_tokens(db, user.id)
+    assert token.scopes == scopes
+    assert shown in created.text
+
+
+async def test_an_unknown_access_creates_nothing(db: AsyncSession, browser) -> None:
+    client, user = browser
+
+    response = await client.post(
+        "/profile/api-tokens", data={"name": "agent", "access": "root"}
+    )
+
+    assert response.status_code == 422
     assert await ApiTokenCoreService.list_tokens(db, user.id) == []

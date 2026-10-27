@@ -8,6 +8,7 @@ from uuid import UUID
 
 from pydantic import Field, field_validator
 
+from app.core.authorization import DEFAULT_SCOPES, validate_scope
 from app.core.datetime_utils import utc_now
 from app.models.enum_model import UserRole
 from app.schemas.auth_schema import CurrentUserDTO
@@ -15,12 +16,26 @@ from app.schemas.base_schema import BaseSchema, TimestampSchema
 
 
 class ApiTokenCreate(BaseSchema):
-    """A new API token: what it is for, and how long it lasts."""
+    """A new API token: what it is for, what it may do, and how long it lasts."""
 
     name: str = Field(..., min_length=1, max_length=100, description="What it is for")
     expires_in_days: int | None = Field(
         None, ge=1, le=3650, description="Days until it stops working; None = never"
     )
+    scopes: list[str] = Field(
+        default_factory=lambda: list(DEFAULT_SCOPES),
+        min_length=1,
+        max_length=50,
+        description="family:action scopes narrowing the user's role; read-only by default",
+    )
+
+    @field_validator("scopes")
+    @classmethod
+    def _known_scopes(cls, scopes: list[str]) -> list[str]:
+        unknown = [s for s in scopes if not validate_scope(s)]
+        if unknown:
+            raise ValueError(f"Unknown scope: {unknown[0]}")
+        return list(dict.fromkeys(scopes))
 
     @field_validator("name")
     @classmethod
@@ -37,6 +52,7 @@ class ApiTokenResponse(TimestampSchema):
     id: UUID = Field(..., description="Token UUID")
     name: str = Field(..., description="What it is for")
     token_prefix: str = Field(..., description="The token's first characters")
+    scopes: list[str] = Field(..., description="What the token may do")
     last_used_at: datetime | None = Field(None, description="Last authenticated")
     expires_at: datetime | None = Field(None, description="Stops working at")
     revoked_at: datetime | None = Field(None, description="Revoked at")
@@ -54,6 +70,7 @@ class ApiPrincipal:
     token_id: UUID
     token_name: str
     token_expires_at: datetime | None
+    scopes: tuple[str, ...]
 
 
 class ApiWhoAmIResponse(BaseSchema):
@@ -66,4 +83,7 @@ class ApiWhoAmIResponse(BaseSchema):
     token_name: str = Field(..., description="The calling token's name")
     token_expires_at: datetime | None = Field(
         None, description="When the calling token stops working"
+    )
+    token_scopes: list[str] = Field(
+        ..., description="What the calling token may do, within the role"
     )

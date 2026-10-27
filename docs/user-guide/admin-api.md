@@ -1,16 +1,16 @@
 # Admin API
 
-The admin API lets scripts and tools manage LuxSwirl over HTTP, under `/api/v1/admin`. Each call carries a personal API token, and the token acts as the user who made it: it can do what that user can do in the web UI, and nothing more.
+The admin API lets scripts and tools manage LuxSwirl over HTTP, under `/api/v1/admin`. Each call carries a personal API token, and the token acts as the user who made it, narrowed by its scopes: it can do what both the user's role and its scopes allow, never more than that user can do in the web UI.
 
 ## API tokens
 
-| Action | Where                                                      | Notes                                                                                  |
-| ------ | ---------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| Create | **My Account** panel → **API Tokens**                      | Give it a name (what it is for) and an expiry: 30 days, 90 days, 1 year or never.      |
-| Copy   | Shown once, right after creating it                        | Only a hash is stored. A lost token cannot be recovered; revoke it and create another. |
-| Revoke | **My Account** → **API Tokens** → **Revoke** (click twice) | Takes effect on the next request.                                                      |
+| Action | Where                                                      | Notes                                                                                          |
+| ------ | ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Create | **My Account** panel → **API Tokens**                      | Give it a name (what it is for), an expiry (30 days, 90 days, 1 year or never) and its access. |
+| Copy   | Shown once, right after creating it                        | Only a hash is stored. A lost token cannot be recovered; revoke it and create another.         |
+| Revoke | **My Account** → **API Tokens** → **Revoke** (click twice) | Takes effect on the next request.                                                              |
 
-The token list shows each token's name, its first characters (`lsw_` and 8 more), when it was created and last used, and when it expires.
+The token list shows each token's name, its first characters (`lsw_` and 8 more), its access, when it was created and last used, and when it expires.
 
 A token stops working when any of these is true:
 
@@ -22,6 +22,27 @@ A token stops working when any of these is true:
 A login lockout (too many wrong passwords) does not stop a token: the lockout guards the password, and anyone who knows a username can trigger one.
 
 A token carries its user's role at the time of each request, so changing a user's role changes what their tokens may do.
+
+### Scopes
+
+A token's scopes narrow its user's role; they never widen it. A scope is `family:action`, with the same vocabulary as the fleet's other services:
+
+| Part   | Values                                                                                                                                                                                                |
+| ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| family | `checks` (with their results, export and import), `agents`, `alerts`, `notifications`, `jobs` (agent jobs and background jobs), `status_pages`, `registration_keys`, `settings`, `scheduler`, `users` |
+| action | `read`, `write`, `admin`                                                                                                                                                                              |
+
+`checks:*` grants every action on checks, `*:read` reading everything, and `*` everything. A read (`GET`) needs `family:read`; any other call needs `family:write`, or `family:admin` for the families only an admin works with (`registration_keys`, `settings`, `scheduler`, `users`, and check export and import). A call the scopes do not grant gets `403` naming the scope it needs, even when the user's role would allow it.
+
+The **Access** choice when creating a token sets its scopes:
+
+| Access         | Scopes              | Can                                                                    |
+| -------------- | ------------------- | ---------------------------------------------------------------------- |
+| Read only      | `*:read`            | Read everything the user can see; change nothing. The default.         |
+| Read and write | `*:read`, `*:write` | Also make the changes an editor can, short of the admin-only families. |
+| Full           | `*`                 | Everything the user's role allows.                                     |
+
+Tokens made before scopes existed hold `*`.
 
 ## Calling the API
 
@@ -38,16 +59,17 @@ curl -H "Authorization: Bearer lsw_..." https://luxswirl.example.com/api/v1/admi
   "role": "editor",
   "token_id": "9b21…",
   "token_name": "ci",
-  "token_expires_at": "2027-01-24T10:00:00Z"
+  "token_expires_at": "2027-01-24T10:00:00Z",
+  "token_scopes": ["*:read"]
 }
 ```
 
-| Method | Path                         | Role | Returns                                     |
-| ------ | ---------------------------- | ---- | ------------------------------------------- |
-| `GET`  | `/api/v1/admin/me`           | any  | The token's user, their role, and the token |
-| `GET`  | `/api/v1/admin/openapi.json` | any  | The admin API's OpenAPI document            |
+| Method | Path                         | Role | Returns                                                     |
+| ------ | ---------------------------- | ---- | ----------------------------------------------------------- |
+| `GET`  | `/api/v1/admin/me`           | any  | The token's user, their role, and the token with its scopes |
+| `GET`  | `/api/v1/admin/openapi.json` | any  | The admin API's OpenAPI document                            |
 
-A missing, unknown, revoked or expired token gets `401` with `WWW-Authenticate: Bearer`. A valid token whose user lacks the role a route needs gets `403`. A browser session cookie does not authenticate the admin API.
+A missing, unknown, revoked or expired token gets `401` with `WWW-Authenticate: Bearer`. A valid token whose user lacks the role a route needs, or whose scopes do not grant the call, gets `403`. A browser session cookie does not authenticate the admin API.
 
 ## Checks
 
