@@ -28,7 +28,7 @@ _VALUE_TYPES: tuple[tuple[type, SettingValueType], ...] = (
 )
 
 
-def _value_type(value: Any) -> SettingValueType:
+def value_type_of(value: Any) -> SettingValueType:
     """The stored type tag for a setting value; anything else is a string."""
     for python_type, value_type in _VALUE_TYPES:
         if isinstance(value, python_type):
@@ -144,4 +144,4 @@ class Setting(
         Args:
             new_value: The new value to store
         """
-        self.value = {"value": new_value, "type": _value_type(new_value)}
+        self.value = {"value": new_value, "type": value_type_of(new_value)}

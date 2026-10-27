@@ -16,6 +16,7 @@ import pytest_asyncio
 from app.core.config import settings
 from app.core.display_settings import current_display_settings, update_display_settings
 from app.core.rate_limit import limiter
+from app.crud.setting_crud import SettingCRUD
 from app.main import app
 from app.schemas.api_token_schema import ApiTokenCreate
 from app.services.core.api_token_core_service import ApiTokenCoreService
@@ -24,6 +25,7 @@ from app.services.core.settings_core_service import SettingsCoreService
 from app.services.core.timescale_core_service import TimescaleCoreService
 from fixtures.factories import make_user
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 pytestmark = pytest.mark.integration
@@ -267,6 +269,93 @@ async def test_a_display_setting_changes_what_is_shown_when_set_and_reset(
 
     assert set_to == "Asia/Tokyo"
     assert current_display_settings().timezone == "UTC"
+
+
+async def test_a_value_its_policy_refuses_leaves_the_setting_unchanged(
+    db: AsyncSession, client: AsyncClient
+) -> None:
+    # A row whose rules were lost: only the TimescaleDB policy bounds remain.
+    row = await SettingCRUD.get_by_key(db, "database.retention_days")
+    assert row is not None
+    row.validation = None
+    await db.flush()
+    user = make_user(role="admin")
+    db.add(user)
+    await db.flush()
+    _, session_token = await AuthCoreService().create_session(db, user.id)
+    client.cookies.set(settings.security.session_cookie_name, session_token)
+
+    resp = await client.post(
+        "/settings/database.retention_days/update", data={"value": "5000"}
+    )
+
+    assert resp.status_code == 400, resp.text
+    db.expire_all()
+    assert await SettingsCoreService.get_setting(db, "database.retention_days") == 90
+
+
+@pytest.mark.parametrize("raw", [b'{"value": NaN}', b'{"value": Infinity}'])
+async def test_a_float_setting_refuses_what_is_no_number(
+    db: AsyncSession, client: AsyncClient, raw: bytes
+) -> None:
+    await SettingsCoreService.create_setting(
+        db,
+        key="system.test_ratio",
+        category="system",
+        value=0.5,
+        display_name="Ratio",
+        validation={"min": 0.0},
+    )
+    admin = await _as(db, "admin")
+
+    resp = await client.put(
+        f"{SETTINGS}/system.test_ratio",
+        content=raw,
+        headers={**admin, "Content-Type": "application/json"},
+    )
+
+    assert resp.status_code == 422, resp.text
+    assert await SettingsCoreService.get_setting(db, "system.test_ratio") == 0.5
+
+
+async def test_a_row_holding_a_bare_value_is_read(
+    db: AsyncSession, client: AsyncClient
+) -> None:
+    await db.execute(
+        text("UPDATE settings SET value = CAST('60' AS json) WHERE key = :k"),
+        {"k": "check.default_interval"},
+    )
+    admin = await _as(db, "admin")
+
+    listed = await client.get(SETTINGS, headers=admin)
+    one = await client.get(f"{SETTINGS}/check.default_interval", headers=admin)
+
+    assert listed.status_code == 200, listed.text
+    assert one.json()["value"] == 60 and one.json()["type"] == "int"
+
+
+async def test_a_row_with_no_type_tag_is_set_as_the_type_it_holds(
+    db: AsyncSession, client: AsyncClient
+) -> None:
+    await db.execute(
+        text(
+            'UPDATE settings SET value = CAST(\'{"value": "GET"}\' AS json) '
+            "WHERE key = :k"
+        ),
+        {"k": "check.default_http_method"},
+    )
+    admin = await _as(db, "admin")
+
+    read = await client.get(f"{SETTINGS}/check.default_http_method", headers=admin)
+    resp = await client.put(
+        f"{SETTINGS}/check.default_http_method", json={"value": "POST"}, headers=admin
+    )
+
+    assert read.json()["type"] == "string"
+    assert resp.status_code == 200, resp.text
+    assert (
+        await SettingsCoreService.get_setting(db, "check.default_http_method") == "POST"
+    )
 
 
 # ── The metrics bearer token ────────────────────────────────────────────────

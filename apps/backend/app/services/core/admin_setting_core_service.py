@@ -9,7 +9,7 @@ policies, the display preferences) whatever the path.
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import NotFoundException
-from app.models.enum_model import SettingCategory, SettingValueType
+from app.models.enum_model import SettingCategory
 from app.schemas.admin_setting_schema import (
     MASK,
     AdminSetting,
@@ -20,38 +20,24 @@ from app.schemas.setting_schema import SettingResponse, SettingScalar
 from app.services.core.settings_core_service import (
     GENERATED_KEYS,
     SettingsCoreService,
+    stored_value_type,
 )
-
-
-def _unwrapped(stored: object) -> SettingScalar:
-    """A stored value without its type tag (a row written outside the app may
-    hold the bare value)."""
-    if isinstance(stored, dict) and "value" in stored:
-        value: SettingScalar = stored["value"]
-        return value
-    return None
 
 
 def _response(setting: SettingResponse) -> AdminSetting:
     generated = setting.key in GENERATED_KEYS
-    value = _unwrapped(setting.value)
-    default = _unwrapped(setting.default_value)
+    value: SettingScalar = setting.value.get("value")
+    default: SettingScalar = setting.default_value.get("value")
     if generated:
         value = MASK if value else ""
         default = MASK if default else ""
-    stored_type = setting.value.get("type")
-    value_type = (
-        SettingValueType(stored_type)
-        if stored_type in set(SettingValueType)
-        else SettingValueType.STRING
-    )
     return AdminSetting(
         key=setting.key,
         category=setting.category,
         subcategory=setting.subcategory,
         display_name=setting.display_name,
         description=setting.description,
-        type=value_type,
+        type=stored_value_type(setting.value),
         value=value,
         default_value=default,
         validation=setting.validation,

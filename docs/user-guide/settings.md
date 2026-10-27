@@ -300,7 +300,7 @@ Invalid values are rejected with an inline error.
 
 ### Resetting a Setting
 
-Click **Reset** (curved arrow) to revert a setting to its seeded default.
+Click **Reset** (curved arrow) to revert a setting to its seeded default. A reset applies what the setting governs, as a save does: resetting a retention or compression setting moves its TimescaleDB policy back too.
 
 > The tables below list the real keys and exact defaults. For the authoritative, complete list (every key, type, and validation), see the [Settings Reference](../reference/settings-reference.md#a-runtime-settings-database-backed-editable-in-the-ui).
 
@@ -409,7 +409,7 @@ New checks inherit these; existing checks are unchanged and users can override p
 
 - **Enable Metrics Endpoint** (`metrics.enabled`, bool) — Default **true**.
 - **Require Authentication** (`metrics.auth_required`, bool) — Default **false**.
-- **Bearer Token** (`metrics.bearer_token`, string) — empty by default.
+- **Bearer Token** (`metrics.bearer_token`, string) — empty by default. It is generated (**Generate New Token**), never typed in; a reset clears it.
 - **Agent Timeout (seconds)** (`metrics.agent_timeout_seconds`, int) — Default **300**, range 30–3600.
 
 ______________________________________________________________________
