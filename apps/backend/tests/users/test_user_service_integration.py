@@ -8,6 +8,7 @@ from __future__ import annotations
 from uuid import uuid4
 
 import pytest
+from app.core.exceptions import DuplicateResourceException, UserNotFoundException
 from app.crud.user_crud import UserCRUD
 from app.schemas.user_schema import UserCreate, UserUpdate
 from app.services.core.user_core_service import UserCoreService
@@ -57,15 +58,15 @@ class TestCreateUser:
 
     async def test_duplicate_username_raises(self, db: AsyncSession, svc):
         await svc.create_user(db, _create_data(username="dup"))
-        with pytest.raises(ValueError, match="already exists"):
+        with pytest.raises(DuplicateResourceException, match="already exists"):
             await svc.create_user(db, _create_data(username="dup"))
 
     async def test_a_duplicate_leaves_the_session_usable(self, db: AsyncSession, svc):
-        """The web form catches the ValueError and renders an error partial, so
+        """The web form catches the conflict and renders an error partial, so
         the request's session is then COMMITTED. A duplicate used to leave it
         in a failed flush: the commit raised after the response had started."""
         await svc.create_user(db, _create_data(username="dup2"))
-        with pytest.raises(ValueError, match="already exists"):
+        with pytest.raises(DuplicateResourceException, match="already exists"):
             await svc.create_user(db, _create_data(username="dup2"))
 
         assert await UserCRUD.get_by_username(db, "dup2") is not None
@@ -134,7 +135,7 @@ class TestUpdateUser:
         assert updated.full_name == "Just the name"
 
     async def test_missing_user_raises(self, db: AsyncSession, svc):
-        with pytest.raises(ValueError, match="User not found"):
+        with pytest.raises(UserNotFoundException):
             await svc.update_user(db, uuid4(), UserUpdate(role="admin"))
 
 
@@ -153,7 +154,7 @@ class TestDeleteAndUnlock:
         assert await svc.get_user_by_id(db, u.id) is None
 
     async def test_delete_missing_raises(self, db: AsyncSession, svc):
-        with pytest.raises(ValueError, match="not found"):
+        with pytest.raises(UserNotFoundException):
             await svc.delete_user(db, uuid4())
 
     async def test_unlock_clears_locked_until(self, db: AsyncSession, svc):

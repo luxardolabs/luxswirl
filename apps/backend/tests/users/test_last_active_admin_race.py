@@ -11,6 +11,7 @@ import asyncio
 from collections.abc import Awaitable, Callable
 
 import pytest
+from app.core.exceptions import LastActiveAdminException
 from app.models.user_model import User
 from app.schemas.user_schema import UserUpdate
 from app.services.core.user_core_service import UserCoreService
@@ -50,7 +51,7 @@ async def _race(
         await asyncio.sleep(0.3)
         assert not pending.done(), "the second request did not wait for the first"
         await s1.commit()
-        with pytest.raises(ValueError, match="last active admin"):
+        with pytest.raises(LastActiveAdminException, match="last active admin"):
             await pending
         await s2.rollback()
 
@@ -95,7 +96,7 @@ async def test_removing_one_of_two_admins_one_after_the_other_refuses_the_second
         await s1.commit()
 
     async with worker_db() as s2:
-        with pytest.raises(ValueError, match="last active admin"):
+        with pytest.raises(LastActiveAdminException, match="last active admin"):
             await svc.update_user(s2, b.id, UserUpdate(role="editor"))
 
     assert await _active_admins(worker_db) == 1

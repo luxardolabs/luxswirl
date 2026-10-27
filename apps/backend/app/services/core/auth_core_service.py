@@ -12,7 +12,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.common_passwords import is_common_password
 from app.core.datetime_utils import utc_now
-from app.core.exceptions import NotFoundException
+from app.core.exceptions import (
+    NotFoundException,
+    UserNotFoundException,
+    ValidationException,
+)
 from app.crud.session_crud import SessionCRUD
 from app.crud.user_crud import UserCRUD
 from app.models.session_model import Session
@@ -555,24 +559,26 @@ class AuthCoreService:
             force_change: Whether to force user to change password on next login
 
         Raises:
-            ValueError: If new password doesn't meet complexity requirements
-            NotFoundException: If the user no longer exists
+            ValidationException: The new password does not meet the policy.
+            UserNotFoundException: If the user no longer exists
         """
         # Validate new password complexity
         valid, error_message = await self.validate_password_complexity(db, new_password)
         if not valid:
-            raise ValueError(error_message)
+            raise ValidationException(error_message)
 
         user = await UserCRUD.get_by_id(db, user_id)
         if user is None:
-            raise NotFoundException(f"User {user_id} not found")
+            raise UserNotFoundException(user_id)
 
         user.password_hash = self.hash_password(new_password)
         user.password_changed_at = utc_now()
         user.must_change_password = force_change
         user.failed_login_attempts = 0
         user.locked_until = None
-        # A reset answers a compromised account: its API tokens stop with it.
+        # A reset answers a compromised account: its sessions and API tokens
+        # stop with it.
+        await self.logout_all_sessions(db, user.id)
         await ApiTokenCoreService.revoke_all_for_user(db, user.id, "password_reset")
 
         logger.info(

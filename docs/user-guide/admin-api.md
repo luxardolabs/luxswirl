@@ -261,6 +261,22 @@ The scheduled jobs the web UI's Scheduler page shows, addressed by `job_key`. Ev
 
 A run is recorded in the job's history either way. A run that fails is still a `200`: its `status` is `failed` and its `error` says why. A job runs once at a time: asking to run one while a run of it (scheduled or by hand) is in progress is a `409`. An unknown `job_key` is a `404`.
 
+## Users
+
+User accounts, addressed by id. Every route takes an admin's token. No response carries a password or its hash.
+
+| Method   | Path                                      | Does                                                                                            |
+| -------- | ----------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `GET`    | `/api/v1/admin/users`                     | One page of users; `role`, `is_active`, `search`                                                |
+| `GET`    | `/api/v1/admin/users/{id}`                | One user                                                                                        |
+| `POST`   | `/api/v1/admin/users`                     | `{"username", "password", "role"?, "full_name"?, "is_active"?, "must_change_password"?}`; `201` |
+| `PATCH`  | `/api/v1/admin/users/{id}`                | Change `role`, `full_name` (`null` clears it), `is_active`, `must_change_password`              |
+| `DELETE` | `/api/v1/admin/users/{id}`                | Delete the user; `204`                                                                          |
+| `POST`   | `/api/v1/admin/users/{id}/reset-password` | `{"new_password", "must_change"?}`: the user's sessions and API tokens end                      |
+| `POST`   | `/api/v1/admin/users/{id}/unlock`         | Clear the user's failed sign-ins and lock                                                       |
+
+A new user must change their password at first sign-in unless `must_change_password` is `false`. A password must meet the policy under Settings > Security (`422` otherwise); a taken username is a `409`. A role change ends the user's sessions. A change or delete that would leave no active admin is a `409`, and no one deletes their own account (`422`). A password reset counts against `security.password_reset_rate_limit` per token as well as the API's own limit.
+
 ## OpenAPI document
 
 `/api/v1/admin/openapi.json` describes every admin-API route, with the bearer scheme declared. It is served to any token holder in every environment, so a client generator or an AI agent can read it. The app-wide `/docs` and `/openapi.json` stay off in production.

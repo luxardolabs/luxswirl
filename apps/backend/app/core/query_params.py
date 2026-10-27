@@ -31,6 +31,7 @@ from app.models.enum_model import (
     NotificationProviderType,
     NotificationStatus,
     SettingCategory,
+    UserRole,
 )
 
 
@@ -132,6 +133,11 @@ PublicFilter = Annotated[
     bool | None,
     BeforeValidator(empty_to_none),
     Query(description="Filter by public status"),
+]
+UserRoleFilter = Annotated[
+    UserRole | None,
+    BeforeValidator(empty_to_none),
+    Query(description="Filter by role"),
 ]
 ActiveFilter = Annotated[
     bool | None,
