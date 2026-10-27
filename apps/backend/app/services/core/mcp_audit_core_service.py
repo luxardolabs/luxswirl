@@ -7,6 +7,7 @@ seeing what an agent did, not for replaying it. Rows older than the retention ar
 pruned by the job purge task.
 """
 
+import ipaddress
 from datetime import timedelta
 from typing import Any
 
@@ -20,24 +21,41 @@ from app.schemas.api_token_schema import ApiPrincipal
 
 # How long a tool call stays in the audit log.
 AUDIT_RETENTION = timedelta(days=90)
+# The longest tool name the audit log keeps (the column's width); an agent may send any.
+TOOL_NAME_LENGTH = 100
 
 
 def masked_arguments(arguments: dict[str, Any]) -> dict[str, Any]:
     """A tool call's arguments as the audit log keeps them: every credential masked,
     a synthetic script by its size alone."""
-    return {key: _masked(key, value) for key, value in arguments.items()}
+    return {_storable(key): _masked(key, value) for key, value in arguments.items()}
 
 
 def _masked(key: object, value: object) -> object:
     if key == "script_code" and isinstance(value, str):
         return f"<{len(value)} characters>"
     if isinstance(value, dict):
-        return {str(k): _masked(k, v) for k, v in value.items()}
+        return {_storable(str(k)): _masked(k, v) for k, v in value.items()}
     if isinstance(value, list):
         return [_masked(None, item) for item in value]
     if isinstance(value, str):
-        return mask_credentials(value)
+        return _storable(mask_credentials(value))
     return value
+
+
+def _storable(text: str) -> str:
+    """`text` without the NUL characters Postgres refuses in text and JSON."""
+    return text.replace("\x00", "")
+
+
+def _address(value: str | None) -> str | None:
+    """`value` when it is an IP address; None otherwise (no peer, a unix socket)."""
+    if not value:
+        return None
+    try:
+        return str(ipaddress.ip_address(value))
+    except ValueError:
+        return None
 
 
 class MCPAuditCoreService:
@@ -62,13 +80,15 @@ class MCPAuditCoreService:
             db,
             user_id=principal.user.id if principal else None,
             api_token_id=principal.token_id if principal else None,
-            tool_name=tool_name,
+            tool_name=_storable(tool_name)[:TOOL_NAME_LENGTH],
             arguments=masked_arguments(arguments),
             success=success,
-            error_message=mask_credentials(error_message),
+            error_message=(
+                _storable(mask_credentials(error_message)) if error_message else None
+            ),
             duration_ms=duration_ms,
-            ip_address=ip_address,
-            user_agent=user_agent,
+            ip_address=_address(ip_address),
+            user_agent=_storable(user_agent) if user_agent else None,
             denial_code=denial_code,
         )
 

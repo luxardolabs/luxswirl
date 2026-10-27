@@ -6,17 +6,25 @@ Ported from LuxWX's app/mcp/server.py (itself LuxPM's), with these adaptations:
    credential and the same checks as the admin API: unrevoked, unexpired, an active
    user who owes no password change. The token's user, role and scopes are the
    principal; there is no tenant, pack or station pin.
-2. Some tools change data, so a call that fails is rolled back before its audit row
-   is written: a half-made change is never committed. LuxWX's tools only read.
-3. An unexpected error reaches the agent as a fixed message, never its own text: a
+2. Some tools change data, so each tool call runs in a transaction of its own,
+   committed BEFORE its result is handed to the transport: an agent told a change was
+   made can rely on it, and a call that fails is rolled back whole. LuxWX's tools only
+   read, and commit in the middleware after the response.
+3. The audit row is written in a transaction of its own, so it can never undo a
+   tool's change, nor a tool's failure lose the row.
+4. An unexpected error reaches the agent as a fixed message, never its own text: a
    database error's text carries the statement and its parameters.
+5. The SDK's own input validation is off: the gate runs first on every call, a
+   refused call is answered FORBIDDEN before any schema of the tool is disclosed, and
+   every call is audited. The handlers validate their own arguments.
 
-TRANSACTION OWNERSHIP: this middleware owns the request's session (`worker_session`,
-the app's non-request owner), committing on success and rolling back on failure. Tool
-handlers are request-scoped CONSUMERS and never commit.
+TRANSACTION OWNERSHIP: no session is held across a request. Authentication stamps
+the token's `last_used_at` in its own short transaction; `call_tool` owns each call's
+(`worker_session`, the app's non-request owner). Tool handlers are CONSUMERS and
+never commit. The streamable-HTTP GET (a server-to-client event stream) and DELETE
+(ending a session) have no use in this stateless, JSON-only server and are refused.
 """
 
-import hashlib
 import time
 from typing import Any
 
@@ -24,7 +32,6 @@ from mcp.server import Server
 from mcp.server.fastmcp.server import StreamableHTTPASGIApp
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 from mcp.types import CallToolResult, TextContent, Tool
-from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
@@ -36,13 +43,13 @@ from app.db import worker_session
 from app.mcp.authorization import AuthorizationError, authorize_tool_call, may_call
 from app.mcp.authorization.registry import is_meta_tool
 from app.mcp.context import (
-    get_db,
     get_origin,
     get_principal,
+    set_db,
     set_origin,
-    set_request_context,
+    set_principal,
 )
-from app.mcp.tools import ALL_TOOLS, HANDLERS, ToolError
+from app.mcp.tools import ALL_TOOLS, HANDLERS, ToolError, ToolHandler
 from app.mcp.validators import MCPValidationError
 from app.models.enum_model import MCPDenialCode
 from app.services.core.api_token_core_service import TOKEN_PREFIX, ApiTokenCoreService
@@ -83,18 +90,29 @@ def _error_result(message: str) -> CallToolResult:
     )
 
 
-@mcp_server.call_tool()
+class _ToolFailed(Exception):
+    """A tool call's failure, carrying what the agent reads and what the audit keeps."""
+
+    def __init__(self, reply: str, error_message: str) -> None:
+        super().__init__(error_message)
+        self.reply = reply
+        self.error_message = error_message
+
+
+@mcp_server.call_tool(validate_input=False)
 async def call_tool(
     name: str, arguments: dict[str, Any]
 ) -> list[TextContent] | CallToolResult:
-    """Authorize, then dispatch, then audit whatever the outcome.
+    """Authorize, then dispatch in a transaction of its own, then audit the outcome.
 
     AUTHORIZATION HAPPENS HERE, once, before any handler runs. Handlers are consumers:
     the core services they call keep their own rules (the synthetic-check rule, the
     viewer's masking), but they do not decide whether the call is permitted.
 
-    FAILURES RETURN `CallToolResult(isError=True)`, NOT a bare content list, so the
-    audit trail and the client agree on what failed.
+    The call's transaction is committed before its result is returned, so the SDK
+    never sends a success the database did not keep. FAILURES RETURN
+    `CallToolResult(isError=True)`, NOT a bare content list, so the audit trail and the
+    client agree on what failed.
     """
     start = time.monotonic()
     success = True
@@ -103,21 +121,18 @@ async def call_tool(
     # Map at the write: the SDK dictates this handler's `name` param (protocol
     # contract); mcp tool_name is the column it lands in.
     tool_name = name
+    principal = get_principal()
 
     try:
-        principal = get_principal()
         if principal is None:
             raise RuntimeError("principal missing from MCP context")
-
         authorize_tool_call(principal=principal, tool_name=tool_name)
-
         # Looked up AFTER authorization so an unregistered/unauthorized name is answered
         # by the gate, not by a "no such tool" that would confirm what does exist.
         handler = HANDLERS.get(name)
         if handler is None:
             raise RuntimeError(f"Tool {name} is registered but has no handler")
-
-        return await handler(arguments)
+        return await _run(handler, arguments)
     except AuthorizationError as exc:
         success = False
         error_message = f"{exc.code}: {exc.message}"
@@ -127,34 +142,32 @@ async def call_tool(
             extra={"tool": name, "code": str(exc.code), "required": exc.required_scope},
         )
         return _error_result(f"FORBIDDEN: {exc.message}")
-    except (ToolError, MCPValidationError) as exc:
-        # Expected, agent-correctable failures (a bad id, an unknown field).
+    except _ToolFailed as exc:
         success = False
-        error_message = str(exc)
-        await _roll_back()
-        return _error_result(f"Error: {exc}")
-    except LuxSwirlException as exc:
-        # The core's own refusals (not found, invalid, not allowed): written for users.
-        success = False
-        error_message = exc.message
-        await _roll_back()
-        return _error_result(f"Error: {exc.message}")
+        error_message = exc.error_message
+        return _error_result(exc.reply)
     except Exception as exc:
         success = False
         error_message = type(exc).__name__
         logger.exception("MCP tool error", extra={"tool": name})
-        await _roll_back()
         return _error_result(_INTERNAL_ERROR)
     finally:
         await _audit(tool_name, arguments, success, error_message, denial_code, start)
 
 
-async def _roll_back() -> None:
-    """Undo whatever a failed tool changed, so the middleware commits only the audit."""
+async def _run(handler: ToolHandler, arguments: dict[str, Any]) -> list[TextContent]:
+    """Run a handler in a transaction of its own: committed on success, before the
+    result leaves; rolled back whole on any failure."""
     try:
-        await get_db().rollback()
-    except Exception:
-        logger.exception("Rollback after a failed MCP tool call failed")
+        async with worker_session() as db:
+            set_db(db)
+            return await handler(arguments)
+    except (ToolError, MCPValidationError) as exc:
+        # Expected, agent-correctable failures (a bad id, an unknown field).
+        raise _ToolFailed(f"Error: {exc}", str(exc)) from exc
+    except LuxSwirlException as exc:
+        # The core's own refusals (not found, invalid, not allowed): written for users.
+        raise _ToolFailed(f"Error: {exc.message}", exc.message) from exc
 
 
 async def _audit(
@@ -165,72 +178,40 @@ async def _audit(
     denial_code: MCPDenialCode | None,
     start: float,
 ) -> None:
-    """Record the call. Best-effort: an audit failure never replaces the tool's answer."""
-    audit_db: AsyncSession | None = None
+    """Record the call, in a transaction of its own. Best-effort: an audit failure is
+    logged and never replaces the tool's answer or touches its change."""
     try:
-        audit_db = get_db()
-        principal = get_principal()
         ip_address, user_agent = get_origin()
-        await MCPAuditCoreService.log_call(
-            audit_db,
-            principal=principal,
-            tool_name=tool_name,
-            arguments=arguments,
-            success=success,
-            error_message=error_message,
-            duration_ms=int((time.monotonic() - start) * 1000),
-            denial_code=denial_code,
-            ip_address=ip_address,
-            user_agent=user_agent,
-        )
+        async with worker_session() as audit_db:
+            await MCPAuditCoreService.log_call(
+                audit_db,
+                principal=get_principal(),
+                tool_name=tool_name,
+                arguments=arguments,
+                success=success,
+                error_message=error_message,
+                duration_ms=int((time.monotonic() - start) * 1000),
+                denial_code=denial_code,
+                ip_address=ip_address,
+                user_agent=user_agent,
+            )
     except Exception:
-        # Audit must never poison the outer session. If the insert left the session
-        # pending-rollback, roll back here so the middleware's commit can still
-        # proceed and the client gets the tool's real response.
-        logger.warning(
-            "Failed to log MCP tool call", extra={"tool": tool_name}, exc_info=True
-        )
-        if audit_db is not None:
-            try:
-                await audit_db.rollback()
-            except Exception:
-                logger.exception(
-                    "Rollback after failed MCP tool-call audit failed",
-                    extra={"tool": tool_name},
-                )
+        logger.exception("Failed to log MCP tool call", extra={"tool": tool_name})
 
 
 # The failed-credential limiter's name for this surface.
 _MCP_AUTH_SURFACE = "mcp-auth"
 # The per-token call limit's name for this surface.
 _MCP_TOKEN_CALLS_SURFACE = "mcp-token-calls"
-# How long a token proven valid skips the failed-credential count.
-_PROVEN_SECONDS = 60.0
-_recently_proven: dict[str, float] = {}
-
-
-def _digest(token: str) -> str:
-    return hashlib.sha256(b"mcp-proven:" + token.encode("utf-8")).hexdigest()
-
-
-def _is_recently_proven(token: str) -> bool:
-    until = _recently_proven.get(_digest(token))
-    return until is not None and until > time.monotonic()
-
-
-def _mark_proven(token: str) -> None:
-    now = time.monotonic()
-    for digest, until in list(_recently_proven.items()):
-        if until <= now:
-            del _recently_proven[digest]
-    _recently_proven[_digest(token)] = now + _PROVEN_SECONDS
+# The streamable-HTTP methods this stateless, JSON-only server answers.
+_METHODS = frozenset({"POST"})
 
 
 class MCPAuthMiddleware:
     """ASGI middleware authenticating MCP requests by the user's `lsw_` API token.
 
-    Owns the request's DB session: mints it, binds the context, commits on success and
-    rolls back on failure. Handlers downstream must not commit.
+    Holds no database session across the request: authentication runs in its own
+    short transaction, and each tool call opens its own in `call_tool`.
     """
 
     def __init__(self, app: ASGIApp) -> None:
@@ -252,6 +233,15 @@ class MCPAuthMiddleware:
             await response(scope, receive, send)
             return
 
+        if request.method not in _METHODS:
+            response = JSONResponse(
+                {"error": "Method not allowed: this server answers POST only"},
+                status_code=405,
+                headers={"Allow": "POST"},
+            )
+            await response(scope, receive, send)
+            return
+
         token = self._extract_token(request)
         if not token:
             # RFC 6750 §3: a bearer 401 carries a WWW-Authenticate challenge.
@@ -263,17 +253,12 @@ class MCPAuthMiddleware:
             await response(scope, receive, send)
             return
 
-        # Every token check a client makes counts against its per-minute limit, counted
-        # before the lookup so a concurrent burst cannot outrun it. A token proven in the
-        # last minute skips the count, so a working agent is never refused because
-        # someone else probed from its address (FLEET-RATE-LIMIT-STANDARD §3).
+        # A client that has presented too many refused tokens this minute is refused
+        # before its token is looked up; only a refused token counts against it, so
+        # valid tokens from a shared address never do (FLEET-RATE-LIMIT-STANDARD §3).
         client_ip = client_ip_from_request(request)
-        retry_after = (
-            None
-            if _is_recently_proven(token)
-            else rate_limit.credential_attempts.retry_after(
-                _MCP_AUTH_SURFACE, client_ip
-            )
+        retry_after = rate_limit.credential_attempts.over_limit(
+            _MCP_AUTH_SURFACE, client_ip
         )
         if retry_after is not None:
             response = JSONResponse(
@@ -284,51 +269,50 @@ class MCPAuthMiddleware:
             await response(scope, receive, send)
             return
 
-        # worker_session is the app's non-request session owner: it commits on clean
-        # exit and rolls back on exception.
+        # Its own short transaction: the last_used_at stamp is committed now, so no
+        # row lock on the token outlives authentication.
         async with worker_session() as db:
             principal = await ApiTokenCoreService.authenticate(db, token)
-            if principal is None:
-                # Deliberately indistinguishable across unknown/revoked/expired/inactive
-                # user — don't help an attacker enumerate valid tokens.
-                response = JSONResponse(
-                    {"error": "Invalid or revoked API token"},
-                    status_code=401,
-                    headers={
-                        "WWW-Authenticate": (
-                            'Bearer realm="luxswirl-mcp", error="invalid_token", '
-                            'error_description="The API token is invalid, revoked '
-                            'or expired"'
-                        )
-                    },
-                )
-                await response(scope, receive, send)
-                return
-            _mark_proven(token)
-
-            # The token's own call budget: caps what a leaked token can pull.
-            retry_after = rate_limit.mcp_token_calls.retry_after(
-                _MCP_TOKEN_CALLS_SURFACE, str(principal.token_id)
+        if principal is None:
+            rate_limit.credential_attempts.count(_MCP_AUTH_SURFACE, client_ip)
+            # Deliberately indistinguishable across unknown/revoked/expired/inactive
+            # user — don't help an attacker enumerate valid tokens.
+            response = JSONResponse(
+                {"error": "Invalid or revoked API token"},
+                status_code=401,
+                headers={
+                    "WWW-Authenticate": (
+                        'Bearer realm="luxswirl-mcp", error="invalid_token", '
+                        'error_description="The API token is invalid, revoked '
+                        'or expired"'
+                    )
+                },
             )
-            if retry_after is not None:
-                logger.info(
-                    "MCP request refused: token over its call limit",
-                    extra={"token_id": str(principal.token_id)},
-                )
-                response = JSONResponse(
-                    {"error": "Too many requests for this API token"},
-                    status_code=429,
-                    headers={"Retry-After": str(retry_after)},
-                )
-                await response(scope, receive, send)
-                return
+            await response(scope, receive, send)
+            return
 
-            set_request_context(db, principal)
-            # The proxy-aware resolver the rate limiter uses: X-Forwarded-For is only
-            # honored when the peer is a trusted proxy, so a caller cannot forge it.
-            set_origin(client_ip, request.headers.get("user-agent"))
+        # The token's own call budget: caps what a leaked token can pull.
+        retry_after = rate_limit.mcp_token_calls.retry_after(
+            _MCP_TOKEN_CALLS_SURFACE, str(principal.token_id)
+        )
+        if retry_after is not None:
+            logger.info(
+                "MCP request refused: token over its call limit",
+                extra={"token_id": str(principal.token_id)},
+            )
+            response = JSONResponse(
+                {"error": "Too many requests for this API token"},
+                status_code=429,
+                headers={"Retry-After": str(retry_after)},
+            )
+            await response(scope, receive, send)
+            return
 
-            await self.app(scope, receive, send)
+        set_principal(principal)
+        # The proxy-aware resolver the rate limiter uses: X-Forwarded-For is only
+        # honored when the peer is a trusted proxy, so a caller cannot forge it.
+        set_origin(client_ip, request.headers.get("user-agent"))
+        await self.app(scope, receive, send)
 
     @staticmethod
     def _extract_token(request: Request) -> str | None:

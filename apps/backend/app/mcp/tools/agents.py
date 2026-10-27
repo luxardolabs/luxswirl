@@ -6,7 +6,7 @@ from mcp.types import TextContent, Tool
 
 from app.mcp.context import get_db
 from app.mcp.formatting import json_response
-from app.mcp.tools._base import PAGE_PROPERTIES, bool_arg, page_args
+from app.mcp.tools._base import PAGE_PROPERTIES, bool_arg, page_args, text_arg
 from app.mcp.validators import validate_uuid
 from app.services.core.admin_agent_core_service import AdminAgentCoreService
 
@@ -23,6 +23,7 @@ TOOLS: list[Tool] = [
                 **PAGE_PROPERTIES,
                 "search": {
                     "type": "string",
+                    "maxLength": 255,
                     "description": "Match the agent's name, hostname or address",
                 },
                 "archived": {"type": "boolean", "description": "List archived agents"},
@@ -52,7 +53,7 @@ async def handle_list_agents(arguments: dict[str, Any]) -> list[TextContent]:
             get_db(),
             page=page,
             per_page=per_page,
-            search=arguments.get("search") or None,
+            search=text_arg(arguments.get("search"), "search", max_length=255),
             archived=bool_arg(arguments.get("archived"), "archived", default=False),
             exclude_pending=bool_arg(
                 arguments.get("exclude_pending"), "exclude_pending", default=False

@@ -53,6 +53,19 @@ def choice[E: StrEnum](value: Any, enum: type[E], field_name: str) -> E | None:
         ) from None
 
 
+def text_arg(value: Any, field_name: str, *, max_length: int) -> str | None:
+    """A free-text argument, at most `max_length` characters (the route's own bound)."""
+    if value in (None, ""):
+        return None
+    if not isinstance(value, str):
+        raise MCPValidationError(f"{field_name} must be a string")
+    if len(value) > max_length:
+        raise MCPValidationError(
+            f"{field_name} is at most {max_length} characters, got {len(value)}"
+        )
+    return value
+
+
 def bool_arg(value: Any, field_name: str, *, default: bool) -> bool:
     if value is None:
         return default
