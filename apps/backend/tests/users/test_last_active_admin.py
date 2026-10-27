@@ -8,6 +8,7 @@ count: it cannot sign in.
 from __future__ import annotations
 
 import pytest
+from app.core.exceptions import LastActiveAdminException
 from app.schemas.user_schema import UserUpdate
 from app.services.core.user_core_service import UserCoreService
 from fixtures.factories import make_user
@@ -36,7 +37,7 @@ async def test_the_last_active_admin_keeps_the_role(
 ) -> None:
     admin = await _only_admin(db, {"role": "admin", "is_active": False})
 
-    with pytest.raises(ValueError, match="last active admin"):
+    with pytest.raises(LastActiveAdminException, match="last active admin"):
         await UserCoreService().update_user(
             db, admin.id, UserUpdate.model_validate(change)
         )
@@ -75,7 +76,7 @@ async def test_the_last_active_admin_cannot_be_deleted_beside_an_inactive_one(
 ) -> None:
     admin = await _only_admin(db, {"role": "admin", "is_active": False})
 
-    with pytest.raises(ValueError, match="last active admin"):
+    with pytest.raises(LastActiveAdminException, match="last active admin"):
         await UserCoreService().delete_user(db, admin.id)
 
 

@@ -14,7 +14,11 @@ from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.datetime_utils import utc_now
-from app.core.exceptions import validation_message, value_error_message
+from app.core.exceptions import (
+    LuxSwirlException,
+    validation_message,
+    value_error_message,
+)
 from app.models.enum_model import UserRole, options_for
 from app.schemas.auth_schema import AuthedUser
 from app.schemas.pagination_schema import build_pagination
@@ -158,6 +162,8 @@ class WebUsersViewService:
             return user, None
         except ValueError as e:
             return None, value_error_message(e)
+        except LuxSwirlException as e:
+            return None, e.message
 
     async def update_user(
         self,
@@ -189,9 +195,11 @@ class WebUsersViewService:
             return user, None
         except ValueError as e:
             return None, value_error_message(e)
+        except LuxSwirlException as e:
+            return None, e.message
 
     async def delete_user(
-        self, db: AsyncSession, user_id: UUID
+        self, db: AsyncSession, user_id: UUID, actor_id: UUID
     ) -> tuple[bool, str | None]:
         """
         Delete user.
@@ -199,13 +207,15 @@ class WebUsersViewService:
         Args:
             db: Database session
             user_id: User ID
+            actor_id: The admin asking (who cannot delete themselves)
 
         Returns:
             Tuple of (success, error message if failed)
         """
-        success = await self.user_service.delete_user(db, user_id)
-        if not success:
-            return False, "User not found"
+        try:
+            await self.user_service.delete_user(db, user_id, actor_id=actor_id)
+        except LuxSwirlException as e:
+            return False, e.message
         return True, None
 
     async def reset_password(
@@ -240,6 +250,8 @@ class WebUsersViewService:
             return user, None
         except ValueError as e:
             return None, value_error_message(e)
+        except LuxSwirlException as e:
+            return None, e.message
 
     async def unlock_user(
         self, db: AsyncSession, user_id: UUID
@@ -260,6 +272,8 @@ class WebUsersViewService:
             return await self.user_service.unlock_user(db, user_id), None
         except ValueError as e:
             return None, value_error_message(e)
+        except LuxSwirlException as e:
+            return None, e.message
 
     async def build_users_page_context(
         self,

@@ -7,6 +7,13 @@ from uuid import UUID
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.exceptions import (
+    AuthorizationException,
+    DuplicateResourceException,
+    LastActiveAdminException,
+    UserNotFoundException,
+    ValidationException,
+)
 from app.crud.user_crud import UserCRUD
 from app.models.enum_model import UserRole
 from app.models.user_model import User
@@ -44,14 +51,15 @@ class UserCoreService:
             Created User object
 
         Raises:
-            ValueError: If username or email already exists, or password doesn't meet complexity requirements
+            ValidationException: The password does not meet the policy.
+            DuplicateResourceException: The username is taken.
         """
         # Validate password complexity
         valid, error_message = await self.auth_service.validate_password_complexity(
             db, user_data.password
         )
         if not valid:
-            raise ValueError(error_message)
+            raise ValidationException(error_message)
 
         # Hash password
         password_hash = self.auth_service.hash_password(user_data.password)
@@ -69,8 +77,8 @@ class UserCoreService:
 
         try:
             # A savepoint, so a duplicate rolls back only this insert: callers
-            # turn the ValueError into a form error and the request's session
-            # is still committed afterwards.
+            # turn the error into a form error and the request's session is
+            # still committed afterwards.
             user = await UserCRUD.add_user(db, user)
             logger.info(
                 "Created user",
@@ -83,11 +91,13 @@ class UserCoreService:
             )
             return UserResponse.model_validate(user)
         except IntegrityError as e:
+            # The database's own text is not repeated: it carries the row's
+            # values, the password hash among them.
             if "username" in str(e):
-                raise ValueError(
+                raise DuplicateResourceException(
                     f"Username '{user_data.username}' already exists"
                 ) from e
-            raise ValueError(f"User creation failed: {e}") from e
+            raise ValidationException("The user could not be created") from e
 
     async def get_user(self, db: AsyncSession, user_id: UUID) -> UserResponse | None:
         """The user as the web seam holds it — a DTO, not the ORM row.
@@ -117,6 +127,16 @@ class UserCoreService:
             return False
         user = await UserCRUD.get_by_id(db, user_id)
         return user is not None and user.is_active and user.role == UserRole.ADMIN
+
+    @staticmethod
+    async def require_active_admin(db: AsyncSession, actor_id: UUID) -> None:
+        """Refuse unless `actor_id` is, now, an active admin.
+
+        Raises:
+            AuthorizationException: The actor is not an active admin.
+        """
+        if not await UserCoreService.is_active_admin(db, actor_id):
+            raise AuthorizationException("Admin access required")
 
     async def get_user_by_id(self, db: AsyncSession, user_id: UUID) -> User | None:
         """
@@ -179,12 +199,13 @@ class UserCoreService:
             Updated User object
 
         Raises:
-            ValueError: If user not found or update fails
+            UserNotFoundException: No user has the id.
+            LastActiveAdminException: The change leaves no active admin.
         """
         # Get user
         user = await self.get_user_by_id(db, user_id)
         if not user:
-            raise ValueError(f"User not found: {user_id}")
+            raise UserNotFoundException(user_id)
 
         # Track if role is changing (security: invalidate sessions on privilege escalation)
         original_role = user.role
@@ -227,7 +248,7 @@ class UserCoreService:
             )
             return UserResponse.model_validate(user)
         except IntegrityError as e:
-            raise ValueError(f"User update failed: {e}") from e
+            raise ValidationException("The user could not be updated") from e
 
     @staticmethod
     async def _assert_an_active_admin_remains(
@@ -236,35 +257,43 @@ class UserCoreService:
         """Refuse a change that leaves no active admin to sign in and manage users.
 
         Raises:
-            ValueError: If `user` is the last active admin and would stop being one.
+            LastActiveAdminException: `user` is the last active admin and would
+                stop being one.
         """
         is_active_admin = user.role == UserRole.ADMIN and user.is_active
         if not is_active_admin or stays_active_admin:
             return
         if await UserCRUD.count_other_active_admins(db, user.id) == 0:
-            raise ValueError(
+            raise LastActiveAdminException(
                 "Cannot remove the last active admin: make another user an "
                 "active admin first"
             )
 
-    async def delete_user(self, db: AsyncSession, user_id: UUID) -> bool:
+    async def delete_user(
+        self, db: AsyncSession, user_id: UUID, actor_id: UUID | None = None
+    ) -> bool:
         """
         Delete user.
 
         Args:
             db: Database session
             user_id: User UUID
+            actor_id: Who asks; no one deletes their own account
 
         Returns:
             True if user was deleted
 
         Raises:
-            ValueError: If user not found or is last admin
+            ValidationException: The user is the one asking.
+            UserNotFoundException: No user has the id.
+            LastActiveAdminException: The user is the last active admin.
         """
+        if actor_id is not None and actor_id == user_id:
+            raise ValidationException("Cannot delete your own account")
         # Get user
         user = await self.get_user_by_id(db, user_id)
         if not user:
-            raise ValueError(f"User not found: {user_id}")
+            raise UserNotFoundException(user_id)
 
         await self._assert_an_active_admin_remains(db, user, stays_active_admin=False)
 
@@ -315,11 +344,11 @@ class UserCoreService:
             Updated User object
 
         Raises:
-            ValueError: If user not found
+            UserNotFoundException: No user has the id.
         """
         user = await self.get_user_by_id(db, user_id)
         if not user:
-            raise ValueError(f"User not found: {user_id}")
+            raise UserNotFoundException(user_id)
 
         user.locked_until = None
         user.failed_login_attempts = 0

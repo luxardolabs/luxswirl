@@ -462,7 +462,7 @@ Use the edit (pencil) action to change role, full name, active status, and the m
 
 ### Resetting a Password
 
-Use the reset-password action to set a new password; **Must Change** defaults to on so the user is prompted to change it at next login.
+Use the reset-password action to set a new password; **Must Change** defaults to on so the user is prompted to change it at next login. A reset signs the user out everywhere: their sessions end, and their API tokens are revoked.
 
 ### Unlocking an Account
 

@@ -78,8 +78,17 @@ deps = [
 # Admin-tier surfaces: settings (including users), registration keys, and the
 # agent approval/lifecycle actions. require_admin_web (AdminUserWeb) is the
 # web's role gate; require_api_admin (ApiAdmin) is the admin API's.
+# require_active_admin (UserCoreService) is the core's: it re-reads, in the
+# caller's transaction, that the acting user is an active admin, so a core
+# method is gated whoever calls it.
 admin_url_patterns = ["/settings", "/registration-keys", "/users"]
-require_names = ["require_admin_web", "AdminUserWeb", "require_api_admin", "ApiAdmin"]
+require_names = [
+  "require_admin_web",
+  "AdminUserWeb",
+  "require_api_admin",
+  "ApiAdmin",
+  "require_active_admin",
+]
 
 # AUDIT confirmations — rules examined and found genuinely N/A, recorded so the
 # next reader knows they were adjudicated rather than overlooked:

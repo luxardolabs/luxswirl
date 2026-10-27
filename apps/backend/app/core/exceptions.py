@@ -97,6 +97,22 @@ class SchedulerJobBusyException(LuxSwirlException):
         )
 
 
+class UserNotFoundException(NotFoundException):
+    """Raised when no user has the id."""
+
+    def __init__(self, user_id: object):
+        super().__init__(
+            message=f"User not found: {user_id}", details={"user_id": str(user_id)}
+        )
+
+
+class LastActiveAdminException(LuxSwirlException):
+    """Raised by a change that would leave no active admin to sign in."""
+
+    status_code = 409
+    error_code = "LAST_ACTIVE_ADMIN"
+
+
 class DuplicateResourceException(LuxSwirlException):
     """Raised when attempting to create a duplicate resource."""
 

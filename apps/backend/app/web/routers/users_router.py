@@ -280,11 +280,7 @@ async def delete_user(
 
     web_users = WebUsersViewService()
 
-    # Prevent deleting self
-    if admin.id == user_id:
-        return hx_toast_without_swap("Cannot delete your own account")
-
-    success, error = await web_users.delete_user(db, user_id)
+    success, error = await web_users.delete_user(db, user_id, actor_id=admin.id)
 
     if error:
         return hx_toast_without_swap(error)
