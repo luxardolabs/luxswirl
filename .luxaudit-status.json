@@ -5,12 +5,37 @@
   "packages": 103,
   "source": "apps/backend/poetry.lock, apps/agent/poetry.lock",
   "summary": {
-    "PASS": 103,
-    "FAIL": 0,
+    "PASS": 102,
+    "FAIL": 1,
     "XFAIL": 0,
     "INERT": 1
   },
-  "vulnerable": [],
+  "vulnerable": [
+    {
+      "package": "dnspython",
+      "version": "2.8.0",
+      "vuln_id": "CVE-2026-114605",
+      "fix": "2.9.0",
+      "sources": [
+        "apps/backend/poetry.lock",
+        "apps/agent/poetry.lock"
+      ],
+      "occurrences": [
+        {
+          "listed": [
+            "apps/backend/poetry.lock"
+          ],
+          "file": "apps/backend/poetry.lock"
+        },
+        {
+          "listed": [
+            "apps/agent/poetry.lock"
+          ],
+          "file": "apps/agent/poetry.lock"
+        }
+      ]
+    }
+  ],
   "deferred": [],
   "banned": [],
   "not_audited": [],
@@ -27,6 +52,6 @@
     "vulnerable": [],
     "deferred": []
   },
-  "commit": "a76ff1fe24805f007092a63ab894b6419d36bd1c",
-  "generated_at": "2026-10-27T14:25:33Z"
+  "commit": "f84751d7ae8e778b51aadae7dfea25dc8691025c",
+  "generated_at": "2026-10-27T16:09:01Z"
 }
