@@ -5,11 +5,15 @@ StatusPage service - business logic for status page operations.
 from typing import Any
 from uuid import UUID
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import attributes
 
 from app.core.datetime_utils import utc_now
-from app.core.exceptions import StatusPageNotFoundException
+from app.core.exceptions import (
+    DuplicateResourceException,
+    StatusPageNotFoundException,
+)
 from app.crud.status_page_crud import StatusPageCRUD
 from app.models.status_page_model import StatusPage
 from app.schemas.status_page_schema import (
@@ -20,6 +24,10 @@ from app.schemas.status_page_schema import (
 from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.services.status_page")
+
+
+def _slug_taken(slug: str) -> DuplicateResourceException:
+    return DuplicateResourceException(f"Status page with slug '{slug}' already exists")
 
 
 class StatusPageCoreService:
@@ -93,12 +101,12 @@ class StatusPageCoreService:
             Created StatusPage object
 
         Raises:
-            ValueError: If slug already exists
+            DuplicateResourceException: If slug already exists
         """
         # Check if slug already exists
         existing = await StatusPageCoreService.get_status_page_by_slug(db, data.slug)
         if existing:
-            raise ValueError(f"Status page with slug '{data.slug}' already exists")
+            raise _slug_taken(data.slug)
 
         # Create new status page
         status_page = StatusPage(
@@ -110,7 +118,11 @@ class StatusPageCoreService:
             items=data.items,
         )
 
-        status_page = await StatusPageCRUD.add_page(db, status_page)
+        try:
+            status_page = await StatusPageCRUD.add_page(db, status_page)
+        except IntegrityError as e:
+            # Another request took the slug between the check and the insert.
+            raise _slug_taken(data.slug) from e
 
         logger.info(
             "Created status page",
@@ -135,7 +147,7 @@ class StatusPageCoreService:
 
         Raises:
             StatusPageNotFoundException: If status page not found
-            ValueError: If new slug already exists
+            DuplicateResourceException: If new slug already exists
         """
         status_page = await StatusPageCoreService.get_status_page_by_id(
             db, status_page_id
@@ -147,7 +159,7 @@ class StatusPageCoreService:
                 db, data.slug
             )
             if existing:
-                raise ValueError(f"Status page with slug '{data.slug}' already exists")
+                raise _slug_taken(data.slug)
 
         # Update fields
         update_data = data.model_dump(exclude_unset=True)
@@ -155,7 +167,10 @@ class StatusPageCoreService:
             setattr(status_page, field, value)
 
         status_page.updated_at = utc_now()
-        status_page = await StatusPageCRUD.save_page(db, status_page)
+        try:
+            status_page = await StatusPageCRUD.save_page(db, status_page)
+        except IntegrityError as e:
+            raise _slug_taken(data.slug or "") from e
 
         logger.info(
             "Updated status page",

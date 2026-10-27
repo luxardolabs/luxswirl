@@ -17,15 +17,20 @@ class StatusPageCRUD:
 
     @staticmethod
     async def add_page(db: AsyncSession, status_page: StatusPage) -> StatusPage:
-        db.add(status_page)
-        await db.flush()
+        """Insert a page inside a savepoint, so a taken slug (IntegrityError,
+        raised to the caller) rolls back only this insert; the refreshed row."""
+        async with db.begin_nested():
+            db.add(status_page)
+            await db.flush()
         await db.refresh(status_page)
         return status_page
 
     @staticmethod
     async def save_page(db: AsyncSession, status_page: StatusPage) -> StatusPage:
-        """Write a page's changed fields; the refreshed row."""
-        await db.flush()
+        """Write a page's changed fields inside a savepoint (a taken slug raises
+        IntegrityError and rolls back only this write); the refreshed row."""
+        async with db.begin_nested():
+            await db.flush()
         await db.refresh(status_page)
         return status_page
 

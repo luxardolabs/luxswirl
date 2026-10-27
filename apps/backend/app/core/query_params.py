@@ -122,6 +122,11 @@ GlobalFilter = Annotated[
     BeforeValidator(empty_to_none),
     Query(description="Filter by global status"),
 ]
+PublicFilter = Annotated[
+    bool | None,
+    BeforeValidator(empty_to_none),
+    Query(description="Filter by public status"),
+]
 ActiveFilter = Annotated[
     bool | None,
     BeforeValidator(empty_to_none),

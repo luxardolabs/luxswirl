@@ -3,12 +3,16 @@ Pydantic schemas for StatusPage domain.
 """
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal, get_args
 from uuid import UUID
 
 from pydantic import Field, field_validator
 
 from app.schemas.base_schema import BaseSchema, TimestampSchema
+
+# The status-bar windows a page may show, in minutes.
+StatusBarMinutes = Literal[30, 60, 120, 240, 480, 1440]
+ALLOWED_TIME_RANGES: list[int] = list(get_args(StatusBarMinutes))
 
 
 class StatusPageBase(BaseSchema):
