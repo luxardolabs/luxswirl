@@ -34,6 +34,15 @@ A token's scopes narrow its user's role; they never widen it. A scope is `family
 
 `checks:*` grants every action on checks, `*:read` reading everything, and `*` everything. A read (`GET`) needs `family:read`; any other call needs `family:write`, or `family:admin` for the families only an admin works with (`registration_keys`, `settings`, `scheduler`, `users`, and check export and import). A call the scopes do not grant gets `403` naming the scope it needs, even when the user's role would allow it.
 
+A call that reaches another family's data needs that family's scope as well:
+
+| Call                                                       | Also needs                     | Why                                                                                    |
+| ---------------------------------------------------------- | ------------------------------ | -------------------------------------------------------------------------------------- |
+| `POST /api/v1/admin/jobs/{id}/checks`                      | `checks:write`                 | It creates checks                                                                      |
+| `POST /api/v1/admin/checks/bulk/create` with `alert_ids`   | `alerts:write`                 | It assigns the alerts                                                                  |
+| `DELETE /api/v1/admin/agents/{id}`                         | `checks:write`                 | The agent's checks are deleted with it                                                 |
+| `POST /api/v1/admin/agents/{id}/key`, `.../key/regenerate` | `agents:admin`, `checks:admin` | An agent key reads the agent's checks, credentials included, and reports their results |
+
 The **Access** choice when creating a token sets its scopes:
 
 | Access         | Scopes              | Can                                                                    |

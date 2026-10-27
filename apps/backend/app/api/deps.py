@@ -37,6 +37,7 @@ from app.core.security import (
 )
 from app.db import get_db
 from app.models.enum_model import UserRole
+from app.schemas.admin_check_schema import AdminBulkCreate
 from app.schemas.agent_schema import AgentHeartbeat, AgentRegisterRequest
 from app.schemas.api_token_schema import ApiPrincipal
 from app.schemas.check_artifact_schema import CheckArtifactCreate
@@ -352,3 +353,42 @@ def require_scope(
             )
 
     return require_token_scope
+
+
+def require_scopes(*required: str) -> Callable[..., Awaitable[None]]:
+    """A route's scopes beyond its router's family, for a call that reaches
+    another family's data: creating checks from a job, deleting an agent with
+    its checks, issuing an agent key (which reads the agent's checks)."""
+
+    async def require_route_scopes(
+        principal: Annotated[ApiPrincipal, Depends(require_api_user)],
+    ) -> None:
+        for scope in required:
+            if not scope_grants(principal.scopes, scope):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"This API token's scopes do not grant {scope}",
+                )
+
+    return require_route_scopes
+
+
+async def require_bulk_create_scopes(
+    data: AdminBulkCreate,
+    principal: Annotated[ApiPrincipal, Depends(require_api_user)],
+) -> AdminBulkCreate:
+    """A bulk create, once the token may also assign the alerts it names.
+
+    The body is declared here only, as for heartbeats: the route takes it from
+    this dependency, so it is validated once.
+    """
+    if data.alert_ids and not scope_grants(principal.scopes, "alerts:write"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This API token's scopes do not grant alerts:write",
+        )
+    return data
+
+
+# A bulk create whose alerts, if any, the token may assign.
+ScopedBulkCreate = Annotated[AdminBulkCreate, Depends(require_bulk_create_scopes)]
