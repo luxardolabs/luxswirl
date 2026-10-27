@@ -161,19 +161,19 @@ The token's user is recorded as `created_by` and `revoked_by`. A key revoked onc
 
 The jobs the web UI's Jobs page runs on an agent: `network_scan` (sweep a subnet for hosts and open ports) and `network_discover` (report the agent's networks to scan). A job is addressed by its id. Reads take any token; every change takes an editor's or an admin's.
 
-| Method   | Path                              | Role   | Does                                                                                                  |
-| -------- | --------------------------------- | ------ | ----------------------------------------------------------------------------------------------------- |
-| `GET`    | `/api/v1/admin/jobs`              | any    | One page of jobs, highest priority first, then newest; `status`, `job_type`, `agent_id`               |
-| `GET`    | `/api/v1/admin/jobs/types`        | any    | Each job type: what it does, whether it needs an agent, its timeout, and the JSON Schema of `params` |
-| `GET`    | `/api/v1/admin/jobs/{id}`         | any    | One job, with its `result` once it has finished                                                       |
-| `POST`   | `/api/v1/admin/jobs`              | editor | `{"job_type", "agent_id", "params"?, "priority"?, "tags"?}`; `201` with the queued job                 |
-| `POST`   | `/api/v1/admin/jobs/{id}/cancel`  | editor | Cancel a job that has not finished                                                                    |
-| `DELETE` | `/api/v1/admin/jobs/{id}`         | editor | Delete it; `204`                                                                                      |
-| `POST`   | `/api/v1/admin/jobs/{id}/checks`  | editor | Create checks from a scan's hosts; `201` with `created` and `skipped`                                 |
+| Method   | Path                             | Role   | Does                                                                                                 |
+| -------- | -------------------------------- | ------ | ---------------------------------------------------------------------------------------------------- |
+| `GET`    | `/api/v1/admin/jobs`             | any    | One page of jobs, highest priority first, then newest; `status`, `job_type`, `agent_id`              |
+| `GET`    | `/api/v1/admin/jobs/types`       | any    | Each job type: what it does, whether it needs an agent, its timeout, and the JSON Schema of `params` |
+| `GET`    | `/api/v1/admin/jobs/{id}`        | any    | One job, with its `result` once it has finished                                                      |
+| `POST`   | `/api/v1/admin/jobs`             | editor | `{"job_type", "agent_id", "params"?, "priority"?, "tags"?}`; `201` with the queued job               |
+| `POST`   | `/api/v1/admin/jobs/{id}/cancel` | editor | Cancel a job that has not finished                                                                   |
+| `DELETE` | `/api/v1/admin/jobs/{id}`        | editor | Delete it; `204`                                                                                     |
+| `POST`   | `/api/v1/admin/jobs/{id}/checks` | editor | Create checks from a scan's hosts; `201` with `created` and `skipped`                                |
 
-Both job types run on an agent, which picks a job up on its next heartbeat: a job without an `agent_id` is a `422`, and an unknown agent a `404`. `params` are held to the type's schema, with its defaults filled in and any key it does not take dropped; a scan's `subnet` is at most a `/16` and never reaches the cloud metadata range. The token's user is recorded as `created_by`. Cancelling a finished job is a `409`.
+Both job types run on an agent, which picks a job up on its next heartbeat: a job without an `agent_id`, or for an agent that is not approved, is a `422`, and an unknown agent a `404`. `params` are held to the type's schema, with its defaults filled in; a key it does not take is a `422`. A scan's `subnet` is at most a `/16` and never reaches the cloud metadata range, and its `ports` are at most 1,024, each scanned once. The token's user is recorded as `created_by`. Cancelling a finished job is a `409`.
 
-`checks` takes `{"kind", "agent_id", ...}` and makes one kind of check per request on that agent: `ping` (a ping check per host), `web` (an HTTP check per web port), `ssh` (a TCP check per SSH port) or `database` (a TCP check per database port). `interval_seconds`, `timeout_seconds`, `retry_attempts`, `expected_status` and `verify_ssl` (web only) default to the check defaults in Settings; `tags` are set on every check made. A host whose check already exists on the agent, by name, is skipped. A job with no scan result is a `422`, as is an agent that is not approved.
+`checks` takes `{"kind", "agent_id", ...}` and makes one kind of check per request on that agent: `ping` (a ping check per host), `web` (an HTTP check per web port), `ssh` (a TCP check per SSH port) or `database` (a TCP check per database port). `interval_seconds`, `timeout_seconds`, `retry_attempts`, `expected_status` and `verify_ssl` (web only) default to the check defaults in Settings; `tags` are set on every check made. A host whose check already exists on the agent, by name, is skipped, as is a second host that would make a check of the same name. A host or port the agent reported in a shape it should not have is passed over. A job with no scan result is a `422`, as is an agent that is not approved.
 
 ## Alerts
 

@@ -67,7 +67,7 @@ class JobToCheckCoreService:
         if not job or not job.result or "discovered_hosts" not in job.result:
             return None, "Job not found or has no discovered hosts"
 
-        discovered_hosts = job.result.get("discovered_hosts", [])
+        discovered_hosts = NetworkScanCoreService.scan_hosts(job.result)
         existing_checks = await CheckCoreService.list_checks_for_agent(
             db, params.agent_id
         )
@@ -102,6 +102,7 @@ class JobToCheckCoreService:
                 tags=params.tags,
             )
             await CheckCoreService.create_check(db, params.agent_id, check_data)
+            existing_check_names.add(check_name)
             created_count += 1
 
         logger.info(
@@ -167,6 +168,7 @@ class JobToCheckCoreService:
                     tags=params.tags,
                 )
                 await CheckCoreService.create_check(db, params.agent_id, check_data)
+                existing_check_names.add(check_name)
                 created_count += 1
 
         logger.info(
@@ -228,6 +230,7 @@ class JobToCheckCoreService:
                     tags=params.tags,
                 )
                 await CheckCoreService.create_check(db, params.agent_id, check_data)
+                existing_check_names.add(check_name)
                 created_count += 1
 
         logger.info(
@@ -330,6 +333,7 @@ class JobToCheckCoreService:
                     tags=params.tags,
                 )
                 await CheckCoreService.create_check(db, params.agent_id, check_data)
+                existing_check_names.add(check_name)
                 created_count += 1
 
         logger.info(

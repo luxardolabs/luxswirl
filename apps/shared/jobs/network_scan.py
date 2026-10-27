@@ -15,7 +15,7 @@ import time
 from collections.abc import Sequence
 from typing import Any
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from ..ssrf import network_cloud_metadata_overlap
 from ..subprocess_safe import get_subprocess_config, run_subprocess_no_output
@@ -31,12 +31,19 @@ def _subnets_of(
     return list(network.subnets(new_prefix=prefix))
 
 
+# The most ports one scan probes on each host.
+MAX_SCAN_PORTS = 1024
+
+
 class NetworkScanParams(BaseModel):
     """
     Parameter schema for network_scan job.
 
     Defines all configurable parameters with types, defaults, validation, and documentation.
+    A parameter it does not name is refused, so a misspelt one is never a silent default.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     subnet: str = Field(
         ...,  # Required field
@@ -53,6 +60,7 @@ class NetworkScanParams(BaseModel):
 
     ports: list[int] = Field(
         default=[22, 80, 443, 3306, 5432, 8080, 8443],
+        max_length=MAX_SCAN_PORTS,
         description="TCP ports to scan on discovered hosts (empty list = ping only)",
     )
 
@@ -91,14 +99,14 @@ class NetworkScanParams(BaseModel):
     @field_validator("ports")
     @classmethod
     def validate_ports(cls, v: list[int]) -> list[int]:
-        """Validate port numbers."""
+        """Validate port numbers, each scanned once."""
         if v:
             for port in v:
                 if not (1 <= port <= 65535):
                     raise ValueError(
                         f"Invalid port number: {port}. Must be between 1 and 65535"
                     )
-        return v
+        return list(dict.fromkeys(v))
 
 
 class NetworkScanJob(BaseJob):

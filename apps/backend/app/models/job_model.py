@@ -3,7 +3,7 @@ Job model - Tasks dispatched to agents for discovery, diagnostics, and maintenan
 """
 
 from datetime import datetime, timedelta
-from typing import Any, cast
+from typing import Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import JSON, DateTime, Index, Integer, String, Text, Uuid
@@ -174,15 +174,13 @@ class Job(Base, TimestampMixin):
     @property
     def duration_seconds(self) -> float | None:
         """Calculate job execution duration."""
-        # Check if job stored its own accurate duration in result
-        if self.result:
-            # Different job types may use different field names
-            if "scan_duration_seconds" in self.result:
-                return cast(float, self.result["scan_duration_seconds"])
-            elif "duration_seconds" in self.result:
-                return cast(float, self.result["duration_seconds"])
-            elif "duration" in self.result:
-                return cast(float, self.result["duration"])
+        # The job's own measure, when its result carries one as a number: the
+        # agent writes the result, so anything else falls back to the timestamps.
+        if isinstance(self.result, dict):
+            for key in ("scan_duration_seconds", "duration_seconds", "duration"):
+                value = self.result.get(key)
+                if isinstance(value, int | float) and not isinstance(value, bool):
+                    return float(value)
 
         # Fallback to timestamp calculation
         if self.started_at and self.completed_at:

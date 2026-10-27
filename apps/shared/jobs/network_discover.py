@@ -14,7 +14,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from ..subprocess_safe import get_subprocess_config, run_subprocess_safely
 from .base import BaseJob
@@ -26,6 +26,8 @@ class NetworkDiscoverParams(BaseModel):
 
     This job requires no parameters - it automatically discovers the agent's network topology.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
 
 class NetworkDiscoverJob(BaseJob):
