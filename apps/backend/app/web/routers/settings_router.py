@@ -198,17 +198,13 @@ async def reset_setting(
     current_user: AdminUserWeb,
 ) -> Response:
     """Reset a setting to its default; returns the refreshed setting card."""
-    updated_setting = await SettingsViewService.reset_setting_with_cache_update(db, key)
+    context, toast = await SettingsViewService.reset_setting_card(
+        db, request, current_user, key
+    )
     response = templates.TemplateResponse(
-        request,
-        "partials/settings/setting_card.html",
-        SettingsViewService.build_setting_card_context(
-            request, current_user, updated_setting
-        ),
+        request, "partials/settings/setting_card.html", context
     )
-    response.headers["HX-Trigger"] = hx_toast_trigger(
-        f"Setting '{updated_setting.display_name}' reset to default"
-    )
+    response.headers["HX-Trigger"] = hx_toast_trigger(toast)
     return response
 
 

@@ -30,6 +30,7 @@ from app.models.enum_model import (
     JobType,
     NotificationProviderType,
     NotificationStatus,
+    SettingCategory,
 )
 
 
@@ -59,6 +60,11 @@ JobTypeFilter = Annotated[
     JobType | None,
     BeforeValidator(empty_to_none),
     Query(description="Filter by job type"),
+]
+SettingCategoryFilter = Annotated[
+    SettingCategory | None,
+    BeforeValidator(empty_to_none),
+    Query(description="Filter by setting category"),
 ]
 CheckTypeFilter = Annotated[
     CheckType | None,

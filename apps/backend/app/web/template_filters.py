@@ -10,6 +10,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from jinja2 import Environment
 
 from app.core.credential_mask import mask_credentials
+from app.core.display_settings import current_display_settings
 from app.schemas.pagination_schema import paginated_url
 from app.shared.logger import get_logger
 
@@ -23,36 +24,6 @@ _TIME_UNITS = [
     (60, "m"),
     (1, "s"),
 ]
-
-# Global timezone cache (loaded from database settings at startup)
-_cached_timezone: str = "America/Chicago"
-_cached_date_format: str = "long"
-_cached_time_format: str = "12h"
-
-
-def update_settings_cache(
-    timezone: str | None = None,
-    date_format: str | None = None,
-    time_format: str | None = None,
-) -> None:
-    """
-    Update the cached display settings.
-
-    Called at startup and when settings are changed via the settings page.
-
-    Args:
-        timezone: Timezone name (e.g., "America/Chicago")
-        date_format: Date format preference (long/short/iso)
-        time_format: Time format preference (12h/24h)
-    """
-    global _cached_timezone, _cached_date_format, _cached_time_format
-
-    if timezone is not None:
-        _cached_timezone = timezone
-    if date_format is not None:
-        _cached_date_format = date_format
-    if time_format is not None:
-        _cached_time_format = time_format
 
 
 def format_datetime(
@@ -93,9 +64,10 @@ def format_datetime(
     if isinstance(dt, str):
         dt = datetime.fromisoformat(dt.replace("Z", "+00:00"))
 
-    # Use cached timezone from settings if not explicitly provided
+    display = current_display_settings()
+    # The configured timezone, unless one is given
     if timezone is None:
-        timezone = _cached_timezone
+        timezone = display.timezone
 
     # Convert UTC to target timezone (with fallback to UTC if invalid)
     try:
@@ -110,13 +82,13 @@ def format_datetime(
     if format_str is None:
         # Time format based on setting
         # 24h or 12h
-        time_fmt = "%H:%M" if _cached_time_format == "24h" else "%I:%M%p"
+        time_fmt = "%H:%M" if display.time_format == "24h" else "%I:%M%p"
 
         if include_date or date_only:
             # Date format based on setting
-            if _cached_date_format == "iso":
+            if display.date_format == "iso":
                 date_fmt = "%Y-%m-%d"
-            elif _cached_date_format == "short":
+            elif display.date_format == "short":
                 date_fmt = "%-m/%-d/%Y"  # 11/8/2025
             else:  # long
                 date_fmt = "%B %-d, %Y"  # November 8, 2025
