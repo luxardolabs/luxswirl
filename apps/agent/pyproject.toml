@@ -56,7 +56,7 @@ playwright = "^1.63.0"      # synthetic checks
 jsonata-python = "^0.7.0"   # JSON API checks (Uptime Kuma compatible)
 aiomysql = "^0.3.2"         # MySQL checks
 asyncpg = "^0.31.0"         # PostgreSQL checks
-dnspython = "^2.7.0"        # DNS checks
+dnspython = "^2.9.0"        # DNS checks; CVE-2026-114605 floor
 
 [tool.poetry.group.dev.dependencies]
 # No ruff, no mypy, no `types-*` here on purpose. luxlint runs ruff and mypy
