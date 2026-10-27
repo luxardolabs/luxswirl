@@ -12,7 +12,7 @@ Provides:
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, Response
 
-from app.core.exceptions import value_error_message
+from app.core.exceptions import SchedulerJobNotFoundException
 from app.services.views.scheduler_view_service import SchedulerViewService
 from app.shared.logger import get_logger
 from app.web.deps import AdminUserWeb
@@ -77,10 +77,8 @@ async def toggle_job(
         )
         return response
 
-    except ValueError as e:
-        return hx_empty_with_toast(
-            value_error_message(e), kind="error", status_code=404
-        )
+    except SchedulerJobNotFoundException as e:
+        return hx_empty_with_toast(e.message, kind="error", status_code=404)
 
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
@@ -112,10 +110,8 @@ async def run_job(
         response.headers["HX-Trigger"] = hx_toast_trigger(message, kind=kind)
         return response
 
-    except ValueError as e:
-        return hx_empty_with_toast(
-            value_error_message(e), kind="error", status_code=404
-        )
+    except SchedulerJobNotFoundException as e:
+        return hx_empty_with_toast(e.message, kind="error", status_code=404)
 
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
@@ -147,10 +143,8 @@ async def reset_job(
         )
         return response
 
-    except ValueError as e:
-        return hx_empty_with_toast(
-            value_error_message(e), kind="error", status_code=404
-        )
+    except SchedulerJobNotFoundException as e:
+        return hx_empty_with_toast(e.message, kind="error", status_code=404)
 
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
@@ -177,7 +171,5 @@ async def job_history(
             },
         )
 
-    except ValueError as e:
-        return settings_error_partial(
-            request, current_user, value_error_message(e), status_code=404
-        )
+    except SchedulerJobNotFoundException as e:
+        return settings_error_partial(request, current_user, e.message, status_code=404)
