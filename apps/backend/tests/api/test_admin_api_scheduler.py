@@ -7,6 +7,7 @@ fresh one.
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
@@ -288,3 +289,79 @@ async def test_a_reset_clears_failures_and_turns_the_job_on(
     assert resp.status_code == 200, resp.text
     job = await _job(worker_db, key)
     assert job.enabled is True and job.retry_count == 0 and job.failed_runs == 0
+
+
+# ── One run at a time ───────────────────────────────────────────────────────
+
+
+async def test_a_run_while_another_holds_the_lease_is_refused(
+    worker_db, client: AsyncClient, test_function: list[dict]
+) -> None:
+    key = await _seed_job(
+        worker_db,
+        lease_token=uuid4(),
+        lease_expires_at=datetime.now(UTC) + timedelta(minutes=10),
+    )
+    admin = await _as(worker_db, "admin")
+
+    resp = await client.post(f"{JOBS}/{key}/run", headers=admin)
+
+    assert resp.status_code == 409, resp.text
+    assert test_function == []
+
+
+async def test_a_run_by_hand_during_a_scheduled_run_leaves_its_count_whole(
+    worker_db, client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    entered, gate = asyncio.Event(), asyncio.Event()
+    calls: list[int] = []
+
+    async def _slow(**_kwargs):
+        calls.append(1)
+        entered.set()
+        await gate.wait()
+        return {"ok": True}
+
+    monkeypatch.setitem(scheduler_service.job_functions, "test_noop", _slow)
+    lease = uuid4()
+    key = await _seed_job(
+        worker_db,
+        lease_token=lease,
+        lease_expires_at=datetime.now(UTC) + timedelta(minutes=10),
+    )
+    admin = await _as(worker_db, "admin")
+    scheduled = asyncio.create_task(scheduler_service._execute_job(key, lease))
+    await asyncio.wait_for(entered.wait(), 10)
+
+    manual = await client.post(f"{JOBS}/{key}/run", headers=admin)
+    gate.set()
+    await asyncio.wait_for(scheduled, 10)
+
+    assert manual.status_code == 409, manual.text
+    assert calls == [1]
+    job = await _job(worker_db, key)
+    assert job.total_runs == 1 and job.lease_token is None
+
+
+async def test_a_run_by_hand_frees_the_job_when_it_ends(
+    worker_db, client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    outcomes = iter([RuntimeError("disk full"), None])
+
+    async def _flaky(**_kwargs):
+        error = next(outcomes)
+        if error is not None:
+            raise error
+        return {"ok": True}
+
+    monkeypatch.setitem(scheduler_service.job_functions, "test_noop", _flaky)
+    key = await _seed_job(worker_db)
+    admin = await _as(worker_db, "admin")
+
+    failed = await client.post(f"{JOBS}/{key}/run", headers=admin)
+    succeeded = await client.post(f"{JOBS}/{key}/run", headers=admin)
+
+    assert failed.json()["status"] == "failed"
+    assert succeeded.status_code == 200 and succeeded.json()["status"] == "success"
+    job = await _job(worker_db, key)
+    assert job.lease_token is None and job.lease_expires_at is None

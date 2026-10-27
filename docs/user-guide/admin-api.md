@@ -259,7 +259,7 @@ The scheduled jobs the web UI's Scheduler page shows, addressed by `job_key`. Ev
 | `POST` | `/api/v1/admin/scheduler/jobs/{job_key}/run`     | Run it now and answer when it ends                                          |
 | `POST` | `/api/v1/admin/scheduler/jobs/{job_key}/reset`   | Clear its retry count and failures, and turn it on                          |
 
-A run is recorded in the job's history either way. A run that fails is still a `200`: its `status` is `failed` and its `error` says why. An unknown `job_key` is a `404`.
+A run is recorded in the job's history either way. A run that fails is still a `200`: its `status` is `failed` and its `error` says why. A job runs once at a time: asking to run one while a run of it (scheduled or by hand) is in progress is a `409`. An unknown `job_key` is a `404`.
 
 ## OpenAPI document
 
