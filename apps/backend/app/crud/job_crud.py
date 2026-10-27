@@ -12,7 +12,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.datetime_utils import utc_now
 from app.models.agent_model import Agent
-from app.models.enum_model import AgentApprovalStatus, JobStatus
+from app.models.enum_model import (
+    UNADMITTED_AGENT_STATUSES,
+    AgentApprovalStatus,
+    JobStatus,
+)
 from app.models.job_model import Job
 
 _FINISHED = (JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED)
@@ -43,9 +47,14 @@ class JobCRUD:
         await db.delete(job)
 
     @staticmethod
-    async def agent_exists(db: AsyncSession, agent_id: UUID) -> bool:
-        result = await db.execute(select(Agent.id).where(Agent.id == agent_id))
-        return result.scalar_one_or_none() is not None
+    async def agent_approval_status(
+        db: AsyncSession, agent_id: UUID
+    ) -> AgentApprovalStatus | None:
+        """The agent's approval status, or None if there is no such agent."""
+        result = await db.execute(
+            select(Agent.approval_status).where(Agent.id == agent_id)
+        )
+        return result.scalar_one_or_none()
 
     @staticmethod
     async def get_by_id(db: AsyncSession, job_id: UUID) -> Job | None:
@@ -221,15 +230,7 @@ class JobCRUD:
         agents_query = (
             select(Agent)
             .where(Agent.id.in_(agent_ids))
-            .where(
-                Agent.approval_status.not_in(
-                    [
-                        AgentApprovalStatus.PENDING,
-                        AgentApprovalStatus.REJECTED,
-                        AgentApprovalStatus.ARCHIVED,
-                    ]
-                )
-            )
+            .where(Agent.approval_status.not_in(UNADMITTED_AGENT_STATUSES))
             .order_by(Agent.agent_name)
         )
         agents_result = await db.execute(agents_query)

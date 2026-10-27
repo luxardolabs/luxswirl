@@ -41,7 +41,9 @@ def build_scan_view(
             "scan_chunks_without_findings": [],
         }
 
-    hosts = sorted(result.get("discovered_hosts") or [], key=lambda h: h.get("ip", ""))
+    hosts = sorted(
+        result.get("discovered_hosts") or [], key=lambda h: str(h.get("ip") or "")
+    )
     for host in hosts:
         host["all_checks_exist"] = all(
             name in existing_checks for name in expected_check_names(host)

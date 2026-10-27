@@ -160,7 +160,7 @@ async def test_an_editor_creates_a_scan_held_to_its_params(
         json={
             "job_type": "network_scan",
             "agent_id": str(agent_id),
-            "params": {"subnet": "10.1.0.0/24", "ports": [22], "shell": "rm -rf /"},
+            "params": {"subnet": "10.1.0.0/24", "ports": [22, 22]},
             "priority": 5,
             "tags": ["lab"],
         },
@@ -212,6 +212,27 @@ async def test_an_editor_creates_a_scan_held_to_its_params(
         ({"job_type": "network_discover", "agent_id": str(uuid4())}, 404, "Agent"),
         ({"job_type": "shell", "agent_id": "{agent}"}, 422, "job_type"),
         (
+            {
+                "job_type": "network_scan",
+                "agent_id": "{agent}",
+                "params": {"subnet": "10.0.0.0/24", "port": [22]},
+            },
+            422,
+            "port: Extra inputs",
+        ),
+        (
+            {
+                "job_type": "network_scan",
+                "agent_id": "{agent}",
+                "params": {"subnet": "10.0.0.0/24", "ports": list(range(1, 1100))},
+            },
+            422,
+            "ports",
+        ),
+        ({"job_type": "network_discover", "agent_id": "{pending}"}, 422, "pending"),
+        ({"job_type": "network_discover", "agent_id": "{rejected}"}, 422, "rejected"),
+        ({"job_type": "network_discover", "agent_id": "{archived}"}, 422, "archived"),
+        (
             {"job_type": "network_discover", "agent_id": "{agent}", "created_by": "x"},
             422,
             "created_by",
@@ -231,9 +252,14 @@ async def test_a_job_that_cannot_run_is_refused_and_nothing_queued(
     says: str,
 ) -> None:
     editor = await _as(db, "editor")
-    agent_id = str(await _agent(db))
-    if body.get("agent_id") == "{agent}":
-        body = {**body, "agent_id": agent_id}
+    agents = {
+        "{agent}": await _agent(db),
+        "{pending}": await _agent(db, approval_status="pending"),
+        "{rejected}": await _agent(db, approval_status="rejected"),
+        "{archived}": await _agent(db, approval_status="archived"),
+    }
+    if body.get("agent_id") in agents:
+        body = {**body, "agent_id": str(agents[body["agent_id"]])}
     before = await db.scalar(select(func.count()).select_from(Job))
 
     resp = await client.post(JOBS, json=body, headers=editor)
@@ -419,3 +445,121 @@ async def test_checks_go_only_to_an_admitted_agent(
 
     assert resp.status_code == 422, resp.text
     assert await _checks(db, pending) == []
+
+
+# ── What the agent wrote ────────────────────────────────────────────────────
+
+
+async def test_a_result_s_duration_that_is_not_a_number_is_not_read(
+    db: AsyncSession, client: AsyncClient
+) -> None:
+    viewer = await _as(db, "viewer")
+    agent_id = await _agent(db)
+    job_id = await _job(
+        db,
+        agent_id=agent_id,
+        status=JobStatus.COMPLETED,
+        result={**SCAN_RESULT, "scan_duration_seconds": "n/a"},
+    )
+
+    listed = await client.get(JOBS, params={"agent_id": str(agent_id)}, headers=viewer)
+    one = await client.get(f"{JOBS}/{job_id}", headers=viewer)
+
+    assert listed.status_code == 200, listed.text
+    assert one.status_code == 200, one.text
+    assert one.json()["duration_seconds"] is None
+
+
+@pytest.mark.parametrize(
+    ("kind", "hosts"),
+    [
+        ("ping", [{"ip": "192.168.7.10"}, {"ip": "192.168.7.10"}]),
+        (
+            "ping",
+            [
+                {"ip": "10.0.0.1", "hostname": "a.b"},
+                {"ip": "10.0.0.2", "hostname": "a_b"},
+            ],
+        ),
+        ("web", [{"ip": "192.168.7.10", "open_ports": [80]}] * 2),
+        ("ssh", [{"ip": "192.168.7.10", "open_ports": [22]}] * 2),
+        ("database", [{"ip": "192.168.7.10", "open_ports": [5432]}] * 2),
+    ],
+    ids=["ping-twice", "ping-names-meet", "web-twice", "ssh-twice", "database-twice"],
+)
+async def test_one_scan_never_makes_two_checks_of_one_name(
+    db: AsyncSession, client: AsyncClient, kind: str, hosts: list[dict]
+) -> None:
+    editor = await _as(db, "editor")
+    result = {**SCAN_RESULT, "discovered_hosts": hosts}
+    job_id = await _job(db, status=JobStatus.COMPLETED, result=result)
+    target = await _agent(db)
+
+    resp = await client.post(
+        f"{JOBS}/{job_id}/checks",
+        json={"kind": kind, "agent_id": str(target)},
+        headers=editor,
+    )
+
+    assert resp.status_code == 201, resp.text
+    assert resp.json() == {"created": 1, "skipped": 1}
+    names = [c.display_name for c in await _checks(db, target)]
+    assert len(names) == len(set(names)) == 1
+
+
+@pytest.mark.parametrize(
+    ("kind", "result"),
+    [
+        ("ping", {"discovered_hosts": None}),
+        ("ping", {"discovered_hosts": ["192.168.7.10", {"ip": "192.168.7.11"}]}),
+        ("ping", {"discovered_hosts": {"ip": "192.168.7.10"}}),
+        (
+            "web",
+            {
+                **SCAN_RESULT,
+                "discovered_hosts": [{"ip": "192.168.7.10", "open_ports": "80"}],
+            },
+        ),
+        (
+            "web",
+            {
+                **SCAN_RESULT,
+                "discovered_hosts": [{"ip": "192.168.7.10", "open_ports": None}],
+            },
+        ),
+        (
+            "web",
+            {
+                "discovered_hosts": [{"ip": "192.168.7.10", "open_ports": [80]}],
+                "scan_params": None,
+            },
+        ),
+    ],
+    ids=[
+        "hosts-null",
+        "host-not-a-mapping",
+        "hosts-a-mapping",
+        "ports-a-string",
+        "ports-null",
+        "scan-params-null",
+    ],
+)
+async def test_a_malformed_scan_result_makes_only_the_checks_it_can(
+    db: AsyncSession, client: AsyncClient, kind: str, result: dict
+) -> None:
+    editor = await _as(db, "editor")
+    job_id = await _job(db, status=JobStatus.COMPLETED, result=result)
+    target = await _agent(db)
+
+    resp = await client.post(
+        f"{JOBS}/{job_id}/checks",
+        json={"kind": kind, "agent_id": str(target)},
+        headers=editor,
+    )
+    viewed = await client.get(f"{JOBS}/{job_id}", headers=editor)
+
+    assert resp.status_code == 201, resp.text
+    assert viewed.status_code == 200, viewed.text
+    made = {c.target for c in await _checks(db, target)}
+    assert made <= {"192.168.7.11"}
+    assert resp.json()["created"] == len(made)

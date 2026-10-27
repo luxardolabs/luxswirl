@@ -86,7 +86,7 @@ class TestJobLifecycle:
         self, db: AsyncSession
     ):
         data = await self._on_agent(
-            db, params={"subnet": "10.0.0.0/24", "ports": [22], "unknown": "x"}
+            db, params={"subnet": "10.0.0.0/24", "ports": [22, 22]}
         )
         job = await svc.create_job(db, data)
         assert job.params == {
@@ -96,12 +96,15 @@ class TestJobLifecycle:
             "max_concurrent": 100,
         }
 
-    async def test_a_discover_job_drops_params_it_does_not_take(self, db: AsyncSession):
+    @pytest.mark.parametrize("job_type", ["network_scan", "network_discover"])
+    async def test_a_param_the_job_does_not_take_is_refused(
+        self, db: AsyncSession, job_type: str
+    ):
         data = await self._on_agent(
-            db, job_type="network_discover", params={"subnet": "x" * 10_000}
+            db, job_type=job_type, params={"subnet": "10.0.0.0/24", "port": [22]}
         )
-        job = await svc.create_job(db, data)
-        assert job.params == {}
+        with pytest.raises(ValidationException, match="port: Extra inputs"):
+            await svc.create_job(db, data)
 
     @pytest.mark.parametrize(
         "params",
@@ -163,7 +166,9 @@ class TestJobLifecycle:
         assert out.completed_at is not None
         # the PAYLOAD is actually persisted, not just the status flipped
         assert out.result is not None
-        assert out.result.get("discovered_hosts") == [{"ip": "10.0.0.7"}]
+        assert out.result.get("discovered_hosts") == [
+            {"ip": "10.0.0.7", "open_ports": []}
+        ]
 
     async def test_submit_failed_result(self, db: AsyncSession):
         job = await svc.create_job(db, await self._on_agent(db))
@@ -226,9 +231,8 @@ class TestDispatch:
 
     @staticmethod
     def _data(agent_id, job_type="network_scan"):
-        return JobCreate(
-            job_type=job_type, params={"subnet": "10.0.0.0/24"}, agent_id=agent_id
-        )
+        params = {"subnet": "10.0.0.0/24"} if job_type == "network_scan" else {}
+        return JobCreate(job_type=job_type, params=params, agent_id=agent_id)
 
     async def test_agent_gets_its_pending_jobs_in_dispatch_shape(
         self, db: AsyncSession

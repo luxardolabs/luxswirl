@@ -24,7 +24,12 @@ from app.core.exceptions import (
     ValidationException,
 )
 from app.crud.job_crud import JobCRUD
-from app.models.enum_model import SERVER_RUNNER, JobStatus, JobType
+from app.models.enum_model import (
+    SERVER_RUNNER,
+    UNADMITTED_AGENT_STATUSES,
+    JobStatus,
+    JobType,
+)
 from app.models.job_model import Job
 from app.schemas.agent_schema import AgentOption
 from app.schemas.job_schema import (
@@ -114,9 +119,14 @@ class JobCoreService:
             )
         params = JobCoreService.validated_params(data.job_type, data.params)
 
-        # Verify agent exists if agent_id is specified
-        if data.agent_id and not await JobCRUD.agent_exists(db, data.agent_id):
-            raise AgentNotFoundException(str(data.agent_id))
+        if data.agent_id:
+            approval = await JobCRUD.agent_approval_status(db, data.agent_id)
+            if approval is None:
+                raise AgentNotFoundException(str(data.agent_id))
+            if approval in UNADMITTED_AGENT_STATUSES:
+                raise ValidationException(
+                    f"Agent {data.agent_id} is {approval}: it takes no jobs"
+                )
 
         # Create job
         job = Job(

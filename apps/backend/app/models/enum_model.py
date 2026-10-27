@@ -191,6 +191,16 @@ class AgentApprovalStatus(StrEnum):
     REJECTED = "rejected"
 
 
+# Agents that take no checks or jobs: awaiting approval, refused, or out of use.
+UNADMITTED_AGENT_STATUSES = frozenset(
+    {
+        AgentApprovalStatus.PENDING,
+        AgentApprovalStatus.REJECTED,
+        AgentApprovalStatus.ARCHIVED,
+    }
+)
+
+
 # ============================================================================
 # Jobs (server-dispatched work units)
 # ============================================================================

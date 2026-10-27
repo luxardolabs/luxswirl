@@ -1974,7 +1974,7 @@ lint: ## luxlint: the canonical ruff set, format, tests and docs standard (mount
 	fi
 	docker run --rm -v $(PWD):/repo $(LUXLINT_IMAGE)
 
-format: ## THE canonical fixer — `luxlint --format` (ruff fix+format AND markdown), in place. PATH=<substr> to scope.
+format: ## THE canonical fixer — `luxlint --format` (ruff fix+format AND markdown), in place. PATH_SCOPE=<substr> to scope.
 	@if [ -z "$(LUXARCH_REGISTRY)" ]; then \
 		echo ">> format skipped: LUXARCH_REGISTRY unset (see Makefile.local.example)"; exit 0; \
 	fi

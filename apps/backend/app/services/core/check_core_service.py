@@ -31,7 +31,7 @@ from app.crud.check_crud import CheckCRUD
 from app.models.agent_model import Agent
 from app.models.check_model import Check
 from app.models.enum_model import (
-    AgentApprovalStatus,
+    UNADMITTED_AGENT_STATUSES,
     AssignmentMode,
     BulkCheckOutcome,
     CheckType,
@@ -59,15 +59,6 @@ from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.services.check")
 
-# Agents that take no checks: awaiting approval, refused, or out of use.
-_NOT_ADMITTED = frozenset(
-    {
-        AgentApprovalStatus.PENDING,
-        AgentApprovalStatus.REJECTED,
-        AgentApprovalStatus.ARCHIVED,
-    }
-)
-
 
 class CheckCoreService:
     """Service for check operations."""
@@ -81,7 +72,7 @@ class CheckCoreService:
             ValidationException: it is awaiting approval, refused or archived.
         """
         agent = await AgentCoreService.get_agent_by_id(db, agent_id)
-        if agent.approval_status in _NOT_ADMITTED:
+        if agent.approval_status in UNADMITTED_AGENT_STATUSES:
             raise ValidationException(
                 f"Agent {agent.agent_name} is {agent.approval_status}: it takes no checks"
             )

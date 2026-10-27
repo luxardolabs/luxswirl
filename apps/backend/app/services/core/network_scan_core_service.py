@@ -16,8 +16,31 @@ from app.shared.logger import get_logger
 logger = get_logger("luxswirl.services.jobs.network_scan")
 
 
+def _port_numbers(value: object) -> list[int]:
+    """The port numbers in `value`, if it is a list; nothing otherwise."""
+    if not isinstance(value, list):
+        return []
+    return [p for p in value if isinstance(p, int) and not isinstance(p, bool)]
+
+
 class NetworkScanCoreService:
     """Server-side service for network_scan job results."""
+
+    @staticmethod
+    def scan_hosts(result: dict[str, Any]) -> list[dict[str, Any]]:
+        """The scan's hosts, each a mapping whose `open_ports` are port numbers.
+
+        The agent writes the result, so an entry that is not a mapping is
+        dropped, and a port that is not a number is left out.
+        """
+        hosts = result.get("discovered_hosts")
+        if not isinstance(hosts, list):
+            return []
+        return [
+            {**host, "open_ports": _port_numbers(host.get("open_ports"))}
+            for host in hosts
+            if isinstance(host, dict)
+        ]
 
     @staticmethod
     def enrich_result(result: dict[str, Any]) -> dict[str, Any]:
@@ -37,7 +60,8 @@ class NetworkScanCoreService:
         """
         enriched = result.copy()
 
-        discovered_hosts = result.get("discovered_hosts", [])
+        discovered_hosts = NetworkScanCoreService.scan_hosts(result)
+        enriched["discovered_hosts"] = discovered_hosts
 
         if not discovered_hosts:
             enriched["summary"] = "No hosts discovered on network"
@@ -153,7 +177,10 @@ class NetworkScanCoreService:
         - port_aware_summary: str (human-readable counts)
         - port_aware_recommendations: list[str]
         """
-        scanned_ports = result.get("scan_params", {}).get("ports", [])
+        scan_params = result.get("scan_params")
+        scanned_ports = _port_numbers(
+            scan_params.get("ports") if isinstance(scan_params, dict) else None
+        )
 
         # Shared with the creation path and the scan panel; only categories with at
         # least one scanned port survive.
