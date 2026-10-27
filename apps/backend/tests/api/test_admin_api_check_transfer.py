@@ -171,11 +171,9 @@ async def test_an_import_is_queued_and_each_request_is_its_own_job(
         )
     }
     stored = jobs[UUID(again.json()["id"])]
-    assert stored.params == {
-        "agent_id": str(agent_id),
-        "mode": "merge",
-        "checks": second,
-    }
+    assert stored.params["agent_id"] == str(agent_id)
+    assert stored.params["mode"] == "merge"
+    assert [c["name"] for c in stored.params["checks"]] == ["api"]
     assert jobs[UUID(first.json()["id"])].params["mode"] == "replace"
 
 

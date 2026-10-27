@@ -12,6 +12,7 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.credential_mask import mask_credentials
 from app.core.exceptions import NotFoundException
 from app.crud.maintenance_job_crud import MaintenanceJobCRUD
 from app.models.enum_model import MaintenanceJobKind
@@ -109,9 +110,13 @@ class MaintenanceJobCoreService:
 
         A database error's text carries the statement and its parameters (a
         check's target or script among them): those are cut, and any
-        credential left is masked. The full error is in the worker's log.
+        credential left is masked, by the log scrub and by the console's own
+        mask (a token or secret in a query string among them). The full error
+        is in the worker's log.
         """
-        return scrub_text(_SQL_DETAIL.split(error, maxsplit=1)[0].strip())
+        return mask_credentials(
+            scrub_text(_SQL_DETAIL.split(error, maxsplit=1)[0].strip())
+        )
 
     @staticmethod
     async def mark_failed(db: AsyncSession, job_id: UUID, error: str) -> None:

@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.background.maintenance_handlers._job_owner import require_owner_is_admin
 from app.background.maintenance_worker import JobFailed
-from app.core.exceptions import AgentNotFoundException
+from app.core.exceptions import AgentNotFoundException, ValidationException
 from app.models.enum_model import ImportMode
 from app.models.maintenance_job_model import MaintenanceJob
 from app.services.core.check_core_service import CheckCoreService
@@ -74,6 +74,8 @@ async def handle(db: AsyncSession, job: MaintenanceJob) -> None:
         )
     except AgentNotFoundException:
         raise JobFailed("The agent no longer exists; nothing was imported") from None
+    except ValidationException as e:
+        raise JobFailed(f"{e.message}; nothing was imported") from None
 
     logger.info(
         "Bulk check import complete",
@@ -86,7 +88,11 @@ async def handle(db: AsyncSession, job: MaintenanceJob) -> None:
             "job_id": str(job.id),
         },
     )
-    await MaintenanceJobCoreService.update_progress(db, job.id, _outcome(result))
+    progress = _outcome(result)
+    # An import that changed no check and failed some fails, its outcome kept.
+    if result["created"] + result["updated"] == 0 and result["errors"]:
+        raise JobFailed("; ".join(progress["errors"]), progress)
+    await MaintenanceJobCoreService.update_progress(db, job.id, progress)
 
 
 def _outcome(result: dict[str, Any]) -> dict[str, Any]:

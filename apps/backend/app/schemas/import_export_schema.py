@@ -7,7 +7,7 @@ the layered architecture standard (no BaseModel subclasses inside routers).
 
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.enum_model import CheckType
 from app.schemas.base_schema import TagList
@@ -15,7 +15,13 @@ from app.schemas.check_schema import HttpMethodField
 
 
 class CheckExport(BaseModel):
-    """Check export format."""
+    """Check export format.
+
+    A field it does not name is refused, so an entry carrying a setting the
+    import cannot take is that entry's error, never a check made without it.
+    """
+
+    model_config = ConfigDict(extra="forbid")
 
     name: str
     check_type: CheckType

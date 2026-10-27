@@ -17,6 +17,7 @@ from sqlalchemy.orm import attributes
 from app.core.check_config import pack_config, take_config_updates
 from app.core.check_target_validator import validate_check_target
 from app.core.datetime_utils import utc_now
+from app.core.error_summary import error_summary
 from app.core.exceptions import (
     AgentNotFoundException,
     CheckNotFoundException,
@@ -36,7 +37,6 @@ from app.models.enum_model import (
     BulkCheckOutcome,
     CheckType,
 )
-from app.schemas.agent_schema import AgentCreate
 from app.schemas.check_schema import (
     DEFAULT_RETRY_INTERVAL_SECONDS,
     AgentCheckCounts,
@@ -638,85 +638,112 @@ class CheckCoreService:
         check of the same name; otherwise it is skipped. `actor_is_admin` is the caller's authority, as for a single
         create: a synthetic check is refused unless it is True.
 
-        Builds the AgentCreate / CheckCreate / CheckUpdate DTOs here, so
-        routers don't marshal schemas. Returns {created, updated, skipped, errors}.
+        Each entry runs in its own savepoint, so one that fails (even in the
+        database) leaves the rest to commit. Builds the CheckCreate / CheckUpdate
+        DTOs here, so routers don't marshal schemas. The agent must take checks.
+        Returns {created, updated, skipped, errors}.
         """
-        created = updated = skipped = 0
+        counts = {"created": 0, "updated": 0, "skipped": 0}
         errors: list[dict[str, str]] = []
 
-        agent = await AgentCoreService.get_agent_by_id(db, agent_id)
-        if not agent:
-            await AgentCoreService.create_agent(
-                db,
-                AgentCreate(
-                    agent_name=str(agent_id), hostname=str(agent_id), version="imported"
-                ),
-            )
-            logger.info("Created agent", extra={"agent_id": str(agent_id)})
+        # An agent that takes no checks keeps the ones it has, too.
+        await CheckCoreService.get_admitted_agent(db, agent_id)
 
         existing = await CheckCoreService.list_checks_for_agent(db, agent_id)
         existing_map = {c.display_name: c for c in existing}
 
         for raw in checks:
             name = str(raw.get("name") or "unknown")
+            # swallowed-exceptions: one entry's failure is that entry's error, kept for the caller; its savepoint keeps the rest of the import committable
             try:
                 check_data = CheckExport.model_validate(raw)
-                if check_data.name in existing_map:
-                    if not overwrite:
-                        skipped += 1
-                        continue
-                    await CheckCoreService.update_check(
-                        db,
-                        existing_map[check_data.name].id,
-                        CheckUpdate(
-                            check_type=check_data.check_type,
-                            target=check_data.target,
-                            interval_seconds=check_data.interval,
-                            timeout_seconds=check_data.timeout,
-                            retry_attempts=check_data.retry_attempts,
-                            enabled=check_data.enabled,
-                            description=check_data.description,
-                            http_method=check_data.http_method,
-                            expected_status=check_data.expected_status,
-                            json_path=check_data.json_path,
-                            expected_value=check_data.expected_value,
-                            tags=check_data.tags,
-                        ),
-                        actor_is_admin=actor_is_admin,
-                    )
-                    updated += 1
-                else:
-                    await CheckCoreService.create_check(
+                async with db.begin_nested():
+                    outcome = await CheckCoreService._import_one(
                         db,
                         agent_id,
-                        CheckCreate(
-                            display_name=check_data.name,
-                            check_type=check_data.check_type,
-                            target=check_data.target,
-                            interval_seconds=check_data.interval,
-                            timeout_seconds=check_data.timeout,
-                            retry_attempts=check_data.retry_attempts,
-                            enabled=check_data.enabled,
-                            description=check_data.description,
-                            http_method=check_data.http_method,
-                            expected_status=check_data.expected_status,
-                            json_path=check_data.json_path,
-                            expected_value=check_data.expected_value,
-                            tags=check_data.tags,
-                        ),
+                        check_data,
+                        existing_map,
+                        overwrite=overwrite,
                         actor_is_admin=actor_is_admin,
                     )
-                    created += 1
             except Exception as e:
-                errors.append({"check": name, "error": str(e)})
+                errors.append({"check": name, "error": error_summary(e)})
                 logger.exception("Error importing check", extra={"check_name": name})
+                continue
+            counts[outcome] += 1
 
+        created, updated, skipped = (
+            counts["created"],
+            counts["updated"],
+            counts["skipped"],
+        )
         return {
             "created": created,
             "updated": updated,
             "skipped": skipped,
             "errors": errors,
         }
+
+    @staticmethod
+    async def _import_one(
+        db: AsyncSession,
+        agent_id: UUID,
+        check_data: CheckExport,
+        existing_map: dict[str, Check],
+        *,
+        overwrite: bool,
+        actor_is_admin: bool,
+    ) -> str:
+        """Import one entry; "created", "updated" or "skipped".
+
+        A check the import creates joins `existing_map`, so a name met again
+        in the same import is skipped or overwritten, never made twice.
+        """
+        existing = existing_map.get(check_data.name)
+        if existing is not None:
+            if not overwrite:
+                return "skipped"
+            await CheckCoreService.update_check(
+                db,
+                existing.id,
+                CheckUpdate(
+                    check_type=check_data.check_type,
+                    target=check_data.target,
+                    interval_seconds=check_data.interval,
+                    timeout_seconds=check_data.timeout,
+                    retry_attempts=check_data.retry_attempts,
+                    enabled=check_data.enabled,
+                    description=check_data.description,
+                    http_method=check_data.http_method,
+                    expected_status=check_data.expected_status,
+                    json_path=check_data.json_path,
+                    expected_value=check_data.expected_value,
+                    tags=check_data.tags,
+                ),
+                actor_is_admin=actor_is_admin,
+            )
+            return "updated"
+        existing_map[check_data.name] = await CheckCoreService.create_check(
+            db,
+            agent_id,
+            CheckCreate(
+                display_name=check_data.name,
+                check_type=check_data.check_type,
+                target=check_data.target,
+                interval_seconds=check_data.interval,
+                timeout_seconds=check_data.timeout,
+                retry_attempts=check_data.retry_attempts,
+                enabled=check_data.enabled,
+                description=check_data.description,
+                http_method=check_data.http_method,
+                expected_status=check_data.expected_status,
+                json_path=check_data.json_path,
+                expected_value=check_data.expected_value,
+                tags=check_data.tags,
+            ),
+            actor_is_admin=actor_is_admin,
+        )
+        return "created"
 
     @staticmethod
     async def delete_check(
@@ -1073,8 +1100,11 @@ class CheckCoreService:
                     ),
                 )
 
-                # Create the check
-                check = await CheckCoreService.create_check(db, agent_id, check_data)
+                # Each in its own savepoint: one that fails leaves the rest to commit.
+                async with db.begin_nested():
+                    check = await CheckCoreService.create_check(
+                        db, agent_id, check_data
+                    )
 
                 # Record success
                 results.append(
@@ -1100,7 +1130,7 @@ class CheckCoreService:
                         url=req.url,
                         status=BulkCheckOutcome.FAILED,
                         display_name=req.display_name,
-                        error=str(e),
+                        error=error_summary(e),
                     )
                 )
                 failed += 1
