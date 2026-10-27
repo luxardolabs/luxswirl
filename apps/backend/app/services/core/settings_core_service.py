@@ -2,6 +2,7 @@
 Settings service - business logic for configurable system defaults.
 """
 
+import math
 import secrets
 from typing import Any, TypeVar, cast, overload
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -13,7 +14,7 @@ from app.core.display_settings import update_display_settings
 from app.core.exceptions import NotFoundException, ValidationException
 from app.crud.setting_crud import SettingCRUD
 from app.models.enum_model import SettingValueType
-from app.models.setting_model import Setting
+from app.models.setting_model import Setting, value_type_of
 from app.schemas.setting_schema import (
     AlertDefaults,
     CheckDefaults,
@@ -48,14 +49,26 @@ _POLICIES = {
 }
 
 
-def _fits_type(value: SettingScalar, value_type: object) -> bool:
-    """Whether `value` is of the setting's stored type (a bool is no number)."""
+def stored_value_type(stored: dict[str, Any]) -> SettingValueType:
+    """A stored value's type: its tag, or, for a row written without one, the
+    type of the value it holds."""
+    tag = stored.get("type")
+    if tag in set(SettingValueType):
+        return SettingValueType(tag)
+    return value_type_of(stored.get("value"))
+
+
+def _fits_type(value: SettingScalar, value_type: SettingValueType) -> bool:
+    """Whether `value` is of the setting's stored type (a bool is no number,
+    and NaN or an infinity no float)."""
     if isinstance(value, bool):
         return value_type == SettingValueType.BOOL
     if value_type == SettingValueType.INT:
         return isinstance(value, int)
     if value_type == SettingValueType.FLOAT:
-        return isinstance(value, int | float)
+        return isinstance(value, int) or (
+            isinstance(value, float) and math.isfinite(value)
+        )
     if value_type == SettingValueType.STRING:
         return isinstance(value, str)
     if value_type == SettingValueType.LIST:
@@ -217,19 +230,19 @@ class SettingsCoreService:
             raise NotFoundException(f"Setting with key '{key}' not found")
         if key in GENERATED_KEYS:
             raise ValidationException(f"{key} is generated, not set to a value")
-        stored: object = setting.value
-        value_type = stored.get("type") if isinstance(stored, dict) else None
+        value_type = stored_value_type(SettingResponse.model_validate(setting).value)
         if not _fits_type(new_value, value_type):
-            raise ValidationException(f"{key} takes a {value_type} value")
+            raise ValidationException(f"{key} takes a {value_type.value} value")
         if value_type == SettingValueType.FLOAT and isinstance(new_value, int):
             new_value = float(new_value)
         try:
             SettingsCoreService._validate_value(new_value, setting.validation)
+            # What the setting governs moves first: a value its policy refuses
+            # leaves the setting as it was.
+            await SettingsCoreService._apply(db, key, new_value)
         except ValueError as e:
             raise ValidationException(str(e)) from None
-        updated = await SettingsCoreService.update_setting(db, key, new_value)
-        await SettingsCoreService._apply(db, key, new_value)
-        return updated
+        return await SettingsCoreService.update_setting(db, key, new_value)
 
     @staticmethod
     async def _apply(db: AsyncSession, key: str, value: SettingScalar) -> None:
@@ -281,9 +294,9 @@ class SettingsCoreService:
             default_value = stored_default.get("value")
         else:
             default_value = stored_default
+        await SettingsCoreService._apply(db, key, default_value)
         setting.set_typed_value(default_value)
         setting = await SettingCRUD.save_setting(db, setting)
-        await SettingsCoreService._apply(db, key, default_value)
 
         logger.info("Reset setting to default", extra={"setting_key": key})
         return SettingResponse.model_validate(setting)

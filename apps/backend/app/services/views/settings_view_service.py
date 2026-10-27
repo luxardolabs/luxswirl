@@ -32,7 +32,10 @@ from app.schemas.setting_schema import (
 from app.services.core.alert_core_service import AlertCoreService
 from app.services.core.notification_core_service import NotificationCoreService
 from app.services.core.registration_key_core_service import RegistrationKeyCoreService
-from app.services.core.settings_core_service import SettingsCoreService
+from app.services.core.settings_core_service import (
+    SettingsCoreService,
+    stored_value_type,
+)
 from app.services.core.user_core_service import UserCoreService
 from app.web.templates import templates
 
@@ -91,19 +94,19 @@ class SettingsViewService:
                 return None, f"Setting not found: {key}"
 
             # Parse value based on type
-            value_type = setting.value.get("type")
-            parsed_value = SettingsViewService._parse_value(value, value_type)
-
+            parsed_value = SettingsViewService._parse_value(
+                value, stored_value_type(setting.value)
+            )
+        except ValueError as e:
+            return None, f"Invalid value format: {value_error_message(e)}"
+        try:
             # Set it; the core applies what the setting governs.
             updated_setting = await SettingsCoreService.set_setting(
                 db, key, parsed_value
             )
-            return updated_setting, None
-
-        except ValueError as e:
-            return None, f"Invalid value format: {value_error_message(e)}"
         except ValidationException as e:
             return None, e.message
+        return updated_setting, None
 
     @staticmethod
     def _parse_value(value: str, value_type: str | None) -> SettingScalar:

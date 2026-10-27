@@ -231,6 +231,20 @@ A new page is private unless `is_public` is `true`; a public page is open at `/s
 
 An item is either a check, `{"type": "check", "check_id"}`, or a group, `{"type": "group", "name", "collapsed"?, "sort_by"?, "sort_direction"?}` with exactly one of `checks` (the check ids it lists) or `filter` (`agent_id`, `check_type`, `tags`, `search`: the checks matching all of them when the page renders). `sort_by` is `manual`, `name`, `status`, `latency` or `uptime`; `sort_direction` is `asc` or `desc`. A page holds at most 500 items, a group lists at most 1,000 checks, and a page names at most 10,000 checks in all. A check or agent id that does not exist is a `422`, and nothing is written. The delete job is refused when it runs if its owner is no longer an active editor or admin.
 
+## Settings
+
+The runtime settings the web UI's Settings pages show, addressed by key. Every route takes an admin's token.
+
+| Method | Path                                   | Does                                                                                                               |
+| ------ | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `GET`  | `/api/v1/admin/settings`               | Every setting by key; `category` (`check`, `alert`, `system`, `job`, `metrics`, `database`, `general`, `security`) |
+| `GET`  | `/api/v1/admin/settings/{key}`         | One setting: `type`, `value`, `default_value`, `validation`                                                        |
+| `PUT`  | `/api/v1/admin/settings/{key}`         | `{"value"}`: set it                                                                                                |
+| `POST` | `/api/v1/admin/settings/{key}/reset`   | Set it back to its `default_value`                                                                                 |
+| `POST` | `/api/v1/admin/settings/metrics-token` | `201` with a new `/metrics` bearer `token`, shown only now; the old one stops working                              |
+
+A value must be of the setting's `type` (a number is not a string, and `true` is not a number) and meet its `validation` (`min`, `max`, `enum`); anything else is a `422`, and nothing changes. Setting or resetting a setting applies what it governs, as the web UI does: a `database.*` retention or compression setting moves its TimescaleDB policy, and `general.timezone`, `general.date_format` and `general.time_format` change how dates are shown. `metrics.bearer_token` is generated, never set to a value (`422`): it reads as `********` when set and `""` when not, with `generated: true`; a reset clears it, so `/metrics` refuses every token until a new one is generated.
+
 ## OpenAPI document
 
 `/api/v1/admin/openapi.json` describes every admin-API route, with the bearer scheme declared. It is served to any token holder in every environment, so a client generator or an AI agent can read it. The app-wide `/docs` and `/openapi.json` stay off in production.

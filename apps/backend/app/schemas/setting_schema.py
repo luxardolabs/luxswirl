@@ -6,9 +6,10 @@ from dataclasses import dataclass
 from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
 
 from app.models.enum_model import HttpMethod, SettingCategory
+from app.models.setting_model import value_type_of
 
 # A setting's stored value. The closed set the storage format documents ("int, float,
 # bool, string, list, dict") — written as a real union so mypy can see it, rather than
@@ -30,6 +31,15 @@ class SettingResponse(BaseModel):
     validation: dict[str, Any] | None
     created_at: Any
     updated_at: Any
+
+    @field_validator("value", "default_value", mode="before")
+    @classmethod
+    def _wrapped(cls, stored: object) -> object:
+        """A row written outside the app may hold the bare value; read it in the
+        {"value", "type"} form the app writes."""
+        if isinstance(stored, dict) and "value" in stored:
+            return stored
+        return {"value": stored, "type": value_type_of(stored)}
 
     model_config = ConfigDict(
         from_attributes=True,
