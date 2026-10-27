@@ -10,6 +10,7 @@ from uuid import UUID
 from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.credential_mask import mask_url_paths
 from app.models.enum_model import CheckType, NotificationStatus
 from app.schemas.auth_schema import CurrentUserDTO
 from app.schemas.notification_log_schema import NotificationLogEntry
@@ -131,7 +132,8 @@ def _log_row(request: Request, entry: NotificationLogEntry) -> NotificationLogRo
         check_type=entry.check_type,
         check_target=entry.target,
         status=entry.status,
-        error_message=entry.error_message,
+        # A row written before errors were stored URL-free may still hold one.
+        error_message=mask_url_paths(entry.error_message),
         check_success=entry.success if entry.success is not None else False,
         check_latency_ms=entry.latency_ms,
         check_id=entry.check_id,

@@ -20,6 +20,21 @@ _VALUE = r"\{[^}]*\}|'(?:\\.|[^'])*'|\"(?:\\.|[^\"])*\"|(?:\\.|[^\s;&#])+"
 _PAIR = re.compile(rf"(?i)(?<![\w.-])({_KEYS})(\s*=\s*)({_VALUE})")
 # An ODBC string (`;`-separated): a bare value runs to the `;`, spaces included.
 _ODBC_PAIR = re.compile(rf"(?i)(?<![\w.-])({_KEYS})(\s*=\s*)(\{{[^}}]*\}}|[^;]*)")
+# A URL in free text: its scheme and host, then everything up to a space or quote.
+_URL = re.compile(r"(?i)\b([a-z][a-z0-9+.-]*://[^/\s'\"<>?#]+)[^\s'\"<>]*")
+
+
+def mask_url_paths(text: str | None) -> str | None:
+    """`text` with each URL in it cut to its scheme and host (`https://ha.lan/...`),
+    and any credential masked.
+
+    A notification endpoint's path or query can be its credential (a Home
+    Assistant webhook id, a chat-hook token), and an HTTP library's error text
+    repeats the whole URL; this is how such text is shown and stored.
+    """
+    if not text:
+        return text
+    return _URL.sub(r"\1/...", mask_credentials(text))
 
 
 @overload

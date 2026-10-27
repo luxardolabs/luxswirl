@@ -8,8 +8,10 @@ from datetime import datetime, timedelta
 from typing import Any
 from uuid import UUID
 
+import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.credential_mask import mask_url_paths
 from app.core.datetime_utils import utc_now
 from app.core.exceptions import NotFoundException, ValidationException
 from app.crud.notification_log_crud import NotificationLogCRUD
@@ -335,7 +337,7 @@ class NotificationCoreService:
                 return False, "Provider returned failure status"
 
         except Exception as e:
-            error_msg = str(e)
+            error_msg = NotificationCoreService._delivery_error(e)
             logger.exception(
                 "Test notification error",
                 extra={"provider_id": str(provider_id), "error_message": error_msg},
@@ -460,6 +462,17 @@ class NotificationCoreService:
         return rows
 
     @staticmethod
+    def _delivery_error(error: Exception) -> str:
+        """A failed delivery's error as it is stored and shown, without the
+        endpoint's URL: its path or query can be the provider's credential, and
+        any user may read the notification log."""
+        if isinstance(error, httpx.HTTPStatusError):
+            response = error.response
+            return f"HTTP {response.status_code} {response.reason_phrase}".strip()
+        detail = mask_url_paths(str(error)) or ""
+        return f"{type(error).__name__}: {detail}" if detail else type(error).__name__
+
+    @staticmethod
     async def _deliver(
         provider: NotificationProvider, context: NotificationContext
     ) -> tuple[NotificationStatus, str | None]:
@@ -473,7 +486,7 @@ class NotificationCoreService:
                 return NotificationStatus.SENT, None
             return NotificationStatus.FAILED, "Provider returned failure"
         except Exception as e:
-            error_msg = str(e)
+            error_msg = NotificationCoreService._delivery_error(e)
             logger.exception(
                 "Notification send failed",
                 extra={"provider_id": str(provider.id), "error_message": error_msg},
