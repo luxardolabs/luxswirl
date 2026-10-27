@@ -15,7 +15,7 @@ declared = [
   "AgentApprovalStatus", "AgentStatus", "AlertTriggerType", "ApiTokenAccess",
   "ArtifactContentType", "AssignmentMode", "BulkCheckOutcome",
   "CheckArtifactType", "CheckErrorType", "CheckHealthStatus", "CheckType",
-  "DnsRecordType", "HttpMethod", "ImportMode", "JobStatus", "JobType", "MaintenanceJobKind",
+  "DnsRecordType", "HttpMethod", "ImportMode", "JobStatus", "MCPDenialCode", "JobType", "MaintenanceJobKind",
   "MaintenanceJobStatus", "NotificationProviderType", "NotificationStatus",
   "RegistrationKeyStatus", "ScanCheckKind", "SchedulerExecutionStatus", "SchedulerJobCategory",
   "SchedulerTriggerType", "SettingCategory", "SettingValueType", "UserRole",
@@ -39,6 +39,9 @@ non_request_files = [
   # The admin-bootstrap CLI (luxarch --emit admin-bootstrap-cli): startup seed and
   # `python -m app.cli reset-password` each own their transaction.
   "app/cli.py",
+  # The MCP server's auth middleware owns each /mcp request's transaction (as LuxWX's
+  # app/mcp/ does), and rolls back a tool call that failed before auditing it.
+  "app/mcp/server.py",
 ]
 cascading_delete_calls = [
   "\\bbulk_delete_by_ids\\b",

@@ -50,6 +50,7 @@ from app.core.trusted_host import AllowedHostsMiddleware
 from app.db import worker_session
 from app.db.database import close_db, init_db
 from app.db.scheduler_init import init_scheduler_defaults
+from app.mcp.server import create_mcp_app, mcp_session_manager
 from app.notifications.providers.email import EmailNotificationProvider
 from app.notifications.providers.homeassistant import HomeAssistantNotificationProvider
 from app.notifications.providers.webhook import WebhookNotificationProvider
@@ -175,7 +176,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Start async scheduler
     await scheduler_service.start()
 
-    yield
+    # The MCP streamable-HTTP session manager must be running for the /mcp mount to
+    # answer; it stops when the app does.
+    async with mcp_session_manager.run():
+        logger.info("MCP session manager started")
+        yield
 
     # Shutdown
     logger.info("Shutting down LuxSwirl Server API server...")
@@ -380,6 +385,9 @@ async def general_exception_handler(request: Request, exc: Exception) -> Respons
 # Fleet-canonical location: app/static/, a sibling of app/templates/.
 _APP_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=str(_APP_DIR / "static")), name="static")
+
+# MCP server for AI agents: authenticates by the user's lsw_ API token (app/mcp/).
+app.mount("/mcp", create_mcp_app())
 
 # Include routers
 app.include_router(metrics_router)  # Prometheus metrics (root level /metrics)

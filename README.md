@@ -141,7 +141,7 @@ ______________________________________________________________________
 
 - **[Quickstart](docs/quickstart/quickstart.md)** — Docker Compose to first check.
 - **[Installation](docs/deployment/installation.md)** — production deployment.
-- **[User guide](docs/user-guide/)** — one document per feature: [Dashboard](docs/user-guide/dashboard.md), [Agents](docs/user-guide/agents.md), [Checks](docs/user-guide/checks.md), [Jobs](docs/user-guide/jobs.md), [Status Pages](docs/user-guide/status-pages.md), [Alerts](docs/user-guide/alerts.md), [Notifications](docs/user-guide/notifications.md), [Settings](docs/user-guide/settings.md), [Admin API](docs/user-guide/admin-api.md), [Database Health](docs/user-guide/database-health.md), [Import/Export](docs/user-guide/import-export.md).
+- **[User guide](docs/user-guide/)** — one document per feature: [Dashboard](docs/user-guide/dashboard.md), [Agents](docs/user-guide/agents.md), [Checks](docs/user-guide/checks.md), [Jobs](docs/user-guide/jobs.md), [Status Pages](docs/user-guide/status-pages.md), [Alerts](docs/user-guide/alerts.md), [Notifications](docs/user-guide/notifications.md), [Settings](docs/user-guide/settings.md), [Admin API](docs/user-guide/admin-api.md), [MCP server](docs/user-guide/mcp.md), [Database Health](docs/user-guide/database-health.md), [Import/Export](docs/user-guide/import-export.md).
 - **[Architecture](docs/architecture/overview.md)** — system design, agent model, and database schema.
 - **[FAQ](docs/user-guide/faq.md)** and **[Limitations](docs/reference/limitations.md)** — honest answers about what it does and doesn't do.
 - **Agent protocol reference** — auto-generated Swagger UI at `/docs` and ReDoc at `/redoc` on a running server (outside production).

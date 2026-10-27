@@ -70,6 +70,10 @@ cryptography = "^50.0.0"  # CVE-2026-69247/69248/69249 + GHSA-537c-gmf6-5ccf flo
 # Rate Limiting
 slowapi = "^0.1.10"
 
+# Model Context Protocol server (app/mcp/, the AI-agent surface). Pinned to the
+# version LuxPM and LuxWX resolve, so the server ported from them behaves the same.
+mcp = "^1.26.0"
+
 # Transitive-dependency CVE floors. These are pulled in by fastapi, whose own
 # ranges still admit the vulnerable versions — so a re-lock alone cannot raise them; the floor
 # has to be declared here (luxaudit ONBOARDING: "a CVE fix needs a version floor").

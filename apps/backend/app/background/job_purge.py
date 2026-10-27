@@ -1,7 +1,8 @@
 """
 Job purge background task.
 
-Periodically removes expired jobs from the database based on retention policy.
+Periodically removes expired jobs, and MCP tool calls past the audit
+retention, from the database.
 """
 
 import asyncio
@@ -10,6 +11,7 @@ import contextlib
 from app.core.config import settings
 from app.db import worker_session
 from app.services.core.job_core_service import JobCoreService
+from app.services.core.mcp_audit_core_service import MCPAuditCoreService
 from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.background.job_purge")
@@ -38,6 +40,12 @@ async def _job_purge_loop() -> None:
                     logger.info(
                         "Purged expired jobs",
                         extra={"deleted_count": deleted_count},
+                    )
+                audit_count = await MCPAuditCoreService.purge_expired(db)
+                if audit_count > 0:
+                    logger.info(
+                        "Purged MCP tool calls past retention",
+                        extra={"deleted_count": audit_count},
                     )
 
         except asyncio.CancelledError:

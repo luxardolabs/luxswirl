@@ -361,6 +361,14 @@ class SettingValueType(StrEnum):
     DICT = "dict"
 
 
+class MCPDenialCode(StrEnum):
+    """Why the MCP gate refused a tool call (ported from LuxPM's AuthorizationErrorCode)."""
+
+    UNKNOWN_TOOL = "unknown_tool"  # no registry entry: denied by construction
+    ROLE_INSUFFICIENT = "role_insufficient"  # the user's role is below the tool's
+    SCOPE_INSUFFICIENT = "scope_insufficient"  # the token's scopes do not grant it
+
+
 class ApiTokenAccess(StrEnum):
     """The scope presets the web form offers a new API token."""
 
