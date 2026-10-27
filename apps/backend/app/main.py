@@ -326,12 +326,13 @@ async def validation_exception_handler(
 ) -> Response:
     """Handle request validation errors.
 
-    The errors carry the offending `input`, which for a body that is not valid
-    JSON is raw bytes — not serializable. Rendering them straight made the
-    handler itself raise, so a client sending the wrong content-type got a 500
-    instead of the 422 that describes what was wrong.
+    Each error is logged and returned without the value it refused: that value
+    can be a secret (a password the policy refused), and for a body that is not
+    valid JSON it is raw bytes, which do not serialize.
     """
-    errors = jsonable_encoder(exc.errors())
+    errors = jsonable_encoder(
+        [{k: v for k, v in e.items() if k != "input"} for e in exc.errors()]
+    )
     get_logger("luxswirl.server").warning(
         "Validation error",
         extra={"validation_errors": errors},

@@ -25,6 +25,9 @@ from app.services.core.api_token_core_service import ApiTokenCoreService
 from app.services.core.settings_core_service import SettingsCoreService
 from app.shared.logger import get_logger
 
+# The most bytes bcrypt hashes.
+MAX_PASSWORD_BYTES = 72
+
 logger = get_logger("luxswirl.services.auth")
 
 
@@ -66,6 +69,15 @@ class AuthCoreService:
         min_length = security_settings.get("min_password_length", 8)
         if len(password) < min_length:
             return False, f"Password must be at least {min_length} characters long"
+
+        # bcrypt hashes at most 72 bytes; a longer password is refused rather
+        # than cut short (a character outside ASCII takes more than one byte).
+        if len(password.encode()) > MAX_PASSWORD_BYTES:
+            return (
+                False,
+                f"Password must be at most {MAX_PASSWORD_BYTES} bytes "
+                "(fewer characters if it uses accented or non-Latin letters)",
+            )
 
         # Check uppercase requirement
         if security_settings.get("require_uppercase", True) and not any(

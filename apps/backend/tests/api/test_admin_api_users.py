@@ -7,6 +7,7 @@ a password reset ending the user's sessions and API tokens.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
@@ -20,6 +21,7 @@ from app.main import app
 from app.models.user_model import User
 from app.schemas.admin_user_schema import AdminUserCreate
 from app.schemas.api_token_schema import ApiTokenCreate
+from app.services.core.admin_bootstrap_core_service import AdminBootstrapCoreService
 from app.services.core.admin_user_core_service import AdminUserCoreService
 from app.services.core.api_token_core_service import ApiTokenCoreService
 from app.services.core.auth_core_service import AuthCoreService
@@ -378,3 +380,69 @@ async def test_unlock_clears_the_lock(db: AsyncSession, client: AsyncClient) -> 
     assert resp.status_code == 200, resp.text
     assert resp.json()["locked_until"] is None
     assert resp.json()["failed_login_attempts"] == 0
+
+
+# ── Refused passwords stay secret ───────────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    ("path", "body", "secret"),
+    [
+        (
+            "",
+            {"username": "leaky", "password": "CorrectHorseBatteryStaple"},
+            "CorrectHorseBatteryStaple",
+        ),
+        ("/{id}/reset-password", {"new_password": "Tr0ub4d"}, "Tr0ub4d"),
+    ],
+)
+async def test_a_refused_password_is_neither_logged_nor_echoed(
+    db: AsyncSession,
+    client: AsyncClient,
+    app_logs: list[logging.LogRecord],
+    path: str,
+    body: dict[str, object],
+    secret: str,
+) -> None:
+    admin = await _as(db, "admin")
+    target = await _target(db)
+
+    resp = await client.post(USERS + path.format(id=target), json=body, headers=admin)
+
+    assert resp.status_code == 422, resp.text
+    assert secret not in resp.text
+    logged = " ".join(f"{r.getMessage()} {r.__dict__}" for r in app_logs)
+    assert "Validation error" in logged
+    assert secret not in logged
+
+
+async def test_a_password_bcrypt_would_cut_short_is_refused_by_policy(
+    db: AsyncSession, client: AsyncClient
+) -> None:
+    admin = await _as(db, "admin")
+    target = await _target(db)
+
+    resp = await client.post(
+        f"{USERS}/{target}/reset-password",
+        json={"new_password": "Aa1-" + "é" * 40},
+        headers=admin,
+    )
+
+    assert resp.status_code == 422, resp.text
+    assert "72 bytes" in resp.text
+
+
+async def test_a_recovery_reset_ends_the_user_s_api_tokens(
+    db: AsyncSession, client: AsyncClient
+) -> None:
+    victim, stolen_token = await _user(db, "admin", must_change_password=False)
+    assert (
+        await client.get("/api/v1/admin/me", headers=stolen_token)
+    ).status_code == 200
+    bootstrap = AdminBootstrapCoreService()
+
+    temporary = await bootstrap.reset_password(db, victim.username)
+    await bootstrap.change_password(db, victim.username, temporary, "Brand-New-Pass-42")
+
+    resp = await client.get("/api/v1/admin/me", headers=stolen_token)
+    assert resp.status_code == 401, resp.text
