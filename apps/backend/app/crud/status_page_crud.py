@@ -2,6 +2,7 @@
 StatusPage CRUD - database queries for status pages.
 """
 
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -27,9 +28,25 @@ class StatusPageCRUD:
 
     @staticmethod
     async def save_page(db: AsyncSession, status_page: StatusPage) -> StatusPage:
-        """Write a page's changed fields inside a savepoint (a taken slug raises
-        IntegrityError and rolls back only this write); the refreshed row."""
+        """Write a page's changed fields; the refreshed row."""
+        await db.flush()
+        await db.refresh(status_page)
+        return status_page
+
+    @staticmethod
+    async def update_page(
+        db: AsyncSession, status_page: StatusPage, changes: dict[str, Any]
+    ) -> StatusPage:
+        """Apply `changes` to the page inside a savepoint, so a taken slug
+        (IntegrityError, raised to the caller) rolls back only this write and
+        the session stays usable; the refreshed row.
+
+        The changes are made inside the savepoint: entering one flushes what is
+        already pending, outside it.
+        """
         async with db.begin_nested():
+            for field, value in changes.items():
+                setattr(status_page, field, value)
             await db.flush()
         await db.refresh(status_page)
         return status_page

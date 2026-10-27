@@ -682,7 +682,7 @@ ______________________________________________________________________
 
 ## Status Page Examples
 
-A status page has a `name`, a URL-safe `slug`, an `is_public` flag, an optional `config` (display settings such as `theme`, `show_uptime`, `refresh_interval`), and an `items` array. Each item is either a `check` (`check_id` + `order`) or a `group` (`name` + `filter` + `order` + optional `collapsed`). Check IDs are UUID strings.
+A status page has a `name`, a URL-safe `slug`, an `is_public` flag, an optional `config` (display settings such as `theme`, `show_uptime`, `refresh_interval`), and an `items` array. Each item is either a `check` (`check_id` + `order`) or a `group` (`name` + `filter` + `order` + optional `collapsed`). Check IDs are UUID strings. These examples show a page as it is stored; the admin API's create body takes `status_bar_minutes` in place of `config` and items without `order` (see `docs/user-guide/admin-api.md`, "Status pages").
 
 ### Public SaaS Status Page
 

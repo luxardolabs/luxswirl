@@ -214,6 +214,23 @@ A provider's `config` holds its credentials: an SMTP password, a webhook URL who
 
 Filters: `status` (`sent`, `failed`, `retrying`, `rate_limited`, `deduplicated`, `suppressed`), `alert_id`, `notification_provider_id`, and `search` over alert, provider and check names. Each row's `error_message` has every URL in it cut to its host, and its `check_target` has any credential masked, as the web UI's log page shows them to anyone signed in.
 
+## Status pages
+
+Reads take any token; every change takes an editor's, as in the web UI.
+
+| Method   | Path                                    | Role   | Does                                                                                     |
+| -------- | --------------------------------------- | ------ | ---------------------------------------------------------------------------------------- |
+| `GET`    | `/api/v1/admin/status-pages`            | any    | One page of status pages by name; `is_public`                                            |
+| `GET`    | `/api/v1/admin/status-pages/{id}`       | any    | One page, with its items in display order                                                |
+| `POST`   | `/api/v1/admin/status-pages`            | editor | `{"name", "slug", "description"?, "is_public"?, "status_bar_minutes"?, "items"?}`; `201` |
+| `PATCH`  | `/api/v1/admin/status-pages/{id}`       | editor | Change the fields sent; `description` sent as `null` is cleared                          |
+| `PUT`    | `/api/v1/admin/status-pages/{id}/items` | editor | `{"items": [...]}`: the page's items become exactly these, in this order                 |
+| `DELETE` | `/api/v1/admin/status-pages/{id}`       | editor | `202` with a `status_page_delete` job; poll `/api/v1/admin/maintenance-jobs/{id}`        |
+
+A new page is private unless `is_public` is `true`; a public page is open at `/status/{slug}` to anyone, signed in or not. A slug is letters, digits, hyphens and underscores, stored lower-case; a taken one is a `409`. `status_bar_minutes` is one of `30`, `60`, `120`, `240`, `480`, `1440` (default `30`).
+
+An item is either a check, `{"type": "check", "check_id"}`, or a group, `{"type": "group", "name", "collapsed"?, "sort_by"?, "sort_direction"?}` with exactly one of `checks` (the check ids it lists) or `filter` (`agent_id`, `check_type`, `tags`, `search`: the checks matching all of them when the page renders). `sort_by` is `manual`, `name`, `status`, `latency` or `uptime`; `sort_direction` is `asc` or `desc`. A page holds at most 500 items, a group lists at most 1,000 checks, and a page names at most 10,000 checks in all. A check or agent id that does not exist is a `422`, and nothing is written. The delete job is refused when it runs if its owner is no longer an active editor or admin.
+
 ## OpenAPI document
 
 `/api/v1/admin/openapi.json` describes every admin-API route, with the bearer scheme declared. It is served to any token holder in every environment, so a client generator or an AI agent can read it. The app-wide `/docs` and `/openapi.json` stay off in production.

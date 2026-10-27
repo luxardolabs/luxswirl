@@ -21,6 +21,7 @@ from app.schemas.admin_status_page_schema import (
     CheckItem,
     StatusPageItem,
     StatusPagePage,
+    named_check_ids,
 )
 from app.schemas.maintenance_job_schema import MaintenanceJobResponse
 from app.schemas.pagination_schema import build_pagination
@@ -89,17 +90,16 @@ class AdminStatusPageCoreService:
         db: AsyncSession, items: list[StatusPageItem]
     ) -> None:
         """Every check and agent the items name exists."""
-        check_ids: list[UUID] = []
-        agent_ids: list[UUID] = []
-        for item in items:
-            if isinstance(item, CheckItem):
-                check_ids.append(item.check_id)
-            elif item.checks is not None:
-                check_ids.extend(item.checks)
-            elif item.filter is not None and item.filter.agent_id is not None:
-                agent_ids.append(item.filter.agent_id)
+        check_ids = named_check_ids(items)
+        agent_ids = [
+            item.filter.agent_id
+            for item in items
+            if not isinstance(item, CheckItem)
+            and item.filter is not None
+            and item.filter.agent_id is not None
+        ]
         found = {c.id for c in await CheckCoreService.get_checks_by_ids(db, check_ids)}
-        missing = [c for c in dict.fromkeys(check_ids) if c not in found]
+        missing = [c for c in check_ids if c not in found]
         if missing:
             raise ValidationException(f"No check has the id {missing[0]}")
         for agent_id in dict.fromkeys(agent_ids):

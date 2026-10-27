@@ -18,9 +18,11 @@ from app.schemas.base_schema import NoteText, PlainText, Tag
 from app.schemas.paginated_response_schema import PaginatedResponse
 from app.schemas.status_page_schema import StatusBarMinutes
 
-# The most items one page holds, and checks one group lists.
+# The most items one page holds, checks one group lists, and checks one page
+# names in all (its check items and its groups' lists together).
 MAX_ITEMS = 500
 MAX_GROUP_CHECKS = 1000
+MAX_PAGE_CHECKS = 10_000
 
 # A slug is a URL path segment: letters, digits, hyphens and underscores.
 SLUG_PATTERN = r"^[A-Za-z0-9_-]+$"
@@ -82,12 +84,36 @@ class GroupItem(BaseModel):
 StatusPageItem = Annotated[CheckItem | GroupItem, Field(discriminator="type")]
 
 
+def named_check_ids(items: list[StatusPageItem]) -> list[UUID]:
+    """Every check the items name, once each, in order."""
+    ids: list[UUID] = []
+    for item in items:
+        if isinstance(item, CheckItem):
+            ids.append(item.check_id)
+        elif item.checks is not None:
+            ids.extend(item.checks)
+    return list(dict.fromkeys(ids))
+
+
+def _within_page_cap(items: list[StatusPageItem]) -> list[StatusPageItem]:
+    if len(named_check_ids(items)) > MAX_PAGE_CHECKS:
+        raise ValueError(f"A page names at most {MAX_PAGE_CHECKS} checks")
+    return items
+
+
+PageItems = Annotated[
+    list[StatusPageItem],
+    Field(max_length=MAX_ITEMS),
+    AfterValidator(_within_page_cap),
+]
+
+
 class AdminStatusPageItems(BaseModel):
     """A page's whole item list, in display order."""
 
     model_config = ConfigDict(extra="forbid")
 
-    items: list[StatusPageItem] = Field(..., max_length=MAX_ITEMS)
+    items: PageItems
 
 
 class AdminStatusPageCreate(BaseModel):
@@ -101,7 +127,7 @@ class AdminStatusPageCreate(BaseModel):
     description: NoteText | None = Field(None, max_length=1000)
     is_public: bool = False
     status_bar_minutes: StatusBarMinutes = 30
-    items: list[StatusPageItem] = Field(default_factory=list, max_length=MAX_ITEMS)
+    items: PageItems = Field(default_factory=list)
 
 
 class AdminStatusPageUpdate(BaseModel):
