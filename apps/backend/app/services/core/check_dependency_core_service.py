@@ -179,6 +179,14 @@ class CheckDependencyCoreService:
                 "Single-level dependencies only — the selected parent already has a parent"
             )
 
+        if (
+            own_check_id is not None
+            and await CheckCRUD.count_dependents(db, own_check_id) > 0
+        ):
+            raise ValidationException(
+                "Single-level dependencies only — this check is a parent itself"
+            )
+
     @staticmethod
     async def list_eligible_parent_rows(
         db: AsyncSession, exclude_check_id: UUID | None = None

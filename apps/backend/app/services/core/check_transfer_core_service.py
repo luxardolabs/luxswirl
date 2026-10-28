@@ -175,7 +175,9 @@ class CheckTransferCoreService:
             owner_id,
             agent_id,
             mode,
-            [check.model_dump(mode="json") for check in checks],
+            # Only what each entry named: an optional setting it left out is
+            # left as the check has it, as for the web upload.
+            [check.model_dump(mode="json", exclude_unset=True) for check in checks],
         )
 
     @staticmethod

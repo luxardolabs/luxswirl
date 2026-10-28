@@ -73,6 +73,21 @@ def pack_config(data: CheckCreate, check_type: str) -> dict[str, Any]:
     }
 
 
+def keep_type_fields(config: dict[str, Any], check_type: str) -> dict[str, Any]:
+    """`config` without the fields of other check types.
+
+    For a check whose type changes: a database check turned into an http
+    check must not keep its connection string. Keys outside every type's
+    fields are kept.
+    """
+    own = set(TYPE_FIELDS.get(check_type, ()))
+    return {
+        key: value
+        for key, value in config.items()
+        if key not in ALL_CONFIG_FIELDS or key in own
+    }
+
+
 def take_config_updates(update_data: dict[str, Any], check_type: str) -> dict[str, Any]:
     """POP this check type's config fields out of an update dict and return them.
 
