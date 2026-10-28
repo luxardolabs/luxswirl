@@ -285,8 +285,11 @@ class Check(UUIDBaseModel):
 
         Kept in `check_config` (encrypted at rest), where create and update
         write it and the agent reads it; a value only in
-        `connection_string_encrypted` is still read.
+        `connection_string_encrypted` is still read. Only a database check has
+        one: a value left in the config of a check whose type changed is not.
         """
+        if self.check_type not in (CheckType.MYSQL, CheckType.POSTGRES):
+            return None
         return self._config_str("connection_string") or self.connection_string_encrypted
 
     @connection_string.setter

@@ -3,7 +3,12 @@
 An import job's params hold the entries it will make: check targets, database
 connection strings and synthetic scripts, the values `checks` keeps encrypted.
 The column becomes text holding the Fernet ciphertext (`EncryptedJSON`), and
-every row already in it is encrypted. Downgrading writes each row back as JSON.
+every row already in it is encrypted with the server's key. With no key
+anywhere the server has never run, and the rows stay JSON text, which
+`EncryptedJSON` reads and stores in that case.
+
+Downgrading writes each row back as JSON. A row it cannot decrypt (no key, or
+another one) stops the downgrade, naming the job: it is never written over.
 
 Revision ID: 5b8d2f4a7c61
 Revises: 3c7e1a9d5f20
@@ -16,8 +21,8 @@ import json
 import sqlalchemy as sa
 from alembic import op
 from app.core.config import settings
-from app.core.encrypted_types import EncryptedJSON
 from app.core.secrets import load_existing
+from cryptography.fernet import Fernet, InvalidToken
 from sqlalchemy.engine import Connection
 
 revision = "5b8d2f4a7c61"
@@ -28,53 +33,70 @@ depends_on = None
 _OLD_COMMENT = "Kind-specific args (check_ids list, URL list, etc.)"
 _NEW_COMMENT = "Kind-specific args (check_ids list, URL list, etc.) - encrypted at rest"
 
-encrypted_jobs = sa.table(
-    "maintenance_jobs",
-    sa.column("id", sa.Uuid()),
-    sa.column("params", EncryptedJSON()),
-)
-plain_jobs = sa.table(
+jobs = sa.table(
     "maintenance_jobs",
     sa.column("id", sa.Uuid()),
     sa.column("params", sa.Text()),
 )
 
 
-def _use_the_server_key() -> None:
-    """Encrypt with the server's key. `alembic upgrade` runs before the server,
-    whose lifespan resolves the key from its file; with no key anywhere the
-    server has never run, and `EncryptedJSON` stores JSON as it would then."""
+def _server_fernet() -> Fernet | None:
+    """The cipher for the server's key, or None when it has none.
+
+    `alembic upgrade` runs before the server, whose lifespan resolves the key
+    from its file; this reads the same env var and file, never generating one.
+    """
     key = load_existing("field_encryption_key", settings.security.field_encryption_key)
-    if key:
-        settings.security.field_encryption_key = key
+    return Fernet(key.encode()) if key else None
+
+
+def _is_json(text: str) -> bool:
+    try:
+        json.loads(text)
+    except json.JSONDecodeError:
+        return False
+    return True
 
 
 def encrypt_rows(connection: Connection) -> None:
-    """Write every row's params back through `EncryptedJSON`, so each is stored
-    encrypted (a row it reads as plaintext JSON is the one to encrypt)."""
-    _use_the_server_key()
-    rows = connection.execute(
-        sa.select(encrypted_jobs.c.id, encrypted_jobs.c.params)
-    ).all()
-    for job_id, params in rows:
-        connection.execute(
-            sa.update(encrypted_jobs)
-            .where(encrypted_jobs.c.id == job_id)
-            .values(params=params if params is not None else {})
-        )
+    """Encrypt every row still stored as JSON text."""
+    fernet = _server_fernet()
+    if fernet is None:
+        return
+    for job_id, params in connection.execute(sa.select(jobs.c.id, jobs.c.params)).all():
+        if params is not None and _is_json(params):
+            connection.execute(
+                sa.update(jobs)
+                .where(jobs.c.id == job_id)
+                .values(params=fernet.encrypt(params.encode()).decode())
+            )
 
 
 def decrypt_rows(connection: Connection) -> None:
-    """Write every row's params back as plain JSON text."""
-    _use_the_server_key()
-    rows = connection.execute(
-        sa.select(encrypted_jobs.c.id, encrypted_jobs.c.params)
-    ).all()
-    for job_id, params in rows:
+    """Write every encrypted row back as the JSON it holds.
+
+    Raises:
+        RuntimeError: A row is neither JSON nor decryptable with the server's
+            key; nothing is written over it.
+    """
+    fernet = _server_fernet()
+    for job_id, params in connection.execute(sa.select(jobs.c.id, jobs.c.params)).all():
+        if params is None or _is_json(params):
+            continue
+        if fernet is None:
+            raise RuntimeError(
+                f"maintenance job {job_id} holds encrypted params and no "
+                "encryption key is configured; set SECURITY__FIELD_ENCRYPTION_KEY"
+            )
+        try:
+            plain = fernet.decrypt(params.encode()).decode()
+        except InvalidToken:
+            raise RuntimeError(
+                f"maintenance job {job_id}'s params do not decrypt with the "
+                "configured encryption key"
+            ) from None
         connection.execute(
-            sa.update(plain_jobs)
-            .where(plain_jobs.c.id == job_id)
-            .values(params=json.dumps(params if params is not None else {}))
+            sa.update(jobs).where(jobs.c.id == job_id).values(params=plain)
         )
 
 

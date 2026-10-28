@@ -14,7 +14,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import attributes
 
-from app.core.check_config import pack_config, take_config_updates
+from app.core.check_config import keep_type_fields, pack_config, take_config_updates
 from app.core.check_target_validator import validate_check_target
 from app.core.datetime_utils import utc_now
 from app.core.error_summary import error_summary
@@ -452,9 +452,12 @@ class CheckCoreService:
             },
         )
 
-        if config_updates:
-            # Merge into existing check_config
-            current_config = check.check_config or {}
+        type_changes = check_type != check.check_type
+        if config_updates or type_changes:
+            # Merge into existing check_config; a new type drops the old one's fields.
+            current_config = dict(check.check_config or {})
+            if type_changes:
+                current_config = keep_type_fields(current_config, check_type)
             current_config.update(config_updates)
             check.check_config = current_config
             # Force SQLAlchemy to detect the JSONB change
@@ -680,6 +683,13 @@ class CheckCoreService:
             if outcome != "skipped" and check_data.names_parent():
                 to_link.append(check_data)
 
+        # Unlinks first: a check the file frees of its parent may be another
+        # entry's parent, whatever their order in the file.
+        to_link.sort(
+            key=lambda entry: (
+                entry.depends_on is not None or entry.depends_on_check_id is not None
+            )
+        )
         for check_data in to_link:
             # swallowed-exceptions: a parent that cannot be linked is that entry's error, kept for the caller; the check itself is made, and its savepoint keeps the rest committable
             try:
