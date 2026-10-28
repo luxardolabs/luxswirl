@@ -34,5 +34,6 @@ class NavUrls:
     settings_registration_keys: str
     settings_defaults: str
     settings_users: str
+    settings_api_activity: str
     settings_components: str
     settings_logo_demo: str

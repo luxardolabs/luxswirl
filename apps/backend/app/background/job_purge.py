@@ -1,15 +1,18 @@
 """
 Job purge background task.
 
-Periodically removes expired jobs, and MCP tool calls past the audit
-retention, from the database.
+Periodically removes expired jobs, and MCP tool calls and admin API calls past
+the audit retention, from the database.
 """
 
 import asyncio
 import contextlib
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.core.config import settings
 from app.db import worker_session
+from app.services.core.api_audit_core_service import ApiAuditCoreService
 from app.services.core.job_core_service import JobCoreService
 from app.services.core.mcp_audit_core_service import MCPAuditCoreService
 from app.shared.logger import get_logger
@@ -18,6 +21,29 @@ logger = get_logger("luxswirl.background.job_purge")
 
 # Task handle
 _purge_task: asyncio.Task[None] | None = None
+
+
+async def purge_expired_once(db: AsyncSession) -> None:
+    """One purge pass on `db`: expired jobs, and MCP tool calls and admin API
+    calls past the audit retention. The caller owns the transaction."""
+    deleted_count = await JobCoreService.purge_expired_jobs(db)
+    if deleted_count > 0:
+        logger.info(
+            "Purged expired jobs",
+            extra={"deleted_count": deleted_count},
+        )
+    audit_count = await MCPAuditCoreService.purge_expired(db)
+    if audit_count > 0:
+        logger.info(
+            "Purged MCP tool calls past retention",
+            extra={"deleted_count": audit_count},
+        )
+    api_count = await ApiAuditCoreService.purge_expired(db)
+    if api_count > 0:
+        logger.info(
+            "Purged admin API calls past retention",
+            extra={"deleted_count": api_count},
+        )
 
 
 async def _job_purge_loop() -> None:
@@ -35,18 +61,7 @@ async def _job_purge_loop() -> None:
 
             # Purge expired jobs: one transaction, committed by the owner
             async with worker_session() as db:
-                deleted_count = await JobCoreService.purge_expired_jobs(db)
-                if deleted_count > 0:
-                    logger.info(
-                        "Purged expired jobs",
-                        extra={"deleted_count": deleted_count},
-                    )
-                audit_count = await MCPAuditCoreService.purge_expired(db)
-                if audit_count > 0:
-                    logger.info(
-                        "Purged MCP tool calls past retention",
-                        extra={"deleted_count": audit_count},
-                    )
+                await purge_expired_once(db)
 
         except asyncio.CancelledError:
             logger.info("Job purge task cancelled")

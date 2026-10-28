@@ -16,6 +16,7 @@
 {%- set ICO_KEY %}<span class="w-6 h-6 text-brand-500 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/key.svg" %}</span>{% endset -%}
 {%- set ICO_PAINT %}<span class="w-6 h-6 text-brand-500 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/paint-brush.svg" %}</span>{% endset -%}
 {%- set ICO_COG %}<span class="w-6 h-6 text-brand-500 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/cog-6-tooth.svg" %}</span>{% endset -%}
+{%- set ICO_ACTIVITY %}<span class="w-6 h-6 text-brand-500 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/queue-list.svg" %}</span>{% endset -%}
 {%- set ICO_USERS %}<span class="w-6 h-6 text-brand-500 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/user-group.svg" %}</span>{% endset -%}
 
 <!-- Settings Categories Grid -->
@@ -59,6 +60,13 @@
         description='Manage user accounts, roles, and permissions',
         icon=ICO_USERS,
         href=nav.settings_users
+    ) }}
+
+    {{ settings_category_card(
+        title='API Activity',
+        description='Every MCP tool call and admin API request made with a user\'s API token',
+        icon=ICO_ACTIVITY,
+        href=nav.settings_api_activity
     ) }}
 
     {{ settings_category_card(

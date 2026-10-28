@@ -1,0 +1,163 @@
+{% extends "layouts/base.html" %}
+{% from 'macros/settings.html' import settings_nav %}
+{% from 'macros/page.html' import page_header %}
+{% from 'macros/badges.html' import badge %}
+{% from 'macros/buttons.html' import icon_view %}
+{% from 'macros/filters.html' import filter_card, filter_select %}
+{% from 'macros/tables.html' import data_table %}
+
+{# API activity (admin only): every user's MCP tool calls or admin API requests.
+   Ported from LuxWX's admin MCP usage page, without tenants and stations.
+   Vars: surface ('mcp'|'api'), surface_tabs, rows [{call, outcome_label,
+         outcome_variant, detail_url (mcp only)}], row_limit, row_count, truncated,
+         filters, filter_options {days, operations, users, api_tokens, outcomes},
+         list_url. #}
+
+{% block content %}
+{{ page_header(
+    title='Settings',
+    description='Every call made with a user\'s API token, over MCP and the admin API'
+) }}
+
+{{ settings_nav('api_activity', current_user, nav) }}
+
+<div class="mb-4">
+    <h2 class="text-lg font-semibold">API Activity</h2>
+    <p class="text-sm text-dark-text-muted mt-1">
+        {{ row_count }} call{{ '' if row_count == 1 else 's' }} shown{% if truncated %}, the newest {{ row_limit }}: narrow the filters to see further back{% endif %}.
+        Calls are kept for 90 days.
+    </p>
+</div>
+
+<div class="border-b border-dark-border mb-6">
+    <nav class="flex space-x-6" aria-label="Activity surfaces">
+        {% for tab in surface_tabs %}
+        <a href="{{ tab.url }}"
+           class="{% if tab.active %}border-brand-500 text-brand-500{% else %}border-transparent text-dark-text-muted hover:text-dark-text-primary hover:border-dark-border{% endif %} border-b-2 py-3 px-1 font-medium text-sm transition-colors">
+            {{ tab.label }}
+        </a>
+        {% endfor %}
+    </nav>
+</div>
+
+{% call filter_card(list_url) %}
+    <input type="hidden" name="surface" value="{{ surface }}">
+
+    {% call filter_select('days', 'Window', extra_classes='w-36') %}
+        {% for d in filter_options.days %}
+        <option value="{{ d }}" {% if filters.days == d %}selected{% endif %}>Last {{ d }} day{{ '' if d == 1 else 's' }}</option>
+        {% endfor %}
+    {% endcall %}
+
+    {% if surface == 'mcp' %}
+    {% call filter_select('tool', 'Tool', extra_classes='w-48') %}
+        <option value="">All tools</option>
+        {% for opt in filter_options.operations %}
+        <option value="{{ opt.value }}" {% if filters.tool == opt.value %}selected{% endif %}>{{ opt.label }}</option>
+        {% endfor %}
+    {% endcall %}
+    {% else %}
+    {% call filter_select('route', 'Route', extra_classes='w-72') %}
+        <option value="">All routes</option>
+        {% for opt in filter_options.operations %}
+        <option value="{{ opt.value }}" {% if filters.route == opt.value %}selected{% endif %}>{{ opt.label }}</option>
+        {% endfor %}
+    {% endcall %}
+    {% endif %}
+
+    {% call filter_select('user_id', 'User', extra_classes='w-44') %}
+        <option value="">All users</option>
+        {% for opt in filter_options.users %}
+        <option value="{{ opt.value }}" {% if filters.user_id == opt.value %}selected{% endif %}>{{ opt.label }}</option>
+        {% endfor %}
+    {% endcall %}
+
+    {% call filter_select('api_token_id', 'Token', extra_classes='w-56') %}
+        <option value="">All tokens</option>
+        {% for opt in filter_options.api_tokens %}
+        <option value="{{ opt.value }}" {% if filters.api_token_id == opt.value %}selected{% endif %}>{{ opt.label }}</option>
+        {% endfor %}
+    {% endcall %}
+
+    {% call filter_select('outcome', 'Outcome', extra_classes='w-36') %}
+        <option value="">All outcomes</option>
+        {% for opt in filter_options.outcomes %}
+        <option value="{{ opt.value }}" {% if filters.outcome == opt.value %}selected{% endif %}>{{ opt.label }}</option>
+        {% endfor %}
+    {% endcall %}
+{% endcall %}
+
+<div class="card overflow-hidden">
+    {% if surface == 'mcp' %}
+    {% call data_table([
+        {'label': 'Time'},
+        {'label': 'User'},
+        {'label': 'Token'},
+        {'label': 'Tool'},
+        {'label': 'Outcome'},
+        {'label': 'Denial'},
+        {'label': 'Duration', 'align': 'right'},
+        {'label': 'Client'},
+        {'label': 'Details', 'align': 'right'},
+    ]) %}
+        {% for row in rows %}
+        {% set call = row.call %}
+        <tr data-call-id="{{ call.id }}">
+            <td><span class="font-mono text-dark-text-muted whitespace-nowrap">{{ call.created_at|format_datetime('%m/%d %I:%M:%S%p') }}</span></td>
+            <td>{{ call.username or '(deleted user)' }}</td>
+            <td>{{ call.token_name or '(deleted token)' }}</td>
+            <td><span class="font-mono text-sm">{{ call.tool_name }}</span></td>
+            <td>{{ badge(row.outcome_label, row.outcome_variant) }}</td>
+            <td>{% if call.denial_code %}<span class="font-mono text-xs text-yellow-300">{{ call.denial_code.value }}</span>{% else %}<span class="text-dark-text-muted/50">—</span>{% endif %}</td>
+            <td class="text-right font-mono">{% if call.duration_ms is not none %}{{ call.duration_ms }} ms{% else %}—{% endif %}</td>
+            <td>
+                <span class="font-mono text-xs">{{ call.ip_address or 'not recorded' }}</span>
+                {% if call.user_agent %}<p class="text-xs text-dark-text-muted truncate max-w-[12rem]" title="{{ call.user_agent }}">{{ call.user_agent }}</p>{% endif %}
+            </td>
+            <td class="text-right">
+                {{ icon_view(title='Arguments and error', hx_get=row.detail_url, hx_target='#panel-container') }}
+            </td>
+        </tr>
+        {% endfor %}
+    {% endcall %}
+    {% if not rows %}
+    <div class="p-12 text-center">
+        <p class="text-dark-text-muted">No MCP tool calls match these filters in this window.</p>
+    </div>
+    {% endif %}
+    {% else %}
+    {% call data_table([
+        {'label': 'Time'},
+        {'label': 'User'},
+        {'label': 'Token'},
+        {'label': 'Request'},
+        {'label': 'Outcome'},
+        {'label': 'Status', 'align': 'right'},
+        {'label': 'Duration', 'align': 'right'},
+        {'label': 'Client'},
+    ]) %}
+        {% for row in rows %}
+        {% set call = row.call %}
+        <tr data-call-id="{{ call.id }}">
+            <td><span class="font-mono text-dark-text-muted whitespace-nowrap">{{ call.created_at|format_datetime('%m/%d %I:%M:%S%p') }}</span></td>
+            <td>{{ call.username or '(deleted user)' }}</td>
+            <td>{{ call.token_name or '(deleted token)' }}</td>
+            <td><span class="font-mono text-sm"><span class="text-brand-300">{{ call.method.value }}</span> {{ call.route }}</span></td>
+            <td>{{ badge(row.outcome_label, row.outcome_variant) }}</td>
+            <td class="text-right font-mono">{{ call.status_code }}</td>
+            <td class="text-right font-mono">{% if call.duration_ms is not none %}{{ call.duration_ms }} ms{% else %}—{% endif %}</td>
+            <td>
+                <span class="font-mono text-xs">{{ call.ip_address or 'not recorded' }}</span>
+                {% if call.user_agent %}<p class="text-xs text-dark-text-muted truncate max-w-[12rem]" title="{{ call.user_agent }}">{{ call.user_agent }}</p>{% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    {% endcall %}
+    {% if not rows %}
+    <div class="p-12 text-center">
+        <p class="text-dark-text-muted">No admin API requests match these filters in this window.</p>
+    </div>
+    {% endif %}
+    {% endif %}
+</div>
+{% endblock %}

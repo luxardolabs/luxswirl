@@ -369,6 +369,21 @@ class MCPDenialCode(StrEnum):
     SCOPE_INSUFFICIENT = "scope_insufficient"  # the token's scopes do not grant it
 
 
+class AuditSurface(StrEnum):
+    """Which token surface an audited call came in on."""
+
+    MCP = "mcp"  # a tool call over /mcp
+    API = "api"  # a request to /api/v1/admin
+
+
+class AuditOutcome(StrEnum):
+    """How an audited call ended, as the activity screens filter it."""
+
+    SUCCESS = "success"  # answered without error
+    ERROR = "error"  # failed, but was not refused
+    DENIED = "denied"  # refused: the role or the token's scopes do not allow it
+
+
 class ApiTokenAccess(StrEnum):
     """The scope presets the web form offers a new API token."""
 

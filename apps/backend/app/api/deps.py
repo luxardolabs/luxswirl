@@ -25,6 +25,7 @@ from uuid import UUID
 from fastapi import Depends, Header, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.audit_middleware import mark_authenticated
 from app.core.authorization import scope_grants
 from app.core.config import settings
 from app.core.exceptions import AgentNotFoundException
@@ -273,10 +274,15 @@ UploadingAgentId = Annotated[UUID, Depends(require_uploading_agent)]
 
 
 async def require_api_user(
+    request: Request,
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     authorization: Annotated[str | None, Header()] = None,
 ) -> ApiPrincipal:
-    """The user whose unrevoked, unexpired API token authenticated this request."""
+    """The user whose unrevoked, unexpired API token authenticated this request.
+
+    The request is marked for its audit row (`app/api/audit_middleware.py`), so
+    every authenticated call is recorded, whatever its route answers.
+    """
     scheme, _, token = (authorization or "").partition(" ")
     principal = (
         await ApiTokenCoreService.authenticate(db, token.strip())
@@ -289,6 +295,7 @@ async def require_api_user(
             detail="A valid API token is required (Authorization: Bearer lsw_...)",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    mark_authenticated(request, principal)
     return principal
 
 

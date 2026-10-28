@@ -13,7 +13,7 @@ required = true
 [target.enums]
 declared = [
   "AgentApprovalStatus", "AgentStatus", "AlertTriggerType", "ApiTokenAccess",
-  "ArtifactContentType", "AssignmentMode", "BulkCheckOutcome",
+  "ArtifactContentType", "AuditOutcome", "AuditSurface", "AssignmentMode", "BulkCheckOutcome",
   "CheckArtifactType", "CheckErrorType", "CheckHealthStatus", "CheckType",
   "DnsRecordType", "HttpMethod", "ImportMode", "JobStatus", "MCPDenialCode", "JobType", "MaintenanceJobKind",
   "MaintenanceJobStatus", "NotificationProviderType", "NotificationStatus",
@@ -42,6 +42,9 @@ non_request_files = [
   # The MCP server's auth middleware owns each /mcp request's transaction (as LuxWX's
   # app/mcp/ does), and rolls back a tool call that failed before auditing it.
   "app/mcp/server.py",
+  # The admin API's call audit writes each row after the response, in a transaction
+  # of its own, so the request's rollback never loses it (as app/mcp/server.py audits).
+  "app/api/audit_middleware.py",
 ]
 cascading_delete_calls = [
   "\\bbulk_delete_by_ids\\b",

@@ -103,6 +103,15 @@
             <p class="text-xs text-dark-text-muted mb-3">For scripts and tools calling the admin API. A token acts as you, with your role.</p>
             {% include "partials/profile/api_tokens.html" %}
         </div>
+
+        <!-- API Activity: the user's own tokens' calls, loaded with the panel -->
+        <div class="pt-4 border-t border-dark-border">
+            <h3 class="text-sm font-medium text-dark-text-secondary mb-1">API Activity</h3>
+            <p class="text-xs text-dark-text-muted mb-3">What your API tokens did, over MCP and the admin API.</p>
+            <div id="api-activity" hx-get="{{ activity_url }}" hx-trigger="load" hx-swap="outerHTML">
+                <p class="text-xs text-dark-text-muted">Loading…</p>
+            </div>
+        </div>
     </div>
     {% endcall %}
 {% endcall %}

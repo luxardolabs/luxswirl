@@ -53,6 +53,7 @@ class NavViewService:
             settings_registration_keys=u("settings_registration_keys"),
             settings_defaults=u("settings_defaults"),
             settings_users=u("users_page"),
+            settings_api_activity=u("api_activity_page"),
             settings_components=u("settings_components"),
             settings_logo_demo=u("settings_logo_demo"),
         )
