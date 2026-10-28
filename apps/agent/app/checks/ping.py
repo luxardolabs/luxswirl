@@ -38,10 +38,18 @@ class PingCheck(BaseCheck):
         """
         host = self.config["target"]
         # SSRF: ping an address the policy allows, never the name (`ping` would
-        # resolve it again); a name with no allowed address is refused. One that
-        # does not resolve is left to `ping`, which reports it.
+        # resolve it again, unvetted); a name with no allowed address is refused.
         addresses = allowed_addresses(host)
-        ping_host = addresses[0] if addresses else host
+        if not addresses:
+            return self.create_result(
+                success=False,
+                latency_ms=None,
+                error=f"Could not resolve host: {host}",
+                target_host=host,
+                packet_loss=100,
+                ping_statistics=None,
+            )
+        ping_host = addresses[0]
         count = self.config.get("count", 1)
         timeout = self.config.get("timeout", 1)
         retries = self.config.get("retries", 1)
@@ -131,6 +139,10 @@ class PingCheck(BaseCheck):
                 host,
             ]
         elif os_name == "darwin":
+            if ":" in host:
+                # macOS `ping` is IPv4 only, and `ping6` takes no timeout flag:
+                # the subprocess timeout bounds it.
+                return ["ping6", "-c", str(count), host]
             # macOS ping
             return ["ping", "-c", str(count), "-t", str(int(timeout)), host]
         else:
