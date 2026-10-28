@@ -74,16 +74,30 @@ class AlertEvaluationCoreService:
         # Evaluate each alert. The silence triggers fire on the absence of
         # results, so a result is not theirs to evaluate: the scheduled
         # SilenceAlertCoreService pass owns them, recoveries included.
+        # Each alert in its own savepoint: one that fails (a stored trigger_config
+        # of the wrong type, say) is logged and rolled back, and the next alert
+        # on the check is still evaluated.
         for alert in all_alerts:
             if alert.trigger_type in SILENCE_TRIGGER_TYPES:
                 continue
-            should_fire = await AlertEvaluationCoreService._should_fire_alert(
-                db, alert, check, check_result
-            )
-
-            if should_fire:
-                await AlertEvaluationCoreService._fire_alert(
-                    db, alert, check, check_result
+            # swallowed-exceptions: one alert's failure is logged with its id and rolled back in its savepoint; the other alerts on the check must still fire
+            try:
+                async with db.begin_nested():
+                    should_fire = await AlertEvaluationCoreService._should_fire_alert(
+                        db, alert, check, check_result
+                    )
+                    if should_fire:
+                        await AlertEvaluationCoreService._fire_alert(
+                            db, alert, check, check_result
+                        )
+            except Exception:
+                logger.exception(
+                    "Alert evaluation failed",
+                    extra={
+                        "alert_id": str(alert.id),
+                        "alert_name": alert.name,
+                        "check_id": str(check.id),
+                    },
                 )
 
     @staticmethod
