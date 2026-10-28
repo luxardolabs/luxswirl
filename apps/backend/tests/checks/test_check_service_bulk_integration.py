@@ -252,6 +252,40 @@ class TestCloneCheck:
         alert_ids = await AlertCoreService.get_alert_ids_for_check(db, cloned.id)
         assert sorted(alert_ids) == sorted([global_alert.id, own_alert.id])
 
+    async def test_a_disabled_global_alert_on_the_source_is_copied_once(
+        self, db: AsyncSession
+    ):
+        """create_check gives a new check only the enabled global alerts; a
+        disabled global one mapped on the source is still copied, and nothing
+        is mapped twice, cloning to another agent too."""
+        agent = make_agent()
+        other = make_agent()
+        live = make_alert(is_global=True)
+        off = make_alert(is_global=True, is_enabled=False)
+        own = make_alert()
+        db.add_all([agent, other, live, off, own])
+        await db.flush()
+        source = await CheckCoreService.create_check(
+            db,
+            agent.id,
+            CheckCreate(
+                display_name="src",
+                check_type="ping",
+                target="127.0.0.1",
+                retry_interval_seconds=30,
+            ),
+            skip_config_update=True,
+        )
+        await AlertCoreService.add_check(db, off.id, source.id)
+        await AlertCoreService.add_check(db, own.id, source.id)
+
+        cloned = await CheckCoreService.clone_check(
+            db, source.id, other.id, skip_config_update=True
+        )
+
+        alert_ids = await AlertCoreService.get_alert_ids_for_check(db, cloned.id)
+        assert sorted(alert_ids) == sorted([live.id, off.id, own.id])
+
     async def test_a_check_stored_without_a_timeout_clones_with_the_default(
         self, db: AsyncSession
     ):
