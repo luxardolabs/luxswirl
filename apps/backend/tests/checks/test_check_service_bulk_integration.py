@@ -13,12 +13,13 @@ from app.core.exceptions import CheckNotFoundException
 from app.crud.check_crud import CheckCRUD
 from app.models.check_model import Check
 from app.schemas.check_schema import CheckCreate, CheckUpdate
+from app.services.core.alert_core_service import AlertCoreService
 from app.services.core.check_core_service import CheckCoreService
 from app.services.core.check_dependency_core_service import (
     CheckDependencyCoreService,
 )
 from app.services.views.checks_view_service import ChecksViewService
-from fixtures.factories import make_agent, make_check, make_user
+from fixtures.factories import make_agent, make_alert, make_check, make_user
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -220,6 +221,36 @@ class TestCloneCheck:
         assert source.display_name in cloned.display_name
         assert cloned.check_type == source.check_type
         assert cloned.target == source.target
+
+    async def test_a_check_with_a_global_alert_clones_with_each_alert_once(
+        self, db: AsyncSession
+    ):
+        """A new check gets the global alerts; the clone copies the source's
+        alerts too, and the global ones it already has are not added twice."""
+        agent = make_agent()
+        global_alert = make_alert(is_global=True)
+        own_alert = make_alert()
+        db.add_all([agent, global_alert, own_alert])
+        await db.flush()
+        source = await CheckCoreService.create_check(
+            db,
+            agent.id,
+            CheckCreate(
+                display_name="watched",
+                check_type="ping",
+                target="127.0.0.1",
+                retry_interval_seconds=30,
+            ),
+            skip_config_update=True,
+        )
+        await AlertCoreService.add_check(db, own_alert.id, source.id)
+
+        cloned = await CheckCoreService.clone_check(
+            db, source.id, agent.id, skip_config_update=True
+        )
+
+        alert_ids = await AlertCoreService.get_alert_ids_for_check(db, cloned.id)
+        assert sorted(alert_ids) == sorted([global_alert.id, own_alert.id])
 
     async def test_a_check_stored_without_a_timeout_clones_with_the_default(
         self, db: AsyncSession
