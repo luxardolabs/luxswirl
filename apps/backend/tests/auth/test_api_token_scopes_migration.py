@@ -1,7 +1,7 @@
 """Migration 009 gives every token that already exists `*`, and leaves no default.
 
-The suite builds its schema with create_all, so this runs the revision itself,
-down and up again, around a token stored as an older version stored it.
+The suite's schema is already at head, so this runs the revision itself, down
+and up again, around a token stored as an older version stored it.
 """
 
 from __future__ import annotations
