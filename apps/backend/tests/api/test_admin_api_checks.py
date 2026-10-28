@@ -9,7 +9,7 @@ same core service.
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 import pytest_asyncio
@@ -17,8 +17,9 @@ from app.core.config import settings
 from app.core.rate_limit import limiter
 from app.main import app
 from app.schemas.api_token_schema import ApiTokenCreate
+from app.services.core.alert_core_service import AlertCoreService
 from app.services.core.api_token_core_service import ApiTokenCoreService
-from fixtures.factories import make_agent, make_check, make_user
+from fixtures.factories import make_agent, make_alert, make_check, make_user
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -283,3 +284,38 @@ async def test_only_an_admin_writes_a_synthetic_check(
         headers=editor,
     )
     assert response.status_code == 403
+
+
+async def test_an_editor_clones_a_check_that_has_a_global_alert(
+    db: AsyncSession, client: AsyncClient
+) -> None:
+    """The clone holds the global alert once and the source's own alert."""
+    editor = await _as(db, "editor")
+    agent = await _agent(db)
+    global_alert = make_alert(is_global=True)
+    own_alert = make_alert()
+    db.add_all([global_alert, own_alert])
+    await db.flush()
+    created = await client.post(
+        CHECKS,
+        json={
+            "agent_id": str(agent.id),
+            "display_name": "watched",
+            "check_type": "ping",
+            "target": "127.0.0.1",
+        },
+        headers=editor,
+    )
+    assert created.status_code == 201, created.text
+    source_id = created.json()["id"]
+    await AlertCoreService.add_check(db, own_alert.id, UUID(source_id))
+
+    clone = await client.post(
+        f"{CHECKS}/{source_id}/clone", json={"display_name": "copy"}, headers=editor
+    )
+
+    assert clone.status_code == 201, clone.text
+    alert_ids = await AlertCoreService.get_alert_ids_for_check(
+        db, UUID(clone.json()["id"])
+    )
+    assert sorted(alert_ids) == sorted([global_alert.id, own_alert.id])
