@@ -39,6 +39,8 @@ class ProfileViewService:
             **await ProfileViewService.api_tokens_context(db, request, current_user),
             "update_url": str(request.app.url_path_for("update_profile")),
             "change_password_url": str(request.app.url_path_for("web_change_password")),
+            # The user's own tokens' calls, loaded into the panel once it opens.
+            "activity_url": str(request.app.url_path_for("profile_activity")),
         }
 
     @staticmethod

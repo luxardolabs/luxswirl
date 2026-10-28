@@ -24,6 +24,8 @@ from fastapi import Query
 from pydantic import BeforeValidator
 
 from app.models.enum_model import (
+    AuditOutcome,
+    AuditSurface,
     CheckHealthStatus,
     CheckType,
     JobStatus,
@@ -99,6 +101,24 @@ AlertIdFilter = Annotated[
 ]
 AgentIdFilter = Annotated[
     UUID | None, BeforeValidator(empty_to_none), Query(description="Filter by agent id")
+]
+UserIdFilter = Annotated[
+    UUID | None, BeforeValidator(empty_to_none), Query(description="Filter by user id")
+]
+ApiTokenIdFilter = Annotated[
+    UUID | None,
+    BeforeValidator(empty_to_none),
+    Query(description="Filter by API token id"),
+]
+AuditSurfaceFilter = Annotated[
+    AuditSurface | None,
+    BeforeValidator(empty_to_none),
+    Query(description="Which token surface: mcp or api"),
+]
+AuditOutcomeFilter = Annotated[
+    AuditOutcome | None,
+    BeforeValidator(empty_to_none),
+    Query(description="Filter by outcome: success, error or denied"),
 ]
 
 # ── Scalar filters: optional non-str params a dropdown/form can submit as '' ──

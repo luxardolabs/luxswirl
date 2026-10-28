@@ -1,0 +1,50 @@
+{# The profile panel's API activity: the signed-in user's own MCP tool calls or
+   admin API requests, never anyone else's. Ported from LuxWX's
+   pages/settings/mcp_usage.html. Swapped whole into #api-activity by its tabs.
+   Vars: surface, days, rows [{call, outcome_label, outcome_variant}], row_limit,
+         surface_tabs, day_tabs. #}
+{% from 'macros/badges.html' import badge %}
+{% from 'macros/buttons.html' import segmented_option %}
+<div id="api-activity" class="space-y-3">
+    <div class="flex flex-wrap items-center justify-between gap-2">
+        <div class="flex">
+            {% for tab in surface_tabs %}
+            {{ segmented_option(tab.label, active=tab.active, extra_attrs='hx-get="' ~ tab.url ~ '" hx-target="#api-activity" hx-swap="outerHTML"') }}
+            {% endfor %}
+        </div>
+        <div class="flex">
+            {% for tab in day_tabs %}
+            {{ segmented_option(tab.label, active=tab.active, extra_attrs='hx-get="' ~ tab.url ~ '" hx-target="#api-activity" hx-swap="outerHTML"') }}
+            {% endfor %}
+        </div>
+    </div>
+
+    {% if rows %}
+    <ul class="space-y-2">
+        {% for row in rows %}
+        {% set call = row.call %}
+        <li data-call-id="{{ call.id }}" class="p-2 bg-dark-bg-tertiary rounded-lg border border-dark-border text-xs space-y-1">
+            <div class="flex items-center justify-between gap-2">
+                {% if surface == 'mcp' %}
+                <span class="font-mono text-dark-text-primary truncate">{{ call.tool_name }}</span>
+                {% else %}
+                <span class="font-mono text-dark-text-primary truncate"><span class="text-brand-300">{{ call.method.value }}</span> {{ call.route }}</span>
+                {% endif %}
+                {{ badge(row.outcome_label, row.outcome_variant) }}
+            </div>
+            <p class="text-dark-text-muted">
+                {{ call.created_at|format_datetime('%b %d %I:%M:%S%p') }}
+                · {{ call.token_name or '(deleted token)' }}
+                {% if surface == 'api' %}· {{ call.status_code }}{% endif %}
+                {% if call.duration_ms is not none %}· {{ call.duration_ms }} ms{% endif %}
+                · <span class="font-mono">{{ call.ip_address or 'no address' }}</span>
+                {% if surface == 'mcp' and call.denial_code %}· <span class="font-mono text-yellow-300">{{ call.denial_code.value }}</span>{% endif %}
+            </p>
+        </li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <p class="text-xs text-dark-text-muted">None of your tokens made a call here in the last {{ days }} day{{ '' if days == 1 else 's' }}.</p>
+    {% endif %}
+    <p class="text-xs text-dark-text-muted">The newest {{ row_limit }} calls made with your tokens. Calls are kept for 90 days.</p>
+</div>

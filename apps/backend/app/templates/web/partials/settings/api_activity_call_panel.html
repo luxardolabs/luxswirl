@@ -1,0 +1,58 @@
+{# Slide-over panel: one MCP tool call in full (admin only). Ported from LuxWX's
+   partials/admin/mcp/call_panel.html. The list keeps the rows scannable; this is
+   where the masked arguments and the whole error are read.
+   Vars: call (McpCallRow), outcome_label. #}
+{% from 'macros/panels.html' import panel_wrapper, panel_header, panel_content %}
+
+{% call panel_wrapper(max_width='max-w-3xl') %}
+    {{ panel_header(call.tool_name, subtitle='Called ' ~ (call.created_at|format_datetime('%b %d, %Y %I:%M:%S%p'))) }}
+    {% call panel_content() %}
+    <div class="space-y-6" data-call-id="{{ call.id }}">
+        <div class="p-4 rounded-lg border {% if call.outcome.value == 'success' %}border-green-500/30 bg-green-500/10 text-green-300{% elif call.outcome.value == 'denied' %}border-yellow-500/30 bg-yellow-500/10 text-yellow-300{% else %}border-red-500/30 bg-red-500/10 text-red-300{% endif %}">
+            <p class="text-sm font-medium">
+                {{ outcome_label }}{% if call.duration_ms is not none %} in {{ call.duration_ms }} ms{% endif %}
+                {% if call.denial_code %}· <span class="font-mono">{{ call.denial_code.value }}</span>{% endif %}
+            </p>
+        </div>
+
+        <dl class="space-y-3 text-sm">
+            <div class="flex justify-between gap-4">
+                <dt class="text-dark-text-muted">User</dt>
+                <dd class="text-dark-text-primary">{{ call.username or '(deleted user)' }}</dd>
+            </div>
+            <div class="flex justify-between gap-4">
+                <dt class="text-dark-text-muted">Token</dt>
+                <dd class="text-dark-text-primary">{{ call.token_name or '(deleted token)' }}</dd>
+            </div>
+            <div class="flex justify-between gap-4">
+                <dt class="text-dark-text-muted">Tool</dt>
+                <dd class="font-mono text-dark-text-primary">{{ call.tool_name }}</dd>
+            </div>
+            <div class="flex justify-between gap-4">
+                <dt class="text-dark-text-muted">From</dt>
+                <dd class="font-mono text-xs text-dark-text-primary">{{ call.ip_address or 'not recorded' }}</dd>
+            </div>
+            {% if call.user_agent %}
+            <div class="flex justify-between gap-4">
+                <dt class="text-dark-text-muted">Client</dt>
+                <dd class="font-mono text-xs text-dark-text-primary break-all text-right">{{ call.user_agent }}</dd>
+            </div>
+            {% endif %}
+        </dl>
+
+        <div>
+            <h3 class="text-sm font-medium text-dark-text-secondary mb-2">Arguments <span class="text-xs text-dark-text-muted font-normal">(credentials masked)</span></h3>
+            <pre class="text-xs font-mono bg-dark-bg-primary p-3 rounded overflow-x-auto text-dark-text-secondary">{{ call.arguments|tojson(indent=2) }}</pre>
+        </div>
+
+        {% if call.error_message %}
+        <div>
+            <h3 class="text-sm font-medium text-dark-text-secondary mb-2">Error</h3>
+            <pre class="text-xs font-mono bg-dark-bg-primary p-3 rounded overflow-x-auto text-red-300 whitespace-pre-wrap">{{ call.error_message }}</pre>
+        </div>
+        {% endif %}
+
+        <p class="text-xs text-dark-text-muted">The tool's response is not kept, only whether it succeeded.</p>
+    </div>
+    {% endcall %}
+{% endcall %}

@@ -20,6 +20,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from starlette.routing import Route
 
 from app.api import api_router
+from app.api.audit_middleware import AdminApiAuditMiddleware
 from app.api.v1.routers.metrics_router import router as metrics_router
 from app.background import (
     start_database_maintenance_task,
@@ -66,6 +67,7 @@ from app.web.render import render_error_response
 from app.web.routers.admin_bootstrap_router import router as admin_bootstrap_router
 from app.web.routers.agents_router import router as agents_router
 from app.web.routers.alerts_router import router as alerts_router
+from app.web.routers.api_activity_router import router as api_activity_router
 from app.web.routers.artifacts_router import router as artifacts_router
 from app.web.routers.auth_router import router as web_auth_router
 from app.web.routers.check_router import router as check_router
@@ -242,6 +244,10 @@ if settings.server.environment == "production":
             "(API, agent, registration). It must not be used in production."
         )
         raise ValueError("auth_enabled=False is not allowed in production")
+
+# The admin API's call audit: added first, so it is the innermost layer, around the
+# routes, and records the status they answered (app/api/audit_middleware.py).
+app.add_middleware(AdminApiAuditMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
@@ -424,6 +430,7 @@ app.include_router(notification_logs_router)  # Web UI - notification logs
 app.include_router(jobs_router)  # Web UI - jobs management
 app.include_router(maintenance_router)  # Web UI - maintenance job status polling
 app.include_router(scheduler_router)  # Web UI - scheduler admin
+app.include_router(api_activity_router)  # Web UI - MCP and admin API activity
 
 
 # Health check endpoint
