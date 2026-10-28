@@ -118,6 +118,9 @@ async def run_async_migrations() -> None:
         configuration,
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
+        # A failed migration statement's error carries no bound values (a
+        # migration rewrites secrets: check configs, job params).
+        hide_parameters=True,
     )
 
     async with connectable.connect() as connection:
