@@ -99,9 +99,6 @@ services:
       SERVER__CORS_ORIGINS: '["https://your-domain.com:9000"]'
       SERVER__CORS_CREDENTIALS: "true"
 
-      # Security
-      SECURITY__RATE_LIMIT_ENABLED: "true"
-
       # Logging
       LOG__LEVEL: INFO
 
@@ -211,7 +208,6 @@ SERVER__CORS_ORIGINS: '["https://server.example.com:9000", "https://monitoring.e
 | -------------------------------- | -------- | -------------- | ------------------------------------------------------------------------------------------------------------------- |
 | `SECURITY__SECRET_KEY`           | No       | Auto-generated | JWT signing key. Auto-generated + persisted to `/app/data` on first boot; set only to inject from a secrets manager |
 | `SECURITY__FIELD_ENCRYPTION_KEY` | No       | Auto-generated | Fernet key for encrypting sensitive DB fields. Auto-generated + persisted on first boot                             |
-| `SECURITY__RATE_LIMIT_ENABLED`   | No       | `true`         | Enable rate limiting                                                                                                |
 
 ### Logging Configuration
 
@@ -303,7 +299,6 @@ services:
       # manager. Pass them explicitly only if you manage them externally:
       #   SECURITY__SECRET_KEY: ${SECRET_KEY}
       #   SECURITY__FIELD_ENCRYPTION_KEY: ${FIELD_ENCRYPTION_KEY}
-      SECURITY__RATE_LIMIT_ENABLED: "true"
 
       # Logging
       LOG__LEVEL: INFO
@@ -969,7 +964,6 @@ SERVER__CORS_ORIGINS: '["https://monitoring.yourdomain.com:9000"]'
 ### 4. Enable Security Features
 
 ```yaml
-SECURITY__RATE_LIMIT_ENABLED: "true"
 # SECRET_KEY (JWT) and FIELD_ENCRYPTION_KEY are auto-generated + persisted to
 # /app/data on first boot. Override only to inject from a secrets manager:
 # SECURITY__SECRET_KEY: "<token-urlsafe-64>"

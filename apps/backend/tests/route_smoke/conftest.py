@@ -143,7 +143,7 @@ async def _seed(session_maker) -> dict[str, Any]:
 
 
 @pytest_asyncio.fixture
-async def empty_install(monkeypatch):
+async def empty_install():
     """The app on a FIRST-RUN install: no users, no session, no API token set.
 
     /setup exists only for this state — with any user present it is 404,
@@ -152,7 +152,6 @@ async def empty_install(monkeypatch):
     Every test starts on an empty database (its own rolled-back transaction),
     so there is nothing to clear first.
     """
-    monkeypatch.setattr(settings.security, "rate_limit_enabled", False)
     async with AsyncClient(
         transport=ASGITransport(app=app),
         base_url="http://route-smoke",
@@ -170,9 +169,6 @@ async def smoke_world(monkeypatch):
     and are rolled back with it.
     """
     monkeypatch.setattr(settings.security, "auth_enabled", True)
-    # The limiter is deliberately outside RATE_LIMIT_ENABLED for login; this
-    # suite logs in once, so reset rather than disable it.
-    monkeypatch.setattr(settings.security, "rate_limit_enabled", False)
 
     ids = await _seed(AsyncSessionLocal)
 

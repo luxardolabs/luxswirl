@@ -7,11 +7,16 @@ import secrets
 from typing import Any, TypeVar, cast, overload
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session, SessionTransaction
 
+from app.core.config import settings
 from app.core.default_settings import DEFAULT_SETTINGS
 from app.core.display_settings import update_display_settings
 from app.core.exceptions import NotFoundException, ValidationException
+from app.core.rate_limit import update_rate_limits
+from app.core.rate_limit_format import check_rate_limit
 from app.crud.setting_crud import SettingCRUD
 from app.models.enum_model import SettingValueType
 from app.models.setting_model import Setting, value_type_of
@@ -40,6 +45,13 @@ _DISPLAY_KEYS = {
     "general.time_format": "time_format",
 }
 
+# The route limit each rate-limit setting sets, by its name in `RateLimits`.
+_RATE_LIMIT_KEYS = {
+    "security.login_rate_limit": "login",
+    "security.api_rate_limit": "api",
+    "security.registration_rate_limit": "registration",
+}
+
 # The TimescaleDB policy each database setting sets: (relation, policy).
 _POLICIES = {
     "database.retention_days": ("check_results", "retention"),
@@ -47,6 +59,92 @@ _POLICIES = {
     "database.hourly_aggregate_retention_days": ("check_results_hourly", "retention"),
     "database.daily_aggregate_retention_days": ("check_results_daily", "retention"),
 }
+
+
+# The limit in effect lives in process memory, outside the transaction, so a
+# change waits on the session until its row lands: a commit applies it, and the
+# rollback of the transaction (or savepoint) it was made in drops it.
+_PENDING_LIMITS = "pending_rate_limits"
+
+
+def _defer_rate_limit(session: Session, limit: str, value: str) -> None:
+    """Apply `limit` = `value` when `session` commits the change, never before."""
+    pending = session.info.get(_PENDING_LIMITS)
+    if pending is None:
+        pending = session.info[_PENDING_LIMITS] = []
+        event.listen(session, "after_commit", _apply_committed_rate_limits)
+        event.listen(session, "after_soft_rollback", _drop_rolled_back_rate_limits)
+        event.listen(session, "after_transaction_end", _forget_unlanded_rate_limits)
+    made_in = session.get_nested_transaction() or session.get_transaction()
+    pending.append((made_in, {limit: value}))
+
+
+def _apply_committed_rate_limits(session: Session) -> None:
+    """A transaction committed. A savepoint's changes now belong to the
+    transaction around it; the root's have landed, and apply."""
+    pending = session.info.get(_PENDING_LIMITS)
+    if not pending:
+        return
+    # SQLAlchemy reports a savepoint's commit here too, while it is still current.
+    committed = session.get_nested_transaction()
+    if committed is not None:
+        pending[:] = [
+            (committed.parent if made_in is committed else made_in, changes)
+            for made_in, changes in pending
+        ]
+        return
+    for _, changes in pending:
+        update_rate_limits(**changes)
+    pending.clear()
+
+
+def _drop_rolled_back_rate_limits(
+    session: Session, previous_transaction: SessionTransaction
+) -> None:
+    """A transaction rolled back: forget the changes made in it or inside it.
+
+    A failed flush reports only its own subtransaction, but rolls back to the
+    savepoint (or root) around it, so the changes go from there down.
+    """
+    pending = session.info.get(_PENDING_LIMITS)
+    if not pending:
+        return
+    ended = previous_transaction
+    while not ended.nested and ended.parent is not None:
+        ended = ended.parent
+    pending[:] = [
+        (made_in, changes)
+        for made_in, changes in pending
+        if not _within(made_in, ended)
+    ]
+
+
+def _forget_unlanded_rate_limits(
+    session: Session, transaction: SessionTransaction
+) -> None:
+    """The root transaction ended. A commit has applied its changes by now, so
+    whatever is left did not land (a close, say) and must not wait for the next."""
+    if transaction.parent is None:
+        pending = session.info.get(_PENDING_LIMITS)
+        if pending:
+            pending.clear()
+
+
+def _within(transaction: SessionTransaction | None, ended: SessionTransaction) -> bool:
+    """Whether `transaction` is `ended` or nested inside it."""
+    while transaction is not None:
+        if transaction is ended:
+            return True
+        transaction = transaction.parent
+    return False
+
+
+def _stored_scalar(stored: object) -> object:
+    """The value a JSON column holds: the app writes {"value": ..., "type": ...},
+    but a row written outside the app can hold the bare value."""
+    if isinstance(stored, dict):
+        return stored.get("value")
+    return stored
 
 
 def stored_value_type(stored: dict[str, Any]) -> SettingValueType:
@@ -250,6 +348,10 @@ class SettingsCoreService:
         preference = _DISPLAY_KEYS.get(key)
         if preference is not None and isinstance(value, str):
             update_display_settings(**{preference: value})
+        limit = _RATE_LIMIT_KEYS.get(key)
+        if limit is not None and isinstance(value, str):
+            check_rate_limit(value)
+            _defer_rate_limit(db.sync_session, limit, value)
         policy = _POLICIES.get(key)
         if policy is None or isinstance(value, bool) or not isinstance(value, int):
             return
@@ -294,7 +396,10 @@ class SettingsCoreService:
             default_value = stored_default.get("value")
         else:
             default_value = stored_default
-        await SettingsCoreService._apply(db, key, default_value)
+        try:
+            await SettingsCoreService._apply(db, key, default_value)
+        except ValueError as e:
+            raise ValidationException(str(e)) from None
         setting.set_typed_value(default_value)
         setting = await SettingCRUD.save_setting(db, setting)
 
@@ -514,6 +619,42 @@ class SettingsCoreService:
         logger.info("Default settings ensured", extra={"count": len(DEFAULT_SETTINGS)})
 
     @staticmethod
+    async def load_rate_limits(db: AsyncSession) -> None:
+        """Put the stored rate-limit settings in effect, at startup.
+
+        The environment's limit is each setting's default, so a reset returns to
+        the environment as it is now. A setting still at its stored default takes
+        the environment's value too, so a changed environment applies. A value an
+        operator set is kept. A stored value that is not a limit leaves the
+        environment's in effect.
+        """
+        for key, limit in _RATE_LIMIT_KEYS.items():
+            setting = await SettingCRUD.get_by_key(db, key)
+            if setting is None:
+                continue
+            configured: str = getattr(settings.security, f"{limit}_rate_limit")
+            value = _stored_scalar(setting.value)
+            default = _stored_scalar(setting.default_value)
+            if default != configured:
+                if value == default:
+                    setting.set_typed_value(configured)
+                    value = configured
+                setting.default_value = {
+                    "value": configured,
+                    "type": value_type_of(configured),
+                }
+                setting = await SettingCRUD.save_setting(db, setting)
+            try:
+                if not isinstance(value, str):
+                    raise ValueError(f"{value!r} is not a rate limit")
+                update_rate_limits(**{limit: value})
+            except ValueError:
+                logger.warning(
+                    "Stored rate limit is not a limit; the environment's applies",
+                    extra={"setting_key": key},
+                )
+
+    @staticmethod
     async def get_security_settings(db: AsyncSession) -> dict[str, Any]:
         """
         Get all security settings as a convenient dict.
@@ -530,9 +671,6 @@ class SettingsCoreService:
             ),
             "account_lock_duration_minutes": await SettingsCoreService.get_setting(
                 db, "security.account_lock_duration_minutes", 30
-            ),
-            "rate_limit_enabled": await SettingsCoreService.get_setting(
-                db, "security.rate_limit_enabled", True
             ),
             "login_rate_limit": await SettingsCoreService.get_setting(
                 db, "security.login_rate_limit", "10/15minutes"

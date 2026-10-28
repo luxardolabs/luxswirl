@@ -29,7 +29,7 @@ from app.api.audit_middleware import mark_authenticated
 from app.core.authorization import scope_grants
 from app.core.config import settings
 from app.core.exceptions import AgentNotFoundException
-from app.core.rate_limit import limiter
+from app.core.rate_limit import limiter, registration_rate_limit
 from app.core.security import (
     authenticate_heartbeat,
     verify_agent_token,
@@ -55,7 +55,7 @@ from app.services.core.job_core_service import JobCoreService
 # Limited here, every call counts, the refused ones included.
 
 
-@limiter.limit(settings.security.registration_rate_limit)
+@limiter.limit(registration_rate_limit)
 async def require_registration_key(
     request: Request,
     registration: AgentRegisterRequest,
@@ -75,7 +75,7 @@ async def require_registration_key(
 KeyedRegistration = Annotated[AgentRegisterRequest, Depends(require_registration_key)]
 
 
-@limiter.limit(settings.security.registration_rate_limit)
+@limiter.limit(registration_rate_limit)
 async def require_recovery_registration_key(
     request: Request,
     agent_id: UUID,

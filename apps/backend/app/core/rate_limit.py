@@ -9,6 +9,7 @@ See core.request_helpers.client_ip_from_request for the trust model.
 
 import hashlib
 import time
+from dataclasses import dataclass, replace
 
 from limits import RateLimitItem, RateLimitItemPerMinute, parse
 from limits.storage import MemoryStorage
@@ -17,6 +18,7 @@ from slowapi import Limiter
 from starlette.requests import Request
 
 from app.core.config import settings
+from app.core.rate_limit_format import check_rate_limit
 from app.core.request_helpers import client_ip_from_request
 
 
@@ -40,6 +42,67 @@ def api_token_rate_limit_key(request: Request) -> str:
 
 # Global limiter — imported by routers that need @limiter.limit(...) decorators.
 limiter = Limiter(key_func=_rate_limit_key)
+
+
+@dataclass(frozen=True)
+class RateLimits:
+    """The per-route limits the Settings page governs, as `count/period` strings.
+
+    Each starts at its environment setting. `SettingsCoreService` loads the
+    stored settings at startup and replaces a limit whenever its setting is
+    set or reset, by any path.
+    """
+
+    login: str = settings.security.login_rate_limit
+    api: str = settings.security.api_rate_limit
+    registration: str = settings.security.registration_rate_limit
+
+
+_current = RateLimits()
+
+
+def current_rate_limits() -> RateLimits:
+    """The limits in effect now."""
+    return _current
+
+
+def update_rate_limits(
+    login: str | None = None,
+    api: str | None = None,
+    registration: str | None = None,
+) -> None:
+    """Replace the limits given; the others are kept.
+
+    Raises:
+        ValueError: A limit given is not a rate limit (see `check_rate_limit`).
+    """
+    global _current
+    changes = {
+        name: check_rate_limit(value)
+        for name, value in (
+            ("login", login),
+            ("api", api),
+            ("registration", registration),
+        )
+        if value is not None
+    }
+    _current = replace(_current, **changes)
+
+
+# The limit each decorated route reads on every request it counts.
+def login_rate_limit() -> str:
+    """The limit on password checks: /login and the change-password form."""
+    return _current.login
+
+
+def api_rate_limit() -> str:
+    """The limit on the Prometheus /metrics endpoint."""
+    return _current.api
+
+
+def registration_rate_limit() -> str:
+    """The limit on registration-key checks: agent registration and key recovery."""
+    return _current.registration
 
 
 class KeyedLimiter:

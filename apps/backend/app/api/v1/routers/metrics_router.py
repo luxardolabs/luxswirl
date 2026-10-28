@@ -15,8 +15,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import settings
-from app.core.rate_limit import limiter
+from app.core.rate_limit import api_rate_limit, limiter
 from app.db import get_db
 from app.services.core.metrics_collector_core_service import MetricsCollectorCoreService
 from app.services.core.settings_core_service import SettingsCoreService
@@ -31,7 +30,7 @@ router = APIRouter(tags=["Metrics"])
     response_class=Response,
     name="get_metrics",
 )
-@limiter.limit(settings.security.api_rate_limit)
+@limiter.limit(api_rate_limit)
 async def get_metrics(
     request: Request,
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],

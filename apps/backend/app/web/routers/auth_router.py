@@ -11,7 +11,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.core.rate_limit import limiter
+from app.core.rate_limit import limiter, login_rate_limit
 from app.core.request_helpers import client_ip_from_request
 from app.core.safe_redirect import safe_redirect_target
 from app.core.same_origin import is_cross_site
@@ -75,7 +75,7 @@ async def login_page(
 @router.post(
     "/login", response_class=HTMLResponse, include_in_schema=False, name="login_submit"
 )
-@limiter.limit(settings.security.login_rate_limit)
+@limiter.limit(login_rate_limit)
 async def login_submit(
     request: Request,
     response: Response,
@@ -240,7 +240,7 @@ async def change_password_page(
 # Same limit as /login, because it does the same thing: it verifies
 # `current_password`. Unlimited attempts here is unlimited guessing of a
 # logged-in user's password, from one address.
-@limiter.limit(settings.security.login_rate_limit)
+@limiter.limit(login_rate_limit)
 async def change_password_submit(
     request: Request,
     current_password: Annotated[str, Form()],
