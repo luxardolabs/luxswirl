@@ -8,6 +8,7 @@ pruned by the job purge task.
 """
 
 import ipaddress
+import re
 from datetime import datetime, timedelta
 from typing import Any
 from uuid import UUID
@@ -27,6 +28,9 @@ AUDIT_RETENTION = timedelta(days=90)
 # The longest tool name the audit log keeps (the column's width); an agent may send any.
 TOOL_NAME_LENGTH = 100
 
+# What a synthetic script is stored as: its size alone.
+_SCRIPT_SIZE = re.compile(r"<\d+ characters>")
+
 
 def masked_arguments(arguments: dict[str, Any]) -> dict[str, Any]:
     """A tool call's arguments as the audit log keeps them: every credential masked,
@@ -36,6 +40,9 @@ def masked_arguments(arguments: dict[str, Any]) -> dict[str, Any]:
 
 def _masked(key: object, value: object) -> object:
     if key == "script_code" and isinstance(value, str):
+        # Masked again on read: a size already recorded is kept, not re-measured.
+        if _SCRIPT_SIZE.fullmatch(value):
+            return value
         return f"<{len(value)} characters>"
     if isinstance(value, dict):
         return {storable_text(str(k)): _masked(k, v) for k, v in value.items()}
