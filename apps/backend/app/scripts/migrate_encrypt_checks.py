@@ -17,7 +17,8 @@ DATABASE_URL = os.getenv(
     "DATABASE_URL", "postgresql+asyncpg://luxswirl:luxswirl@timescaledb:5432/luxswirl"
 )
 
-engine = create_async_engine(DATABASE_URL, echo=False)
+# hide_parameters: an error writing a check carries no target or config value.
+engine = create_async_engine(DATABASE_URL, echo=False, hide_parameters=True)
 async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 

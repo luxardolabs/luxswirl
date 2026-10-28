@@ -37,6 +37,10 @@ engine: AsyncEngine = create_async_engine(
     max_overflow=settings.database.max_overflow,
     pool_pre_ping=settings.database.pool_pre_ping,
     pool_recycle=3600,
+    # A failed statement's error text, and so every log line and 500 built from
+    # it, carries the SQL but never its bound values: a write binds key hashes,
+    # connection strings and scripts.
+    hide_parameters=True,
     connect_args={
         "server_settings": {
             "statement_timeout": "5000",
