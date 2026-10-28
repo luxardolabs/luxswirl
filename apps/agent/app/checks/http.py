@@ -16,6 +16,7 @@ from cryptography.utils import CryptographyDeprecationWarning
 
 from app.agent.http_client import check_client
 from app.checks._ssrf_http import ssrf_guarded_send
+from app.checks._ssrf_policy import allowed_addresses
 from app.checks.base import BaseCheck
 from app.shared.logger import get_logger
 
@@ -203,6 +204,22 @@ class HTTPCheck(BaseCheck):
 
         return result
 
+    @staticmethod
+    def _vetted_connection(hostname: str, port: int, timeout: float) -> socket.socket:
+        """A TCP connection to the first allowed address of `hostname` that answers.
+
+        Raises:
+            SsrfBlockedError: Every address `hostname` resolves to is blocked.
+            OSError: It does not resolve, or no allowed address answers.
+        """
+        last: OSError = OSError(f"Could not resolve host: {hostname}")
+        for address in allowed_addresses(hostname):
+            try:
+                return socket.create_connection((address, port), timeout=timeout)
+            except OSError as e:
+                last = e
+        raise last
+
     def _get_ssl_certificate_info(
         self, target: str, timeout: float = 5
     ) -> dict[str, Any] | None:
@@ -234,9 +251,10 @@ class HTTPCheck(BaseCheck):
             context.check_hostname = False
             context.verify_mode = ssl.CERT_NONE  # Don't verify for info gathering
 
-            # Connect and get certificate
+            # Connect on an address the SSRF policy allows (never the name, which
+            # would be resolved again), presenting the name for SNI.
             with (
-                socket.create_connection((hostname, port), timeout=timeout) as sock,
+                self._vetted_connection(hostname, port, timeout) as sock,
                 context.wrap_socket(sock, server_hostname=hostname) as ssock,
             ):
                 # Get cert in binary form (works even with CERT_NONE)
