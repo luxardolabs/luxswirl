@@ -6,7 +6,17 @@ from collections.abc import Sequence
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import String, and_, cast, delete, func, or_, select, update
+from sqlalchemy import (
+    String,
+    and_,
+    cast,
+    delete,
+    func,
+    inspect,
+    or_,
+    select,
+    update,
+)
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload, undefer
@@ -32,9 +42,18 @@ class CheckCRUD:
 
     @staticmethod
     async def save_check(db: AsyncSession, check: Check) -> Check:
-        """Write a check's changed fields; the refreshed row with its agent loaded."""
+        """Write a check's changed fields; the row with what the database set
+        reloaded and its agent still loaded.
+
+        Only the attributes the flush expired (the server-set `updated_at`) are
+        reloaded. Refreshing the whole row, or its `agent`, leaves `agent`
+        unloaded whenever the agent's `checks` are loaded in the session, and
+        the next read of it would be a lazy load, which async cannot do.
+        """
         await db.flush()
-        await db.refresh(check, ["agent"])
+        expired = inspect(check).expired_attributes
+        if expired:
+            await db.refresh(check, list(expired))
         return check
 
     @staticmethod

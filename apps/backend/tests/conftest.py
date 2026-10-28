@@ -45,6 +45,7 @@ if "test" not in _TEST_DB_NAME:
 pytest_plugins = [
     "fixtures.db",
     "fixtures.committed_db",
+    "fixtures.encryption",
     "fixtures.logs",
     "fixtures.notification_providers",
 ]

@@ -635,13 +635,17 @@ class CheckCoreService:
         Each entry is validated on its own: one that is not a valid check (an
         unknown type or method from an older export) is an error for that check,
         never a refusal of the whole import. `overwrite` replaces an existing
-        check of the same name; otherwise it is skipped. `actor_is_admin` is the caller's authority, as for a single
-        create: a synthetic check is refused unless it is True.
+        check of the same name, changing only the optional settings the entry
+        names; otherwise it is skipped. `actor_is_admin` is the caller's
+        authority, as for a single create: a synthetic check is refused unless
+        it is True.
 
         Each entry runs in its own savepoint, so one that fails (even in the
-        database) leaves the rest to commit. Builds the CheckCreate / CheckUpdate
-        DTOs here, so routers don't marshal schemas. The agent must take checks.
-        Returns {created, updated, skipped, errors}.
+        database) leaves the rest to commit. A parent an entry names is linked
+        after every entry is made, in a savepoint of its own: one that cannot be
+        is that entry's error, and its check stays. Builds the CheckCreate /
+        CheckUpdate DTOs here, so routers don't marshal schemas. The agent must
+        take checks. Returns {created, updated, skipped, errors}.
         """
         counts = {"created": 0, "updated": 0, "skipped": 0}
         errors: list[dict[str, str]] = []
@@ -651,6 +655,8 @@ class CheckCoreService:
 
         existing = await CheckCoreService.list_checks_for_agent(db, agent_id)
         existing_map = {c.display_name: c for c in existing}
+        # Entries that name a parent, linked once every entry is made.
+        to_link: list[CheckExport] = []
 
         for raw in checks:
             name = str(raw.get("name") or "unknown")
@@ -671,6 +677,22 @@ class CheckCoreService:
                 logger.exception("Error importing check", extra={"check_name": name})
                 continue
             counts[outcome] += 1
+            if outcome != "skipped" and check_data.names_parent():
+                to_link.append(check_data)
+
+        for check_data in to_link:
+            # swallowed-exceptions: a parent that cannot be linked is that entry's error, kept for the caller; the check itself is made, and its savepoint keeps the rest committable
+            try:
+                async with db.begin_nested():
+                    await CheckCoreService._link_parent(
+                        db, check_data, existing_map, actor_is_admin=actor_is_admin
+                    )
+            except Exception as e:
+                errors.append({"check": check_data.name, "error": error_summary(e)})
+                logger.exception(
+                    "Error linking an imported check to its parent",
+                    extra={"check_name": check_data.name},
+                )
 
         created, updated, skipped = (
             counts["created"],
@@ -706,44 +728,53 @@ class CheckCoreService:
             await CheckCoreService.update_check(
                 db,
                 existing.id,
-                CheckUpdate(
-                    check_type=check_data.check_type,
-                    target=check_data.target,
-                    interval_seconds=check_data.interval,
-                    timeout_seconds=check_data.timeout,
-                    retry_attempts=check_data.retry_attempts,
-                    enabled=check_data.enabled,
-                    description=check_data.description,
-                    http_method=check_data.http_method,
-                    expected_status=check_data.expected_status,
-                    json_path=check_data.json_path,
-                    expected_value=check_data.expected_value,
-                    tags=check_data.tags,
-                ),
+                CheckUpdate.model_validate(check_data.settings()),
                 actor_is_admin=actor_is_admin,
             )
             return "updated"
         existing_map[check_data.name] = await CheckCoreService.create_check(
             db,
             agent_id,
-            CheckCreate(
-                display_name=check_data.name,
-                check_type=check_data.check_type,
-                target=check_data.target,
-                interval_seconds=check_data.interval,
-                timeout_seconds=check_data.timeout,
-                retry_attempts=check_data.retry_attempts,
-                enabled=check_data.enabled,
-                description=check_data.description,
-                http_method=check_data.http_method,
-                expected_status=check_data.expected_status,
-                json_path=check_data.json_path,
-                expected_value=check_data.expected_value,
-                tags=check_data.tags,
+            CheckCreate.model_validate(
+                {"display_name": check_data.name, **check_data.settings()}
             ),
             actor_is_admin=actor_is_admin,
         )
         return "created"
+
+    @staticmethod
+    async def _link_parent(
+        db: AsyncSession,
+        check_data: CheckExport,
+        existing_map: dict[str, Check],
+        *,
+        actor_is_admin: bool,
+    ) -> None:
+        """Point an imported check at the parent its entry names, or at none.
+
+        `depends_on` is a check of the agent imported onto, by name; it runs
+        after every entry is made, so a parent later in the file is found.
+
+        Raises:
+            ValidationException: The agent has no check of that name
+        """
+        parent_id = check_data.depends_on_check_id
+        if check_data.depends_on is not None:
+            parent = existing_map.get(check_data.depends_on)
+            if parent is None:
+                raise ValidationException(
+                    f"It depends on {check_data.depends_on!r}, which this agent "
+                    "does not have"
+                )
+            parent_id = parent.id
+        check = existing_map[check_data.name]
+        if check.depends_on_check_id != parent_id:
+            await CheckCoreService.update_check(
+                db,
+                check.id,
+                CheckUpdate(depends_on_check_id=parent_id),
+                actor_is_admin=actor_is_admin,
+            )
 
     @staticmethod
     async def delete_check(

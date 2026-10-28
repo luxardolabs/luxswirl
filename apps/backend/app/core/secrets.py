@@ -46,6 +46,17 @@ def _write_file(path: Path, value: str) -> None:
     path.chmod(0o600)
 
 
+def load_existing(
+    name: str, env_value: str | None, *, secrets_dir: Path | None = None
+) -> str | None:
+    """The secret the server would use, from env or its file; None when it has
+    none yet. Never generates one: for a process that runs before the server
+    (a migration), which must not create a key the server did not."""
+    if env_value:
+        return env_value
+    return _read_file((secrets_dir or SECRETS_DIR) / name)
+
+
 def load_or_generate(
     name: str,
     env_value: str | None,

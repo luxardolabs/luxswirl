@@ -12,6 +12,7 @@ These tests fail if such a fallback exists.
 from __future__ import annotations
 
 import pytest
+from app.core.config import settings
 from app.core.encrypted_types import EncryptedJSON, EncryptedString
 from app.core.exceptions import DatabaseException
 from cryptography.fernet import Fernet
@@ -55,6 +56,24 @@ class TestEncryptedString:
         col = EncryptedString()
         monkeypatch.setattr(col, "_get_fernet", lambda: None)
         assert col.process_bind_param("hunter2", None) == "hunter2"
+
+
+def test_a_column_follows_the_key_configured_now(field_key, monkeypatch) -> None:
+    """A type that has encrypted under one key encrypts under the next: the
+    key is resolved at startup, after the models (and their types) exist."""
+    col = EncryptedString()
+    first = col.process_bind_param("hunter2", None)
+    assert first is not None
+    assert Fernet(field_key.encode()).decrypt(first.encode()) == b"hunter2"
+
+    second_key = Fernet.generate_key().decode()
+    monkeypatch.setattr(settings.security, "field_encryption_key", second_key)
+    second = col.process_bind_param("hunter2", None)
+    assert second is not None
+    assert Fernet(second_key.encode()).decrypt(second.encode()) == b"hunter2"
+
+    monkeypatch.setattr(settings.security, "field_encryption_key", "")
+    assert col.process_bind_param("hunter2", None) == "hunter2"
 
 
 class TestEncryptedJSON:

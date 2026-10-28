@@ -4,7 +4,7 @@ Import/Export backs up, restores, migrates, and templates check configurations u
 
 **Access:** **Agents** page → an agent's **Import / Export** button (between Edit and View Checks on the agent card). Requires an **admin** account.
 
-**Exported:** each check's configuration — name, type, target, interval, timeout, retry attempts, enabled status, description, tags, and type-specific settings (HTTP method, JSON path, etc.).
+**Exported:** each check's whole configuration — name, type, target, interval, timeout, retries and their interval, notification resend, enabled status, description, tags, every type's own settings (HTTP method and SSL verification, JSON path, DNS record type and nameserver, database connection string and query, synthetic script), and what the check depends on. An export imported onto another agent recreates its checks as they were.
 
 **Not exported:** historical check results and metrics, alert configurations, agent metadata (hostname, API keys, approval status), and notification providers.
 
@@ -43,21 +43,33 @@ Open the panel and click **Download JSON** — a one-click operation that includ
 
 ### Check fields
 
-| Field             | Type   | Required for import | Default | Notes                                                                  |
-| ----------------- | ------ | ------------------- | ------- | ---------------------------------------------------------------------- |
-| `name`            | string | **Yes**             | —       | Unique within the agent                                                |
-| `check_type`      | string | **Yes**             | —       | `http`, `ping`, `tcp`, `json`, `dns`, `mysql`, `postgres`, `synthetic` |
-| `target`          | string | **Yes**             | —       | URL / host / connection string, per type (below)                       |
-| `interval`        | int    | No                  | 60      | Seconds between runs                                                   |
-| `timeout`         | int    | No                  | 5       | Seconds per run                                                        |
-| `retry_attempts`  | int    | No                  | 2       | Retries before marking down                                            |
-| `enabled`         | bool   | No                  | true    | —                                                                      |
-| `description`     | string | No                  | —       | —                                                                      |
-| `http_method`     | string | No (HTTP only)      | —       | GET, POST, …                                                           |
-| `expected_status` | int    | No (HTTP only)      | —       | Expected HTTP status                                                   |
-| `json_path`       | string | No (JSON only)      | —       | JSONata query                                                          |
-| `expected_value`  | string | No (JSON only)      | —       | Expected value for comparison                                          |
-| `tags`            | list   | No                  | —       | Up to 100 strings, each one line of at most 100 characters             |
+| Field                       | Type   | Required for import    | Default | Notes                                                                   |
+| --------------------------- | ------ | ---------------------- | ------- | ----------------------------------------------------------------------- |
+| `name`                      | string | **Yes**                | —       | Unique within the agent                                                 |
+| `check_type`                | string | **Yes**                | —       | `http`, `ping`, `tcp`, `json`, `dns`, `mysql`, `postgres`, `synthetic`  |
+| `target`                    | string | **Yes**                | —       | URL / host / connection string, per type (below)                        |
+| `interval`                  | int    | No                     | 60      | Seconds between runs                                                    |
+| `timeout`                   | int    | No                     | 5       | Seconds per run                                                         |
+| `retry_attempts`            | int    | No                     | 2       | Retries before marking down                                             |
+| `enabled`                   | bool   | No                     | true    | —                                                                       |
+| `description`               | string | No                     | —       | —                                                                       |
+| `http_method`               | string | No (HTTP only)         | —       | GET, POST, …                                                            |
+| `expected_status`           | int    | No (HTTP only)         | —       | Expected HTTP status                                                    |
+| `json_path`                 | string | No (JSON only)         | —       | JSONata query                                                           |
+| `expected_value`            | string | No (JSON only)         | —       | Expected value for comparison                                           |
+| `tags`                      | list   | No                     | —       | Up to 100 strings, each one line of at most 100 characters              |
+| `retry_interval_seconds`    | int    | No                     | 30      | Seconds between retries                                                 |
+| `resend_notification_after` | int    | No                     | —       | Failures before a notification is sent again                            |
+| `verify_ssl`                | bool   | No (HTTP, JSON)        | —       | `false` skips certificate verification                                  |
+| `record_type`               | string | No (DNS only)          | —       | A, AAAA, MX, TXT, …                                                     |
+| `nameserver`                | string | No (DNS only)          | —       | The resolver to ask                                                     |
+| `port`                      | int    | No (DNS only)          | —       | The resolver's port                                                     |
+| `expect_value`              | string | No (DNS only)          | —       | An answer the record must contain                                       |
+| `connection_string`         | string | No (MySQL, PostgreSQL) | —       | `mysql://user:pass@host:3306/db` or `postgresql://…`                    |
+| `query`                     | string | No (MySQL, PostgreSQL) | —       | The SQL to run                                                          |
+| `script_code`               | string | No (synthetic only)    | —       | The Playwright script                                                   |
+| `depends_on`                | string | No                     | —       | Name of the check, on the agent you import onto, this one depends on    |
+| `depends_on_check_id`       | UUID   | No                     | —       | Id of another agent's check this one depends on (not with `depends_on`) |
 
 The minimal valid check is `name` + `check_type` + `target`; everything else takes the defaults:
 
@@ -67,15 +79,16 @@ The minimal valid check is `name` + `check_type` + `target`; everything else tak
 
 ### Target format by type
 
-| Type       | Target                                      | Per-type JSON                         |
-| ---------- | ------------------------------------------- | ------------------------------------- |
-| `http`     | `https://example.com`                       | adds `http_method`, `expected_status` |
-| `json`     | `https://api.example.com/data`              | adds `json_path`, `expected_value`    |
-| `ping`     | `192.168.1.100`                             | —                                     |
-| `tcp`      | `redis.example.com:6379` (`host:port`)      | —                                     |
-| `dns`      | `example.com`                               | —                                     |
-| `mysql`    | `mysql://user:pass@host:3306/database`      | —                                     |
-| `postgres` | `postgresql://user:pass@host:5432/database` | —                                     |
+| Type        | Target                                 | Per-type JSON                                            |
+| ----------- | -------------------------------------- | -------------------------------------------------------- |
+| `http`      | `https://example.com`                  | adds `http_method`, `expected_status`                    |
+| `json`      | `https://api.example.com/data`         | adds `json_path`, `expected_value`                       |
+| `ping`      | `192.168.1.100`                        | —                                                        |
+| `tcp`       | `redis.example.com:6379` (`host:port`) | —                                                        |
+| `dns`       | `example.com`                          | adds `record_type`, `nameserver`, `port`, `expect_value` |
+| `mysql`     | `db.example.com`                       | adds `connection_string`, `query`                        |
+| `postgres`  | `db.example.com`                       | adds `connection_string`, `query`                        |
+| `synthetic` | `https://example.com`                  | adds `script_code`                                       |
 
 ```json
 // HTTP — method + expected status
@@ -91,10 +104,17 @@ The minimal valid check is `name` + `check_type` + `target`; everything else tak
 { "name": "redis_port", "check_type": "tcp", "target": "redis.example.com:6379",
   "timeout": 5, "tags": ["infrastructure", "redis"] }
 
-// MySQL / PostgreSQL — connection string in the target
-{ "name": "mysql_connection", "check_type": "mysql",
-  "target": "mysql://user:pass@host:3306/database", "timeout": 15, "tags": ["database", "mysql"] }
+// MySQL / PostgreSQL — connection string and query
+{ "name": "mysql_connection", "check_type": "mysql", "target": "db.example.com",
+  "connection_string": "mysql://user:pass@db.example.com:3306/database",
+  "query": "SELECT 1", "timeout": 15, "tags": ["database", "mysql"] }
+
+// A check that depends on another check of the same agent
+{ "name": "api_login", "check_type": "http", "target": "https://api.example.com/login",
+  "depends_on": "api_health" }
 ```
+
+A dependency is linked once every entry is made, so a parent later in the file is found. A `depends_on` name the agent has no check of is that entry's error; the check itself is still made.
 
 > ⚠️ Synthetic checks run arbitrary Python and are admin-only — importing them is discouraged for security. See [SECURITY.md](../../SECURITY.md).
 
@@ -108,6 +128,8 @@ Pick a mode, **drag and drop** a `.json` file onto the drop zone (or click it to
 | ------------------- | ---------- | ----------------------------------- |
 | **Merge** (default) | Created    | **Skipped**, left unchanged         |
 | **Replace**         | Created    | **Updated** to the file's values    |
+
+Replace changes a setting the entry names. An optional setting it leaves out (an export made before the setting was exported, or a hand-written entry) keeps the check's current value.
 
 ```
 Existing: api_health, database_ping        Import file: api_health, web_homepage, dns_check
@@ -145,10 +167,10 @@ ______________________________________________________________________
 
 ## Security
 
-Targets can contain secrets — database connection strings carry passwords, and HTTP checks may embed tokens in headers — so export files may hold credentials in plaintext:
+An export carries every secret its checks hold: database connection strings and their passwords, tokens in targets, and synthetic scripts. The file holds them in plaintext. On the server, an import's entries wait in its job encrypted, as the checks themselves are stored:
 
 ```json
-{ "name": "database_check", "target": "mysql://dbuser:secretpassword@db.example.com:3306/appdb" }
+{ "name": "database_check", "connection_string": "mysql://dbuser:secretpassword@db.example.com:3306/appdb" }
 ```
 
 - **Secure storage:** keep exports in encrypted locations; use git-crypt/git-secret for version control; never commit unencrypted files to public repos.

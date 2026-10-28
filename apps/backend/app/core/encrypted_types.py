@@ -5,6 +5,7 @@ Provides transparent encryption/decryption for sensitive database fields.
 """
 
 import json
+from functools import lru_cache
 from typing import Any
 
 from cryptography.fernet import Fernet, InvalidToken
@@ -19,6 +20,26 @@ logger = get_logger("luxswirl.models.encrypted")
 
 # What an EncryptedJSON column holds: a JSON object or array.
 JsonContainer = dict[str, Any] | list[Any]
+
+
+@lru_cache(maxsize=4)
+def _fernet_for(key: str) -> Fernet:
+    """One Fernet per key, built once."""
+    return Fernet(key.encode())
+
+
+def _configured_fernet() -> Fernet | None:
+    """The Fernet for the key configured now; None when there is none.
+
+    Read on every use, never kept on the type: SQLAlchemy runs each column
+    type through a per-dialect copy, so a cipher cached on an instance outlives
+    the key it was built from (the key is resolved at startup, after the
+    models are imported).
+    """
+    key = settings.security.field_encryption_key
+    if not key or key.strip() == "":
+        return None
+    return _fernet_for(key)
 
 
 def _json_container(raw: str) -> JsonContainer | None:
@@ -62,17 +83,10 @@ class EncryptedString(TypeDecorator[str]):
             **kwargs: Additional SQLAlchemy type arguments
         """
         super().__init__(length, **kwargs)
-        self._fernet: Fernet | None = None
 
     def _get_fernet(self) -> Fernet | None:
-        """Get Fernet cipher instance (lazy initialization)."""
-        if self._fernet is None:
-            key = settings.security.field_encryption_key
-            if not key or key.strip() == "":
-                # No encryption key - return None to skip encryption
-                return None
-            self._fernet = Fernet(key.encode())
-        return self._fernet
+        """The cipher for the configured key; None skips encryption."""
+        return _configured_fernet()
 
     def process_bind_param(self, value: str | None, dialect: Dialect) -> str | None:
         """
@@ -167,19 +181,9 @@ class EncryptedJSON(TypeDecorator[JsonContainer]):
     impl = Text
     cache_ok = True
 
-    def __init__(self, **kwargs: Any) -> None:
-        """Initialize encrypted JSON type."""
-        super().__init__(**kwargs)
-        self._fernet: Fernet | None = None
-
     def _get_fernet(self) -> Fernet | None:
-        """Get Fernet cipher instance (lazy initialization)."""
-        if self._fernet is None:
-            key = settings.security.field_encryption_key
-            if not key or key.strip() == "":
-                return None
-            self._fernet = Fernet(key.encode())
-        return self._fernet
+        """The cipher for the configured key; None skips encryption."""
+        return _configured_fernet()
 
     def process_bind_param(
         self, value: JsonContainer | None, dialect: Dialect
