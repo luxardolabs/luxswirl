@@ -9,6 +9,7 @@ it reads the configured alerts, writes the notification audit trail
 """
 
 import fnmatch
+import hashlib
 from datetime import datetime
 from typing import Any
 from uuid import UUID
@@ -28,6 +29,9 @@ from app.notifications.providers.base import NotificationContext
 from app.schemas.alert_schema import SendDecision
 from app.services.core.notification_core_service import NotificationCoreService
 from app.shared.logger import get_logger
+
+# notification_logs.notification_hash is String(64).
+STATE_KEY_LENGTH = 64
 
 logger = get_logger("luxswirl.services.alert")
 
@@ -151,6 +155,26 @@ class AlertEvaluationCoreService:
 
     @staticmethod
     def _compute_alert_state_key(
+        alert: Alert,
+        check_result: CheckResult,
+        *,
+        parent_down: bool = False,
+    ) -> str:
+        """The alert's state key, as `notification_logs.notification_hash` holds it.
+
+        A key longer than the column (a threshold value of many digits stored
+        before configs were validated) is its SHA-256: still one stable value
+        per state, so dedup matches, and the log row can always be written.
+        """
+        key = AlertEvaluationCoreService._state_key(
+            alert, check_result, parent_down=parent_down
+        )
+        if len(key) <= STATE_KEY_LENGTH:
+            return key
+        return hashlib.sha256(key.encode()).hexdigest()
+
+    @staticmethod
+    def _state_key(
         alert: Alert,
         check_result: CheckResult,
         *,
