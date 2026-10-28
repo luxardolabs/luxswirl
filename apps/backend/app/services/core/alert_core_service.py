@@ -8,6 +8,7 @@ Evaluating check results against alerts and sending their notifications is
 
 from collections.abc import Sequence
 from datetime import timedelta
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,6 +17,7 @@ from app.core.datetime_utils import utc_now
 from app.core.exceptions import NotFoundException, ValidationException
 from app.crud.alert_crud import AlertCRUD
 from app.models.alert_model import Alert
+from app.models.enum_model import AlertTriggerType
 from app.schemas.alert_schema import (
     AlertCheckSnooze,
     AlertCreate,
@@ -23,6 +25,7 @@ from app.schemas.alert_schema import (
     AlertResponse,
     AlertUpdate,
 )
+from app.schemas.alert_trigger_config_schema import normalized_trigger_config
 from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.services.alert")
@@ -194,6 +197,21 @@ class AlertCoreService:
         return total
 
     @staticmethod
+    def _valid_trigger_config(
+        trigger_type: AlertTriggerType, config: dict[str, Any]
+    ) -> dict[str, Any]:
+        """`config` held to its trigger type, in the form evaluation reads, by
+        every path (the web form, the admin API, the MCP).
+
+        Raises:
+            ValidationException: It does not fit the trigger type.
+        """
+        try:
+            return normalized_trigger_config(trigger_type, config)
+        except ValueError as e:
+            raise ValidationException(str(e)) from None
+
+    @staticmethod
     async def create_alert(
         db: AsyncSession,
         data: AlertCreate,
@@ -213,7 +231,9 @@ class AlertCoreService:
             name=data.name,
             description=data.description,
             trigger_type=data.trigger_type,
-            trigger_config=data.trigger_config,
+            trigger_config=AlertCoreService._valid_trigger_config(
+                data.trigger_type, data.trigger_config
+            ),
             is_enabled=data.is_enabled,
             is_global=data.is_global,
             notify_on_recovery=data.notify_on_recovery,
@@ -266,6 +286,10 @@ class AlertCoreService:
             if value is None and field in _REQUIRED_ALERT_FIELDS:
                 continue
             setattr(alert, field, value)
+        if {"trigger_type", "trigger_config"} & data.model_fields_set:
+            alert.trigger_config = AlertCoreService._valid_trigger_config(
+                AlertTriggerType(alert.trigger_type), alert.trigger_config or {}
+            )
 
         alert = await AlertCRUD.save_alert(db, alert)
 
