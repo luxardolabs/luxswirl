@@ -15,6 +15,7 @@ from sqlalchemy import JSON, DateTime, Index, Text, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.datetime_utils import utc_now
+from app.core.encrypted_types import EncryptedJSON
 from app.models.base_model import Base, str_enum
 from app.models.enum_model import MaintenanceJobKind, MaintenanceJobStatus
 
@@ -49,11 +50,13 @@ class MaintenanceJob(Base):
         comment="Primary entity being mutated (agent_id, status_page_id, etc.)",
     )
 
+    # Encrypted: an import's entries wait here with their targets, connection
+    # strings and scripts until the worker runs them.
     params: Mapped[dict[str, Any]] = mapped_column(
-        JSON,
+        EncryptedJSON,
         nullable=False,
         default=dict,
-        comment="Kind-specific args (check_ids list, URL list, etc.)",
+        comment="Kind-specific args (check_ids list, URL list, etc.) - encrypted at rest",
     )
 
     status: Mapped[MaintenanceJobStatus] = mapped_column(

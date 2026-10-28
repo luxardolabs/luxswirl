@@ -281,22 +281,23 @@ class Check(UUIDBaseModel):
 
     @property
     def connection_string(self) -> str | None:
-        """
-        Get connection string (automatically decrypted).
+        """The database connection string, decrypted.
 
-        Returns decrypted connection string from encrypted column.
+        Kept in `check_config` (encrypted at rest), where create and update
+        write it and the agent reads it; a value only in
+        `connection_string_encrypted` is still read.
         """
-        return self.connection_string_encrypted
+        return self._config_str("connection_string") or self.connection_string_encrypted
 
     @connection_string.setter
     def connection_string(self, value: str | None) -> None:
-        """
-        Set connection string (automatically encrypted).
-
-        Args:
-            value: Plaintext connection string (automatically encrypted at rest)
-        """
-        self.connection_string_encrypted = value
+        """Set the connection string in `check_config` (encrypted at rest)."""
+        config = dict(self.check_config or {})
+        if value is None:
+            config.pop("connection_string", None)
+        else:
+            config["connection_string"] = value
+        self.check_config = config
 
     @property
     def query(self) -> str | None:

@@ -22,7 +22,7 @@ from app.core.exceptions import (
     ValidationException,
 )
 from app.models.enum_model import ImportMode, MaintenanceJobKind
-from app.schemas.check_schema import BulkCheckCreateRequest
+from app.schemas.check_schema import BulkCheckCreateRequest, CheckInDB
 from app.schemas.import_export_schema import CheckExport, CheckExportDocument
 from app.schemas.maintenance_job_schema import MaintenanceJobResponse
 from app.services.core.agent_core_service import AgentCoreService
@@ -55,6 +55,43 @@ def _or(value: int | None, default: int) -> int:
     return default if value is None else value
 
 
+def _entry(check: CheckInDB, names: dict[UUID, str]) -> CheckExport:
+    """One check as the export carries it; `names` are its agent's checks by id.
+
+    A parent on the same agent is named, so an import onto another agent
+    points at that agent's check of the name; a parent elsewhere is its id.
+    """
+    parent = check.depends_on_check_id
+    parent_name = names.get(parent) if parent is not None else None
+    return CheckExport(
+        name=check.display_name,
+        check_type=check.check_type,
+        target=check.target,
+        interval=_or(check.interval_seconds, 60),
+        timeout=_or(check.timeout_seconds, 5),
+        retry_attempts=_or(check.retry_attempts, 2),
+        enabled=check.enabled,
+        description=check.description,
+        http_method=check.http_method,
+        expected_status=check.expected_status,
+        json_path=check.json_path,
+        expected_value=check.expected_value,
+        tags=check.tags,
+        retry_interval_seconds=check.retry_interval_seconds,
+        resend_notification_after=check.resend_notification_after,
+        verify_ssl=check.verify_ssl,
+        record_type=check.record_type,
+        nameserver=check.nameserver,
+        port=check.port,
+        expect_value=check.expect_value,
+        connection_string=check.connection_string,
+        query=check.query,
+        script_code=check.script_code,
+        depends_on=parent_name,
+        depends_on_check_id=parent if parent_name is None else None,
+    )
+
+
 class CheckTransferCoreService:
     """Export, import and bulk-create an agent's checks."""
 
@@ -69,29 +106,13 @@ class CheckTransferCoreService:
         if not agent:
             raise AgentNotFoundException(str(agent_id))
         checks = await CheckCoreService.list_agent_checks(db, agent_id)
+        names = {check.id: check.display_name for check in checks}
         return CheckExportDocument(
             agent_id=agent.id,
             agent_name=agent.agent_name,
             agent_hostname=agent.hostname,
             total_checks=len(checks),
-            checks=[
-                CheckExport(
-                    name=check.display_name,
-                    check_type=check.check_type,
-                    target=check.target,
-                    interval=_or(check.interval_seconds, 60),
-                    timeout=_or(check.timeout_seconds, 5),
-                    retry_attempts=_or(check.retry_attempts, 2),
-                    enabled=check.enabled,
-                    description=check.description,
-                    http_method=check.http_method,
-                    expected_status=check.expected_status,
-                    json_path=check.json_path,
-                    expected_value=check.expected_value,
-                    tags=check.tags,
-                )
-                for check in checks
-            ],
+            checks=[_entry(check, names) for check in checks],
         )
 
     @staticmethod

@@ -23,7 +23,7 @@ from app.models.maintenance_job_model import MaintenanceJob
 from app.schemas.check_schema import BulkCheckCreateRequest
 from app.services.core.check_transfer_core_service import CheckTransferCoreService
 from fixtures.factories import make_agent, make_alert, make_check, make_user
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 pytestmark = pytest.mark.integration
 
@@ -401,3 +401,264 @@ async def test_control_bulk_create_onto_an_agent_archived_after_enqueue(
     assert job.status == MaintenanceJobStatus.FAILED
     assert (job.progress or {}).get("failure_count") == 1
     assert not await _checks(worker_db, agent_id)
+
+
+# ── Every type's own settings survive a round trip ─────────────────────────
+
+# A script the synthetic guard passes, as an import validates it, in the form a
+# create stores (strings are stripped).
+SCRIPT = "async def run_check(page):\n    await page.goto('https://example.invalid')"
+
+
+def _settings(check: Check) -> dict[str, object]:
+    """Everything an import is meant to recreate."""
+    return {
+        "check_type": check.check_type,
+        "target": check.target,
+        "retry_interval_seconds": check.retry_interval_seconds,
+        "resend_notification_after": check.resend_notification_after,
+        "check_config": check.check_config,
+        "script_code": check.script_code,
+    }
+
+
+async def _import(maker, dst: UUID, checks: list[dict], mode: str = "merge") -> UUID:
+    job_id = await _queue(
+        maker,
+        MaintenanceJobKind.BULK_CHECK_IMPORT,
+        {"agent_id": str(dst), "mode": mode, "checks": checks},
+        await _owner(maker, role="admin"),
+    )
+    await _run()
+    return job_id
+
+
+async def _export(maker, src: UUID) -> list[dict]:
+    async with maker() as s:
+        doc = await CheckTransferCoreService.export_document(s, src)
+    return doc.model_dump(mode="json")["checks"]
+
+
+async def test_round_trip_keeps_every_type_s_own_settings(worker_db) -> None:
+    """Database, DNS, SSL-skipping, JSON and synthetic checks come back whole."""
+    src = await _agent(worker_db)
+    dst = await _agent(worker_db)
+    async with worker_db() as s:
+        s.add_all(
+            [
+                make_check(
+                    agent_id=src,
+                    display_name="pg",
+                    check_type="postgres",
+                    target="db.example.com",
+                    check_config={
+                        "connection_string": "postgresql://m:pw@db.example.com/app",
+                        "query": "SELECT 1",
+                    },
+                ),
+                make_check(
+                    agent_id=src,
+                    display_name="my",
+                    check_type="mysql",
+                    target="my.example.com",
+                    check_config={
+                        "connection_string": "mysql://m:pw@my.example.com/app",
+                        "query": "SELECT 2",
+                    },
+                ),
+                make_check(
+                    agent_id=src,
+                    display_name="dns",
+                    check_type="dns",
+                    target="example.com",
+                    check_config={
+                        "record_type": "MX",
+                        "nameserver": "1.1.1.1",
+                        "port": 5353,
+                        "expect_value": "mx.example.com",
+                    },
+                ),
+                make_check(
+                    agent_id=src,
+                    display_name="web",
+                    check_type="http",
+                    target="https://a.example.com",
+                    retry_interval_seconds=90,
+                    resend_notification_after=7,
+                    check_config={
+                        "http_method": "HEAD",
+                        "verify_ssl": False,
+                        "expected_status": 204,
+                    },
+                ),
+                make_check(
+                    agent_id=src,
+                    display_name="api",
+                    check_type="json",
+                    target="https://api.example.com",
+                    check_config={
+                        "http_method": "POST",
+                        "verify_ssl": False,
+                        "expected_status": 200,
+                        "json_path": "status",
+                        "expected_value": "ok",
+                    },
+                ),
+                make_check(
+                    agent_id=src,
+                    display_name="browse",
+                    check_type="synthetic",
+                    target="https://b.example.com",
+                    script_code=SCRIPT,
+                ),
+            ]
+        )
+        await s.commit()
+    job_id = await _import(worker_db, dst, await _export(worker_db, src))
+
+    want = {c.display_name: _settings(c) for c in await _checks(worker_db, src)}
+    got = {c.display_name: _settings(c) for c in await _checks(worker_db, dst)}
+    progress = (await _row(worker_db, job_id)).progress
+    for name, settings in want.items():
+        assert got.get(name) == settings, (name, got.get(name), settings, progress)
+    assert got.keys() == want.keys()
+
+
+async def test_round_trip_keeps_dependencies(worker_db) -> None:
+    """A parent on the exported agent is the copy's parent on the new one; a
+    parent on another agent stays the parent."""
+    src = await _agent(worker_db)
+    dst = await _agent(worker_db)
+    other = await _agent(worker_db)
+    far = make_check(agent_id=other, display_name="far")
+    near = make_check(agent_id=src, display_name="near")
+    async with worker_db() as s:
+        s.add_all([far, near])
+        await s.flush()
+        # Each child sorts before its parent, so the import meets it first.
+        s.add_all(
+            [
+                make_check(
+                    agent_id=src, display_name="a-child", depends_on_check_id=near.id
+                ),
+                make_check(
+                    agent_id=src, display_name="b-child", depends_on_check_id=far.id
+                ),
+            ]
+        )
+        await s.commit()
+    job_id = await _import(worker_db, dst, await _export(worker_db, src))
+
+    copies = {c.display_name: c for c in await _checks(worker_db, dst)}
+    progress = (await _row(worker_db, job_id)).progress
+    assert copies["a-child"].depends_on_check_id == copies["near"].id, progress
+    assert copies["b-child"].depends_on_check_id == far.id, progress
+
+
+async def test_replace_with_an_older_entry_keeps_what_it_does_not_name(
+    worker_db,
+) -> None:
+    """An entry from an export that predates a field leaves that field alone."""
+    dst = await _agent(worker_db)
+    async with worker_db() as s:
+        s.add(
+            make_check(
+                agent_id=dst,
+                display_name="browse",
+                check_type="synthetic",
+                target="https://b.example.com",
+                script_code=SCRIPT,
+                retry_interval_seconds=90,
+            )
+        )
+        await s.commit()
+    old_entry = {
+        "name": "browse",
+        "check_type": "synthetic",
+        "target": "https://c.example.com",
+    }
+    job_id = await _import(worker_db, dst, [old_entry], mode="replace")
+
+    (check,) = await _checks(worker_db, dst)
+    assert check.target == "https://c.example.com", (
+        await _row(worker_db, job_id)
+    ).progress
+    assert check.script_code == SCRIPT
+    assert check.retry_interval_seconds == 90
+
+
+async def test_a_parent_name_the_agent_lacks_is_that_entry_s_error(
+    worker_db,
+) -> None:
+    """The check is made; the missing parent is reported, never guessed."""
+    dst = await _agent(worker_db)
+    entry = {
+        "name": "child",
+        "check_type": "ping",
+        "target": "127.0.0.1",
+        "depends_on": "nowhere",
+    }
+    job_id = await _import(worker_db, dst, [entry])
+
+    (check,) = await _checks(worker_db, dst)
+    assert check.depends_on_check_id is None
+    progress = (await _row(worker_db, job_id)).progress
+    assert "nowhere" in json.dumps(progress), progress
+
+
+async def test_replace_import_through_the_worker_updates_the_check(worker_db) -> None:
+    """The worker's import has listed the agent's checks (and the agent its
+    own) before it updates one; the update still finishes."""
+    dst = await _agent(worker_db)
+    async with worker_db() as s:
+        s.add(
+            make_check(
+                agent_id=dst,
+                display_name="web",
+                check_type="http",
+                target="https://b.example.com",
+            )
+        )
+        await s.commit()
+    job_id = await _import(
+        worker_db,
+        dst,
+        [{"name": "web", "check_type": "http", "target": "https://c.example.com"}],
+        mode="replace",
+    )
+
+    progress = (await _row(worker_db, job_id)).progress
+    assert progress and progress["updated"] == 1, progress
+    (check,) = await _checks(worker_db, dst)
+    assert check.target == "https://c.example.com"
+
+
+async def test_a_queued_import_keeps_its_secrets_encrypted_at_rest(
+    worker_db, field_key
+) -> None:
+    """An import's entries wait in the job row with their connection strings
+    and scripts: the row holds them encrypted, and the worker still reads them."""
+    dst = await _agent(worker_db)
+    secret = "postgresql://m:hunter2@db.example.com/app"
+    job_id = await _import(
+        worker_db,
+        dst,
+        [
+            {
+                "name": "pg",
+                "check_type": "postgres",
+                "target": "db.example.com",
+                "connection_string": secret,
+                "query": "SELECT 1",
+            }
+        ],
+    )
+
+    async with worker_db() as s:
+        stored = await s.scalar(
+            text("SELECT params::text FROM maintenance_jobs WHERE id = :id"),
+            {"id": job_id},
+        )
+    assert stored and "hunter2" not in stored, stored
+    (check,) = await _checks(worker_db, dst)
+    assert check.connection_string == secret

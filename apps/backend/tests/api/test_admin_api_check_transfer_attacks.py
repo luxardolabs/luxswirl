@@ -105,7 +105,7 @@ async def test_control_bulk_create_top_level_unknown_field_is_refused(
 async def test_import_entry_with_a_field_import_does_not_take_is_refused(
     db: AsyncSession, client: AsyncClient
 ) -> None:
-    """An entry's `connection_string` is not a field the import takes: a 422."""
+    """An entry's `agent_selector` is not a field the import takes: a 422."""
     admin = await _as(db, "admin")
     agent_id = await _agent(db)
     resp = await client.post(
@@ -118,12 +118,15 @@ async def test_import_entry_with_a_field_import_does_not_take_is_refused(
                     "target": "db.test",
                     "connection_string": f"postgresql://m:{SECRET}@db.test/app",
                     "query": "SELECT 1",
+                    "agent_selector": {"tags": ["db"]},
                 }
             ]
         },
         headers=admin,
     )
     assert resp.status_code == 422, resp.text
+    assert "agent_selector" in resp.text
+    assert SECRET not in resp.text
 
 
 async def test_viewer_reading_an_import_job_sees_no_params(
