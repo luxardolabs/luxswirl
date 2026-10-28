@@ -101,9 +101,8 @@ require_names = [
 #
 #   fw.feature_flag_is_not_authz / fw.feature_keys_declared — luxswirl has no
 #     feature-flag mechanism. There is no require_feature dependency, no Feature
-#     registry, and no feature-key literal anywhere in app/; the two operator
-#     toggles (security.rate_limit_enabled, metrics.enabled) are settings read in
-#     a service, not route gates. Nothing to declare and nothing to check.
+#     registry, and no feature-key literal anywhere in app/; the operator
+#     toggle metrics.enabled is a setting read in a service, not a route gate. Nothing to declare and nothing to check.
 #
 #   fw.fields_wired_into_pipeline — no UI/config field feeds a downstream
 #     pipeline whose reads could silently drop it; check configuration is read

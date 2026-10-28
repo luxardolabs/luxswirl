@@ -368,12 +368,11 @@ New checks inherit these; existing checks are unchanged and users can override p
 
 #### Rate Limiting
 
-- **Enable Rate Limiting** (`security.rate_limit_enabled`, bool) — Default **true**.
-- **Login Rate Limit** (`security.login_rate_limit`, **string**) — `count/period` format. Default **`10/15minutes`**.
-- **API Rate Limit** (`security.api_rate_limit`, **string**) — `count/period` format. Default **`100/minute`**.
-- **Agent Registration Rate Limit** (`security.registration_rate_limit`, **string**) — `count/period` format. Default **`5/hour`**.
+- **Login Rate Limit** (`security.login_rate_limit`, **string**) — password checks per IP address, at `/login` and the change-password form. Default **`10/15minutes`**.
+- **API Rate Limit** (`security.api_rate_limit`, **string**) — requests per IP address to the Prometheus `/metrics` endpoint. Default **`100/minute`**.
+- **Agent Registration Rate Limit** (`security.registration_rate_limit`, **string**) — agent registrations and key recoveries per IP address, refused keys included. Default **`5/hour`**.
 
-> Rate limits are strings such as `10/15minutes` or `100/minute`, not numbers.
+> Rate limits are strings such as `10/15minutes` or `100/minute`, not numbers; join several with `;`. A change applies from the next request, and starts every client's count for that limit afresh. Each default is the matching `SECURITY__` environment setting, so a reset returns to it. A value that is not a limit, or that allows no requests, is refused.
 
 #### Password Complexity
 

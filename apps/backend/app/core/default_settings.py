@@ -326,23 +326,13 @@ DEFAULT_SETTINGS: list[dict[str, Any]] = [
     },
     # Rate Limiting
     {
-        "key": "security.rate_limit_enabled",
-        "category": "security",
-        "subcategory": "Rate Limiting",
-        "value": True,
-        "type": "bool",
-        "display_name": "Enable Rate Limiting",
-        "description": "Enable rate limiting on authentication endpoints to prevent brute-force attacks",
-        "validation": None,
-    },
-    {
         "key": "security.login_rate_limit",
         "category": "security",
         "subcategory": "Rate Limiting",
         "value": "10/15minutes",
         "type": "string",
         "display_name": "Login Rate Limit",
-        "description": "Rate limit for login attempts per IP address (format: count/period, e.g., '10/15minutes')",
+        "description": "Password checks per IP address at /login and the change-password form (format: count/period, e.g., '10/15minutes')",
         "validation": None,
     },
     {
@@ -352,7 +342,7 @@ DEFAULT_SETTINGS: list[dict[str, Any]] = [
         "value": "100/minute",
         "type": "string",
         "display_name": "API Rate Limit",
-        "description": "Rate limit for general API requests per IP address (format: count/period, e.g., '100/minute')",
+        "description": "Requests per IP address to the Prometheus /metrics endpoint (format: count/period, e.g., '100/minute')",
         "validation": None,
     },
     {
@@ -362,7 +352,7 @@ DEFAULT_SETTINGS: list[dict[str, Any]] = [
         "value": "5/hour",
         "type": "string",
         "display_name": "Agent Registration Rate Limit",
-        "description": "Rate limit for agent registration per IP address (format: count/period, e.g., '5/hour')",
+        "description": "Agent registrations and key recoveries per IP address, refused keys included (format: count/period, e.g., '5/hour')",
         "validation": None,
     },
     # Password Complexity

@@ -274,11 +274,10 @@ async def test_the_secret_in_the_query_string_is_not_read(
 
 
 async def test_secret_guesses_spend_the_recovery_rate_limit(
-    client: AsyncClient, db: AsyncSession, reg_key: str, monkeypatch
+    client: AsyncClient, db: AsyncSession, reg_key: str
 ) -> None:
     """Holding the registration key, a host cannot guess secrets without limit:
     the refusal is raised in the route body, inside the limit."""
-    monkeypatch.setattr(settings.security, "rate_limit_enabled", True)
     agent_id, _ = await _register(client, reg_key)
     await _approve(db, agent_id)
     allowed = parse(settings.security.registration_rate_limit).amount

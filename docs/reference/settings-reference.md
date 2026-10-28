@@ -81,7 +81,7 @@ Data retention and compression policies for check results and aggregates.
 
 Authentication, rate limiting, password policy, and SSRF network protection. The UI groups these by subcategory (Session & Authentication, Rate Limiting, Password Complexity, Network Protection).
 
-> Note: `security.login_rate_limit`, `security.api_rate_limit`, and `security.registration_rate_limit` are **strings** in `count/period` form (e.g. `10/15minutes`), not integers.
+> Note: `security.login_rate_limit`, `security.api_rate_limit`, and `security.registration_rate_limit` are **strings** in `count/period` form (e.g. `10/15minutes`), not integers. Several limits can be joined with `;` (`10/minute;100/hour`). A value set here applies from the next request once it is saved, and starts every client's count for that limit afresh. Each one's default is its `SECURITY__` environment setting (see the security table below): while a setting is unchanged it follows the environment, and a reset returns to it. A value that is not a limit, allows no requests, has a period longer than a year or runs past 100 characters is refused; the same holds for the environment settings, and the server will not start on one.
 
 #### Session & Authentication
 
@@ -93,12 +93,11 @@ Authentication, rate limiting, password policy, and SSRF network protection. The
 
 #### Rate Limiting
 
-| Key                                | Default        | Type   | Allowed / Validation | Description                                                                        |
-| ---------------------------------- | -------------- | ------ | -------------------- | ---------------------------------------------------------------------------------- |
-| `security.rate_limit_enabled`      | true           | bool   | —                    | Enable rate limiting on authentication endpoints to prevent brute-force attacks    |
-| `security.login_rate_limit`        | `10/15minutes` | string | format: count/period | Rate limit for login attempts per IP address (e.g., `10/15minutes`)                |
-| `security.api_rate_limit`          | `100/minute`   | string | format: count/period | Rate limit for general API requests per IP address (e.g., `100/minute`)            |
-| `security.registration_rate_limit` | `5/hour`       | string | format: count/period | Rate limit for agent registration and key recovery per IP address (e.g., `5/hour`) |
+| Key                                | Default        | Type   | Allowed / Validation | Description                                                                      |
+| ---------------------------------- | -------------- | ------ | -------------------- | -------------------------------------------------------------------------------- |
+| `security.login_rate_limit`        | `10/15minutes` | string | format: count/period | Limit per IP address on password checks: `/login` and the change-password form   |
+| `security.api_rate_limit`          | `100/minute`   | string | format: count/period | Limit per IP address on the Prometheus `/metrics` endpoint                       |
+| `security.registration_rate_limit` | `5/hour`       | string | format: count/period | Limit per IP address on agent registration and key recovery; counts refused keys |
 
 #### Password Complexity
 
@@ -223,7 +222,6 @@ There is no shared API token. Agents authenticate with a registration key and th
 | `SECURITY__AUTH_ENABLED`                | `true`                                                                    | Enable authentication                                                                                                                                                                                               |
 | `SECURITY__ALGORITHM`                   | `HS256`                                                                   | JWT algorithm                                                                                                                                                                                                       |
 | `SECURITY__ACCESS_TOKEN_EXPIRE_MINUTES` | `30`                                                                      | Access token expiry in minutes (5–43200)                                                                                                                                                                            |
-| `SECURITY__RATE_LIMIT_ENABLED`          | `true`                                                                    | Enable rate limiting on auth endpoints                                                                                                                                                                              |
 | `SECURITY__LOGIN_RATE_LIMIT`            | `10/15minutes`                                                            | Login rate limit per IP (`count/period`)                                                                                                                                                                            |
 | `SECURITY__API_RATE_LIMIT`              | `100/minute`                                                              | API rate limit per IP (`count/period`)                                                                                                                                                                              |
 | `SECURITY__AGENT_API_RATE_LIMIT`        | `600/minute`                                                              | Per-IP limit on agent-authenticated routes (heartbeat, reports, check list, job start and results, artifacts); counts refused keys too, so it bounds agent-key guessing                                             |
@@ -236,7 +234,7 @@ There is no shared API token. Agents authenticate with a registration key and th
 | `SECURITY__SESSION_COOKIE_SAMESITE`     | `lax`                                                                     | SameSite attribute (`strict`/`lax`/`none`)                                                                                                                                                                          |
 | `SECURITY__SESSION_COOKIE_PATH`         | `/`                                                                       | Cookie path                                                                                                                                                                                                         |
 
-> Note: the per-route limits are read from these environment settings once, at startup. The `security.*` rate-limit values on the Settings page are stored but not consulted by the limiter, and `SECURITY__RATE_LIMIT_ENABLED` does not switch it off.
+> Note: `SECURITY__LOGIN_RATE_LIMIT`, `SECURITY__API_RATE_LIMIT` and `SECURITY__REGISTRATION_RATE_LIMIT` are the defaults of the matching `security.*` settings, which govern the limit and can be changed without a restart. `SECURITY__AGENT_API_RATE_LIMIT` and `SECURITY__ADMIN_API_RATE_LIMIT` are read at startup. No setting switches a limit off, since every limited route checks a password, key or token; an administrator can still set a limit loose.
 
 ### Logging (`LOG__`)
 

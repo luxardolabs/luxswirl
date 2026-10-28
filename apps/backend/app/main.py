@@ -131,6 +131,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             "table. Remove them from the env file.",
             extra={"retired_keys": retired},
         )
+    if "SECURITY__RATE_LIMIT_ENABLED" in {k.upper() for k in os.environ}:
+        logger.warning(
+            "SECURITY__RATE_LIMIT_ENABLED is set and ignored: the limits on routes "
+            "that check a password or key cannot be switched off. Remove it from "
+            "the env file.",
+        )
     await bootstrap_on_startup()
 
     # Startup runs outside the request lifecycle, so worker_session() owns this
@@ -151,6 +157,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             "Template filters configured",
             extra={"timezone": general_settings.get("timezone")},
         )
+        await SettingsCoreService.load_rate_limits(db)
 
         # Rebuild Prometheus metrics from database (in-memory collector)
         await MetricsCollectorCoreService.rebuild_from_database(db, lookback_minutes=10)

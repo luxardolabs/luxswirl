@@ -12,6 +12,7 @@ from cryptography.fernet import Fernet
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from app.core.rate_limit_format import check_rate_limit
 from app.core.trusted_host import AllowedHosts
 
 
@@ -171,17 +172,19 @@ class SecuritySettings(BaseSettings):
     )
 
     # Rate Limiting
-    rate_limit_enabled: bool = Field(
-        default=True,
-        description="Enable rate limiting on authentication endpoints",
-    )
     login_rate_limit: str = Field(
         default="10/15minutes",
-        description="Rate limit for login attempts per IP (format: count/period)",
+        description=(
+            "Default of the security.login_rate_limit setting: password checks "
+            "per IP at /login and the change-password form (count/period)"
+        ),
     )
     api_rate_limit: str = Field(
         default="100/minute",
-        description="Rate limit for general API requests per IP",
+        description=(
+            "Default of the security.api_rate_limit setting: requests per IP "
+            "to /metrics (count/period)"
+        ),
     )
     agent_api_rate_limit: str = Field(
         default="600/minute",
@@ -204,7 +207,11 @@ class SecuritySettings(BaseSettings):
     )
     registration_rate_limit: str = Field(
         default="5/hour",
-        description="Rate limit for agent registration per IP",
+        description=(
+            "Default of the security.registration_rate_limit setting: agent "
+            "registrations and key recoveries per IP, refused keys included "
+            "(count/period)"
+        ),
     )
     password_reset_rate_limit: str = Field(
         default="20/hour",
@@ -263,6 +270,20 @@ class SecuritySettings(BaseSettings):
             "secrets manager."
         ),
     )
+
+    @field_validator(
+        "login_rate_limit",
+        "api_rate_limit",
+        "agent_api_rate_limit",
+        "admin_api_rate_limit",
+        "registration_rate_limit",
+        "password_reset_rate_limit",
+    )
+    @classmethod
+    def validate_rate_limit(cls, v: str) -> str:
+        """Refuse a limit slowapi could not count with, so the server will not
+        start on one rather than fail every request to its route."""
+        return check_rate_limit(v)
 
     @field_validator("field_encryption_key")
     @classmethod
