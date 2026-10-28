@@ -17,6 +17,7 @@ from uuid_extensions import uuid7
 
 from app.checks.base import BaseCheck
 from app.shared.logger import get_logger
+from app.shared.ssrf import SsrfBlockedError
 
 logger = get_logger("luxswirl.agent.check_executor")
 
@@ -141,6 +142,14 @@ class CheckExecutor:
                 extra={"check_name": check.name},
             )
             result = self._failure(check, "timeout")
+        except SsrfBlockedError as e:
+            # The policy refusing the target is the check's result, not a fault:
+            # the refusal itself is already logged, with the address and range.
+            self.logger.warning(
+                "Check target refused by the SSRF policy",
+                extra={"check_name": check.name, "reason": str(e)},
+            )
+            result = self._failure(check, str(e))
         except Exception as e:
             self.logger.exception(
                 "Check failed with exception",

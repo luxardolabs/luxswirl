@@ -6,7 +6,7 @@ import platform
 import re
 from typing import Any
 
-from app.checks._ssrf_policy import assert_target_allowed
+from app.checks._ssrf_policy import allowed_addresses
 from app.checks.base import BaseCheck
 from app.shared.subprocess_safe import get_subprocess_config, run_subprocess_safely
 
@@ -37,8 +37,11 @@ class PingCheck(BaseCheck):
             A dictionary containing the check result
         """
         host = self.config["target"]
-        # SSRF: refuse a ping target that resolves into a blocked range.
-        assert_target_allowed(host)
+        # SSRF: ping an address the policy allows, never the name (`ping` would
+        # resolve it again); a name with no allowed address is refused. One that
+        # does not resolve is left to `ping`, which reports it.
+        addresses = allowed_addresses(host)
+        ping_host = addresses[0] if addresses else host
         count = self.config.get("count", 1)
         timeout = self.config.get("timeout", 1)
         retries = self.config.get("retries", 1)
@@ -51,7 +54,7 @@ class PingCheck(BaseCheck):
         subprocess_config = get_subprocess_config(self.config)
 
         # Adjust parameters based on OS
-        ping_args = self._get_ping_args(host, count, timeout)
+        ping_args = self._get_ping_args(ping_host, count, timeout)
 
         # Try pinging with retries
         for _attempt in range(retries):
