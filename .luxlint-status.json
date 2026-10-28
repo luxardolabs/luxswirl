@@ -44,7 +44,7 @@
         {
           "path": "Makefile",
           "line": null,
-          "detail": "luxlint cannot read this run: `make -n check` failed (REFUSING: make runs in /tmp/luxlint-make-ttrlcrxj/repo, not in this makefile's directory /tmp/luxlint-make-ttrlcrxj/repo, so every guard would read the wrong tr). A run luxlint cannot read is red, never assumed wired; write it as a plain recipe line, `luxlint --emit-config pytest > <path>` and then `pytest -c <path> \u2026` with a literal or shell-variable path"
+          "detail": "luxlint cannot read this run: `make -n check` failed (REFUSING: make runs in /tmp/luxlint-make-tophw3cx/repo (CURDIR /repo), not in this makefile's directory /tmp/luxlint-make-tophw3cx/repo, so every guard would re). A run luxlint cannot read is red, never assumed wired; write it as a plain recipe line, `luxlint --emit-config pytest > <path>` and then `pytest -c <path> \u2026` with a literal or shell-variable path"
         }
       ],
       "deferred": false
@@ -213,6 +213,6 @@
     "INERT": 0
   },
   "mypy": "separate: `luxlint --mypy` ([mypy].baseline ratchet)",
-  "commit": "a46e0e5258c9246170e6216fc159b0c995555a21",
-  "generated_at": "2026-10-28T19:37:56Z"
+  "commit": "f2cfd9114410cc065cbd100fc0818a51342bfef1",
+  "generated_at": "2026-10-28T20:05:15Z"
 }
