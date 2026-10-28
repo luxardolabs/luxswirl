@@ -139,3 +139,47 @@ def test_server_options_carry_the_redactor_and_the_level_defaults() -> None:
     options = logging_options()
     assert options["redact"] is scrub
     assert options["levels"]["sqlalchemy.engine"] == logging.WARNING
+
+
+@pytest.mark.parametrize(
+    ("raw", "leaked", "kept"),
+    [
+        (
+            "DETAIL:  Key (key_hash)=($2b$12$abcdef) already exists.",
+            "$2b$12$abcdef",
+            "Key (key_hash)=(***) already exists.",
+        ),
+        (
+            "DETAIL:  Failing row contains (null, s3cr3tHASH, 2026-10-28).",
+            "s3cr3tHASH",
+            "Failing row contains (***)",
+        ),
+        (
+            "invalid input for query argument $1: 's3cr3t' (invalid UUID 's3cr3t')",
+            "s3cr3t",
+            "query argument $1: ***",
+        ),
+        (
+            "ValueError: invalid UUID 's3cr3t': length must be",
+            "s3cr3t",
+            "invalid UUID '***'",
+        ),
+        (
+            'invalid input syntax for type uuid: "s3cr3t"',
+            "s3cr3t",
+            'invalid input syntax for type uuid: "***"',
+        ),
+    ],
+)
+def test_a_database_error_s_quoted_values_are_masked(
+    raw: str, leaked: str, kept: str
+) -> None:
+    """The columns and the reason stay readable; the values a write bound go."""
+    scrubbed = scrub_text(raw)
+    assert leaked not in scrubbed, scrubbed
+    assert kept in scrubbed, scrubbed
+
+
+def test_text_that_quotes_no_database_value_is_left_alone() -> None:
+    text = "Key rotation done (3 agents); invalid request from 10.0.0.5"
+    assert scrub_text(text) == text

@@ -60,6 +60,7 @@ from app.schemas.health_schema import ApiInfoResponse, HealthResponse
 from app.services.core.metrics_collector_core_service import MetricsCollectorCoreService
 from app.services.core.scheduler_core_service import scheduler_service
 from app.services.core.settings_core_service import SettingsCoreService
+from app.shared.log_redaction import scrub_text
 from app.shared.logger import get_logger
 from app.web.render import render_error_response
 from app.web.routers.admin_bootstrap_router import router as admin_bootstrap_router
@@ -358,7 +359,10 @@ async def database_exception_handler(
 ) -> Response:
     """Handle database errors."""
     get_logger("luxswirl.server").error("Database error", exc_info=True)
-    detail = str(exc) if settings.server.environment != "production" else None
+    # Outside production the error itself, with what it quotes of a write masked.
+    detail = (
+        scrub_text(str(exc)) if settings.server.environment != "production" else None
+    )
     return render_error_response(
         request,
         status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -372,7 +376,10 @@ async def database_exception_handler(
 async def general_exception_handler(request: Request, exc: Exception) -> Response:
     """Handle all other exceptions."""
     get_logger("luxswirl.server").error("Unhandled exception", exc_info=True)
-    detail = str(exc) if settings.server.environment != "production" else None
+    # Outside production the error itself, with what it quotes of a write masked.
+    detail = (
+        scrub_text(str(exc)) if settings.server.environment != "production" else None
+    )
     return render_error_response(
         request,
         status.HTTP_500_INTERNAL_SERVER_ERROR,

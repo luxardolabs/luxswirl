@@ -413,8 +413,9 @@ LUXSWIRL_ALLOW_INSECURE_HTTP=true LUXSWIRL_SERVER_URL=http://test.example.com:90
 - Bearer tokens (`Bearer ***`)
 - API keys (`api_key=***`)
 - Password fields in JSON (`"password":"***"`)
+- Values a database error quotes: PostgreSQL's DETAIL (`Key (col)=(***)`, `Failing row contains (***)`), asyncpg's refused argument and a codec's `invalid UUID '***'`
 
-A failed database statement carries its SQL but never its bound values: every engine is created with `hide_parameters=True` (`app/db/database.py`, `alembic/env.py`), so the `Database error` log line and, outside production, the 500's `detail` hold no key hash, connection string or script a write bound.
+A failed database statement carries its SQL but never its bound values: every engine is created with `hide_parameters=True` (`app/db/database.py`, `alembic/env.py`), and the error handlers pass their non-production `detail` through `scrub_text`, so the `Database error` log line and the 500 hold no key hash, connection string or script a write bound.
 
 **Credential Storage (Encrypted at Rest):**
 

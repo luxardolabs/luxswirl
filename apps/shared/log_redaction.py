@@ -4,7 +4,8 @@ Every log line goes through `scrub` before it is written: once for the envelope
 (the message and any traceback), once for the caller's fields (`extra=` and the
 bound `log_context`), each as a flat dict. It masks credentials wherever they
 appear: a connection-string password, a Bearer token, `api_key=`/`auth_key=`/
-`password=` pairs and JSON password fields, and the whole value of any field
+`password=` pairs and JSON password fields, the values a database error quotes
+(PostgreSQL's DETAIL, asyncpg's refused argument), and the whole value of any field
 whose NAME says it is secret (`password`, `api_key`, `token`, ...). Keys match
 in any case, and a value is masked whole, up to its delimiter.
 
@@ -40,6 +41,15 @@ _PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
     ),
     # An agent's recovery secret, wherever it appears (it has its own prefix)
     (re.compile(r"luxswirl_rs_[\w\-]+"), "luxswirl_rs_***"),
+    # A database error quotes what a write bound: PostgreSQL's DETAIL names a
+    # duplicated or missing key's values and a failing row's every column, and
+    # asyncpg an argument it could not encode. The columns stay; values go.
+    (re.compile(r"(Key \([^)\n]*\)=)\(.*\)"), r"\1(***)"),
+    (re.compile(r"(Failing row contains )\(.*\)"), r"\1(***)"),
+    (re.compile(r"(query argument \$\d+: ).*"), r"\1***"),
+    # ... and the codec or the server names the value it could not read.
+    (re.compile(r"(invalid [A-Za-z ]+ )'[^'\n]*'"), r"\1'***'"),
+    (re.compile(r'(invalid input syntax for type [\w ]+: )"[^"\n]*"'), r'\1"***"'),
 )
 
 # A field whose name contains one of these is masked outright, whatever its value.
