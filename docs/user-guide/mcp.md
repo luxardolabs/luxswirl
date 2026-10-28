@@ -58,3 +58,10 @@ A missing, unknown, revoked or expired token gets `401` with a `WWW-Authenticate
 ## Audit log
 
 Every call is recorded, whether it succeeded, failed or was refused: the tool, the user and token, the arguments with every credential masked (a synthetic script by its size alone), the outcome, why it was refused, how long it took, and the caller's address and client name. Calls are kept 90 days.
+
+| Where                                                  | Who        | What it shows                                                                                                                                                                         |
+| ------------------------------------------------------ | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Settings** → **API Activity** → **MCP tool calls**   | Admins     | Every user's calls, filtered by window (1, 7, 30 or 90 days), tool, user, token and outcome (succeeded, failed, denied). The details button opens a call's masked arguments and error |
+| **My Account** → **API Activity** → **MCP tool calls** | Every user | The calls made with their own tokens, never anyone else's                                                                                                                             |
+
+The tool's response is not kept, only whether it succeeded.

@@ -349,6 +349,15 @@ A new user must change their password at first sign-in unless `must_change_passw
 
 `/api/v1/admin/openapi.json` describes every admin-API route, with the bearer scheme declared. It is served to any token holder in every environment, so a client generator or an AI agent can read it. The app-wide `/docs` and `/openapi.json` stay off in production.
 
+## Audit log
+
+Every request a valid token makes is recorded, whatever its answer: the user and token, the method, the route as it is declared (`/api/v1/admin/checks/{check_id}`, never the ids in the path), the status, how long it took, and the caller's address and client name. The query string and the body are never kept. A request without a valid token is not recorded. Requests are kept 90 days.
+
+| Where                                                      | Who        | What it shows                                                                                                                           |
+| ---------------------------------------------------------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| **Settings** → **API Activity** → **Admin API requests**   | Admins     | Every user's requests, filtered by window (1, 7, 30 or 90 days), route, user, token and outcome (succeeded, failed, denied: 401 or 403) |
+| **My Account** → **API Activity** → **Admin API requests** | Every user | The requests made with their own tokens, never anyone else's                                                                            |
+
 ## Rate limit
 
 Each token may make `security.admin_api_rate_limit` requests (default `300/minute`, env `SECURITY__ADMIN_API_RATE_LIMIT`). The limit is per token, not per address, so several scripts behind one address do not share it. Past the limit, a request gets `429`.
