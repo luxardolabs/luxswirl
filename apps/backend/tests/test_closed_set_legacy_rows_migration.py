@@ -4,7 +4,7 @@ Rows an older version stored with a value outside the sets the schemas now
 enforce fail on read (the agent's check fetch, an artifact listing). Revision
 c24bfe691550 uppercases what it can, clears and disables a check it cannot fix,
 and deletes artifacts with a content type the console cannot serve safely. The
-test suite builds its schema with create_all, so this runs the revision's
+test suite's schema is already at head, so this runs the revision's
 `migrate` directly against rows shaped like an older version's.
 """
 
