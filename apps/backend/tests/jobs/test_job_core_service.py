@@ -7,6 +7,7 @@ transitions / result submission / cancel guard).
 
 from __future__ import annotations
 
+import asyncio
 from uuid import uuid4
 
 import pytest
@@ -17,6 +18,7 @@ from app.core.exceptions import (
 )
 from app.schemas.job_schema import JobCreate, JobResultSubmit
 from app.services.core.job_core_service import JobCoreService
+from app.services.core.settings_core_service import SettingsCoreService
 from fixtures.factories import make_agent
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -254,6 +256,31 @@ class TestDispatch:
         by_type = {j["job_type"]: j["timeout_seconds"] for j in dispatched}
         assert by_type["network_scan"] == 600
         assert by_type["network_discover"] == 60
+
+    async def test_dispatch_never_uses_the_session_from_two_tasks_at_once(
+        self, db: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ):
+        """An AsyncSession is not safe for concurrent use: each job's dispatch
+        reads its settings on the session one after another, never together."""
+        agent = await self._agent(db)
+        for _ in range(3):
+            await svc.create_job(db, self._data(agent.id, "network_scan"))
+        in_flight = 0
+        most = 0
+
+        async def one_at_a_time(_db, _key, default=None):
+            nonlocal in_flight, most
+            in_flight += 1
+            most = max(most, in_flight)
+            await asyncio.sleep(0.01)
+            in_flight -= 1
+            return default
+
+        monkeypatch.setattr(SettingsCoreService, "get_setting", one_at_a_time)
+
+        dispatched = await svc.get_jobs_for_dispatch(db, agent.id)
+        assert len(dispatched) == 3
+        assert most == 1, f"{most} dispatches used the session at once"
 
     async def test_dispatch_is_per_agent_and_marks_assigned(self, db: AsyncSession):
         a1 = await self._agent(db)

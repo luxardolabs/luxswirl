@@ -9,7 +9,6 @@ Handles:
 - Job queue management
 """
 
-import asyncio
 from collections.abc import Sequence
 from typing import Any
 from uuid import UUID
@@ -488,10 +487,11 @@ class JobCoreService:
         # Get pending jobs for this agent
         pending_jobs = await JobCoreService.get_pending_jobs_for_agent(db, agent_id)
 
-        # Convert to dispatch format (async in parallel)
-        jobs_dispatch = await asyncio.gather(
-            *[JobCoreService.job_to_dispatch(db, job) for job in pending_jobs]
-        )
+        # One after another: each reads its settings on `db`, and a session is
+        # never used by two tasks at once.
+        jobs_dispatch = [
+            await JobCoreService.job_to_dispatch(db, job) for job in pending_jobs
+        ]
 
         # Convert to dict format for JSON response
         return [job.model_dump() for job in jobs_dispatch]
