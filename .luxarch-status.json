@@ -1521,7 +1521,7 @@
           "violations": 0,
           "deferred": false,
           "inert": true,
-          "inert_reason": "0 mutating core methods take a user (actor, current_user, requesting_user, user or a `*User` type), so no permission check was judged. 10 mutating method(s) take a `user_id` instead, which this rule cannot read as an actor (it is as often an owner filter). NOT a clearance: an id-only actor is checked nowhere here.",
+          "inert_reason": "0 mutating core methods take a user (actor, current_user, requesting_user, user or a `*User` type), so no permission check was judged. 11 mutating method(s) take a `user_id` instead, which this rule cannot read as an actor (it is as often an owner filter). NOT a clearance: an id-only actor is checked nowhere here.",
           "fix": "",
           "example": ""
         },
@@ -2908,6 +2908,6 @@
     "XPASS": 0,
     "INERT": 22
   },
-  "commit": "1b7757ee2a77e35e444c63cfd4827a5567f1a032",
-  "generated_at": "2026-10-28T14:57:05Z"
+  "commit": "523c0933a46e37cad2feaeecd9939ce698c23b50",
+  "generated_at": "2026-10-28T15:54:38Z"
 }
