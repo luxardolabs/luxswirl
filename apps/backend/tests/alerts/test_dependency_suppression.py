@@ -266,9 +266,36 @@ async def test_validate_dependency_rejects_two_level_chain():
 async def test_validate_dependency_accepts_valid_parent():
     db = AsyncMock()
     parent = SimpleNamespace(id=uuid4(), depends_on_check_id=None)
-    with patch(
-        "app.services.core.check_core_service.CheckCRUD.get_by_id",
-        AsyncMock(return_value=parent),
+    with (
+        patch(
+            "app.services.core.check_core_service.CheckCRUD.get_by_id",
+            AsyncMock(return_value=parent),
+        ),
+        patch(
+            "app.services.core.check_core_service.CheckCRUD.count_dependents",
+            AsyncMock(return_value=0),
+        ),
+    ):
+        await CheckDependencyCoreService.validate_dependency(
+            db, parent.id, own_check_id=uuid4()
+        )
+
+
+@pytest.mark.asyncio
+async def test_validate_dependency_refuses_a_check_that_is_a_parent():
+    """Single-level: a check with dependents cannot be given a parent."""
+    db = AsyncMock()
+    parent = SimpleNamespace(id=uuid4(), depends_on_check_id=None)
+    with (
+        patch(
+            "app.services.core.check_core_service.CheckCRUD.get_by_id",
+            AsyncMock(return_value=parent),
+        ),
+        patch(
+            "app.services.core.check_core_service.CheckCRUD.count_dependents",
+            AsyncMock(return_value=2),
+        ),
+        pytest.raises(ValidationException, match="parent itself"),
     ):
         await CheckDependencyCoreService.validate_dependency(
             db, parent.id, own_check_id=uuid4()
