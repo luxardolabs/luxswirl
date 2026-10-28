@@ -9,7 +9,8 @@ Two surfaces:
 
 - `server_client()` — talks to the LuxSwirl server (registration, artifact upload,
   config fetch). One client, default TLS verification.
-- `check_client(verify=...)` — talks to arbitrary CHECK TARGETS. `verify` is a
+- `check_client(verify=...)` — talks to arbitrary CHECK TARGETS, each connection
+  on an address the SSRF policy allows (`checks._ssrf_http.VettedTransport`). `verify` is a
   transport-level setting, so it cannot be varied per request; clients are therefore
   pooled per distinct `verify` value (in practice two). Timeouts ARE per-request and
   must be passed at the call site, never baked into the client.
@@ -20,6 +21,8 @@ Two surfaces:
 from __future__ import annotations
 
 import httpx
+
+from app.checks._ssrf_http import VettedTransport
 
 _server_client: httpx.AsyncClient | None = None
 _check_clients: dict[bool, httpx.AsyncClient] = {}
@@ -41,7 +44,8 @@ def check_client(*, verify: bool = True) -> httpx.AsyncClient:
     """
     client = _check_clients.get(verify)
     if client is None:
-        client = httpx.AsyncClient(verify=verify)
+        # Every connection on an address the SSRF policy allows.
+        client = httpx.AsyncClient(transport=VettedTransport(verify=verify))
         _check_clients[verify] = client
     return client
 

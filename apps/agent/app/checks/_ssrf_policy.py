@@ -35,11 +35,37 @@ def apply_server_policy(response: Mapping[str, Any]) -> None:
 
 
 def assert_target_allowed(target: str) -> None:
-    """Refuse `target` if it resolves into a range the policy blocks."""
+    """Refuse `target` if ANY address it resolves to is in a range the policy
+    blocks: for a check whose driver resolves the name itself."""
     ssrf.assert_target_allowed(
         target,
         block_cloud_metadata=True,
         block_private_networks=block_private_networks(),
+    )
+
+
+def allowed_addresses(host: str) -> list[str]:
+    """The addresses `host` resolves to that the policy allows, to connect to.
+
+    Raises:
+        SsrfBlockedError: It resolves, and every address is blocked.
+    """
+    return ssrf.allowed_addresses(
+        host,
+        block_cloud_metadata=True,
+        block_private_networks=block_private_networks(),
+    )
+
+
+def ip_allowed(ip: str) -> bool:
+    """Whether the policy allows connecting to the resolved `ip`."""
+    return (
+        ssrf.blocked_range(
+            ip,
+            block_cloud_metadata=True,
+            block_private_networks=block_private_networks(),
+        )
+        is None
     )
 
 

@@ -6,7 +6,7 @@ import asyncio
 import socket
 from typing import Any
 
-from app.checks._ssrf_policy import assert_ip_allowed
+from app.checks._ssrf_policy import assert_ip_allowed, ip_allowed
 from app.checks.base import BaseCheck
 
 
@@ -138,18 +138,29 @@ class TCPCheck(BaseCheck):
             port: The port number
 
         Returns:
-            The first valid address info tuple or None if resolution fails
+            The first address info the SSRF policy allows, or None if resolution fails
+
+        Raises:
+            SsrfBlockedError: It resolves, and every address is blocked.
         """
         try:
             # Use getaddrinfo to support both IPv4 and IPv6
-            info = await asyncio.get_event_loop().getaddrinfo(
+            infos = await asyncio.get_event_loop().getaddrinfo(
                 host, port, family=socket.AF_UNSPEC, type=socket.SOCK_STREAM
             )
-            if info:
-                return info[0]  # Return the first valid address info
-            return None
         except socket.gaierror:
             return None
+        # Only IP addresses (an AF_INET/AF_INET6 sockaddr starts with its address).
+        addressed = [
+            (info, address) for info in infos if isinstance(address := info[4][0], str)
+        ]
+        for info, address in addressed:
+            if ip_allowed(address):
+                return info
+        if addressed:
+            # Every address is blocked: refuse, naming the first.
+            assert_ip_allowed(addressed[0][1])
+        return None
 
     async def _test_echo(
         self,

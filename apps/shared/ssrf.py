@@ -10,10 +10,14 @@ instance's IAM credentials (the classic SSRF prize — see the 2019 Capital One
 breach). RFC-1918 private networks are *allowed* by default, since monitoring LAN
 hosts is the intended use; the server can opt into blocking them via settings.
 
-Residual: this validates the resolved IPs immediately before connecting, which
-closes the create→fetch window. A sub-millisecond TTL-0 rebinding between this
-resolve and the socket's own resolve is not closed here (would require pinning the
-validated IP through TLS/SNI) — documented as a known further-hardening item.
+A check that opens its own connection resolves the name once
+(:func:`allowed_addresses`), drops every address in a blocked range, and connects
+to one that is left: ping, tcp and the http/json checks, whose TLS still verifies
+the name. A name is refused only when it resolves and none of its addresses is
+allowed, so a host that also answers with its IPv6 link-local address is reached
+on its other one, and nothing resolves the name again between the check and the
+socket. The database and DNS checks hand the name to a driver that resolves it
+itself: :func:`assert_target_allowed` refuses those when ANY address is blocked.
 """
 
 from __future__ import annotations
@@ -180,9 +184,37 @@ def resolve_host(host: str) -> list[str]:
         pass
     try:
         infos = socket.getaddrinfo(host, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
-        return list({info[4][0] for info in infos if isinstance(info[4][0], str)})
+        # In the resolver's order (its preference), each address once.
+        return list(
+            dict.fromkeys(info[4][0] for info in infos if isinstance(info[4][0], str))
+        )
     except socket.gaierror, OSError:
         return []
+
+
+def blocked_range(
+    ip_str: str,
+    *,
+    block_cloud_metadata: bool = True,
+    block_private_networks: bool = False,
+) -> tuple[ipaddress.IPv4Network | ipaddress.IPv6Network, str] | None:
+    """The blocked range ``ip_str`` falls in and its label, or None when allowed."""
+    try:
+        ip = ipaddress.ip_address(ip_str)
+    except ValueError:
+        return None
+    embedded = _embedded_ipv4(ip)
+    candidates = [ip] if embedded is None else [ip, embedded]
+    ranges: list[tuple[list[ipaddress.IPv4Network | ipaddress.IPv6Network], str]] = []
+    if block_cloud_metadata:
+        ranges.append((CLOUD_METADATA_NETWORKS, "cloud metadata / link-local"))
+    if block_private_networks:
+        ranges.append((PRIVATE_NETWORKS, "private network"))
+    for networks, label in ranges:
+        matched = next((net for net in networks for c in candidates if c in net), None)
+        if matched is not None:
+            return matched, label
+    return None
 
 
 def assert_ip_allowed(
@@ -196,27 +228,51 @@ def assert_ip_allowed(
     Use this when you already hold the resolved IP you're about to connect to
     (e.g. TCP) — it validates the exact pinned IP, with no re-resolution gap.
     """
-    try:
-        ip = ipaddress.ip_address(ip_str)
-    except ValueError:
+    blocked = blocked_range(
+        ip_str,
+        block_cloud_metadata=block_cloud_metadata,
+        block_private_networks=block_private_networks,
+    )
+    if blocked is None:
         return
-    embedded = _embedded_ipv4(ip)
-    candidates = [ip] if embedded is None else [ip, embedded]
-    ranges: list[tuple[list[ipaddress.IPv4Network | ipaddress.IPv6Network], str]] = []
-    if block_cloud_metadata:
-        ranges.append((CLOUD_METADATA_NETWORKS, "cloud metadata / link-local"))
-    if block_private_networks:
-        ranges.append((PRIVATE_NETWORKS, "private network"))
-    for networks, label in ranges:
-        matched = next((net for net in networks for c in candidates if c in net), None)
-        if matched is not None:
-            logger.warning(
-                "SSRF protection: blocked IP",
-                extra={"resolved_ip": ip_str, "range": str(matched)},
-            )
-            raise SsrfBlockedError(
-                f"{ip_str} is in the blocked {label} range ({matched})."
-            )
+    matched, label = blocked
+    logger.warning(
+        "SSRF protection: blocked IP",
+        extra={"resolved_ip": ip_str, "range": str(matched)},
+    )
+    raise SsrfBlockedError(f"{ip_str} is in the blocked {label} range ({matched}).")
+
+
+def allowed_addresses(
+    host: str,
+    *,
+    block_cloud_metadata: bool = True,
+    block_private_networks: bool = False,
+) -> list[str]:
+    """The addresses ``host`` resolves to that the policy allows, in the
+    resolver's order: the ones to connect to. Empty when it does not resolve.
+
+    Raises:
+        SsrfBlockedError: It resolves, and every address is in a blocked range.
+    """
+    addresses = resolve_host(host)
+    allowed = [
+        ip
+        for ip in addresses
+        if blocked_range(
+            ip,
+            block_cloud_metadata=block_cloud_metadata,
+            block_private_networks=block_private_networks,
+        )
+        is None
+    ]
+    if addresses and not allowed:
+        assert_ip_allowed(
+            addresses[0],
+            block_cloud_metadata=block_cloud_metadata,
+            block_private_networks=block_private_networks,
+        )
+    return allowed
 
 
 def assert_target_allowed(
