@@ -738,7 +738,7 @@ ______________________________________________________________________
 - Trusted hosts: any `Host` not in `ALLOWED_HOSTS` gets 400
 - CORS headers (`SERVER__CORS_ORIGINS`)
 - CSRF protection (SameSite cookies)
-- Security headers (X-Frame-Options, CSP)
+- Security headers (X-Frame-Options, CSP), and `Cache-Control: no-store` on every dynamic response the app answers, its unhandled-error 500 included, so no cache keeps one that shows a secret once (static assets keep their caching). The trusted-host 400 and the cross-site 403 are answered before these headers are set; they carry no secret.
 
 **Layer 3: Authentication**
 
