@@ -419,6 +419,14 @@ class CheckResultCoreService:
         return await CheckResultCRUD.get_24h_stats_batch(db, check_ids)
 
     @staticmethod
+    async def get_current_results_batch(
+        db: AsyncSession,
+        check_ids: list[UUID],
+    ) -> dict[UUID, AggregateRow]:
+        """Each check's current result, as its health is read. Delegates to CRUD."""
+        return await CheckResultCRUD.get_current_results_batch(db, check_ids)
+
+    @staticmethod
     async def get_minute_bars_results(
         db: AsyncSession,
         check_ids: list[UUID],

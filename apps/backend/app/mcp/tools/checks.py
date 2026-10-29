@@ -28,7 +28,7 @@ from app.mcp.validators import (
     validate_optional_uuid,
     validate_uuid,
 )
-from app.models.enum_model import CheckType
+from app.models.enum_model import CheckHealthStatus, CheckType
 from app.schemas.admin_check_schema import (
     AdminCheckClone,
     AdminCheckCreate,
@@ -68,8 +68,10 @@ TOOLS: list[Tool] = [
     Tool(
         name="list_checks",
         description=(
-            "One page of monitoring checks, filtered by agent, type, tag, enabled, or a "
-            "name/target search. Returns each check's id, type, target and settings."
+            "One page of monitoring checks, filtered by agent, type, tag, enabled, "
+            "health or a name/target search. Returns each check's id, type, target, "
+            "settings and health: latest_status (up, down, or unknown when it has no "
+            "current result), latest_latency_ms and success_rate_24h."
         ),
         inputSchema={
             "type": "object",
@@ -97,6 +99,11 @@ TOOLS: list[Tool] = [
                     "type": "string",
                     "maxLength": 255,
                     "description": "Match the check's name or target",
+                },
+                "status": {
+                    "type": "string",
+                    "enum": [s.value for s in CheckHealthStatus],
+                    "description": "Only checks of this health",
                 },
             },
         },
@@ -223,6 +230,7 @@ async def handle_list_checks(arguments: dict[str, Any]) -> list[TextContent]:
             ),
             tag=text_arg(arguments.get("tag"), "tag", max_length=100),
             search=text_arg(arguments.get("search"), "search", max_length=255),
+            status=choice(arguments.get("status"), CheckHealthStatus, "status"),
         )
     )
 

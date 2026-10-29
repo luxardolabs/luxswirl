@@ -15,16 +15,19 @@ from sqlalchemy import (
     inspect,
     or_,
     select,
+    true,
     update,
 )
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload, undefer
+from sqlalchemy.sql import ColumnElement
 
 from app.core.datetime_utils import utc_now
+from app.crud._check_health import current_result, health_condition
 from app.models.agent_model import Agent
 from app.models.check_model import Check
-from app.models.enum_model import AssignmentMode
+from app.models.enum_model import AssignmentMode, CheckHealthStatus
 
 
 class CheckCRUD:
@@ -106,41 +109,103 @@ class CheckCRUD:
         limit: int = 50,
     ) -> tuple[Sequence[Check], int]:
         """Paginated list of checks with agent loaded and filters applied."""
-        query = select(Check).options(
-            selectinload(Check.agent), undefer(Check.script_code)
+        clauses = CheckCRUD._list_filters(
+            agent_id=agent_id,
+            check_type=check_type,
+            enabled_only=enabled_only,
+            tag=tag,
+            search=search,
+            exclude_internal=exclude_internal,
         )
-        count_query = select(func.count(Check.id))
-
-        if agent_id is not None:
-            query = query.where(Check.agent_id == agent_id)
-            count_query = count_query.where(Check.agent_id == agent_id)
-        if check_type:
-            query = query.where(Check.check_type == check_type)
-            count_query = count_query.where(Check.check_type == check_type)
-        if enabled_only:
-            query = query.where(Check.enabled.is_(True))
-            count_query = count_query.where(Check.enabled.is_(True))
-        if tag:
-            tag_clause = Check.tags.op("@>")(cast([tag], ARRAY(String)))
-            query = query.where(tag_clause)
-            count_query = count_query.where(tag_clause)
-        if search:
-            pattern = f"%{search}%"
-            search_clause = or_(
-                Check.display_name.ilike(pattern),
-                Check.target.ilike(pattern),
-            )
-            query = query.where(search_clause)
-            count_query = count_query.where(search_clause)
-        if exclude_internal:
-            query = query.where(Check.check_type != "internal")
-            count_query = count_query.where(Check.check_type != "internal")
-
-        total = (await db.execute(count_query)).scalar_one()
+        total = (
+            await db.execute(select(func.count(Check.id)).where(*clauses))
+        ).scalar_one()
         result = await db.execute(
-            query.order_by(Check.agent_id, Check.display_name).offset(skip).limit(limit)
+            select(Check)
+            .options(selectinload(Check.agent), undefer(Check.script_code))
+            .where(*clauses)
+            .order_by(Check.agent_id, Check.display_name)
+            .offset(skip)
+            .limit(limit)
         )
         return result.scalars().all(), total
+
+    @staticmethod
+    async def list_page_with_health(
+        db: AsyncSession,
+        *,
+        agent_id: UUID | None = None,
+        check_type: str | None = None,
+        enabled_only: bool = False,
+        tag: str | None = None,
+        search: str | None = None,
+        status: CheckHealthStatus | None = None,
+        skip: int = 0,
+        limit: int = 50,
+    ) -> tuple[list[tuple[Check, bool | None, float | None]], int]:
+        """`list_paginated`'s page, each check with its current result's success
+        and latency (None, None when it has none), filtered on that health.
+
+        One statement reads both the filter and the health it serves, so a
+        result landing mid-request cannot list a check under one status and
+        serve it with another.
+        """
+        current = current_result()
+        clauses = CheckCRUD._list_filters(
+            agent_id=agent_id,
+            check_type=check_type,
+            enabled_only=enabled_only,
+            tag=tag,
+            search=search,
+        )
+        if status is not None:
+            clauses.append(health_condition(current, status))
+        total = (
+            await db.execute(
+                select(func.count(Check.id)).outerjoin(current, true()).where(*clauses)
+            )
+        ).scalar_one()
+        result = await db.execute(
+            select(Check, current.c.success, current.c.latency_ms)
+            .options(selectinload(Check.agent), undefer(Check.script_code))
+            .outerjoin(current, true())
+            .where(*clauses)
+            .order_by(Check.agent_id, Check.display_name)
+            .offset(skip)
+            .limit(limit)
+        )
+        return [
+            (check, success, latency_ms) for check, success, latency_ms in result.all()
+        ], total
+
+    @staticmethod
+    def _list_filters(
+        *,
+        agent_id: UUID | None,
+        check_type: str | None,
+        enabled_only: bool,
+        tag: str | None,
+        search: str | None,
+        exclude_internal: bool = False,
+    ) -> list[ColumnElement[bool]]:
+        """The WHERE clauses the check lists share."""
+        clauses: list[ColumnElement[bool]] = []
+        if agent_id is not None:
+            clauses.append(Check.agent_id == agent_id)
+        if check_type:
+            clauses.append(Check.check_type == check_type)
+        if enabled_only:
+            clauses.append(Check.enabled.is_(True))
+        if tag:
+            clauses.append(Check.tags.op("@>")(cast([tag], ARRAY(String))))
+        if search:
+            pattern = f"%{search}%"
+            clauses.append(
+                or_(Check.display_name.ilike(pattern), Check.target.ilike(pattern))
+            )
+        if exclude_internal:
+            clauses.append(Check.check_type != "internal")
+        return clauses
 
     @staticmethod
     async def list_for_agent(db: AsyncSession, agent_id: UUID) -> Sequence[Check]:

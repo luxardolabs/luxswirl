@@ -276,7 +276,7 @@ class CheckResponse(CheckInDB):
                 "created_at": "2024-01-01T00:00:00Z",
                 "updated_at": "2024-01-01T12:00:00Z",
                 "fully_qualified_name": "prod-web-01:api_health",
-                "latest_status": "success",
+                "latest_status": "up",
                 "latest_latency_ms": 45.2,
                 "success_rate_24h": 99.5,
             }

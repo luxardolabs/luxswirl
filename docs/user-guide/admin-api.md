@@ -95,7 +95,15 @@ A check is addressed by its own id. Reads take any token; writes take an editor'
 | `POST`   | `/api/v1/admin/checks/{id}/enable`  | editor | Enable it                                                                          |
 | `POST`   | `/api/v1/admin/checks/{id}/disable` | editor | Disable it                                                                         |
 
-The list takes `page` (from 1) and `per_page` (1-200, default 50), and filters `agent_id`, `check_type`, `tag`, `search` (name or target) and `enabled_only`. It answers with the page envelope every admin-API list uses:
+The list takes `page` (from 1) and `per_page` (1-200, default 50), and filters `agent_id`, `check_type`, `tag`, `search` (name or target), `enabled_only` and `status` (`up`, `down` or `unknown`).
+
+Every check the API returns carries its health, as the status dashboard shows it:
+
+- `latest_status` is `up` or `down` from its newest result within its silence threshold, and `unknown` when it has none (it never reported, or has gone silent).
+- `latest_latency_ms` is that result's latency, null when it is `unknown`.
+- `success_rate_24h` is the percentage of the last 24 hours' results that succeeded, null with none.
+
+The list answers with the page envelope every admin-API list uses:
 
 ```json
 {"items": [...], "total": 120, "page": 1, "per_page": 50, "total_pages": 3, "has_next": true}
