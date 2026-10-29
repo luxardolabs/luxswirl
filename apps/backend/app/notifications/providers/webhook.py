@@ -87,43 +87,38 @@ class WebhookNotificationProvider(BaseNotificationProvider):
         Raises:
             Exception: If webhook fails to send
         """
-        try:
-            # Build request data
-            url = self.config["post_url"]
-            # Re-validate at send time: defends against DNS rebinding between config and send.
-            validate_check_target(url, block_cloud_metadata=True)
-            preset = self.config.get("request_body_preset", "json")
-            timeout = self.config.get("timeout", 10)
-            verify_ssl = self.config.get("verify_ssl", True)
+        # Build request data
+        url = self.config["post_url"]
+        # Re-validate at send time: defends against DNS rebinding between config and send.
+        validate_check_target(url, block_cloud_metadata=True)
+        preset = self.config.get("request_body_preset", "json")
+        timeout = self.config.get("timeout", 10)
+        verify_ssl = self.config.get("verify_ssl", True)
 
-            # Build payload (encode UUID/datetime to JSON-native types at the wire boundary)
-            payload = jsonable_encoder(self._build_payload(context))
+        # Build payload (encode UUID/datetime to JSON-native types at the wire boundary)
+        payload = jsonable_encoder(self._build_payload(context))
 
-            # Build headers
-            headers = self._build_headers(preset)
+        # Build headers
+        headers = self._build_headers(preset)
 
-            # Add custom headers if provided
-            if "additional_headers" in self.config:
-                headers.update(self.config["additional_headers"])
+        # Add custom headers if provided
+        if "additional_headers" in self.config:
+            headers.update(self.config["additional_headers"])
 
-            # Send request
-            async with httpx.AsyncClient(verify=verify_ssl, timeout=timeout) as client:
-                if preset == "json":
-                    response = await client.post(url, json=payload, headers=headers)
-                else:  # form
-                    response = await client.post(url, data=payload, headers=headers)
+        # Send request
+        async with httpx.AsyncClient(verify=verify_ssl, timeout=timeout) as client:
+            if preset == "json":
+                response = await client.post(url, json=payload, headers=headers)
+            else:  # form
+                response = await client.post(url, data=payload, headers=headers)
 
-                response.raise_for_status()
+            response.raise_for_status()
 
-            logger.info(
-                "Webhook notification sent successfully",
-                extra={"url": mask_url_paths(url), "status_code": response.status_code},
-            )
-            return True
-
-        except Exception:
-            logger.exception("Failed to send webhook notification")
-            raise
+        logger.info(
+            "Webhook notification sent successfully",
+            extra={"url": mask_url_paths(url), "status_code": response.status_code},
+        )
+        return True
 
     def _build_payload(self, context: NotificationContext) -> dict[str, Any]:
         """

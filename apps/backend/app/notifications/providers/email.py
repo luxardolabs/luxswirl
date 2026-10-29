@@ -89,40 +89,35 @@ class EmailNotificationProvider(BaseNotificationProvider):
         Raises:
             Exception: If email fails to send
         """
-        try:
-            self.logger.debug(
-                "Starting email send",
-                extra={"to_email": self.config["to_email"]},
-            )
-            self.logger.debug(
-                "SMTP config",
-                extra={
-                    "smtp_hostname": self.config["hostname"],
-                    "smtp_port": self.config["port"],
-                    "security": self.config.get("security", "none"),
-                },
-            )
+        self.logger.debug(
+            "Starting email send",
+            extra={"to_email": self.config["to_email"]},
+        )
+        self.logger.debug(
+            "SMTP config",
+            extra={
+                "smtp_hostname": self.config["hostname"],
+                "smtp_port": self.config["port"],
+                "security": self.config.get("security", "none"),
+            },
+        )
 
-            # Build email message
-            msg = self._build_message(context)
-            self.logger.debug(
-                "Email message built",
-                extra={"subject": msg["Subject"]},
-            )
+        # Build email message
+        msg = self._build_message(context)
+        self.logger.debug(
+            "Email message built",
+            extra={"subject": msg["Subject"]},
+        )
 
-            # Send via async SMTP
-            self.logger.debug("Initiating SMTP connection...")
-            await self._send_smtp(msg)
+        # Send via async SMTP
+        self.logger.debug("Initiating SMTP connection...")
+        await self._send_smtp(msg)
 
-            self.logger.info(
-                "Email notification sent successfully",
-                extra={"to_email": self.config["to_email"]},
-            )
-            return True
-
-        except Exception:
-            self.logger.exception("Failed to send email notification")
-            raise
+        self.logger.info(
+            "Email notification sent successfully",
+            extra={"to_email": self.config["to_email"]},
+        )
+        return True
 
     def _build_message(self, context: NotificationContext) -> MIMEMultipart:
         """
@@ -268,26 +263,22 @@ class EmailNotificationProvider(BaseNotificationProvider):
         )
 
         # Send email using aiosmtplib
-        try:
-            self.logger.debug(
-                "Attempting SMTP connection",
-                extra={"smtp_hostname": hostname, "smtp_port": port},
-            )
-            await aiosmtplib.send(
-                msg,
-                hostname=hostname,
-                port=port,
-                username=username,
-                password=password,
-                use_tls=use_tls,
-                start_tls=start_tls,
-                tls_context=tls_context,
-                timeout=timeout,
-            )
-            self.logger.debug("SMTP send completed successfully")
-        except Exception:
-            self.logger.exception("SMTP send failed")
-            raise
+        self.logger.debug(
+            "Attempting SMTP connection",
+            extra={"smtp_hostname": hostname, "smtp_port": port},
+        )
+        await aiosmtplib.send(
+            msg,
+            hostname=hostname,
+            port=port,
+            username=username,
+            password=password,
+            use_tls=use_tls,
+            start_tls=start_tls,
+            tls_context=tls_context,
+            timeout=timeout,
+        )
+        self.logger.debug("SMTP send completed successfully")
 
     @classmethod
     def get_config_schema(cls) -> dict[str, Any]:
