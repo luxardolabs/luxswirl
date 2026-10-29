@@ -2,6 +2,11 @@
 Security Headers Middleware - Adds security headers to all HTTP responses.
 
 This module implements defense-in-depth security measures through HTTP headers.
+`add_security_headers` sets them; the middleware applies it to every response
+the app's routes answer, and the unhandled-exception handler to its 500, which
+Starlette answers outside every user middleware. The trusted-host and
+same-origin refusals (emitted assets, outside this middleware) carry none; they
+hold no secret.
 """
 
 from fastapi import Request, Response
@@ -9,10 +14,13 @@ from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoin
 
 from app.core.config import settings
 
+# Where the app mounts its static assets (app.main).
+STATIC_PREFIX = "/static/"
 
-class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+
+def add_security_headers(path: str, response: Response) -> Response:
     """
-    Add security headers to all responses.
+    Set the security headers on `response`, the answer to a request for `path`.
 
     Headers added:
     - X-Frame-Options: Prevents clickjacking
@@ -22,71 +30,84 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     - Content-Security-Policy: Restricts resource loading
     - Referrer-Policy: Controls referer information leakage
     - Permissions-Policy: Disables unnecessary browser features
+    - Cache-Control: no-store and Pragma: no-cache on every dynamic response
     """
+    # Prevent clickjacking attacks
+    response.headers["X-Frame-Options"] = "DENY"
+
+    # Prevent MIME type sniffing
+    response.headers["X-Content-Type-Options"] = "nosniff"
+
+    # Enable XSS filter in older browsers (mostly legacy)
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+
+    # Strict HTTPS enforcement (only in production with HTTPS)
+    # WARNING: This can break local dev if enabled incorrectly
+    if settings.server.environment == "production":
+        # max-age=31536000 = 1 year
+        # includeSubDomains = apply to all subdomains
+        # preload = allow browser preload list inclusion (optional)
+        response.headers["Strict-Transport-Security"] = (
+            "max-age=31536000; includeSubDomains"
+        )
+
+    # Content Security Policy - Primary defense against XSS
+    # All resources loaded from same origin only (self-hosted)
+    csp_directives = [
+        "default-src 'self'",  # Default: only from our domain
+        # Scripts: our files only, no inline <script> or on*= handler.
+        # 'unsafe-eval' is for Alpine.js (standard build) and htmx hx-on.
+        "script-src 'self' 'unsafe-eval'",
+        "style-src 'self' 'unsafe-inline'",  # Styles: our domain + inline
+        "img-src 'self' data: https:",  # Images: our domain + data URIs + any HTTPS
+        "font-src 'self' data:",  # Fonts: our domain + data URIs
+        "connect-src 'self'",  # AJAX/fetch/WebSocket: only our domain
+        "frame-ancestors 'none'",  # Cannot be iframed (redundant with X-Frame-Options)
+        "base-uri 'self'",  # Restrict <base> tag to prevent base tag hijacking
+        "form-action 'self'",  # Forms can only submit to our domain
+        "object-src 'none'",  # No Flash/Java/plugins
+        "upgrade-insecure-requests",  # Auto-upgrade HTTP to HTTPS in production
+    ]
+    response.headers["Content-Security-Policy"] = "; ".join(csp_directives)
+
+    # Referrer policy - balance between privacy and functionality
+    # strict-origin-when-cross-origin:
+    #   - Same origin: send full URL
+    #   - HTTPS → HTTPS: send origin only
+    #   - HTTPS → HTTP: send nothing
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+
+    # Permissions Policy - disable unused browser features
+    # Reduces attack surface by disabling APIs we don't use
+    permissions = [
+        "geolocation=()",  # No location access
+        "microphone=()",  # No microphone access
+        "camera=()",  # No camera access
+        "payment=()",  # No payment API
+        "usb=()",  # No USB access
+        "magnetometer=()",  # No magnetometer
+        "accelerometer=()",  # No accelerometer
+        "gyroscope=()",  # No gyroscope
+    ]
+    response.headers["Permissions-Policy"] = ", ".join(permissions)
+
+    # No cache keeps a dynamic response: several show a secret once (a new
+    # agent or API key, a recovery secret, the metrics token), and marking
+    # every one means a new route needs nothing to be covered. Static assets
+    # keep their caching; a response that sets Cache-Control itself keeps it.
+    if not path.startswith(STATIC_PREFIX) and "cache-control" not in response.headers:
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["Pragma"] = "no-cache"
+
+    return response
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """Add the security headers (`add_security_headers`) to every response."""
 
     async def dispatch(
         self, request: Request, call_next: RequestResponseEndpoint
     ) -> Response:
         """Add security headers to response."""
         response: Response = await call_next(request)
-
-        # Prevent clickjacking attacks
-        response.headers["X-Frame-Options"] = "DENY"
-
-        # Prevent MIME type sniffing
-        response.headers["X-Content-Type-Options"] = "nosniff"
-
-        # Enable XSS filter in older browsers (mostly legacy)
-        response.headers["X-XSS-Protection"] = "1; mode=block"
-
-        # Strict HTTPS enforcement (only in production with HTTPS)
-        # WARNING: This can break local dev if enabled incorrectly
-        if settings.server.environment == "production":
-            # max-age=31536000 = 1 year
-            # includeSubDomains = apply to all subdomains
-            # preload = allow browser preload list inclusion (optional)
-            response.headers["Strict-Transport-Security"] = (
-                "max-age=31536000; includeSubDomains"
-            )
-
-        # Content Security Policy - Primary defense against XSS
-        # All resources loaded from same origin only (self-hosted)
-        csp_directives = [
-            "default-src 'self'",  # Default: only from our domain
-            # Scripts: our files only, no inline <script> or on*= handler.
-            # 'unsafe-eval' is for Alpine.js (standard build) and htmx hx-on.
-            "script-src 'self' 'unsafe-eval'",
-            "style-src 'self' 'unsafe-inline'",  # Styles: our domain + inline
-            "img-src 'self' data: https:",  # Images: our domain + data URIs + any HTTPS
-            "font-src 'self' data:",  # Fonts: our domain + data URIs
-            "connect-src 'self'",  # AJAX/fetch/WebSocket: only our domain
-            "frame-ancestors 'none'",  # Cannot be iframed (redundant with X-Frame-Options)
-            "base-uri 'self'",  # Restrict <base> tag to prevent base tag hijacking
-            "form-action 'self'",  # Forms can only submit to our domain
-            "object-src 'none'",  # No Flash/Java/plugins
-            "upgrade-insecure-requests",  # Auto-upgrade HTTP to HTTPS in production
-        ]
-        response.headers["Content-Security-Policy"] = "; ".join(csp_directives)
-
-        # Referrer policy - balance between privacy and functionality
-        # strict-origin-when-cross-origin:
-        #   - Same origin: send full URL
-        #   - HTTPS → HTTPS: send origin only
-        #   - HTTPS → HTTP: send nothing
-        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-
-        # Permissions Policy - disable unused browser features
-        # Reduces attack surface by disabling APIs we don't use
-        permissions = [
-            "geolocation=()",  # No location access
-            "microphone=()",  # No microphone access
-            "camera=()",  # No camera access
-            "payment=()",  # No payment API
-            "usb=()",  # No USB access
-            "magnetometer=()",  # No magnetometer
-            "accelerometer=()",  # No accelerometer
-            "gyroscope=()",  # No gyroscope
-        ]
-        response.headers["Permissions-Policy"] = ", ".join(permissions)
-
-        return response
+        return add_security_headers(request.url.path, response)

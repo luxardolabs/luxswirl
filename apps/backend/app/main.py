@@ -46,7 +46,7 @@ from app.core.logging_options import logging_options
 from app.core.rate_limit import limiter
 from app.core.same_origin import SameOriginMiddleware
 from app.core.secrets import resolve_runtime_secrets
-from app.core.security_headers import SecurityHeadersMiddleware
+from app.core.security_headers import SecurityHeadersMiddleware, add_security_headers
 from app.core.synthetic_security import SyntheticSecurityError
 from app.core.trusted_host import AllowedHostsMiddleware
 from app.db import worker_session
@@ -387,18 +387,25 @@ async def database_exception_handler(
 
 @app.exception_handler(Exception)
 async def general_exception_handler(request: Request, exc: Exception) -> Response:
-    """Handle all other exceptions."""
+    """Handle all other exceptions.
+
+    Starlette answers these outside every user middleware, so the 500 takes the
+    security headers here.
+    """
     get_logger("luxswirl.server").error("Unhandled exception", exc_info=True)
     # Outside production the error itself, with what it quotes of a write masked.
     detail = (
         scrub_text(str(exc)) if settings.server.environment != "production" else None
     )
-    return render_error_response(
-        request,
-        status.HTTP_500_INTERNAL_SERVER_ERROR,
-        "An internal server error occurred",
-        error_code="INTERNAL_SERVER_ERROR",
-        detail=detail,
+    return add_security_headers(
+        request.url.path,
+        render_error_response(
+            request,
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            "An internal server error occurred",
+            error_code="INTERNAL_SERVER_ERROR",
+            detail=detail,
+        ),
     )
 
 
