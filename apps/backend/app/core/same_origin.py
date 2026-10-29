@@ -1,4 +1,4 @@
-# luxarch:same-origin asset v3 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit same-origin`.
+# luxarch:same-origin asset v4 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit same-origin`.
 """The app refuses a cross-site POST: the one cross-site guard (FLEET-AUTH-SESSION-STANDARD §5).
 
 Emitted by ``luxarch --emit same-origin``. Drop it in at ``app/core/same_origin.py``; it is enforced
@@ -16,7 +16,12 @@ Wire it on the app, with the same ALLOWED_HOSTS the trusted-host middleware uses
 
     app.add_middleware(SameOriginMiddleware, allowed_hosts=settings.ALLOWED_HOSTS)
 
-An unsafe-method request (POST, PUT, PATCH, DELETE) is refused with 403 when:
+A websocket handshake is judged by the same test and closed with 1008 before the app accepts it: a
+browser sends the visitor's cookies with a handshake from any page and always says where it came from
+in ``Origin``, so another site's page could otherwise open an authenticated socket (cross-site
+websocket hijacking). For this question ``ws`` is ``http`` and ``wss`` is ``https``: in the scope, in
+``X-Forwarded-Proto`` (a proxy may forward the handshake's own scheme) and in ``Origin``. An
+unsafe-method request (POST, PUT, PATCH, DELETE) is refused with 403 when:
 
 * ``Sec-Fetch-Site`` is ``cross-site``; or
 * ``Origin`` is ``null``, is not a serialized origin, names a host the app does not serve
@@ -62,9 +67,14 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 
 _UNSAFE = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 _SCHEMES = frozenset({"http", "https"})
+_WS_SCHEMES = {
+    "ws": "http",
+    "wss": "https",
+}  # a websocket's scheme asks the same site question
 # A serialized origin, as a browser sends it: scheme, host, optional port, nothing else
 _ORIGIN = re.compile(
-    r"^(https?)://([A-Za-z0-9.-]+|\[[0-9A-Fa-f:.]+\])(?::[0-9]{1,5})?$", re.IGNORECASE
+    r"^(https?|wss?)://([A-Za-z0-9.-]+|\[[0-9A-Fa-f:.]+\])(?::[0-9]{1,5})?$",
+    re.IGNORECASE,
 )
 
 
@@ -84,6 +94,7 @@ def _this_site(
 ) -> bool:
     """https is this site's scheme always; http only when the request itself is http."""
     scheme = scheme.lower()
+    scheme = _WS_SCHEMES.get(scheme, scheme)
     if scheme not in _SCHEMES or (scheme == "http" and own_scheme != "http"):
         return False
     return _host_allowed(host, allowed_hosts)
@@ -134,6 +145,7 @@ def is_cross_site(
     forwarded = [v.strip().lower() for v in values("x-forwarded-proto")]
     # one value, or the first hop's (a proxy chain appends: `https, http`)
     first = forwarded[0].split(",")[0].strip() if forwarded else ""
+    first = _WS_SCHEMES.get(first, first)
     own_scheme = first if first in _SCHEMES else (scheme or "https").lower()
     fetch_site = [v.strip().lower() for v in values("sec-fetch-site")]
     if "cross-site" in fetch_site:
@@ -149,7 +161,7 @@ def is_cross_site(
 
 
 class SameOriginMiddleware:
-    """Refuse an unsafe-method request a browser sent from another site."""
+    """Refuse an unsafe-method request, or a websocket handshake, a browser sent from another site."""
 
     def __init__(
         self,
@@ -187,21 +199,30 @@ class SameOriginMiddleware:
             self.cross_site_prefixes
         )
 
+    def _cross_site(self, scope: Scope) -> bool:
+        headers: dict[str, list[str]] = {}
+        for k, v in scope["headers"]:
+            headers.setdefault(k.decode("latin-1").lower(), []).append(
+                v.decode("latin-1")
+            )
+        scheme = scope.get("scheme")
+        scheme = _WS_SCHEMES.get(scheme, scheme) if scheme else None
+        return is_cross_site(headers, self.allowed_hosts, scheme=scheme)
+
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if (
+        if scope["type"] == "websocket" and not self._exempt(scope["path"]):
+            if self._cross_site(scope):
+                # closing before the app accepts refuses the handshake (the server answers 403)
+                await receive()  # websocket.connect
+                await send({"type": "websocket.close", "code": 1008})
+                return
+        elif (
             scope["type"] == "http"
             and scope["method"] in _UNSAFE
             and not self._exempt(scope["path"])
+            and self._cross_site(scope)
         ):
-            headers: dict[str, list[str]] = {}
-            for k, v in scope["headers"]:
-                headers.setdefault(k.decode("latin-1").lower(), []).append(
-                    v.decode("latin-1")
-                )
-            if is_cross_site(headers, self.allowed_hosts, scheme=scope.get("scheme")):
-                response = PlainTextResponse(
-                    "Cross-site request refused", status_code=403
-                )
-                await response(scope, receive, send)
-                return
+            response = PlainTextResponse("Cross-site request refused", status_code=403)
+            await response(scope, receive, send)
+            return
         await self.app(scope, receive, send)
