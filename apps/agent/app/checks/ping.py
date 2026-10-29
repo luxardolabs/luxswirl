@@ -8,7 +8,10 @@ from typing import Any
 
 from app.checks._ssrf_policy import allowed_addresses
 from app.checks.base import BaseCheck
+from app.shared.logger import get_logger
 from app.shared.subprocess_safe import get_subprocess_config, run_subprocess_safely
+
+logger = get_logger("luxswirl.agent.checks.ping")
 
 
 class PingCheck(BaseCheck):
@@ -99,6 +102,13 @@ class PingCheck(BaseCheck):
                 error = f"Ping timed out after {timeout}s"
                 continue
             except Exception as e:
+                # The failure is the check's result; the traceback is for a
+                # debug run, so no unforeseen failure floods the log.
+                logger.debug(
+                    "Ping check hit an unexpected error",
+                    exc_info=True,
+                    extra={"check_name": self.name},
+                )
                 error = f"Ping failed: {str(e)}"
                 continue
 

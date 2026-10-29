@@ -19,6 +19,7 @@ from app.checks._ssrf_http import ssrf_guarded_send
 from app.checks._ssrf_policy import allowed_addresses
 from app.checks.base import BaseCheck
 from app.shared.logger import get_logger
+from app.shared.ssrf import SsrfBlockedError
 
 logger = get_logger("luxswirl.agent.checks.http")
 
@@ -70,6 +71,15 @@ class HTTPCheck(BaseCheck):
             "max_response_time": cfg.get("max_response_time"),
         }
 
+        # A port out of range would reach the connect as an OverflowError;
+        # reading it here raises ValueError instead.
+        try:
+            _ = urlparse(target).port
+        except ValueError as e:
+            return self.create_result(
+                success=False, latency_ms=None, error=f"Invalid URL: {e}"
+            )
+
         http_response: httpx.Response | None = None
         last_error: Exception | None = None
         response_data: dict[str, Any] = {}
@@ -98,10 +108,25 @@ class HTTPCheck(BaseCheck):
                 # If we got a response, break out of retry loop
                 break
 
-            except httpx.RequestError as e:
+            except (
+                httpx.RequestError,
+                SsrfBlockedError,
+                # A target httpx refuses: a character a URL cannot hold (a
+                # pasted newline or tab), a host name IDNA forbids or cannot
+                # encode.
+                httpx.InvalidURL,
+                UnicodeError,
+            ) as e:
                 last_error = e
                 continue
             except Exception as e:
+                # The failure is the check's result; the traceback is for a
+                # debug run, so no unforeseen failure floods the log.
+                logger.debug(
+                    "HTTP check hit an unexpected error",
+                    exc_info=True,
+                    extra={"check_name": self.name},
+                )
                 last_error = e
                 continue
 

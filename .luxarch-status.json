@@ -1505,13 +1505,13 @@
         },
         {
           "rule": "fw.broad_except_is_logged",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.177.0",
-          "violations": 2,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
-          "fix": "Either let it propagate (delete the handler, or `raise` after annotating) or record it \u2014 `logger.exception(\"<what failed>\")` inside the handler, on every way out of it; a fallback logs what it fell back from. Catch a NARROW, named exception when the outcome is genuinely expected \u2014 then it is control flow, not a swallow. When dropping it silently is genuinely right, say why at the site: a `# swallowed-exceptions: <reason>` comment on the `try:` line, on that handler's `except` line, or in the comment block directly above the `try:` or that `except`. (A bare `except:` is luxlint's E722; a route swallowing is fw.route_no_broad_except.)",
+          "fix": "",
           "example": ""
         },
         {
@@ -2000,8 +2000,8 @@
         }
       ],
       "summary": {
-        "PASS": 160,
-        "FAIL": 3,
+        "PASS": 161,
+        "FAIL": 2,
         "XFAIL": 0,
         "XPASS": 0,
         "INERT": 18
@@ -2112,19 +2112,19 @@
         },
         {
           "rule": "fw.broad_except_is_logged",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.330.0",
-          "violations": 11,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
-          "fix": "Either let it propagate (delete the handler, or `raise` after annotating) or record it \u2014 `logger.exception(\"<what failed>\")` inside the handler, on every way out of it; a fallback logs what it fell back from. Catch a NARROW, named exception when the outcome is genuinely expected \u2014 then it is control flow, not a swallow. When dropping it silently is genuinely right, say why at the site: a `# swallowed-exceptions: <reason>` comment on the `try:` line, on that handler's `except` line, or in the comment block directly above the `try:` or that `except`. (A bare `except:` is luxlint's E722; a route swallowing is fw.route_no_broad_except.)",
+          "fix": "",
           "example": ""
         }
       ],
       "summary": {
-        "PASS": 6,
-        "FAIL": 1,
+        "PASS": 7,
+        "FAIL": 0,
         "XFAIL": 0,
         "XPASS": 0,
         "INERT": 3
@@ -2913,12 +2913,12 @@
     }
   },
   "summary": {
-    "PASS": 235,
-    "FAIL": 4,
+    "PASS": 237,
+    "FAIL": 2,
     "XFAIL": 0,
     "XPASS": 0,
     "INERT": 22
   },
-  "commit": "66c4f9f50ece95bd6db94097ad73c1fb2071baf3",
-  "generated_at": "2026-10-29T23:01:59Z"
+  "commit": "45244d4dd8df810812697e0e39bf94c16eaf621a",
+  "generated_at": "2026-10-29T23:38:07Z"
 }

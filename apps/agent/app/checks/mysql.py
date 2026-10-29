@@ -235,7 +235,20 @@ class MySQLCheck(BaseCheck):
                 error_type = "timeout_error"
                 continue
 
+            except UnicodeEncodeError:
+                # Not quoted: the error names a character of the password.
+                error = "The user name or password has a character MySQL's login cannot encode"
+                error_type = "authentication_error"
+                continue
+
             except Exception as e:
+                # The failure is the check's result; the traceback is for a
+                # debug run, so no unforeseen failure floods the log.
+                logger.debug(
+                    "MySQL check hit an unexpected error",
+                    exc_info=True,
+                    extra={"check_name": self.name},
+                )
                 error = f"Unexpected error: {str(e)}"
                 error_type = "unknown_error"
                 continue

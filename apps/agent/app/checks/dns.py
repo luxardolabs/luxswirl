@@ -6,6 +6,7 @@ from typing import Any
 
 from app.checks._ssrf_policy import assert_target_allowed
 from app.checks.base import BaseCheck
+from app.shared.logger import get_logger
 
 try:
     import dns.asyncresolver
@@ -16,6 +17,8 @@ try:
     DNS_AVAILABLE = True
 except ImportError:
     DNS_AVAILABLE = False
+
+logger = get_logger("luxswirl.agent.checks.dns")
 
 
 class DNSCheck(BaseCheck):
@@ -102,7 +105,12 @@ class DNSCheck(BaseCheck):
                 resolver.lifetime = timeout
 
                 # Configure nameserver with port
-                resolver.nameservers = [nameserver]
+                try:
+                    resolver.nameservers = [nameserver]
+                except ValueError as e:
+                    # A nameserver given as a name rather than an address.
+                    error = f"Invalid nameserver: {e}"
+                    continue
                 resolver.port = port
 
                 # Perform DNS query
@@ -170,6 +178,13 @@ class DNSCheck(BaseCheck):
                 error = f"DNS error: {str(e)}"
                 continue
             except Exception as e:
+                # The failure is the check's result; the traceback is for a
+                # debug run, so no unforeseen failure floods the log.
+                logger.debug(
+                    "DNS check hit an unexpected error",
+                    exc_info=True,
+                    extra={"check_name": self.name},
+                )
                 error = f"Unexpected error: {str(e)}"
                 continue
 

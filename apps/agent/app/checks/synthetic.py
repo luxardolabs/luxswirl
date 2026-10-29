@@ -116,6 +116,7 @@ class SyntheticCheck(BaseCheck):
                     result_data["errors"].append(
                         f"Script execution timed out after {timeout}s"
                     )
+                # swallowed-exceptions: a failing script is the check's result; its error and traceback are returned in result_data["errors"]
                 except Exception as e:
                     result_data["status"] = "failure"
                     result_data["errors"].append(f"Script execution failed: {str(e)}")
@@ -127,7 +128,6 @@ class SyntheticCheck(BaseCheck):
                         result_data["browser_timing"] = await page.evaluate(
                             "() => JSON.parse(JSON.stringify(window.performance.timing))"
                         )
-                    # swallowed-exceptions: the failure IS the check result, returned as a failed run with the traceback
                     except Exception as timing_error:
                         # Timing is a nice-to-have on top of the check result —
                         # a closed or crashed page loses it, which is not a
@@ -152,6 +152,10 @@ class SyntheticCheck(BaseCheck):
                             }
                         )
                     except Exception as e:
+                        logger.debug(
+                            "Could not capture a screenshot after synthetic run",
+                            extra={"error": str(e)},
+                        )
                         result_data["errors"].append(
                             f"Failed to capture screenshot: {str(e)}"
                         )
@@ -187,6 +191,10 @@ class SyntheticCheck(BaseCheck):
                         # reason.
                         await asyncio.to_thread(Path(trace_path).unlink)
                     except Exception as e:
+                        logger.debug(
+                            "Could not capture a trace after synthetic run",
+                            extra={"error": str(e)},
+                        )
                         result_data["errors"].append(
                             f"Failed to capture trace: {str(e)}"
                         )
@@ -195,6 +203,13 @@ class SyntheticCheck(BaseCheck):
                     await browser.close()
 
         except Exception as e:
+            # The failure is the check's result; the traceback is for a debug
+            # run, so a browser that will not start does not flood the log.
+            logger.debug(
+                "Synthetic check failed outside its script",
+                exc_info=True,
+                extra={"check_name": self.name},
+            )
             result_data["status"] = "failure"
             result_data["errors"].append(f"Playwright initialization failed: {str(e)}")
             result_data["errors"].append(traceback.format_exc())

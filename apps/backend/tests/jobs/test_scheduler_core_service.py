@@ -13,10 +13,12 @@ assertion the bug failed — see the `worker_db` fixture docstring.
 from __future__ import annotations
 
 import asyncio
+import logging
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import pytest
+from app.crud.scheduler_crud import JobConfigurationCRUD
 from app.models.enum_model import (
     SchedulerExecutionStatus,
     SchedulerJobCategory,
@@ -57,6 +59,18 @@ def _svc(result=None, *, raises: Exception | None = None) -> SchedulerCoreServic
         return result if result is not None else {"ok": True}
 
     svc.job_functions["test_noop"] = _noop
+    return svc
+
+
+def _overrunning_svc() -> SchedulerCoreService:
+    """A scheduler whose test function runs past any limit under a minute."""
+    svc = SchedulerCoreService()
+
+    async def _slow(**_kwargs):
+        await asyncio.sleep(60)
+        return {"ok": True}
+
+    svc.job_functions["test_noop"] = _slow
     return svc
 
 
@@ -244,6 +258,81 @@ class TestManualRunPersists:
         assert (await _get_job(worker_db, key)).failed_runs == 1
         assert out.job.failed_runs == 1
 
+    async def test_a_failed_manual_run_is_logged_once_with_its_traceback(
+        self, worker_db, caplog
+    ):
+        key = await _seed_job(worker_db)
+
+        with caplog.at_level(logging.WARNING):
+            await _svc(raises=RuntimeError("boom")).execute_job_synchronously(key)
+
+        logged = [
+            r for r in caplog.records if r.getMessage() == "Manual job run failed"
+        ]
+        assert len(logged) == 1, caplog.text
+        assert logged[0].exc_info and logged[0].exc_info[0] is RuntimeError
+
+    async def test_a_timed_out_manual_run_is_logged_once_without_a_traceback(
+        self, worker_db, caplog
+    ):
+        key = await _seed_job(worker_db, max_runtime_seconds=1)
+
+        with caplog.at_level(logging.WARNING):
+            out = await _overrunning_svc().execute_job_synchronously(key)
+
+        assert out.error == "Job timed out after 1 seconds"
+
+        logged = [
+            r for r in caplog.records if r.getMessage() == "Manual job run failed"
+        ]
+        assert len(logged) == 1, caplog.text
+        assert not logged[0].exc_info
+
+    async def test_a_timeout_after_the_job_row_changed_is_still_recorded(
+        self, worker_db, monkeypatch
+    ):
+        """The savepoint's rollback expires the job row the success bookkeeping
+        changed; the timeout's message must not read it back."""
+        key = await _seed_job(worker_db)
+        real_save = JobConfigurationCRUD.save_job
+        calls = {"n": 0}
+
+        async def times_out_once(db, job):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise TimeoutError()
+            return await real_save(db, job)
+
+        monkeypatch.setattr(
+            JobConfigurationCRUD, "save_job", staticmethod(times_out_once)
+        )
+
+        out = await _svc().execute_job_synchronously(key)
+
+        assert out.status == SchedulerExecutionStatus.FAILED
+        assert out.error == "TimeoutError"
+        (execution,) = await _executions(worker_db, key)
+        assert execution.status == SchedulerExecutionStatus.FAILED
+
+    async def test_a_job_raising_its_own_timeout_is_a_failure_with_its_cause(
+        self, worker_db, caplog
+    ):
+        """A connect or query timeout inside the job is not the run's limit."""
+        key = await _seed_job(worker_db)
+
+        with caplog.at_level(logging.WARNING):
+            out = await _svc(
+                raises=TimeoutError("connect timed out")
+            ).execute_job_synchronously(key)
+
+        assert out.status == SchedulerExecutionStatus.FAILED
+        assert out.error == "connect timed out"
+        logged = [
+            r for r in caplog.records if r.getMessage() == "Manual job run failed"
+        ]
+        assert len(logged) == 1, caplog.text
+        assert logged[0].exc_info and logged[0].exc_info[0] is TimeoutError
+
     async def test_an_unregistered_function_is_a_recorded_failure(self, worker_db):
         key = await _seed_job(worker_db, function_name="no_such_function")
 
@@ -340,9 +429,9 @@ class TestTimeoutHandling:
         assert execution.status == SchedulerExecutionStatus.FAILED
 
     async def test_manual_timeout_is_recorded_failed(self, worker_db):
-        key = await _seed_job(worker_db)
+        key = await _seed_job(worker_db, max_runtime_seconds=1)
 
-        out = await _svc(raises=TimeoutError()).execute_job_synchronously(key)
+        out = await _overrunning_svc().execute_job_synchronously(key)
 
         assert out.status == SchedulerExecutionStatus.FAILED
         assert "timed out" in (out.error or "")

@@ -9,9 +9,11 @@ DB, and assert the counts match — including the active-vs-stale cutoff logic.
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from app.crud.monitoring_crud import MonitoringCRUD
 from app.services.core.monitoring_core_service import (
     collect_database_metrics,
     collect_operational_metrics,
@@ -40,6 +42,26 @@ class TestCollectDatabaseMetrics:
         assert metrics["check_count"] == 2
         # active = last_seen within the 300s window; only `active` qualifies.
         assert metrics["active_agent_count"] == 1
+
+    async def test_a_failed_chunk_stats_read_is_logged_and_the_rest_collect(
+        self, worker_db, monkeypatch, caplog
+    ):
+        async def refuse(db):
+            raise RuntimeError("no timescaledb_information")
+
+        monkeypatch.setattr(MonitoringCRUD, "get_hypertable_chunk_stats", refuse)
+
+        with caplog.at_level(logging.WARNING):
+            metrics = await collect_database_metrics()
+
+        assert metrics["hypertable_chunks_error"] == "no timescaledb_information"
+        assert "agent_count" in metrics
+        logged = [
+            r
+            for r in caplog.records
+            if r.getMessage() == "Failed to read hypertable chunk stats"
+        ]
+        assert len(logged) == 1, caplog.text
 
 
 class TestCollectOperationalMetrics:
