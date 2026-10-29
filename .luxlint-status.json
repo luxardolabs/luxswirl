@@ -1,6 +1,6 @@
 {
   "guard": "luxlint",
-  "guard_version": "0.70.0",
+  "guard_version": "0.70.1",
   "repo": "/repo",
   "source": [
     "apps/backend/app",
@@ -37,16 +37,10 @@
     },
     {
       "rule": "test.pytest_config_wired",
-      "status": "FAIL",
+      "status": "PASS",
       "since": "0.35.0",
-      "violations": 1,
-      "sites": [
-        {
-          "path": "Makefile",
-          "line": null,
-          "detail": "luxlint cannot read this run: `make -n check` failed (REFUSING: make runs in /tmp/luxlint-make-vttpll1j/repo (CURDIR /repo), not in this makefile's directory /tmp/luxlint-make-vttpll1j/repo, so every guard would re). A run luxlint cannot read is red, never assumed wired; write it as a plain recipe line, `luxlint --emit-config pytest > <path>` and then `pytest -c <path> \u2026` with a literal or shell-variable path"
-        }
-      ],
+      "violations": 0,
+      "sites": [],
       "deferred": false
     },
     {
@@ -206,13 +200,13 @@
     }
   ],
   "summary": {
-    "PASS": 20,
-    "FAIL": 2,
+    "PASS": 21,
+    "FAIL": 1,
     "XFAIL": 0,
     "XPASS": 0,
     "INERT": 0
   },
   "mypy": "separate: `luxlint --mypy` ([mypy].baseline ratchet)",
-  "commit": "bf2647a6a392aa4d5178b226b79728a9e91f2e8d",
-  "generated_at": "2026-10-28T23:23:57Z"
+  "commit": "c3368695f6081bd11a4fa7b8c10a9f7acde9c604",
+  "generated_at": "2026-10-29T00:55:53Z"
 }
