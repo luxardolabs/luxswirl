@@ -494,6 +494,12 @@ class SchedulerCoreService:
                 status="running",
             )
 
+            # Read before the savepoint: its rollback expires the job's row.
+            max_runtime_seconds = job.max_runtime_seconds
+            # The run's own limit: a TimeoutError the job raises itself (a
+            # connect or query timeout) is a failure with a cause, not this.
+            deadline = asyncio.timeout(max_runtime_seconds)
+
             # The run and its success bookkeeping share a savepoint: if either
             # fails (the job, or flushing its output), only they roll back, and
             # the failure below is still recorded in a live transaction.
@@ -503,10 +509,8 @@ class SchedulerCoreService:
 
                     if function_name in self.job_functions:
                         func = self.job_functions[function_name]
-                        result = await asyncio.wait_for(
-                            func(**(job.parameters or {})),
-                            timeout=job.max_runtime_seconds,
-                        )
+                        async with deadline:
+                            result = await func(**(job.parameters or {}))
                     else:
                         raise LookupError(f"Function '{function_name}' not found")
 
@@ -545,10 +549,20 @@ class SchedulerCoreService:
                         job=SchedulerJobResponse.model_validate(job),
                     )
 
-            except TimeoutError:
-                error = f"Job timed out after {job.max_runtime_seconds} seconds"
             except Exception as e:
-                error = str(e) or type(e).__name__
+                if isinstance(e, TimeoutError) and deadline.expired():
+                    error = f"Job timed out after {max_runtime_seconds} seconds"
+                    logger.warning(
+                        "Manual job run failed",
+                        extra={"job_key": job_key, "error": error},
+                    )
+                else:
+                    error = str(e) or type(e).__name__
+                    logger.warning(
+                        "Manual job run failed",
+                        exc_info=True,
+                        extra={"job_key": job_key, "error": error},
+                    )
 
             # A failed manual run is RETURNED, not raised: raising rolled back
             # the worker session, so the FAILED execution record and the failed
@@ -564,9 +578,6 @@ class SchedulerCoreService:
             ).total_seconds()
             job.last_status = SchedulerExecutionStatus.FAILED
             job.failed_runs += 1
-            logger.warning(
-                "Manual job run failed", extra={"job_key": job_key, "error": error}
-            )
             job = await JobConfigurationCRUD.save_job(db, job)
             return SchedulerRunResult(
                 status=SchedulerExecutionStatus.FAILED,

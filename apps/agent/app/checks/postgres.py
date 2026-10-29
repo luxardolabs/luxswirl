@@ -182,7 +182,30 @@ class PostgreSQLCheck(BaseCheck):
                 error = f"Connection/query timed out after {timeout}s"
                 error_type = "timeout_error"
                 continue
+            except OSError as e:
+                # Refused, unreachable, unresolvable, or a missing SSL file.
+                error = f"Cannot connect to {host!s}:{port!s}: {e}"
+                error_type = "connection_error"
+                continue
+            except asyncpg.exceptions.ClientConfigurationError as e:
+                # The connection string's own options (sslmode, target_session_attrs).
+                error = f"Connection settings refused: {e}"
+                error_type = "connection_error"
+                continue
+            except asyncpg.InterfaceError as e:
+                # The client refused the exchange: a query that names a
+                # parameter ($1) the check cannot pass, for one.
+                error = f"PostgreSQL client error: {e}"
+                error_type = "query_error"
+                continue
             except Exception as e:
+                # The failure is the check's result; the traceback is for a
+                # debug run, so no unforeseen failure floods the log.
+                logger.debug(
+                    "PostgreSQL check hit an unexpected error",
+                    exc_info=True,
+                    extra={"check_name": self.name},
+                )
                 error = f"Unexpected error: {str(e)}"
                 error_type = "unknown_error"
                 continue

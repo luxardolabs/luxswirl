@@ -77,6 +77,9 @@ async def collect_database_metrics() -> dict[str, Any]:
                 for row in chunk_rows
             ]
         except Exception as e:
+            logger.warning(
+                "Failed to read hypertable chunk stats", extra={"error": str(e)}
+            )
             metrics["hypertable_chunks_error"] = str(e)
 
         # Check results count — TimescaleDB hypertable, must use approximate_row_count()

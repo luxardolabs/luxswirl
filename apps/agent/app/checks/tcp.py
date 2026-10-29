@@ -3,11 +3,21 @@ TCP Check Module - Implements TCP connection health checks.
 """
 
 import asyncio
+import contextlib
 import socket
 from typing import Any
 
 from app.checks._ssrf_policy import assert_ip_allowed, ip_allowed
 from app.checks.base import BaseCheck
+from app.shared.logger import get_logger
+from app.shared.ssrf import SsrfBlockedError
+
+logger = get_logger("luxswirl.agent.checks.tcp")
+
+
+class EchoTestError(ValueError):
+    """The endpoint's answer to `send_string` failed the check: no reply in
+    time, a broken exchange, or a reply without `expect_string`."""
 
 
 class TCPCheck(BaseCheck):
@@ -86,19 +96,21 @@ class TCPCheck(BaseCheck):
                 latency_ms = self.stop_timer(start_time)
                 additional_data["connect_latency_ms"] = latency_ms
 
-                # If we need to send/receive data
-                if send_string or expect_string:
-                    response, echo_latency = await self._test_echo(
-                        reader, writer, send_string, expect_string, timeout
-                    )
-                    if echo_latency is not None:
-                        additional_data["echo_latency_ms"] = echo_latency
-                    if response is not None:
-                        additional_data["response"] = response
-
-                # Close the connection
-                writer.close()
-                await writer.wait_closed()
+                try:
+                    # If we need to send/receive data
+                    if send_string or expect_string:
+                        response, echo_latency = await self._test_echo(
+                            reader, writer, send_string, expect_string, timeout
+                        )
+                        if echo_latency is not None:
+                            additional_data["echo_latency_ms"] = echo_latency
+                        if response is not None:
+                            additional_data["response"] = response
+                finally:
+                    # Closed however the exchange went, a failed echo included.
+                    writer.close()
+                    with contextlib.suppress(OSError):
+                        await writer.wait_closed()
 
                 # If we get here, the check succeeded
                 success = True
@@ -116,7 +128,20 @@ class TCPCheck(BaseCheck):
             except OSError as e:
                 error = f"Socket error: {str(e)}"
                 continue
+            except SsrfBlockedError as e:
+                error = f"Target blocked: {e}"
+                continue
+            except EchoTestError as e:
+                error = str(e)
+                continue
             except Exception as e:
+                # The failure is the check's result; the traceback is for a
+                # debug run, so no unforeseen failure floods the log.
+                logger.debug(
+                    "TCP check hit an unexpected error",
+                    exc_info=True,
+                    extra={"check_name": self.name},
+                )
                 error = f"Unexpected error: {str(e)}"
                 continue
 
@@ -148,7 +173,8 @@ class TCPCheck(BaseCheck):
             infos = await asyncio.get_event_loop().getaddrinfo(
                 host, port, family=socket.AF_UNSPEC, type=socket.SOCK_STREAM
             )
-        except socket.gaierror:
+        except socket.gaierror, UnicodeError:
+            # Unresolvable, or a name IDNA cannot encode (a label over 63).
             return None
         # Only IP addresses (an AF_INET/AF_INET6 sockaddr starts with its address).
         addressed = [
@@ -204,11 +230,13 @@ class TCPCheck(BaseCheck):
 
                 # Check if response matches expected
                 if response and expect_string not in response:
-                    raise ValueError("Response does not match expected string")
+                    raise EchoTestError("Response does not match expected string")
 
+        except EchoTestError as e:
+            raise EchoTestError(f"Echo test failed: {e}") from None
         except TimeoutError:
-            raise ValueError("Timed out waiting for response") from None
+            raise EchoTestError("Timed out waiting for response") from None
         except Exception as e:
-            raise ValueError(f"Echo test failed: {str(e)}") from e
+            raise EchoTestError(f"Echo test failed: {str(e)}") from e
 
         return response, latency
