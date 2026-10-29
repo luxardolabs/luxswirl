@@ -1,6 +1,6 @@
 {
   "guard": "luxarch",
-  "guard_version": "0.329.2",
+  "guard_version": "0.330.0",
   "repo": "/repo",
   "targets": [
     {
@@ -1505,13 +1505,13 @@
         },
         {
           "rule": "fw.broad_except_is_logged",
-          "status": "PASS",
+          "status": "FAIL",
           "since": "0.177.0",
-          "violations": 0,
+          "violations": 2,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
-          "fix": "",
+          "fix": "Either let it propagate (delete the handler, or `raise` after annotating) or record it \u2014 `logger.exception(\"<what failed>\")` inside the handler, on every way out of it; a fallback logs what it fell back from. Catch a NARROW, named exception when the outcome is genuinely expected \u2014 then it is control flow, not a swallow. When dropping it silently is genuinely right, say why at the site: a `# swallowed-exceptions: <reason>` comment on the `try:` line, on that handler's `except` line, or in the comment block directly above the `try:` or that `except`. (A bare `except:` is luxlint's E722; a route swallowing is fw.route_no_broad_except.)",
           "example": ""
         },
         {
@@ -2000,8 +2000,8 @@
         }
       ],
       "summary": {
-        "PASS": 161,
-        "FAIL": 2,
+        "PASS": 160,
+        "FAIL": 3,
         "XFAIL": 0,
         "XPASS": 0,
         "INERT": 18
@@ -2109,11 +2109,22 @@
           "inert_reason": "no function, provider or class in this app holds a SQLAlchemy session, so there is no session to share",
           "fix": "",
           "example": ""
+        },
+        {
+          "rule": "fw.broad_except_is_logged",
+          "status": "FAIL",
+          "since": "0.330.0",
+          "violations": 11,
+          "deferred": false,
+          "inert": false,
+          "inert_reason": "",
+          "fix": "Either let it propagate (delete the handler, or `raise` after annotating) or record it \u2014 `logger.exception(\"<what failed>\")` inside the handler, on every way out of it; a fallback logs what it fell back from. Catch a NARROW, named exception when the outcome is genuinely expected \u2014 then it is control flow, not a swallow. When dropping it silently is genuinely right, say why at the site: a `# swallowed-exceptions: <reason>` comment on the `try:` line, on that handler's `except` line, or in the comment block directly above the `try:` or that `except`. (A bare `except:` is luxlint's E722; a route swallowing is fw.route_no_broad_except.)",
+          "example": ""
         }
       ],
       "summary": {
         "PASS": 6,
-        "FAIL": 0,
+        "FAIL": 1,
         "XFAIL": 0,
         "XPASS": 0,
         "INERT": 3
@@ -2902,12 +2913,12 @@
     }
   },
   "summary": {
-    "PASS": 236,
-    "FAIL": 2,
+    "PASS": 235,
+    "FAIL": 4,
     "XFAIL": 0,
     "XPASS": 0,
     "INERT": 22
   },
-  "commit": "2839711cffe1acaa774c005c46d7226ead49bf6d",
-  "generated_at": "2026-10-29T03:04:47Z"
+  "commit": "d9d7033c6fc654f762fdbb20c71a06afc6cf0fac",
+  "generated_at": "2026-10-29T20:43:56Z"
 }
