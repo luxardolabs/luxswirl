@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import ApiEditor, ApiUser, ScopedBulkCreate, require_scope
 from app.core.config import settings
-from app.core.query_params import AgentIdFilter, CheckTypeFilter
+from app.core.query_params import AgentIdFilter, CheckTypeFilter, HealthStatusFilter
 from app.core.rate_limit import api_token_rate_limit_key, limiter
 from app.db import get_db
 from app.schemas.admin_check_schema import (
@@ -58,8 +58,10 @@ async def admin_list_checks(
     enabled_only: bool = False,
     tag: Annotated[str | None, Query(max_length=100)] = None,
     search: Annotated[str | None, Query(max_length=255)] = None,
+    status: HealthStatusFilter = None,
 ) -> CheckPage:
-    """One page of checks: filter by agent, type, tag, enabled, or a name/target search."""
+    """One page of checks, each with its health: filter by agent, type, tag,
+    enabled, health (up, down, unknown), or a name/target search."""
     return await AdminCheckCoreService.list_checks(
         db,
         principal.user.role,
@@ -70,6 +72,7 @@ async def admin_list_checks(
         enabled_only=enabled_only,
         tag=tag,
         search=search,
+        status=status,
     )
 
 

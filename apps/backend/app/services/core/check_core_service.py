@@ -35,6 +35,7 @@ from app.models.enum_model import (
     UNADMITTED_AGENT_STATUSES,
     AssignmentMode,
     BulkCheckOutcome,
+    CheckHealthStatus,
     CheckType,
 )
 from app.schemas.check_schema import (
@@ -541,6 +542,33 @@ class CheckCoreService:
             tag=tag,
             search=search,
             exclude_internal=exclude_internal,
+            skip=offset,
+            limit=limit,
+        )
+
+    @staticmethod
+    async def list_checks_with_health(
+        db: AsyncSession,
+        *,
+        agent_id: UUID | None = None,
+        check_type: str | None = None,
+        enabled_only: bool = False,
+        tag: str | None = None,
+        search: str | None = None,
+        status: CheckHealthStatus | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> tuple[list[tuple[Check, bool | None, float | None]], int]:
+        """`list_checks`' page, each check with its current result's success and
+        latency, read in the statement that filters on `status` (that health)."""
+        return await CheckCRUD.list_page_with_health(
+            db,
+            agent_id=agent_id,
+            check_type=check_type,
+            enabled_only=enabled_only,
+            tag=tag,
+            search=search,
+            status=status,
             skip=offset,
             limit=limit,
         )

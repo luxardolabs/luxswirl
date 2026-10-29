@@ -29,16 +29,20 @@ from sqlalchemy.orm import defer, selectinload
 from sqlalchemy.sql import ColumnElement
 
 from app.core.datetime_utils import utc_now
-from app.core.liveness import (
-    DEFAULT_CHECK_INTERVAL_SECONDS,
-    DEFAULT_MISSED_INTERVALS,
-    GRACE_SECONDS,
+from app.crud._check_health import (
+    current_result,
+    health_condition,
+    silent_after_seconds,
 )
 from app.models.agent_model import Agent
 from app.models.check_artifact_model import CheckArtifact
 from app.models.check_model import Check
 from app.models.check_result_model import CheckResult
-from app.models.enum_model import AgentApprovalStatus, AssignmentMode
+from app.models.enum_model import (
+    AgentApprovalStatus,
+    AssignmentMode,
+    CheckHealthStatus,
+)
 
 
 def _in_use() -> ColumnElement[bool]:
@@ -57,15 +61,6 @@ def _in_use() -> ColumnElement[bool]:
 # A row of labelled aggregates (count/sum/avg/percentile over results): SQLAlchemy
 # 2.1 cannot type `func.*` columns, so the row is typed by its arity only.
 type AggregateRow = Row[*tuple[Any, ...]]
-
-
-def _silent_after_seconds() -> ColumnElement[int]:
-    """`app.core.liveness.silent_after(Check.interval_seconds)`, in SQL."""
-    return (
-        func.coalesce(Check.interval_seconds, DEFAULT_CHECK_INTERVAL_SECONDS)
-        * DEFAULT_MISSED_INTERVALS
-        + GRACE_SECONDS
-    )
 
 
 class CheckResultCRUD:
@@ -272,30 +267,10 @@ class CheckResultCRUD:
                 )
             )
 
-        # Status filter: each check's newest result within its silence
-        # threshold (app.core.liveness), one index probe per check. A check
-        # with none is silent and counts as unknown (no data).
-        if status:
-            current = (
-                select(CheckResult.success)
-                .where(
-                    CheckResult.check_id == Check.id,
-                    CheckResult.timestamp
-                    >= literal(utc_now(), DateTime(timezone=True))
-                    - func.make_interval(0, 0, 0, 0, 0, 0, _silent_after_seconds()),
-                )
-                .order_by(desc(CheckResult.timestamp))
-                .limit(1)
-                .lateral("current_result")
-            )
+        if status in set(CheckHealthStatus):
+            current = current_result()
             query = query.outerjoin(current, true())
-
-            if status == "up":
-                conditions.append(current.c.success.is_(True))
-            elif status == "down":
-                conditions.append(current.c.success.is_(False))
-            elif status == "unknown":
-                conditions.append(current.c.success.is_(None))
+            conditions.append(health_condition(current, CheckHealthStatus(status)))
 
         if conditions:
             query = query.where(and_(*conditions))
@@ -330,7 +305,7 @@ class CheckResultCRUD:
         if not check_ids:
             return {}
 
-        lookback = func.greatest(_silent_after_seconds(), cutoff_minutes * 60)
+        lookback = func.greatest(silent_after_seconds(), cutoff_minutes * 60)
         latest = (
             select(CheckResult.success, CheckResult.latency_ms, CheckResult.timestamp)
             .where(
@@ -462,6 +437,29 @@ class CheckResultCRUD:
             .limit(1)
         )
         return result.scalar_one_or_none()
+
+    @staticmethod
+    async def get_current_results_batch(
+        db: AsyncSession, check_ids: list[UUID]
+    ) -> dict[UUID, AggregateRow]:
+        """Each check's current result (`current_result()`): success, latency_ms,
+        timestamp. A check with none is left out: it is silent."""
+        if not check_ids:
+            return {}
+        current = current_result()
+        query = (
+            select(
+                Check.id.label("check_id"),
+                current.c.success,
+                current.c.latency_ms,
+                current.c.timestamp,
+            )
+            .select_from(Check)
+            .join(current, true())
+            .where(Check.id.in_(check_ids))
+        )
+        result = await db.execute(query)
+        return {row.check_id: row for row in result.all()}
 
     @staticmethod
     async def get_24h_stats_batch(

@@ -13,6 +13,7 @@ synthetic check (403). Delete and modify cascade or move, so they run as
 maintenance jobs, which judge their owner again when they run.
 """
 
+from collections.abc import Sequence
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,7 +22,7 @@ from app.core.credential_mask import mask_credentials
 from app.core.exceptions import ValidationException
 from app.core.synthetic_guard import SYNTHETIC, require_admin_actor
 from app.models.check_model import Check
-from app.models.enum_model import MaintenanceJobKind, UserRole
+from app.models.enum_model import CheckHealthStatus, MaintenanceJobKind, UserRole
 from app.schemas.admin_check_schema import (
     AdminBulkChecks,
     AdminBulkModify,
@@ -42,7 +43,11 @@ from app.services.core.check_core_service import CheckCoreService
 from app.services.core.check_dependency_core_service import (
     CheckDependencyCoreService,
 )
+from app.services.core.check_result_core_service import CheckResultCoreService
 from app.services.core.maintenance_job_core_service import MaintenanceJobCoreService
+
+# A check with its current result's success and latency: None, None with none.
+type CheckWithCurrent = tuple[Check, bool | None, float | None]
 
 
 class AdminCheckCoreService:
@@ -64,13 +69,74 @@ class AdminCheckCoreService:
         return response
 
     @staticmethod
+    async def _responses(
+        db: AsyncSession, rows: Sequence[CheckWithCurrent], role: UserRole
+    ) -> list[CheckResponse]:
+        """Each check as served with its health as the status dashboard reads
+        it: `rows` carry its current result's success and latency (None, None
+        when it has none); the 24 h rates take one query, however many checks."""
+        day = await CheckResultCoreService.get_24h_stats_batch(
+            db, [check.id for check, _, _ in rows]
+        )
+        responses = []
+        for check, success, latency_ms in rows:
+            stats = day.get(check.id)
+            if success is None:
+                health = CheckHealthStatus.UNKNOWN
+            elif success:
+                health = CheckHealthStatus.UP
+            else:
+                health = CheckHealthStatus.DOWN
+            responses.append(
+                AdminCheckCoreService._response(check, role).model_copy(
+                    update={
+                        "latest_status": health,
+                        "latest_latency_ms": latency_ms,
+                        "success_rate_24h": (
+                            stats.successful / stats.total * 100
+                            if stats and stats.total
+                            else None
+                        ),
+                    }
+                )
+            )
+        return responses
+
+    @staticmethod
+    async def _with_current(
+        db: AsyncSession, checks: Sequence[Check]
+    ) -> list[CheckWithCurrent]:
+        """`checks`, each with its current result's success and latency: one query."""
+        current = await CheckResultCoreService.get_current_results_batch(
+            db, [check.id for check in checks]
+        )
+        rows: list[CheckWithCurrent] = []
+        for check in checks:
+            result = current.get(check.id)
+            if result is None:
+                rows.append((check, None, None))
+            else:
+                rows.append((check, result.success, result.latency_ms))
+        return rows
+
+    @staticmethod
+    async def _served(
+        db: AsyncSession, checks: Sequence[Check], role: UserRole
+    ) -> list[CheckResponse]:
+        """`checks` as served, each with its health."""
+        return await AdminCheckCoreService._responses(
+            db, await AdminCheckCoreService._with_current(db, checks), role
+        )
+
+    @staticmethod
     async def _reloaded(
         db: AsyncSession, check_id: UUID, role: UserRole
     ) -> CheckResponse:
         check = await CheckCoreService.get_check_by_id(
             db, check_id, include_script_code=True
         )
-        return AdminCheckCoreService._response(check, role)
+        (response,) = await AdminCheckCoreService._served(db, [check], role)
+        return response
 
     @staticmethod
     async def list_checks(
@@ -84,22 +150,29 @@ class AdminCheckCoreService:
         enabled_only: bool = False,
         tag: str | None = None,
         search: str | None = None,
+        status: CheckHealthStatus | None = None,
     ) -> CheckPage:
-        """One page of checks, filtered."""
+        """One page of checks, filtered, each with its health.
+
+        The statement that filters on `status` also reads the health each check
+        is served with, so a check cannot be listed under one status and served
+        with another.
+        """
         page = max(1, page)
-        checks, total = await CheckCoreService.list_checks(
+        rows, total = await CheckCoreService.list_checks_with_health(
             db,
             agent_id=agent_id,
             check_type=check_type,
             enabled_only=enabled_only,
             tag=tag,
             search=search,
+            status=status,
             limit=per_page,
             offset=(page - 1) * per_page,
         )
         pagination = build_pagination(page=page, per_page=per_page, total=total)
         return CheckPage.of(
-            [AdminCheckCoreService._response(check, role) for check in checks],
+            await AdminCheckCoreService._responses(db, rows, role),
             pagination,
         )
 
@@ -237,10 +310,9 @@ class AdminCheckCoreService:
     ) -> list[CheckResponse]:
         """The checks that depend on `check_id`."""
         await CheckCoreService.get_check_by_id(db, check_id)
-        return [
-            AdminCheckCoreService._response(check, role)
-            for check in await CheckDependencyCoreService.list_dependents(db, check_id)
-        ]
+        return await AdminCheckCoreService._served(
+            db, await CheckDependencyCoreService.list_dependents(db, check_id), role
+        )
 
     @staticmethod
     async def set_dependents(
