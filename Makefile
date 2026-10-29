@@ -39,7 +39,7 @@ DEV_WAIT_TIMEOUT      ?= 180
 # Makefile.local (gitignored): copy Makefile.local.example -> Makefile.local and set it.
 # Contributors don't need it — lint/test and the import-linter contracts run without it.
 LUXARCH_REGISTRY ?=
-LUXARCH_VERSION := 0.329.1
+LUXARCH_VERSION := 0.329.2
 LUXARCH_IMAGE    ?= $(LUXARCH_REGISTRY)/luxardolabs/luxarch:$(LUXARCH_VERSION)
 # Dependency-CVE guard (luxaudit) — same private registry as luxarch, mount-only.
 # Scans the pinned poetry.locks against the live advisory feed (see .luxaudit.toml).
@@ -49,7 +49,7 @@ LUXAUDIT_IMAGE   ?= $(LUXARCH_REGISTRY)/luxardolabs/luxaudit:$(LUXAUDIT_VERSION)
 # ruff/mypy config byte-identical (see .luxlint.toml); ruff runs mount-only, mypy
 # runs as an in-repo tail (needs a current mypy for PEP 758 excepts — the baked
 # lint image freezes an older one, so the tail installs a fresh mypy).
-LUXLINT_VERSION := 0.70.0
+LUXLINT_VERSION := 0.70.1
 LUXLINT_IMAGE    ?= $(LUXARCH_REGISTRY)/luxardolabs/luxlint:$(LUXLINT_VERSION)
 # The gitleaks asset reads the luxlint ref as $(LUXLINT).
 LUXLINT          = $(LUXLINT_IMAGE)
@@ -1715,7 +1715,7 @@ SMOKE_ENTRY_MODULES := app.main
 # No bearer-token GET is served by default: /metrics takes one only when the
 # stack requires it, so the authenticated probe is set per stack (Makefile.local).
 
-# luxarch:smoke asset v9 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit smoke`.
+# luxarch:smoke asset v10 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit smoke`.
 # ── Smoke: probe the DEPLOYED stack from outside, after every dev deploy ──────────────────────────
 # Emitted by `luxarch --emit smoke`; paste below the image block. `make test` runs the app in-process
 # against its test stack, so it cannot see the proxy, the server, the production image or an entry
@@ -1861,8 +1861,12 @@ smoke: ## Probe the deployed dev stack: build commit, static asset, forged Host 
 	    *) echo "FAIL  $$c is not running ($$st) $${settle}s after its HEALTHCHECK passed: the deployed process stopped"; fail=1;; esac; fi; \
 	done; fi; \
 	n=0; mods=; \
-	if [ -d "$(SMOKE_SCRIPTS_DIR)" ]; then for f in $$(find "$(SMOKE_SCRIPTS_DIR)" -name '*.py' ! -name '__init__.py' | sort); do \
-	  rel=$$(realpath --relative-to="$(SMOKE_IMPORT_ROOT)" "$$f"); mods="$$mods $$(printf '%s' "$${rel%.py}" | tr / .)"; done; fi; \
+	if [ -d "$(SMOKE_SCRIPTS_DIR)" ]; then root=$$(CDPATH= cd -P -- "$(SMOKE_IMPORT_ROOT)" && pwd -P) || exit 1; \
+	  for f in $$(find "$(SMOKE_SCRIPTS_DIR)" -name '*.py' ! -name '__init__.py' | sort); do \
+	  d=$$(CDPATH= cd -P -- "$$(dirname -- "$$f")" && pwd -P) || exit 1; \
+	  case "$$d/" in "$${root%/}/"*) rel="$${d#"$${root%/}"}/$$(basename "$$f")"; rel=$${rel#/} ;; \
+	    *) echo "REFUSING: $$f is not under SMOKE_IMPORT_ROOT ($(SMOKE_IMPORT_ROOT)), so it has no module name to import"; exit 1 ;; esac; \
+	  mods="$$mods $$(printf '%s' "$${rel%.py}" | tr / .)"; done; fi; \
 	mods=$$(printf '%s\n' $$mods $(SMOKE_ENTRY_MODULES) | sort -u); \
 	if [ -n "$$mods" ]; then \
 	  envf=; [ -n "$(SMOKE_ENV_FILE)" ] && [ -f "$(SMOKE_ENV_FILE)" ] && envf="--env-file=$(SMOKE_ENV_FILE)"; \
@@ -2136,7 +2140,7 @@ hooks: ## Activate the committed git hooks (hooks/) for this clone — run once 
 	git config core.hooksPath hooks
 	@echo "git hooks active (hooks/): pre-commit = identity + gitleaks(staged), pre-push = gitleaks(full history + identity), commit-msg = no internal refs."
 
-# luxarch:gitleaks asset v18 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit gitleaks`.
+# luxarch:gitleaks asset v19 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit gitleaks`.
 # ── The privacy gate: EVERY surface a commit publishes ──────────────────────────────────────────
 # Emitted by `luxarch --emit gitleaks`. Drop in verbatim.
 #
@@ -2152,6 +2156,12 @@ hooks: ## Activate the committed git hooks (hooks/) for this clone — run once 
 # scan and the push hook: seven commits in one public repo, found only when a file repeated the name.
 # Every commit and annotated-tag message in history is now scanned with the same config as file
 # content, and `gitleaks-commit-msg` scans the message being written (run by hooks/commit-msg).
+
+# The fleet's makefiles need GNU make 4 or later. macOS ships GNU make 3.81, which cannot read this
+# block (nor some others) and would stop every target with a parse error. make reads lines in order,
+# so this refusal comes first and says what to do: `brew install make`, then run `gmake` (or put
+# "$(brew --prefix)/opt/make/libexec/gnubin" first on PATH, so `make` is GNU make 4).
+$(if $(filter 3.%,$(MAKE_VERSION)),$(error REFUSING: GNU make $(MAKE_VERSION) is too old for this Makefile; it needs GNU make 4 or later. On macOS: brew install make; then run gmake))
 
 # Commit identities this repo accepts. The fleet account's `users.noreply.github.com` address, plus
 # GitHub's own web-UI committer. Widen ONLY for a real outside contributor, with a comment saying who.
