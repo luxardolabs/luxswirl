@@ -417,6 +417,8 @@ LUXSWIRL_ALLOW_INSECURE_HTTP=true LUXSWIRL_SERVER_URL=http://test.example.com:90
 
 A failed database statement carries its SQL but never its bound values: every engine is created with `hide_parameters=True` (`app/db/database.py`, `alembic/env.py`), and the error handlers pass their non-production `detail` through `scrub_text`, so the `Database error` log line and the 500 hold no key hash, connection string or script a write bound.
 
+A failed notification is logged once, by `NotificationCoreService` (`_deliver`, `test_provider`), as a warning carrying the error it stores and shows to every signed-in user, never a traceback. That error (`_delivery_error`) is built from typed fields alone, never an error's text, which quotes what was sent or received (the request URL, whose path can be the endpoint's credential, a header value, an SMTP AUTH line a server echoed): the HTTP status with its standard phrase, the exception's type and its root cause's, an SMTP reply code, an OS error's `strerror`, and the SSRF refusal's own text. The providers raise without logging.
+
 **Credential Storage (Encrypted at Rest):**
 
 Agent credentials (`agent_id` + `api_key`) are automatically encrypted using **Fernet encryption (AES-128-CBC + HMAC)** and stored at `/app/data/agent_credentials.json`.

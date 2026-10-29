@@ -3,15 +3,20 @@ Notification service - business logic for notification provider operations.
 """
 
 import asyncio
+import errno
+import os
+import ssl
 from collections.abc import Sequence
 from datetime import datetime, timedelta
+from http import HTTPStatus
 from typing import Any
 from uuid import UUID
 
+import aiosmtplib
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.credential_mask import mask_url_paths
+from app.core.check_target_validator import CheckTargetBlockedError
 from app.core.datetime_utils import utc_now
 from app.core.exceptions import NotFoundException, ValidationException
 from app.crud.notification_log_crud import NotificationLogCRUD
@@ -26,10 +31,45 @@ from app.schemas.notification_provider_schema import (
     NotificationProviderInDB,
     NotificationProviderUpdate,
 )
-from app.shared.log_redaction import scrub_text
 from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.services.notification")
+
+# The standard phrase per status: the endpoint's own reason text is its to
+# choose, and can quote the request.
+_HTTP_PHRASES = {status.value: status.phrase for status in HTTPStatus}
+
+
+def _chain(error: BaseException) -> list[BaseException]:
+    """`error` and every exception it was raised from or during, outermost
+    first, a group's members included. A library that re-raises `from None`
+    still leaves the original as the context, and only types and error
+    numbers are read from it."""
+    chain: list[BaseException] = []
+    pending = [error]
+    while pending:
+        current = pending.pop(0)
+        if any(current is seen for seen in chain):
+            continue
+        chain.append(current)
+        linked = (current.__cause__, current.__context__)
+        pending.extend(e for e in linked if e is not None)
+        if isinstance(current, BaseExceptionGroup):
+            pending.extend(current.exceptions)
+    return chain
+
+
+def _os_error(chain: list[BaseException]) -> OSError | None:
+    """The first operating-system error in `chain` with a known error number
+    (an SSL error's number is the TLS library's, not the system's)."""
+    for error in chain:
+        if (
+            isinstance(error, OSError)
+            and not isinstance(error, ssl.SSLError)
+            and error.errno in errno.errorcode
+        ):
+            return error
+    return None
 
 
 class NotificationCoreService:
@@ -340,8 +380,9 @@ class NotificationCoreService:
                 return False, "Provider returned failure status"
 
         except Exception as e:
+            # The summary, not the traceback: the error's text can quote what was sent.
             error_msg = NotificationCoreService._delivery_error(e)
-            logger.exception(
+            logger.warning(
                 "Test notification error",
                 extra={"provider_id": str(provider_id), "error_message": error_msg},
             )
@@ -466,16 +507,33 @@ class NotificationCoreService:
 
     @staticmethod
     def _delivery_error(error: Exception) -> str:
-        """A failed delivery's error as it is stored and shown, without the
-        endpoint's URL: its path or query can be the provider's credential, and
-        any user may read the notification log."""
+        """A failed delivery's error as it is stored, logged and shown.
+
+        Built from typed fields alone, never from an error's text: that text
+        quotes what was sent or received (the request URL, whose path or query
+        can be the endpoint's credential, a header value, an SMTP AUTH line a
+        server echoed back) and any user may read the notification log. The
+        SSRF refusal is the one text kept: the app writes it
+        (`check_target_validator`), and it names only the resolved address and
+        the blocked range.
+        """
         if isinstance(error, httpx.HTTPStatusError):
-            response = error.response
-            return f"HTTP {response.status_code} {response.reason_phrase}".strip()
-        # The text can also carry a header or token the request was sent with
-        # (an httpx protocol error quotes the offending header value).
-        detail = scrub_text(mask_url_paths(str(error)) or "")
-        return f"{type(error).__name__}: {detail}" if detail else type(error).__name__
+            code = error.response.status_code
+            phrase = _HTTP_PHRASES.get(code)
+            return f"HTTP {code} {phrase}" if phrase else f"HTTP {code}"
+        if isinstance(error, CheckTargetBlockedError):
+            return f"{type(error).__name__}: {error}"
+        summary = type(error).__name__
+        if isinstance(error, aiosmtplib.SMTPResponseException) and error.code > 0:
+            summary += f" (SMTP {error.code})"
+        chain = _chain(error)
+        os_error = _os_error(chain)
+        root = os_error or chain[-1]
+        if type(root).__name__ != type(error).__name__:
+            summary += f" ({type(root).__name__})"
+        if os_error is not None and os_error.errno is not None:
+            summary += f": {os.strerror(os_error.errno)}"
+        return summary
 
     @staticmethod
     async def _deliver(
@@ -491,8 +549,9 @@ class NotificationCoreService:
                 return NotificationStatus.SENT, None
             return NotificationStatus.FAILED, "Provider returned failure"
         except Exception as e:
+            # The summary, not the traceback: the error's text can quote what was sent.
             error_msg = NotificationCoreService._delivery_error(e)
-            logger.exception(
+            logger.warning(
                 "Notification send failed",
                 extra={"provider_id": str(provider.id), "error_message": error_msg},
             )

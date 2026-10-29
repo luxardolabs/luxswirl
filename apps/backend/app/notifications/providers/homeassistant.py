@@ -80,38 +80,33 @@ class HomeAssistantNotificationProvider(BaseNotificationProvider):
         Raises:
             Exception: If notification fails to send
         """
-        try:
-            # Build request
-            url = self.config["post_url"]
-            # Re-validate at send time: defends against DNS rebinding between config and send.
-            validate_check_target(url, block_cloud_metadata=True)
-            timeout = self.config.get("timeout", 10)
-            verify_ssl = self.config.get("verify_ssl", True)
+        # Build request
+        url = self.config["post_url"]
+        # Re-validate at send time: defends against DNS rebinding between config and send.
+        validate_check_target(url, block_cloud_metadata=True)
+        timeout = self.config.get("timeout", 10)
+        verify_ssl = self.config.get("verify_ssl", True)
 
-            # Build Home Assistant-friendly payload (encode UUID/datetime at the wire boundary)
-            payload = jsonable_encoder(self._build_ha_payload(context))
+        # Build Home Assistant-friendly payload (encode UUID/datetime at the wire boundary)
+        payload = jsonable_encoder(self._build_ha_payload(context))
 
-            # Send to Home Assistant
-            async with httpx.AsyncClient(verify=verify_ssl, timeout=timeout) as client:
-                response = await client.post(
-                    url,
-                    json=payload,
-                    headers={
-                        "Content-Type": "application/json",
-                        "User-Agent": "LuxSwirl-Monitor/1.0",
-                    },
-                )
-                response.raise_for_status()
-
-            logger.info(
-                "Home Assistant notification sent successfully",
-                extra={"url": mask_url_paths(url), "status_code": response.status_code},
+        # Send to Home Assistant
+        async with httpx.AsyncClient(verify=verify_ssl, timeout=timeout) as client:
+            response = await client.post(
+                url,
+                json=payload,
+                headers={
+                    "Content-Type": "application/json",
+                    "User-Agent": "LuxSwirl-Monitor/1.0",
+                },
             )
-            return True
+            response.raise_for_status()
 
-        except Exception:
-            logger.exception("Failed to send Home Assistant notification")
-            raise
+        logger.info(
+            "Home Assistant notification sent successfully",
+            extra={"url": mask_url_paths(url), "status_code": response.status_code},
+        )
+        return True
 
     def _build_ha_payload(self, context: NotificationContext) -> dict[str, Any]:
         """
