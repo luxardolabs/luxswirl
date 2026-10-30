@@ -755,6 +755,7 @@ ______________________________________________________________________
 **Layer 5: Input Validation**
 
 - Pydantic schemas (all API inputs)
+- Form bodies are UTF-8: a multipart body whose `Content-Type` names another charset gets 415 before any route runs (`app/core/form_charset.py`), since a codec such as `unicode_escape` decodes to text no page, column or log line can hold
 - SQL injection prevention (SQLAlchemy ORM)
 - Command injection prevention (parameterized subprocess)
 - XSS prevention (Jinja2 auto-escaping)

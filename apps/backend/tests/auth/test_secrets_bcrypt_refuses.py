@@ -2,10 +2,11 @@
 
 bcrypt refuses to hash or check more than 72 bytes, and a secret holds only text
 UTF-8 can encode, so no stored hash is of a longer secret or of one with a lone
-surrogate (a multipart form decoded in a charset its client names can carry
-one). Any caller can send either: a bearer token to the agent protocol, a
-password to the login form. It is refused like any other wrong secret: no ERROR
-log line, no 500, and a failed login is counted.
+surrogate. Any caller can send a long one: a bearer token to the agent
+protocol, a password to the login form. It is refused like any other wrong
+secret: no ERROR log line, no 500, and a failed login is counted. A multipart
+form that names a charset able to carry a surrogate is refused (415) before the
+login route runs; the checks refuse a surrogate whatever path brings one.
 """
 
 from __future__ import annotations
@@ -203,7 +204,7 @@ async def test_a_wrong_multipart_login_is_a_failed_login(
 
 @pytest.mark.integration
 @pytest.mark.parametrize("username", ["surrogate", "nosuchuser"])
-async def test_a_login_password_with_a_lone_surrogate_is_a_failed_login(
+async def test_a_login_password_in_a_surrogate_charset_never_reaches_the_route(
     client: AsyncClient,
     db: AsyncSession,
     caplog: pytest.LogCaptureFixture,
@@ -217,7 +218,7 @@ async def test_a_login_password_with_a_lone_surrogate_is_a_failed_login(
             client, username.encode(), b"\\ud800", "unicode_escape"
         )
 
-    assert status == 401
+    assert status == 415
     assert _errors(caplog) == []
 
 
@@ -245,11 +246,11 @@ async def test_a_login_username_with_a_nul_is_a_failed_login(
 
 
 @pytest.mark.integration
-async def test_a_login_username_with_a_lone_surrogate_is_refused_without_an_error(
+async def test_a_login_username_in_a_surrogate_charset_never_reaches_the_route(
     client: AsyncClient, caplog: pytest.LogCaptureFixture
 ) -> None:
     with caplog.at_level(logging.DEBUG):
         status = await _login_multipart(client, b"a\\ud800", b"nope", "unicode_escape")
 
-    assert 400 <= status < 500
+    assert status == 415
     assert _errors(caplog) == []
