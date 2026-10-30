@@ -756,6 +756,7 @@ ______________________________________________________________________
 
 - Pydantic schemas (all API inputs)
 - Form bodies are UTF-8: a multipart body whose `Content-Type` names another charset gets 415 before any route runs (`app/core/form_charset.py`), since a codec such as `unicode_escape` decodes to text no page, column or log line can hold
+- Text no column can hold is refused: a lone surrogate (a JSON `"\ud800"`) or a NUL. Free-form JSON an input sets (check `agent_selector`, alert `trigger_config`, provider `config`, job `params` and results, a setting's value, a report result's `metrics`) is a `StorableJson`, refused with 422, and a report result holding one is counted in `results_failed` while the rest are stored. `PlainText`, `NoteText` and `Tag` refuse a surrogate with the other control characters, as does every text field a constraint or whitespace stripping validates; a status page's groups are checked before they are written. A test walks every JSON request body, through every annotation, so a new field cannot skip this (`tests/test_storable_json.py`)
 - SQL injection prevention (SQLAlchemy ORM)
 - Command injection prevention (parameterized subprocess)
 - XSS prevention (Jinja2 auto-escaping)

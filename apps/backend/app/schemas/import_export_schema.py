@@ -37,7 +37,8 @@ class CheckExport(BaseModel):
     import cannot take is that entry's error, never a check made without it.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    # Stripped as CheckCreate strips: a surrogate in any text is refused here.
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
     name: str
     check_type: CheckType

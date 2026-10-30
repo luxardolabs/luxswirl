@@ -10,7 +10,7 @@ from uuid import UUID
 from pydantic import Field
 
 from app.models.enum_model import NotificationProviderType
-from app.schemas.base_schema import BaseSchema, TimestampSchema
+from app.schemas.base_schema import BaseSchema, StorableJson, TimestampSchema
 
 
 class NotificationProviderBase(BaseSchema):
@@ -54,6 +54,12 @@ class NotificationProviderBase(BaseSchema):
 class NotificationProviderCreate(NotificationProviderBase):
     """Schema for creating a new notification provider."""
 
+    # Validated here, not on NotificationProviderBase, which also reads stored rows.
+    config: StorableJson = Field(
+        ...,
+        description="Provider-specific configuration (validated by provider class)",
+    )
+
     model_config = {
         "json_schema_extra": {
             "example": {
@@ -80,7 +86,7 @@ class NotificationProviderUpdate(BaseSchema):
     """Schema for updating a notification provider."""
 
     friendly_name: str | None = Field(None, min_length=1, max_length=255)
-    config: dict[str, Any] | None = None
+    config: StorableJson | None = None
     is_enabled: bool | None = None
     is_default_enabled: bool | None = None
     rate_limit_count: int | None = Field(None, ge=1)

@@ -20,6 +20,7 @@ from app.models.enum_model import (
 from app.schemas.agent_schema import AgentOption
 from app.schemas.base_schema import (
     BaseSchema,
+    StorableJson,
     TagList,
     TimestampSchema,
     upper_or_none,
@@ -86,7 +87,7 @@ class CheckCreate(CheckBase):
         AssignmentMode.MANUAL,
         description="Assignment mode: manual, replicate, distribute",
     )
-    agent_selector: dict[str, Any] | None = Field(
+    agent_selector: StorableJson | None = Field(
         None, description="Agent selector for replicate/distribute modes"
     )
 
@@ -157,7 +158,7 @@ class CheckUpdate(BaseSchema):
 
     # Agent assignment (Phase 2)
     assignment_mode: AssignmentMode | None = None
-    agent_selector: dict[str, Any] | None = None
+    agent_selector: StorableJson | None = None
 
     # Synthetic check script
     script_code: str | None = None

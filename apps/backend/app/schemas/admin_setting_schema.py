@@ -7,11 +7,12 @@ is read masked, and its plaintext is returned once, when it is generated.
 """
 
 from datetime import datetime
-from typing import Any
+from typing import Annotated, Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field
 
 from app.models.enum_model import SettingCategory, SettingValueType
+from app.schemas.base_schema import storable_json
 from app.schemas.setting_schema import SettingScalar
 
 # What a set secret reads as; an unset one reads as the empty string.
@@ -41,7 +42,7 @@ class AdminSettingValue(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    value: SettingScalar
+    value: Annotated[SettingScalar, AfterValidator(storable_json)]
 
 
 class MetricsToken(BaseModel):

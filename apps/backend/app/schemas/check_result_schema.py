@@ -9,7 +9,7 @@ from uuid import UUID
 from pydantic import Field
 
 from app.models.enum_model import CheckErrorType, CheckType
-from app.schemas.base_schema import BaseSchema
+from app.schemas.base_schema import BaseSchema, StorableJson
 
 
 class CheckResultBase(BaseSchema):
@@ -52,7 +52,7 @@ class CheckResultCreate(CheckResultBase):
     http_response_time_ms: float | None = Field(
         None, ge=0, description="HTTP response time"
     )
-    metrics: dict[str, Any] | None = Field(None, description="Additional metrics")
+    metrics: StorableJson | None = Field(None, description="Additional metrics")
     response_data: str | None = Field(
         None, max_length=65535, description="Response body or data"
     )

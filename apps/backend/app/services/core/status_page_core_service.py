@@ -16,6 +16,7 @@ from app.core.exceptions import (
 )
 from app.crud.status_page_crud import StatusPageCRUD
 from app.models.status_page_model import StatusPage
+from app.schemas.base_schema import storable_json
 from app.schemas.status_page_schema import (
     StatusPageCreate,
     StatusPageInDB,
@@ -283,7 +284,9 @@ class StatusPageCoreService:
 
         Raises:
             StatusPageNotFoundException: If status page not found
+            ValueError: If the name or filter holds text no column can store
         """
+        storable_json([name, filter])
         status_page = await StatusPageCoreService.get_status_page_by_id(
             db, status_page_id
         )
@@ -422,7 +425,9 @@ class StatusPageCoreService:
 
         Raises:
             StatusPageNotFoundException: If status page not found
+            ValueError: If an item holds text no column can store
         """
+        storable_json(client_items)
 
         status_page = await StatusPageCoreService.get_status_page_by_id(
             db, status_page_id
@@ -495,8 +500,9 @@ class StatusPageCoreService:
 
         Raises:
             StatusPageNotFoundException: If status page not found
+            ValueError: If the name holds text no column can store
         """
-
+        storable_json(new_name)
         status_page = await StatusPageCoreService.get_status_page_by_id(
             db, status_page_id
         )
@@ -539,7 +545,9 @@ class StatusPageCoreService:
 
         Raises:
             StatusPageNotFoundException: If status page not found
+            ValueError: If the filter holds text no column can store
         """
+        storable_json(filter)
 
         status_page = await StatusPageCoreService.get_status_page_by_id(
             db, status_page_id

@@ -12,7 +12,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.enum_model import JobType, ScanCheckKind
-from app.schemas.base_schema import TagList
+from app.schemas.base_schema import StorableJson, TagList
 from app.schemas.job_schema import JobResponse
 from app.schemas.paginated_response_schema import PaginatedResponse
 
@@ -30,7 +30,7 @@ class AdminJobCreate(BaseModel):
     agent_id: UUID | None = Field(
         None, description="The agent that runs the job; every job type needs one"
     )
-    params: dict[str, Any] = Field(
+    params: StorableJson = Field(
         default_factory=dict[str, Any],
         description="The job type's params, as `GET /jobs/types` describes them",
     )
