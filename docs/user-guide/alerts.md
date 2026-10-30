@@ -136,7 +136,7 @@ Specific: "Customer Portal Down"  · Status Change, 1 failure  · PagerDuty, Ema
 | Simple, catch-all monitoring               | Global            |
 | Granular, targeted alerting                | Specific          |
 
-A **specific alert with zero checks** is valid — it won't fire until checks are assigned (via the alert form or the Checks page). **Common pattern:** one global baseline ("any check down after 5 failures") plus specific alerts for critical services ("production API down after 1 failure").
+A **specific alert with zero checks** is valid — it won't fire until checks are assigned (via the alert form or the Checks page). Only an admin can give an alert a synthetic check: an editor's alert that names one is refused (`403`) and nothing is created. Everything else about an alert (editing, disabling, deleting, a global alert's reach) stays with editors, whatever its checks. **Common pattern:** one global baseline ("any check down after 5 failures") plus specific alerts for critical services ("production API down after 1 failure").
 
 ______________________________________________________________________
 

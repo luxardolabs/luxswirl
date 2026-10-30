@@ -15,7 +15,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.datetime_utils import utc_now
 from app.core.exceptions import NotFoundException, ValidationException
+from app.core.synthetic_guard import SYNTHETIC, require_admin_actor
 from app.crud.alert_crud import AlertCRUD
+from app.crud.check_crud import CheckCRUD
 from app.models.alert_model import Alert
 from app.models.enum_model import AlertTriggerType
 from app.schemas.alert_schema import (
@@ -26,6 +28,7 @@ from app.schemas.alert_schema import (
     AlertUpdate,
 )
 from app.schemas.alert_trigger_config_schema import normalized_trigger_config
+from app.services.core.notification_core_service import NotificationCoreService
 from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.services.alert")
@@ -183,6 +186,53 @@ class AlertCoreService:
         """
         alert = await AlertCoreService.create_alert(db, data)
         return await AlertCoreService.get_alert_response(db, alert.id)
+
+    @staticmethod
+    async def require_providers(db: AsyncSession, provider_ids: list[UUID]) -> None:
+        """Every notification provider exists.
+
+        Raises:
+            ValidationException: A provider id names no provider.
+        """
+        found = await NotificationCoreService.existing_provider_ids(db, provider_ids)
+        missing = [p for p in dict.fromkeys(provider_ids) if p not in found]
+        if missing:
+            raise ValidationException(
+                f"No notification provider has the id {missing[0]}"
+            )
+
+    @staticmethod
+    def require_check_list(alert: Alert) -> None:
+        """A non-global alert: only it is given a list of checks.
+
+        Raises:
+            ValidationException: The alert is global: it reaches checks by its
+                filters as they are created, not by a list.
+        """
+        if alert.is_global:
+            raise ValidationException(
+                "A global alert reaches checks by its filters; it takes no check list"
+            )
+
+    @staticmethod
+    async def require_checks(
+        db: AsyncSession, check_ids: list[UUID], *, actor_is_admin: bool
+    ) -> None:
+        """Every check exists, and a synthetic one among them needs an admin:
+        attaching an alert to it, or detaching one, changes how it is watched.
+
+        Raises:
+            ValidationException: A check id names no check.
+            AuthorizationException: A synthetic check, and the actor is not
+                an admin.
+        """
+        checks = await CheckCRUD.get_checks_by_ids(db, check_ids)
+        found = {c.id for c in checks}
+        missing = [c for c in dict.fromkeys(check_ids) if c not in found]
+        if missing:
+            raise ValidationException(f"No check has the id {missing[0]}")
+        if any(c.check_type == SYNTHETIC for c in checks):
+            require_admin_actor(actor_is_admin=actor_is_admin)
 
     @staticmethod
     async def list_alert_options(db: AsyncSession) -> list[AlertOption]:
@@ -358,10 +408,7 @@ class AlertCoreService:
                 filters as they are created, not by a list.
         """
         alert = await AlertCoreService.get_alert_by_id(db, alert_id)
-        if alert.is_global:
-            raise ValidationException(
-                "A global alert reaches checks by its filters; it takes no check list"
-            )
+        AlertCoreService.require_check_list(alert)
         return await AlertCRUD.replace_check_mappings(db, alert_id, check_ids)
 
     @staticmethod

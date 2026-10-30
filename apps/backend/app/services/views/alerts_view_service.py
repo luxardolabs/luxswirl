@@ -12,7 +12,7 @@ from fastapi import Request
 from fastapi.responses import HTMLResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.enum_model import AlertTriggerType
+from app.models.enum_model import AlertTriggerType, UserRole
 from app.schemas.alert_schema import AlertCreate, AlertResponse, AlertUpdate
 from app.schemas.auth_schema import AuthedUser
 from app.services.core.alert_core_service import AlertCoreService
@@ -74,6 +74,7 @@ class AlertsViewService:
     @staticmethod
     async def create_alert(
         db: AsyncSession,
+        actor: AuthedUser,
         *,
         name: str,
         description: str | None,
@@ -89,7 +90,21 @@ class AlertsViewService:
         notification_provider_ids: list[UUID],
         check_ids: list[UUID],
     ) -> AlertResponse:
-        """Build the AlertCreate DTO from raw form inputs and create the alert."""
+        """Build the AlertCreate DTO from raw form inputs and create the alert.
+
+        Raises:
+            ValidationException: A provider or check id names none.
+            AuthorizationException: A synthetic check, and `actor` is not an
+                admin.
+        """
+        # The form hides the check boxes under Global without clearing them,
+        # and a global alert attaches none; a box posted twice is one check.
+        check_ids = [] if is_global else list(dict.fromkeys(check_ids))
+        notification_provider_ids = list(dict.fromkeys(notification_provider_ids))
+        await AlertCoreService.require_providers(db, notification_provider_ids)
+        await AlertCoreService.require_checks(
+            db, check_ids, actor_is_admin=actor.role == UserRole.ADMIN
+        )
         alert_data = AlertCreate(
             name=name,
             description=description or None,
