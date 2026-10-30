@@ -18,6 +18,7 @@ from app.core.exceptions import (
     UserNotFoundException,
     ValidationException,
 )
+from app.core.storable_text import storable_text
 from app.crud.session_crud import SessionCRUD
 from app.crud.user_crud import UserCRUD
 from app.models.session_model import Session
@@ -27,18 +28,6 @@ from app.services.core.settings_core_service import SettingsCoreService
 from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.services.auth")
-
-
-def _storable(text: str) -> bool:
-    """Whether a column can hold the text: PostgreSQL refuses a NUL, and UTF-8
-    cannot encode a lone surrogate."""
-    if "\x00" in text:
-        return False
-    try:
-        text.encode()
-    except UnicodeEncodeError:
-        return False
-    return True
 
 
 class AuthCoreService:
@@ -221,7 +210,7 @@ class AuthCoreService:
         # No user has a username no column can hold; it is an unknown user.
         user = (
             await UserCRUD.get_by_username(db, username)
-            if _storable(username)
+            if storable_text(username)
             else None
         )
 

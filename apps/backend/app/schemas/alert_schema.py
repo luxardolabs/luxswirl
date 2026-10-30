@@ -11,7 +11,7 @@ from pydantic import Field, field_validator
 
 from app.core.liveness import MAX_MISSED_INTERVALS
 from app.models.enum_model import AlertTriggerType
-from app.schemas.base_schema import BaseSchema, TimestampSchema
+from app.schemas.base_schema import BaseSchema, StorableJson, TimestampSchema
 
 
 def _check_missed_intervals(config: dict[str, Any] | None) -> dict[str, Any] | None:
@@ -79,6 +79,11 @@ class AlertBase(BaseSchema):
 class AlertCreate(AlertBase):
     """Schema for creating a new alert."""
 
+    # Validated here, not on AlertBase, which also reads stored rows.
+    trigger_config: StorableJson = Field(
+        ..., description="Trigger-specific configuration"
+    )
+
     notification_provider_ids: list[UUID] = Field(
         default_factory=list,
         description="List of notification provider UUIDs to use for this alert",
@@ -123,7 +128,7 @@ class AlertUpdate(BaseSchema):
     name: str | None = Field(None, min_length=1, max_length=255)
     description: str | None = None
     trigger_type: AlertTriggerType | None = None
-    trigger_config: dict[str, Any] | None = None
+    trigger_config: StorableJson | None = None
     is_enabled: bool | None = None
     is_global: bool | None = None
     notify_on_recovery: bool | None = None

@@ -18,10 +18,13 @@ from pydantic import (
 )
 
 from app.core.datetime_utils import utc_now
+from app.core.storable_text import storable_text
 
 # Control (C0, DEL, C1), format (bidi overrides, zero-width), and line and
 # paragraph separators: each one breaks a line or changes how text around it reads.
-_REFUSED_CATEGORIES = frozenset({"Cc", "Cf", "Zl", "Zp"})
+# A lone surrogate (a JSON "\ud800") is text UTF-8 cannot encode: no page, column
+# or log line can hold it.
+_REFUSED_CATEGORIES = frozenset({"Cc", "Cf", "Cs", "Zl", "Zp"})
 
 MAX_TAGS = 100
 MAX_TAG_LENGTH = 100
@@ -80,11 +83,35 @@ def canonical_ip(value: str | None) -> str | None:
         raise ValueError("not a valid IP address") from None
 
 
+def _refuse_unstorable(value: object) -> None:
+    if isinstance(value, str):
+        if not storable_text(value):
+            # The refused text is not repeated: no response or log line can hold it.
+            raise ValueError("must hold only text UTF-8 can encode, with no NUL")
+    elif isinstance(value, dict):
+        for key, item in value.items():
+            _refuse_unstorable(key)
+            _refuse_unstorable(item)
+    elif isinstance(value, list):
+        for item in value:
+            _refuse_unstorable(item)
+
+
+def storable_json[T](value: T) -> T:
+    """Refuse a JSON value holding, at any depth, a key or string no column can
+    store (`app.core.storable_text`)."""
+    _refuse_unstorable(value)
+    return value
+
+
 PlainText = Annotated[str, AfterValidator(refuse_control_chars)]
 """Free text an input sets on one line: a name, a hostname, a version."""
 
 NoteText = Annotated[str, AfterValidator(refuse_control_chars_in_notes)]
 """Free text that may span lines: a description, a reason."""
+
+StorableJson = Annotated[dict[str, Any], AfterValidator(storable_json)]
+"""A free-form JSON object an input sets: settings, metrics, parameters."""
 
 IpAddressText = Annotated[
     str | None, BeforeValidator(blank_to_none), AfterValidator(canonical_ip)

@@ -17,7 +17,7 @@ from app.models.enum_model import (
     JobStatus,
     JobType,
 )
-from app.schemas.base_schema import BaseSchema, TagList, TimestampSchema
+from app.schemas.base_schema import BaseSchema, StorableJson, TagList, TimestampSchema
 
 
 class JobBase(BaseSchema):
@@ -53,11 +53,14 @@ class JobCreate(JobBase):
 
     # Validated here, not on JobBase, which also reads stored rows.
     tags: TagList | None = Field(None, description="Tags for organizing/filtering jobs")
+    params: StorableJson = Field(
+        default_factory=dict[str, Any], description="Job-specific parameters"
+    )
     # Future fields (design now, implement in Phase 2)
-    schedule: dict[str, Any] | None = Field(
+    schedule: StorableJson | None = Field(
         None, description="Scheduling config (null = one-time job)"
     )
-    automation_config: dict[str, Any] | None = Field(
+    automation_config: StorableJson | None = Field(
         None, description="Automation rules (null = manual)"
     )
 
@@ -84,7 +87,7 @@ class JobResultSubmit(BaseSchema):
     status: Literal[JobStatus.COMPLETED, JobStatus.FAILED] = Field(
         ..., description="Final job status (completed or failed)"
     )
-    result: dict[str, Any] | None = Field(None, description="Job result data")
+    result: StorableJson | None = Field(None, description="Job result data")
     error: str | None = Field(
         None, max_length=5000, description="Error message if failed"
     )
