@@ -10,6 +10,7 @@ from uuid import UUID
 import bcrypt
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.bcrypt_secret import MAX_SECRET_BYTES, bcrypt_matches
 from app.core.common_passwords import is_common_password
 from app.core.datetime_utils import utc_now
 from app.core.exceptions import (
@@ -25,10 +26,19 @@ from app.services.core.api_token_core_service import ApiTokenCoreService
 from app.services.core.settings_core_service import SettingsCoreService
 from app.shared.logger import get_logger
 
-# The most bytes bcrypt hashes.
-MAX_PASSWORD_BYTES = 72
-
 logger = get_logger("luxswirl.services.auth")
+
+
+def _storable(text: str) -> bool:
+    """Whether a column can hold the text: PostgreSQL refuses a NUL, and UTF-8
+    cannot encode a lone surrogate."""
+    if "\x00" in text:
+        return False
+    try:
+        text.encode()
+    except UnicodeEncodeError:
+        return False
+    return True
 
 
 class AuthCoreService:
@@ -70,12 +80,18 @@ class AuthCoreService:
         if len(password) < min_length:
             return False, f"Password must be at least {min_length} characters long"
 
+        # A password is stored as UTF-8, which cannot encode a lone surrogate.
+        try:
+            password_bytes = password.encode()
+        except UnicodeEncodeError:
+            return False, "Password contains a character that cannot be stored"
+
         # bcrypt hashes at most 72 bytes; a longer password is refused rather
         # than cut short (a character outside ASCII takes more than one byte).
-        if len(password.encode()) > MAX_PASSWORD_BYTES:
+        if len(password_bytes) > MAX_SECRET_BYTES:
             return (
                 False,
-                f"Password must be at most {MAX_PASSWORD_BYTES} bytes "
+                f"Password must be at most {MAX_SECRET_BYTES} bytes "
                 "(fewer characters if it uses accented or non-Latin letters)",
             )
 
@@ -142,9 +158,7 @@ class AuthCoreService:
         Returns:
             True if password matches hash
         """
-        password_bytes = password.encode("utf-8")
-        hash_bytes = password_hash.encode("utf-8")
-        return bcrypt.checkpw(password_bytes, hash_bytes)
+        return bcrypt_matches(password, password_hash)
 
     @staticmethod
     def generate_session_token() -> str:
@@ -204,8 +218,12 @@ class AuthCoreService:
         # Get security settings from database
         security_settings = await SettingsCoreService.get_security_settings(db)
 
-        # Get user by username
-        user = await UserCRUD.get_by_username(db, username)
+        # No user has a username no column can hold; it is an unknown user.
+        user = (
+            await UserCRUD.get_by_username(db, username)
+            if _storable(username)
+            else None
+        )
 
         if not user:
             # Security: Always run bcrypt verification even for non-existent users

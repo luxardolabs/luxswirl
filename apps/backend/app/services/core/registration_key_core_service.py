@@ -8,6 +8,7 @@ from uuid import UUID
 import bcrypt
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.bcrypt_secret import bcrypt_matches
 from app.core.exceptions import NotFoundException, ValidationException
 from app.crud.registration_key_crud import RegistrationKeyCRUD
 from app.models.registration_key_model import RegistrationKey
@@ -30,7 +31,7 @@ class RegistrationKeyCoreService:
         Generate a secure random registration key.
 
         Format: luxswirl_rk_{32 random hex chars}
-        Total length: 42 characters
+        Total length: 44 characters
 
         Returns:
             Securely generated key
@@ -66,9 +67,9 @@ class RegistrationKeyCoreService:
             True if key matches hash
         """
         try:
-            return bcrypt.checkpw(key.encode("utf-8"), key_hash.encode("utf-8"))
-        # swallowed-exceptions: fail closed — any bcrypt error is a failed
-        # verification, never an accepted key.
+            return bcrypt_matches(key, key_hash)
+        # swallowed-exceptions: fail closed — a stored hash bcrypt cannot read
+        # is a failed verification, never an accepted key.
         except Exception:
             logger.exception("Error verifying registration key")
             return False
