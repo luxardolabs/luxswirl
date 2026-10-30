@@ -275,7 +275,7 @@ make dev-shell     # bash into the server container
 make dev-down      # stop the stack (volume preserved)
 ```
 
-Dev runs **baked images** (code COPYd in — no source bind-mounts), so a code change reaches the stack only through a build: use `make dev-deploy`. `make dev-up` alone recreates the containers onto the tag `.env.dev` already pins, and `make dev-restart` just bounces them; both run the old code. `make smoke` needs `SMOKE_URL` in `Makefile.local` (see `Makefile.local.example`); its authenticated probe runs when `Makefile.local` sets `SMOKE_AUTH_PATH` (e.g. `/metrics` on a stack that requires the metrics token) and `SMOKE_AUTH_TOKEN` is in the environment. The `luxswirl_db_data` volume persists across `down`/`up`; only `make clean-all` (`down -v`) drops it.
+Dev runs **baked images** (code COPYd in — no source bind-mounts), so a code change reaches the stack only through a build: use `make dev-deploy`. `make dev-up` alone recreates the containers onto the tag `.env.dev` already pins, and `make dev-restart` just bounces them; both run the old code. `make dev-deploy` and `make publish-sha` need `REGISTRY` and `PRIVATE_REGISTRY` (REGISTRY's host, declared private because releases go to ghcr.io) as literals in `Makefile.local`, or they refuse. `make smoke` needs `SMOKE_URL` in `Makefile.local` (see `Makefile.local.example`); its authenticated probe runs when `Makefile.local` sets `SMOKE_AUTH_PATH` (e.g. `/metrics` on a stack that requires the metrics token) and `SMOKE_AUTH_TOKEN` is in the environment. The `luxswirl_db_data` volume persists across `down`/`up`; only `make clean-all` (`down -v`) drops it.
 
 ### Build & release
 
@@ -285,7 +285,7 @@ make build                  # build both images LOCALLY as bare luxswirl-{backen
 make release                # cut VERSION: refuse a dirty tree / released version / untagged HEAD, build + scan + push both :$(VERSION) to ghcr, then the GitHub Release
 ```
 
-Publishing is the luxarch **image block** (v16, `IMAGES = backend agent`): one `VERSION`, both images, every image scanned before any is pushed. Version is **coded in the `VERSION` file** (not derived from the directory path) → baked via `--build-arg BUILD_VERSION` → `ENV APP_VERSION`/`LABEL version` → `settings.app_version` → `/health`. Registries: each commit's `:sha-<commit>` goes to the private `REGISTRY` (from `Makefile.local`); a release goes to `RELEASE_REGISTRY` = `ghcr.io/luxardolabs/luxswirl-{backend,agent}`. The backend Dockerfile's `test` stage (production + the dev group) is the suite's image.
+Publishing is the luxarch **image block** (v21, `IMAGES = backend agent`): one `VERSION`, both images, every image scanned before any is pushed. Version is **coded in the `VERSION` file** (not derived from the directory path) → baked via `--build-arg BUILD_VERSION` → `ENV APP_VERSION`/`LABEL version` → `settings.app_version` → `/health`. Registries: each commit's `:sha-<commit>` goes to the private `REGISTRY` (from `Makefile.local`); a release goes to `RELEASE_REGISTRY` = `ghcr.io/luxardolabs/luxswirl-{backend,agent}`. The backend Dockerfile's `test` stage (production + the dev group) is the suite's image.
 
 ### Quality & tests (all dockerized)
 
