@@ -18,6 +18,13 @@
 # Left unset, every target that pushes or pins refuses.
 #
 # REGISTRY := your.registry.example:5000
+#
+# A release goes to ghcr.io, another host than REGISTRY, so the image block also
+# requires REGISTRY's host declared private, or `make publish-sha` and
+# `make dev-deploy` refuse. It must be a makefile literal like REGISTRY: a value
+# from the shell or the command line is refused.
+#
+# PRIVATE_REGISTRY := your.registry.example:5000
 
 # `make smoke` (run by `make dev-deploy`) probes the deployed dev stack from
 # outside. Point it at the address the dev stack answers on.
