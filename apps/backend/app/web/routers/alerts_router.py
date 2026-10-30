@@ -173,6 +173,7 @@ async def create_alert(
     # Create alert (DTO built in the view seam)
     alert = await AlertsViewService.create_alert(
         db,
+        current_user,
         name=name,
         description=description or None,
         trigger_type=trigger_type,

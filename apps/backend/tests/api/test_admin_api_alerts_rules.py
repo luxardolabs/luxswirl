@@ -215,6 +215,24 @@ async def test_an_edited_config_is_held_to_the_alerts_trigger(
 # ── Synthetic checks ─────────────────────────────────────────────────────────
 
 
+async def test_a_global_alerts_check_list_is_refused_before_it_is_judged(
+    db: AsyncSession, client: AsyncClient
+) -> None:
+    """A global alert takes no check list, whoever asks and whatever it maps."""
+    token = await _as(db, "editor")
+    synthetic = await _synthetic(db)
+    alert_id = await _alert(db, is_global=True)
+    db.add(make_alert_check_mapping(alert_id=alert_id, check_id=synthetic))
+    await db.flush()
+
+    r = await client.put(
+        f"{ALERTS}/{alert_id}/checks", json={"check_ids": []}, headers=token
+    )
+
+    assert r.status_code == 422, r.text
+    assert "takes no check list" in r.text
+
+
 @pytest.mark.parametrize("role", ["editor", "admin"])
 async def test_only_an_admin_attaches_or_detaches_a_synthetic_check(
     db: AsyncSession, client: AsyncClient, role: str

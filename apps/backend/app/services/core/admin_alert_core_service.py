@@ -13,7 +13,6 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ValidationException
-from app.core.synthetic_guard import SYNTHETIC, require_admin_actor
 from app.models.enum_model import UserRole
 from app.schemas.admin_alert_schema import (
     AdminAlertChecks,
@@ -28,8 +27,6 @@ from app.schemas.alert_schema import AlertCheckSnooze, AlertUpdate
 from app.schemas.alert_trigger_config_schema import normalized_trigger_config
 from app.schemas.pagination_schema import build_pagination
 from app.services.core.alert_core_service import AlertCoreService
-from app.services.core.check_core_service import CheckCoreService
-from app.services.core.notification_core_service import NotificationCoreService
 from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.services.admin_alert")
@@ -37,28 +34,6 @@ logger = get_logger("luxswirl.services.admin_alert")
 
 class AdminAlertCoreService:
     """List, read, create, change and delete alerts, and their mappings."""
-
-    @staticmethod
-    async def _require_providers(db: AsyncSession, provider_ids: list[UUID]) -> None:
-        found = await NotificationCoreService.existing_provider_ids(db, provider_ids)
-        missing = [p for p in dict.fromkeys(provider_ids) if p not in found]
-        if missing:
-            raise ValidationException(
-                f"No notification provider has the id {missing[0]}"
-            )
-
-    @staticmethod
-    async def _require_checks(
-        db: AsyncSession, role: UserRole, check_ids: list[UUID]
-    ) -> None:
-        """Every check exists; a synthetic one among them needs an admin."""
-        checks = await CheckCoreService.get_checks_by_ids(db, check_ids)
-        found = {c.id for c in checks}
-        missing = [c for c in dict.fromkeys(check_ids) if c not in found]
-        if missing:
-            raise ValidationException(f"No check has the id {missing[0]}")
-        if any(c.check_type == SYNTHETIC for c in checks):
-            require_admin_actor(actor_is_admin=role == UserRole.ADMIN)
 
     @staticmethod
     async def get_alert(db: AsyncSession, alert_id: UUID) -> AdminAlertDetail:
@@ -95,10 +70,10 @@ class AdminAlertCoreService:
     async def create_alert(
         db: AsyncSession, role: UserRole, data: AdminAlertCreate
     ) -> AdminAlertDetail:
-        await AdminAlertCoreService._require_providers(
-            db, data.notification_provider_ids
+        await AlertCoreService.require_providers(db, data.notification_provider_ids)
+        await AlertCoreService.require_checks(
+            db, data.check_ids, actor_is_admin=role == UserRole.ADMIN
         )
-        await AdminAlertCoreService._require_checks(db, role, data.check_ids)
         payload = data.model_dump()
         payload["notification_provider_ids"] = list(
             dict.fromkeys(data.notification_provider_ids)
@@ -145,9 +120,7 @@ class AdminAlertCoreService:
         db: AsyncSession, alert_id: UUID, data: AdminAlertProviders
     ) -> AlertMappingChange:
         await AlertCoreService.get_alert_by_id(db, alert_id)
-        await AdminAlertCoreService._require_providers(
-            db, data.notification_provider_ids
-        )
+        await AlertCoreService.require_providers(db, data.notification_provider_ids)
         added, removed = await AlertCoreService.set_providers(
             db, alert_id, list(dict.fromkeys(data.notification_provider_ids))
         )
@@ -157,11 +130,15 @@ class AdminAlertCoreService:
     async def set_checks(
         db: AsyncSession, role: UserRole, alert_id: UUID, data: AdminAlertChecks
     ) -> AlertMappingChange:
-        await AlertCoreService.get_alert_by_id(db, alert_id)
+        alert = await AlertCoreService.get_alert_by_id(db, alert_id)
+        # Refused as global before the checks are judged.
+        AlertCoreService.require_check_list(alert)
         _, current = await AlertCoreService.get_mapped_ids(db, alert_id)
         # The checks gained and lost are judged; one kept is not touched.
         changed = list(set(current) ^ set(data.check_ids))
-        await AdminAlertCoreService._require_checks(db, role, changed)
+        await AlertCoreService.require_checks(
+            db, changed, actor_is_admin=role == UserRole.ADMIN
+        )
         added, removed = await AlertCoreService.set_checks(
             db, alert_id, list(dict.fromkeys(data.check_ids))
         )
