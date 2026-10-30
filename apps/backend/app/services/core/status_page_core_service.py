@@ -5,6 +5,7 @@ StatusPage service - business logic for status page operations.
 from typing import Any
 from uuid import UUID
 
+from pydantic import TypeAdapter
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import attributes
@@ -16,13 +17,48 @@ from app.core.exceptions import (
 )
 from app.crud.status_page_crud import StatusPageCRUD
 from app.models.status_page_model import StatusPage
-from app.schemas.base_schema import storable_json
+from app.schemas.admin_status_page_schema import (
+    MAX_ITEMS,
+    MAX_PAGE_CHECKS,
+    EditorReorder,
+    GroupFilter,
+    GroupName,
+    SortBy,
+    SortDirection,
+)
 from app.schemas.status_page_schema import (
     StatusPageCreate,
     StatusPageInDB,
     StatusPageUpdate,
 )
+from app.services.core.check_core_service import CheckCoreService
 from app.shared.logger import get_logger
+
+_GROUP_NAME = TypeAdapter(GroupName)
+_REORDER = TypeAdapter(EditorReorder)
+_SORT_BY = TypeAdapter(SortBy)
+_SORT_DIRECTION = TypeAdapter(SortDirection)
+
+
+def _named_check_ids(items: list[dict[str, Any]]) -> set[str]:
+    """The check ids a page's items name: its check items and its groups' lists."""
+    named = {i["check_id"] for i in items if i.get("type") == "check"}
+    for item in items:
+        named.update(item.get("checks") or [])
+    return named
+
+
+def _room_for_one_more(items: list[dict[str, Any]]) -> None:
+    """Refuse an item past what one page holds, the most a reorder takes."""
+    if len(items) >= MAX_ITEMS:
+        raise ValueError(f"A page holds at most {MAX_ITEMS} items")
+
+
+def _stored_filter(filter: dict[str, Any]) -> dict[str, Any]:
+    """A group filter in the form the admin API stores it, or ValueError when it
+    is not one."""
+    return GroupFilter.model_validate(filter).model_dump(mode="json", exclude_none=True)
+
 
 logger = get_logger("luxswirl.services.status_page")
 
@@ -244,6 +280,9 @@ class StatusPageCoreService:
         status_page = await StatusPageCoreService.get_status_page_by_id(
             db, status_page_id
         )
+        _room_for_one_more(status_page.items)
+        if len(_named_check_ids(status_page.items) | {str(check_id)}) > MAX_PAGE_CHECKS:
+            raise ValueError(f"A page names at most {MAX_PAGE_CHECKS} checks")
         status_page.add_check(check_id, order)
         status_page.updated_at = utc_now()
 
@@ -284,12 +323,15 @@ class StatusPageCoreService:
 
         Raises:
             StatusPageNotFoundException: If status page not found
-            ValueError: If the name or filter holds text no column can store
+            ValueError: If the name or filter is not one a group takes
         """
-        storable_json([name, filter])
+        name = _GROUP_NAME.validate_python(name)
+        if filter is not None:
+            filter = _stored_filter(filter)
         status_page = await StatusPageCoreService.get_status_page_by_id(
             db, status_page_id
         )
+        _room_for_one_more(status_page.items)
         status_page.add_group(name, filter, order, collapsed)
         status_page.updated_at = utc_now()
 
@@ -425,9 +467,9 @@ class StatusPageCoreService:
 
         Raises:
             StatusPageNotFoundException: If status page not found
-            ValueError: If an item holds text no column can store
+            ValueError: If an item is not one the editor sends
         """
-        storable_json(client_items)
+        reordered = _REORDER.validate_python(client_items)
 
         status_page = await StatusPageCoreService.get_status_page_by_id(
             db, status_page_id
@@ -443,30 +485,59 @@ class StatusPageCoreService:
 
         # Build new items array based on client state
         new_items = []
-        for item_data in client_items:
-            old_index = item_data.get("oldIndex")
-            item_type = item_data.get("type")
-
-            if item_type == "group":
-                # Retrieve original group item
-                if old_index is not None and 0 <= old_index < len(status_page.items):
-                    group_item = status_page.items[old_index].copy()
-                    # Update checks array if it's a container group
-                    if "checks" in group_item:
-                        group_item["checks"] = item_data.get("checks", [])
-                    new_items.append(group_item)
-            # Retrieve original check item
-            elif (
-                item_type == "check"
-                and old_index is not None
-                and 0 <= old_index < len(status_page.items)
-            ):
-                new_items.append(status_page.items[old_index])
+        placed_indexes = [
+            item.old_index for item in reordered if item.old_index is not None
+        ]
+        placed = set(placed_indexes)
+        if len(placed_indexes) != len(placed):
+            raise ValueError("An item appears in the reorder more than once")
+        for item in reordered:
+            if item.old_index is None:
+                # A check dragged out of a group: a check item of its own.
+                new_items.append(
+                    {"type": "check", "check_id": str(UUID(str(item.check_id)))}
+                )
+                continue
+            if item.old_index >= len(status_page.items):
+                continue
+            if item.type == "group":
+                group_item = status_page.items[item.old_index].copy()
+                # A group that lists its checks takes the ones the editor sent.
+                if "checks" in group_item:
+                    group_item["checks"] = [
+                        str(c) for c in dict.fromkeys(item.checks or [])
+                    ]
+                new_items.append(group_item)
+            else:
+                new_items.append(status_page.items[item.old_index])
 
         logger.info(
             "Reorder request - new items computed",
             extra={"new_items": new_items},
         )
+
+        named = _named_check_ids(new_items)
+        if len(named) > MAX_PAGE_CHECKS:
+            raise ValueError(f"A page names at most {MAX_PAGE_CHECKS} checks")
+        # Only a check dragged into a group leaves its own place; any other item
+        # left out of the reorder would be deleted with it.
+        grouped = {c for i in new_items for c in i.get("checks") or []}
+        for index, stored in enumerate(status_page.items):
+            if index not in placed and not (
+                stored.get("type") == "check" and stored.get("check_id") in grouped
+            ):
+                raise ValueError("The reorder leaves out an item of the page")
+        # A check new to the page must exist, as the admin API requires.
+        new_ids = named - _named_check_ids(status_page.items)
+        found = {
+            str(c.id)
+            for c in await CheckCoreService.get_checks_by_ids(
+                db, [UUID(c) for c in new_ids]
+            )
+        }
+        missing = sorted(new_ids - found)
+        if missing:
+            raise ValueError(f"No check has the id {missing[0]}")
 
         # Update the status page
         status_page.items = new_items
@@ -500,9 +571,9 @@ class StatusPageCoreService:
 
         Raises:
             StatusPageNotFoundException: If status page not found
-            ValueError: If the name holds text no column can store
+            ValueError: If the name is not one a group takes
         """
-        storable_json(new_name)
+        new_name = _GROUP_NAME.validate_python(new_name)
         status_page = await StatusPageCoreService.get_status_page_by_id(
             db, status_page_id
         )
@@ -545,9 +616,9 @@ class StatusPageCoreService:
 
         Raises:
             StatusPageNotFoundException: If status page not found
-            ValueError: If the filter holds text no column can store
+            ValueError: If the filter is not one a group takes
         """
-        storable_json(filter)
+        filter = _stored_filter(filter)
 
         status_page = await StatusPageCoreService.get_status_page_by_id(
             db, status_page_id
@@ -595,7 +666,10 @@ class StatusPageCoreService:
 
         Raises:
             StatusPageNotFoundException: If status page not found
+            ValueError: If the sort is not one a group takes
         """
+        sort_by = _SORT_BY.validate_python(sort_by)
+        sort_direction = _SORT_DIRECTION.validate_python(sort_direction)
         status_page = await StatusPageCoreService.get_status_page_by_id(
             db, status_page_id
         )
