@@ -9,7 +9,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, Request, Response, status
+from fastapi import Depends, FastAPI, Request, Response, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -41,6 +41,7 @@ from app.cli import bootstrap_on_startup
 from app.core.config import settings
 from app.core.display_settings import update_display_settings
 from app.core.exceptions import LuxSwirlException, value_error_message
+from app.core.form_charset import require_utf8_form_body
 from app.core.logging_config import configure_logging
 from app.core.logging_options import logging_options
 from app.core.rate_limit import limiter
@@ -215,6 +216,8 @@ app = FastAPI(
     description="A production-quality SaaS observability monitoring platform for all types of metrics",
     version=settings.app_version,
     lifespan=lifespan,
+    # Before any route runs: a multipart body is UTF-8 (app/core/form_charset.py).
+    dependencies=[Depends(require_utf8_form_body)],
     docs_url="/docs" if settings.server.environment != "production" else None,
     redoc_url="/redoc" if settings.server.environment != "production" else None,
     openapi_url=(

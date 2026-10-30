@@ -149,6 +149,13 @@ class ValidationException(LuxSwirlException):
     error_code = "VALIDATION_ERROR"
 
 
+class UnsupportedMediaTypeException(LuxSwirlException):
+    """Raised when a request body is in a format or charset the app does not take."""
+
+    status_code = 415
+    error_code = "UNSUPPORTED_MEDIA_TYPE"
+
+
 class DatabaseException(LuxSwirlException):
     """Raised when database operations fail."""
 
