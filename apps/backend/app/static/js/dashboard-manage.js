@@ -48,7 +48,11 @@ function initializeSortable() {
             ghostClass: 'sortable-ghost',
             chosenClass: 'sortable-chosen',
             dragClass: 'sortable-drag',
-            group: 'dashboard',
+            // A group holds checks, never another group.
+            group: {
+                name: 'dashboard',
+                put: (to, from, dragEl) => dragEl.dataset.itemType !== 'group',
+            },
             onEnd: () => saveItemOrder()
         });
     });

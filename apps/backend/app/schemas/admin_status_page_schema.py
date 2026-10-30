@@ -30,6 +30,9 @@ SLUG_PATTERN = r"^[A-Za-z0-9_-]+$"
 SortBy = Literal["manual", "name", "status", "latency", "uptime"]
 SortDirection = Literal["asc", "desc"]
 
+GroupName = Annotated[PlainText, Field(min_length=1, max_length=255)]
+"""A group's name, as the admin API and the web editor both take it."""
+
 # Stored lower-case, as the web UI stores it.
 Slug = Annotated[
     str,
@@ -67,7 +70,7 @@ class GroupItem(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     type: Literal["group"]
-    name: PlainText = Field(..., min_length=1, max_length=255)
+    name: GroupName
     collapsed: bool = False
     sort_by: SortBy = "manual"
     sort_direction: SortDirection = "asc"
@@ -106,6 +109,30 @@ PageItems = Annotated[
     Field(max_length=MAX_ITEMS),
     AfterValidator(_within_page_cap),
 ]
+
+
+class EditorReorderItem(BaseModel):
+    """One item of the web editor's reorder: where it stood, and, for a group
+    that lists its checks, the checks it now lists. A check with no place of
+    its own (one dragged out of a group) is a new check item, named by its id."""
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    type: Literal["group", "check"]
+    old_index: int | None = Field(None, ge=0, alias="oldIndex")
+    new_index: int | None = Field(None, ge=0, alias="newIndex")
+    checks: list[UUID] | None = Field(None, max_length=MAX_GROUP_CHECKS)
+    # Echoed back as the page stores it; read only for a new check item.
+    check_id: PlainText | None = Field(None, max_length=64, alias="checkId")
+
+    @model_validator(mode="after")
+    def _placed_or_named(self) -> Self:
+        if self.old_index is None and (self.type == "group" or self.check_id is None):
+            raise ValueError("An item names where it stood, or the check it is")
+        return self
+
+
+EditorReorder = Annotated[list[EditorReorderItem], Field(max_length=MAX_ITEMS)]
 
 
 class AdminStatusPageItems(BaseModel):
