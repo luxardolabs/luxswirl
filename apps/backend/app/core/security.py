@@ -10,11 +10,11 @@ from typing import TYPE_CHECKING, Annotated, Any
 from urllib.parse import urlencode
 from uuid import UUID
 
-import bcrypt
 import jwt
 from fastapi import Cookie, Depends, Header, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.bcrypt_secret import bcrypt_matches
 from app.core.config import settings
 from app.core.datetime_utils import utc_now
 from app.core.safe_redirect import safe_redirect_target
@@ -565,9 +565,7 @@ async def verify_agent_token(
     if agent.api_key_hash:
         # Validate token against agent's specific key
         try:
-            is_valid = bcrypt.checkpw(
-                token.encode("utf-8"), agent.api_key_hash.encode("utf-8")
-            )
+            is_valid = bcrypt_matches(token, agent.api_key_hash)
         except Exception:
             logger.exception(
                 "Error verifying agent key",

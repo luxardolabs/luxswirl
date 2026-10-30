@@ -33,7 +33,7 @@ class TestKeyCrypto:
         random_part = k.removeprefix("luxswirl_rk_")
         assert len(random_part) == 32
         int(random_part, 16)  # must be valid hex
-        # 12-char prefix + 32 hex = 44 (the docstring's "42" is wrong).
+        # 12-char prefix + 32 hex = 44.
         assert len(k) == 44
 
     def test_generate_key_unique(self):
