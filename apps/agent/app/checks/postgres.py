@@ -198,9 +198,10 @@ class PostgreSQLCheck(BaseCheck):
                 error = f"PostgreSQL client error: {e}"
                 error_type = "query_error"
                 continue
+            # swallowed-exceptions: the failure is the check's result, sent to the
+            # server; its traceback goes to DEBUG so a failure that recurs every
+            # interval cannot flood the log.
             except Exception as e:
-                # The failure is the check's result; the traceback is for a
-                # debug run, so no unforeseen failure floods the log.
                 logger.debug(
                     "PostgreSQL check hit an unexpected error",
                     exc_info=True,

@@ -70,8 +70,9 @@ class NetworkDiscoverCoreService:
                                 exc_info=True,
                             )
             except Exception:
-                logger.debug(
-                    "Error processing default gateway",
+                logger.warning(
+                    "Could not match the default gateway to an interface; "
+                    "interfaces are left without a gateway",
                     extra={"default_gateway": default_gateway},
                     exc_info=True,
                 )

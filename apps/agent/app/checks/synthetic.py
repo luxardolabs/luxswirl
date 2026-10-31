@@ -128,10 +128,10 @@ class SyntheticCheck(BaseCheck):
                         result_data["browser_timing"] = await page.evaluate(
                             "() => JSON.parse(JSON.stringify(window.performance.timing))"
                         )
+                    # swallowed-exceptions: timing is optional enrichment on top of
+                    # the check result; a closed or crashed page loses it, which
+                    # is not a check failure.
                     except Exception as timing_error:
-                        # Timing is a nice-to-have on top of the check result —
-                        # a closed or crashed page loses it, which is not a
-                        # check failure but is worth a line.
                         logger.debug(
                             "Could not read browser timing after synthetic run",
                             extra={"error": str(timing_error)},
@@ -151,6 +151,8 @@ class SyntheticCheck(BaseCheck):
                                 "size_bytes": len(screenshot_bytes),
                             }
                         )
+                    # swallowed-exceptions: the capture failure is recorded in the
+                    # check result's errors, sent to the server.
                     except Exception as e:
                         logger.debug(
                             "Could not capture a screenshot after synthetic run",
@@ -190,6 +192,8 @@ class SyntheticCheck(BaseCheck):
                         # Off-thread like the read above: same event loop, same
                         # reason.
                         await asyncio.to_thread(Path(trace_path).unlink)
+                    # swallowed-exceptions: the capture failure is recorded in the
+                    # check result's errors, sent to the server.
                     except Exception as e:
                         logger.debug(
                             "Could not capture a trace after synthetic run",
@@ -202,9 +206,10 @@ class SyntheticCheck(BaseCheck):
                     # Close browser
                     await browser.close()
 
+        # swallowed-exceptions: the failure is the check's result, sent to the
+        # server; its traceback goes to DEBUG so a browser that will not start
+        # cannot flood the log every interval.
         except Exception as e:
-            # The failure is the check's result; the traceback is for a debug
-            # run, so a browser that will not start does not flood the log.
             logger.debug(
                 "Synthetic check failed outside its script",
                 exc_info=True,
