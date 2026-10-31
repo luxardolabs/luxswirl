@@ -32,7 +32,7 @@ router = APIRouter(tags=["Check Results"])
     status_code=status.HTTP_202_ACCEPTED,
     summary="Submit agent report",
     description="Submit check results from an agent",
-    name="submit_report",
+    name="api.agent.reports.create",
 )
 async def submit_report(
     report: AgentReportSubmission,

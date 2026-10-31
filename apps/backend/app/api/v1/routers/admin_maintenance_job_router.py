@@ -30,7 +30,7 @@ LIMIT = settings.security.admin_api_rate_limit
 @router.get(
     "/{job_id}",
     response_model=MaintenanceJobResponse,
-    name="admin_get_maintenance_job",
+    name="api.admin.maintenance_jobs.show",
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_get_maintenance_job(

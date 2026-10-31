@@ -32,7 +32,7 @@ logger = get_logger("luxswirl.api.checks")
     responses={
         404: {"model": ErrorResponse, "description": "Agent not found"},
     },
-    name="list_checks",
+    name="api.agent.checks.index",
 )
 async def list_checks(
     agent_id: AuthenticatedAgentId,

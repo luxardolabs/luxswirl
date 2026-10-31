@@ -28,9 +28,7 @@ router = APIRouter(tags=["Web UI - Alerts"], include_in_schema=False)
 
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
-@router.get(
-    "/alerts/create-form", response_class=HTMLResponse, name="create_alert_form"
-)
+@router.get("/alerts/create-form", response_class=HTMLResponse, name="alerts.new")
 async def create_alert_form(
     request: Request,
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
@@ -56,7 +54,7 @@ async def create_alert_form(
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.get(
-    "/alerts/{alert_id}/edit-form", response_class=HTMLResponse, name="edit_alert_form"
+    "/alerts/{alert_id}/edit-form", response_class=HTMLResponse, name="alerts.edit"
 )
 async def edit_alert_form(
     request: Request,
@@ -83,7 +81,7 @@ async def edit_alert_form(
 
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
-@router.post("/alerts/create", response_class=HTMLResponse, name="web_create_alert")
+@router.post("/alerts/create", response_class=HTMLResponse, name="alerts.create")
 async def create_alert(
     request: Request,
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
@@ -204,7 +202,7 @@ async def create_alert(
 # delete_alert with alert_id="snooze" and 422ing, which made unsnooze
 # unreachable.
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
-@router.post("/alerts/snooze", response_class=HTMLResponse, name="snooze_alert_check")
+@router.post("/alerts/snooze", response_class=HTMLResponse, name="alert_snoozes.create")
 async def snooze_alert_check(
     request: Request,
     alert_id: Annotated[UUID, Query(description="Alert UUID")],
@@ -229,7 +227,7 @@ async def snooze_alert_check(
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.delete(
-    "/alerts/snooze", response_class=HTMLResponse, name="unsnooze_alert_check"
+    "/alerts/snooze", response_class=HTMLResponse, name="alert_snoozes.delete"
 )
 async def unsnooze_alert_check(
     request: Request,
@@ -250,7 +248,7 @@ async def unsnooze_alert_check(
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post(
-    "/alerts/{alert_id}/update", response_class=HTMLResponse, name="web_update_alert"
+    "/alerts/{alert_id}/update", response_class=HTMLResponse, name="alerts.update"
 )
 async def update_alert(
     request: Request,
@@ -344,9 +342,7 @@ async def update_alert(
 
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
-@router.delete(
-    "/alerts/{alert_id}", response_class=HTMLResponse, name="web_delete_alert"
-)
+@router.delete("/alerts/{alert_id}", response_class=HTMLResponse, name="alerts.delete")
 async def delete_alert(
     request: Request,
     alert_id: UUID,
@@ -363,7 +359,7 @@ async def delete_alert(
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post(
-    "/alerts/{alert_id}/toggle", response_class=HTMLResponse, name="toggle_alert"
+    "/alerts/{alert_id}/toggle", response_class=HTMLResponse, name="alerts.toggle"
 )
 async def toggle_alert(
     request: Request,

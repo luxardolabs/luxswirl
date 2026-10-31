@@ -38,7 +38,7 @@ router = APIRouter(
 LIMIT = settings.security.admin_api_rate_limit
 
 
-@router.get("", response_model=StatusPagePage, name="admin_list_status_pages")
+@router.get("", response_model=StatusPagePage, name="api.admin.status_pages.index")
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_list_status_pages(
     request: Request,
@@ -56,7 +56,9 @@ async def admin_list_status_pages(
 
 
 @router.get(
-    "/{status_page_id}", response_model=AdminStatusPage, name="admin_get_status_page"
+    "/{status_page_id}",
+    response_model=AdminStatusPage,
+    name="api.admin.status_pages.show",
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_get_status_page(
@@ -72,7 +74,7 @@ async def admin_get_status_page(
     "",
     response_model=AdminStatusPage,
     status_code=status.HTTP_201_CREATED,
-    name="admin_create_status_page",
+    name="api.admin.status_pages.create",
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_create_status_page(
@@ -88,7 +90,7 @@ async def admin_create_status_page(
 @router.patch(
     "/{status_page_id}",
     response_model=AdminStatusPage,
-    name="admin_update_status_page",
+    name="api.admin.status_pages.update",
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_update_status_page(
@@ -105,7 +107,7 @@ async def admin_update_status_page(
 @router.put(
     "/{status_page_id}/items",
     response_model=AdminStatusPage,
-    name="admin_set_status_page_items",
+    name="api.admin.status_page_items.update",
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_set_status_page_items(
@@ -123,7 +125,7 @@ async def admin_set_status_page_items(
     "/{status_page_id}",
     response_model=MaintenanceJobResponse,
     status_code=status.HTTP_202_ACCEPTED,
-    name="admin_delete_status_page",
+    name="api.admin.status_pages.delete",
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_delete_status_page(

@@ -87,22 +87,22 @@ async def test_sidebar_renders_the_resolved_links(
 ) -> None:
     await _sign_in(client, db)
 
-    r = await client.get(path_for("status_page"))
+    r = await client.get(path_for("dashboard.index"))
 
     assert r.status_code == 200
     for name in (
-        "status_page",
-        "jobs_page",
-        "status_pages_list",
-        "notification_logs_page",
-        "agents_list_page",
-        "settings_landing",
-        "scheduler_page",
-        "database_health_page",
+        "dashboard.index",
+        "jobs.index",
+        "status_pages.index",
+        "notification_logs.index",
+        "agents.index",
+        "settings.index",
+        "scheduler.index",
+        "database_health.index",
     ):
         assert f'href="{path_for(name)}"' in r.text, name
-    assert f'hx-get="{path_for("profile_panel")}"' in r.text
-    assert f'action="{path_for("web_logout")}"' in r.text
+    assert f'hx-get="{path_for("profile.show")}"' in r.text
+    assert f'action="{path_for("auth.logout")}"' in r.text
 
 
 @pytest.mark.integration
@@ -111,17 +111,17 @@ async def test_settings_tabs_render_the_resolved_links(
 ) -> None:
     await _sign_in(client, db)
 
-    r = await client.get(path_for("settings_alerts"))
+    r = await client.get(path_for("settings.alerts"))
 
     assert r.status_code == 200
     for name in (
-        "settings_notifications",
-        "settings_alerts",
-        "settings_registration_keys",
-        "settings_defaults",
-        "users_page",
-        "settings_components",
-        "settings_logo_demo",
+        "settings.notifications",
+        "settings.alerts",
+        "settings.registration_keys",
+        "settings.defaults",
+        "users.index",
+        "settings.components",
+        "settings.logo_demo",
     ):
         assert f'href="{path_for(name)}"' in r.text, name
 
@@ -134,11 +134,13 @@ async def test_sign_in_redirect_names_the_login_page(
     db.add(make_user())
     await db.flush()
 
-    r = await client.get(path_for("status_page"))
+    r = await client.get(path_for("dashboard.index"))
 
     assert r.status_code == 307
-    dashboard = path_for("status_page").replace("/", "%2F")
-    assert r.headers["location"] == f"{path_for('login_page')}?redirect={dashboard}"
+    dashboard = path_for("dashboard.index").replace("/", "%2F")
+    assert (
+        r.headers["location"] == f"{path_for('auth.login_page')}?redirect={dashboard}"
+    )
 
 
 @pytest.mark.integration
@@ -147,14 +149,17 @@ async def test_a_required_password_change_redirects_to_the_change_page(
 ) -> None:
     await _sign_in(client, db, must_change_password=True)
 
-    r = await client.get(path_for("status_page"))
+    r = await client.get(path_for("dashboard.index"))
 
     assert r.status_code == 307
-    assert r.headers["location"] == f"{path_for('change_password_page')}?required=true"
+    assert (
+        r.headers["location"]
+        == f"{path_for('auth.change_password_page')}?required=true"
+    )
     # ...and the page it sends the user to is not itself redirected.
-    page = await client.get(path_for("change_password_page"))
+    page = await client.get(path_for("auth.change_password_page"))
     assert page.status_code == 200
-    assert f'action="{path_for("change_password_submit")}"' in page.text
+    assert f'action="{path_for("auth.change_password")}"' in page.text
 
 
 @pytest.mark.integration
@@ -163,20 +168,20 @@ async def test_a_viewer_on_an_admin_page_goes_home(
 ) -> None:
     await _sign_in(client, db, role="viewer")
 
-    r = await client.get(path_for("settings_landing"))
+    r = await client.get(path_for("settings.index"))
 
     assert r.status_code == 307
-    assert r.headers["location"] == f"{path_for('root_redirect')}?error=admin_required"
+    assert r.headers["location"] == f"{path_for('home.redirect')}?error=admin_required"
 
 
 @pytest.mark.integration
 async def test_home_redirects_to_the_dashboard_keeping_the_query(
     client: AsyncClient,
 ) -> None:
-    r = await client.get(path_for("root_redirect"), params={"status": "down"})
+    r = await client.get(path_for("home.redirect"), params={"status": "down"})
 
     assert r.status_code == 302
-    assert r.headers["location"] == f"{path_for('status_page')}?status=down"
+    assert r.headers["location"] == f"{path_for('dashboard.index')}?status=down"
 
 
 @pytest.mark.integration
@@ -187,10 +192,10 @@ async def test_login_form_posts_to_the_sign_in_route(
     db.add(make_user())
     await db.flush()
 
-    r = await client.get(path_for("login_page"))
+    r = await client.get(path_for("auth.login_page"))
 
     assert r.status_code == 200
-    assert f'action="{path_for("login_submit")}"' in r.text
+    assert f'action="{path_for("auth.login")}"' in r.text
 
 
 @pytest.mark.integration
@@ -200,12 +205,12 @@ async def test_a_failed_password_reset_returns_to_the_users_page(
     await _sign_in(client, db)
 
     r = await client.post(
-        path_for("web_reset_user_password", user_id=uuid4()),
+        path_for("users.reset_password", user_id=uuid4()),
         data={"new_password": "AnotherPass123!"},
     )
 
     assert r.status_code == 302
-    assert r.headers["location"].startswith(f"{path_for('users_page')}?error=")
+    assert r.headers["location"].startswith(f"{path_for('users.index')}?error=")
 
 
 @pytest.mark.integration
@@ -231,12 +236,12 @@ async def test_notification_log_row_links_name_their_routes(
     db.add(log)
     await db.flush()
 
-    r = await client.get(path_for("notification_logs_page"))
+    r = await client.get(path_for("notification_logs.index"))
 
     assert r.status_code == 200
-    assert path_for("check_detail_panel", check_id=check.id) in r.text
+    assert path_for("checks.show", check_id=check.id) in r.text
     snooze = (
-        f"{path_for('snooze_alert_check')}?alert_id={alert.id}"
+        f"{path_for('alert_snoozes.create')}?alert_id={alert.id}"
         f"&amp;check_id={check.id}&amp;log_id={log.id}"
     )
     assert snooze in r.text

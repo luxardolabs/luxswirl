@@ -25,7 +25,7 @@ router = APIRouter(tags=["Web UI - Checks"])
     "/check/{check_id}",
     response_class=HTMLResponse,
     include_in_schema=False,
-    name="check_detail_panel",
+    name="checks.show",
 )
 async def check_detail_panel(
     request: Request,
@@ -70,7 +70,7 @@ async def check_detail_panel(
     "/checks/detail/empty",
     response_class=HTMLResponse,
     include_in_schema=False,
-    name="check_detail_empty",
+    name="checks.detail_empty",
 )
 async def check_detail_empty(
     request: Request,

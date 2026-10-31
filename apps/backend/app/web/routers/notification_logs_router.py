@@ -34,7 +34,7 @@ router = APIRouter(tags=["Web UI - Notification Logs"])
     "/notification-logs",
     response_class=HTMLResponse,
     include_in_schema=False,
-    name="notification_logs_page",
+    name="notification_logs.index",
 )
 async def notification_logs_page(
     request: Request,

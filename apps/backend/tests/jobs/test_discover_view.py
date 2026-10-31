@@ -20,7 +20,7 @@ pytestmark = pytest.mark.unit
 
 class _Request:
     def url_for(self, name: str, **_: Any) -> SimpleNamespace:
-        assert name == "job_create_form"
+        assert name == "jobs.new"
         return SimpleNamespace(path="/jobs/create-form")
 
 

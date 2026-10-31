@@ -421,7 +421,7 @@ app.mount("/static", StaticFiles(directory=str(_APP_DIR / "static")), name="stat
 # Served at /mcp exactly as well as under it: a client configured without the
 # trailing slash would otherwise get a redirect, which many drop the token across.
 _mcp_app = create_mcp_app()
-app.router.routes.append(Route("/mcp", endpoint=_mcp_app, methods=["POST"], name="mcp"))
+app.router.routes.append(Route("/mcp", endpoint=_mcp_app, methods=["POST"], name="mcp.call"))
 app.mount("/mcp", _mcp_app, name="mcp_mount")
 
 # Include routers
@@ -451,7 +451,7 @@ app.include_router(api_activity_router)  # Web UI - MCP and admin API activity
 
 
 # Health check endpoint
-@app.get("/health", tags=["Health"], response_model=HealthResponse, name="health_check")
+@app.get("/health", tags=["Health"], response_model=HealthResponse, name="health.show")
 async def health_check() -> HealthResponse:
     """
     Health check endpoint.
@@ -467,7 +467,7 @@ async def health_check() -> HealthResponse:
 
 
 # Root API endpoint (only for /api prefix)
-@app.get("/api", tags=["Root"], response_model=ApiInfoResponse, name="api_root")
+@app.get("/api", tags=["Root"], response_model=ApiInfoResponse, name="api.root.show")
 async def api_root() -> ApiInfoResponse:
     """
     API root endpoint.

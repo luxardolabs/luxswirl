@@ -29,7 +29,7 @@ router = APIRouter(prefix="/settings", tags=["Web UI - Users"])
 
 
 @router.get(
-    "/users", response_class=HTMLResponse, include_in_schema=False, name="users_page"
+    "/users", response_class=HTMLResponse, include_in_schema=False, name="users.index"
 )
 async def users_page(
     request: Request,
@@ -60,7 +60,7 @@ async def users_page(
     "/users/partials/table",
     response_class=HTMLResponse,
     include_in_schema=False,
-    name="users_table_partial",
+    name="users.table",
 )
 async def users_table_partial(
     request: Request,
@@ -93,7 +93,7 @@ async def users_table_partial(
     "/users/create-form",
     response_class=HTMLResponse,
     include_in_schema=False,
-    name="create_user_form",
+    name="users.new",
 )
 async def create_user_form(
     request: Request,
@@ -117,7 +117,7 @@ async def create_user_form(
     "/users/create",
     response_class=HTMLResponse,
     include_in_schema=False,
-    name="create_user_submit",
+    name="users.create",
 )
 async def create_user_submit(
     request: Request,
@@ -175,7 +175,7 @@ async def create_user_submit(
     "/users/{user_id}/edit-form",
     response_class=HTMLResponse,
     include_in_schema=False,
-    name="edit_user_form",
+    name="users.edit",
 )
 async def edit_user_form(
     request: Request,
@@ -216,7 +216,7 @@ async def edit_user_form(
     "/users/{user_id}/update",
     response_class=HTMLResponse,
     include_in_schema=False,
-    name="update_user_submit",
+    name="users.update",
 )
 async def update_user_submit(
     request: Request,
@@ -268,7 +268,7 @@ async def update_user_submit(
 
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
-@router.post("/users/{user_id}/delete", include_in_schema=False, name="web_delete_user")
+@router.post("/users/{user_id}/delete", include_in_schema=False, name="users.delete")
 async def delete_user(
     user_id: UUID,
     admin: AdminUserWeb,
@@ -302,7 +302,7 @@ async def delete_user(
 @router.post(
     "/users/{user_id}/reset-password",
     include_in_schema=False,
-    name="web_reset_user_password",
+    name="users.reset_password",
 )
 @limiter.limit(settings.security.password_reset_rate_limit)
 async def reset_user_password(
@@ -346,7 +346,7 @@ async def reset_user_password(
     )
 
 
-@router.post("/users/{user_id}/unlock", include_in_schema=False, name="web_unlock_user")
+@router.post("/users/{user_id}/unlock", include_in_schema=False, name="users.unlock")
 async def unlock_user(
     user_id: UUID,
     admin: AdminUserWeb,

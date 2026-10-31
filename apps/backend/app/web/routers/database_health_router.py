@@ -21,7 +21,7 @@ router = APIRouter(tags=["Web UI - Database Health"], include_in_schema=False)
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.get(
-    "/database-health", response_class=HTMLResponse, name="database_health_page"
+    "/database-health", response_class=HTMLResponse, name="database_health.index"
 )
 async def database_health_page(
     request: Request,
@@ -41,7 +41,7 @@ async def database_health_page(
 @router.get(
     "/database-health/refresh",
     response_class=HTMLResponse,
-    name="database_health_refresh",
+    name="database_health.refresh",
 )
 async def database_health_refresh(
     request: Request,
@@ -61,7 +61,7 @@ async def database_health_refresh(
 @router.get(
     "/database-health/chart-data",
     response_class=HTMLResponse,
-    name="database_growth_chart_data",
+    name="database_health.chart_data",
 )
 async def database_growth_chart_data(
     request: Request,

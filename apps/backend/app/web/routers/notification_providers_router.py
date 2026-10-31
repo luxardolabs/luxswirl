@@ -27,7 +27,7 @@ router = APIRouter(tags=["Web UI - Notification Providers"], include_in_schema=F
 @router.get(
     "/notification-providers/create-form",
     response_class=HTMLResponse,
-    name="create_provider_form",
+    name="notification_providers.new",
 )
 async def create_provider_form(
     request: Request,
@@ -48,7 +48,7 @@ async def create_provider_form(
 @router.get(
     "/notification-providers/{provider_id}/edit-form",
     response_class=HTMLResponse,
-    name="edit_provider_form",
+    name="notification_providers.edit",
 )
 async def edit_provider_form(
     request: Request,
@@ -70,7 +70,7 @@ async def edit_provider_form(
 @router.post(
     "/notification-providers/create",
     response_class=HTMLResponse,
-    name="web_create_provider",
+    name="notification_providers.create",
 )
 async def create_provider(
     request: Request,
@@ -87,7 +87,7 @@ async def create_provider(
 @router.post(
     "/notification-providers/{provider_id}/update",
     response_class=HTMLResponse,
-    name="web_update_provider",
+    name="notification_providers.update",
 )
 async def update_provider(
     request: Request,
@@ -104,7 +104,7 @@ async def update_provider(
 @router.delete(
     "/notification-providers/{provider_id}",
     response_class=HTMLResponse,
-    name="web_delete_provider",
+    name="notification_providers.delete",
 )
 async def delete_provider(
     request: Request,
@@ -121,7 +121,7 @@ async def delete_provider(
 @router.post(
     "/notification-providers/{provider_id}/toggle",
     response_class=HTMLResponse,
-    name="toggle_provider",
+    name="notification_providers.toggle",
 )
 async def toggle_provider(
     request: Request,
@@ -140,7 +140,7 @@ async def toggle_provider(
 @router.post(
     "/notification-providers/{provider_id}/test",
     response_class=HTMLResponse,
-    name="web_test_provider",
+    name="notification_providers.test",
 )
 async def test_provider(
     request: Request,

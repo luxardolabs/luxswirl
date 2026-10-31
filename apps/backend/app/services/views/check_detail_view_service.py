@@ -118,14 +118,14 @@ def build_check_urls(request: Request, check_id: UUID, hours: int) -> dict[str, 
         return str(request.url_for(name, **kw).path)
 
     return {
-        "toggle": u("toggle_check", check_id=check_id),
-        "detail": f"{u('check_detail_panel', check_id=check_id)}?hours={hours}",
+        "toggle": u("checks.toggle", check_id=check_id),
+        "detail": f"{u('checks.show', check_id=check_id)}?hours={hours}",
         # The range selector posts its own ?hours=, so it needs the bare path.
-        "detail_base": u("check_detail_panel", check_id=check_id),
-        "clone_form": u("clone_form", check_id=check_id),
-        "dependents": u("dependents_panel", check_id=check_id),
-        "edit_form": u("check_edit_form", check_id=check_id),
-        "delete": u("web_delete_check", check_id=check_id),
+        "detail_base": u("checks.show", check_id=check_id),
+        "clone_form": u("checks.clone_form", check_id=check_id),
+        "dependents": u("check_dependents.index", check_id=check_id),
+        "edit_form": u("checks.edit", check_id=check_id),
+        "delete": u("checks.delete", check_id=check_id),
     }
 
 
@@ -519,10 +519,10 @@ class CheckDetailViewService:
                         "check_result_id": str(artifact.check_result_id),
                         # Finished hrefs, resolved by route name.
                         "view_url": request.url_for(
-                            "view_artifact", artifact_id=artifact.id
+                            "artifacts.show", artifact_id=artifact.id
                         ).path,
                         "viewer_url": request.url_for(
-                            "trace_viewer", artifact_id=artifact.id
+                            "artifacts.trace_viewer", artifact_id=artifact.id
                         ).path,
                     }
                     for artifact in artifacts_models
@@ -538,7 +538,7 @@ class CheckDetailViewService:
             "check_urls": build_check_urls(request, check_id, hours),
             # The parent link points at a DIFFERENT check, so it needs its own href.
             "parent_check_url": (
-                f"{request.url_for('check_detail_panel', check_id=dependency_info['parent_check'].id).path}"
+                f"{request.url_for('checks.show', check_id=dependency_info['parent_check'].id).path}"
                 f"?hours={hours}"
                 if dependency_info.get("parent_check")
                 else None

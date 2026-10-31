@@ -52,8 +52,12 @@ class ImportExportViewService:
             # .path, not str(): url_for returns an absolute url from the
             # request's scheme/host, which behind TLS-terminating nginx can emit
             # http:// into an https:// page.
-            "export_url": request.url_for("web_export_checks", agent_id=agent_id).path,
-            "import_url": request.url_for("web_import_checks", agent_id=agent_id).path,
+            "export_url": request.url_for(
+                "agent_checks.export", agent_id=agent_id
+            ).path,
+            "import_url": request.url_for(
+                "agent_checks.import", agent_id=agent_id
+            ).path,
         }
 
     @staticmethod

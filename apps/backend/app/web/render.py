@@ -113,7 +113,7 @@ def render_error_response(
     an empty body with HX-Reswap=none so the failed action's target is left
     intact and the user just sees an error toast.
     """
-    api_root = request.app.url_path_for("api_root")
+    api_root = request.app.url_path_for("api.root.show")
     wants_json = request.url.path.startswith(f"{api_root}/") or (
         "application/json" in request.headers.get("accept", "")
     )

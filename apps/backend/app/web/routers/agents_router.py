@@ -37,7 +37,7 @@ router = APIRouter(tags=["Web UI - Agents"])
     "/agents",
     response_class=HTMLResponse,
     include_in_schema=False,
-    name="agents_list_page",
+    name="agents.index",
 )
 async def agents_list_page(
     request: Request,
@@ -66,7 +66,7 @@ async def agents_list_page(
     "/agents/{agent_id}/edit-form",
     response_class=HTMLResponse,
     include_in_schema=False,
-    name="agent_edit_form",
+    name="agents.edit",
 )
 async def agent_edit_form(
     agent_id: UUID,
@@ -98,7 +98,7 @@ async def agent_edit_form(
     "/agents/{agent_id}",
     response_class=HTMLResponse,
     include_in_schema=False,
-    name="update_agent_web",
+    name="agents.update",
 )
 async def update_agent_web(
     agent_id: UUID,
@@ -151,7 +151,7 @@ async def update_agent_web(
     "/agents/{agent_id}/delete-impact",
     response_class=HTMLResponse,
     include_in_schema=False,
-    name="agent_delete_impact",
+    name="agents.delete_impact",
 )
 async def agent_delete_impact(
     request: Request,
@@ -178,7 +178,7 @@ async def agent_delete_impact(
     "/agents/{agent_id}",
     response_class=HTMLResponse,
     include_in_schema=False,
-    name="delete_agent_web",
+    name="agents.delete",
 )
 async def delete_agent_web(
     request: Request,
@@ -241,7 +241,7 @@ async def delete_agent_web(
 @router.post(
     "/agents/{agent_id}/force-reload",
     include_in_schema=False,
-    name="force_reload_agent",
+    name="agents.force_reload",
 )
 async def force_reload_agent(
     agent_id: UUID,
@@ -257,7 +257,7 @@ async def force_reload_agent(
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post(
-    "/agents/{agent_id}/approve-web", include_in_schema=False, name="approve_agent_web"
+    "/agents/{agent_id}/approve-web", include_in_schema=False, name="agents.approve"
 )
 async def approve_agent_web(
     agent_id: UUID,
@@ -270,7 +270,7 @@ async def approve_agent_web(
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post(
-    "/agents/{agent_id}/reject-web", include_in_schema=False, name="reject_agent_web"
+    "/agents/{agent_id}/reject-web", include_in_schema=False, name="agents.reject"
 )
 async def reject_agent_web(
     agent_id: UUID,
@@ -284,7 +284,7 @@ async def reject_agent_web(
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post(
-    "/agents/{agent_id}/pause-web", include_in_schema=False, name="pause_agent_web"
+    "/agents/{agent_id}/pause-web", include_in_schema=False, name="agents.pause"
 )
 async def pause_agent_web(
     agent_id: UUID,
@@ -297,7 +297,7 @@ async def pause_agent_web(
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post(
-    "/agents/{agent_id}/resume-web", include_in_schema=False, name="resume_agent_web"
+    "/agents/{agent_id}/resume-web", include_in_schema=False, name="agents.resume"
 )
 async def resume_agent_web(
     agent_id: UUID,
@@ -309,7 +309,7 @@ async def resume_agent_web(
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post(
-    "/agents/{agent_id}/disable-web", include_in_schema=False, name="disable_agent_web"
+    "/agents/{agent_id}/disable-web", include_in_schema=False, name="agents.disable"
 )
 async def disable_agent_web(
     agent_id: UUID,
@@ -322,7 +322,7 @@ async def disable_agent_web(
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post(
-    "/agents/{agent_id}/enable-web", include_in_schema=False, name="enable_agent_web"
+    "/agents/{agent_id}/enable-web", include_in_schema=False, name="agents.enable"
 )
 async def enable_agent_web(
     agent_id: UUID,
@@ -334,7 +334,7 @@ async def enable_agent_web(
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post(
-    "/agents/{agent_id}/archive-web", include_in_schema=False, name="archive_agent_web"
+    "/agents/{agent_id}/archive-web", include_in_schema=False, name="agents.archive"
 )
 async def archive_agent_web(
     agent_id: UUID,
@@ -346,7 +346,7 @@ async def archive_agent_web(
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post(
-    "/agents/{agent_id}/restore-web", include_in_schema=False, name="restore_agent_web"
+    "/agents/{agent_id}/restore-web", include_in_schema=False, name="agents.restore"
 )
 async def restore_agent_web(
     agent_id: UUID,
@@ -364,7 +364,7 @@ async def restore_agent_web(
     "/agents/{agent_id}/key-management-panel",
     response_class=HTMLResponse,
     include_in_schema=False,
-    name="get_key_management_panel",
+    name="agent_keys.show",
 )
 async def get_key_management_panel(
     agent_id: UUID,
@@ -396,7 +396,7 @@ async def get_key_management_panel(
     "/agents/{agent_id}/generate-key-web",
     response_class=HTMLResponse,
     include_in_schema=False,
-    name="generate_key_web",
+    name="agent_keys.create",
 )
 async def generate_key_web(
     agent_id: UUID,
@@ -420,7 +420,7 @@ async def generate_key_web(
     "/agents/{agent_id}/regenerate-key-web",
     response_class=HTMLResponse,
     include_in_schema=False,
-    name="regenerate_key_web",
+    name="agent_keys.regenerate",
 )
 async def regenerate_key_web(
     agent_id: UUID,
@@ -439,7 +439,9 @@ async def regenerate_key_web(
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.delete(
-    "/agents/{agent_id}/revoke-key-web", include_in_schema=False, name="revoke_key_web"
+    "/agents/{agent_id}/revoke-key-web",
+    include_in_schema=False,
+    name="agent_keys.delete",
 )
 async def revoke_key_web(
     agent_id: UUID,

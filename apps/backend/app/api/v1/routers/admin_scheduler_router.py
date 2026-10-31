@@ -28,7 +28,9 @@ router = APIRouter(
 LIMIT = settings.security.admin_api_rate_limit
 
 
-@router.get("", response_model=list[SchedulerJobResponse], name="admin_list_jobs")
+@router.get(
+    "", response_model=list[SchedulerJobResponse], name="api.admin.scheduler_jobs.index"
+)
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_list_jobs(
     request: Request, principal: ApiAdmin
@@ -37,7 +39,11 @@ async def admin_list_jobs(
     return await AdminSchedulerCoreService.list_jobs()
 
 
-@router.get("/{job_key}", response_model=SchedulerJobResponse, name="admin_get_job")
+@router.get(
+    "/{job_key}",
+    response_model=SchedulerJobResponse,
+    name="api.admin.scheduler_jobs.show",
+)
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_get_job(
     request: Request, job_key: str, principal: ApiAdmin
@@ -48,7 +54,7 @@ async def admin_get_job(
 @router.get(
     "/{job_key}/history",
     response_model=list[SchedulerExecutionResponse],
-    name="admin_get_job_history",
+    name="api.admin.scheduler_jobs.history",
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_get_job_history(
@@ -62,7 +68,9 @@ async def admin_get_job_history(
 
 
 @router.post(
-    "/{job_key}/enable", response_model=SchedulerJobResponse, name="admin_enable_job"
+    "/{job_key}/enable",
+    response_model=SchedulerJobResponse,
+    name="api.admin.scheduler_jobs.enable",
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_enable_job(
@@ -75,7 +83,7 @@ async def admin_enable_job(
 @router.post(
     "/{job_key}/disable",
     response_model=SchedulerJobResponse,
-    name="admin_disable_job",
+    name="api.admin.scheduler_jobs.disable",
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_disable_job(
@@ -85,7 +93,11 @@ async def admin_disable_job(
     return await AdminSchedulerCoreService.set_enabled(job_key, False)
 
 
-@router.post("/{job_key}/run", response_model=SchedulerRunResult, name="admin_run_job")
+@router.post(
+    "/{job_key}/run",
+    response_model=SchedulerRunResult,
+    name="api.admin.scheduler_jobs.run",
+)
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_run_job(
     request: Request, job_key: str, principal: ApiAdmin
@@ -96,7 +108,9 @@ async def admin_run_job(
 
 
 @router.post(
-    "/{job_key}/reset", response_model=SchedulerJobResponse, name="admin_reset_job"
+    "/{job_key}/reset",
+    response_model=SchedulerJobResponse,
+    name="api.admin.scheduler_jobs.reset",
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_reset_job(

@@ -236,7 +236,7 @@ async def _unauthenticated_web_redirect(
         )
     # The requested path rides as an encoded query value; the whole target still
     # goes through the one safe-redirect helper, since part of it is the request's.
-    login = request.app.url_path_for("login_page")
+    login = request.app.url_path_for("auth.login_page")
     target = f"{login}?{urlencode({'redirect': request.url.path})}"
     return HTTPException(
         status_code=status.HTTP_307_TEMPORARY_REDIRECT,
@@ -280,10 +280,10 @@ async def get_current_user_web(
     # A seeded or reset password must be changed before any other page
     # (FLEET-ADMIN-BOOTSTRAP-STANDARD §5): login sends the user to the form, and
     # every other web route sends them back to it until they change it.
-    change_password = request.app.url_path_for("change_password_page")
+    change_password = request.app.url_path_for("auth.change_password_page")
     if session.user.must_change_password and request.url.path not in {
         change_password,
-        request.app.url_path_for("web_logout"),
+        request.app.url_path_for("auth.logout"),
     }:
         raise HTTPException(
             status_code=status.HTTP_307_TEMPORARY_REDIRECT,
@@ -301,7 +301,7 @@ async def require_admin_web(
     """Require admin role for web routes (redirects non-admins to home)."""
     if current_user.role != "admin":
         # Redirect to home page with error message
-        home = request.app.url_path_for("root_redirect")
+        home = request.app.url_path_for("home.redirect")
         raise HTTPException(
             status_code=status.HTTP_307_TEMPORARY_REDIRECT,
             headers={"Location": f"{home}?error=admin_required"},
@@ -316,7 +316,7 @@ async def require_editor_web(
     """Require editor role or higher for web routes (redirects viewers to home)."""
     if current_user.role not in ("admin", "editor"):
         # Redirect to home page with error message
-        home = request.app.url_path_for("root_redirect")
+        home = request.app.url_path_for("home.redirect")
         raise HTTPException(
             status_code=status.HTTP_307_TEMPORARY_REDIRECT,
             headers={"Location": f"{home}?error=editor_required"},

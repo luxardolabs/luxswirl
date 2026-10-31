@@ -360,11 +360,11 @@ class StatusViewService:
             return str(request.app.url_path_for(name))
 
         return DashboardUrls(
-            page=u("status_page"),
-            create_form=u("check_create_form"),
-            summary=u("status_summary_partial"),
-            bulk_action=u("bulk_action"),
-            bulk_modify=u("bulk_modify"),
+            page=u("dashboard.index"),
+            create_form=u("checks.new"),
+            summary=u("dashboard.summary"),
+            bulk_action=u("checks.bulk_action"),
+            bulk_modify=u("checks.bulk_modify"),
         )
 
     @staticmethod
@@ -378,7 +378,7 @@ class StatusViewService:
         https:// page.
         """
         for row in rows:
-            path = request.url_for("check_detail_panel", check_id=row.check_id).path
+            path = request.url_for("checks.show", check_id=row.check_id).path
             row._detail_url = f"{path}?hours={hours}"
         return rows
 

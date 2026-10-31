@@ -31,7 +31,7 @@ router = APIRouter(
 LIMIT = settings.security.admin_api_rate_limit
 
 
-@router.get("", response_model=list[AdminSetting], name="admin_list_settings")
+@router.get("", response_model=list[AdminSetting], name="api.admin.settings.index")
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_list_settings(
     request: Request,
@@ -47,7 +47,7 @@ async def admin_list_settings(
     "/metrics-token",
     response_model=MetricsToken,
     status_code=status.HTTP_201_CREATED,
-    name="admin_generate_metrics_token",
+    name="api.admin.metrics_token.create",
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_generate_metrics_token(
@@ -60,7 +60,7 @@ async def admin_generate_metrics_token(
     return await AdminSettingCoreService.generate_metrics_token(db)
 
 
-@router.get("/{key}", response_model=AdminSetting, name="admin_get_setting")
+@router.get("/{key}", response_model=AdminSetting, name="api.admin.settings.show")
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_get_setting(
     request: Request,
@@ -71,7 +71,7 @@ async def admin_get_setting(
     return await AdminSettingCoreService.get_setting(db, key)
 
 
-@router.put("/{key}", response_model=AdminSetting, name="admin_set_setting")
+@router.put("/{key}", response_model=AdminSetting, name="api.admin.settings.update")
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_set_setting(
     request: Request,
@@ -84,7 +84,9 @@ async def admin_set_setting(
     return await AdminSettingCoreService.set_setting(db, key, data)
 
 
-@router.post("/{key}/reset", response_model=AdminSetting, name="admin_reset_setting")
+@router.post(
+    "/{key}/reset", response_model=AdminSetting, name="api.admin.settings.reset"
+)
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_reset_setting(
     request: Request,

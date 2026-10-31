@@ -28,7 +28,10 @@ router = APIRouter(tags=["Web UI - Auth"])
 
 
 @router.get(
-    "/login", response_class=HTMLResponse, include_in_schema=False, name="login_page"
+    "/login",
+    response_class=HTMLResponse,
+    include_in_schema=False,
+    name="auth.login_page",
 )
 async def login_page(
     request: Request,
@@ -50,7 +53,7 @@ async def login_page(
     # Where to land after sign-in: the requested page when it is on this site,
     # else home (resolved by name).
     target = safe_redirect_target(
-        redirect, default=request.app.url_path_for("root_redirect")
+        redirect, default=request.app.url_path_for("home.redirect")
     )
 
     # Already signed in: go there now.
@@ -73,7 +76,7 @@ async def login_page(
 
 
 @router.post(
-    "/login", response_class=HTMLResponse, include_in_schema=False, name="login_submit"
+    "/login", response_class=HTMLResponse, include_in_schema=False, name="auth.login"
 )
 @limiter.limit(login_rate_limit)
 async def login_submit(
@@ -94,7 +97,7 @@ async def login_submit(
     # Where to land after sign-in: the requested page when it is on this site,
     # else home (resolved by name).
     target = safe_redirect_target(
-        redirect, default=request.app.url_path_for("root_redirect")
+        redirect, default=request.app.url_path_for("home.redirect")
     )
 
     # Capture request context up-front for both success and failure paths.
@@ -145,7 +148,7 @@ async def login_submit(
     # Check if password must be changed
     if user.must_change_password:
         # Set cookie first
-        change_password = request.app.url_path_for("change_password_page")
+        change_password = request.app.url_path_for("auth.change_password_page")
         response = RedirectResponse(
             url=f"{change_password}?required=true", status_code=status.HTTP_302_FOUND
         )
@@ -175,8 +178,8 @@ async def login_submit(
     return response
 
 
-@router.get("/logout", include_in_schema=False, name="web_logout")
-@router.post("/logout", include_in_schema=False, name="web_logout")
+@router.get("/logout", include_in_schema=False, name="auth.logout")
+@router.post("/logout", include_in_schema=False, name="auth.logout")
 async def logout(
     request: Request,
     user: OptionalUserWeb,
@@ -199,7 +202,7 @@ async def logout(
     "/change-password",
     response_class=HTMLResponse,
     include_in_schema=False,
-    name="change_password_page",
+    name="auth.change_password_page",
 )
 async def change_password_page(
     request: Request,
@@ -213,7 +216,7 @@ async def change_password_page(
     """
     if not user:
         return RedirectResponse(
-            url=request.app.url_path_for("login_page"),
+            url=request.app.url_path_for("auth.login_page"),
             status_code=status.HTTP_302_FOUND,
         )
 
@@ -235,7 +238,7 @@ async def change_password_page(
     "/change-password",
     response_class=HTMLResponse,
     include_in_schema=False,
-    name="change_password_submit",
+    name="auth.change_password",
 )
 # Same limit as /login, because it does the same thing: it verifies
 # `current_password`. Unlimited attempts here is unlimited guessing of a
@@ -255,7 +258,7 @@ async def change_password_submit(
     """
     if not user:
         return RedirectResponse(
-            url=request.app.url_path_for("login_page"),
+            url=request.app.url_path_for("auth.login_page"),
             status_code=status.HTTP_302_FOUND,
         )
 
@@ -298,7 +301,7 @@ async def change_password_submit(
         # If password change was required, redirect to home
         if required or user.must_change_password:
             return RedirectResponse(
-                url=request.app.url_path_for("root_redirect"),
+                url=request.app.url_path_for("home.redirect"),
                 status_code=status.HTTP_302_FOUND,
             )
 

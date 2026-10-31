@@ -38,7 +38,7 @@ router = APIRouter(tags=["Web UI - Status Pages"])
     "/status-pages",
     response_class=HTMLResponse,
     include_in_schema=False,
-    name="status_pages_list",
+    name="status_pages.index",
 )
 async def status_pages_list(
     request: Request,
@@ -62,7 +62,7 @@ async def status_pages_list(
     "/status-pages/create-form",
     response_class=HTMLResponse,
     include_in_schema=False,
-    name="status_page_create_form",
+    name="status_pages.new",
 )
 async def create_form(
     request: Request,
@@ -82,7 +82,7 @@ async def create_form(
     "/status-pages/{status_page_id}/edit-form",
     response_class=HTMLResponse,
     include_in_schema=False,
-    name="status_page_edit_form",
+    name="status_pages.edit",
 )
 async def edit_form(
     request: Request,
@@ -111,7 +111,7 @@ async def edit_form(
     "/status-pages/create",
     response_class=HTMLResponse,
     include_in_schema=False,
-    name="create_status_page",
+    name="status_pages.create",
 )
 async def create_status_page(
     request: Request,
@@ -135,7 +135,7 @@ async def create_status_page(
     "/status-pages/{status_page_id}/update",
     response_class=HTMLResponse,
     include_in_schema=False,
-    name="update_status_page",
+    name="status_pages.update",
 )
 async def update_status_page(
     request: Request,
@@ -160,7 +160,7 @@ async def update_status_page(
     "/status-pages/{status_page_id}",
     response_class=HTMLResponse,
     include_in_schema=False,
-    name="delete_status_page",
+    name="status_pages.delete",
 )
 async def delete_status_page(
     request: Request,
@@ -190,7 +190,7 @@ async def delete_status_page(
     "/status-pages/{status_page_id}/manage",
     response_class=HTMLResponse,
     include_in_schema=False,
-    name="manage_status_page",
+    name="status_pages.manage",
 )
 async def manage_status_page(
     request: Request,
@@ -216,7 +216,7 @@ async def manage_status_page(
     "/status-pages/{status_page_id}/available-checks",
     response_class=HTMLResponse,
     include_in_schema=False,
-    name="get_available_checks",
+    name="status_page_items.available_checks",
 )
 async def get_available_checks(
     request: Request,
@@ -251,7 +251,7 @@ async def get_available_checks(
     "/status-pages/{status_page_id}/add-check",
     response_class=HTMLResponse,
     include_in_schema=False,
-    name="add_check_to_dashboard",
+    name="status_page_items.add_check",
 )
 async def add_check_to_dashboard(
     request: Request,
@@ -279,7 +279,7 @@ async def add_check_to_dashboard(
     "/status-pages/{status_page_id}/remove-item/{item_index}",
     response_class=HTMLResponse,
     include_in_schema=False,
-    name="remove_item_from_dashboard",
+    name="status_page_items.delete",
 )
 async def remove_item_from_dashboard(
     request: Request,
@@ -305,7 +305,7 @@ async def remove_item_from_dashboard(
     "/status-pages/{status_page_id}/reorder",
     response_class=HTMLResponse,
     include_in_schema=False,
-    name="reorder_dashboard_items",
+    name="status_page_items.reorder",
 )
 async def reorder_dashboard_items(
     request: Request,
@@ -326,7 +326,7 @@ async def reorder_dashboard_items(
     "/status-pages/{status_page_id}/add-group",
     response_class=HTMLResponse,
     include_in_schema=False,
-    name="add_group_to_dashboard",
+    name="status_page_items.add_group",
 )
 async def add_group_to_dashboard(
     request: Request,
@@ -355,7 +355,7 @@ async def add_group_to_dashboard(
     "/status-pages/{status_page_id}/rename-group/{item_index}",
     response_class=HTMLResponse,
     include_in_schema=False,
-    name="rename_group_in_dashboard",
+    name="status_page_groups.rename",
 )
 async def rename_group_in_dashboard(
     request: Request,
@@ -379,7 +379,7 @@ async def rename_group_in_dashboard(
     "/status-pages/{status_page_id}/update-group-filters/{item_index}",
     response_class=HTMLResponse,
     include_in_schema=False,
-    name="update_group_filters_in_dashboard",
+    name="status_page_groups.update_filters",
 )
 async def update_group_filters_in_dashboard(
     request: Request,
@@ -401,7 +401,7 @@ async def update_group_filters_in_dashboard(
     "/status-pages/{status_page_id}/group/{item_index}/sort",
     response_class=HTMLResponse,
     include_in_schema=False,
-    name="update_group_sort_in_dashboard",
+    name="status_page_groups.sort",
 )
 async def update_group_sort_in_dashboard(
     request: Request,
@@ -424,7 +424,7 @@ async def update_group_sort_in_dashboard(
     "/status-pages/{status_page_id}/dashboard-items",
     response_class=HTMLResponse,
     include_in_schema=False,
-    name="get_dashboard_items",
+    name="status_page_items.index",
 )
 async def get_dashboard_items(
     request: Request,
@@ -446,7 +446,7 @@ async def get_dashboard_items(
     "/status/{slug}",
     response_class=HTMLResponse,
     include_in_schema=False,
-    name="view_public_status_page",
+    name="public_status_pages.show",
 )
 async def view_public_status_page(
     request: Request,
@@ -490,7 +490,7 @@ async def view_public_status_page(
     "/status/{slug}/partial",
     response_class=HTMLResponse,
     include_in_schema=False,
-    name="view_public_status_page_partial",
+    name="public_status_pages.partial",
 )
 async def view_public_status_page_partial(
     request: Request,

@@ -122,7 +122,7 @@ class ApiActivityViewService:
             route=(route or None) if surface is AuditSurface.API else None,
             outcome=outcome,
         )
-        page_url = str(request.app.url_path_for("api_activity_page"))
+        page_url = str(request.app.url_path_for("api_activity.index"))
         rows: list[dict[str, Any]]
         if surface is AuditSurface.MCP:
             callers = await MCPAuditCoreService.callers(db, days)
@@ -132,7 +132,7 @@ class ApiActivityViewService:
                     call,
                     detail_url=str(
                         request.app.url_path_for(
-                            "api_activity_mcp_call", call_id=str(call.id)
+                            "api_activity.mcp_call", call_id=str(call.id)
                         )
                     ),
                 )
@@ -215,7 +215,7 @@ class ApiActivityViewService:
         surface = surface or AuditSurface.MCP
         days = clamp_days(days)
         filters = ActivityFilters(days=days, user_id=current_user.id)
-        own_url = str(request.app.url_path_for("profile_activity"))
+        own_url = str(request.app.url_path_for("profile_activity.index"))
         calls: list[McpCallRow] | list[ApiCallRow]
         if surface is AuditSurface.MCP:
             calls = await MCPAuditCoreService.list_calls(db, filters, OWN_ROWS)

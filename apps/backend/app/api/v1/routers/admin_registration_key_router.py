@@ -35,7 +35,9 @@ router = APIRouter(
 LIMIT = settings.security.admin_api_rate_limit
 
 
-@router.get("", response_model=RegistrationKeyPage, name="admin_list_registration_keys")
+@router.get(
+    "", response_model=RegistrationKeyPage, name="api.admin.registration_keys.index"
+)
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_list_registration_keys(
     request: Request,
@@ -54,7 +56,7 @@ async def admin_list_registration_keys(
 @router.get(
     "/{key_id}",
     response_model=RegistrationKeyResponse,
-    name="admin_get_registration_key",
+    name="api.admin.registration_keys.show",
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_get_registration_key(
@@ -70,7 +72,7 @@ async def admin_get_registration_key(
     "",
     response_model=RegistrationKeyCreated,
     status_code=status.HTTP_201_CREATED,
-    name="admin_create_registration_key",
+    name="api.admin.registration_keys.create",
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_create_registration_key(
@@ -88,7 +90,7 @@ async def admin_create_registration_key(
 @router.post(
     "/{key_id}/revoke",
     response_model=RegistrationKeyResponse,
-    name="admin_revoke_registration_key",
+    name="api.admin.registration_keys.revoke",
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_revoke_registration_key(

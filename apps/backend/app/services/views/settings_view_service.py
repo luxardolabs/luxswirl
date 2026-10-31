@@ -43,8 +43,8 @@ from app.web.templates import templates
 def build_setting_urls(request: Request, key: str) -> SettingUrls:
     """Resolve one setting's update/reset hrefs by route name."""
     return SettingUrls(
-        update=str(request.url_for("update_setting", key=key).path),
-        reset=str(request.url_for("reset_setting", key=key).path),
+        update=str(request.url_for("settings.update", key=key).path),
+        reset=str(request.url_for("settings.reset", key=key).path),
     )
 
 
@@ -55,10 +55,10 @@ def build_metrics_card_urls(request: Request) -> MetricsCardUrls:
         return str(request.app.url_path_for(name))
 
     return MetricsCardUrls(
-        toggle_enabled=u("toggle_metrics_enabled"),
-        toggle_auth=u("toggle_metrics_auth"),
-        update_timeout=u("update_metrics_timeout"),
-        generate_token=u("generate_metrics_token"),
+        toggle_enabled=u("metrics_settings.toggle_enabled"),
+        toggle_auth=u("metrics_settings.toggle_auth"),
+        update_timeout=u("metrics_settings.update_timeout"),
+        generate_token=u("metrics_settings.generate_token"),
     )
 
 
@@ -252,16 +252,16 @@ class SettingsViewService:
                     **p.model_dump(),
                     urls=ProviderUrls(
                         toggle=request.url_for(
-                            "toggle_provider", provider_id=p.id
+                            "notification_providers.toggle", provider_id=p.id
                         ).path,
                         test=request.url_for(
-                            "web_test_provider", provider_id=p.id
+                            "notification_providers.test", provider_id=p.id
                         ).path,
                         edit_form=request.url_for(
-                            "edit_provider_form", provider_id=p.id
+                            "notification_providers.edit", provider_id=p.id
                         ).path,
                         delete=request.url_for(
-                            "web_delete_provider", provider_id=p.id
+                            "notification_providers.delete", provider_id=p.id
                         ).path,
                     ),
                 )
@@ -269,7 +269,9 @@ class SettingsViewService:
             ],
             "total_providers": total,
             "available_types": NotificationCoreService.get_available_provider_types(),
-            "provider_create_form_url": request.url_for("create_provider_form").path,
+            "provider_create_form_url": request.url_for(
+                "notification_providers.new"
+            ).path,
             "page_title": "Settings - Notifications",
         }
 
@@ -300,19 +302,17 @@ class SettingsViewService:
             page=page, per_page=per_page, total=total, filters=filters
         )
         return {
-            "alerts_url": request.url_for("settings_alerts").path,
-            "alert_create_form_url": request.url_for("create_alert_form").path,
+            "alerts_url": request.url_for("settings.alerts").path,
+            "alert_create_form_url": request.url_for("alerts.new").path,
             "request": request,
             "current_user": current_user,
             "alerts": [
                 AlertRow(
                     **a.model_dump(),
                     urls=AlertUrls(
-                        edit_form=request.url_for(
-                            "edit_alert_form", alert_id=a.id
-                        ).path,
-                        delete=request.url_for("web_delete_alert", alert_id=a.id).path,
-                        toggle=request.url_for("toggle_alert", alert_id=a.id).path,
+                        edit_form=request.url_for("alerts.edit", alert_id=a.id).path,
+                        delete=request.url_for("alerts.delete", alert_id=a.id).path,
+                        toggle=request.url_for("alerts.toggle", alert_id=a.id).path,
                     ),
                 )
                 for a in alerts
@@ -347,8 +347,12 @@ class SettingsViewService:
                 RegistrationKeyRow(
                     **dict(k),
                     urls=RegistrationKeyUrls(
-                        revoke=request.url_for("revoke_key", key_id=k.id).path,
-                        delete=request.url_for("delete_key", key_id=k.id).path,
+                        revoke=request.url_for(
+                            "registration_keys.revoke", key_id=k.id
+                        ).path,
+                        delete=request.url_for(
+                            "registration_keys.delete", key_id=k.id
+                        ).path,
                     ),
                 )
                 for k in keys
@@ -356,7 +360,9 @@ class SettingsViewService:
             "total_keys": total,
             "metrics_settings": await SettingsCoreService.get_metrics_settings(db),
             "metrics_urls": build_metrics_card_urls(request),
-            "create_key_form_url": str(request.app.url_path_for("create_key_form")),
+            "create_key_form_url": str(
+                request.app.url_path_for("registration_keys.new")
+            ),
             "page_title": "Settings - API Keys",
         }
 
@@ -375,7 +381,7 @@ class SettingsViewService:
             "page_title": "Settings - Components",
             "sample_pagination": build_pagination(page=2, per_page=10, total=42),
             # The sample filter/pagination swatches link back to this page.
-            "list_url": str(request.app.url_path_for("settings_components")),
+            "list_url": str(request.app.url_path_for("settings.components")),
             "sample_status_row": {
                 "check_id": "00000000-0000-0000-0000-000000000000",
                 "check_name": "api-health",

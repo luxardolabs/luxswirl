@@ -28,7 +28,7 @@ router = APIRouter(tags=["Metrics"])
     summary="Prometheus metrics endpoint",
     description="Export metrics in Prometheus text format (optional auth)",
     response_class=Response,
-    name="get_metrics",
+    name="metrics.show",
 )
 @limiter.limit(api_rate_limit)
 async def get_metrics(

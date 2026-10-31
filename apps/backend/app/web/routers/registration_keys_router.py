@@ -27,7 +27,7 @@ router = APIRouter(tags=["Web UI - Registration Keys"], include_in_schema=False)
 @router.get(
     "/registration-keys/create-form",
     response_class=HTMLResponse,
-    name="create_key_form",
+    name="registration_keys.new",
 )
 async def create_key_form(
     request: Request,
@@ -43,7 +43,9 @@ async def create_key_form(
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post(
-    "/registration-keys/create", response_class=HTMLResponse, name="create_key"
+    "/registration-keys/create",
+    response_class=HTMLResponse,
+    name="registration_keys.create",
 )
 async def create_key(
     request: Request,
@@ -65,7 +67,9 @@ async def create_key(
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.post(
-    "/registration-keys/{key_id}/revoke", response_class=HTMLResponse, name="revoke_key"
+    "/registration-keys/{key_id}/revoke",
+    response_class=HTMLResponse,
+    name="registration_keys.revoke",
 )
 async def revoke_key(
     request: Request,
@@ -82,7 +86,9 @@ async def revoke_key(
 
 
 @router.delete(
-    "/registration-keys/{key_id}", response_class=HTMLResponse, name="delete_key"
+    "/registration-keys/{key_id}",
+    response_class=HTMLResponse,
+    name="registration_keys.delete",
 )
 async def delete_key(
     request: Request,

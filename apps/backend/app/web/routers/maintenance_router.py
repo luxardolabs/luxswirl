@@ -30,7 +30,7 @@ router = APIRouter(tags=["Web UI - Maintenance"])
     "/maintenance/{job_id}/status",
     response_class=HTMLResponse,
     include_in_schema=False,
-    name="maintenance_job_status",
+    name="maintenance_jobs.status",
 )
 async def maintenance_job_status(
     request: Request,

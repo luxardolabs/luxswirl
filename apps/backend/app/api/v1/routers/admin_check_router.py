@@ -45,7 +45,7 @@ router = APIRouter(
 LIMIT = settings.security.admin_api_rate_limit
 
 
-@router.get("", response_model=CheckPage, name="admin_list_checks")
+@router.get("", response_model=CheckPage, name="api.admin.checks.index")
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_list_checks(
     request: Request,
@@ -77,7 +77,7 @@ async def admin_list_checks(
 
 
 @router.post(
-    "/bulk/enable", response_model=BulkCheckResult, name="admin_bulk_enable_checks"
+    "/bulk/enable", response_model=BulkCheckResult, name="api.admin.checks.bulk_enable"
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_bulk_enable_checks(
@@ -93,7 +93,9 @@ async def admin_bulk_enable_checks(
 
 
 @router.post(
-    "/bulk/disable", response_model=BulkCheckResult, name="admin_bulk_disable_checks"
+    "/bulk/disable",
+    response_model=BulkCheckResult,
+    name="api.admin.checks.bulk_disable",
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_bulk_disable_checks(
@@ -112,7 +114,7 @@ async def admin_bulk_disable_checks(
     "/bulk/delete",
     response_model=MaintenanceJobResponse,
     status_code=status.HTTP_202_ACCEPTED,
-    name="admin_bulk_delete_checks",
+    name="api.admin.checks.bulk_delete",
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_bulk_delete_checks(
@@ -134,7 +136,7 @@ async def admin_bulk_delete_checks(
     "/bulk/modify",
     response_model=MaintenanceJobResponse,
     status_code=status.HTTP_202_ACCEPTED,
-    name="admin_bulk_modify_checks",
+    name="api.admin.checks.bulk_modify",
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_bulk_modify_checks(
@@ -155,7 +157,7 @@ async def admin_bulk_modify_checks(
     "/bulk/create",
     response_model=MaintenanceJobResponse,
     status_code=status.HTTP_202_ACCEPTED,
-    name="admin_bulk_create_checks",
+    name="api.admin.checks.bulk_create",
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_bulk_create_checks(
@@ -172,7 +174,7 @@ async def admin_bulk_create_checks(
     )
 
 
-@router.get("/{check_id}", response_model=CheckResponse, name="admin_get_check")
+@router.get("/{check_id}", response_model=CheckResponse, name="api.admin.checks.show")
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_get_check(
     request: Request,
@@ -187,7 +189,7 @@ async def admin_get_check(
     "",
     response_model=CheckResponse,
     status_code=status.HTTP_201_CREATED,
-    name="admin_create_check",
+    name="api.admin.checks.create",
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_create_check(
@@ -199,7 +201,9 @@ async def admin_create_check(
     return await AdminCheckCoreService.create_check(db, principal.user.role, data)
 
 
-@router.patch("/{check_id}", response_model=CheckResponse, name="admin_update_check")
+@router.patch(
+    "/{check_id}", response_model=CheckResponse, name="api.admin.checks.update"
+)
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_update_check(
     request: Request,
@@ -214,7 +218,9 @@ async def admin_update_check(
 
 
 @router.delete(
-    "/{check_id}", status_code=status.HTTP_204_NO_CONTENT, name="admin_delete_check"
+    "/{check_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    name="api.admin.checks.delete",
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_delete_check(
@@ -231,7 +237,7 @@ async def admin_delete_check(
     "/{check_id}/clone",
     response_model=CheckResponse,
     status_code=status.HTTP_201_CREATED,
-    name="admin_clone_check",
+    name="api.admin.checks.clone",
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_clone_check(
@@ -247,7 +253,7 @@ async def admin_clone_check(
 
 
 @router.post(
-    "/{check_id}/enable", response_model=CheckResponse, name="admin_enable_check"
+    "/{check_id}/enable", response_model=CheckResponse, name="api.admin.checks.enable"
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_enable_check(
@@ -262,7 +268,7 @@ async def admin_enable_check(
 
 
 @router.post(
-    "/{check_id}/disable", response_model=CheckResponse, name="admin_disable_check"
+    "/{check_id}/disable", response_model=CheckResponse, name="api.admin.checks.disable"
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_disable_check(
@@ -279,7 +285,7 @@ async def admin_disable_check(
 @router.get(
     "/{check_id}/dependents",
     response_model=list[CheckResponse],
-    name="admin_list_check_dependents",
+    name="api.admin.check_dependents.index",
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_list_check_dependents(
@@ -297,7 +303,7 @@ async def admin_list_check_dependents(
 @router.put(
     "/{check_id}/dependents",
     response_model=DependentsChange,
-    name="admin_set_check_dependents",
+    name="api.admin.check_dependents.update",
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_set_check_dependents(

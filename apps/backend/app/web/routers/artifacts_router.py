@@ -25,7 +25,7 @@ router = APIRouter(tags=["Web UI - Artifacts"])
     "/artifacts/{artifact_id}/view",
     response_class=Response,
     include_in_schema=False,
-    name="view_artifact",
+    name="artifacts.show",
 )
 async def view_artifact(
     artifact_id: Annotated[UUID, Path(description="Artifact UUID")],
@@ -41,7 +41,7 @@ async def view_artifact(
     "/artifacts/{artifact_id}/viewer",
     response_class=HTMLResponse,
     include_in_schema=False,
-    name="trace_viewer",
+    name="artifacts.trace_viewer",
 )
 async def trace_viewer(
     request: Request,

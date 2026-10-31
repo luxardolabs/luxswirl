@@ -19,7 +19,7 @@ logger = get_logger("luxswirl.web.services.database_health")
 def _chart_data_url(request: Request) -> str:
     """The growth chart's data endpoint, resolved by route name. The chart's
     script reads it from the canvas (`data-url`), so the path has one home."""
-    return str(request.app.url_path_for("database_growth_chart_data"))
+    return str(request.app.url_path_for("database_health.chart_data"))
 
 
 class DatabaseHealthViewService:
@@ -36,7 +36,7 @@ class DatabaseHealthViewService:
             "current_user": current_user,
             "health": health,
             "page_title": "Database Health & Metrics",
-            "refresh_url": str(request.app.url_path_for("database_health_refresh")),
+            "refresh_url": str(request.app.url_path_for("database_health.refresh")),
             "chart_data_url": _chart_data_url(request),
         }
 

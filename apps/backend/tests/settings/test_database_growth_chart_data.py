@@ -76,7 +76,7 @@ async def test_an_admin_gets_the_points_in_the_fragment(
     await _sign_in(client, db, role="admin")
 
     resp = await client.get(
-        app.url_path_for("database_growth_chart_data"), params={"hours": 24}
+        app.url_path_for("database_health.chart_data"), params={"hours": 24}
     )
 
     assert resp.status_code == 200, resp.text[:300]
@@ -91,10 +91,10 @@ async def test_the_page_points_the_chart_at_the_fragment(
 ) -> None:
     await _sign_in(client, db, role="admin")
 
-    page = await client.get(app.url_path_for("database_health_page"))
+    page = await client.get(app.url_path_for("database_health.index"))
 
     assert page.status_code == 200
-    assert f'data-url="{app.url_path_for("database_growth_chart_data")}"' in page.text
+    assert f'data-url="{app.url_path_for("database_health.chart_data")}"' in page.text
 
 
 async def test_an_out_of_range_window_is_refused(
@@ -103,7 +103,7 @@ async def test_an_out_of_range_window_is_refused(
     await _sign_in(client, db, role="admin")
 
     resp = await client.get(
-        app.url_path_for("database_growth_chart_data"), params={"hours": 0}
+        app.url_path_for("database_health.chart_data"), params={"hours": 0}
     )
 
     assert resp.status_code == 422
@@ -114,7 +114,7 @@ async def test_a_viewer_does_not_get_the_data(
 ) -> None:
     await _sign_in(client, db, role="viewer")
 
-    resp = await client.get(app.url_path_for("database_growth_chart_data"))
+    resp = await client.get(app.url_path_for("database_health.chart_data"))
 
     assert resp.status_code == 307
     assert "database-growth-data" not in resp.text

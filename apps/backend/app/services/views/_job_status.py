@@ -33,5 +33,7 @@ def build_job_status_context(
         # .path, not str(): url_for returns an absolute url from the request's
         # scheme/host, which behind TLS-terminating nginx can emit http:// into
         # an https:// page.
-        "job_status_url": request.url_for("maintenance_job_status", job_id=job.id).path,
+        "job_status_url": request.url_for(
+            "maintenance_jobs.status", job_id=job.id
+        ).path,
     }

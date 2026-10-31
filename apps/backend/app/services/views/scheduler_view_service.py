@@ -79,10 +79,10 @@ def build_scheduler_job_urls(request: Request, job_key: str) -> SchedulerJobUrls
         return request.url_for(name, job_key=job_key).path
 
     return SchedulerJobUrls(
-        history=u("job_history"),
-        run=u("run_job"),
-        reset=u("reset_job"),
-        toggle=u("toggle_job"),
+        history=u("scheduler_jobs.history"),
+        run=u("scheduler_jobs.run"),
+        reset=u("scheduler_jobs.reset"),
+        toggle=u("scheduler_jobs.toggle"),
     )
 
 

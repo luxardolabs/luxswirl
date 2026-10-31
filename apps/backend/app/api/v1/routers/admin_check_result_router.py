@@ -42,7 +42,7 @@ Hours = Annotated[int, Query(ge=1, le=720)]
 @router.get(
     "/{check_id}/results",
     response_model=CheckResultPage,
-    name="admin_list_check_results",
+    name="api.admin.check_results.index",
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_list_check_results(
@@ -71,7 +71,7 @@ async def admin_list_check_results(
 @router.get(
     "/{check_id}/results/{result_id}",
     response_model=AdminCheckResultDetail,
-    name="admin_get_check_result",
+    name="api.admin.check_results.show",
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_get_check_result(
@@ -90,7 +90,7 @@ async def admin_get_check_result(
 @router.get(
     "/{check_id}/history",
     response_model=CheckHistory,
-    name="admin_get_check_history",
+    name="api.admin.check_history.show",
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_get_check_history(
@@ -109,7 +109,7 @@ async def admin_get_check_history(
 @router.get(
     "/{check_id}/summary",
     response_model=CheckSummary,
-    name="admin_get_check_summary",
+    name="api.admin.check_summary.show",
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_get_check_summary(

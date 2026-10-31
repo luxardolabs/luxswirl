@@ -38,7 +38,7 @@ router = APIRouter(tags=["Web UI - Checks"])
     "/checks/assignment-mode-selector",
     response_class=HTMLResponse,
     include_in_schema=False,
-    name="assignment_mode_selector",
+    name="checks.assignment_mode_selector",
 )
 async def assignment_mode_selector(
     request: Request,
@@ -62,7 +62,7 @@ async def assignment_mode_selector(
     "/checks/create-form",
     response_class=HTMLResponse,
     include_in_schema=False,
-    name="check_create_form",
+    name="checks.new",
 )
 async def create_form(
     request: Request,
@@ -82,7 +82,7 @@ async def create_form(
     "/checks/{check_id}/edit-form",
     response_class=HTMLResponse,
     include_in_schema=False,
-    name="check_edit_form",
+    name="checks.edit",
 )
 async def edit_form(
     request: Request,
@@ -107,7 +107,7 @@ async def edit_form(
     "/checks/{check_id}/clone-form",
     response_class=HTMLResponse,
     include_in_schema=False,
-    name="clone_form",
+    name="checks.clone_form",
 )
 async def clone_form(
     request: Request,
@@ -136,7 +136,7 @@ async def clone_form(
     "/checks/{check_id}/clone",
     response_class=HTMLResponse,
     include_in_schema=False,
-    name="clone_check_handler",
+    name="checks.clone",
 )
 async def clone_check_handler(
     request: Request,
@@ -156,7 +156,7 @@ async def clone_check_handler(
     "/checks/create",
     response_class=HTMLResponse,
     include_in_schema=False,
-    name="create_check_assignment",
+    name="checks.create",
 )
 async def create_check_assignment(
     request: Request,
@@ -175,7 +175,7 @@ async def create_check_assignment(
     "/checks/{check_id}/update",
     response_class=HTMLResponse,
     include_in_schema=False,
-    name="web_update_check",
+    name="checks.update",
 )
 async def update_check(
     request: Request,
@@ -195,7 +195,7 @@ async def update_check(
     "/checks/{check_id}/toggle",
     response_class=HTMLResponse,
     include_in_schema=False,
-    name="toggle_check",
+    name="checks.toggle",
 )
 async def toggle_check(
     request: Request,
@@ -217,7 +217,7 @@ async def toggle_check(
     "/checks/{check_id}",
     response_class=HTMLResponse,
     include_in_schema=False,
-    name="web_delete_check",
+    name="checks.delete",
 )
 async def delete_check(
     request: Request,
@@ -238,7 +238,7 @@ async def delete_check(
     "/checks/{check_id}/dependents",
     response_class=HTMLResponse,
     include_in_schema=False,
-    name="dependents_panel",
+    name="check_dependents.index",
 )
 async def dependents_panel(
     request: Request,
@@ -273,7 +273,7 @@ async def dependents_panel(
     "/checks/{check_id}/dependents",
     response_class=HTMLResponse,
     include_in_schema=False,
-    name="update_dependents",
+    name="check_dependents.update",
 )
 async def update_dependents(
     request: Request,
@@ -299,7 +299,7 @@ async def update_dependents(
     "/checks/bulk-action",
     response_class=HTMLResponse,
     include_in_schema=False,
-    name="bulk_action",
+    name="checks.bulk_action",
 )
 async def bulk_action(
     request: Request,
@@ -353,7 +353,7 @@ async def bulk_action(
     "/checks/bulk-modify",
     response_class=HTMLResponse,
     include_in_schema=False,
-    name="bulk_modify",
+    name="checks.bulk_modify",
 )
 async def bulk_modify(
     request: Request,
@@ -399,7 +399,7 @@ async def bulk_modify(
     "/checks/bulk-preview",
     response_class=HTMLResponse,
     include_in_schema=False,
-    name="bulk_check_preview",
+    name="checks.bulk_preview",
 )
 async def bulk_check_preview(
     request: Request,
