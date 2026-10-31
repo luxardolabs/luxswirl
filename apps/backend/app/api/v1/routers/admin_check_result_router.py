@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import ApiUser, require_scope
 from app.core.config import settings
+from app.core.openapi_operations import HandlerNamedRoute
 from app.core.query_params import SinceFilter, UntilFilter
 from app.core.rate_limit import api_token_rate_limit_key, limiter
 from app.db import get_db
@@ -28,6 +29,7 @@ from app.services.core.admin_check_result_core_service import (
 )
 
 router = APIRouter(
+    route_class=HandlerNamedRoute,
     prefix="/checks",
     tags=["Admin API: Check results"],
     dependencies=[Depends(require_scope("checks"))],

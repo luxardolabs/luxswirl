@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import ApiAdmin, require_scope
 from app.core.config import settings
+from app.core.openapi_operations import HandlerNamedRoute
 from app.core.query_params import ActiveFilter, UserRoleFilter
 from app.core.rate_limit import api_token_rate_limit_key, limiter
 from app.db import get_db
@@ -26,6 +27,7 @@ from app.schemas.user_schema import UserResponse
 from app.services.core.admin_user_core_service import AdminUserCoreService
 
 router = APIRouter(
+    route_class=HandlerNamedRoute,
     prefix="/users",
     tags=["Admin API: Users"],
     dependencies=[Depends(require_scope("users", admin_writes=True))],

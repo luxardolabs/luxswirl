@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import ApiUser, require_scope
 from app.core.config import settings
+from app.core.openapi_operations import HandlerNamedRoute
 from app.core.query_params import AlertIdFilter, NotifStatusFilter, ProviderIdFilter
 from app.core.rate_limit import api_token_rate_limit_key, limiter
 from app.db import get_db
@@ -21,6 +22,7 @@ from app.services.core.admin_notification_core_service import (
 )
 
 router = APIRouter(
+    route_class=HandlerNamedRoute,
     prefix="/notification-logs",
     tags=["Admin API: Notification logs"],
     dependencies=[Depends(require_scope("notifications"))],

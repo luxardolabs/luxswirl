@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import ApiAdmin, require_scope
 from app.core.config import settings
+from app.core.openapi_operations import HandlerNamedRoute
 from app.core.rate_limit import api_token_rate_limit_key, limiter
 from app.db import get_db
 from app.schemas.admin_check_schema import AdminCheckImport
@@ -22,6 +23,7 @@ from app.schemas.maintenance_job_schema import MaintenanceJobResponse
 from app.services.core.check_transfer_core_service import CheckTransferCoreService
 
 router = APIRouter(
+    route_class=HandlerNamedRoute,
     prefix="/agents/{agent_id}/checks",
     tags=["Admin API: Checks"],
     dependencies=[Depends(require_scope("checks", admin_writes=True))],

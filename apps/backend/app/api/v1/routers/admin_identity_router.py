@@ -10,11 +10,12 @@ from fastapi import APIRouter, Request, Response
 from app.api.deps import ApiUser
 from app.core.admin_openapi import admin_openapi_schema
 from app.core.config import settings
+from app.core.openapi_operations import HandlerNamedRoute
 from app.core.rate_limit import api_token_rate_limit_key, limiter
 from app.schemas.api_token_schema import ApiWhoAmIResponse
 from app.services.core.api_token_core_service import ApiTokenCoreService
 
-router = APIRouter(tags=["Admin API"])
+router = APIRouter(route_class=HandlerNamedRoute, tags=["Admin API"])
 
 
 @router.get(

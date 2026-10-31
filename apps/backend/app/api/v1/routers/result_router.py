@@ -16,6 +16,7 @@ from fastapi import (
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import ReportingAgentId
+from app.core.openapi_operations import HandlerNamedRoute
 from app.db import get_db
 from app.schemas.check_result_schema import (
     AgentReportResponse,
@@ -23,7 +24,7 @@ from app.schemas.check_result_schema import (
 )
 from app.services.core.check_result_core_service import CheckResultCoreService
 
-router = APIRouter(tags=["Check Results"])
+router = APIRouter(route_class=HandlerNamedRoute, tags=["Check Results"])
 
 
 @router.post(

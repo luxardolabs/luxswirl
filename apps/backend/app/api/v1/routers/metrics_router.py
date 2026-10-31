@@ -15,12 +15,13 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.openapi_operations import HandlerNamedRoute
 from app.core.rate_limit import api_rate_limit, limiter
 from app.db import get_db
 from app.services.core.metrics_collector_core_service import MetricsCollectorCoreService
 from app.services.core.settings_core_service import SettingsCoreService
 
-router = APIRouter(tags=["Metrics"])
+router = APIRouter(route_class=HandlerNamedRoute, tags=["Metrics"])
 
 
 @router.get(
