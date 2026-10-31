@@ -5,16 +5,14 @@
  * Server roundtrips all go through `htmx.ajax(...)` (manageAjax) so HTMX owns the swap
  * lifecycle (hx-confirm dialogs, htmx:afterSwap re-binding, indicators).
  * Pure-client JS lives here only for things that have no server roundtrip:
- * Sortable.js drag visuals, the inline rename input lifecycle, group filter
- * inputs that save when committed, and the available-checks-card
+ * Sortable.js drag visuals, the inline rename input lifecycle, debounced
+ * filter inputs that flush to the server, and the available-checks-card
  * "added/not added" visual indicator.
  */
 
 let sortableInstance = null;
 let selectedTags = [];
 let checkActionsInitialized = false;
-let editorBusy = 0;
-let focusBeforeBusy = null;
 
 
 /**
@@ -223,48 +221,39 @@ function syncCheckCards() {
 }
 
 /**
- * Every manage-page roundtrip. Its request belongs to #dashboard-items, so
- * its htmx events reach the busy listeners there (setEditorBusy): the editor
- * takes no new action until the page is redrawn, so no request ever waits
- * in htmx's queue (which keeps only the last one) and none is issued against
- * item indexes an earlier request is about to change.
+ * The page version the editor list was drawn from (dashboard_items.html).
  */
-/**
- * Count editor requests in flight; the editor is inert while any is out, and
- * gives focus back to what had it when the last one ends.
- */
-function setEditorBusy(busy) {
-    const editor = document.getElementById('status-page-editor');
-    if (busy) {
-        if (editorBusy === 0) {
-            focusBeforeBusy = document.activeElement;
-        }
-        editorBusy += 1;
-    } else {
-        editorBusy = Math.max(0, editorBusy - 1);
-    }
-    if (!editor) return;
-    editor.inert = editorBusy > 0;
-    editor.setAttribute('aria-busy', String(editorBusy > 0));
-    if (editorBusy === 0 && focusBeforeBusy && focusBeforeBusy.isConnected) {
-        focusBeforeBusy.focus();
-        focusBeforeBusy = null;
-    }
+function drawnPageVersion() {
+    return document.getElementById('dashboard-page-version')?.dataset.pageVersion ?? '';
 }
 
+/**
+ * Every manage-page roundtrip. Its request belongs to #dashboard-items, whose
+ * hx-sync="this:queue all" sends each in turn, and carries the page version
+ * read now, from the same drawn page as any item index the caller read. One
+ * queued behind a request that changes the page is refused (409) instead of
+ * applied to whatever item now sits at that index, and the editor redraws.
+ */
 function manageAjax(verb, url, options) {
-    // inert stops the user; this stops anything else (a browser without inert).
-    if (editorBusy > 0) {
-        document.body.dispatchEvent(new CustomEvent('showToast', {
-            detail: { message: 'The page is still updating; try again.', type: 'info' },
-        }));
-        return Promise.resolve();
-    }
     return htmx.ajax(verb, url, {
         source: document.getElementById('dashboard-items'),
         target: '#dashboard-items',
         swap: 'innerHTML',
+        headers: { 'X-Page-Version': drawnPageVersion() },
         ...options,
+    });
+}
+
+/**
+ * Redraw the editor list from the server, after a request was refused as
+ * made on an older page.
+ */
+function redrawEditor() {
+    const dashboardItems = document.getElementById('dashboard-items');
+    htmx.ajax('GET', dashboardItems.dataset.itemsUrl, {
+        source: dashboardItems,
+        target: '#dashboard-items',
+        swap: 'innerHTML',
     });
 }
 
@@ -333,6 +322,9 @@ function renameGroup(itemIndex) {
     };
 
     const saveRename = () => {
+        // A redraw removed the input: its group's URL and the page it names
+        // are gone with it.
+        if (!input.isConnected) return;
         const newName = input.value.trim();
         if (!newName || newName === currentName) {
             revertToSpan();
@@ -370,20 +362,32 @@ function initializeGroupActions() {
 }
 
 /**
- * Wire the change handler on dynamic-group filter inputs: each field saves
- * the group's filter when committed.
+ * Wire change/input handlers on dynamic-group filter inputs. Selects save on
+ * change; tags/search save 500ms after the last keystroke.
  */
 function initializeFilterInputs() {
-    // A group's filter saves when the user commits a field (a select's choice,
-    // or Enter / leaving a text field), like the rename input: never from a
-    // timer, which could fire while another request is about to redraw the page.
     document.body.addEventListener('change', (e) => {
         if (e.target.classList.contains('filter-agent-select') ||
-            e.target.classList.contains('filter-type-select') ||
-            e.target.classList.contains('filter-tags-input') ||
-            e.target.classList.contains('filter-search-input')) {
+            e.target.classList.contains('filter-type-select')) {
             const itemIndex = parseInt(e.target.dataset.itemIndex);
             updateGroupFilters(itemIndex);
+        }
+    });
+
+    let inputTimeout;
+    document.body.addEventListener('input', (e) => {
+        if (e.target.classList.contains('filter-tags-input') ||
+            e.target.classList.contains('filter-search-input')) {
+            clearTimeout(inputTimeout);
+            const input = e.target;
+            // The group's index is read when the save is sent, with the page
+            // version, from the same drawn page; an input a redraw removed has
+            // no page to save to.
+            inputTimeout = setTimeout(() => {
+                if (input.isConnected) {
+                    updateGroupFilters(parseInt(input.dataset.itemIndex));
+                }
+            }, 500);
         }
     });
 }
@@ -444,7 +448,16 @@ function renameAddedGroup(event) {
     }
     const allItems = dashboardItems.querySelectorAll('.dashboard-item[data-item-index]');
     const newItemIndex = allItems.length - 1;
-    setTimeout(() => renameGroup(newItemIndex), 100);
+    setTimeout(() => {
+        // Not when the user has since put focus somewhere (typing in another
+        // field): the rename would take it from them.
+        const active = document.activeElement;
+        if (active && active !== document.body &&
+            !active.closest('#add-group-btn, #add-filter-group-btn')) {
+            return;
+        }
+        renameGroup(newItemIndex);
+    }, 100);
 }
 
 function updateItemsCount() {
@@ -481,11 +494,14 @@ export function init() {
         updateGroupSort(groupIndex, sortBy, sortDirection);
     });
 
-    // Every editor request (manageAjax, and the remove buttons inside the
-    // list) fires its htmx events on #dashboard-items or bubbles them there.
+    // An editor request (manageAjax, or a remove button inside the list) made
+    // on an older page is refused with 409: redraw the list from the server.
     const dashboardItems = document.getElementById('dashboard-items');
-    dashboardItems.addEventListener('htmx:beforeRequest', () => setEditorBusy(true));
-    dashboardItems.addEventListener('htmx:afterRequest', () => setEditorBusy(false));
+    dashboardItems.addEventListener('htmx:afterRequest', (event) => {
+        if (event.detail.xhr && event.detail.xhr.status === 409) {
+            redrawEditor();
+        }
+    });
 
     // Re-bind drag handles + counts whenever HTMX swaps in fresh dashboard
     // content. Uses the same mechanism for partial swaps and full reloads.

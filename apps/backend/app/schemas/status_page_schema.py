@@ -156,6 +156,7 @@ class StatusPageUrls:
     reorder: str
     add_check: str
     add_group: str
+    items: str
 
 
 @dataclass(frozen=True)

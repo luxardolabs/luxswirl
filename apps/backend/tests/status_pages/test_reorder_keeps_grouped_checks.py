@@ -68,8 +68,11 @@ async def _stored(db: AsyncSession, page_id: UUID) -> list[dict[str, Any]]:
     return page.items
 
 
-async def _drawn(client: AsyncClient, page_id: UUID) -> list[dict[str, Any]]:
-    """The reorder the editor sends for the manage page as drawn, unchanged."""
+async def _drawn(
+    client: AsyncClient, page_id: UUID
+) -> tuple[list[dict[str, Any]], str]:
+    """The reorder the editor sends for the manage page as drawn, unchanged, and
+    the page version it was drawn from."""
     resp = await client.get(
         app.url_path_for("status_page_items.index", status_page_id=str(page_id)),
         headers=HX,
@@ -96,16 +99,18 @@ async def _drawn(client: AsyncClient, page_id: UUID) -> list[dict[str, Any]]:
             drawn.append({"oldIndex": index, "type": "group", "checks": checks})
         else:
             drawn.append({"oldIndex": index, "type": "check", "checkId": check_id})
-    return drawn
+    version = re.search(r'data-page-version="([^"]+)"', html)
+    assert version is not None
+    return drawn, version.group(1)
 
 
 async def _reorder(
-    client: AsyncClient, page_id: UUID, items: list[dict[str, Any]]
+    client: AsyncClient, page_id: UUID, items: list[dict[str, Any]], version: str
 ) -> int:
     resp = await client.post(
         app.url_path_for("status_page_items.reorder", status_page_id=str(page_id)),
         data={"items_json": json.dumps(items)},
-        headers=HX,
+        headers={**HX, "X-Page-Version": version},
     )
     return resp.status_code
 
@@ -129,10 +134,10 @@ async def test_a_grouped_check_of_an_archived_agent_survives_a_reorder(
         ],
     )
 
-    drawn = await _drawn(client, page_id)
+    drawn, version = await _drawn(client, page_id)
     drawn.reverse()
 
-    assert await _reorder(client, page_id, drawn) == 200
+    assert await _reorder(client, page_id, drawn, version) == 200
     [moved, group] = await _stored(db, page_id)
     assert moved["check_id"] == top
     assert sorted(group["checks"]) == sorted([archived, live])

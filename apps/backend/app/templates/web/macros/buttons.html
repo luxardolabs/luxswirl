@@ -369,7 +369,10 @@
 {% macro confirm_action_btn(icon_svg='', label='', color='red',
                             hx_post='', hx_delete='', hx_get='',
                             hx_target='body', hx_swap='none', after='',
-                            timeout=3000, title='Confirm', extra_classes='') %}
+                            timeout=3000, title='Confirm', extra_classes='',
+                            ajax_extra='') %}
+{#- ajax_extra: JS entries appended to the htmx.ajax options, evaluated at the
+    confirming click (a later key wins, e.g. `source: ..., headers: {...}`). -#}
 {%- set method = 'DELETE' if hx_delete else ('GET' if hx_get else 'POST') -%}
 {%- set url = hx_delete or hx_get or hx_post -%}
 {%- set palette = {
@@ -391,7 +394,7 @@
 {%- set _after = '.then(() => window.location.reload())' if after == 'reload' else '' -%}
 <button type="button"
     x-data="{ confirm: false }"
-    @click="if (confirm) { let t = '{{ hx_target }}'; htmx.ajax('{{ method }}', '{{ url }}', {source: $el, target: t.startsWith('closest ') ? $el.closest(t.substring(8)) : t, swap: '{{ hx_swap }}'}){{ _after }}; confirm = false; } else { confirm = true; setTimeout(() => confirm = false, {{ timeout }}); }"
+    @click="if (confirm) { let t = '{{ hx_target }}'; htmx.ajax('{{ method }}', '{{ url }}', {source: $el, target: t.startsWith('closest ') ? $el.closest(t.substring(8)) : t, swap: '{{ hx_swap }}'{{ ', ' ~ ajax_extra if ajax_extra }}}){{ _after }}; confirm = false; } else { confirm = true; setTimeout(() => confirm = false, {{ timeout }}); }"
     :class="confirm ? '{{ p.armed }}' : '{{ p.normal }}'"
     :title="confirm ? 'Click again to confirm' : '{{ title }}'"
     {% if not label %}aria-label="{{ title }}"{% endif %}
@@ -404,10 +407,10 @@
 
 {# Thin wrappers — forward to confirm_action_btn with preset icon + color. #}
 {% macro delete_icon_button(delete_url, target_id, title='Delete', extra_classes='',
-                            hx_target='', hx_swap='outerHTML', timeout=3000) %}
+                            hx_target='', hx_swap='outerHTML', timeout=3000, ajax_extra='') %}
 {%- set _target = hx_target if hx_target else '#' ~ target_id -%}
 {%- set svg %}<span class="w-3.5 h-3.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/trash.svg" %}</span>{% endset -%}
-{{ confirm_action_btn(icon_svg=svg, color='red', hx_delete=delete_url, hx_target=_target, hx_swap=hx_swap, title=title, timeout=timeout, extra_classes=extra_classes) }}
+{{ confirm_action_btn(icon_svg=svg, color='red', hx_delete=delete_url, hx_target=_target, hx_swap=hx_swap, title=title, timeout=timeout, extra_classes=extra_classes, ajax_extra=ajax_extra) }}
 {% endmacro %}
 
 {% macro cancel_icon_button(hx_post, hx_target='body', hx_swap='outerHTML', hx_confirm_text='',

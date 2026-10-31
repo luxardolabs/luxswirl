@@ -2,6 +2,11 @@
 {% from 'macros/form_fields.html' import input, select %}
 {% from 'macros/buttons.html' import icon_edit, delete_icon_button, icon_btn %}
 {% from 'macros/badges.html' import tag as meta_tag, status_pip %}
+{# The page version this list was drawn from: every editor request that names an
+   item by its position sends it, and the server refuses one the page has moved
+   past (409), so the editor redraws instead of changing the wrong item. #}
+<span hidden id="dashboard-page-version" data-page-version="{{ status_page.updated_at.isoformat() }}"></span>
+{% set editor_request = "source: document.getElementById('dashboard-items'), headers: {'X-Page-Version': document.getElementById('dashboard-page-version').dataset.pageVersion}" %}
 {% if status_page.items %}
     {% for item, item_urls in dashboard_items %}
         {% if item.type == 'group' %}
@@ -29,7 +34,7 @@
                             {# Removing a dashboard item is an EditorUserWeb endpoint;
                                this partial renders on a CurrentUserWeb page. #}
                             {% if current_user.role in ('admin', 'editor') %}
-                            {{ delete_icon_button(delete_url=item_urls.remove, target_id='dashboard-item-' ~ loop.index0, hx_target='#dashboard-items', hx_swap='innerHTML', extra_classes='opacity-0 group-hover:opacity-100') }}
+                            {{ delete_icon_button(delete_url=item_urls.remove, target_id='dashboard-item-' ~ loop.index0, hx_target='#dashboard-items', hx_swap='innerHTML', extra_classes='opacity-0 group-hover:opacity-100', ajax_extra=editor_request) }}
                             {% endif %}
                         </div>
                     </div>
@@ -274,7 +279,7 @@
                 </div>
                 {% endif %}
                 {% if current_user.role in ('admin', 'editor') %}
-                {{ delete_icon_button(delete_url=item_urls.remove, target_id='dashboard-item-' ~ loop.index0, hx_target='#dashboard-items', hx_swap='innerHTML', extra_classes='opacity-0 group-hover:opacity-100 flex-shrink-0') }}
+                {{ delete_icon_button(delete_url=item_urls.remove, target_id='dashboard-item-' ~ loop.index0, hx_target='#dashboard-items', hx_swap='innerHTML', extra_classes='opacity-0 group-hover:opacity-100 flex-shrink-0', ajax_extra=editor_request) }}
                 {% endif %}
             </div>
         {% endif %}
