@@ -421,7 +421,9 @@ app.mount("/static", StaticFiles(directory=str(_APP_DIR / "static")), name="stat
 # Served at /mcp exactly as well as under it: a client configured without the
 # trailing slash would otherwise get a redirect, which many drop the token across.
 _mcp_app = create_mcp_app()
-app.router.routes.append(Route("/mcp", endpoint=_mcp_app, methods=["POST"], name="mcp.call"))
+app.router.routes.append(
+    Route("/mcp", endpoint=_mcp_app, methods=["POST"], name="mcp.call")
+)
 app.mount("/mcp", _mcp_app, name="mcp_mount")
 
 # Include routers
