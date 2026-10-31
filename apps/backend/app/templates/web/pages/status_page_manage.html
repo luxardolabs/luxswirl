@@ -64,7 +64,7 @@
                     </div>
                 </div>
                 <div class="p-4">
-                    <div class="space-y-2" id="dashboard-items" data-reorder-url="{{ sp_urls.reorder }}" data-add-check-url="{{ sp_urls.add_check }}" data-add-group-url="{{ sp_urls.add_group }}">
+                    <div class="space-y-2" id="dashboard-items" hx-sync="this:queue all" data-reorder-url="{{ sp_urls.reorder }}" data-add-check-url="{{ sp_urls.add_check }}" data-add-group-url="{{ sp_urls.add_group }}">
                         {% include 'partials/dashboard_items.html' %}
                     </div>
 

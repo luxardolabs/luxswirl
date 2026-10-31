@@ -2,7 +2,7 @@
  * Dashboard management — drag-and-drop, inline rename, tag filtering, and
  * inline filter inputs for the status-pages /manage view.
  *
- * Server roundtrips all go through `htmx.ajax(...)` so HTMX owns the swap
+ * Server roundtrips all go through `htmx.ajax(...)` (manageAjax) so HTMX owns the swap
  * lifecycle (hx-confirm dialogs, htmx:afterSwap re-binding, indicators).
  * Pure-client JS lives here only for things that have no server roundtrip:
  * Sortable.js drag visuals, the inline rename input lifecycle, debounced
@@ -94,9 +94,7 @@ function saveItemOrder() {
         }
     });
 
-    htmx.ajax('POST', dashboardItems.dataset.reorderUrl, {
-        target: '#dashboard-items',
-        swap: 'innerHTML',
+    manageAjax('POST', dashboardItems.dataset.reorderUrl, {
         values: { items_json: JSON.stringify(items) },
     });
 }
@@ -194,29 +192,46 @@ function initializeCheckActions() {
 
 /**
  * Add a check to the dashboard via HTMX. Server returns the refreshed
- * dashboard_items partial, and on success an HX-Trigger
- * `statusPageCheckAdded` event naming the check, which marks its card
- * (markAddedCheck). A refused add sends no such event, so its card stays.
+ * dashboard_items partial; its swap re-syncs the available-checks cards
+ * (syncCheckCards). A refused add swaps nothing, so no card changes.
  */
 function addCheckToDashboard(checkEl) {
     const dashboardItems = document.getElementById('dashboard-items');
 
-    htmx.ajax('POST', dashboardItems.dataset.addCheckUrl, {
-        target: '#dashboard-items',
-        swap: 'innerHTML',
+    manageAjax('POST', dashboardItems.dataset.addCheckUrl, {
         values: { check_id: checkEl.dataset.checkId },
     });
 }
 
 /**
- * Mark the available-checks card of the check the server says it added.
+ * Mark each available-checks card added exactly when the page, as last
+ * drawn from the server, names its check. Run after either list swaps, so
+ * whichever answer lands last, the cards agree with the page.
  */
-function markAddedCheck(event) {
-    const checkId = String(event.detail.checkId);
+function syncCheckCards() {
+    const onPage = new Set(
+        Array.from(
+            document.querySelectorAll('#dashboard-items [data-check-id]'),
+            (el) => el.dataset.checkId
+        )
+    );
     document.querySelectorAll('.available-check').forEach((checkEl) => {
-        if (checkEl.dataset.checkId === checkId) {
-            updateCheckCardVisual(checkEl, true);
-        }
+        updateCheckCardVisual(checkEl, onPage.has(checkEl.dataset.checkId));
+    });
+}
+
+/**
+ * Every manage-page roundtrip: its request belongs to #dashboard-items, whose
+ * hx-sync="this:queue all" sends each in turn. With no source, htmx files
+ * them under <body>, whose default queue keeps only the last one waiting, so
+ * a reorder or add clicked while another was in flight was never sent.
+ */
+function manageAjax(verb, url, options) {
+    return htmx.ajax(verb, url, {
+        source: document.getElementById('dashboard-items'),
+        target: '#dashboard-items',
+        swap: 'innerHTML',
+        ...options,
     });
 }
 
@@ -290,9 +305,7 @@ function renameGroup(itemIndex) {
             revertToSpan();
             return;
         }
-        htmx.ajax('PATCH', groupElement.dataset.renameUrl, {
-            target: '#dashboard-items',
-            swap: 'innerHTML',
+        manageAjax('PATCH', groupElement.dataset.renameUrl, {
             values: { name: newName },
         }).catch(() => revertToSpan());
     };
@@ -365,9 +378,7 @@ function updateGroupFilters(itemIndex) {
     }
     if (searchInput && searchInput.value.trim()) filterConfig.search = searchInput.value.trim();
 
-    htmx.ajax('PATCH', groupElement.dataset.filtersUrl, {
-        target: '#dashboard-items',
-        swap: 'innerHTML',
+    manageAjax('PATCH', groupElement.dataset.filtersUrl, {
         values: { filter_json: JSON.stringify(filterConfig) },
     });
 }
@@ -384,17 +395,24 @@ function addGroup(type) {
         values.filter_json = '{}';
     }
 
-    htmx.ajax('POST', dashboardItems.dataset.addGroupUrl, {
-        target: '#dashboard-items',
-        swap: 'innerHTML',
-        values,
-    }).then(() => {
-        // Auto-trigger inline rename on the newly added group.
-        // Top-level items only: a group's own checks carry no data-item-index.
-        const allItems = dashboardItems.querySelectorAll('.dashboard-item[data-item-index]');
-        const newItemIndex = allItems.length - 1;
-        setTimeout(() => renameGroup(newItemIndex), 100);
-    });
+    // Its swap opens the new group's rename (renameAddedGroup).
+    manageAjax('POST', dashboardItems.dataset.addGroupUrl, { values });
+}
+
+/**
+ * Open the inline rename on the group an add-group swap just drew: the last
+ * top-level item (a group's own checks carry no data-item-index). Run from
+ * that request's own swap, since a queued request's promise resolves before
+ * it is sent.
+ */
+function renameAddedGroup(event) {
+    const dashboardItems = document.getElementById('dashboard-items');
+    if (event.detail.requestConfig?.path !== dashboardItems.dataset.addGroupUrl) {
+        return;
+    }
+    const allItems = dashboardItems.querySelectorAll('.dashboard-item[data-item-index]');
+    const newItemIndex = allItems.length - 1;
+    setTimeout(() => renameGroup(newItemIndex), 100);
 }
 
 function updateItemsCount() {
@@ -411,9 +429,7 @@ function updateGroupSort(groupIndex, sortBy, sortDirection) {
     const groupElement = document.querySelector(`.dashboard-item[data-item-index="${groupIndex}"]`);
     if (!groupElement) return;
 
-    htmx.ajax('PATCH', groupElement.dataset.sortUrl, {
-        target: '#dashboard-items',
-        swap: 'innerHTML',
+    manageAjax('PATCH', groupElement.dataset.sortUrl, {
         values: { sort_by: sortBy, sort_direction: sortDirection },
     });
 }
@@ -433,15 +449,18 @@ export function init() {
         updateGroupSort(groupIndex, sortBy, sortDirection);
     });
 
-    // The add-check response names the check it stored (HX-Trigger).
-    document.body.addEventListener('statusPageCheckAdded', markAddedCheck);
-
     // Re-bind drag handles + counts whenever HTMX swaps in fresh dashboard
     // content. Uses the same mechanism for partial swaps and full reloads.
+    // Either list swapping re-syncs the available-checks cards with the page.
     document.body.addEventListener('htmx:afterSwap', (event) => {
-        if (event.detail.target.id === 'dashboard-items') {
+        const swapped = event.detail.target.id;
+        if (swapped === 'dashboard-items') {
             initializeSortable();
             updateItemsCount();
+            renameAddedGroup(event);
+        }
+        if (swapped === 'dashboard-items' || swapped === 'available-checks-list') {
+            syncCheckCards();
         }
     });
 }
