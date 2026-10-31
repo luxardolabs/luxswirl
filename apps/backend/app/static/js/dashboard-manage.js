@@ -5,14 +5,16 @@
  * Server roundtrips all go through `htmx.ajax(...)` (manageAjax) so HTMX owns the swap
  * lifecycle (hx-confirm dialogs, htmx:afterSwap re-binding, indicators).
  * Pure-client JS lives here only for things that have no server roundtrip:
- * Sortable.js drag visuals, the inline rename input lifecycle, debounced
- * filter inputs that flush to the server, and the available-checks-card
+ * Sortable.js drag visuals, the inline rename input lifecycle, group filter
+ * inputs that save when committed, and the available-checks-card
  * "added/not added" visual indicator.
  */
 
 let sortableInstance = null;
 let selectedTags = [];
 let checkActionsInitialized = false;
+let editorBusy = 0;
+let focusBeforeBusy = null;
 
 
 /**
@@ -227,15 +229,37 @@ function syncCheckCards() {
  * in htmx's queue (which keeps only the last one) and none is issued against
  * item indexes an earlier request is about to change.
  */
+/**
+ * Count editor requests in flight; the editor is inert while any is out, and
+ * gives focus back to what had it when the last one ends.
+ */
 function setEditorBusy(busy) {
     const editor = document.getElementById('status-page-editor');
-    if (editor) {
-        editor.inert = busy;
-        editor.setAttribute('aria-busy', String(busy));
+    if (busy) {
+        if (editorBusy === 0) {
+            focusBeforeBusy = document.activeElement;
+        }
+        editorBusy += 1;
+    } else {
+        editorBusy = Math.max(0, editorBusy - 1);
+    }
+    if (!editor) return;
+    editor.inert = editorBusy > 0;
+    editor.setAttribute('aria-busy', String(editorBusy > 0));
+    if (editorBusy === 0 && focusBeforeBusy && focusBeforeBusy.isConnected) {
+        focusBeforeBusy.focus();
+        focusBeforeBusy = null;
     }
 }
 
 function manageAjax(verb, url, options) {
+    // inert stops the user; this stops anything else (a browser without inert).
+    if (editorBusy > 0) {
+        document.body.dispatchEvent(new CustomEvent('showToast', {
+            detail: { message: 'The page is still updating; try again.', type: 'info' },
+        }));
+        return Promise.resolve();
+    }
     return htmx.ajax(verb, url, {
         source: document.getElementById('dashboard-items'),
         target: '#dashboard-items',
@@ -346,26 +370,20 @@ function initializeGroupActions() {
 }
 
 /**
- * Wire change/input handlers on dynamic-group filter inputs. Selects fire
- * on change; tags/search are debounced (500ms) so we don't spam the server
- * on every keystroke.
+ * Wire the change handler on dynamic-group filter inputs: each field saves
+ * the group's filter when committed.
  */
 function initializeFilterInputs() {
+    // A group's filter saves when the user commits a field (a select's choice,
+    // or Enter / leaving a text field), like the rename input: never from a
+    // timer, which could fire while another request is about to redraw the page.
     document.body.addEventListener('change', (e) => {
         if (e.target.classList.contains('filter-agent-select') ||
-            e.target.classList.contains('filter-type-select')) {
+            e.target.classList.contains('filter-type-select') ||
+            e.target.classList.contains('filter-tags-input') ||
+            e.target.classList.contains('filter-search-input')) {
             const itemIndex = parseInt(e.target.dataset.itemIndex);
             updateGroupFilters(itemIndex);
-        }
-    });
-
-    let inputTimeout;
-    document.body.addEventListener('input', (e) => {
-        if (e.target.classList.contains('filter-tags-input') ||
-            e.target.classList.contains('filter-search-input')) {
-            clearTimeout(inputTimeout);
-            const itemIndex = parseInt(e.target.dataset.itemIndex);
-            inputTimeout = setTimeout(() => updateGroupFilters(itemIndex), 500);
         }
     });
 }
