@@ -41,15 +41,16 @@ COPY apps/backend/pyproject.toml apps/backend/poetry.lock* /app/
 RUN VIRTUAL_ENV=/opt/venv PATH=/opt/venv/bin:$PATH \
     /opt/poetry/bin/poetry install --only main --no-root && rm -rf $POETRY_CACHE_DIR
 
-# ---- code: the app's source, readable by all whatever modes the build host's checkout gave it ----
-# A checkout made under umask 077 holds 600 files and 700 directories; production copies the
+# ---- code: the app's source at 644/755 (read for all, write for none but root), whatever the checkout's modes ----
+# A checkout under umask 077 holds 600/700 files and directories, one under umask 002 group-writable
+# ones; both are set to 644/755 here. Production copies the
 # code from here root-owned, and the runtime user only has to read it.
 FROM python:3.14-slim AS code
 COPY apps/backend/app /code/app
 COPY apps/shared /code/app/shared
 COPY apps/backend/alembic /code/alembic
 COPY apps/backend/alembic.ini /code/alembic.ini
-RUN chmod -R a+rX /code
+RUN chmod -R u=rwX,go=rX /code
 
 FROM python:3.14-slim AS production
 
