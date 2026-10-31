@@ -88,12 +88,13 @@ LABEL org.opencontainers.image.source="https://github.com/luxardolabs/luxswirl" 
 # app package -> /app/app ; alembic at component root. The shared SSOT (apps/shared)
 # is baked over the app's 0-byte placeholder package app/shared, so it is imported
 # as `app.shared.*`.
-COPY apps/backend/app /app/app
+# Root-owned and readable by all (a+rX), whatever modes the build host's checkout gave them.
+COPY --chmod=a+rX apps/backend/app /app/app
 # The stylesheet the css stage compiled from this same source (gitignored on the host).
-COPY --from=css /build/app/static/css/app.css /app/app/static/css/app.css
-COPY apps/backend/alembic /app/alembic
-COPY apps/backend/alembic.ini /app/alembic.ini
-COPY apps/shared /app/app/shared
+COPY --from=css --chmod=a+rX /build/app/static/css/app.css /app/app/static/css/app.css
+COPY --chmod=a+rX apps/backend/alembic /app/alembic
+COPY --chmod=a+rX apps/backend/alembic.ini /app/alembic.ini
+COPY --chmod=a+rX apps/shared /app/app/shared
 ENV PYTHONPATH=/app
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "9000"]
