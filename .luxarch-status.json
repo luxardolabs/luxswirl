@@ -1,6 +1,6 @@
 {
   "guard": "luxarch",
-  "guard_version": "0.333.0",
+  "guard_version": "0.334.0",
   "repo": "/repo",
   "targets": [
     {
@@ -1505,13 +1505,13 @@
         },
         {
           "rule": "fw.broad_except_is_logged",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.177.0",
-          "violations": 1,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
-          "fix": "Either let it propagate (delete the handler, or `raise` after annotating) or record it \u2014 `logger.exception(\"<what failed>\")` inside the handler, on every way out of it; a fallback logs what it fell back from. Catch a NARROW, named exception when the outcome is genuinely expected \u2014 then it is control flow, not a swallow. When dropping it silently is genuinely right, say why at the site: a `# swallowed-exceptions: <reason>` comment on the `try:` line, on that handler's `except` line, or in the comment block directly above the `try:` or that `except`. (A bare `except:` is luxlint's E722; a route swallowing is fw.route_no_broad_except.)",
+          "fix": "",
           "example": ""
         },
         {
@@ -1802,13 +1802,13 @@
         },
         {
           "rule": "fw.route_names_unique",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.297.0",
-          "violations": 245,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
-          "fix": "Give every route an explicit, unique, literal `name=\"[area.]<resource>.<action>\"`: two or more lowercase snake_case segments, the last two the resource and the action, any before them areas (e.g. `name=\"admin.users.index\"` and `name=\"api.users.index\"`: the web page and the API endpoint are two names). One name may serve several methods of ONE path. Without this, `url_path_for` resolves a shared handler name to the first route registered: in one app, `login` returned `/api/v1/auth/login` for the web login link, silently. See --playbook url-in-view.",
+          "fix": "",
           "example": ""
         },
         {
@@ -2000,8 +2000,8 @@
         }
       ],
       "summary": {
-        "PASS": 159,
-        "FAIL": 4,
+        "PASS": 161,
+        "FAIL": 2,
         "XFAIL": 0,
         "XPASS": 0,
         "INERT": 18
@@ -2112,19 +2112,19 @@
         },
         {
           "rule": "fw.broad_except_is_logged",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.330.0",
-          "violations": 11,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
-          "fix": "Either let it propagate (delete the handler, or `raise` after annotating) or record it \u2014 `logger.exception(\"<what failed>\")` inside the handler, on every way out of it; a fallback logs what it fell back from. Catch a NARROW, named exception when the outcome is genuinely expected \u2014 then it is control flow, not a swallow. When dropping it silently is genuinely right, say why at the site: a `# swallowed-exceptions: <reason>` comment on the `try:` line, on that handler's `except` line, or in the comment block directly above the `try:` or that `except`. (A bare `except:` is luxlint's E722; a route swallowing is fw.route_no_broad_except.)",
+          "fix": "",
           "example": ""
         }
       ],
       "summary": {
-        "PASS": 6,
-        "FAIL": 1,
+        "PASS": 7,
+        "FAIL": 0,
         "XFAIL": 0,
         "XPASS": 0,
         "INERT": 3
@@ -2225,6 +2225,17 @@
         "rule": "repo.dev_tools_not_in_production",
         "status": "PASS",
         "since": "0.243.0",
+        "violations": 0,
+        "deferred": false,
+        "inert": false,
+        "inert_reason": "",
+        "fix": "",
+        "example": ""
+      },
+      {
+        "rule": "repo.runtime_user_cannot_write_code",
+        "status": "PASS",
+        "since": "0.334.0",
         "violations": 0,
         "deferred": false,
         "inert": false,
@@ -2905,7 +2916,7 @@
       }
     ],
     "summary": {
-      "PASS": 69,
+      "PASS": 70,
       "FAIL": 0,
       "XFAIL": 0,
       "XPASS": 0,
@@ -2913,12 +2924,12 @@
     }
   },
   "summary": {
-    "PASS": 234,
-    "FAIL": 5,
+    "PASS": 238,
+    "FAIL": 2,
     "XFAIL": 0,
     "XPASS": 0,
     "INERT": 22
   },
-  "commit": "41f875379a77f0f67897bd5dc3ea824ed35f0398",
-  "generated_at": "2026-10-30T16:59:31Z"
+  "commit": "3fabfb957e375838b8d4242003880155900a8ffa",
+  "generated_at": "2026-10-31T04:05:52Z"
 }

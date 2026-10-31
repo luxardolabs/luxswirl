@@ -63,9 +63,10 @@ RUN useradd -m -u 1000 -s /bin/bash luxswirl
 
 EXPOSE 9000
 
-RUN chown -R luxswirl:luxswirl /app
+# The code stays root-owned; the runtime user owns only the paths it writes.
+RUN mkdir -p /app/logs /app/reports /app/data && \
+    chown luxswirl:luxswirl /app/logs /app/reports /app/data
 USER luxswirl
-RUN mkdir -p /app/logs /app/reports /app/data
 
 # ---- Layers below invalidate on every build ----
 ARG BUILD_VERSION=dev
@@ -87,12 +88,12 @@ LABEL org.opencontainers.image.source="https://github.com/luxardolabs/luxswirl" 
 # app package -> /app/app ; alembic at component root. The shared SSOT (apps/shared)
 # is baked over the app's 0-byte placeholder package app/shared, so it is imported
 # as `app.shared.*`.
-COPY --chown=luxswirl:luxswirl apps/backend/app /app/app
+COPY apps/backend/app /app/app
 # The stylesheet the css stage compiled from this same source (gitignored on the host).
-COPY --from=css --chown=luxswirl:luxswirl /build/app/static/css/app.css /app/app/static/css/app.css
-COPY --chown=luxswirl:luxswirl apps/backend/alembic /app/alembic
-COPY --chown=luxswirl:luxswirl apps/backend/alembic.ini /app/alembic.ini
-COPY --chown=luxswirl:luxswirl apps/shared /app/app/shared
+COPY --from=css /build/app/static/css/app.css /app/app/static/css/app.css
+COPY apps/backend/alembic /app/alembic
+COPY apps/backend/alembic.ini /app/alembic.ini
+COPY apps/shared /app/app/shared
 ENV PYTHONPATH=/app
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "9000"]
