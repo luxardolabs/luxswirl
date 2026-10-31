@@ -111,3 +111,15 @@ async def test_a_check_the_page_names_cannot_be_added_again(
     page = await StatusPageCoreService.get_status_page(db, page_id)
     assert page is not None
     assert len(page.items) == 1
+
+
+async def test_a_full_page_says_the_check_is_already_on_it(db: AsyncSession) -> None:
+    check_id = await _check_id(db, f"c-{uuid4().hex[:6]}")
+    page_id = await _page(
+        db,
+        [{"type": "check", "check_id": check_id}]
+        + [{"type": "group", "name": f"g{i}", "checks": []} for i in range(499)],
+    )
+
+    with pytest.raises(ValueError, match="already on the page"):
+        await StatusPageCoreService.add_check_to_page(db, page_id, UUID(check_id))
