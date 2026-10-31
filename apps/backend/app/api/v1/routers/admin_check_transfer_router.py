@@ -31,7 +31,7 @@ LIMIT = settings.security.admin_api_rate_limit
 
 
 @router.get(
-    "/export", response_model=CheckExportDocument, name="admin_export_agent_checks"
+    "/export", response_model=CheckExportDocument, name="api.admin.agent_checks.export"
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_export_agent_checks(
@@ -48,7 +48,7 @@ async def admin_export_agent_checks(
     "/import",
     response_model=MaintenanceJobResponse,
     status_code=status.HTTP_202_ACCEPTED,
-    name="admin_import_agent_checks",
+    name="api.admin.agent_checks.import",
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_import_agent_checks(

@@ -29,7 +29,7 @@ router = APIRouter(tags=["Web UI - Jobs"])
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.get(
-    "/jobs", response_class=HTMLResponse, include_in_schema=False, name="jobs_page"
+    "/jobs", response_class=HTMLResponse, include_in_schema=False, name="jobs.index"
 )
 async def jobs_page(
     request: Request,
@@ -70,7 +70,7 @@ async def jobs_page(
     "/jobs/partials/table",
     response_class=HTMLResponse,
     include_in_schema=False,
-    name="jobs_table_partial",
+    name="jobs.table",
 )
 async def jobs_table_partial(
     request: Request,
@@ -105,7 +105,7 @@ async def jobs_table_partial(
     "/jobs/{job_id}/detail",
     response_class=HTMLResponse,
     include_in_schema=False,
-    name="job_detail_panel",
+    name="jobs.show",
 )
 async def job_detail_panel(
     job_id: UUID,
@@ -129,7 +129,7 @@ async def job_detail_panel(
     "/jobs/create-form",
     response_class=HTMLResponse,
     include_in_schema=False,
-    name="job_create_form",
+    name="jobs.new",
 )
 async def job_create_form(
     request: Request,
@@ -159,7 +159,7 @@ async def job_create_form(
     "/jobs/create",
     response_class=HTMLResponse,
     include_in_schema=False,
-    name="create_job_web",
+    name="jobs.create",
 )
 async def create_job_web(
     request: Request,
@@ -175,7 +175,7 @@ async def create_job_web(
     )
 
 
-@router.delete("/jobs/{job_id}", include_in_schema=False, name="delete_job_web")
+@router.delete("/jobs/{job_id}", include_in_schema=False, name="jobs.delete")
 async def delete_job_web(
     job_id: UUID,
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
@@ -187,7 +187,7 @@ async def delete_job_web(
 
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
-@router.post("/jobs/{job_id}/cancel", include_in_schema=False, name="cancel_job_web")
+@router.post("/jobs/{job_id}/cancel", include_in_schema=False, name="jobs.cancel")
 async def cancel_job_web(
     job_id: UUID,
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
@@ -208,7 +208,7 @@ async def cancel_job_web(
     "/jobs/{job_id}/create-checks/bulk-ping",
     response_class=HTMLResponse,
     include_in_schema=False,
-    name="bulk_create_ping_checks",
+    name="job_checks.bulk_ping",
 )
 async def bulk_create_ping_checks(
     job_id: UUID,
@@ -229,7 +229,7 @@ async def bulk_create_ping_checks(
     "/jobs/{job_id}/create-checks/bulk-web",
     response_class=HTMLResponse,
     include_in_schema=False,
-    name="bulk_create_web_checks",
+    name="job_checks.bulk_web",
 )
 async def bulk_create_web_checks(
     job_id: UUID,
@@ -250,7 +250,7 @@ async def bulk_create_web_checks(
     "/jobs/{job_id}/create-checks/bulk-ssh",
     response_class=HTMLResponse,
     include_in_schema=False,
-    name="bulk_create_ssh_checks",
+    name="job_checks.bulk_ssh",
 )
 async def bulk_create_ssh_checks(
     job_id: UUID,
@@ -271,7 +271,7 @@ async def bulk_create_ssh_checks(
     "/jobs/{job_id}/create-checks/bulk-database",
     response_class=HTMLResponse,
     include_in_schema=False,
-    name="bulk_create_database_checks",
+    name="job_checks.bulk_database",
 )
 async def bulk_create_database_checks(
     job_id: UUID,
@@ -294,7 +294,7 @@ async def bulk_create_database_checks(
     "/jobs/{job_id}/quick-create-check",
     response_class=HTMLResponse,
     include_in_schema=False,
-    name="quick_create_check_from_host",
+    name="job_checks.quick_create",
 )
 async def quick_create_check_from_host(
     job_id: UUID,

@@ -59,9 +59,9 @@ class AlertsViewService:
         # The form posts to update when editing, create otherwise. Reverse the
         # route name so the path lives with the route, not in the template.
         form_action = (
-            request.url_for("web_update_alert", alert_id=alert_id).path
+            request.url_for("alerts.update", alert_id=alert_id).path
             if alert_id
-            else request.url_for("web_create_alert").path
+            else request.url_for("alerts.create").path
         )
 
         return {

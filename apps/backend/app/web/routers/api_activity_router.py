@@ -34,7 +34,7 @@ router = APIRouter(tags=["Web UI - API Activity"], include_in_schema=False)
 @router.get(
     "/settings/api-activity",
     response_class=HTMLResponse,
-    name="api_activity_page",
+    name="api_activity.index",
 )
 async def api_activity_page(
     request: Request,
@@ -70,7 +70,7 @@ async def api_activity_page(
 @router.get(
     "/settings/api-activity/mcp/{call_id}",
     response_class=HTMLResponse,
-    name="api_activity_mcp_call",
+    name="api_activity.mcp_call",
 )
 async def api_activity_mcp_call(
     request: Request,
@@ -91,7 +91,7 @@ async def api_activity_mcp_call(
 @router.get(
     "/profile/activity",
     response_class=HTMLResponse,
-    name="profile_activity",
+    name="profile_activity.index",
 )
 async def profile_activity(
     request: Request,

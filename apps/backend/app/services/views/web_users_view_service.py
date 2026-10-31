@@ -43,11 +43,11 @@ def build_user_urls(request: Request, user_id: UUID) -> UserUrls:
         return str(request.url_for(name, user_id=user_id).path)
 
     return UserUrls(
-        edit_form=u("edit_user_form"),
-        update=u("update_user_submit"),
-        unlock=u("web_unlock_user"),
-        delete=u("web_delete_user"),
-        reset_password=u("web_reset_user_password"),
+        edit_form=u("users.edit"),
+        update=u("users.update"),
+        unlock=u("users.unlock"),
+        delete=u("users.delete"),
+        reset_password=u("users.reset_password"),
     )
 
 
@@ -318,8 +318,8 @@ class WebUsersViewService:
             "filters": filters,
             "page_title": "Settings - Users",
             # The page's own path: filters and pagination re-request it.
-            "list_url": str(request.app.url_path_for("users_page")),
-            "create_form_url": str(request.app.url_path_for("create_user_form")),
+            "list_url": str(request.app.url_path_for("users.index")),
+            "create_form_url": str(request.app.url_path_for("users.new")),
         }
 
     @staticmethod
@@ -333,14 +333,14 @@ class WebUsersViewService:
         return {
             "current_user": current_user,
             "role_options": options_for(UserRole),
-            "create_url": str(request.app.url_path_for("create_user_submit")),
+            "create_url": str(request.app.url_path_for("users.create")),
         }
 
     @staticmethod
     def users_page_url(request: Request, **params: str) -> str:
         """The users page, resolved by route name, with `params` as its query
         (the page shows `error` / `success` as a banner)."""
-        path = str(request.app.url_path_for("users_page"))
+        path = str(request.app.url_path_for("users.index"))
         return f"{path}?{urlencode(params)}" if params else path
 
     @staticmethod
@@ -409,5 +409,5 @@ class WebUsersViewService:
             "current_user": current_user,
             "users": users,
             "pagination": pagination,
-            "list_url": str(request.app.url_path_for("users_page")),
+            "list_url": str(request.app.url_path_for("users.index")),
         }

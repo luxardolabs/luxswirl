@@ -36,7 +36,7 @@ router = APIRouter(
 LIMIT = settings.security.admin_api_rate_limit
 
 
-@router.get("", response_model=AgentPage, name="admin_list_agents")
+@router.get("", response_model=AgentPage, name="api.admin.agents.index")
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_list_agents(
     request: Request,
@@ -60,7 +60,7 @@ async def admin_list_agents(
     )
 
 
-@router.get("/{agent_id}", response_model=AgentResponse, name="admin_get_agent")
+@router.get("/{agent_id}", response_model=AgentResponse, name="api.admin.agents.show")
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_get_agent(
     request: Request,
@@ -71,7 +71,9 @@ async def admin_get_agent(
     return await AdminAgentCoreService.get_agent(db, agent_id)
 
 
-@router.patch("/{agent_id}", response_model=AgentResponse, name="admin_update_agent")
+@router.patch(
+    "/{agent_id}", response_model=AgentResponse, name="api.admin.agents.update"
+)
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_update_agent(
     request: Request,
@@ -90,7 +92,7 @@ async def admin_update_agent(
     "/{agent_id}",
     response_model=MaintenanceJobResponse,
     status_code=status.HTTP_202_ACCEPTED,
-    name="admin_delete_agent",
+    name="api.admin.agents.delete",
     # The agent's checks are deleted with it.
     dependencies=[Depends(require_scopes("checks:write"))],
 )
@@ -114,7 +116,7 @@ async def admin_delete_agent(
 
 
 @router.post(
-    "/{agent_id}/approve", response_model=AgentResponse, name="admin_approve_agent"
+    "/{agent_id}/approve", response_model=AgentResponse, name="api.admin.agents.approve"
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_approve_agent(
@@ -128,7 +130,7 @@ async def admin_approve_agent(
 
 
 @router.post(
-    "/{agent_id}/reject", response_model=AgentResponse, name="admin_reject_agent"
+    "/{agent_id}/reject", response_model=AgentResponse, name="api.admin.agents.reject"
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_reject_agent(
@@ -144,7 +146,7 @@ async def admin_reject_agent(
 
 
 @router.post(
-    "/{agent_id}/pause", response_model=AgentResponse, name="admin_pause_agent"
+    "/{agent_id}/pause", response_model=AgentResponse, name="api.admin.agents.pause"
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_pause_agent(
@@ -160,7 +162,7 @@ async def admin_pause_agent(
 
 
 @router.post(
-    "/{agent_id}/resume", response_model=AgentResponse, name="admin_resume_agent"
+    "/{agent_id}/resume", response_model=AgentResponse, name="api.admin.agents.resume"
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_resume_agent(
@@ -173,7 +175,7 @@ async def admin_resume_agent(
 
 
 @router.post(
-    "/{agent_id}/disable", response_model=AgentResponse, name="admin_disable_agent"
+    "/{agent_id}/disable", response_model=AgentResponse, name="api.admin.agents.disable"
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_disable_agent(
@@ -189,7 +191,7 @@ async def admin_disable_agent(
 
 
 @router.post(
-    "/{agent_id}/enable", response_model=AgentResponse, name="admin_enable_agent"
+    "/{agent_id}/enable", response_model=AgentResponse, name="api.admin.agents.enable"
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_enable_agent(
@@ -202,7 +204,7 @@ async def admin_enable_agent(
 
 
 @router.post(
-    "/{agent_id}/archive", response_model=AgentResponse, name="admin_archive_agent"
+    "/{agent_id}/archive", response_model=AgentResponse, name="api.admin.agents.archive"
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_archive_agent(
@@ -216,7 +218,7 @@ async def admin_archive_agent(
 
 
 @router.post(
-    "/{agent_id}/restore", response_model=AgentResponse, name="admin_restore_agent"
+    "/{agent_id}/restore", response_model=AgentResponse, name="api.admin.agents.restore"
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_restore_agent(
@@ -232,7 +234,7 @@ async def admin_restore_agent(
 @router.post(
     "/{agent_id}/force-reload",
     response_model=AgentResponse,
-    name="admin_force_reload_agent",
+    name="api.admin.agents.force_reload",
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_force_reload_agent(
@@ -258,7 +260,7 @@ AGENT_KEY_SCOPES = ("agents:admin", "checks:admin")
     "/{agent_id}/key",
     response_model=AgentKey,
     status_code=status.HTTP_201_CREATED,
-    name="admin_generate_agent_key",
+    name="api.admin.agent_keys.create",
     dependencies=[Depends(require_scopes(*AGENT_KEY_SCOPES))],
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
@@ -276,7 +278,7 @@ async def admin_generate_agent_key(
     "/{agent_id}/key/regenerate",
     response_model=AgentKey,
     status_code=status.HTTP_201_CREATED,
-    name="admin_regenerate_agent_key",
+    name="api.admin.agent_keys.regenerate",
     dependencies=[Depends(require_scopes(*AGENT_KEY_SCOPES))],
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
@@ -293,7 +295,7 @@ async def admin_regenerate_agent_key(
 @router.delete(
     "/{agent_id}/key",
     status_code=status.HTTP_204_NO_CONTENT,
-    name="admin_revoke_agent_key",
+    name="api.admin.agent_keys.delete",
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_revoke_agent_key(

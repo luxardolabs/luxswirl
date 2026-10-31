@@ -34,7 +34,7 @@ router = APIRouter(
 LIMIT = settings.security.admin_api_rate_limit
 
 
-@router.get("", response_model=UserPage, name="admin_list_users")
+@router.get("", response_model=UserPage, name="api.admin.users.index")
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_list_users(
     request: Request,
@@ -57,7 +57,7 @@ async def admin_list_users(
     )
 
 
-@router.get("/{user_id}", response_model=UserResponse, name="admin_get_user")
+@router.get("/{user_id}", response_model=UserResponse, name="api.admin.users.show")
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_get_user(
     request: Request,
@@ -72,7 +72,7 @@ async def admin_get_user(
     "",
     response_model=UserResponse,
     status_code=status.HTTP_201_CREATED,
-    name="admin_create_user",
+    name="api.admin.users.create",
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_create_user(
@@ -88,7 +88,7 @@ async def admin_create_user(
     )
 
 
-@router.patch("/{user_id}", response_model=UserResponse, name="admin_update_user")
+@router.patch("/{user_id}", response_model=UserResponse, name="api.admin.users.update")
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_update_user(
     request: Request,
@@ -106,7 +106,7 @@ async def admin_update_user(
     "/{user_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     response_class=Response,
-    name="admin_delete_user",
+    name="api.admin.users.delete",
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_delete_user(
@@ -123,7 +123,7 @@ async def admin_delete_user(
 @router.post(
     "/{user_id}/reset-password",
     response_model=UserResponse,
-    name="admin_reset_user_password",
+    name="api.admin.users.reset_password",
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 @limiter.limit(
@@ -142,7 +142,9 @@ async def admin_reset_user_password(
     )
 
 
-@router.post("/{user_id}/unlock", response_model=UserResponse, name="admin_unlock_user")
+@router.post(
+    "/{user_id}/unlock", response_model=UserResponse, name="api.admin.users.unlock"
+)
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_unlock_user(
     request: Request,

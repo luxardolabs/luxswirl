@@ -73,7 +73,7 @@ def build_alerts_page_url(request: Request) -> str:
     keyed on a check_id, and the CREATE form has no check yet. Putting it there
     made /checks/create-form raise UndefinedError on `form_urls`.
     """
-    return str(request.url_for("settings_alerts").path)
+    return str(request.url_for("settings.alerts").path)
 
 
 def build_check_create_urls(request: Request) -> CheckCreateUrls:
@@ -87,9 +87,9 @@ def build_check_create_urls(request: Request) -> CheckCreateUrls:
         return str(request.app.url_path_for(name))
 
     return CheckCreateUrls(
-        create=u("create_check_assignment"),
-        assignment_mode_selector=u("assignment_mode_selector"),
-        bulk_preview=u("bulk_check_preview"),
+        create=u("checks.create"),
+        assignment_mode_selector=u("checks.assignment_mode_selector"),
+        bulk_preview=u("checks.bulk_preview"),
     )
 
 
@@ -100,10 +100,10 @@ def build_check_form_urls(request: Request, check_id: UUID) -> CheckFormUrls:
         return str(request.url_for(name, check_id=check_id).path)
 
     return CheckFormUrls(
-        clone=u("clone_check_handler"),
-        update=u("web_update_check"),
-        dependents=u("dependents_panel"),
-        update_dependents=u("update_dependents"),
+        clone=u("checks.clone"),
+        update=u("checks.update"),
+        dependents=u("check_dependents.index"),
+        update_dependents=u("check_dependents.update"),
     )
 
 
@@ -519,7 +519,7 @@ class ChecksViewService:
             # .path, not str(): url_for returns an absolute url from the
             # request's scheme/host, which behind TLS-terminating nginx can emit
             # http:// into an https:// page.
-            "toggle_url": request.url_for("toggle_check", check_id=check_id).path,
+            "toggle_url": request.url_for("checks.toggle", check_id=check_id).path,
         }
 
     @staticmethod

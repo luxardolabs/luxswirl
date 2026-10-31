@@ -72,7 +72,7 @@ class ArtifactsViewService:
             # request's scheme/host, which behind TLS-terminating nginx can emit
             # http:// into an https:// page.
             "download_url": request.url_for(
-                "view_artifact", artifact_id=artifact_id
+                "artifacts.show", artifact_id=artifact_id
             ).path,
         }
         return context, None

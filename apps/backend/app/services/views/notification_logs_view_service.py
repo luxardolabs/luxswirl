@@ -111,12 +111,12 @@ def _log_row(request: Request, entry: NotificationLogEntry) -> NotificationLogRo
     snooze_url: str | None = None
     if entry.check_id:
         check_detail_url = str(
-            request.app.url_path_for("check_detail_panel", check_id=entry.check_id)
+            request.app.url_path_for("checks.show", check_id=entry.check_id)
         )
         query = urlencode(
             {"alert_id": entry.alert_id, "check_id": entry.check_id, "log_id": entry.id}
         )
-        snooze_url = f"{request.app.url_path_for('snooze_alert_check')}?{query}"
+        snooze_url = f"{request.app.url_path_for('alert_snoozes.create')}?{query}"
     return NotificationLogRow(
         log_id=entry.id,
         sent_at=entry.sent_at,
@@ -267,6 +267,6 @@ class NotificationLogsViewService:
             "all_providers": all_providers,
             "pagination": pagination,
             # The page's own path: filters and pagination re-request it.
-            "list_url": str(request.app.url_path_for("notification_logs_page")),
+            "list_url": str(request.app.url_path_for("notification_logs.index")),
             "page_title": "Notification Logs",
         }

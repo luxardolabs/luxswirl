@@ -97,15 +97,17 @@ def build_status_page_urls(
         return request.url_for(name, **kw).path
 
     return StatusPageUrls(
-        edit_form=u("status_page_edit_form", status_page_id=page_id),
-        manage=u("manage_status_page", status_page_id=page_id),
-        delete=u("delete_status_page", status_page_id=page_id),
-        update=u("update_status_page", status_page_id=page_id),
-        available_checks=u("get_available_checks", status_page_id=page_id),
-        public=u("view_public_status_page", slug=slug),
-        reorder=u("reorder_dashboard_items", status_page_id=page_id),
-        add_check=u("add_check_to_dashboard", status_page_id=page_id),
-        add_group=u("add_group_to_dashboard", status_page_id=page_id),
+        edit_form=u("status_pages.edit", status_page_id=page_id),
+        manage=u("status_pages.manage", status_page_id=page_id),
+        delete=u("status_pages.delete", status_page_id=page_id),
+        update=u("status_pages.update", status_page_id=page_id),
+        available_checks=u(
+            "status_page_items.available_checks", status_page_id=page_id
+        ),
+        public=u("public_status_pages.show", slug=slug),
+        reorder=u("status_page_items.reorder", status_page_id=page_id),
+        add_check=u("status_page_items.add_check", status_page_id=page_id),
+        add_group=u("status_page_items.add_group", status_page_id=page_id),
     )
 
 
@@ -118,10 +120,10 @@ def _dashboard_item_urls(
         return str(request.app.url_path_for(name, status_page_id=status_page_id, **kw))
 
     return DashboardItemUrls(
-        remove=u("remove_item_from_dashboard", item_index=index),
-        rename_group=u("rename_group_in_dashboard", item_index=index),
-        update_group_filters=u("update_group_filters_in_dashboard", item_index=index),
-        sort=u("update_group_sort_in_dashboard", item_index=index),
+        remove=u("status_page_items.delete", item_index=index),
+        rename_group=u("status_page_groups.rename", item_index=index),
+        update_group_filters=u("status_page_groups.update_filters", item_index=index),
+        sort=u("status_page_groups.sort", item_index=index),
     )
 
 
@@ -192,8 +194,8 @@ class StatusPagesViewService:
             "pagination": pagination,
             "page_title": "Status Pages",
             # The page's own path: filters and pagination re-request it.
-            "list_url": str(request.app.url_path_for("status_pages_list")),
-            "create_form_url": str(request.app.url_path_for("status_page_create_form")),
+            "list_url": str(request.app.url_path_for("status_pages.index")),
+            "create_form_url": str(request.app.url_path_for("status_pages.new")),
         }
 
     @staticmethod
@@ -205,7 +207,7 @@ class StatusPagesViewService:
             "request": request,
             "current_user": current_user,
             "status_page": None,
-            "create_url": str(request.app.url_path_for("create_status_page")),
+            "create_url": str(request.app.url_path_for("status_pages.create")),
         }
 
     @staticmethod
@@ -631,8 +633,8 @@ class StatusPagesViewService:
         Both paths come from the route table by name, so neither the login page
         nor the public page's path has a second home here.
         """
-        login = request.app.url_path_for("login_page")
-        page = request.app.url_path_for("view_public_status_page", slug=slug)
+        login = request.app.url_path_for("auth.login_page")
+        page = request.app.url_path_for("public_status_pages.show", slug=slug)
         return f"{login}?{urlencode({'redirect': page})}"
 
     @staticmethod
@@ -684,11 +686,11 @@ class StatusPagesViewService:
             # One finished choice per time-range option — label, href and whether
             # it is the current one — so the selector only renders.
             "time_range_choices": _time_range_choices(
-                request.url_for("view_public_status_page", slug=status_page.slug).path,
+                request.url_for("public_status_pages.show", slug=status_page.slug).path,
                 selected=time_range_minutes,
             ),
             "partial_url_base": request.url_for(
-                "view_public_status_page_partial", slug=status_page.slug
+                "public_status_pages.partial", slug=status_page.slug
             ).path,
         }, None
 

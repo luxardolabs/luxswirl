@@ -22,7 +22,7 @@ router = APIRouter(tags=["Admin API"])
     response_model=ApiWhoAmIResponse,
     summary="Who this token acts as",
     description="The calling API token's user, its role, and the token itself",
-    name="admin_me",
+    name="api.admin.me.show",
 )
 @limiter.limit(
     settings.security.admin_api_rate_limit, key_func=api_token_rate_limit_key
@@ -31,7 +31,7 @@ async def admin_me(request: Request, principal: ApiUser) -> ApiWhoAmIResponse:
     return ApiTokenCoreService.who_am_i(principal)
 
 
-@router.get("/openapi.json", include_in_schema=False, name="admin_openapi")
+@router.get("/openapi.json", include_in_schema=False, name="api.admin.openapi.show")
 @limiter.limit(
     settings.security.admin_api_rate_limit, key_func=api_token_rate_limit_key
 )

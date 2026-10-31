@@ -208,7 +208,7 @@ async def test_web_import_bad_input_is_never_a_500_and_queues_nothing(
     db: AsyncSession, web: AsyncClient, mode: str, content: str | bytes
 ) -> None:
     agent_id = await _agent(db)
-    url = app.url_path_for("web_import_checks", agent_id=str(agent_id))
+    url = app.url_path_for("agent_checks.import", agent_id=str(agent_id))
     resp = await web.post(
         url,
         data={"mode": mode},

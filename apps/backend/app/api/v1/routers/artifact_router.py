@@ -39,7 +39,7 @@ router = APIRouter(tags=["Artifacts"])
         },
         404: {"model": ErrorResponse, "description": "Agent or check not found"},
     },
-    name="create_artifact",
+    name="api.agent.artifacts.create",
 )
 async def create_artifact(
     artifact: CheckArtifactCreate,

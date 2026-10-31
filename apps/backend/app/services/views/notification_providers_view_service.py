@@ -138,9 +138,11 @@ class NotificationProvidersViewService:
             # .path, not str(): url_for returns an absolute url from the
             # request's scheme/host, which behind TLS-terminating nginx can emit
             # http:// into an https:// page.
-            "form_action": request.url_for("web_create_provider").path,
+            "form_action": request.url_for("notification_providers.create").path,
             # Picking a type re-renders this form for that type.
-            "create_form_url": str(request.app.url_path_for("create_provider_form")),
+            "create_form_url": str(
+                request.app.url_path_for("notification_providers.new")
+            ),
         }
 
     @staticmethod
@@ -160,7 +162,7 @@ class NotificationProvidersViewService:
                 available_types, provider.provider_type, provider
             ),
             "form_action": request.url_for(
-                "web_update_provider", provider_id=provider_id
+                "notification_providers.update", provider_id=provider_id
             ).path,
         }
 

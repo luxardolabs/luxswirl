@@ -29,7 +29,7 @@ router = APIRouter(tags=["Web UI - Profile"])
     "/profile",
     response_class=HTMLResponse,
     include_in_schema=False,
-    name="profile_panel",
+    name="profile.show",
 )
 async def profile_panel(
     request: Request,
@@ -49,7 +49,7 @@ async def profile_panel(
     "/profile/api-tokens",
     response_class=HTMLResponse,
     include_in_schema=False,
-    name="create_api_token",
+    name="api_tokens.create",
 )
 async def create_api_token(
     request: Request,
@@ -74,7 +74,7 @@ async def create_api_token(
     "/profile/api-tokens/{token_id}/revoke",
     response_class=HTMLResponse,
     include_in_schema=False,
-    name="revoke_api_token",
+    name="api_tokens.revoke",
 )
 async def revoke_api_token(
     request: Request,
@@ -95,7 +95,7 @@ async def revoke_api_token(
     "/profile/update",
     response_class=HTMLResponse,
     include_in_schema=False,
-    name="update_profile",
+    name="profile.update",
 )
 async def update_profile(
     request: Request,
@@ -117,7 +117,7 @@ async def update_profile(
     "/profile/change-password",
     response_class=HTMLResponse,
     include_in_schema=False,
-    name="web_change_password",
+    name="profile.change_password",
 )
 @limiter.limit(settings.security.password_reset_rate_limit)
 async def change_password(

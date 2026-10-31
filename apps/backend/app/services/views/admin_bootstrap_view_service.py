@@ -39,13 +39,13 @@ from app.services.core.admin_bootstrap_core_service import (
 SETUP_ROUTE = "admin.setup"
 
 # --- EDIT THIS: the route NAMES of your login page and password-change form.
-LOGIN_ROUTE = "login_page"
-CHANGE_PASSWORD_ROUTE = "change_password_page"
+LOGIN_ROUTE = "auth.login_page"
+CHANGE_PASSWORD_ROUTE = "auth.change_password_page"
 
 
 # --- EDIT THIS: the route name of logout, which a user who must change their password may still
 # reach.
-LOGOUT_ROUTE = "web_logout"
+LOGOUT_ROUTE = "auth.logout"
 
 
 @dataclass(frozen=True)

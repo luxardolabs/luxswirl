@@ -37,7 +37,7 @@ router = APIRouter(
 LIMIT = settings.security.admin_api_rate_limit
 
 
-@router.get("", response_model=JobPage, name="admin_list_agent_jobs")
+@router.get("", response_model=JobPage, name="api.admin.jobs.index")
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_list_agent_jobs(
     request: Request,
@@ -60,7 +60,9 @@ async def admin_list_agent_jobs(
     )
 
 
-@router.get("/types", response_model=list[JobTypeInfo], name="admin_list_job_types")
+@router.get(
+    "/types", response_model=list[JobTypeInfo], name="api.admin.job_types.index"
+)
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_list_job_types(
     request: Request, principal: ApiUser
@@ -73,7 +75,7 @@ async def admin_list_job_types(
     "",
     response_model=JobResponse,
     status_code=status.HTTP_201_CREATED,
-    name="admin_create_agent_job",
+    name="api.admin.jobs.create",
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_create_agent_job(
@@ -86,7 +88,7 @@ async def admin_create_agent_job(
     return await AdminJobCoreService.create_job(db, principal.user.username, data)
 
 
-@router.get("/{job_id}", response_model=JobResponse, name="admin_get_agent_job")
+@router.get("/{job_id}", response_model=JobResponse, name="api.admin.jobs.show")
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_get_agent_job(
     request: Request,
@@ -99,7 +101,7 @@ async def admin_get_agent_job(
 
 
 @router.post(
-    "/{job_id}/cancel", response_model=JobResponse, name="admin_cancel_agent_job"
+    "/{job_id}/cancel", response_model=JobResponse, name="api.admin.jobs.cancel"
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_cancel_agent_job(
@@ -115,7 +117,7 @@ async def admin_cancel_agent_job(
 @router.delete(
     "/{job_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    name="admin_delete_agent_job",
+    name="api.admin.jobs.delete",
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_delete_agent_job(
@@ -132,7 +134,7 @@ async def admin_delete_agent_job(
     "/{job_id}/checks",
     response_model=JobChecksCreated,
     status_code=status.HTTP_201_CREATED,
-    name="admin_create_checks_from_job",
+    name="api.admin.job_checks.create",
     dependencies=[Depends(require_scopes("checks:write"))],
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)

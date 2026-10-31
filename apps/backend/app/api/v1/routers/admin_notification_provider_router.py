@@ -38,7 +38,9 @@ router = APIRouter(
 LIMIT = settings.security.admin_api_rate_limit
 
 
-@router.get("", response_model=ProviderPage, name="admin_list_providers")
+@router.get(
+    "", response_model=ProviderPage, name="api.admin.notification_providers.index"
+)
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_list_providers(
     request: Request,
@@ -59,7 +61,9 @@ async def admin_list_providers(
 
 
 @router.get(
-    "/types", response_model=list[ProviderTypeInfo], name="admin_list_provider_types"
+    "/types",
+    response_model=list[ProviderTypeInfo],
+    name="api.admin.notification_provider_types.index",
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_list_provider_types(
@@ -69,7 +73,11 @@ async def admin_list_provider_types(
     return AdminNotificationCoreService.provider_types()
 
 
-@router.get("/{provider_id}", response_model=AdminProvider, name="admin_get_provider")
+@router.get(
+    "/{provider_id}",
+    response_model=AdminProvider,
+    name="api.admin.notification_providers.show",
+)
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_get_provider(
     request: Request,
@@ -86,7 +94,7 @@ async def admin_get_provider(
     "",
     response_model=AdminProvider,
     status_code=status.HTTP_201_CREATED,
-    name="admin_create_provider",
+    name="api.admin.notification_providers.create",
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_create_provider(
@@ -101,7 +109,9 @@ async def admin_create_provider(
 
 
 @router.patch(
-    "/{provider_id}", response_model=AdminProvider, name="admin_update_provider"
+    "/{provider_id}",
+    response_model=AdminProvider,
+    name="api.admin.notification_providers.update",
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_update_provider(
@@ -120,7 +130,7 @@ async def admin_update_provider(
 @router.delete(
     "/{provider_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    name="admin_delete_provider",
+    name="api.admin.notification_providers.delete",
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_delete_provider(
@@ -134,7 +144,9 @@ async def admin_delete_provider(
 
 
 @router.post(
-    "/{provider_id}/enable", response_model=AdminProvider, name="admin_enable_provider"
+    "/{provider_id}/enable",
+    response_model=AdminProvider,
+    name="api.admin.notification_providers.enable",
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_enable_provider(
@@ -151,7 +163,7 @@ async def admin_enable_provider(
 @router.post(
     "/{provider_id}/disable",
     response_model=AdminProvider,
-    name="admin_disable_provider",
+    name="api.admin.notification_providers.disable",
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_disable_provider(
@@ -166,7 +178,9 @@ async def admin_disable_provider(
 
 
 @router.post(
-    "/{provider_id}/test", response_model=ProviderTestResult, name="admin_test_provider"
+    "/{provider_id}/test",
+    response_model=ProviderTestResult,
+    name="api.admin.notification_providers.test",
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_test_provider(

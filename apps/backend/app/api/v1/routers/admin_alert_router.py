@@ -40,7 +40,7 @@ router = APIRouter(
 LIMIT = settings.security.admin_api_rate_limit
 
 
-@router.get("", response_model=AlertPage, name="admin_list_alerts")
+@router.get("", response_model=AlertPage, name="api.admin.alerts.index")
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_list_alerts(
     request: Request,
@@ -57,7 +57,9 @@ async def admin_list_alerts(
     )
 
 
-@router.get("/{alert_id}", response_model=AdminAlertDetail, name="admin_get_alert")
+@router.get(
+    "/{alert_id}", response_model=AdminAlertDetail, name="api.admin.alerts.show"
+)
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_get_alert(
     request: Request,
@@ -73,7 +75,7 @@ async def admin_get_alert(
     "",
     response_model=AdminAlertDetail,
     status_code=status.HTTP_201_CREATED,
-    name="admin_create_alert",
+    name="api.admin.alerts.create",
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_create_alert(
@@ -85,7 +87,9 @@ async def admin_create_alert(
     return await AdminAlertCoreService.create_alert(db, principal.user.role, data)
 
 
-@router.patch("/{alert_id}", response_model=AdminAlertDetail, name="admin_update_alert")
+@router.patch(
+    "/{alert_id}", response_model=AdminAlertDetail, name="api.admin.alerts.update"
+)
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_update_alert(
     request: Request,
@@ -99,7 +103,9 @@ async def admin_update_alert(
 
 
 @router.delete(
-    "/{alert_id}", status_code=status.HTTP_204_NO_CONTENT, name="admin_delete_alert"
+    "/{alert_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    name="api.admin.alerts.delete",
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_delete_alert(
@@ -113,7 +119,9 @@ async def admin_delete_alert(
 
 
 @router.post(
-    "/{alert_id}/enable", response_model=AdminAlertDetail, name="admin_enable_alert"
+    "/{alert_id}/enable",
+    response_model=AdminAlertDetail,
+    name="api.admin.alerts.enable",
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_enable_alert(
@@ -126,7 +134,9 @@ async def admin_enable_alert(
 
 
 @router.post(
-    "/{alert_id}/disable", response_model=AdminAlertDetail, name="admin_disable_alert"
+    "/{alert_id}/disable",
+    response_model=AdminAlertDetail,
+    name="api.admin.alerts.disable",
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_disable_alert(
@@ -141,7 +151,7 @@ async def admin_disable_alert(
 @router.put(
     "/{alert_id}/providers",
     response_model=AlertMappingChange,
-    name="admin_set_alert_providers",
+    name="api.admin.alert_providers.update",
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_set_alert_providers(
@@ -158,7 +168,7 @@ async def admin_set_alert_providers(
 @router.put(
     "/{alert_id}/checks",
     response_model=AlertMappingChange,
-    name="admin_set_alert_checks",
+    name="api.admin.alert_checks.update",
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_set_alert_checks(
@@ -177,7 +187,7 @@ async def admin_set_alert_checks(
 @router.post(
     "/{alert_id}/checks/{check_id}/snooze",
     response_model=AlertCheckSnooze,
-    name="admin_snooze_alert_check",
+    name="api.admin.alert_snoozes.create",
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_snooze_alert_check(
@@ -203,7 +213,7 @@ async def admin_snooze_alert_check(
 @router.delete(
     "/{alert_id}/checks/{check_id}/snooze",
     status_code=status.HTTP_204_NO_CONTENT,
-    name="admin_unsnooze_alert_check",
+    name="api.admin.alert_snoozes.delete",
 )
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_unsnooze_alert_check(

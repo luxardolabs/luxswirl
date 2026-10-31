@@ -27,7 +27,7 @@ router = APIRouter(tags=["Web UI - Import/Export"])
     "/agents/{agent_id}/import-export-form",
     response_class=HTMLResponse,
     include_in_schema=False,
-    name="import_export_form",
+    name="agent_checks.transfer_form",
 )
 async def import_export_form(
     request: Request,
@@ -61,7 +61,7 @@ async def import_export_form(
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.get(
-    "/agents/{agent_id}/export", include_in_schema=False, name="web_export_checks"
+    "/agents/{agent_id}/export", include_in_schema=False, name="agent_checks.export"
 )
 async def export_checks(
     agent_id: Annotated[UUID, Path(description="Agent ID")],
@@ -83,7 +83,7 @@ async def export_checks(
     "/agents/{agent_id}/import",
     response_class=HTMLResponse,
     include_in_schema=False,
-    name="web_import_checks",
+    name="agent_checks.import",
 )
 async def import_checks(
     request: Request,

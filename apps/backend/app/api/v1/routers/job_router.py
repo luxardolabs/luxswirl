@@ -30,7 +30,7 @@ router = APIRouter(prefix="/jobs", tags=["Jobs"])
     responses={
         404: {"model": ErrorResponse, "description": "Job not found"},
     },
-    name="start_job",
+    name="api.agent.jobs.start",
 )
 async def start_job(
     owned_job_id: AgentOwnedJobId,
@@ -54,7 +54,7 @@ async def start_job(
     responses={
         404: {"model": ErrorResponse, "description": "Job not found"},
     },
-    name="submit_job_results",
+    name="api.agent.job_results.create",
 )
 async def submit_job_results(
     owned_job_id: AgentOwnedJobId,

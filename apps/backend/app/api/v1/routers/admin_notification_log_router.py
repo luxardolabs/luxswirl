@@ -29,7 +29,9 @@ router = APIRouter(
 LIMIT = settings.security.admin_api_rate_limit
 
 
-@router.get("", response_model=NotificationLogPage, name="admin_list_notification_logs")
+@router.get(
+    "", response_model=NotificationLogPage, name="api.admin.notification_logs.index"
+)
 @limiter.limit(LIMIT, key_func=api_token_rate_limit_key)
 async def admin_list_notification_logs(
     request: Request,

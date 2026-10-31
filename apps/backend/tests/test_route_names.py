@@ -1,13 +1,10 @@
 """Route names must be unique across the whole app.
 
-`request.url_for(name)` resolves to the FIRST route registered under that name.
-The JSON API and the web UI both had handlers called `update_alert`,
-`delete_check`, `export_checks`, … — so a view service asking for the web URL
-silently got the /api/v1 one, and the rendered form posted to the wrong
-endpoint. A duplicate name is therefore a live bug, not a style issue.
-
-Web handlers that share a function name with an API handler carry an explicit
-`name="web_*"` (or `name="<entity>_<form>"`) on the route decorator.
+`url_path_for(name)` resolves to the FIRST route registered under that name, so
+a web page and an API endpoint sharing one would send a link to the wrong
+endpoint without an error. Every route names itself `[area.]<resource>.<action>`:
+the web page and its API endpoint are two names (`checks.update`,
+`api.admin.checks.update`).
 """
 
 from __future__ import annotations
@@ -47,7 +44,7 @@ def test_every_referenced_route_name_exists() -> None:
         name for r, _ in iter_routes(app.routes) if (name := getattr(r, "name", None))
     }
     app_dir = pathlib.Path(__file__).resolve().parents[1] / "app"
-    pattern = re.compile(r'(?:url_for|url_path_for|\bu)\(\s*"([a-z_]+)"')
+    pattern = re.compile(r'(?:url_for|url_path_for|path_for|\bu)\(\s*"([a-z_.]+)"')
 
     missing: dict[str, list[str]] = {}
     for path in app_dir.rglob("*.py"):

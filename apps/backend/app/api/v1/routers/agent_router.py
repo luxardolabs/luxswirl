@@ -41,7 +41,7 @@ agent_ops_router = APIRouter(tags=["Agent Operations"])
     status_code=status.HTTP_201_CREATED,
     summary="Register new agent",
     description="Register a new agent for approval using registration key. Returns agent UUID to store locally.",
-    name="register_agent",
+    name="api.agent.registration.create",
 )
 async def register_agent(
     data: KeyedRegistration,
@@ -66,7 +66,7 @@ async def register_agent(
     "/heartbeat",
     response_model=AgentHeartbeatResponse,
     summary="Agent heartbeat",
-    name="agent_heartbeat",
+    name="api.agent.heartbeat.create",
 )
 async def agent_heartbeat(
     sender: AuthenticatedHeartbeat,
@@ -91,7 +91,7 @@ async def agent_heartbeat(
         "new agent-specific key"
     ),
     response_model=AgentKeyRecoveryResponse,
-    name="recover_agent_key",
+    name="api.agent.keys.recover",
 )
 async def recover_agent_key(
     agent_id: UUID,

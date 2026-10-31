@@ -105,7 +105,7 @@ class TestHealthRoutes:
         assert resp.status_code in (200, 302, 307)
 
     async def test_api_root_describes_the_api(self, client):
-        resp = await client.get(app.url_path_for("api_root"))
+        resp = await client.get(app.url_path_for("api.root.show"))
         assert resp.status_code == 200
 
 

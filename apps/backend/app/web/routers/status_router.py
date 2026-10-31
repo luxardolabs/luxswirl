@@ -30,11 +30,11 @@ router = APIRouter(tags=["Web UI - Status"])
 
 
 @router.get(
-    "/", response_class=RedirectResponse, include_in_schema=False, name="root_redirect"
+    "/", response_class=RedirectResponse, include_in_schema=False, name="home.redirect"
 )
 async def root_redirect(request: Request) -> Response:
     qs = request.url.query
-    dashboard = request.app.url_path_for("status_page")
+    dashboard = request.app.url_path_for("dashboard.index")
     target = dashboard + (f"?{qs}" if qs else "")
     return RedirectResponse(
         url=safe_redirect_target(target, default=dashboard), status_code=302
@@ -46,7 +46,7 @@ async def root_redirect(request: Request) -> Response:
     "/internal/summary",
     response_class=HTMLResponse,
     include_in_schema=False,
-    name="status_summary_partial",
+    name="dashboard.summary",
 )
 async def status_summary_partial(
     request: Request,
@@ -66,7 +66,7 @@ async def status_summary_partial(
     "/dashboard",
     response_class=HTMLResponse,
     include_in_schema=False,
-    name="status_page",
+    name="dashboard.index",
 )
 async def status_page(
     request: Request,

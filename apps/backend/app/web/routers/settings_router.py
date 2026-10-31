@@ -27,7 +27,7 @@ router = APIRouter(tags=["Web UI - Settings"], include_in_schema=False)
 
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
-@router.get("/settings", response_class=HTMLResponse, name="settings_landing")
+@router.get("/settings", response_class=HTMLResponse, name="settings.index")
 async def settings_landing(
     request: Request,
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
@@ -42,7 +42,7 @@ async def settings_landing(
 @router.get(
     "/settings/notifications",
     response_class=HTMLResponse,
-    name="settings_notifications",
+    name="settings.notifications",
 )
 async def settings_notifications(
     request: Request,
@@ -59,7 +59,7 @@ async def settings_notifications(
 
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
-@router.get("/settings/alerts", response_class=HTMLResponse, name="settings_alerts")
+@router.get("/settings/alerts", response_class=HTMLResponse, name="settings.alerts")
 async def settings_alerts(
     request: Request,
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
@@ -80,7 +80,7 @@ async def settings_alerts(
 @router.get(
     "/settings/registration-keys",
     response_class=HTMLResponse,
-    name="settings_registration_keys",
+    name="settings.registration_keys",
 )
 async def settings_registration_keys(
     request: Request,
@@ -98,7 +98,7 @@ async def settings_registration_keys(
 
 
 @router.get(
-    "/settings/components", response_class=HTMLResponse, name="settings_components"
+    "/settings/components", response_class=HTMLResponse, name="settings.components"
 )
 async def settings_components(
     request: Request,
@@ -114,7 +114,7 @@ async def settings_components(
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
 @router.get(
-    "/settings/logo-demo", response_class=HTMLResponse, name="settings_logo_demo"
+    "/settings/logo-demo", response_class=HTMLResponse, name="settings.logo_demo"
 )
 async def settings_logo_demo(
     request: Request,
@@ -129,7 +129,7 @@ async def settings_logo_demo(
 
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
-@router.get("/settings/defaults", response_class=HTMLResponse, name="settings_defaults")
+@router.get("/settings/defaults", response_class=HTMLResponse, name="settings.defaults")
 async def settings_defaults(
     request: Request,
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
@@ -146,7 +146,7 @@ async def settings_defaults(
 
 
 @router.post(
-    "/settings/{key}/update", response_class=HTMLResponse, name="update_setting"
+    "/settings/{key}/update", response_class=HTMLResponse, name="settings.update"
 )
 async def update_setting(
     request: Request,
@@ -190,7 +190,9 @@ async def update_setting(
         )
 
 
-@router.post("/settings/{key}/reset", response_class=HTMLResponse, name="reset_setting")
+@router.post(
+    "/settings/{key}/reset", response_class=HTMLResponse, name="settings.reset"
+)
 async def reset_setting(
     request: Request,
     key: str,
@@ -215,7 +217,7 @@ async def reset_setting(
 @router.post(
     "/settings/metrics/generate-token",
     response_class=HTMLResponse,
-    name="generate_metrics_token",
+    name="metrics_settings.generate_token",
 )
 async def generate_metrics_token(
     request: Request,
@@ -230,7 +232,7 @@ async def generate_metrics_token(
 @router.post(
     "/settings/metrics/toggle-enabled",
     response_class=HTMLResponse,
-    name="toggle_metrics_enabled",
+    name="metrics_settings.toggle_enabled",
 )
 async def toggle_metrics_enabled(
     request: Request,
@@ -252,7 +254,7 @@ async def toggle_metrics_enabled(
 @router.post(
     "/settings/metrics/toggle-auth",
     response_class=HTMLResponse,
-    name="toggle_metrics_auth",
+    name="metrics_settings.toggle_auth",
 )
 async def toggle_metrics_auth(
     request: Request,
@@ -274,7 +276,7 @@ async def toggle_metrics_auth(
 @router.post(
     "/settings/metrics/update-timeout",
     response_class=HTMLResponse,
-    name="update_metrics_timeout",
+    name="metrics_settings.update_timeout",
 )
 async def update_metrics_timeout(
     request: Request,

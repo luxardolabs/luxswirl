@@ -37,9 +37,9 @@ def build_job_urls(request: Request, job_id: UUID) -> JobUrls:
         return str(request.url_for(name, job_id=job_id).path)
 
     return JobUrls(
-        detail=u("job_detail_panel"),
-        cancel=u("cancel_job_web"),
-        delete=u("delete_job_web"),
+        detail=u("jobs.show"),
+        cancel=u("jobs.cancel"),
+        delete=u("jobs.delete"),
     )
 
 
@@ -50,11 +50,11 @@ def build_scan_action_urls(request: Request, job_id: UUID) -> ScanActionUrls:
         return str(request.url_for(name, job_id=job_id).path)
 
     return ScanActionUrls(
-        bulk_ping=u("bulk_create_ping_checks"),
-        bulk_web=u("bulk_create_web_checks"),
-        bulk_ssh=u("bulk_create_ssh_checks"),
-        bulk_database=u("bulk_create_database_checks"),
-        quick_create=u("quick_create_check_from_host"),
+        bulk_ping=u("job_checks.bulk_ping"),
+        bulk_web=u("job_checks.bulk_web"),
+        bulk_ssh=u("job_checks.bulk_ssh"),
+        bulk_database=u("job_checks.bulk_database"),
+        quick_create=u("job_checks.quick_create"),
     )
 
 
@@ -68,7 +68,7 @@ def build_discover_view(request: Request, job: JobInDB) -> dict[str, Any]:
     `scan_url` (None when it suggests no scan).
     """
     result = job.result or {}
-    base = request.url_for("job_create_form").path
+    base = request.url_for("jobs.new").path
 
     def form_url(subnet: str | None) -> str | None:
         if not subnet:
@@ -402,15 +402,13 @@ class JobsViewService:
         ]
 
         return {
-            "create_form_url": request.url_for("job_create_form").path,
+            "create_form_url": request.url_for("jobs.new").path,
             # Finished hrefs, resolved by ROUTE NAME. The page used to spell
             # '/jobs/partials/table' and '/jobs' into the template, so moving
             # either route would have left a dead poll and dead pagination links
             # with nothing failing loudly (fw.url_assembly_in_view).
-            "table_url": paginated_url(
-                request.url_for("jobs_table_partial").path, pagination
-            ),
-            "page_url": request.url_for("jobs_page").path,
+            "table_url": paginated_url(request.url_for("jobs.table").path, pagination),
+            "page_url": request.url_for("jobs.index").path,
             "request": request,
             "current_user": current_user,
             "summary": summary,
@@ -547,8 +545,8 @@ class JobsViewService:
             "prefill_params": final_defaults,
             # The form posts to create and re-renders itself when the type
             # changes; both resolved by route name.
-            "create_url": str(request.app.url_path_for("create_job_web")),
-            "create_form_url": str(request.app.url_path_for("job_create_form")),
+            "create_url": str(request.app.url_path_for("jobs.create")),
+            "create_form_url": str(request.app.url_path_for("jobs.new")),
         }
 
     @staticmethod

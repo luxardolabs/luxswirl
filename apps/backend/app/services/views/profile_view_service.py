@@ -37,10 +37,12 @@ class ProfileViewService:
         """Initial-load panel context."""
         return {
             **await ProfileViewService.api_tokens_context(db, request, current_user),
-            "update_url": str(request.app.url_path_for("update_profile")),
-            "change_password_url": str(request.app.url_path_for("web_change_password")),
+            "update_url": str(request.app.url_path_for("profile.update")),
+            "change_password_url": str(
+                request.app.url_path_for("profile.change_password")
+            ),
             # The user's own tokens' calls, loaded into the panel once it opens.
-            "activity_url": str(request.app.url_path_for("profile_activity")),
+            "activity_url": str(request.app.url_path_for("profile_activity.index")),
         }
 
     @staticmethod
@@ -63,13 +65,13 @@ class ProfileViewService:
                     "access": ApiTokenCoreService.access_of(token.scopes),
                     "revoke_url": str(
                         request.app.url_path_for(
-                            "revoke_api_token", token_id=str(token.id)
+                            "api_tokens.revoke", token_id=str(token.id)
                         )
                     ),
                 }
                 for token in tokens
             ],
-            "create_url": str(request.app.url_path_for("create_api_token")),
+            "create_url": str(request.app.url_path_for("api_tokens.create")),
             "created_token": created_token,
             "created_name": created_name,
             "error": error,
