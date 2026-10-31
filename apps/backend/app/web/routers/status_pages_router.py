@@ -2,11 +2,10 @@
 Status Pages router — web UI for managing custom status pages/dashboards.
 """
 
-from datetime import datetime
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Form, Header, Path, Query, Request
+from fastapi import APIRouter, Depends, Form, Path, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,7 +21,12 @@ from app.db import get_db
 from app.services.views.maintenance_job_view_service import MaintenanceJobViewService
 from app.services.views.status_pages_view_service import StatusPagesViewService
 from app.shared.logger import get_logger
-from app.web.deps import CurrentUserWeb, EditorUserWeb, OptionalUserWeb
+from app.web.deps import (
+    CurrentUserWeb,
+    EditorUserWeb,
+    OptionalUserWeb,
+    drawn_page_is_current,
+)
 from app.web.hx_responses import hx_close_panel_and_refresh, hx_toast_trigger
 from app.web.render import error_page, error_partial, public_error_page
 from app.web.templates import templates
@@ -276,23 +280,12 @@ async def add_check_to_dashboard(
 
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
-async def _drawn_page_is_current(
-    status_page_id: Annotated[UUID, Path(description="Status page UUID")],
-    _editor: EditorUserWeb,
-    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
-    page_version: Annotated[datetime | None, Header(alias="X-Page-Version")] = None,
-) -> None:
-    """An edit naming an item by position carries the page version it was drawn
-    from; one the page has moved past is refused (409) before the route runs."""
-    await StatusPagesViewService.require_drawn_version(db, status_page_id, page_version)
-
-
 @router.delete(
     "/status-pages/{status_page_id}/remove-item/{item_index}",
     response_class=HTMLResponse,
     include_in_schema=False,
     name="status_page_items.delete",
-    dependencies=[Depends(_drawn_page_is_current)],
+    dependencies=[Depends(drawn_page_is_current)],
 )
 async def remove_item_from_dashboard(
     request: Request,
@@ -319,7 +312,7 @@ async def remove_item_from_dashboard(
     response_class=HTMLResponse,
     include_in_schema=False,
     name="status_page_items.reorder",
-    dependencies=[Depends(_drawn_page_is_current)],
+    dependencies=[Depends(drawn_page_is_current)],
 )
 async def reorder_dashboard_items(
     request: Request,
@@ -370,7 +363,7 @@ async def add_group_to_dashboard(
     response_class=HTMLResponse,
     include_in_schema=False,
     name="status_page_groups.rename",
-    dependencies=[Depends(_drawn_page_is_current)],
+    dependencies=[Depends(drawn_page_is_current)],
 )
 async def rename_group_in_dashboard(
     request: Request,
@@ -395,7 +388,7 @@ async def rename_group_in_dashboard(
     response_class=HTMLResponse,
     include_in_schema=False,
     name="status_page_groups.update_filters",
-    dependencies=[Depends(_drawn_page_is_current)],
+    dependencies=[Depends(drawn_page_is_current)],
 )
 async def update_group_filters_in_dashboard(
     request: Request,
@@ -418,7 +411,7 @@ async def update_group_filters_in_dashboard(
     response_class=HTMLResponse,
     include_in_schema=False,
     name="status_page_groups.sort",
-    dependencies=[Depends(_drawn_page_is_current)],
+    dependencies=[Depends(drawn_page_is_current)],
 )
 async def update_group_sort_in_dashboard(
     request: Request,
