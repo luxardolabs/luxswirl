@@ -7,6 +7,7 @@ the dashboard rendering view-model assembly via DashboardRender.
 """
 
 import json
+from datetime import datetime
 from typing import Any
 from urllib.parse import urlencode
 from uuid import UUID
@@ -108,6 +109,7 @@ def build_status_page_urls(
         reorder=u("status_page_items.reorder", status_page_id=page_id),
         add_check=u("status_page_items.add_check", status_page_id=page_id),
         add_group=u("status_page_items.add_group", status_page_id=page_id),
+        items=u("status_page_items.index", status_page_id=page_id),
     )
 
 
@@ -294,6 +296,14 @@ class StatusPagesViewService:
             "filtered_checks": filtered_checks,
             "dashboard_check_ids": dashboard_check_ids,
         }
+
+    @staticmethod
+    async def require_drawn_version(
+        db: AsyncSession, status_page_id: UUID, drawn: datetime | None
+    ) -> None:
+        """An edit naming an item by position applies only to the page it was
+        drawn from (StatusPageCoreService.require_drawn_version)."""
+        await StatusPageCoreService.require_drawn_version(db, status_page_id, drawn)
 
     @staticmethod
     async def build_dashboard_items_context(

@@ -142,6 +142,14 @@ class DuplicateResourceException(LuxSwirlException):
     error_code = "DUPLICATE_RESOURCE"
 
 
+class StalePageException(LuxSwirlException):
+    """Raised when an edit names a status page item by its position on a version
+    of the page that has since changed, so the position may name another item."""
+
+    status_code = 409
+    error_code = "STALE_PAGE"
+
+
 class ValidationException(LuxSwirlException):
     """Raised when validation fails."""
 

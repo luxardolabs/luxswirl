@@ -2,6 +2,7 @@
 StatusPage service - business logic for status page operations.
 """
 
+from datetime import datetime
 from typing import Any
 from uuid import UUID
 
@@ -13,6 +14,7 @@ from sqlalchemy.orm import attributes
 from app.core.datetime_utils import utc_now
 from app.core.exceptions import (
     DuplicateResourceException,
+    StalePageException,
     StatusPageNotFoundException,
 )
 from app.crud.status_page_crud import StatusPageCRUD
@@ -91,6 +93,30 @@ class StatusPageCoreService:
         if not status_page:
             raise StatusPageNotFoundException(str(status_page_id))
         return status_page
+
+    @staticmethod
+    async def require_drawn_version(
+        db: AsyncSession, status_page_id: UUID, drawn: datetime | None
+    ) -> None:
+        """Refuse an edit that names an item by its position unless it was made
+        on the page as it is now.
+
+        Every write to a page moves its updated_at, so an edit drawn from an
+        older version may name another item at that position.
+
+        Raises:
+            StatusPageNotFoundException: If status page not found
+            StalePageException: If the page changed since `drawn`, or no
+                version was sent
+        """
+        status_page = await StatusPageCoreService.get_status_page_by_id(
+            db, status_page_id
+        )
+        if drawn is None or status_page.updated_at != drawn:
+            raise StalePageException(
+                "The page changed since it was drawn, so nothing was changed. "
+                "It has been redrawn; try again."
+            )
 
     @staticmethod
     async def get_status_page(db: AsyncSession, status_page_id: UUID) -> StatusPageInDB:
