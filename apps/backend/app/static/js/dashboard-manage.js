@@ -195,17 +195,26 @@ function initializeCheckActions() {
 /**
  * Add a check to the dashboard via HTMX. Server returns the refreshed
  * dashboard_items partial; we then mark the available-checks card as
- * "added" purely client-side (no extra roundtrip).
+ * "added" purely client-side (no extra roundtrip), only when the server
+ * took it: htmx.ajax's promise resolves on a refusal too.
  */
 function addCheckToDashboard(checkEl) {
     const dashboardItems = document.getElementById('dashboard-items');
     const checkId = checkEl.dataset.checkId;
+    let added = false;
+    const onAfterRequest = (evt) => { added = evt.detail.successful; };
+    dashboardItems.addEventListener('htmx:afterRequest', onAfterRequest, { once: true });
 
     htmx.ajax('POST', dashboardItems.dataset.addCheckUrl, {
+        source: dashboardItems,
         target: '#dashboard-items',
         swap: 'innerHTML',
         values: { check_id: checkId },
     }).then(() => {
+        dashboardItems.removeEventListener('htmx:afterRequest', onAfterRequest);
+        if (!added) {
+            return;
+        }
         const emptyState = document.getElementById('empty-state');
         if (emptyState) {
             emptyState.remove();
