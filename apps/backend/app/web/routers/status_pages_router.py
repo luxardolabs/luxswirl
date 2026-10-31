@@ -22,11 +22,7 @@ from app.services.views.maintenance_job_view_service import MaintenanceJobViewSe
 from app.services.views.status_pages_view_service import StatusPagesViewService
 from app.shared.logger import get_logger
 from app.web.deps import CurrentUserWeb, EditorUserWeb, OptionalUserWeb
-from app.web.hx_responses import (
-    hx_close_panel_and_refresh,
-    hx_toast_trigger,
-    hx_trigger,
-)
+from app.web.hx_responses import hx_close_panel_and_refresh, hx_toast_trigger
 from app.web.render import error_page, error_partial, public_error_page
 from app.web.templates import templates
 
@@ -274,18 +270,7 @@ async def add_check_to_dashboard(
         request,
         "partials/dashboard_items.html",
         context,
-        # statusPageCheckAdded names the stored check, so the editor marks its card.
-        headers={
-            "HX-Trigger": hx_trigger(
-                {
-                    "showToast": {
-                        "message": "Check added to dashboard",
-                        "type": "success",
-                    },
-                    "statusPageCheckAdded": {"checkId": str(check_id)},
-                }
-            )
-        },
+        headers={"HX-Trigger": hx_toast_trigger("Check added to dashboard")},
     )
 
 

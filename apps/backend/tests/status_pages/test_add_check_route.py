@@ -1,8 +1,8 @@
-"""The editor's add-check names the check it stored, and refuses one that does not exist.
+"""The editor's add-check draws the check it stored, and refuses one that does not exist.
 
-The manage page marks an available check's card as added from the response's
-HX-Trigger `statusPageCheckAdded` event, so only a stored check is marked,
-whatever else is in flight.
+The manage page marks an available check's card as added exactly when the
+page's partial, as the server last drew it, names the check: a stored check's
+response draws it, and a refusal swaps nothing.
 """
 
 from __future__ import annotations
@@ -48,7 +48,7 @@ async def _add(client: AsyncClient, page_id: str, check_id: str):
     )
 
 
-async def test_an_added_check_is_named_in_the_response(
+async def test_an_added_check_is_drawn_in_the_response(
     client: AsyncClient, db: AsyncSession
 ) -> None:
     page = await StatusPageCoreService.create_status_page(
@@ -64,12 +64,11 @@ async def test_an_added_check_is_named_in_the_response(
     resp = await _add(client, str(page.id), str(check.id))
 
     assert resp.status_code == 200
-    events = json.loads(resp.headers["HX-Trigger"])
-    assert events["statusPageCheckAdded"] == {"checkId": str(check.id)}
-    assert events["showToast"]["type"] == "success"
+    assert f'data-check-id="{check.id}"' in resp.text
+    assert json.loads(resp.headers["HX-Trigger"])["showToast"]["type"] == "success"
 
 
-async def test_a_check_that_does_not_exist_is_refused_and_not_named(
+async def test_a_check_that_does_not_exist_is_refused_and_swaps_nothing(
     client: AsyncClient, db: AsyncSession
 ) -> None:
     page = await StatusPageCoreService.create_status_page(
@@ -79,7 +78,7 @@ async def test_a_check_that_does_not_exist_is_refused_and_not_named(
     resp = await _add(client, str(page.id), str(uuid4()))
 
     assert resp.status_code == 400
-    assert "statusPageCheckAdded" not in resp.headers.get("HX-Trigger", "")
+    assert resp.headers.get("HX-Reswap") == "none"
     stored = await StatusPageCoreService.get_status_page(db, page.id)
     assert stored is not None
     assert stored.items == []
