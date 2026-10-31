@@ -35,7 +35,8 @@ function initializeSortable() {
         dragClass: 'sortable-drag',
         group: 'dashboard',
         onEnd: function(evt) {
-            if (evt.oldIndex !== evt.newIndex) {
+            // A drop into a group moves the item to another list, at any index.
+            if (evt.from !== evt.to || evt.oldIndex !== evt.newIndex) {
                 saveItemOrder();
             }
         }

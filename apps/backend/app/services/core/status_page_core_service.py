@@ -527,17 +527,23 @@ class StatusPageCoreService:
                 stored.get("type") == "check" and stored.get("check_id") in grouped
             ):
                 raise ValueError("The reorder leaves out an item of the page")
-        # A check new to the page must exist, as the admin API requires.
-        new_ids = named - _named_check_ids(status_page.items)
+        # A check new to the page must exist, as the admin API requires; a check
+        # the page names may leave it only once it no longer exists, since a
+        # reorder moves checks and removing one is the remove action's.
+        stored_ids = _named_check_ids(status_page.items)
+        new_ids = named - stored_ids
+        lost_ids = stored_ids - named
         found = {
             str(c.id)
             for c in await CheckCoreService.get_checks_by_ids(
-                db, [UUID(c) for c in new_ids]
+                db, [UUID(c) for c in new_ids | lost_ids]
             )
         }
         missing = sorted(new_ids - found)
         if missing:
             raise ValueError(f"No check has the id {missing[0]}")
+        if lost_ids & found:
+            raise ValueError("The reorder leaves out a check of the page")
 
         # Update the status page
         status_page.items = new_items

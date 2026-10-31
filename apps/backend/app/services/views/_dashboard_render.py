@@ -693,10 +693,12 @@ class DashboardRender:
                     sorted_checks = DashboardRender.sort_checks(
                         check_objects, sort_by, sort_direction
                     )
-                    # Store sorted check IDs
+                    # Store sorted check IDs, then the ones the map cannot describe
+                    # (an archived agent's check): the editor draws every check a
+                    # group names, since a reorder saves the group as drawn.
                     container_group_sorted_checks[idx] = [
                         str(c.id) for c in sorted_checks
-                    ]
+                    ] + [c for c in check_ids_str if c not in check_details_map]
 
         return {
             "check_details_map": check_details_map,
