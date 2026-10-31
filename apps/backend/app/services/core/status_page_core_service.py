@@ -276,13 +276,17 @@ class StatusPageCoreService:
 
         Raises:
             StatusPageNotFoundException: If status page not found
-            ValueError: If the page is full or no check has the id
+            ValueError: If the page is full, already names the check, or no
+                check has the id
         """
         status_page = await StatusPageCoreService.get_status_page_by_id(
             db, status_page_id
         )
         _room_for_one_more(status_page.items)
-        if len(_named_check_ids(status_page.items) | {str(check_id)}) > MAX_PAGE_CHECKS:
+        named = _named_check_ids(status_page.items)
+        if str(check_id) in named:
+            raise ValueError("The check is already on the page")
+        if len(named | {str(check_id)}) > MAX_PAGE_CHECKS:
             raise ValueError(f"A page names at most {MAX_PAGE_CHECKS} checks")
         # The check must exist, as the admin API and the reorder require.
         if not await CheckCoreService.get_checks_by_ids(db, [check_id]):
