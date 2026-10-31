@@ -194,32 +194,29 @@ function initializeCheckActions() {
 
 /**
  * Add a check to the dashboard via HTMX. Server returns the refreshed
- * dashboard_items partial; we then mark the available-checks card as
- * "added" purely client-side (no extra roundtrip), only when the server
- * took it: htmx.ajax's promise resolves on a refusal too.
+ * dashboard_items partial, and on success an HX-Trigger
+ * `statusPageCheckAdded` event naming the check, which marks its card
+ * (markAddedCheck). A refused add sends no such event, so its card stays.
  */
 function addCheckToDashboard(checkEl) {
     const dashboardItems = document.getElementById('dashboard-items');
-    const checkId = checkEl.dataset.checkId;
-    let added = false;
-    const onAfterRequest = (evt) => { added = evt.detail.successful; };
-    dashboardItems.addEventListener('htmx:afterRequest', onAfterRequest, { once: true });
 
     htmx.ajax('POST', dashboardItems.dataset.addCheckUrl, {
-        source: dashboardItems,
         target: '#dashboard-items',
         swap: 'innerHTML',
-        values: { check_id: checkId },
-    }).then(() => {
-        dashboardItems.removeEventListener('htmx:afterRequest', onAfterRequest);
-        if (!added) {
-            return;
+        values: { check_id: checkEl.dataset.checkId },
+    });
+}
+
+/**
+ * Mark the available-checks card of the check the server says it added.
+ */
+function markAddedCheck(event) {
+    const checkId = String(event.detail.checkId);
+    document.querySelectorAll('.available-check').forEach((checkEl) => {
+        if (checkEl.dataset.checkId === checkId) {
+            updateCheckCardVisual(checkEl, true);
         }
-        const emptyState = document.getElementById('empty-state');
-        if (emptyState) {
-            emptyState.remove();
-        }
-        updateCheckCardVisual(checkEl, true);
     });
 }
 
@@ -435,6 +432,9 @@ export function init() {
         const sortDirection = target.dataset.sortDirection;
         updateGroupSort(groupIndex, sortBy, sortDirection);
     });
+
+    // The add-check response names the check it stored (HX-Trigger).
+    document.body.addEventListener('statusPageCheckAdded', markAddedCheck);
 
     // Re-bind drag handles + counts whenever HTMX swaps in fresh dashboard
     // content. Uses the same mechanism for partial swaps and full reloads.
