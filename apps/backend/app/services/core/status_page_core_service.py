@@ -95,6 +95,21 @@ class StatusPageCoreService:
         return status_page
 
     @staticmethod
+    async def get_status_page_for_update(
+        db: AsyncSession, status_page_id: UUID
+    ) -> StatusPage:
+        """The page to rewrite, row-locked until this transaction ends, so a
+        concurrent write cannot change it between this read and the write.
+
+        Raises:
+            StatusPageNotFoundException: If status page not found
+        """
+        status_page = await StatusPageCRUD.get_by_id_for_update(db, status_page_id)
+        if not status_page:
+            raise StatusPageNotFoundException(str(status_page_id))
+        return status_page
+
+    @staticmethod
     async def require_drawn_version(
         db: AsyncSession, status_page_id: UUID, drawn: datetime | None
     ) -> None:
@@ -109,7 +124,7 @@ class StatusPageCoreService:
             StalePageException: If the page changed since `drawn`, or no
                 version was sent
         """
-        status_page = await StatusPageCoreService.get_status_page_by_id(
+        status_page = await StatusPageCoreService.get_status_page_for_update(
             db, status_page_id
         )
         if drawn is None or status_page.updated_at != drawn:
@@ -212,7 +227,7 @@ class StatusPageCoreService:
             StatusPageNotFoundException: If status page not found
             DuplicateResourceException: If new slug already exists
         """
-        status_page = await StatusPageCoreService.get_status_page_by_id(
+        status_page = await StatusPageCoreService.get_status_page_for_update(
             db, status_page_id
         )
 
@@ -249,7 +264,7 @@ class StatusPageCoreService:
         Raises:
             StatusPageNotFoundException: If status page not found
         """
-        status_page = await StatusPageCoreService.get_status_page_by_id(
+        status_page = await StatusPageCoreService.get_status_page_for_update(
             db, status_page_id
         )
 
@@ -305,7 +320,7 @@ class StatusPageCoreService:
             ValueError: If the page is full, already names the check, or no
                 check has the id
         """
-        status_page = await StatusPageCoreService.get_status_page_by_id(
+        status_page = await StatusPageCoreService.get_status_page_for_update(
             db, status_page_id
         )
         named = _named_check_ids(status_page.items)
@@ -362,7 +377,7 @@ class StatusPageCoreService:
         name = _GROUP_NAME.validate_python(name)
         if filter is not None:
             filter = _stored_filter(filter)
-        status_page = await StatusPageCoreService.get_status_page_by_id(
+        status_page = await StatusPageCoreService.get_status_page_for_update(
             db, status_page_id
         )
         _room_for_one_more(status_page.items)
@@ -399,7 +414,7 @@ class StatusPageCoreService:
         Raises:
             StatusPageNotFoundException: If status page not found
         """
-        status_page = await StatusPageCoreService.get_status_page_by_id(
+        status_page = await StatusPageCoreService.get_status_page_for_update(
             db, status_page_id
         )
         status_page.remove_item(index)
@@ -436,7 +451,7 @@ class StatusPageCoreService:
         Raises:
             StatusPageNotFoundException: If status page not found
         """
-        status_page = await StatusPageCoreService.get_status_page_by_id(
+        status_page = await StatusPageCoreService.get_status_page_for_update(
             db, status_page_id
         )
         status_page.reorder_item(from_index, to_index)
@@ -505,7 +520,7 @@ class StatusPageCoreService:
         """
         reordered = _REORDER.validate_python(client_items)
 
-        status_page = await StatusPageCoreService.get_status_page_by_id(
+        status_page = await StatusPageCoreService.get_status_page_for_update(
             db, status_page_id
         )
 
@@ -614,7 +629,7 @@ class StatusPageCoreService:
             ValueError: If the name is not one a group takes
         """
         new_name = _GROUP_NAME.validate_python(new_name)
-        status_page = await StatusPageCoreService.get_status_page_by_id(
+        status_page = await StatusPageCoreService.get_status_page_for_update(
             db, status_page_id
         )
 
@@ -660,7 +675,7 @@ class StatusPageCoreService:
         """
         filter = _stored_filter(filter)
 
-        status_page = await StatusPageCoreService.get_status_page_by_id(
+        status_page = await StatusPageCoreService.get_status_page_for_update(
             db, status_page_id
         )
 
@@ -710,7 +725,7 @@ class StatusPageCoreService:
         """
         sort_by = _SORT_BY.validate_python(sort_by)
         sort_direction = _SORT_DIRECTION.validate_python(sort_direction)
-        status_page = await StatusPageCoreService.get_status_page_by_id(
+        status_page = await StatusPageCoreService.get_status_page_for_update(
             db, status_page_id
         )
         status_page.update_group_sort(item_index, sort_by, sort_direction)

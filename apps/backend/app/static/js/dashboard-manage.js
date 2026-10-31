@@ -304,6 +304,9 @@ function renameGroup(itemIndex) {
     if (!nameSpan) return;
 
     const currentName = nameSpan.textContent;
+    // The version of the page this rename was opened on, with this group's
+    // index: a swap can blur the input after the new page is drawn.
+    const drawnVersion = drawnPageVersion();
 
     const input = document.createElement('input');
     input.type = 'text';
@@ -332,6 +335,7 @@ function renameGroup(itemIndex) {
         }
         manageAjax('PATCH', groupElement.dataset.renameUrl, {
             values: { name: newName },
+            headers: { 'X-Page-Version': drawnVersion },
         }).catch(() => revertToSpan());
     };
 

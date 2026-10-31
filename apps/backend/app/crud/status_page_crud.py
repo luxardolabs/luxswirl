@@ -64,6 +64,20 @@ class StatusPageCRUD:
         return result.scalar_one_or_none()
 
     @staticmethod
+    async def get_by_id_for_update(
+        db: AsyncSession, status_page_id: UUID
+    ) -> StatusPage | None:
+        """The page, row-locked until the transaction ends: a write that reads
+        the items to rewrite them waits for any other such write to commit."""
+        result = await db.execute(
+            select(StatusPage)
+            .where(StatusPage.id == status_page_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        return result.scalar_one_or_none()
+
+    @staticmethod
     async def get_by_slug(db: AsyncSession, slug: str) -> StatusPage | None:
         result = await db.execute(select(StatusPage).where(StatusPage.slug == slug))
         return result.scalar_one_or_none()
