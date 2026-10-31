@@ -65,22 +65,23 @@ class StatusPageCRUD:
 
     @staticmethod
     async def get_by_id_for_update(
-        db: AsyncSession, status_page_id: UUID
+        db: AsyncSession, status_page_id: UUID, *, nowait: bool = True
     ) -> StatusPage | None:
         """The page, row-locked until the transaction ends, so no other write
         can change it between this read and the write that follows.
 
-        NOWAIT: when another transaction holds the page, this raises at once
-        (PostgreSQL lock_not_available, 55P03) instead of waiting into the
-        statement timeout. The savepoint keeps the caller's transaction usable
-        after that refusal; a lock taken inside it is held to the transaction's
-        end.
+        With `nowait` (a request, under the app's statement timeout), a page
+        another transaction holds raises at once (PostgreSQL lock_not_available,
+        55P03) instead of waiting into the timeout; without it (a background
+        job with no timeout) the read waits for the lock. The savepoint keeps
+        the caller's transaction usable after a refusal; a lock taken inside it
+        is held to the transaction's end.
         """
         async with db.begin_nested():
             result = await db.execute(
                 select(StatusPage)
                 .where(StatusPage.id == status_page_id)
-                .with_for_update(nowait=True)
+                .with_for_update(nowait=nowait)
                 .execution_options(populate_existing=True)
             )
             return result.scalar_one_or_none()

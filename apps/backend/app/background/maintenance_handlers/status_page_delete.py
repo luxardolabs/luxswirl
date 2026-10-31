@@ -20,7 +20,9 @@ async def handle(db: AsyncSession, job: MaintenanceJob) -> None:
         extra={"status_page_id": str(job.target_id), "job_id": str(job.id)},
     )
     try:
-        await StatusPageCoreService.delete_status_page(db, job.target_id)
+        # The worker runs with no statement timeout, so the delete waits out
+        # an edit of the page in progress rather than fail the job.
+        await StatusPageCoreService.delete_status_page(db, job.target_id, wait=True)
     except NotFoundException:
         logger.warning("Status page already gone — marking done")
         return
