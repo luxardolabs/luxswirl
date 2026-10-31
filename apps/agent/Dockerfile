@@ -56,9 +56,10 @@ ENV PATH=/opt/venv/bin:$PATH
 
 RUN useradd -m -u 1000 -s /bin/bash luxswirl
 
-RUN chown -R luxswirl:luxswirl /app
+# The code stays root-owned; the runtime user owns only the paths it writes.
+RUN mkdir -p /app/logs /app/reports /app/data && \
+    chown luxswirl:luxswirl /app/logs /app/reports /app/data
 USER luxswirl
-RUN mkdir -p /app/logs /app/reports /app/data
 
 # Chromium binary (cached unless poetry.lock changes the Playwright version).
 RUN playwright install chromium
@@ -82,8 +83,8 @@ LABEL org.opencontainers.image.source="https://github.com/luxardolabs/luxswirl" 
 
 # app package -> /app/app. The shared SSOT (apps/shared) is baked over the app's
 # 0-byte placeholder package app/shared, so it is imported as `app.shared.*`.
-COPY --chown=luxswirl:luxswirl apps/agent/app /app/app
-COPY --chown=luxswirl:luxswirl apps/shared /app/app/shared
+COPY apps/agent/app /app/app
+COPY apps/shared /app/app/shared
 ENV PYTHONPATH=/app
 
 # Liveness = the agent's own work, not a live process: app/health/check.py asserts the
