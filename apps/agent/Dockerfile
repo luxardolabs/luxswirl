@@ -19,6 +19,14 @@ COPY apps/agent/pyproject.toml apps/agent/poetry.lock* /app/
 RUN VIRTUAL_ENV=/opt/venv PATH=/opt/venv/bin:$PATH \
     /opt/poetry/bin/poetry install --only main --no-root && rm -rf $POETRY_CACHE_DIR
 
+# ---- code: the app's source, readable by all whatever modes the build host's checkout gave it ----
+# A checkout made under umask 077 holds 600 files and 700 directories; production copies the
+# code from here root-owned, and the runtime user only has to read it.
+FROM python:3.14-slim AS code
+COPY apps/agent/app /code/app
+COPY apps/shared /code/app/shared
+RUN chmod -R a+rX /code
+
 FROM python:3.14-slim AS production
 
 WORKDIR /app
@@ -83,9 +91,7 @@ LABEL org.opencontainers.image.source="https://github.com/luxardolabs/luxswirl" 
 
 # app package -> /app/app. The shared SSOT (apps/shared) is baked over the app's
 # 0-byte placeholder package app/shared, so it is imported as `app.shared.*`.
-# Root-owned and readable by all (a+rX), whatever modes the build host's checkout gave them.
-COPY --chmod=a+rX apps/agent/app /app/app
-COPY --chmod=a+rX apps/shared /app/app/shared
+COPY --from=code /code/app /app/app
 ENV PYTHONPATH=/app
 
 # Liveness = the agent's own work, not a live process: app/health/check.py asserts the
