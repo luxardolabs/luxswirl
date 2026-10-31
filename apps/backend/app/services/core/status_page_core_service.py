@@ -7,7 +7,7 @@ from typing import Any
 from uuid import UUID
 
 from pydantic import TypeAdapter
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import attributes
 
@@ -35,6 +35,9 @@ from app.schemas.status_page_schema import (
 )
 from app.services.core.check_core_service import CheckCoreService
 from app.shared.logger import get_logger
+
+# PostgreSQL's lock_not_available: a NOWAIT lock another transaction holds.
+_LOCK_NOT_AVAILABLE = "55P03"
 
 _GROUP_NAME = TypeAdapter(GroupName)
 _REORDER = TypeAdapter(EditorReorder)
@@ -103,8 +106,20 @@ class StatusPageCoreService:
 
         Raises:
             StatusPageNotFoundException: If status page not found
+            StalePageException: If another edit of the page is in progress
         """
-        status_page = await StatusPageCRUD.get_by_id_for_update(db, status_page_id)
+        try:
+            status_page = await StatusPageCRUD.get_by_id_for_update(db, status_page_id)
+        except DBAPIError as exc:
+            if _LOCK_NOT_AVAILABLE not in (
+                getattr(exc.orig, "sqlstate", None),
+                getattr(exc.orig, "pgcode", None),
+            ):
+                raise
+            raise StalePageException(
+                "Another edit of this page is in progress, so nothing was changed. "
+                "It has been redrawn; try again."
+            ) from exc
         if not status_page:
             raise StatusPageNotFoundException(str(status_page_id))
         return status_page
