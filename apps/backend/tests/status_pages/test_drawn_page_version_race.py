@@ -120,3 +120,32 @@ async def test_an_edit_after_another_committed_is_refused(worker_db: Any) -> Non
     assert resp.status_code == 409
     names = [i.get("name") for i in (await _stored(worker_db, page_id)).items]
     assert names == ["G1", "G2"]
+
+
+async def test_an_edit_while_another_holds_the_page_is_refused_at_once(
+    worker_db: Any,
+) -> None:
+    token, page_id = await _seed(worker_db)
+    drawn = (await _stored(worker_db, page_id)).updated_at.isoformat()
+    locked = asyncio.Event()
+    release = asyncio.Event()
+
+    async def another_edit_in_progress() -> None:
+        async with worker_db() as other:
+            await StatusPageCoreService.get_status_page_for_update(other, page_id)
+            locked.set()
+            await release.wait()
+            await other.commit()
+
+    holder = asyncio.create_task(another_edit_in_progress())
+    await locked.wait()
+    started = asyncio.get_running_loop().time()
+    resp = await _rename_group_1(token, page_id, drawn)
+    took = asyncio.get_running_loop().time() - started
+    release.set()
+    await holder
+
+    assert resp.status_code == 409
+    assert took < 2.0
+    names = [i.get("name") for i in (await _stored(worker_db, page_id)).items]
+    assert names[1:] == ["G1", "G2"]
