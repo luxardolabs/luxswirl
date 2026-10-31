@@ -20,6 +20,8 @@ from fastapi.routing import APIRoute
 
 def operation_id(route: APIRoute) -> str:
     """FastAPI's `generate_unique_id`, keyed on the handler's name instead of the route's."""
+    if not route.methods:
+        raise ValueError(f"API route {route.path_format} declares no HTTP method")
     operation = re.sub(r"\W", "_", f"{route.endpoint.__name__}{route.path_format}")
     method = next(iter(route.methods)).lower()
     return f"{operation}_{method}"
