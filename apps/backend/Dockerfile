@@ -41,6 +41,16 @@ COPY apps/backend/pyproject.toml apps/backend/poetry.lock* /app/
 RUN VIRTUAL_ENV=/opt/venv PATH=/opt/venv/bin:$PATH \
     /opt/poetry/bin/poetry install --only main --no-root && rm -rf $POETRY_CACHE_DIR
 
+# ---- code: the app's source, readable by all whatever modes the build host's checkout gave it ----
+# A checkout made under umask 077 holds 600 files and 700 directories; production copies the
+# code from here root-owned, and the runtime user only has to read it.
+FROM python:3.14-slim AS code
+COPY apps/backend/app /code/app
+COPY apps/shared /code/app/shared
+COPY apps/backend/alembic /code/alembic
+COPY apps/backend/alembic.ini /code/alembic.ini
+RUN chmod -R a+rX /code
+
 FROM python:3.14-slim AS production
 
 WORKDIR /app
@@ -88,13 +98,11 @@ LABEL org.opencontainers.image.source="https://github.com/luxardolabs/luxswirl" 
 # app package -> /app/app ; alembic at component root. The shared SSOT (apps/shared)
 # is baked over the app's 0-byte placeholder package app/shared, so it is imported
 # as `app.shared.*`.
-# Root-owned and readable by all (a+rX), whatever modes the build host's checkout gave them.
-COPY --chmod=a+rX apps/backend/app /app/app
+COPY --from=code /code/app /app/app
 # The stylesheet the css stage compiled from this same source (gitignored on the host).
-COPY --from=css --chmod=a+rX /build/app/static/css/app.css /app/app/static/css/app.css
-COPY --chmod=a+rX apps/backend/alembic /app/alembic
-COPY --chmod=a+rX apps/backend/alembic.ini /app/alembic.ini
-COPY --chmod=a+rX apps/shared /app/app/shared
+COPY --from=css /build/app/static/css/app.css /app/app/static/css/app.css
+COPY --from=code /code/alembic /app/alembic
+COPY --from=code /code/alembic.ini /app/alembic.ini
 ENV PYTHONPATH=/app
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "9000"]
