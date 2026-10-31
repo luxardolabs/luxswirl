@@ -41,7 +41,8 @@
     ) }}
 
     <!-- Side-by-side layout: 60% dashboard, 40% available checks -->
-    <div class="grid grid-cols-12 gap-6 items-start">
+    {# Made inert while an editor request is out (dashboard-manage.js setEditorBusy). #}
+    <div class="grid grid-cols-12 gap-6 items-start" id="status-page-editor">
         <!-- LEFT: Dashboard Layout (60% - 7 columns) -->
         <div class="col-span-7">
             <div class="card">
@@ -64,7 +65,7 @@
                     </div>
                 </div>
                 <div class="p-4">
-                    <div class="space-y-2" id="dashboard-items" hx-sync="this:queue all" data-reorder-url="{{ sp_urls.reorder }}" data-add-check-url="{{ sp_urls.add_check }}" data-add-group-url="{{ sp_urls.add_group }}">
+                    <div class="space-y-2" id="dashboard-items" data-reorder-url="{{ sp_urls.reorder }}" data-add-check-url="{{ sp_urls.add_check }}" data-add-group-url="{{ sp_urls.add_group }}">
                         {% include 'partials/dashboard_items.html' %}
                     </div>
 

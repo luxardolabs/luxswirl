@@ -221,11 +221,20 @@ function syncCheckCards() {
 }
 
 /**
- * Every manage-page roundtrip: its request belongs to #dashboard-items, whose
- * hx-sync="this:queue all" sends each in turn. With no source, htmx files
- * them under <body>, whose default queue keeps only the last one waiting, so
- * a reorder or add clicked while another was in flight was never sent.
+ * Every manage-page roundtrip. Its request belongs to #dashboard-items, so
+ * its htmx events reach the busy listeners there (setEditorBusy): the editor
+ * takes no new action until the page is redrawn, so no request ever waits
+ * in htmx's queue (which keeps only the last one) and none is issued against
+ * item indexes an earlier request is about to change.
  */
+function setEditorBusy(busy) {
+    const editor = document.getElementById('status-page-editor');
+    if (editor) {
+        editor.inert = busy;
+        editor.setAttribute('aria-busy', String(busy));
+    }
+}
+
 function manageAjax(verb, url, options) {
     return htmx.ajax(verb, url, {
         source: document.getElementById('dashboard-items'),
@@ -410,6 +419,11 @@ function renameAddedGroup(event) {
     if (event.detail.requestConfig?.path !== dashboardItems.dataset.addGroupUrl) {
         return;
     }
+    // A refused add-group still fires afterSwap: app.js swaps error responses
+    // (and marks them not errors) so their toasts render.
+    if (event.detail.xhr.status >= 300) {
+        return;
+    }
     const allItems = dashboardItems.querySelectorAll('.dashboard-item[data-item-index]');
     const newItemIndex = allItems.length - 1;
     setTimeout(() => renameGroup(newItemIndex), 100);
@@ -448,6 +462,12 @@ export function init() {
         const sortDirection = target.dataset.sortDirection;
         updateGroupSort(groupIndex, sortBy, sortDirection);
     });
+
+    // Every editor request (manageAjax, and the remove buttons inside the
+    // list) fires its htmx events on #dashboard-items or bubbles them there.
+    const dashboardItems = document.getElementById('dashboard-items');
+    dashboardItems.addEventListener('htmx:beforeRequest', () => setEditorBusy(true));
+    dashboardItems.addEventListener('htmx:afterRequest', () => setEditorBusy(false));
 
     // Re-bind drag handles + counts whenever HTMX swaps in fresh dashboard
     // content. Uses the same mechanism for partial swaps and full reloads.
