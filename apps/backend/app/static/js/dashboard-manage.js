@@ -384,7 +384,8 @@ function addGroup(type) {
         values,
     }).then(() => {
         // Auto-trigger inline rename on the newly added group.
-        const allItems = dashboardItems.querySelectorAll('.dashboard-item');
+        // Top-level items only: a group's own checks carry no data-item-index.
+        const allItems = dashboardItems.querySelectorAll('.dashboard-item[data-item-index]');
         const newItemIndex = allItems.length - 1;
         setTimeout(() => renameGroup(newItemIndex), 100);
     });
