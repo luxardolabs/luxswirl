@@ -11,11 +11,12 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from typing import Any
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 import pytest_asyncio
 from app.main import app
+from app.models.check_model import Check
 from app.schemas.status_page_schema import StatusPageCreate
 from app.services.core.status_page_core_service import StatusPageCoreService
 from fixtures.factories import make_agent, make_check
@@ -271,12 +272,40 @@ async def test_a_reorder_cannot_name_a_check_that_does_not_exist(
         await StatusPageCoreService.reorder_all_items(db, page.id, items)
 
 
+async def test_adding_a_check_that_does_not_exist_is_refused(
+    db: AsyncSession,
+) -> None:
+    page = await _page(db, None)
+
+    with pytest.raises(ValueError, match="No check has the id"):
+        await StatusPageCoreService.add_check_to_page(db, page.id, uuid4())
+
+    stored = await StatusPageCoreService.get_status_page(db, page.id)
+    assert stored is not None
+    assert [i["type"] for i in stored.items] == ["group"]
+
+
+async def test_adding_a_check_puts_it_on_the_page(db: AsyncSession) -> None:
+    page = await _page(db, None)
+    [check_id] = await _check_ids(db)
+
+    await StatusPageCoreService.add_check_to_page(db, page.id, UUID(check_id))
+
+    stored = await StatusPageCoreService.get_status_page(db, page.id)
+    assert stored is not None
+    assert stored.items[-1]["check_id"] == check_id
+
+
 async def test_a_page_keeps_reordering_after_a_check_it_names_is_gone(
     db: AsyncSession,
 ) -> None:
     page = await _page(db, None)
-    gone = str(uuid4())
-    await StatusPageCoreService.add_check_to_page(db, page.id, gone)
+    [gone] = await _check_ids(db)
+    await StatusPageCoreService.add_check_to_page(db, page.id, UUID(gone))
+    check = await db.get(Check, UUID(gone))
+    assert check is not None
+    await db.delete(check)
+    await db.flush()
 
     await StatusPageCoreService.reorder_all_items(
         db,
