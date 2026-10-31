@@ -83,8 +83,9 @@ LABEL org.opencontainers.image.source="https://github.com/luxardolabs/luxswirl" 
 
 # app package -> /app/app. The shared SSOT (apps/shared) is baked over the app's
 # 0-byte placeholder package app/shared, so it is imported as `app.shared.*`.
-COPY apps/agent/app /app/app
-COPY apps/shared /app/app/shared
+# Root-owned and readable by all (a+rX), whatever modes the build host's checkout gave them.
+COPY --chmod=a+rX apps/agent/app /app/app
+COPY --chmod=a+rX apps/shared /app/app/shared
 ENV PYTHONPATH=/app
 
 # Liveness = the agent's own work, not a live process: app/health/check.py asserts the
