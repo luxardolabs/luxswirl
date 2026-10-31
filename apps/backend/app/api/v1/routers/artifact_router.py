@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import UploadingAgentId
+from app.core.openapi_operations import HandlerNamedRoute
 from app.db import get_db
 from app.schemas.base_schema import ErrorResponse
 from app.schemas.check_artifact_schema import (
@@ -22,7 +23,7 @@ from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.api.artifact")
 
-router = APIRouter(tags=["Artifacts"])
+router = APIRouter(route_class=HandlerNamedRoute, tags=["Artifacts"])
 
 
 @router.post(

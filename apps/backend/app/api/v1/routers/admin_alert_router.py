@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import ApiEditor, ApiUser, require_scope
 from app.core.config import settings
+from app.core.openapi_operations import HandlerNamedRoute
 from app.core.query_params import EnabledFilter, GlobalFilter
 from app.core.rate_limit import api_token_rate_limit_key, limiter
 from app.db import get_db
@@ -32,6 +33,7 @@ from app.schemas.alert_schema import AlertCheckSnooze
 from app.services.core.admin_alert_core_service import AdminAlertCoreService
 
 router = APIRouter(
+    route_class=HandlerNamedRoute,
     prefix="/alerts",
     tags=["Admin API: Alerts"],
     dependencies=[Depends(require_scope("alerts"))],

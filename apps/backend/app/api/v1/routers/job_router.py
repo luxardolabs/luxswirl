@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import AgentOwnedJobId
+from app.core.openapi_operations import HandlerNamedRoute
 from app.db import get_db
 from app.schemas.base_schema import ErrorResponse
 from app.schemas.job_schema import (
@@ -19,7 +20,7 @@ from app.schemas.job_schema import (
 )
 from app.services.core.job_api_core_service import JobApiCoreService
 
-router = APIRouter(prefix="/jobs", tags=["Jobs"])
+router = APIRouter(route_class=HandlerNamedRoute, prefix="/jobs", tags=["Jobs"])
 
 
 @router.post(

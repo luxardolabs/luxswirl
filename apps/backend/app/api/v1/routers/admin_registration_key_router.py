@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import ApiAdmin, require_scope
 from app.core.config import settings
+from app.core.openapi_operations import HandlerNamedRoute
 from app.core.rate_limit import api_token_rate_limit_key, limiter
 from app.db import get_db
 from app.schemas.admin_page_schema import MAX_PAGE
@@ -27,6 +28,7 @@ from app.services.core.admin_registration_key_core_service import (
 )
 
 router = APIRouter(
+    route_class=HandlerNamedRoute,
     prefix="/registration-keys",
     tags=["Admin API: Registration keys"],
     dependencies=[Depends(require_scope("registration_keys", admin_writes=True))],

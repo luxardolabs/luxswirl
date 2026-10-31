@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import ApiAdmin, require_scope
 from app.core.config import settings
+from app.core.openapi_operations import HandlerNamedRoute
 from app.core.query_params import SettingCategoryFilter
 from app.core.rate_limit import api_token_rate_limit_key, limiter
 from app.db import get_db
@@ -23,6 +24,7 @@ from app.schemas.admin_setting_schema import (
 from app.services.core.admin_setting_core_service import AdminSettingCoreService
 
 router = APIRouter(
+    route_class=HandlerNamedRoute,
     prefix="/settings",
     tags=["Admin API: Settings"],
     dependencies=[Depends(require_scope("settings", admin_writes=True))],

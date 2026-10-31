@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import ApiEditor, ApiUser, require_scope, require_scopes
 from app.core.config import settings
+from app.core.openapi_operations import HandlerNamedRoute
 from app.core.query_params import AgentIdFilter, JobStatusFilter, JobTypeFilter
 from app.core.rate_limit import api_token_rate_limit_key, limiter
 from app.db import get_db
@@ -29,6 +30,7 @@ from app.schemas.job_schema import JobResponse
 from app.services.core.admin_job_core_service import AdminJobCoreService
 
 router = APIRouter(
+    route_class=HandlerNamedRoute,
     prefix="/jobs",
     tags=["Admin API: Jobs"],
     dependencies=[Depends(require_scope("jobs"))],

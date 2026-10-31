@@ -44,6 +44,7 @@ from app.core.exceptions import LuxSwirlException, value_error_message
 from app.core.form_charset import require_utf8_form_body
 from app.core.logging_config import configure_logging
 from app.core.logging_options import logging_options
+from app.core.openapi_operations import operation_id
 from app.core.rate_limit import limiter
 from app.core.same_origin import SameOriginMiddleware
 from app.core.secrets import resolve_runtime_secrets
@@ -216,6 +217,8 @@ app = FastAPI(
     description="A production-quality SaaS observability monitoring platform for all types of metrics",
     version=settings.app_version,
     lifespan=lifespan,
+    # OpenAPI operationIds from the handler, not the route name (app/core/openapi_operations.py).
+    generate_unique_id_function=operation_id,
     # Before any route runs: a multipart body is UTF-8 (app/core/form_charset.py).
     dependencies=[Depends(require_utf8_form_body)],
     docs_url="/docs" if settings.server.environment != "production" else None,
@@ -453,7 +456,13 @@ app.include_router(api_activity_router)  # Web UI - MCP and admin API activity
 
 
 # Health check endpoint
-@app.get("/health", tags=["Health"], response_model=HealthResponse, name="health.show")
+@app.get(
+    "/health",
+    tags=["Health"],
+    response_model=HealthResponse,
+    name="health.show",
+    summary="Health Check",
+)
 async def health_check() -> HealthResponse:
     """
     Health check endpoint.
@@ -469,7 +478,13 @@ async def health_check() -> HealthResponse:
 
 
 # Root API endpoint (only for /api prefix)
-@app.get("/api", tags=["Root"], response_model=ApiInfoResponse, name="api.root.show")
+@app.get(
+    "/api",
+    tags=["Root"],
+    response_model=ApiInfoResponse,
+    name="api.root.show",
+    summary="Api Root",
+)
 async def api_root() -> ApiInfoResponse:
     """
     API root endpoint.
