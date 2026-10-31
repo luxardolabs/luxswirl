@@ -99,17 +99,23 @@ class StatusPageCoreService:
 
     @staticmethod
     async def get_status_page_for_update(
-        db: AsyncSession, status_page_id: UUID
+        db: AsyncSession, status_page_id: UUID, *, wait: bool = False
     ) -> StatusPage:
         """The page to rewrite, row-locked until this transaction ends, so a
         concurrent write cannot change it between this read and the write.
 
+        A request refuses a page another change holds (`wait=False`, the
+        default); a background job with no statement timeout waits for it.
+
         Raises:
             StatusPageNotFoundException: If status page not found
-            StalePageException: If another edit of the page is in progress
+            StalePageException: If another change of the page is in progress
+                and `wait` is False
         """
         try:
-            status_page = await StatusPageCRUD.get_by_id_for_update(db, status_page_id)
+            status_page = await StatusPageCRUD.get_by_id_for_update(
+                db, status_page_id, nowait=not wait
+            )
         except DBAPIError as exc:
             if _LOCK_NOT_AVAILABLE not in (
                 getattr(exc.orig, "sqlstate", None),
@@ -117,8 +123,8 @@ class StatusPageCoreService:
             ):
                 raise
             raise StalePageException(
-                "Another edit of this page is in progress, so nothing was changed. "
-                "It has been redrawn; try again."
+                "Another change of this page is in progress, so nothing was "
+                "changed. Try again."
             ) from exc
         if not status_page:
             raise StatusPageNotFoundException(str(status_page_id))
@@ -268,19 +274,25 @@ class StatusPageCoreService:
         return StatusPageInDB.model_validate(status_page)
 
     @staticmethod
-    async def delete_status_page(db: AsyncSession, status_page_id: UUID) -> None:
+    async def delete_status_page(
+        db: AsyncSession, status_page_id: UUID, *, wait: bool = False
+    ) -> None:
         """
         Delete a status page.
 
         Args:
             db: Database session
             status_page_id: Status page UUID
+            wait: Wait for a change of the page in progress (the delete job,
+                which runs with no statement timeout) rather than refuse
 
         Raises:
             StatusPageNotFoundException: If status page not found
+            StalePageException: If another change of the page is in progress
+                and `wait` is False
         """
         status_page = await StatusPageCoreService.get_status_page_for_update(
-            db, status_page_id
+            db, status_page_id, wait=wait
         )
 
         await StatusPageCRUD.delete_page(db, status_page)
