@@ -282,10 +282,10 @@ class StatusPageCoreService:
         status_page = await StatusPageCoreService.get_status_page_by_id(
             db, status_page_id
         )
-        _room_for_one_more(status_page.items)
         named = _named_check_ids(status_page.items)
         if str(check_id) in named:
             raise ValueError("The check is already on the page")
+        _room_for_one_more(status_page.items)
         if len(named | {str(check_id)}) > MAX_PAGE_CHECKS:
             raise ValueError(f"A page names at most {MAX_PAGE_CHECKS} checks")
         # The check must exist, as the admin API and the reorder require.
