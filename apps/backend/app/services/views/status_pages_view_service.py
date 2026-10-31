@@ -284,16 +284,15 @@ class StatusPagesViewService:
             limit=1000,
         )
         status_page = await StatusPageCoreService.get_status_page(db, status_page_id)
-        dashboard_check_ids = [
-            item.get("check_id")
-            for item in status_page.items
-            if item.get("type") == "check" and item.get("check_id")
-        ]
+        # UUIDs, as each check's id is: the page's top-level and grouped checks.
+        dashboard_check_ids = set(
+            DashboardRender.extract_check_ids_from_items(status_page.items)
+        )
         return {
             "request": request,
             "current_user": current_user,
             "filtered_checks": filtered_checks,
-            "dashboard_check_ids": set(dashboard_check_ids),
+            "dashboard_check_ids": dashboard_check_ids,
         }
 
     @staticmethod
