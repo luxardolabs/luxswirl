@@ -213,6 +213,12 @@
                                     {{ status_pip(check.latest_status) }}
                                 </div>
                             </div>
+                            {% else %}
+                            {# Drawn even when the page cannot describe it: a reorder saves the group as drawn. #}
+                            <div class="flex items-center gap-2 p-2 bg-dark-bg-tertiary rounded hover:bg-dark-bg-primary transition-colors group-check dashboard-item" data-item-type="check" data-check-id="{{ check_id }}">
+                                <span class="w-3 h-3 text-dark-text-muted cursor-move drag-handle flex-shrink-0 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/bars-2.svg" %}</span>
+                                <span class="flex-1 min-w-0 text-xs font-medium text-dark-text-primary truncate">Check #{{ check_id }}</span>
+                            </div>
                             {% endif %}
                         {% endfor %}
                     {% else %}
