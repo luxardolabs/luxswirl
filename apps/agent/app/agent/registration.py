@@ -4,6 +4,7 @@ Agent registration and authentication management.
 Handles agent registration with the server and API key recovery.
 """
 
+import math
 import os
 import time
 from typing import Any
@@ -23,12 +24,22 @@ logger = get_logger("luxswirl.agent.registration")
 _DEFAULT_RETRY_AFTER = 60.0
 
 
+# The longest a 429 can hold recovery back: a value past it (or one that is
+# not a finite number) comes from something other than this server, and must
+# not strand the agent until it restarts.
+_MAX_RETRY_AFTER = 3600.0
+
+
 def _retry_after(response: httpx.Response) -> float:
-    """The seconds a 429 asks the agent to wait: its Retry-After, or a minute."""
+    """The seconds a 429 asks the agent to wait: its Retry-After in seconds,
+    between 1 and an hour, or a minute when it names no usable number."""
     try:
-        return max(1.0, float(response.headers.get("Retry-After", "")))
+        seconds = float(response.headers.get("Retry-After", ""))
     except ValueError:
         return _DEFAULT_RETRY_AFTER
+    if not math.isfinite(seconds):
+        return _DEFAULT_RETRY_AFTER
+    return min(max(1.0, seconds), _MAX_RETRY_AFTER)
 
 
 class AgentRegistration:
@@ -103,6 +114,10 @@ class AgentRegistration:
             # after approval) and the recovery secret that key recovery needs.
             if self.credentials.save(agent_id, recovery_secret=recovery_secret):
                 self.config["agent_id"] = agent_id
+                # A new agent and secret: a refusal of the old ones holds
+                # nothing back from these.
+                self._recovery_refused = False
+                self._recovery_not_before = 0.0
                 self.logger.info(
                     "Saved agent credentials",
                     extra={"agent_id": str(agent_id)},

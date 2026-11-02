@@ -19,6 +19,7 @@ import httpx
 import pytest
 import pytest_asyncio
 from app.agent import http_client
+from app.agent import registration as registration_module
 from app.agent.credentials import AgentCredentials
 from app.agent.registration import AgentRegistration
 
@@ -233,3 +234,39 @@ async def test_a_rate_limited_recovery_waits_out_its_retry_after(
     tmp_path: Path,
 ) -> None:
     assert await _recoveries(429, {"Retry-After": "3600"}, tmp_path) == 1
+
+
+@pytest.mark.parametrize(
+    ("header", "seconds"),
+    [
+        ("5", 5.0),
+        ("0", 1.0),
+        ("-30", 1.0),
+        ("99999999999", 3600.0),
+        ("inf", 60.0),
+        ("nan", 60.0),
+        ("1e400", 60.0),
+        ("Wed, 21 Oct 2026 07:28:00 GMT", 60.0),
+        ("", 60.0),
+    ],
+)
+def test_a_retry_after_waits_between_a_second_and_an_hour(
+    header: str, seconds: float
+) -> None:
+    # A value this server never sends (from a proxy, say) must not strand
+    # recovery until the agent restarts.
+    response = httpx.Response(429, headers={"Retry-After": header})
+    assert registration_module._retry_after(response) == seconds
+
+
+async def test_a_new_registration_is_not_held_back_by_an_old_refusal(
+    server: Server, tmp_path: Path
+) -> None:
+    creds = AgentCredentials(str(tmp_path / "agent_credentials.json"))
+    registration, _ = _registration(creds)
+    registration._recovery_refused = True
+    registration._recovery_not_before = float("inf")
+
+    assert await registration.register_with_server()
+
+    assert await registration.recover_agent_key()
