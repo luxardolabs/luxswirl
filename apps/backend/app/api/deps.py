@@ -30,6 +30,7 @@ from app.core.authorization import scope_grants
 from app.core.config import settings
 from app.core.exceptions import AgentNotFoundException
 from app.core.rate_limit import limiter, registration_rate_limit
+from app.core.request_helpers import client_ip_from_request
 from app.core.security import (
     authenticate_heartbeat,
     verify_agent_token,
@@ -185,7 +186,9 @@ async def require_heartbeat_sender(
     the id and which key was used; core loads the agent itself.
     """
     agent = await AgentCoreService.get_agent_by_id(db, heartbeat.agent_id)
-    using_agent_key = await authenticate_heartbeat(agent, authorization, db)
+    using_agent_key = await authenticate_heartbeat(
+        agent, authorization, db, client_ip_from_request(request)
+    )
     return HeartbeatSender(
         heartbeat=heartbeat, agent_id=agent.id, using_agent_key=using_agent_key
     )

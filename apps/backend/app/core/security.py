@@ -17,6 +17,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.bcrypt_secret import bcrypt_matches
 from app.core.config import settings
 from app.core.datetime_utils import utc_now
+from app.core.rate_limit import (
+    count_heartbeat_registration_refusal,
+    heartbeat_registration_retry_after,
+)
 from app.core.safe_redirect import safe_redirect_target
 from app.crud import admin_bootstrap_crud
 from app.db import get_db
@@ -399,6 +403,7 @@ async def authenticate_heartbeat(
     agent: Agent,
     authorization: str | None,
     db: AsyncSession,
+    client: str,
 ) -> bool:
     """Authenticate a heartbeat; True when the agent's own key was used.
 
@@ -408,6 +413,10 @@ async def authenticate_heartbeat(
     registration key is shared by every install, so a False here never lets
     the heartbeat write onto an agent that has its own key: core only reads
     that agent's status back (`AgentCoreService.process_heartbeat`).
+
+    The registration key is held to its own budget here, as on /register:
+    each key refused counts against `client`, and past the budget the fallback
+    answers 429 without checking the key. A right key costs nothing.
     """
     if agent.api_key_hash:
         try:
@@ -416,7 +425,19 @@ async def authenticate_heartbeat(
         except HTTPException as e:
             if e.status_code != 401:
                 raise
-    await verify_registration_token(authorization, db)
+    retry_after = heartbeat_registration_retry_after(client)
+    if retry_after is not None:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many refused registration keys",
+            headers={"Retry-After": str(retry_after)},
+        )
+    try:
+        await verify_registration_token(authorization, db)
+    except HTTPException as refused:
+        if refused.status_code == status.HTTP_401_UNAUTHORIZED:
+            count_heartbeat_registration_refusal(client)
+        raise
     return False
 
 
