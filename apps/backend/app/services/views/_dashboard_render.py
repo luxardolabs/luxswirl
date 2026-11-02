@@ -121,7 +121,8 @@ class DashboardRender:
             return sorted(
                 checks,
                 key=lambda c: (
-                    c.uptime_24h if hasattr(c, "uptime_24h") else 100.0,
+                    # No results in 24 h sorts below any rate, 0 % included.
+                    -1.0 if c.uptime_24h is None else c.uptime_24h,
                     not (c.latest_success if hasattr(c, "latest_success") else False),
                 ),
                 reverse=reverse,
@@ -293,7 +294,7 @@ class DashboardRender:
         db: AsyncSession,
         check_id: UUID,
         hours: int = 168,  # 7 days default
-    ) -> float:
+    ) -> float | None:
         """
         Calculate uptime percentage for a check over a time period.
 
@@ -303,7 +304,7 @@ class DashboardRender:
             hours: Hours to look back
 
         Returns:
-            Uptime percentage (0-100)
+            Uptime percentage (0-100), or None with no results in the window
         """
         # Get stats via core service
         row = await CheckResultCoreService.get_check_detail_stats(db, check_id, hours)
@@ -312,7 +313,7 @@ class DashboardRender:
         successful = int(row.successful or 0) if row else 0
 
         if total == 0:
-            return 100.0  # No data means assume up
+            return None
 
         return round((successful / total) * 100, 2)
 
@@ -406,7 +407,8 @@ class DashboardRender:
             hours: Hours to look back
 
         Returns:
-            Dictionary mapping check_id to dict with 'uptime' and 'last_failure_at' keys
+            Dictionary mapping check_id to dict with 'uptime' and 'last_failure_at'
+            keys; 'uptime' is None for a check with no results in the window.
         """
         if not check_ids:
             return {}
@@ -415,24 +417,17 @@ class DashboardRender:
         rows = await CheckResultCoreService.get_uptime_stats_bulk(db, check_ids, hours)
 
         # Build uptime map
-        uptime_map = {}
+        uptime_map: dict[UUID, dict[str, Any]] = {
+            check_id: {"uptime": None, "last_failure_at": None}
+            for check_id in check_ids
+        }
         for row in rows:
             total = row.total or 0
-            successful = int(row.successful or 0)
-            uptime_pct = 100.0 if total == 0 else round((successful / total) * 100, 2)
-
-            uptime_map[row.check_id] = {
-                "uptime": uptime_pct,
-                "last_failure_at": None,  # Will fill in next
-            }
-
-        # Fill in 100% for checks with no data
-        for check_id in check_ids:
-            if check_id not in uptime_map:
-                uptime_map[check_id] = {
-                    "uptime": 100.0,
-                    "last_failure_at": None,
-                }
+            if total:
+                successful = int(row.successful or 0)
+                uptime_map[row.check_id]["uptime"] = round(
+                    (successful / total) * 100, 2
+                )
 
         # Get last failure timestamp for checks with uptime < 100%
         failed_check_ids = [
@@ -837,16 +832,16 @@ class DashboardRender:
                 )
 
                 uptime_24h_data = uptime_24h_map.get(
-                    check_id_uuid, {"uptime": 100.0, "last_failure_at": None}
+                    check_id_uuid, {"uptime": None, "last_failure_at": None}
                 )
                 uptime_7d_data = uptime_7d_map.get(
-                    check_id_uuid, {"uptime": 100.0, "last_failure_at": None}
+                    check_id_uuid, {"uptime": None, "last_failure_at": None}
                 )
                 uptime_30d_data = uptime_30d_map.get(
-                    check_id_uuid, {"uptime": 100.0, "last_failure_at": None}
+                    check_id_uuid, {"uptime": None, "last_failure_at": None}
                 )
                 uptime_90d_data = uptime_90d_map.get(
-                    check_id_uuid, {"uptime": 100.0, "last_failure_at": None}
+                    check_id_uuid, {"uptime": None, "last_failure_at": None}
                 )
 
                 bars = bars_map.get(check_id_uuid, [])

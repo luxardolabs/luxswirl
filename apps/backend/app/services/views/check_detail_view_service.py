@@ -481,9 +481,10 @@ class CheckDetailViewService:
         # Get statistics
         stats = await CheckResultCoreService.get_check_detail_stats(db, check_id, hours)
 
-        uptime_pct = 0.0
-        if stats.total and stats.total > 0:
-            uptime_pct = (stats.successful / stats.total) * 100
+        # None with no results in the range: no data, not 0 % uptime.
+        uptime_pct = (
+            round((stats.successful / stats.total) * 100, 2) if stats.total else None
+        )
 
         # Fetch artifacts for synthetic checks (linked via check_result_id foreign key)
         artifacts = []
@@ -557,7 +558,7 @@ class CheckDetailViewService:
                 "total_checks": stats.total or 0,
                 "successful": stats.successful or 0,
                 "failed": (stats.total or 0) - (stats.successful or 0),
-                "uptime_pct": round(uptime_pct, 2),
+                "uptime_pct": uptime_pct,
                 "avg_latency_ms": (
                     round(stats.avg_latency, 2) if stats.avg_latency else None
                 ),

@@ -464,15 +464,16 @@ class DashboardCheck:
     latest_status: CheckHealthStatus
     latest_success: bool | None
     latency_ms: float | None
-    uptime_24h: float
+    # Each uptime is None when the check has no results in that window.
+    uptime_24h: float | None
 
     # Filled in by a later pass over the same rows (the bulk uptime/bars
     # queries), via dataclasses.replace rather than mutation — the whole point
     # of the frozen dataclass is that a display value cannot be written onto
     # something that looks like a database row.
-    uptime_7d: float = 100.0
-    uptime_30d: float = 100.0
-    uptime_90d: float = 100.0
+    uptime_7d: float | None = None
+    uptime_30d: float | None = None
+    uptime_90d: float | None = None
     last_failure_at: datetime | None = None
     minute_bars: list[dict[str, Any]] = field(default_factory=list)
     sparkline_path: str = ""

@@ -66,7 +66,9 @@ class StatusRow:
         self.success = success
         self.latency_ms = latency_ms
         self.last_check = last_check
-        self.uptime_24h = uptime_24h or 0.0
+        # None when the check has no results in the last 24 hours: no data,
+        # never 0 % (every result failed) or 100 %.
+        self.uptime_24h = uptime_24h
         self.enabled = enabled
         self.fully_qualified_name = fully_qualified_name
         self.check_tags = check_tags or []
@@ -131,7 +133,9 @@ class StatusRow:
 
     @property
     def uptime_display(self) -> str:
-        """Format uptime percentage for display."""
+        """Format uptime percentage for display; "-" with no results in 24 h."""
+        if self.uptime_24h is None:
+            return "-"
         return f"{self.uptime_24h:.1f}%"
 
     def to_dashboard_check(self) -> DashboardCheck:
@@ -392,10 +396,11 @@ class StatusViewService:
         """
         data = await CheckResultCoreService.get_status_summary_data(db)
 
+        # None with no results in 24 h: no data, not a 0 % success rate.
         overall_success_rate = (
-            (data["overall_successful"] / data["overall_total"]) * 100
+            round((data["overall_successful"] / data["overall_total"]) * 100, 2)
             if data["overall_total"]
-            else 0.0
+            else None
         )
 
         enabled = data["enabled_checks"]
@@ -418,7 +423,7 @@ class StatusViewService:
             "down_pct": share(data["down_count"]),
             "unknown_pct": share(unknown_count),
             "active_agents": data["active_agents"],
-            "overall_success_rate": round(overall_success_rate, 2),
+            "overall_success_rate": overall_success_rate,
         }
 
     @staticmethod
