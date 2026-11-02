@@ -10,7 +10,7 @@ import os
 import re
 import socket
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 import yaml
 
@@ -135,7 +135,8 @@ def load_config_file(path: str | Path) -> dict[str, Any]:
 
     Raises:
         FileNotFoundError: If the config file does not exist
-        ValueError: If the file format is not supported
+        ValueError: If the file format is not supported, or the file does not
+            hold a mapping of settings (a list, a scalar, an empty file)
     """
     path = Path(path)
 
@@ -155,10 +156,12 @@ def load_config_file(path: str | Path) -> dict[str, Any]:
     else:
         raise ValueError(f"Unsupported config file format: {ext}")
 
-    # Expand environment variables in string values
-    config = _expand_env_vars(config)
+    if not isinstance(config, dict):
+        raise ValueError(f"Config file must hold a mapping of settings: {path}")
 
-    return cast(dict[str, Any], config)
+    # Expand environment variables in string values
+    expanded: dict[str, Any] = _expand_env_vars(config)
+    return expanded
 
 
 _ENV_VAR = re.compile(r"\$\{([a-zA-Z0-9_]+)\}|\$([a-zA-Z0-9_]+)")

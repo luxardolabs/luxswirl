@@ -97,6 +97,18 @@ def test_a_missing_or_unsupported_file_is_refused(tmp_path, name, error) -> None
         load_config_file(path)
 
 
+@pytest.mark.parametrize(
+    ("name", "body"),
+    [("agent.yml", ""), ("agent.yml", "- a\n- b\n"), ("agent.json", "42")],
+)
+def test_a_file_that_holds_no_mapping_is_refused(tmp_path, name, body) -> None:
+    path = tmp_path / name
+    path.write_text(body)
+
+    with pytest.raises(ValueError, match="mapping of settings"):
+        load_config_file(path)
+
+
 def _agent(**overrides):
     config = {
         "agent_name": "edge",

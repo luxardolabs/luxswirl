@@ -99,7 +99,6 @@ reason  = "slowapi calls asyncio.iscoroutinefunction, removed in 3.16; not ours 
 ruff = [
   { code = "S102", file = "apps/agent/app/checks/synthetic.py", match = "exec(script_code, script_globals)", evidence = "the exec IS the synthetic check type — running an operator's Playwright script is the feature. Admin-only (enforced in CheckCoreService.create_check/update_check/clone_check, not just the web layer), AST-validated by core/synthetic_security.py, audit-logged, and documented as trusted-environments-only in SECURITY.md" },
   { code = "T201", file = "apps/agent/app/main.py", match = "Luxardo Labs LuxSwirl Agent v", evidence = "`--version` on a CLI writes to stdout and exits. A logger would send it to the log sink the operator is not reading, which is the one thing this flag must not do" },
-  { code = "ASYNC240", file = "apps/agent/app/main.py", match = "config_path.exists()", evidence = "one stat() at process startup, before a single check is registered — there is no concurrent work on the loop for it to stall, and the process cannot proceed without the answer" },
 ]
 
 [rules.deferred]
