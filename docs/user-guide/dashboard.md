@@ -10,12 +10,12 @@ ______________________________________________________________________
 
 Four cards at the top give instant health metrics:
 
-| Card                 | Primary                          | Secondary                                              |
-| -------------------- | -------------------------------- | ------------------------------------------------------ |
-| **Total Checks**     | Enabled checks                   | Total including disabled (e.g. `47` / "52 total")      |
-| **Up**               | Checks currently passing (green) | Success rate of enabled checks (e.g. `45` / `95.7%`)   |
-| **Down**             | Checks currently failing (red)   | Failure rate (e.g. `2` / `4.3%`)                       |
-| **24h Success Rate** | Overall success % over 24h       | Number of agents reporting (e.g. `99.2%` / "3 agents") |
+| Card                 | Primary                                          | Secondary                                              |
+| -------------------- | ------------------------------------------------ | ------------------------------------------------------ |
+| **Total Checks**     | Enabled checks                                   | Total including disabled (e.g. `47` / "52 total")      |
+| **Up**               | Checks currently passing (green)                 | Success rate of enabled checks (e.g. `45` / `95.7%`)   |
+| **Down**             | Checks currently failing (red)                   | Failure rate (e.g. `2` / `4.3%`)                       |
+| **24h Success Rate** | Overall success % over 24h (`-` with no results) | Number of agents reporting (e.g. `99.2%` / "3 agents") |
 
 ______________________________________________________________________
 
@@ -59,7 +59,7 @@ Each row is one check. Columns:
 
 (Interpretation varies by type — a 50ms ping is excellent, but a 50ms database query may be concerning.)
 
-**Uptime (24h)** = (successful checks / total checks) × 100 over the last 24 hours, color-coded for SLA monitoring (`-` for new checks with insufficient history):
+**Uptime (24h)** = (successful checks / total checks) × 100 over the last 24 hours, color-coded for SLA monitoring (`-` for a check with no results in the last 24 hours, never `0%`):
 
 | Color  | Range  |
 | ------ | ------ |
@@ -105,7 +105,7 @@ Hovering a bar shows how many minutes ago, the status (✓ Up / ✗ Down), the n
 
 - **Current Latency** — most recent response time (`87 ms`; `-` if none).
 - **Average Latency** — mean over the selected range, labeled with it (`Avg (4h)`, `Avg (24h)`).
-- **Uptime %** — success rate over the range, color-coded (green ≥99%, yellow 95–99%, red \<95%).
+- **Uptime %** — success rate over the range, color-coded (green ≥99%, yellow 95–99%, red \<95%); `-` with no results in the range.
 - **Total Checks** — executions over the range (e.g. `240` for 4h at a 60s interval).
 
 ### SSL certificate (HTTPS checks)

@@ -13,11 +13,11 @@
     <div class="flex items-center justify-between mb-2">
         <div class="flex items-center gap-1.5">
             <div class="text-lg font-bold transition-all duration-200
-                {% if check.uptime_24h >= 99.9 %}text-green-400 group-hover:text-green-300 drop-shadow-[0_0_8px_rgba(34,197,94,0.5)]{% elif check.uptime_24h >= 95 %}text-yellow-400 group-hover:text-yellow-300 drop-shadow-[0_0_8px_rgba(234,179,8,0.5)]{% else %}text-red-400 group-hover:text-red-300 drop-shadow-[0_0_8px_rgba(239,68,68,0.5)]{% endif %}"
+                {% if check.uptime_24h is none %}text-dark-text-muted{% elif check.uptime_24h >= 99.9 %}text-green-400 group-hover:text-green-300 drop-shadow-[0_0_8px_rgba(34,197,94,0.5)]{% elif check.uptime_24h >= 95 %}text-yellow-400 group-hover:text-yellow-300 drop-shadow-[0_0_8px_rgba(234,179,8,0.5)]{% else %}text-red-400 group-hover:text-red-300 drop-shadow-[0_0_8px_rgba(239,68,68,0.5)]{% endif %}"
                 title="24-hour uptime">
-                {{ check.uptime_24h }}%
+                {% if check.uptime_24h is none %}No data{% else %}{{ check.uptime_24h }}%{% endif %}
             </div>
-            {% if check.uptime_24h < 100 and check.last_failure_at %}
+            {% if check.last_failure_at %}
             <span class="text-xs text-dark-text-muted">•</span>
             <span class="text-xs text-dark-text-muted" title="Last failure at {{ check.last_failure_at | format_datetime }}">
                 {{ check.last_failure_at | format_datetime }}

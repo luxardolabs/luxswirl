@@ -63,7 +63,7 @@ At `/status/{slug}` the page shows an **overall status hero**, then ungrouped ch
 | 🔴 **Service Outage**          | \<50% up                  |
 | ⚪ **Status Unknown**          | No recent results         |
 
-It also shows overall 24-hour uptime. **Each check** displays its name, target, current status (Up/Down/Unknown), most-recent latency (color-coded: green \<100ms, yellow 100–500ms, red >500ms), and 24h uptime % (green ≥99%, yellow 95–99%, red \<95%). **Groups** show a header with check count and a collapse/expand toggle; collapsed groups show only the group's overall status.
+It also shows overall 24-hour uptime. **Each check** displays its name, target, current status (Up/Down/Unknown), most-recent latency (color-coded: green \<100ms, yellow 100–500ms, red >500ms), and 24h uptime % (green ≥99%, yellow 95–99%, red \<95%; "No data" when the check has no results in the last 24 hours). **Groups** show a header with check count and a collapse/expand toggle; collapsed groups show only the group's overall status.
 
 **Public vs private:** a public page (`is_public=true`) is viewable at `/status/{slug}` with no auth; a private page redirects to login. Slugs aren't secret tokens — for sensitive internal pages, either use an unguessable slug or keep the page private.
 
