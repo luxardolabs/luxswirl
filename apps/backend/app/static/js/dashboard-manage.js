@@ -13,6 +13,14 @@
 let sortableInstance = null;
 let selectedTags = [];
 let checkActionsInitialized = false;
+// True while initializeSortable tears down the old instance: Sortable's
+// destroy() ends a drag in progress and fires its onEnd.
+let reinitializingSortable = false;
+// Debounced tag/search filter saves not yet sent, one per group, keyed by the
+// group's item index: { timer, input }.
+const pendingFilterSaves = new Map();
+// The open inline rename, if any: { input, isEdited, save }.
+let openRename = null;
 
 
 /**
@@ -24,7 +32,12 @@ function initializeSortable() {
     if (!dashboardItems) return;
 
     if (sortableInstance) {
-        sortableInstance.destroy();
+        reinitializingSortable = true;
+        try {
+            sortableInstance.destroy();
+        } finally {
+            reinitializingSortable = false;
+        }
     }
 
     sortableInstance = Sortable.create(dashboardItems, {
@@ -34,12 +47,7 @@ function initializeSortable() {
         chosenClass: 'sortable-chosen',
         dragClass: 'sortable-drag',
         group: 'dashboard',
-        onEnd: function(evt) {
-            // A drop into a group moves the item to another list, at any index.
-            if (evt.from !== evt.to || evt.oldIndex !== evt.newIndex) {
-                saveItemOrder();
-            }
-        }
+        onEnd: saveItemOrderIfMoved
     });
 
     document.querySelectorAll('.group-checks-container').forEach(container => {
@@ -54,9 +62,26 @@ function initializeSortable() {
                 name: 'dashboard',
                 put: (to, from, dragEl) => dragEl.dataset.itemType !== 'group',
             },
-            onEnd: () => saveItemOrder()
+            onEnd: saveItemOrderIfMoved
         });
     });
+}
+
+/**
+ * Sortable onEnd for the page list and every group's list. Saves the order
+ * only when the drop moved the item: a drop into another list (a group or
+ * out of one) at any index, or a new index in the same list. A drag that a
+ * redraw ended (the old instance destroyed, or the dragged item no longer in
+ * the drawn list) saves nothing, since a no-op reorder would still move the
+ * page's version and get the user's next queued edit refused.
+ */
+function saveItemOrderIfMoved(evt) {
+    if (reinitializingSortable) return;
+    const dashboardItems = document.getElementById('dashboard-items');
+    if (!dashboardItems || !dashboardItems.contains(evt.item)) return;
+    if (evt.from !== evt.to || evt.oldIndex !== evt.newIndex) {
+        saveItemOrder();
+    }
 }
 
 /**
@@ -228,6 +253,55 @@ function drawnPageVersion() {
 }
 
 /**
+ * Send every edit the user has typed but not yet saved: each group's pending
+ * tag/search filter save and an open rename. Run before another editor
+ * request is issued, so the typed text is sent ahead of it rather than
+ * discarded when that request's answer redraws the list.
+ */
+function flushPendingEdits() {
+    const pending = Array.from(pendingFilterSaves);
+    pendingFilterSaves.clear();
+    pending.forEach(([itemIndex, { timer, input }]) => {
+        clearTimeout(timer);
+        if (input.isConnected) {
+            updateGroupFilters(itemIndex);
+        }
+    });
+    if (openRename) {
+        openRename.save();
+    }
+}
+
+/**
+ * Before a response redraws the editor list, tell the user about typed text
+ * the redraw is about to discard (a filter not yet sent, an edited rename
+ * still open), and forget it: its inputs and the page they name are gone.
+ */
+function warnDiscardedEdits(event) {
+    if (event.detail.target?.id !== 'dashboard-items' || !event.detail.shouldSwap) {
+        return;
+    }
+    let filterDropped = false;
+    pendingFilterSaves.forEach(({ timer, input }) => {
+        clearTimeout(timer);
+        if (input.isConnected) filterDropped = true;
+    });
+    pendingFilterSaves.clear();
+    const renameDropped = Boolean(openRename && openRename.input.isConnected && openRename.isEdited());
+    openRename = null;
+
+    const dropped = [];
+    if (renameDropped) dropped.push('group name');
+    if (filterDropped) dropped.push('group filter');
+    if (dropped.length) {
+        window.showToast?.(
+            `The list was redrawn before your ${dropped.join(' and ')} change was saved. Enter it again.`,
+            'error'
+        );
+    }
+}
+
+/**
  * Every manage-page roundtrip. Its request belongs to #dashboard-items, whose
  * hx-sync="this:queue all" sends each in turn, and carries the page version
  * read now, from the same drawn page as any item index the caller read. One
@@ -235,6 +309,7 @@ function drawnPageVersion() {
  * applied to whatever item now sits at that index, and the editor redraws.
  */
 function manageAjax(verb, url, options) {
+    flushPendingEdits();
     return htmx.ajax(verb, url, {
         source: document.getElementById('dashboard-items'),
         target: '#dashboard-items',
@@ -324,7 +399,17 @@ function renameGroup(itemIndex) {
         input.replaceWith(span);
     };
 
+    // Settled once the rename is sent, reverted or discarded: a later blur
+    // or flush sends nothing.
+    let settled = false;
+    const settle = () => {
+        settled = true;
+        if (openRename?.input === input) openRename = null;
+    };
+
     const saveRename = () => {
+        if (settled) return;
+        settle();
         // A redraw removed the input: its group's URL and the page it names
         // are gone with it.
         if (!input.isConnected) return;
@@ -339,6 +424,16 @@ function renameGroup(itemIndex) {
         }).catch(() => revertToSpan());
     };
 
+    openRename?.save();
+    openRename = {
+        input,
+        isEdited: () => {
+            const newName = input.value.trim();
+            return Boolean(newName) && newName !== currentName;
+        },
+        save: saveRename,
+    };
+
     input.addEventListener('blur', saveRename);
     input.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
@@ -346,6 +441,7 @@ function renameGroup(itemIndex) {
             input.blur();
         } else if (e.key === 'Escape') {
             e.preventDefault();
+            settle();
             revertToSpan();
         }
     });
@@ -367,7 +463,8 @@ function initializeGroupActions() {
 
 /**
  * Wire change/input handlers on dynamic-group filter inputs. Selects save on
- * change; tags/search save 500ms after the last keystroke.
+ * change; tags/search save 500ms after the last keystroke in that group, or
+ * at once when the input loses focus (its change event).
  */
 function initializeFilterInputs() {
     document.body.addEventListener('change', (e) => {
@@ -378,20 +475,35 @@ function initializeFilterInputs() {
         }
     });
 
-    let inputTimeout;
+    const isTextFilter = (el) =>
+        el.classList.contains('filter-tags-input') ||
+        el.classList.contains('filter-search-input');
+
+    // One timer per group, so typing in another group does not cancel this
+    // group's save. The page version is read when the save is sent, from the
+    // page that drew the input; an input a redraw removed has no page to save
+    // to (warnDiscardedEdits reports it).
     document.body.addEventListener('input', (e) => {
-        if (e.target.classList.contains('filter-tags-input') ||
-            e.target.classList.contains('filter-search-input')) {
-            clearTimeout(inputTimeout);
-            const input = e.target;
-            // The group's index is read when the save is sent, with the page
-            // version, from the same drawn page; an input a redraw removed has
-            // no page to save to.
-            inputTimeout = setTimeout(() => {
-                if (input.isConnected) {
-                    updateGroupFilters(parseInt(input.dataset.itemIndex));
-                }
-            }, 500);
+        if (!isTextFilter(e.target)) return;
+        const input = e.target;
+        const itemIndex = parseInt(input.dataset.itemIndex);
+        clearTimeout(pendingFilterSaves.get(itemIndex)?.timer);
+        const timer = setTimeout(() => {
+            pendingFilterSaves.delete(itemIndex);
+            if (input.isConnected) {
+                updateGroupFilters(itemIndex);
+            }
+        }, 500);
+        pendingFilterSaves.set(itemIndex, { timer, input });
+    });
+
+    // Leaving the input (to click another editor control) sends its save now,
+    // ahead of whatever the click sends.
+    document.body.addEventListener('change', (e) => {
+        if (!isTextFilter(e.target)) return;
+        const itemIndex = parseInt(e.target.dataset.itemIndex);
+        if (pendingFilterSaves.has(itemIndex) && e.target.isConnected) {
+            updateGroupFilters(itemIndex);
         }
     });
 }
@@ -404,6 +516,10 @@ function updateGroupFilters(itemIndex) {
     const typeSelect = document.querySelector(`.filter-type-select[data-item-index="${itemIndex}"]`);
     const tagsInput = document.querySelector(`.filter-tags-input[data-item-index="${itemIndex}"]`);
     const searchInput = document.querySelector(`.filter-search-input[data-item-index="${itemIndex}"]`);
+
+    // This save sends every field of the group, typed text included.
+    clearTimeout(pendingFilterSaves.get(itemIndex)?.timer);
+    pendingFilterSaves.delete(itemIndex);
 
     const filterConfig = {};
     if (agentSelect && agentSelect.value) filterConfig.agent_id = agentSelect.value;
@@ -506,6 +622,11 @@ export function init() {
             redrawEditor();
         }
     });
+
+    // A redraw of the list discards typed text not yet saved: say so. On
+    // document, so it runs after app.js's body listener has decided whether
+    // an error response swaps.
+    document.addEventListener('htmx:beforeSwap', warnDiscardedEdits);
 
     // Re-bind drag handles + counts whenever HTMX swaps in fresh dashboard
     // content. Uses the same mechanism for partial swaps and full reloads.
