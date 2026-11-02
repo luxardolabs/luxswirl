@@ -2,7 +2,7 @@
 Alert CRUD - database queries for alerts, alert mappings, and notification logs.
 """
 
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from uuid import UUID
 
 from sqlalchemy import and_, delete, func, select
@@ -52,6 +52,19 @@ class AlertCRUD:
             )
         result = await db.execute(query)
         return result.scalar_one_or_none()
+
+    @staticmethod
+    async def lock(db: AsyncSession, alert_id: UUID) -> None:
+        """Hold `alert_id`'s row until the transaction ends, so a second
+        replacement of its checks waits for this one. FOR NO KEY UPDATE: a
+        mapping inserted meanwhile takes only a key-share lock on the alert
+        for its foreign key, and is not made to wait."""
+        await db.execute(
+            select(Alert.id)
+            .where(Alert.id == alert_id)
+            # key_share on a write lock is PostgreSQL's FOR NO KEY UPDATE.
+            .with_for_update(key_share=True)
+        )
 
     @staticmethod
     async def count_enabled(db: AsyncSession) -> int:
@@ -466,15 +479,20 @@ class AlertCRUD:
 
     @staticmethod
     async def replace_check_mappings(
-        db: AsyncSession, alert_id: UUID, check_ids: Sequence[UUID]
+        db: AsyncSession,
+        alert_id: UUID,
+        current: Collection[UUID],
+        check_ids: Sequence[UUID],
     ) -> tuple[int, int]:
-        """Make `check_ids` exactly the alert's checks; (added, removed).
+        """Make `check_ids` the alert's checks, as a change from `current`,
+        the list the caller read and judged; (added, removed).
 
-        A check kept keeps its mapping row, and with it any snooze on it.
+        Only a check in `current` is removed: one mapped after that read was
+        not judged, so it is left as it is. A check kept keeps its mapping
+        row, and with it any snooze on it.
         """
-        current = set(await AlertCRUD.list_check_ids(db, alert_id))
         wanted = set(check_ids)
-        removed = current - wanted
+        removed = set(current) - wanted
         if removed:
             await db.execute(
                 delete(AlertCheckMapping).where(
@@ -482,9 +500,9 @@ class AlertCRUD:
                     AlertCheckMapping.check_id.in_(removed),
                 )
             )
-        added = wanted - current
+        added = wanted - set(current)
         if added:
-            # A concurrent replacement may insert the same pair first: one row stays.
+            # A concurrent attach may insert the same pair first: one row stays.
             await db.execute(
                 pg_insert(AlertCheckMapping)
                 .values(
