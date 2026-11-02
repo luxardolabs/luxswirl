@@ -6,7 +6,8 @@ from typing import Any
 from urllib.parse import urlparse
 
 from app.checks._ssrf_policy import assert_target_allowed
-from app.checks.base import BaseCheck
+from app.checks.base import BaseCheck, CheckConfigError
+from app.shared import ssrf
 from app.shared.logger import get_logger
 
 try:
@@ -78,16 +79,17 @@ class PostgreSQLCheck(BaseCheck):
         query = self.config.get("query", "SELECT 1")  # Default health check query
         timeout = self.config.get("timeout", 5)
         retries = self.config.get("retries", 1)
+        if not isinstance(connection_string, str):
+            raise CheckConfigError("The connection string must be text")
 
         # Parse connection string to get host/database info for result data
         parsed = urlparse(connection_string)
-        host = parsed.hostname or "unknown"
-        port = parsed.port or 5432
+        host, port = self._endpoint(connection_string)
+        where = host if port is None else f"{host}:{port}"
         database = str(parsed.path).lstrip("/") if parsed.path else "unknown"
 
         # SSRF: block a connection host that resolves into a blocked range.
-        if connection_string:
-            assert_target_allowed(connection_string)
+        assert_target_allowed(connection_string)
 
         success = False
         connection_latency_ms = None
@@ -156,7 +158,7 @@ class PostgreSQLCheck(BaseCheck):
                 error_type = "connection_error"
                 continue
             except asyncpg.ConnectionDoesNotExistError:
-                error = f"Cannot connect to {host!s}:{port!s}"
+                error = f"Cannot connect to {where}"
                 error_type = "connection_error"
                 continue
             except asyncpg.PostgresSyntaxError as e:
@@ -184,7 +186,7 @@ class PostgreSQLCheck(BaseCheck):
                 continue
             except OSError as e:
                 # Refused, unreachable, unresolvable, or a missing SSL file.
-                error = f"Cannot connect to {host!s}:{port!s}: {e}"
+                error = f"Cannot connect to {where}: {e}"
                 error_type = "connection_error"
                 continue
             except asyncpg.exceptions.ClientConfigurationError as e:
@@ -266,6 +268,24 @@ class PostgreSQLCheck(BaseCheck):
                 }
             },
         )
+
+    @staticmethod
+    def _endpoint(connection_string: str) -> tuple[str, int | None]:
+        """The host and port the URL names, for the result and its errors.
+
+        A URL naming several hosts (``h1:5432,h2:5433``, as libpq and asyncpg
+        accept) has the hosts joined and no single port.
+
+        Raises:
+            CheckConfigError: One host, with a port that is not a number in range.
+        """
+        parsed = urlparse(connection_string)
+        try:
+            return parsed.hostname or "unknown", parsed.port or 5432
+        except ValueError as e:
+            if "," not in parsed.netloc.rpartition("@")[2]:
+                raise CheckConfigError(f"Invalid port: {e}") from e
+        return ",".join(ssrf.extract_hosts(connection_string)) or "unknown", None
 
     @staticmethod
     def _login_failure(error: Exception) -> tuple[str, str] | None:

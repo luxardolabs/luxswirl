@@ -15,7 +15,7 @@ from typing import Any
 
 from uuid_extensions import uuid7
 
-from app.checks.base import BaseCheck
+from app.checks.base import BaseCheck, CheckConfigError
 from app.shared.logger import get_logger
 from app.shared.ssrf import SsrfBlockedError
 
@@ -55,6 +55,8 @@ class CheckExecutor:
         self.last_state = last_state
         self.run_id = run_id
         self.logger = logger
+        # Each check's last configuration error, so it is logged once.
+        self._config_errors: dict[str, str] = {}
 
     async def run_check(self, check: BaseCheck) -> None:
         """
@@ -134,8 +136,20 @@ class CheckExecutor:
         Returns the result and the longest attempt so far, this one included.
         """
         begun = time.monotonic()
+        key = str(check.check_id)
         try:
             result = await asyncio.wait_for(check.run(), timeout=timeout)
+            self._config_errors.pop(key, None)
+        except CheckConfigError as e:
+            # The same every interval until the check is edited: logged when
+            # it first appears or changes, and every run is its failed result.
+            if self._config_errors.get(key) != str(e):
+                self._config_errors[key] = str(e)
+                self.logger.warning(
+                    "Check configuration invalid",
+                    extra={"check_name": check.name, "error": str(e)},
+                )
+            result = self._failure(check, f"Invalid configuration: {e}")
         except TimeoutError:
             self.logger.warning(
                 "Check timed out",

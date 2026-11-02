@@ -7,6 +7,12 @@ from abc import ABC, abstractmethod
 from typing import Any
 
 
+class CheckConfigError(ValueError):
+    """The check's configuration cannot be used: a host name no resolver can
+    encode, a port that is not a number. The run fails with this as its error,
+    and the agent logs it once rather than on every interval."""
+
+
 class BaseCheck(ABC):
     """Base abstract class that all health checks must inherit from."""
 

@@ -9,6 +9,7 @@ heartbeat, and the checks list sets it before any check first runs.
 from collections.abc import Mapping
 from typing import Any
 
+from app.checks.base import CheckConfigError
 from app.shared import ssrf
 from app.shared.logger import get_logger
 
@@ -34,9 +35,31 @@ def apply_server_policy(response: Mapping[str, Any]) -> None:
     )
 
 
+def _vet_host_name(host: str) -> None:
+    """Refuse a host name no resolver can take: one with a null character, or
+    one the IDNA codec cannot encode (a label over 63 octets, an empty label).
+
+    Raises:
+        CheckConfigError: The name cannot be resolved as written.
+    """
+    if "\x00" in host:
+        raise CheckConfigError(f"Invalid host name {host!r}: it holds a null character")
+    try:
+        host.encode("idna")
+    except UnicodeError as e:
+        raise CheckConfigError(f"Invalid host name {host!r}: {e}") from e
+
+
 def assert_target_allowed(target: str) -> None:
     """Refuse `target` if ANY address it resolves to is in a range the policy
-    blocks: for a check whose driver resolves the name itself."""
+    blocks: for a check whose driver resolves the name itself.
+
+    Raises:
+        CheckConfigError: A host it names cannot be resolved as written.
+        SsrfBlockedError: An address a host resolves to is blocked.
+    """
+    for host in ssrf.extract_hosts(target):
+        _vet_host_name(host)
     ssrf.assert_target_allowed(
         target,
         block_cloud_metadata=True,
@@ -48,8 +71,10 @@ def allowed_addresses(host: str) -> list[str]:
     """The addresses `host` resolves to that the policy allows, to connect to.
 
     Raises:
+        CheckConfigError: `host` cannot be resolved as written.
         SsrfBlockedError: It resolves, and every address is blocked.
     """
+    _vet_host_name(host)
     return ssrf.allowed_addresses(
         host,
         block_cloud_metadata=True,

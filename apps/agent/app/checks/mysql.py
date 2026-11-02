@@ -6,7 +6,7 @@ from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 from app.checks._ssrf_policy import assert_target_allowed
-from app.checks.base import BaseCheck
+from app.checks.base import BaseCheck, CheckConfigError
 from app.shared.logger import get_logger
 
 try:
@@ -75,15 +75,23 @@ class MySQLCheck(BaseCheck):
 
         Returns:
             Dictionary with host, port, user, password, database keys
+
+        Raises:
+            CheckConfigError: The port is not a number in range.
         """
         parsed = urlparse(connection_string)
 
         # Parse query parameters for additional options
         query_params = parse_qs(parsed.query) if parsed.query else {}
 
+        try:
+            port = parsed.port or 3306
+        except ValueError as e:
+            raise CheckConfigError(f"Invalid port: {e}") from e
+
         return {
             "host": parsed.hostname or "localhost",
-            "port": parsed.port or 3306,
+            "port": port,
             "user": parsed.username or "",
             "password": parsed.password or "",
             "database": parsed.path.lstrip("/") if parsed.path else "",
