@@ -18,7 +18,10 @@ from importlib.metadata import version as package_version
 from pathlib import Path
 from typing import Any
 
+import yaml
+
 from app.agent.core import LuxSwirlAgent
+from app.agent.server_api import server_origin
 from app.checks.dns import DNSCheck
 from app.checks.http import HTTPCheck
 from app.checks.json import JSONCheck
@@ -28,7 +31,7 @@ from app.checks.postgres import PostgreSQLCheck
 from app.checks.synthetic import SyntheticCheck
 from app.checks.tcp import TCPCheck
 from app.core.logging_config import configure_logging
-from app.shared.config import get_config, load_config_file
+from app.shared.config import get_config, load_config_file, validate_config
 from app.shared.jobs.network_discover import NetworkDiscoverJob
 from app.shared.jobs.network_scan import NetworkScanJob
 from app.shared.log_redaction import scrub
@@ -121,33 +124,13 @@ async def main() -> int:
     agent = None
 
     try:
-        # Determine which configuration to use
-        if args.config:
-            # Load from specified file
-            config_path = Path(args.config)
-            # blocking-io: one stat at process startup, before any check is
-            # scheduled — there is no concurrent work on the loop to stall.
-            if not config_path.exists():
-                logger.error(
-                    "Config file not found",
-                    extra={"config_path": str(config_path)},
-                )
-                return 1
-
-            logger.info(
-                "Loading configuration",
-                extra={"config_path": str(config_path)},
-            )
-            config = load_config_file(config_path)
-        else:
-            # Use default configuration
-            logger.info("Using default configuration")
-            config = get_config("agent")
-
-            # If in validate only mode, exit after validation
-            if args.validate_only:
-                logger.info("Configuration validated successfully")
-                return 0
+        config = _effective_config(args.config, logger)
+        if config is None or not _config_is_valid(config, logger):
+            logger.error("Configuration is invalid")
+            return 1
+        if args.validate_only:
+            logger.info("Configuration validated successfully")
+            return 0
 
         # Create agent instance
         agent = LuxSwirlAgent(config)
@@ -187,6 +170,49 @@ async def main() -> int:
         return 1
 
     return 0
+
+
+def _effective_config(config_file: str | None, logger: Any) -> dict[str, Any] | None:
+    """The config the agent runs: the defaults (with the environment), overlaid by
+    the `--config` file when one is given. None, with the reason logged, when the
+    file is missing, does not parse, or does not hold a mapping.
+    """
+    config = get_config("agent")
+    if not config_file:
+        logger.info("Using default configuration")
+        return config
+
+    config_path = Path(config_file)
+    # blocking-io: one stat at process startup, before any check is
+    # scheduled — there is no concurrent work on the loop to stall.
+    if not config_path.exists():
+        logger.error("Config file not found", extra={"config_path": str(config_path)})
+        return None
+
+    logger.info("Loading configuration", extra={"config_path": str(config_path)})
+    try:
+        loaded = load_config_file(config_path)
+    except (OSError, ValueError, yaml.YAMLError) as exc:
+        logger.exception(
+            "Config file cannot be read",
+            extra={"config_path": str(config_path), "error": str(exc)},
+        )
+        return None
+    config.update(loaded)
+    return config
+
+
+def _config_is_valid(config: dict[str, Any], logger: Any) -> bool:
+    """Whether the agent can run `config`: its server address is one the agent
+    connects to (`server_origin`: no path, credentials or bad port, HTTPS to an
+    external host) and `validate_config` passes. Each refusal is logged.
+    """
+    try:
+        server_origin(config.get("server_url", ""))
+    except ValueError as exc:
+        logger.exception("Invalid server_url", extra={"error": str(exc)})
+        return False
+    return validate_config(config, "agent")
 
 
 def _install_signal_handlers(agent: LuxSwirlAgent, logger: Any) -> None:

@@ -218,7 +218,8 @@ Configuration is handled by `apps/shared/config.py` (imported as `app.shared.con
 
 - Default configurations are embedded in the code (see `DEFAULT_AGENT_CONFIG` and `DEFAULT_SERVER_CONFIG`)
 - Environment variables override defaults (e.g., `LUXSWIRL_AGENT_ID`, `LUXSWIRL_AUTH_KEY`, `LUXSWIRL_SERVER_URL`)
-- Configuration can also be loaded from YAML/JSON files via `--config` flag
+- Configuration can also be loaded from YAML/JSON files via `--config` flag; the file's keys overlay the defaults
+- At startup the agent holds that effective config to `validate_config` and to `server_origin` (`apps/agent/app/main.py`) and exits 1, naming what is wrong, when either refuses it; `--validate-only` runs the same validation, with or without `--config`, and exits 0 or 1 without starting
 - The `get_config(type)` function returns config for "agent" or "server"
 
 ### Reporter System
