@@ -392,7 +392,7 @@ ______________________________________________________________________
 
 ### TXT Record (SPF) Validation
 
-`expect_value` matching is a case-insensitive substring test against each returned record.
+`expect_value` matching is a case-insensitive substring test against each returned record. A TXT record over 255 bytes, sent as several strings, is matched as one value with its strings joined with nothing between.
 
 ```json
 {

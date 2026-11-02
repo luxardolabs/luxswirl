@@ -193,10 +193,32 @@ class PostgreSQLCheck(BaseCheck):
                 error_type = "connection_error"
                 continue
             except asyncpg.InterfaceError as e:
-                # The client refused the exchange: a query that names a
-                # parameter ($1) the check cannot pass, for one.
-                error = f"PostgreSQL client error: {e}"
-                error_type = "query_error"
+                if conn is None:
+                    # The server asks for a login method asyncpg does not
+                    # support (an unknown authentication code, a SASL
+                    # mechanism other than SCRAM).
+                    error = f"Login method unavailable: {e}"
+                    error_type = "connection_error"
+                else:
+                    # The client refused the exchange: a query that names a
+                    # parameter ($1) the check cannot pass, for one.
+                    error = f"PostgreSQL client error: {e}"
+                    error_type = "query_error"
+                continue
+            except asyncpg.exceptions.InternalClientError as e:
+                login_failure = self._login_failure(e) if conn is None else None
+                if login_failure is None:
+                    # Raised after the login: asyncpg's own fault, reported
+                    # with its traceback at DEBUG like any unexpected error.
+                    logger.debug(
+                        "PostgreSQL check hit an unexpected error",
+                        exc_info=True,
+                        extra={"check_name": self.name},
+                    )
+                    error = f"Unexpected error: {str(e)}"
+                    error_type = "unknown_error"
+                else:
+                    error, error_type = login_failure
                 continue
             # swallowed-exceptions: the failure is the check's result, sent to the
             # server; its traceback goes to DEBUG so a failure that recurs every
@@ -244,3 +266,34 @@ class PostgreSQLCheck(BaseCheck):
                 }
             },
         )
+
+    @staticmethod
+    def _login_failure(error: Exception) -> tuple[str, str] | None:
+        """Name a failure inside asyncpg's login exchange by its cause.
+
+        asyncpg reports any error its authentication code raises as an
+        ``InternalClientError`` whose ``__cause__`` is that error; no other
+        ``InternalClientError`` it raises carries a cause.
+
+        Args:
+            error: The ``InternalClientError`` raised while connecting.
+
+        Returns:
+            The check's error and error_type, or None when the error did not
+            come from the login exchange.
+        """
+        cause = error.__cause__
+        if cause is None:
+            return None
+        if isinstance(cause, asyncpg.InterfaceError):
+            # GSSAPI or SSPI login, with asyncpg[gssauth] not installed.
+            return f"Login method unavailable: {cause}", "connection_error"
+        if isinstance(cause, AttributeError):
+            # A cleartext password login, and no password in the connection
+            # string, PGPASSWORD or the password file: asyncpg has none to send.
+            return (
+                "Authentication failed - the server asked for a password "
+                "and the connection string gives none",
+                "authentication_error",
+            )
+        return f"Authentication failed: {cause}", "authentication_error"
