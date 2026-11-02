@@ -38,7 +38,15 @@
                     <!-- Modified Badge -->
                     {% set current_value = setting.value.value %}
                     {% set default_value = setting.default_value.value %}
-                    {% if current_value != default_value %}
+                    {# The form shows the value in effect: a stored value the
+                       server ignores (setting.applied false) is named below it,
+                       never shown as the setting's value. #}
+                    {% set shown_value = current_value if setting.applied else setting.in_effect %}
+                    {% if not setting.applied %}
+                    <span class="px-1.5 py-0.5 text-xs font-medium rounded bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">
+                        Not applied
+                    </span>
+                    {% elif current_value != default_value %}
                     <span class="px-1.5 py-0.5 text-xs font-medium rounded bg-brand-500/20 text-brand-400 border border-brand-500/30">
                         Modified
                     </span>
@@ -56,7 +64,7 @@
            about the ROW, not about the viewer. Resetting a setting discards the
            operator's configured value and every /settings route is AdminUserWeb,
            so the control needs the role check too. #}
-        {% if current_value != default_value and current_user.role == 'admin' %}
+        {% if (current_value != default_value or not setting.applied) and current_user.role == 'admin' %}
         {# data-setting-reset marks the button for settings.js's two-click
            confirm; the key rides in the markup, not parsed out of the URL. #}
         {%- set reset_attrs %}data-setting-reset data-setting-key="{{ setting.key }}"{% endset %}
@@ -83,9 +91,9 @@
                 <!-- Boolean Toggle -->
                 <label class="flex items-center gap-2 cursor-pointer flex-1">
                     <span class="text-xs text-dark-text-muted uppercase tracking-wide">Value:</span>
-                    {{ checkbox(name="value", value="true", checked=(current_value), class="sr-only peer", extra_attrs='data-autosubmit') }}
+                    {{ checkbox(name="value", value="true", checked=(shown_value), class="sr-only peer", extra_attrs='data-autosubmit') }}
                     <div class="relative w-11 h-6 bg-dark-bg-tertiary peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-brand-500 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-500"></div>
-                    <span class="text-sm text-dark-text-primary">{% if current_value %}Enabled{% else %}Disabled{% endif %}</span>
+                    <span class="text-sm text-dark-text-primary">{% if shown_value %}Enabled{% else %}Disabled{% endif %}</span>
                 </label>
             {% elif value_type == 'int' or value_type == 'float' %}
                 <!-- Number Input with Unit -->
@@ -97,7 +105,7 @@
                         {%- set min_value = setting.validation.min if setting.validation and setting.validation.min is defined else none -%}
                         {# undefined-guards: same — max is optional per setting #}
                         {%- set max_value = setting.validation.max if setting.validation and setting.validation.max is defined else none -%}
-                        {{ input(id=false, name='value', type='number', value=current_value,
+                        {{ input(id=false, name='value', type='number', value=shown_value,
                                  min=min_value,
                                  max=max_value,
                                  class='px-3 py-1.5 pr-12 text-sm bg-dark-bg-tertiary border border-dark-border rounded-md focus:outline-none focus:ring-2 focus:ring-brand-500',
@@ -117,12 +125,12 @@
                         <!-- Dropdown for enum values - auto-saves on change -->
                         {% call select(id=false, name="value", class="pl-3 pr-8 py-1.5 text-sm bg-dark-bg-tertiary border border-dark-border rounded-md focus:outline-none focus:ring-2 focus:ring-brand-500", extra_attrs=('aria-label="' ~ (setting.display_name) ~ ' value" data-autosubmit')) %}
                             {% for option in setting.validation.enum %}
-                            <option value="{{ option }}" {% if current_value == option %}selected{% endif %}>{{ option }}</option>
+                            <option value="{{ option }}" {% if shown_value == option %}selected{% endif %}>{{ option }}</option>
                             {% endfor %}
                         {% endcall %}
                     {% else %}
                         <!-- Text input for free-form strings -->
-                        {{ input(id=false, name="value", value=current_value, class="flex-1 px-3 py-1.5 text-sm bg-dark-bg-tertiary border border-dark-border rounded-md focus:outline-none focus:ring-2 focus:ring-brand-500", extra_attrs=('aria-label="' ~ (setting.display_name) ~ ' value"')) }}
+                        {{ input(id=false, name="value", value=shown_value, class="flex-1 px-3 py-1.5 text-sm bg-dark-bg-tertiary border border-dark-border rounded-md focus:outline-none focus:ring-2 focus:ring-brand-500", extra_attrs=('aria-label="' ~ (setting.display_name) ~ ' value"')) }}
                     {% endif %}
                 </div>
                 {% if not (setting.validation and setting.validation.enum) %}
@@ -130,6 +138,14 @@
                 {% endif %}
             {% endif %}
         </form>
+
+        {% if not setting.applied %}
+        <p class="text-xs text-yellow-400">
+            The stored value <code class="px-1.5 py-0.5 bg-dark-bg-tertiary rounded font-mono">{{ current_value }}</code>
+            is not valid and is ignored; the value shown is the one in effect.
+            Save a valid value or reset to the default.
+        </p>
+        {% endif %}
 
         <!-- Default Value and Range Info -->
         <div class="flex items-center justify-between text-xs">

@@ -42,6 +42,8 @@ def _response(setting: SettingResponse) -> AdminSetting:
         default_value=default,
         validation=setting.validation,
         generated=generated,
+        applied=setting.applied,
+        in_effect=setting.in_effect,
         updated_at=setting.updated_at,
     )
 
