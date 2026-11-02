@@ -138,6 +138,15 @@ class UserCRUD:
         return result.scalar_one_or_none()
 
     @staticmethod
+    async def lock_row(db: AsyncSession, user_id: UUID) -> None:
+        """Row-lock the user until the transaction ends, loading nothing (so a
+        caller's unflushed changes to the user are kept). A sign-in holds this
+        row from its password check to its commit, so a purge of the user's
+        sessions that takes it first waits for that sign-in's session and ends
+        it too, and a later sign-in waits for the purge's transaction."""
+        await db.execute(select(User.id).where(User.id == user_id).with_for_update())
+
+    @staticmethod
     async def get_by_id(db: AsyncSession, user_id: UUID) -> User | None:
         result = await db.execute(select(User).where(User.id == user_id))
         return result.scalar_one_or_none()

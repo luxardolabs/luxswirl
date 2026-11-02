@@ -79,6 +79,11 @@ def _store_password(
 # fleet default is a `sessions_valid_after` the auth dependency compares with a token's issued-at; a
 # session table deletes the user's rows here instead. It runs in the same transaction as the new hash.
 async def _end_sessions(db: AsyncSession, user: User) -> None:
+    # Lock the user row before the purge (autoflush is off, so the new hash is
+    # not yet written): a sign-in that already checked the old password holds
+    # the row, so the purge waits for its session to commit and ends it; one
+    # that comes later waits for this reset and checks the new hash.
+    await db.execute(select(User.id).where(User.id == user.id).with_for_update())
     await db.execute(delete(Session).where(Session.user_id == user.id))
     # An API token signs in as the user too: it ends with the sessions.
     await db.execute(

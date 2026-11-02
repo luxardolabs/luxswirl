@@ -520,6 +520,9 @@ class AuthCoreService:
         Returns:
             Number of sessions deleted
         """
+        # The user row first: a sign-in in flight holds it until its session is
+        # committed, so the purge waits for that session and ends it as well.
+        await UserCRUD.lock_row(db, user_id)
         count = await SessionCRUD.delete_active_for_user(db, user_id)
 
         logger.info(
