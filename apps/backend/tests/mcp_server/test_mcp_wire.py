@@ -160,7 +160,9 @@ async def test_a_token_over_its_call_budget_is_throttled(
     db: AsyncSession, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     token = await _token(db, "viewer", ["*:read"])
-    monkeypatch.setattr(rate_limit.mcp_token_calls, "limit", RateLimitItemPerMinute(2))
+    monkeypatch.setattr(
+        rate_limit.mcp_token_calls, "limits", (RateLimitItemPerMinute(2),)
+    )
     async with wire_client() as client:
         codes = [
             (
