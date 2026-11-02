@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.check_target_validator import CheckTargetBlockedError
 from app.core.datetime_utils import utc_now
 from app.core.exceptions import NotFoundException, ValidationException
+from app.core.http_header import HeaderRefusedError
 from app.crud.notification_log_crud import NotificationLogCRUD
 from app.crud.notification_provider_crud import NotificationProviderCRUD
 from app.models.enum_model import NotificationStatus
@@ -512,16 +513,17 @@ class NotificationCoreService:
         Built from typed fields alone, never from an error's text: that text
         quotes what was sent or received (the request URL, whose path or query
         can be the endpoint's credential, a header value, an SMTP AUTH line a
-        server echoed back) and any user may read the notification log. The
-        SSRF refusal is the one text kept: the app writes it
-        (`check_target_validator`), and it names only the resolved address and
-        the blocked range.
+        server echoed back) and any user may read the notification log. Two
+        refusals the app writes keep their text: the SSRF refusal
+        (`check_target_validator`), which names only the resolved address and
+        the blocked range, and a header HTTP cannot send (`http_header`),
+        which names only a valid header name.
         """
         if isinstance(error, httpx.HTTPStatusError):
             code = error.response.status_code
             phrase = _HTTP_PHRASES.get(code)
             return f"HTTP {code} {phrase}" if phrase else f"HTTP {code}"
-        if isinstance(error, CheckTargetBlockedError):
+        if isinstance(error, CheckTargetBlockedError | HeaderRefusedError):
             return f"{type(error).__name__}: {error}"
         summary = type(error).__name__
         if isinstance(error, aiosmtplib.SMTPResponseException) and error.code > 0:

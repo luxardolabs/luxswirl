@@ -11,6 +11,7 @@ from fastapi.encoders import jsonable_encoder
 
 from app.core.check_target_validator import validate_check_target
 from app.core.credential_mask import mask_url_paths
+from app.core.http_header import sendable_headers
 from app.notifications.providers.base import (
     BaseNotificationProvider,
     NotificationContext,
@@ -39,7 +40,8 @@ class WebhookNotificationProvider(BaseNotificationProvider):
 
         Optional fields:
         - request_body_preset: "json" or "form" (default: "json")
-        - additional_headers: Dict of extra headers to send
+        - additional_headers: Dict of extra headers to send, each name an
+          HTTP token and each value printable ASCII (`sendable_headers`)
         - timeout: Request timeout in seconds (default: 10)
         - verify_ssl: Whether to verify SSL certificates (default: True)
         """
@@ -68,11 +70,8 @@ class WebhookNotificationProvider(BaseNotificationProvider):
                 f"Invalid request_body_preset: {preset}. Must be 'json' or 'form'"
             )
 
-        # Validate additional headers if provided
-        if "additional_headers" in config and not isinstance(
-            config["additional_headers"], dict
-        ):
-            raise ValueError("additional_headers must be a dictionary")
+        if "additional_headers" in config:
+            sendable_headers("additional_headers", config["additional_headers"])
 
     async def send(self, context: NotificationContext) -> bool:
         """
@@ -101,9 +100,14 @@ class WebhookNotificationProvider(BaseNotificationProvider):
         # Build headers
         headers = self._build_headers(preset)
 
-        # Add custom headers if provided
+        # Judged again before the client opens: a header h11 refuses is
+        # refused on an open connection, which it leaves unclosed.
         if "additional_headers" in self.config:
-            headers.update(self.config["additional_headers"])
+            headers.update(
+                sendable_headers(
+                    "additional_headers", self.config["additional_headers"]
+                )
+            )
 
         # Send request
         async with httpx.AsyncClient(verify=verify_ssl, timeout=timeout) as client:
@@ -201,7 +205,7 @@ class WebhookNotificationProvider(BaseNotificationProvider):
                 "type": "json",
                 "label": "Additional Headers",
                 "required": False,
-                "help_text": "Sets additional headers sent with the webhook. Each header should be defined as a JSON key/value.",
+                "help_text": "Sets additional headers sent with the webhook, as a JSON object of name/value. A value must be printable ASCII, with no line break or other control character.",
                 "placeholder": '{"Authorization": "Bearer token123", "X-Custom": "value"}',
             },
             "timeout": {

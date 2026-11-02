@@ -89,6 +89,8 @@ Sends an HTTP POST with the full check/alert context — the bridge to Slack, Di
 | **Timeout (seconds)**   | No       | 10      | Range 1–60                                                                    |
 | **Verify SSL**          | No       | true    | Set false only for testing with self-signed certs                             |
 
+Each header name must be an HTTP token (letters, digits and `` !#$%&'*+-.^_`|~ ``), and each value text of printable ASCII, spaces and tabs, with no space at either end. A value holding a line break (CR or LF), another control character or a non-ASCII character is refused when the provider is saved, as a 422 naming the header, never its value (a NUL is refused anywhere in a config); a token pasted with a trailing newline is the usual cause. A stored provider whose header cannot be sent fails each delivery and test before any connection is made, its logged error naming the header.
+
 **Payload (JSON preset):**
 
 ```json
