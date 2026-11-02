@@ -28,6 +28,7 @@ from app.crud.alert_crud import AlertCRUD
 from app.main import app
 from app.models.alert_check_mapping_model import AlertCheckMapping
 from app.models.alert_notification_mapping_model import AlertNotificationMapping
+from app.models.check_model import Check
 from app.models.enum_model import UserRole
 from app.models.notification_provider_model import NotificationProvider
 from app.schemas.admin_alert_schema import AdminAlertChecks
@@ -44,7 +45,8 @@ from fixtures.factories import (
     make_user,
 )
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import func, select, update
+from sqlalchemy import func, select, text, update
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 pytestmark = pytest.mark.integration
@@ -473,3 +475,112 @@ async def test_a_synthetic_check_attached_mid_replacement_is_not_detached_unjudg
         )
     assert raced["done"]
     assert mapped == {synthetic_id, plain_id}
+
+
+async def test_a_replacement_reports_only_the_rows_it_changed(
+    worker_db, monkeypatch
+) -> None:
+    """Another session attaches a check the replacement also adds, after the
+    replacement read the list: one row stays, and it is not reported as added
+    by both."""
+    async with worker_db() as s:
+        agent = make_agent()
+        s.add(agent)
+        await s.flush()
+        plain = make_check(agent_id=agent.id)
+        alert = make_alert()
+        s.add_all([plain, alert])
+        await s.commit()
+        plain_id, alert_id = plain.id, alert.id
+    original = AlertCRUD.list_check_ids
+    raced = {"done": False}
+
+    async def read_then_attach(db, aid):
+        rows = await original(db, aid)
+        if not raced["done"]:
+            raced["done"] = True
+            async with worker_db() as other:
+                await AlertCoreService.add_check(other, alert_id, plain_id)
+                await other.commit()
+        return rows
+
+    monkeypatch.setattr(AlertCRUD, "list_check_ids", staticmethod(read_then_attach))
+    async with worker_db() as s:
+        change = await AdminAlertCoreService.set_checks(
+            s, UserRole.EDITOR, alert_id, AdminAlertChecks(check_ids=[plain_id])
+        )
+        await s.commit()
+
+    assert raced["done"]
+    assert (change.added, change.removed) == (0, 0)
+
+
+@pytest.mark.parametrize("attach", [True, False], ids=["attach", "detach"])
+async def test_a_judged_check_cannot_turn_synthetic_before_the_replacement_commits(
+    worker_db, monkeypatch, attach: bool
+) -> None:
+    """An editor's replacement judges a plain check; until it commits, no one
+    can make that check synthetic, so the editor never attaches or detaches a
+    synthetic check."""
+    async with worker_db() as s:
+        agent = make_agent()
+        s.add(agent)
+        await s.flush()
+        plain = make_check(agent_id=agent.id)
+        alert = make_alert()
+        s.add_all([plain, alert])
+        await s.flush()
+        if not attach:
+            s.add(
+                AlertCheckMapping(alert_id=alert.id, check_id=plain.id, is_enabled=True)
+            )
+        await s.commit()
+        plain_id, alert_id = plain.id, alert.id
+    original = AlertCRUD.replace_check_mappings
+    retype: dict[str, bool] = {}
+
+    async def retype_then_write(db, aid, current, wanted):
+        async with worker_db() as admin:
+            await admin.execute(text("SET LOCAL lock_timeout = '200ms'"))
+            try:
+                await admin.execute(
+                    update(Check)
+                    .where(Check.id == plain_id)
+                    .values(
+                        check_type="synthetic",
+                        target="https://a.example",
+                        script_code="await page.goto('https://a.example')",
+                    )
+                )
+                await admin.commit()
+                retype["landed"] = True
+            except DBAPIError:
+                await admin.rollback()
+                retype["landed"] = False
+        return await original(db, aid, current, wanted)
+
+    monkeypatch.setattr(
+        AlertCRUD, "replace_check_mappings", staticmethod(retype_then_write)
+    )
+    async with worker_db() as s:
+        await AdminAlertCoreService.set_checks(
+            s,
+            UserRole.EDITOR,
+            alert_id,
+            AdminAlertChecks(check_ids=[plain_id] if attach else []),
+        )
+        await s.commit()
+
+    assert retype == {"landed": False}
+    async with worker_db() as s:
+        check = await s.get(Check, plain_id)
+        mapped = set(
+            await s.scalars(
+                select(AlertCheckMapping.check_id).where(
+                    AlertCheckMapping.alert_id == alert_id
+                )
+            )
+        )
+    assert check is not None
+    assert check.check_type != "synthetic"
+    assert mapped == ({plain_id} if attach else set())

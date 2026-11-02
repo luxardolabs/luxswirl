@@ -493,17 +493,25 @@ class AlertCRUD:
         """
         wanted = set(check_ids)
         removed = set(current) - wanted
+        removed_count = 0
         if removed:
-            await db.execute(
-                delete(AlertCheckMapping).where(
+            # Counted from the rows deleted: one another session removed first
+            # is not reported as removed here.
+            deleted = await db.execute(
+                delete(AlertCheckMapping)
+                .where(
                     AlertCheckMapping.alert_id == alert_id,
                     AlertCheckMapping.check_id.in_(removed),
                 )
+                .returning(AlertCheckMapping.check_id)
             )
+            removed_count = len(deleted.all())
         added = wanted - set(current)
+        added_count = 0
         if added:
-            # A concurrent attach may insert the same pair first: one row stays.
-            await db.execute(
+            # A concurrent attach may insert the same pair first: one row stays,
+            # and only the rows inserted here are reported as added.
+            inserted = await db.execute(
                 pg_insert(AlertCheckMapping)
                 .values(
                     [
@@ -512,9 +520,11 @@ class AlertCRUD:
                     ]
                 )
                 .on_conflict_do_nothing(constraint="uq_alert_check")
+                .returning(AlertCheckMapping.check_id)
             )
+            added_count = len(inserted.all())
         await db.flush()
-        return len(added), len(removed)
+        return added_count, removed_count
 
     @staticmethod
     async def add_check_mapping(

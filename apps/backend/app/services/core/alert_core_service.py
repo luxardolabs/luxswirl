@@ -221,12 +221,15 @@ class AlertCoreService:
         """Every check exists, and a synthetic one among them needs an admin:
         attaching an alert to it, or detaching one, changes how it is watched.
 
+        The checks are held FOR SHARE until the caller's transaction ends, so
+        none becomes synthetic between this judgement and the write it allows.
+
         Raises:
             ValidationException: A check id names no check.
             AuthorizationException: A synthetic check, and the actor is not
                 an admin.
         """
-        checks = await CheckCRUD.get_checks_by_ids(db, check_ids)
+        checks = await CheckCRUD.share_lock_checks(db, check_ids)
         found = {c.id for c in checks}
         missing = [c for c in dict.fromkeys(check_ids) if c not in found]
         if missing:
