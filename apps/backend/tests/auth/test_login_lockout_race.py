@@ -126,3 +126,56 @@ async def test_the_lock_wait_does_not_outlast_the_login(worker_db) -> None:
         assert await auth.authenticate_user(s, "scoped", RIGHT) is not None
         assert await s.scalar(select(func.current_setting("lock_timeout"))) == default
         await s.rollback()
+
+
+async def _second_while_one_in_flight(worker_db, username: str) -> str:
+    """What a second sign-in for `username` sees while the first one's request
+    is uncommitted."""
+    auth = AuthCoreService()
+    async with worker_db() as s1, worker_db() as s2:
+        await auth.authenticate_user(s1, username, "wrong")
+        try:
+            out = (
+                "none"
+                if await auth.authenticate_user(s2, username, "wrong") is None
+                else "user"
+            )
+        except LoginBusyException:
+            out = "429"
+        await s1.rollback()
+        await s2.rollback()
+    return out
+
+
+async def test_the_busy_refusal_does_not_tell_who_exists(
+    worker_db, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Sign-ins are queued on the username, not the row: an unknown name
+    queued behind another sign-in is refused as busy just as a real one is,
+    so the 429 is no username oracle."""
+    monkeypatch.setattr(AuthCoreService, "LOGIN_LOCK_WAIT_MS", 200)
+    await _seed(worker_db, "realadmin", 0)
+    known = await _second_while_one_in_flight(worker_db, "realadmin")
+    unknown = await _second_while_one_in_flight(worker_db, "nobody-here")
+    assert known == unknown == "429", f"existing user {known}, unknown {unknown}"
+
+
+async def test_the_queue_time_does_not_tell_who_exists(worker_db) -> None:
+    """A second sign-in waits for the first to commit whether or not the
+    username names a user, so its response time does not say which."""
+    await _seed(worker_db, "realadmin2", 0)
+    auth = AuthCoreService()
+
+    async def second_waits(username: str) -> bool:
+        async with worker_db() as s1, worker_db() as s2:
+            await auth.authenticate_user(s1, username, "wrong")
+            second = asyncio.create_task(auth.authenticate_user(s2, username, "wrong"))
+            await asyncio.sleep(0.5)
+            waited = not second.done()
+            await s1.commit()
+            assert await second is None
+            await s2.rollback()
+            return waited
+
+    assert await second_waits("realadmin2")
+    assert await second_waits("nobody-here-2"), "an unknown name answered at once"
