@@ -2302,7 +2302,7 @@
         "rule": "repo.makefile_no_fixed_tmp",
         "status": "FAIL",
         "since": "0.249.0",
-        "violations": 2,
+        "violations": 3,
         "deferred": false,
         "inert": false,
         "inert_reason": "",
@@ -2930,6 +2930,6 @@
     "XPASS": 0,
     "INERT": 22
   },
-  "commit": "5e21487a93072afd315d455c175ab77e6848d1d8",
-  "generated_at": "2026-11-02T19:28:35Z"
+  "commit": "d7fb91bdfb70515f499d6400aafceb6ddddf0bf0",
+  "generated_at": "2026-11-02T19:33:13Z"
 }
