@@ -6,7 +6,7 @@ from collections.abc import Sequence
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import case, func, or_, select, update
+from sqlalchemy import case, func, or_, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.datetime_utils import utc_now
@@ -75,6 +75,35 @@ class UserCRUD:
     async def get_by_username(db: AsyncSession, username: str) -> User | None:
         result = await db.execute(select(User).where(User.username == username))
         return result.scalar_one_or_none()
+
+    @staticmethod
+    async def get_by_username_for_login(
+        db: AsyncSession, username: str, *, lock_wait_ms: int
+    ) -> User | None:
+        """The user a sign-in judges, row-locked until the transaction ends and
+        re-read from the database, so a concurrent sign-in for the same account
+        waits for this one and then reads what it committed (the failure count
+        and the lock).
+
+        The read waits at most `lock_wait_ms` for the row (PostgreSQL
+        lock_not_available, 55P03, past it), well inside a request's statement
+        timeout. The wait is set for this read alone; the savepoint keeps the
+        caller's transaction usable after a refusal, and a lock taken inside
+        it is held to the transaction's end.
+        """
+        async with db.begin_nested():
+            await db.execute(
+                select(func.set_config("lock_timeout", f"{lock_wait_ms}ms", True))
+            )
+            result = await db.execute(
+                select(User)
+                .where(User.username == username)
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
+            user = result.scalar_one_or_none()
+            await db.execute(text("SET LOCAL lock_timeout = DEFAULT"))
+        return user
 
     @staticmethod
     async def get_by_id(db: AsyncSession, user_id: UUID) -> User | None:
