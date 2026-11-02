@@ -198,3 +198,38 @@ async def test_startup_leaves_working_credentials_alone(
 
     assert server.requests == []
     assert creds.api_key == "luxswirl_ak_working"
+
+
+async def _recoveries(status: int, headers: dict[str, str], tmp_path: Path) -> int:
+    """How many recover-key requests three heartbeats make when the server
+    answers every one with `status`."""
+    sent: list[httpx.Request] = []
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        sent.append(request)
+        return httpx.Response(status, headers=headers, json={"detail": "no"})
+
+    http_client._server_client = httpx.AsyncClient(
+        transport=httpx.MockTransport(handle)
+    )
+    try:
+        creds = AgentCredentials(str(tmp_path / "agent_credentials.json"))
+        creds.save(uuid4(), recovery_secret=SECRET)
+        registration, _ = _registration(creds)
+        for _ in range(3):
+            assert not await registration.recover_agent_key()
+    finally:
+        await http_client.aclose_all()
+    return len(sent)
+
+
+async def test_a_refused_recovery_is_not_asked_again(tmp_path: Path) -> None:
+    # A 401 needs a new registration key and a restart: asking every heartbeat
+    # would only spend the recover-key budget the address shares.
+    assert await _recoveries(401, {}, tmp_path) == 1
+
+
+async def test_a_rate_limited_recovery_waits_out_its_retry_after(
+    tmp_path: Path,
+) -> None:
+    assert await _recoveries(429, {"Retry-After": "3600"}, tmp_path) == 1

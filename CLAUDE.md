@@ -334,6 +334,8 @@ The JSON API has two surfaces, each with its own prefix and credential: the agen
 | `POST` | `/api/v1/agent/jobs/{job_id}/results`  | Key of the job's own agent         | Submit a job's results                   |
 | `POST` | `/api/v1/agent/artifacts`              | Agent key                          | Upload an artifact for one of its checks |
 
+A pending agent proves its heartbeat with its recovery secret (header `X-Agent-Recovery-Secret`); an agent build that sends no secret is still checked against the registration key, logged as a warning to upgrade it. Each refused pending credential counts against that agent's registration budget (`reserve_pending_heartbeat_attempt`).
+
 The agent builds every one of these from `LUXSWIRL_SERVER_URL`, the server's address with no path (`apps/agent/app/agent/server_api.py`), and refuses to start on one that carries a path, credentials or an invalid port.
 
 ### Admin API (`/api/v1/admin`)
