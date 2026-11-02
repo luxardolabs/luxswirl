@@ -26,9 +26,10 @@ _VALUE = r"[^\s;,&\"']+"
 
 _PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
     # Connection strings: mysql://user:PASSWORD@host -> mysql://user:***@host.
-    # The password runs to the LAST @ before the host (a password may contain
-    # @), so the match is greedy up to whitespace or a closing quote.
-    (re.compile(r"://([^:/@\s]+):[^\s\"]*@"), r"://\1:***@"),
+    # The user name may be empty (postgresql://:PASSWORD@host). The password
+    # runs from the first `:` to the LAST @ before the host (a password may
+    # contain `:` or `@`), so the match is greedy up to whitespace or a quote.
+    (re.compile(r"://([^:/@\s]*):[^\s\"]*@"), r"://\1:***@"),
     # JSON / Python-literal password fields, any case
     (re.compile(r'"(password)"\s*:\s*"[^"]*"', re.IGNORECASE), r'"\1":"***"'),
     (re.compile(r"'(password)'\s*:\s*'[^']*'", re.IGNORECASE), r"'\1':'***'"),
