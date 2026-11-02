@@ -609,7 +609,9 @@ class HeartbeatSender:
                     self.logger.info("Agent-specific key retrieved successfully")
                 else:
                     self.logger.warning(
-                        "Failed to retrieve agent-specific key, will retry on next heartbeat"
+                        "Agent approved but its agent-specific key was not "
+                        "retrieved: the key recovery log line says why, and "
+                        "whether it is asked again or needs a restart"
                     )
 
     def _auth_headers(self) -> dict[str, str]:
