@@ -20,6 +20,7 @@ import asyncio
 
 import pytest
 from app.core.exceptions import LoginBusyException
+from app.models.session_model import Session
 from app.models.user_model import User
 from app.services.core.auth_core_service import AuthCoreService
 from fixtures.factories import make_user
@@ -179,3 +180,35 @@ async def test_the_queue_time_does_not_tell_who_exists(worker_db) -> None:
 
     assert await second_waits("realadmin2")
     assert await second_waits("nobody-here-2"), "an unknown name answered at once"
+
+
+async def test_a_sign_in_racing_a_password_reset_opens_no_session(worker_db) -> None:
+    """An admin's reset ends the user's sessions. A sign-in with the old
+    password sent while the reset is uncommitted waits for it and is checked
+    against the new hash, so no session outlives the reset."""
+    await _seed(worker_db, "rst", 0)
+    auth = AuthCoreService()
+    async with worker_db() as s:
+        uid = (await s.scalars(select(User.id).where(User.username == "rst"))).one()
+    async with worker_db() as s_reset, worker_db() as s_login:
+        await auth.reset_password(s_reset, uid, "Br4nd-New!Pass-xyz")
+
+        async def sign_in() -> bool:
+            user = await auth.authenticate_user(s_login, "rst", RIGHT)
+            if user is not None:
+                await auth.create_session(s_login, user.id)
+            await s_login.commit()
+            return user is not None
+
+        login = asyncio.create_task(sign_in())
+        await asyncio.sleep(0.5)
+        await s_reset.commit()
+        assert not await login, "the old password signed in past the reset"
+
+    async with worker_db() as s:
+        sessions = (
+            await s.scalars(select(Session).where(Session.user_id == uid))
+        ).all()
+    assert sessions == [], (
+        "a session signed in with the old password outlived the reset"
+    )
