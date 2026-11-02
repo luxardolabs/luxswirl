@@ -412,10 +412,11 @@ async def authenticate_heartbeat(
     that agent's status back (`AgentCoreService.process_heartbeat`).
 
     The registration key is held to its own budget here, as on /register:
-    each key refused counts against `client` for this agent alone, and past
-    every part of the budget the fallback answers 429 without checking the
-    key. A right key costs nothing, and one agent's refusals never shut out
-    another agent behind the same address.
+    each key refused counts against `client`, for this agent and for the
+    address as a whole (`reserve_heartbeat_registration_attempt`), and past
+    any part of either budget the fallback answers 429 without checking the
+    key. A right key is given back once checked, and one stuck agent never
+    shuts out another behind the same address.
     """
     if agent.api_key_hash:
         try:

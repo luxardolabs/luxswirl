@@ -261,6 +261,32 @@ async def test_one_agent_s_refused_keys_never_shut_out_another_at_the_same_addre
     assert resp.status_code == 200, resp.text
 
 
+async def test_more_agent_ids_never_buy_one_address_more_than_twice_the_budget(
+    client: AsyncClient, db: AsyncSession
+) -> None:
+    # An unnamed agent's id is a /metrics label: knowing many ids must not
+    # multiply the guesses one address may make.
+    agents = [
+        make_agent(approval_status="pending", api_key_hash=None) for _ in range(4)
+    ]
+    db.add_all(agents)
+    await db.flush()
+    allowed = parse(settings.security.registration_rate_limit).amount
+
+    statuses = [
+        (
+            await client.post(
+                "/api/v1/agent/heartbeat", json=_beat(agent.id), headers=_WRONG
+            )
+        ).status_code
+        for agent in agents
+        for _ in range(allowed)
+    ]
+
+    assert statuses.count(401) == 2 * allowed, statuses
+    assert statuses[2 * allowed :] == [429] * (len(statuses) - 2 * allowed)
+
+
 async def test_a_concurrent_burst_of_wrong_keys_gets_no_more_checks_than_the_budget(
     client: AsyncClient, db: AsyncSession, monkeypatch: pytest.MonkeyPatch
 ) -> None:
