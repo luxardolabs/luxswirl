@@ -4,6 +4,8 @@ This document describes the PostgreSQL/TimescaleDB database schema for LuxSwirl.
 
 The schema is **owned by Alembic** — the baseline `apps/backend/alembic/versions/000_initial_schema.py` plus the revisions after it are the authoritative definition, and `alembic upgrade head` runs from the container CMD on startup. The ORM models in `apps/backend/app/models/*_model.py` mirror it. The only thing created at runtime (by `app/db/database.py::init_db`) is TimescaleDB-specific state: hypertables, compression, retention policies, and continuous aggregates.
 
+Migrations run with the server's field-encryption key: `alembic/env.py` reads it from `SECURITY__FIELD_ENCRYPTION_KEY` or `/app/data/field_encryption_key`, as the server does, before any revision runs, so a revision that reads or writes an encrypted column (`checks.check_config`, `maintenance_jobs.params`) sees what the server sees. It never generates a key: a database the server has never run against has none until the server's first boot. Revision `609ddde70f0b` applies the closed-set fix-up of `c24bfe691550` to the check configs that revision could not read without the key, and refuses to run with no key while any config is encrypted.
+
 ## Overview
 
 LuxSwirl uses **TimescaleDB** (PostgreSQL extension) for time-series storage. The relevant tables fall into two groups:
