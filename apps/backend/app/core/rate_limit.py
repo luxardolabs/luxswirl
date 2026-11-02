@@ -108,6 +108,31 @@ def registration_rate_limit() -> str:
     return _current.registration
 
 
+# The bucket counting registration keys refused on the heartbeat, which falls
+# back to that key for an agent without its own. Only refusals count: a pending
+# agent heartbeats with the right key every interval and must not run out.
+_HEARTBEAT_REGISTRATION_REFUSALS = "heartbeat-registration-key-refusals"
+
+
+def heartbeat_registration_retry_after(client: str) -> int | None:
+    """Seconds to wait when `client` has spent the registration budget on the
+    heartbeat with refused keys; None while under it. Counts nothing."""
+    limit = parse(registration_rate_limit())
+    if limiter.limiter.test(limit, _HEARTBEAT_REGISTRATION_REFUSALS, client):
+        return None
+    stats = limiter.limiter.get_window_stats(
+        limit, _HEARTBEAT_REGISTRATION_REFUSALS, client
+    )
+    return max(1, int(stats.reset_time - time.time()))
+
+
+def count_heartbeat_registration_refusal(client: str) -> None:
+    """Count one registration key the heartbeat refused, against `client`."""
+    limiter.limiter.hit(
+        parse(registration_rate_limit()), _HEARTBEAT_REGISTRATION_REFUSALS, client
+    )
+
+
 class KeyedLimiter:
     """A per-key count for a surface this limiter cannot decorate, such as the /mcp mount.
 

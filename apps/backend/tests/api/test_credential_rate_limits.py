@@ -117,7 +117,10 @@ def _request(route: str, w: _World) -> tuple[str, str, dict[str, object] | None]
     return requests[route]
 
 
-_REGISTRATION_KEYED = {"register", "recover-key"}
+# Routes where a wrong key ends at the registration-key check, so the
+# registration budget is the one that runs out: the heartbeat falls back to
+# that key when the agent's own key is refused.
+_REGISTRATION_KEYED = {"register", "recover-key", "heartbeat"}
 
 
 @pytest.mark.parametrize(
@@ -191,6 +194,44 @@ async def test_a_pending_agent_heartbeating_with_the_right_key_spends_nothing(
     ]
 
     assert set(statuses) == {200}, statuses
+
+
+@pytest.mark.parametrize("approval_status", ["active", "pending"])
+async def test_wrong_registration_keys_on_the_heartbeat_spend_the_registration_budget(
+    client: AsyncClient,
+    db: AsyncSession,
+    registration_key: str,
+    approval_status: str,
+) -> None:
+    # An active agent reaches the registration key once its own key is
+    # refused; a pending one has no key of its own.
+    own_key = (
+        bcrypt.hashpw(b"the-right-key", bcrypt.gensalt(rounds=4)).decode()
+        if approval_status == "active"
+        else None
+    )
+    agent = make_agent(approval_status=approval_status, api_key_hash=own_key)
+    db.add(agent)
+    await db.flush()
+    allowed = parse(settings.security.registration_rate_limit).amount
+
+    wrong = [
+        (
+            await client.post(
+                "/api/v1/agent/heartbeat", json=_beat(agent.id), headers=_WRONG
+            )
+        ).status_code
+        for _ in range(allowed + 1)
+    ]
+    right = await client.post(
+        "/api/v1/agent/heartbeat",
+        json=_beat(agent.id),
+        headers={"Authorization": f"Bearer {registration_key}"},
+    )
+
+    assert wrong == [401] * allowed + [429], wrong
+    assert right.status_code == 429, right.text
+    assert int(right.headers["Retry-After"]) > 0
 
 
 async def test_malformed_registrations_do_not_spend_the_budget(
