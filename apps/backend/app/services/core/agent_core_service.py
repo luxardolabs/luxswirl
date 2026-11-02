@@ -2,8 +2,6 @@
 Agent service - business logic for agent operations.
 """
 
-import hashlib
-import hmac
 import secrets
 from collections.abc import Sequence
 from datetime import datetime
@@ -22,6 +20,7 @@ from app.core.exceptions import (
     DuplicateResourceException,
     ValidationException,
 )
+from app.core.recovery_secret import recovery_secret_digest, recovery_secret_matches
 from app.core.synthetic_guard import SYNTHETIC, require_admin_actor
 from app.crud.agent_crud import AgentCRUD
 from app.crud.check_crud import CheckCRUD
@@ -47,18 +46,6 @@ from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.services.agent")
 
-
-def _recovery_secret_digest(secret: str) -> str:
-    """The stored form of a recovery secret: its SHA-256 hex digest.
-
-    A fast hash is right here: the secret is 256 random bits, not a password,
-    so there is nothing for a slow hash to stretch.
-    """
-    return hashlib.sha256(secret.encode()).hexdigest()
-
-
-# Compared against when no digest is on record, so a refusal does the same work.
-_NO_SECRET_DIGEST = "0" * 64
 
 # The statuses each operator action moves an agent from. Restore is the only
 # way out of archived, so no other action takes an archived agent.
@@ -274,13 +261,7 @@ class AgentCoreService:
         """
         agent = await AgentCRUD.get_by_id_with_checks(db, agent_id)
         stored = agent.recovery_secret_hash if agent is not None else None
-        presented = _recovery_secret_digest(recovery_secret or "")
-        # Always one constant-time comparison, against a digest no secret has
-        # when there is nothing stored, so the refusal takes the same path.
-        matches = hmac.compare_digest(
-            presented.encode(), (stored or _NO_SECRET_DIGEST).encode()
-        )
-        if agent is None or not stored or not recovery_secret or not matches:
+        if agent is None or not recovery_secret_matches(stored, recovery_secret):
             logger.warning(
                 "SECURITY AUDIT: Agent key recovery refused",
                 extra={
@@ -451,7 +432,7 @@ class AgentCoreService:
             approval_status="pending",
             first_seen=utc_now(),
             last_seen=utc_now(),
-            recovery_secret_hash=_recovery_secret_digest(recovery_secret),
+            recovery_secret_hash=recovery_secret_digest(recovery_secret),
         )
 
         agent = await AgentCRUD.add_agent(db, agent)

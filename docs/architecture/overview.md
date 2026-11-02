@@ -507,7 +507,7 @@ ______________________________________________________________________
 
 The JSON API's agent protocol, under `/api/v1/agent`, carries agents' registration, heartbeats, check lists, results and artifacts. The admin API, under `/api/v1/admin`, takes a user's API token and acts as that user (see `docs/user-guide/admin-api.md`). Operators manage agents, checks, alerts, notification providers, registration keys, users and status pages through the web UI.
 
-**Versioning**: every agent endpoint lives under `/api/v1/agent`. **Authentication**: `Authorization: Bearer <key>` — a registration key to register, a registration key plus the agent's recovery secret (header `X-Agent-Recovery-Secret`) to recover, the agent's own key for its check list, reports, job results and artifacts. **Response format**: JSON.
+**Versioning**: every agent endpoint lives under `/api/v1/agent`. **Authentication**: `Authorization: Bearer <key>` — a registration key to register, a registration key plus the agent's recovery secret (header `X-Agent-Recovery-Secret`) to recover, the agent's own key for its check list, reports, job results and artifacts. A heartbeat carries the agent's own key, or, while the agent has none, its recovery secret (an older agent build that sends no secret is checked against the registration key, with a warning to upgrade it); each refused pending credential counts against that agent's own registration budget. **Response format**: JSON.
 
 ### API Endpoint Structure
 
@@ -515,7 +515,7 @@ The JSON API's agent protocol, under `/api/v1/agent`, carries agents' registrati
 /api/v1/agent
 ├── POST   /register                        Register (registration key)
 ├── POST   /{agent_id}/recover-key          Recover the agent key (registration key + recovery secret)
-├── POST   /heartbeat                       Heartbeat (agent key; the registration key updates only a pending agent)
+├── POST   /heartbeat                       Heartbeat (agent key; a pending agent's recovery secret updates only that pending agent)
 ├── GET    /checks?agent_id={id}            Fetch this agent's checks (agent key)
 ├── POST   /reports                         Submit a batch of results (agent key)
 ├── POST   /jobs/{job_id}/start             Report a job started: it is running (the job's agent key)

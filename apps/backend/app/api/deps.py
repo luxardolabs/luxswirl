@@ -178,8 +178,12 @@ async def require_heartbeat_sender(
     heartbeat: AgentHeartbeat,
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     authorization: Annotated[str | None, Header()] = None,
+    recovery_secret: Annotated[
+        str | None, Header(alias="X-Agent-Recovery-Secret")
+    ] = None,
 ) -> HeartbeatSender:
-    """The heartbeat's agent, authenticated by its own key or the registration key.
+    """The heartbeat's agent, authenticated by its own key or, while it has
+    none, by its recovery secret (`authenticate_heartbeat`).
 
     The body is declared here only: a second declaration on the route would be
     validated again, and each error reported twice. Yields the parsed heartbeat,
@@ -187,7 +191,7 @@ async def require_heartbeat_sender(
     """
     agent = await AgentCoreService.get_agent_by_id(db, heartbeat.agent_id)
     using_agent_key = await authenticate_heartbeat(
-        agent, authorization, db, client_ip_from_request(request)
+        agent, authorization, recovery_secret, db, client_ip_from_request(request)
     )
     return HeartbeatSender(
         heartbeat=heartbeat, agent_id=agent.id, using_agent_key=using_agent_key

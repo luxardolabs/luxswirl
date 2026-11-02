@@ -15,6 +15,7 @@ import httpx
 import pytest
 import pytest_asyncio
 from app.agent import http_client
+from app.agent.credentials import AgentCredentials
 from app.agent.heartbeat import HeartbeatSender
 
 pytestmark = pytest.mark.unit
@@ -54,7 +55,7 @@ def _sender(auth_key: str) -> HeartbeatSender:
         },
         reporter=None,
         job_processor=None,
-        credentials=None,
+        credentials=AgentCredentials(),
         process=None,
         on_config_reload=None,
         on_agent_approved=None,
@@ -86,3 +87,19 @@ async def test_each_heartbeat_sends_the_key_held_at_that_moment(
         "Bearer registration-key",
         "Bearer agent-key",
     ]
+
+
+async def test_a_pending_agent_proves_its_recovery_secret_until_it_holds_its_own_key(
+    seen: list[httpx.Request],
+) -> None:
+    sender = _sender("registration-key")
+    sender.credentials.recovery_secret = "luxswirl_rs_" + "ab" * 32
+    await sender.send_shutdown_heartbeat("run-1")
+    sender.credentials.api_key = "agent-key"
+    sender.config["auth_key"] = "agent-key"
+    await sender.send_shutdown_heartbeat("run-1")
+
+    pending, approved = seen
+    assert pending.headers["x-agent-recovery-secret"] == "luxswirl_rs_" + "ab" * 32
+    assert "x-agent-recovery-secret" not in approved.headers
+    assert approved.headers["authorization"] == "Bearer agent-key"

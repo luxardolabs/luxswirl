@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import logging
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from uuid import UUID, uuid4
@@ -261,30 +262,124 @@ async def test_one_agent_s_refused_keys_never_shut_out_another_at_the_same_addre
     assert resp.status_code == 200, resp.text
 
 
-async def test_more_agent_ids_never_buy_one_address_more_than_twice_the_budget(
-    client: AsyncClient, db: AsyncSession
+# ── A pending agent's own credential: its recovery secret ─────────────────────
+
+
+async def _registered(client: AsyncClient, registration_key: str) -> tuple[UUID, str]:
+    """A pending agent registered for real, and the recovery secret it was given."""
+    resp = await client.post(
+        "/api/v1/agent/register",
+        json={"hostname": "secret-holder"},
+        headers={"Authorization": f"Bearer {registration_key}"},
+    )
+    assert resp.status_code == 201, resp.text
+    body = resp.json()
+    return UUID(body["agent_id"]), body["recovery_secret"]
+
+
+async def test_a_pending_agent_heartbeats_with_its_recovery_secret_alone(
+    client: AsyncClient, registration_key: str
 ) -> None:
-    # An unnamed agent's id is a /metrics label: knowing many ids must not
-    # multiply the guesses one address may make.
-    agents = [
-        make_agent(approval_status="pending", api_key_hash=None) for _ in range(4)
-    ]
-    db.add_all(agents)
-    await db.flush()
+    agent_id, secret = await _registered(client, registration_key)
     allowed = parse(settings.security.registration_rate_limit).amount
 
     statuses = [
         (
             await client.post(
-                "/api/v1/agent/heartbeat", json=_beat(agent.id), headers=_WRONG
+                "/api/v1/agent/heartbeat",
+                json=_beat(agent_id),
+                headers={"X-Agent-Recovery-Secret": secret},
             )
         ).status_code
-        for agent in agents
-        for _ in range(allowed)
+        for _ in range(allowed * 3)
     ]
 
-    assert statuses.count(401) == 2 * allowed, statuses
-    assert statuses[2 * allowed :] == [429] * (len(statuses) - 2 * allowed)
+    assert set(statuses) == {200}, statuses
+
+
+async def test_wrong_recovery_secrets_are_refused_then_limited(
+    client: AsyncClient, registration_key: str
+) -> None:
+    agent_id, secret = await _registered(client, registration_key)
+    allowed = parse(settings.security.registration_rate_limit).amount
+
+    wrong = [
+        (
+            await client.post(
+                "/api/v1/agent/heartbeat",
+                json=_beat(agent_id),
+                headers={"X-Agent-Recovery-Secret": "luxswirl_rs_" + "0" * 64},
+            )
+        ).status_code
+        for _ in range(allowed + 1)
+    ]
+    right = await client.post(
+        "/api/v1/agent/heartbeat",
+        json=_beat(agent_id),
+        headers={"X-Agent-Recovery-Secret": secret},
+    )
+
+    assert wrong == [401] * allowed + [429], wrong
+    assert right.status_code == 429, right.text
+
+
+async def test_a_wrong_recovery_secret_is_refused_whatever_registration_key_it_carries(
+    client: AsyncClient, registration_key: str
+) -> None:
+    # The secret is the agent's own credential: the shared key never stands
+    # in for a secret that was presented and is wrong.
+    agent_id, _ = await _registered(client, registration_key)
+
+    resp = await client.post(
+        "/api/v1/agent/heartbeat",
+        json=_beat(agent_id),
+        headers={
+            "Authorization": f"Bearer {registration_key}",
+            "X-Agent-Recovery-Secret": "luxswirl_rs_" + "0" * 64,
+        },
+    )
+
+    assert resp.status_code == 401, resp.text
+
+
+async def test_another_agent_s_recovery_secret_is_refused(
+    client: AsyncClient, registration_key: str
+) -> None:
+    mine, _ = await _registered(client, registration_key)
+    _, theirs = await _registered(client, registration_key)
+
+    resp = await client.post(
+        "/api/v1/agent/heartbeat",
+        json=_beat(mine),
+        headers={"X-Agent-Recovery-Secret": theirs},
+    )
+
+    assert resp.status_code == 401, resp.text
+
+
+async def test_a_heartbeat_on_the_shared_registration_key_is_logged_for_upgrade(
+    client: AsyncClient,
+    db: AsyncSession,
+    registration_key: str,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    agent = make_agent(approval_status="pending", api_key_hash=None)
+    db.add(agent)
+    await db.flush()
+
+    with caplog.at_level(logging.WARNING, logger="luxswirl.security"):
+        resp = await client.post(
+            "/api/v1/agent/heartbeat",
+            json=_beat(agent.id),
+            headers={"Authorization": f"Bearer {registration_key}"},
+        )
+
+    assert resp.status_code == 200, resp.text
+    assert any(
+        "shared registration key" in r.getMessage()
+        and getattr(r, "agent_id", None) == str(agent.id)
+        for r in caplog.records
+    ), [r.getMessage() for r in caplog.records]
 
 
 async def test_a_concurrent_burst_of_wrong_keys_gets_no_more_checks_than_the_budget(
@@ -303,7 +398,7 @@ async def test_a_concurrent_burst_of_wrong_keys_gets_no_more_checks_than_the_bud
     async def one() -> int:
         try:
             await security.authenticate_heartbeat(
-                agent, "Bearer wrong", db, "198.51.100.99"
+                agent, "Bearer wrong", None, db, "198.51.100.99"
             )
         except HTTPException as refused:
             return refused.status_code

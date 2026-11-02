@@ -109,87 +109,69 @@ def registration_rate_limit() -> str:
     return _current.registration
 
 
-# The buckets counting registration keys refused on the heartbeat, which falls
-# back to that key for an agent without its own. Only refusals count: a pending
-# agent heartbeats with the right key every interval and must not run out.
-#
-# Each (client address, agent) pair holds the registration budget, so an agent
-# whose key keeps being refused locks out only itself. The address as a whole
-# holds twice that budget across all its agents: one stuck agent spends at most
-# half of it, and agent ids an address has learned (an unnamed agent's id is a
-# /metrics label) never multiply what it may guess. An unknown agent id is
-# refused before any key is checked. These budgets are the heartbeat's own:
-# /register and /recover-key keep theirs.
-_HEARTBEAT_REGISTRATION_REFUSALS = "heartbeat-registration-key-refusals"
-_ADDRESS_SHARE = 2
+# The bucket counting credentials refused on a pending agent's heartbeat: its
+# recovery secret, or the shared registration key from an agent build that
+# sends no secret. Only refusals count: a pending agent heartbeats with the
+# right credential every interval and must not run out. Each (client address,
+# agent) pair has its own count, so an agent whose credential keeps being
+# refused locks out only itself; an unknown agent id is refused before any
+# credential is checked. This budget is the heartbeat's own: /register and
+# /recover-key keep theirs.
+_HEARTBEAT_PENDING_REFUSALS = "heartbeat-pending-credential-refusals"
 
 
 @dataclass(frozen=True)
-class _Counted:
-    """One count made in one part of a limit, under its identifiers."""
+class PendingCredentialAttempt:
+    """One pending-heartbeat credential check, already counted in every part of
+    the limit, so concurrent checks cannot all pass a count none has made.
+    Concurrent checks with the right credential can see each other's counts,
+    so the right credential goes free only once checked."""
 
-    limit: RateLimitItem
+    limits: tuple[RateLimitItem, ...]
     keys: tuple[str, ...]
 
-
-@dataclass(frozen=True)
-class RegistrationAttempt:
-    """One heartbeat registration-key check, already counted in every part of
-    both budgets, so concurrent checks cannot all pass a count none has made.
-    Concurrent checks with the right key can see each other's counts, so the
-    right key goes free only once checked."""
-
-    counted: tuple[_Counted, ...]
-
     def release(self) -> None:
-        """Give every count back: the key was not refused.
+        """Give the count back: the credential was not refused.
 
         A window that ended since the count was made holds nothing of it, so
         nothing is given back there (the next window never starts below zero).
         """
         storage = limiter.limiter.storage
-        for each in self.counted:
-            key = each.limit.key_for(*each.keys)
+        for limit in self.limits:
+            key = limit.key_for(*self.keys)
             if storage.get(key) > 0:
-                storage.incr(key, each.limit.get_expiry(), amount=-1)
+                storage.incr(key, limit.get_expiry(), amount=-1)
 
 
-def _address_limit(limit: RateLimitItem) -> RateLimitItem:
-    """`limit` with `_ADDRESS_SHARE` times its amount, over the same period."""
-    return type(limit)(limit.amount * _ADDRESS_SHARE, limit.multiples)
-
-
-def reserve_heartbeat_registration_attempt(
+def reserve_pending_heartbeat_attempt(
     client: str, agent_id: UUID
-) -> RegistrationAttempt | int:
-    """Count one registration-key check on `agent_id`'s heartbeat from
-    `client`, in every part of the agent's and the address's budgets, before
-    the key is read.
+) -> PendingCredentialAttempt | int:
+    """Count one credential check on pending `agent_id`'s heartbeat from
+    `client`, in every part of the registration limit, before the credential
+    is read.
 
-    Returns the attempt, to `release()` unless the key is refused, or, when
-    any part of either budget is spent, the seconds to wait (and counts
+    Returns the attempt, to `release()` unless the credential is refused, or,
+    when any part of the limit is spent, the seconds to wait (and counts
     nothing).
     """
-    agent_keys = (_HEARTBEAT_REGISTRATION_REFUSALS, client, str(agent_id))
-    address_keys = (_HEARTBEAT_REGISTRATION_REFUSALS, client)
-    limits = parse_many(registration_rate_limit())
-    wanted = [_Counted(limit, agent_keys) for limit in limits] + [
-        _Counted(_address_limit(limit), address_keys) for limit in limits
-    ]
-    counted: list[_Counted] = []
-    for each in wanted:
-        counted.append(each)
-        if not limiter.limiter.hit(each.limit, *each.keys):
-            RegistrationAttempt(tuple(counted)).release()
-            return max(
-                max(1, int(stats.reset_time - time.time()))
-                for spent in wanted
-                if not limiter.limiter.test(spent.limit, *spent.keys)
-                for stats in [
-                    limiter.limiter.get_window_stats(spent.limit, *spent.keys)
-                ]
-            )
-    return RegistrationAttempt(tuple(counted))
+    keys = (_HEARTBEAT_PENDING_REFUSALS, client, str(agent_id))
+    limits = tuple(parse_many(registration_rate_limit()))
+    spent = [limit for limit in limits if not limiter.limiter.hit(limit, *keys)]
+    attempt = PendingCredentialAttempt(limits=limits, keys=keys)
+    if not spent:
+        return attempt
+    attempt.release()
+    # A window that ended since the refused count has a reset time already
+    # past, so the wait is at least a second.
+    return max(
+        max(
+            1,
+            int(
+                limiter.limiter.get_window_stats(limit, *keys).reset_time - time.time()
+            ),
+        )
+        for limit in spent
+    )
 
 
 class KeyedLimiter:
