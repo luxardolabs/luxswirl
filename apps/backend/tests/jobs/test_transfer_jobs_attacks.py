@@ -222,6 +222,8 @@ async def test_one_nul_url_does_not_sink_the_rest_of_a_bulk_create(worker_db) ->
     made = await _checks(worker_db, agent_id)
     assert row.status == MaintenanceJobStatus.DONE, (row.error, row.progress)
     assert len(made) == 2, (row.error, row.progress)
+    assert row.progress["failure_count"] == 1
+    assert row.progress["errors"] == ["Entry 2 refused: display_name"]
 
 
 async def test_control_a_good_import_is_done(worker_db) -> None:

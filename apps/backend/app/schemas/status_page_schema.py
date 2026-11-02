@@ -8,7 +8,12 @@ from uuid import UUID
 
 from pydantic import Field, field_validator
 
-from app.schemas.base_schema import BaseSchema, TimestampSchema
+from app.schemas.base_schema import (
+    BaseSchema,
+    StorableJson,
+    StorableText,
+    TimestampSchema,
+)
 
 # The status-bar windows a page may show, in minutes.
 StatusBarMinutes = Literal[30, 60, 120, 240, 480, 1440]
@@ -18,16 +23,16 @@ ALLOWED_TIME_RANGES: list[int] = list(get_args(StatusBarMinutes))
 class StatusPageBase(BaseSchema):
     """Base schema for StatusPage with common fields."""
 
-    name: str = Field(
+    name: StorableText = Field(
         ..., min_length=1, max_length=255, description="Display name of the status page"
     )
-    slug: str = Field(
+    slug: StorableText = Field(
         ...,
         min_length=1,
         max_length=255,
         description="URL-friendly slug (e.g., /status/production)",
     )
-    description: str | None = Field(
+    description: StorableText | None = Field(
         None, max_length=1000, description="Optional description"
     )
     is_public: bool = Field(
@@ -48,10 +53,10 @@ class StatusPageBase(BaseSchema):
 class StatusPageCreate(StatusPageBase):
     """Schema for creating a new status page."""
 
-    config: dict[str, Any] | None = Field(
+    config: StorableJson | None = Field(
         None, description="Display configuration (theme, show_uptime, etc.)"
     )
-    items: list[dict[str, Any]] = Field(
+    items: list[StorableJson] = Field(
         default_factory=list,
         description="Ordered array of items to display (checks and groups)",
     )
@@ -90,12 +95,12 @@ class StatusPageCreate(StatusPageBase):
 class StatusPageUpdate(BaseSchema):
     """Schema for updating a status page."""
 
-    name: str | None = Field(None, min_length=1, max_length=255)
-    slug: str | None = Field(None, min_length=1, max_length=255)
-    description: str | None = Field(None, max_length=1000)
+    name: StorableText | None = Field(None, min_length=1, max_length=255)
+    slug: StorableText | None = Field(None, min_length=1, max_length=255)
+    description: StorableText | None = Field(None, max_length=1000)
     is_public: bool | None = None
-    config: dict[str, Any] | None = None
-    items: list[dict[str, Any]] | None = None
+    config: StorableJson | None = None
+    items: list[StorableJson] | None = None
 
     @field_validator("slug")
     @classmethod

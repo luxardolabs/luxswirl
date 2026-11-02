@@ -10,7 +10,12 @@ from uuid import UUID
 from pydantic import Field
 
 from app.models.enum_model import NotificationProviderType
-from app.schemas.base_schema import BaseSchema, StorableJson, TimestampSchema
+from app.schemas.base_schema import (
+    BaseSchema,
+    StorableJson,
+    StorableText,
+    TimestampSchema,
+)
 
 
 class NotificationProviderBase(BaseSchema):
@@ -21,7 +26,7 @@ class NotificationProviderBase(BaseSchema):
         ...,
         description="Type of notification provider (email, webhook, homeassistant, etc.)",
     )
-    friendly_name: str = Field(
+    friendly_name: StorableText = Field(
         ...,
         min_length=1,
         max_length=255,
@@ -85,7 +90,7 @@ class NotificationProviderCreate(NotificationProviderBase):
 class NotificationProviderUpdate(BaseSchema):
     """Schema for updating a notification provider."""
 
-    friendly_name: str | None = Field(None, min_length=1, max_length=255)
+    friendly_name: StorableText | None = Field(None, min_length=1, max_length=255)
     config: StorableJson | None = None
     is_enabled: bool | None = None
     is_default_enabled: bool | None = None

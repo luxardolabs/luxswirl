@@ -97,12 +97,23 @@ def _refuse_unstorable(value: object) -> None:
             _refuse_unstorable(item)
 
 
+def refuse_unstorable_text(value: str) -> str:
+    """Refuse text no column can store (`app.core.storable_text`): a NUL or a
+    lone surrogate."""
+    _refuse_unstorable(value)
+    return value
+
+
 def storable_json[T](value: T) -> T:
     """Refuse a JSON value holding, at any depth, a key or string no column can
     store (`app.core.storable_text`)."""
     _refuse_unstorable(value)
     return value
 
+
+StorableText = Annotated[str, AfterValidator(refuse_unstorable_text)]
+"""Text an input sets that may hold any character a column can store: a
+password, a script, a URL. Text a person reads is PlainText or NoteText."""
 
 PlainText = Annotated[str, AfterValidator(refuse_control_chars)]
 """Free text an input sets on one line: a name, a hostname, a version."""

@@ -21,6 +21,7 @@ from app.schemas.agent_schema import AgentOption
 from app.schemas.base_schema import (
     BaseSchema,
     StorableJson,
+    StorableText,
     TagList,
     TimestampSchema,
     upper_or_none,
@@ -37,13 +38,15 @@ DEFAULT_RETRY_INTERVAL_SECONDS = 30
 class CheckBase(BaseSchema):
     """Base schema for Check with common fields."""
 
-    display_name: str = Field(
+    display_name: StorableText = Field(
         ..., min_length=1, max_length=255, description="Display name of the check"
     )
     # CheckType IS the validation — bad value is a 422, no hand-maintained list.
     check_type: CheckType = Field(..., description="Type of check")
-    target: str = Field(..., min_length=1, max_length=512, description="Check target")
-    description: str | None = Field(
+    target: StorableText = Field(
+        ..., min_length=1, max_length=512, description="Check target"
+    )
+    description: StorableText | None = Field(
         None, max_length=1000, description="Check description"
     )
 
@@ -92,7 +95,7 @@ class CheckCreate(CheckBase):
     )
 
     # Synthetic check script
-    script_code: str | None = Field(
+    script_code: StorableText | None = Field(
         None, description="Python script code for synthetic checks (Playwright async)"
     )
 
@@ -103,20 +106,24 @@ class CheckCreate(CheckBase):
     expected_status: int | None = Field(
         None, ge=100, le=599, description="Expected HTTP status"
     )
-    json_path: str | None = Field(None, max_length=500, description="JSON path")
-    expected_value: str | None = Field(
+    json_path: StorableText | None = Field(
+        None, max_length=500, description="JSON path"
+    )
+    expected_value: StorableText | None = Field(
         None, max_length=500, description="Expected value"
     )
     record_type: DnsRecordTypeField = Field(None, description="DNS record type")
-    nameserver: str | None = Field(None, max_length=255, description="DNS nameserver")
+    nameserver: StorableText | None = Field(
+        None, max_length=255, description="DNS nameserver"
+    )
     port: int | None = Field(None, ge=1, le=65535, description="Port number")
-    expect_value: str | None = Field(
+    expect_value: StorableText | None = Field(
         None, max_length=500, description="Expected DNS value"
     )
-    connection_string: str | None = Field(
+    connection_string: StorableText | None = Field(
         None, max_length=1000, description="Database connection string"
     )
-    query: str | None = Field(None, max_length=5000, description="SQL query")
+    query: StorableText | None = Field(None, max_length=5000, description="SQL query")
 
     depends_on_check_id: UUID | None = Field(
         None,
@@ -144,10 +151,10 @@ class CheckCreate(CheckBase):
 class CheckUpdate(BaseSchema):
     """Schema for updating a check."""
 
-    display_name: str | None = Field(None, min_length=1, max_length=255)
+    display_name: StorableText | None = Field(None, min_length=1, max_length=255)
     check_type: CheckType | None = None
-    target: str | None = None
-    description: str | None = None
+    target: StorableText | None = None
+    description: StorableText | None = None
     interval_seconds: int | None = Field(None, gt=0, le=86400)
     timeout_seconds: int | None = Field(None, gt=0, le=300)
     enabled: bool | None = None
@@ -161,20 +168,20 @@ class CheckUpdate(BaseSchema):
     agent_selector: StorableJson | None = None
 
     # Synthetic check script
-    script_code: str | None = None
+    script_code: StorableText | None = None
 
     # Check-type-specific configuration (JSONB - accepts any fields)
     http_method: HttpMethodField = None
     verify_ssl: bool | None = None
     expected_status: int | None = Field(None, ge=100, le=599)
-    json_path: str | None = Field(None, max_length=500)
-    expected_value: str | None = Field(None, max_length=500)
+    json_path: StorableText | None = Field(None, max_length=500)
+    expected_value: StorableText | None = Field(None, max_length=500)
     record_type: DnsRecordTypeField = None
-    nameserver: str | None = Field(None, max_length=255)
+    nameserver: StorableText | None = Field(None, max_length=255)
     port: int | None = Field(None, ge=1, le=65535)
-    expect_value: str | None = Field(None, max_length=500)
-    connection_string: str | None = Field(None, max_length=1000)
-    query: str | None = Field(None, max_length=5000)
+    expect_value: StorableText | None = Field(None, max_length=500)
+    connection_string: StorableText | None = Field(None, max_length=1000)
+    query: StorableText | None = Field(None, max_length=5000)
     depends_on_check_id: UUID | None = Field(
         None,
         description="Parent check this one depends on; notifications suppressed when parent is down",
@@ -304,10 +311,10 @@ class CheckListResponse(BaseSchema):
 class BulkCheckCreateRequest(BaseSchema):
     """Schema for bulk check creation request (single item)."""
 
-    url: str = Field(
+    url: StorableText = Field(
         ..., min_length=1, max_length=512, description="URL or target to check"
     )
-    display_name: str | None = Field(
+    display_name: StorableText | None = Field(
         None,
         max_length=255,
         description="Display name (auto-generated if not provided)",

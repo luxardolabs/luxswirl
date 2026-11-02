@@ -9,16 +9,18 @@ from uuid import UUID
 from pydantic import Field
 
 from app.models.enum_model import RegistrationKeyStatus
-from app.schemas.base_schema import BaseSchema, TimestampSchema
+from app.schemas.base_schema import BaseSchema, StorableText, TimestampSchema
 
 
 class RegistrationKeyCreate(BaseSchema):
     """Schema for creating a new registration key."""
 
-    name: str = Field(
+    name: StorableText = Field(
         ..., min_length=1, max_length=255, description="Name for this key"
     )
-    description: str | None = Field(None, description="Optional notes about this key")
+    description: StorableText | None = Field(
+        None, description="Optional notes about this key"
+    )
 
     model_config = {
         "json_schema_extra": {
@@ -33,7 +35,7 @@ class RegistrationKeyCreate(BaseSchema):
 class RegistrationKeyRevoke(BaseSchema):
     """Schema for revoking a registration key."""
 
-    reason: str | None = Field(
+    reason: StorableText | None = Field(
         None, max_length=500, description="Reason for revocation"
     )
 

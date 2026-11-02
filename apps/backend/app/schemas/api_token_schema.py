@@ -12,17 +12,19 @@ from app.core.authorization import DEFAULT_SCOPES, validate_scope
 from app.core.datetime_utils import utc_now
 from app.models.enum_model import UserRole
 from app.schemas.auth_schema import CurrentUserDTO
-from app.schemas.base_schema import BaseSchema, TimestampSchema
+from app.schemas.base_schema import BaseSchema, StorableText, TimestampSchema
 
 
 class ApiTokenCreate(BaseSchema):
     """A new API token: what it is for, what it may do, and how long it lasts."""
 
-    name: str = Field(..., min_length=1, max_length=100, description="What it is for")
+    name: StorableText = Field(
+        ..., min_length=1, max_length=100, description="What it is for"
+    )
     expires_in_days: int | None = Field(
         None, ge=1, le=3650, description="Days until it stops working; None = never"
     )
-    scopes: list[str] = Field(
+    scopes: list[StorableText] = Field(
         default_factory=lambda: list(DEFAULT_SCOPES),
         min_length=1,
         max_length=50,

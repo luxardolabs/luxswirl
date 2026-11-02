@@ -11,7 +11,12 @@ from pydantic import Field, field_validator
 
 from app.core.liveness import MAX_MISSED_INTERVALS
 from app.models.enum_model import AlertTriggerType
-from app.schemas.base_schema import BaseSchema, StorableJson, TimestampSchema
+from app.schemas.base_schema import (
+    BaseSchema,
+    StorableJson,
+    StorableText,
+    TimestampSchema,
+)
 
 
 def _check_missed_intervals(config: dict[str, Any] | None) -> dict[str, Any] | None:
@@ -33,10 +38,10 @@ def _check_missed_intervals(config: dict[str, Any] | None) -> dict[str, Any] | N
 class AlertBase(BaseSchema):
     """Base schema for Alert with common fields."""
 
-    name: str = Field(
+    name: StorableText = Field(
         ..., min_length=1, max_length=255, description="Name of the alert rule"
     )
-    description: str | None = Field(None, description="Detailed description")
+    description: StorableText | None = Field(None, description="Detailed description")
     trigger_type: AlertTriggerType = Field(
         ...,
         description="Type of trigger (status_change, threshold, repeated_failure, ssl_cert_expiry, no_data, agent_offline)",
@@ -64,10 +69,12 @@ class AlertBase(BaseSchema):
         ge=1,
         description="Maximum number of resends",
     )
-    custom_subject: str | None = Field(
+    custom_subject: StorableText | None = Field(
         None, max_length=500, description="Custom subject template"
     )
-    custom_message: str | None = Field(None, description="Custom message body template")
+    custom_message: StorableText | None = Field(
+        None, description="Custom message body template"
+    )
 
     @field_validator("trigger_config")
     @classmethod
@@ -125,8 +132,8 @@ class AlertCreate(AlertBase):
 class AlertUpdate(BaseSchema):
     """Schema for updating an alert."""
 
-    name: str | None = Field(None, min_length=1, max_length=255)
-    description: str | None = None
+    name: StorableText | None = Field(None, min_length=1, max_length=255)
+    description: StorableText | None = None
     trigger_type: AlertTriggerType | None = None
     trigger_config: StorableJson | None = None
     is_enabled: bool | None = None
@@ -134,8 +141,8 @@ class AlertUpdate(BaseSchema):
     notify_on_recovery: bool | None = None
     resend_interval_minutes: int | None = Field(None, ge=1)
     max_resends: int | None = Field(None, ge=1)
-    custom_subject: str | None = None
-    custom_message: str | None = None
+    custom_subject: StorableText | None = None
+    custom_message: StorableText | None = None
 
     @field_validator("trigger_config")
     @classmethod

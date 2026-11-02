@@ -17,7 +17,13 @@ from app.models.enum_model import (
     JobStatus,
     JobType,
 )
-from app.schemas.base_schema import BaseSchema, StorableJson, TagList, TimestampSchema
+from app.schemas.base_schema import (
+    BaseSchema,
+    StorableJson,
+    StorableText,
+    TagList,
+    TimestampSchema,
+)
 
 
 class JobBase(BaseSchema):
@@ -88,7 +94,7 @@ class JobResultSubmit(BaseSchema):
         ..., description="Final job status (completed or failed)"
     )
     result: StorableJson | None = Field(None, description="Job result data")
-    error: str | None = Field(
+    error: StorableText | None = Field(
         None, max_length=5000, description="Error message if failed"
     )
 

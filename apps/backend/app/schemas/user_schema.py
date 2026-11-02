@@ -9,21 +9,22 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.models.enum_model import UserRole
+from app.schemas.base_schema import PlainText, StorableText
 
 
 class UserCreate(BaseModel):
     """Request schema for creating a new user."""
 
-    username: str = Field(
+    username: StorableText = Field(
         ..., min_length=3, max_length=100, description="Username (unique)"
     )
-    password: str = Field(
+    password: StorableText = Field(
         ..., min_length=8, max_length=100, description="Password (min 8 characters)"
     )
     role: UserRole = Field(
         UserRole.VIEWER, description="User role: admin, editor, viewer"
     )
-    full_name: str | None = Field(None, max_length=255, description="Full name")
+    full_name: PlainText | None = Field(None, max_length=255, description="Full name")
     is_active: bool = Field(True, description="Whether user is active")
     must_change_password: bool = Field(
         False, description="Force password change on first login"
@@ -71,7 +72,7 @@ class UserUpdate(BaseModel):
     """Request schema for updating a user."""
 
     role: UserRole | None = Field(None, description="User role")
-    full_name: str | None = Field(None, max_length=255, description="Full name")
+    full_name: PlainText | None = Field(None, max_length=255, description="Full name")
     is_active: bool | None = Field(None, description="Whether user is active")
     must_change_password: bool | None = Field(None, description="Force password change")
 

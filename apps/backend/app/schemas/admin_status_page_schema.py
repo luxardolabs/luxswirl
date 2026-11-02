@@ -14,7 +14,7 @@ from uuid import UUID
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, model_validator
 
 from app.models.enum_model import CheckType
-from app.schemas.base_schema import NoteText, PlainText, Tag
+from app.schemas.base_schema import NoteText, PlainText, StorableText, Tag
 from app.schemas.paginated_response_schema import PaginatedResponse
 from app.schemas.status_page_schema import StatusBarMinutes
 
@@ -38,7 +38,7 @@ GroupName = Annotated[PlainText, Field(min_length=1, max_length=255)]
 
 # Stored lower-case, as the web UI stores it.
 Slug = Annotated[
-    str,
+    StorableText,
     Field(min_length=1, max_length=255, pattern=SLUG_PATTERN),
     AfterValidator(str.lower),
 ]

@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.core.datetime_utils import utc_now
 from app.models.enum_model import UserRole
+from app.schemas.base_schema import StorableText
 
 
 class CurrentUserDTO(BaseModel):
@@ -63,8 +64,10 @@ type AuthedUser = CurrentUserDTO
 class ChangePasswordRequest(BaseModel):
     """Request schema for password change."""
 
-    current_password: str = Field(..., min_length=1, description="Current password")
-    new_password: str = Field(
+    current_password: StorableText = Field(
+        ..., min_length=1, description="Current password"
+    )
+    new_password: StorableText = Field(
         ...,
         min_length=8,
         max_length=100,

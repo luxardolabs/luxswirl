@@ -14,6 +14,7 @@ from app.schemas.base_schema import (
     BaseSchema,
     IpAddressText,
     PlainText,
+    StorableText,
     TagList,
     TimestampSchema,
 )
@@ -101,7 +102,7 @@ class AgentCreate(AgentBase):
     )
     version: PlainText | None = Field(None, max_length=50, description="Agent version")
     tags: TagList | None = Field(None, description="Tags for grouping/filtering")
-    agent_run_id: str | None = Field(
+    agent_run_id: StorableText | None = Field(
         None, max_length=255, description="Current run ID (UUID)"
     )
 
@@ -122,7 +123,7 @@ class AgentUpdate(BaseSchema):
     """Schema for updating an agent."""
 
     agent_name: PlainText | None = Field(None, min_length=1, max_length=255)
-    agent_run_id: str | None = None
+    agent_run_id: StorableText | None = None
     hostname: PlainText | None = Field(None, max_length=255)
     ip_address: IpAddressText = Field(None, max_length=45)
     version: PlainText | None = Field(None, max_length=50)
@@ -169,7 +170,7 @@ class AgentUpdate(BaseSchema):
     )
 
     # Logging configuration
-    log_level: str | None = Field(
+    log_level: StorableText | None = Field(
         None,
         pattern="^(DEBUG|INFO|WARNING|ERROR|CRITICAL)$",
         description="Logging level",
@@ -310,7 +311,7 @@ class AgentHeartbeat(BaseSchema):
     # Not a TagList: an approved agent's tags are ignored, and refusing the
     # whole heartbeat over them would stop its liveness. A pending agent's
     # tags are checked where they are stored (AgentCoreService).
-    tags: list[str] | None = Field(
+    tags: list[StorableText] | None = Field(
         None,
         description=(
             "The agent's declared tags. Stored only while the agent is pending, "
@@ -334,7 +335,9 @@ class AgentHeartbeat(BaseSchema):
     )
 
     # Config state
-    config_version: str | None = Field(None, description="Last fetched config version")
+    config_version: StorableText | None = Field(
+        None, description="Last fetched config version"
+    )
     baseline_checks_count: int | None = Field(
         None, description="Number of baseline checks from config"
     )
@@ -370,7 +373,9 @@ class AgentHeartbeat(BaseSchema):
     heartbeats_total: int | None = Field(
         None, description="Total heartbeats sent during this session"
     )
-    last_error_message: str | None = Field(None, description="Last error message")
+    last_error_message: StorableText | None = Field(
+        None, description="Last error message"
+    )
     server_unreachable_count: int = Field(0, description="Failed server connections")
 
     # Reporter backlog metrics
