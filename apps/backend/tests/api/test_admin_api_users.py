@@ -29,6 +29,7 @@ from app.services.core.settings_core_service import SettingsCoreService
 from app.services.core.user_core_service import UserCoreService
 from fixtures.factories import make_user
 from httpx import ASGITransport, AsyncClient
+from limits import parse
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -185,6 +186,26 @@ async def test_an_unknown_user_is_404(
     )
 
     assert resp.status_code == 404, resp.text
+
+
+async def test_resets_share_one_budget_whatever_user_id_they_name(
+    db: AsyncSession, client: AsyncClient
+) -> None:
+    # A path parameter the caller picks must not buy a fresh budget per value.
+    admin = await _as(db, "admin")
+    allowed = parse(settings.security.password_reset_rate_limit).amount
+    body = {"new_password": GOOD_PASSWORD}
+
+    for _ in range(allowed):
+        resp = await client.post(
+            f"{USERS}/{uuid4()}/reset-password", json=body, headers=admin
+        )
+        assert resp.status_code == 404, resp.text
+    resp = await client.post(
+        f"{USERS}/{uuid4()}/reset-password", json=body, headers=admin
+    )
+
+    assert resp.status_code == 429, resp.text
 
 
 # ── Create ──────────────────────────────────────────────────────────────────

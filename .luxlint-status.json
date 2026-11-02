@@ -1,6 +1,6 @@
 {
   "guard": "luxlint",
-  "guard_version": "0.72.0",
+  "guard_version": "0.73.0",
   "repo": "/repo",
   "source": [
     "apps/backend/app",
@@ -8,7 +8,8 @@
     "apps/shared",
     "apps/backend/alembic",
     "apps/backend/scripts",
-    "apps/backend/conftest.py"
+    "apps/backend/conftest.py",
+    "apps/backend/luxarch_test_db"
   ],
   "rules": [
     {
@@ -77,21 +78,10 @@
     },
     {
       "rule": "lint.ruff",
-      "status": "FAIL",
+      "status": "PASS",
       "since": "0.1.0",
-      "violations": 2,
-      "sites": [
-        {
-          "path": "apps/backend/app/crud/admin_bootstrap_crud.py",
-          "line": 26,
-          "detail": "F401 `datetime.UTC` imported but unused"
-        },
-        {
-          "path": "apps/backend/app/crud/admin_bootstrap_crud.py",
-          "line": 26,
-          "detail": "F401 `datetime.datetime` imported but unused"
-        }
-      ],
+      "violations": 0,
+      "sites": [],
       "deferred": false
     },
     {
@@ -208,13 +198,13 @@
     }
   ],
   "summary": {
-    "PASS": 22,
-    "FAIL": 1,
+    "PASS": 23,
+    "FAIL": 0,
     "XFAIL": 0,
     "XPASS": 0,
     "INERT": 0
   },
   "mypy": "separate: `luxlint --mypy` ([mypy].baseline ratchet)",
-  "commit": "0626556e9005a0ac6c9fa6189649c1252ea93e64",
-  "generated_at": "2026-10-31T23:18:39Z"
+  "commit": "8b5a3a973b5831cf03c3939d9a4d394a98702fa3",
+  "generated_at": "2026-11-02T14:09:01Z"
 }

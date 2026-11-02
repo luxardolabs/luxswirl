@@ -48,6 +48,17 @@ async def test_cross_site_fetch_metadata_is_refused(path: str) -> None:
     assert r.status_code == 403
 
 
+async def test_cross_site_refusal_carries_the_security_headers() -> None:
+    # The guard answers before the app's own headers middleware, so it sets them itself.
+    async with _client() as c:
+        r = await c.post("/login", headers={"Sec-Fetch-Site": "cross-site"})
+    assert r.status_code == 403
+    assert r.headers["X-Frame-Options"] == "DENY"
+    assert r.headers["X-Content-Type-Options"] == "nosniff"
+    assert r.headers["Cache-Control"] == "no-store"
+    assert "default-src 'none'" in r.headers["Content-Security-Policy"]
+
+
 @pytest.mark.parametrize("origin", ["https://attacker.example", "null"])
 async def test_foreign_or_null_origin_is_refused(origin: str) -> None:
     async with _client() as c:

@@ -1,6 +1,6 @@
 {
   "guard": "luxarch",
-  "guard_version": "0.335.0",
+  "guard_version": "0.336.0",
   "repo": "/repo",
   "targets": [
     {
@@ -1551,11 +1551,11 @@
           "rule": "fw.credential_routes_limited",
           "status": "FAIL",
           "since": "0.215.0",
-          "violations": 8,
+          "violations": 9,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
-          "fix": "attach a per-route limit keyed on the real client \u2014 `@limiter.limit(...)` with a trusted-proxy-aware key function. ON PYTHON 3.14+ THAT DECORATOR ALSO NEEDS THE SANCTIONED SLOWAPI CARVE-OUT, or your suite stops COLLECTING: slowapi 0.1.10 calls the deprecated `asyncio.iscoroutinefunction` inside `Limiter.limit`, so under the canonical `filterwarnings = error` the warning is raised at DECORATION time \u2014 at import of any module holding a limited route, before a single test runs. Take the row from `--doc FLEET-RATE-LIMIT-STANDARD` \u00a74 verbatim; do NOT reach for the broad `ignore::DeprecationWarning:slowapi.extension`, which \u00a74 measured as harmful. `--doc FLEET-RATE-LIMIT-STANDARD` \u00a73: a login endpoint cannot key on the authenticated identity, because the credential is what is being verified, so per-route plus per-IP is the honest fallback. An unlimited credential route takes unlimited guessing against every account from one address. If this route genuinely needs no limit, or your limiter has a name this rule does not recognise, put it in `[allowlist].credential_route_limited = [{ function, evidence }]` \u2014 or escalate, so the recognised set grows for the whole fleet rather than one repo carrying a waiver.",
+          "fix": "attach a per-route limit keyed on the real client \u2014 `@limiter.limit(...)` with a trusted-proxy-aware key function, on a `Limiter(..., key_style=\"endpoint\")` wherever the route's path takes a parameter (slowapi's default counts per concrete path). A credential checked in a dependency is limited on that dependency. ON PYTHON 3.14+ THAT DECORATOR ALSO NEEDS THE SANCTIONED SLOWAPI CARVE-OUT, or your suite stops COLLECTING: slowapi 0.1.10 calls the deprecated `asyncio.iscoroutinefunction` inside `Limiter.limit`, so under the canonical `filterwarnings = error` the warning is raised at DECORATION time \u2014 at import of any module holding a limited route, before a single test runs. Take the row from `--doc FLEET-RATE-LIMIT-STANDARD` \u00a74 verbatim; do NOT reach for the broad `ignore::DeprecationWarning:slowapi.extension`, which \u00a74 measured as harmful. `--doc FLEET-RATE-LIMIT-STANDARD` \u00a73: a login endpoint cannot key on the authenticated identity, because the credential is what is being verified, so per-route plus per-IP is the honest fallback. An unlimited credential route takes unlimited guessing against every account from one address. If this route genuinely needs no limit, or your limiter has a name this rule does not recognise, put it in `[allowlist].credential_route_limited = [{ function, evidence }]` \u2014 or escalate, so the recognised set grows for the whole fleet rather than one repo carrying a waiver.",
           "example": ""
         },
         {
@@ -1648,13 +1648,13 @@
         },
         {
           "rule": "fw.file_size",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.235.0",
-          "violations": 1,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
-          "fix": "Follow `luxarch --playbook file-size` \u2014 it is a procedure, not a number. Run `luxarch --sweep split-plan --path <file>` for the evidence, then extract ONLY a cluster that passes the playbook's domain test (its own entity it actually touches, its own lifecycle, its own actor, its own representations, low coupling). If nothing passes, the file is one domain: decompose INSIDE its biggest methods, never split its own subject across files. Import at source, no re-export shim. A file the procedure leaves over the limit because it is one domain records that on one comment line, `# file-size: <the domain and why> \u2014 <its LOC>`: green while it stays at or under that size, never above the ceiling.",
+          "fix": "",
           "example": ""
         },
         {
@@ -2000,8 +2000,8 @@
         }
       ],
       "summary": {
-        "PASS": 160,
-        "FAIL": 3,
+        "PASS": 161,
+        "FAIL": 2,
         "XFAIL": 0,
         "XPASS": 0,
         "INERT": 18
@@ -2300,13 +2300,13 @@
       },
       {
         "rule": "repo.makefile_no_fixed_tmp",
-        "status": "PASS",
+        "status": "FAIL",
         "since": "0.249.0",
-        "violations": 0,
+        "violations": 3,
         "deferred": false,
         "inert": false,
         "inert_reason": "",
-        "fix": "",
+        "fix": "Use a per-run file and remove it on exit, in ONE shell: `@set -e; C=$$(mktemp); trap 'rm -f \"$$C\"' EXIT INT TERM; <cmd> > \"$$C\"; docker run -v \"$$C\":/x:ro \u2026`. A cache that must persist belongs in a gitignored path inside the repo, not /tmp. See --doc FLEET-MAKEFILE-STANDARD.",
         "example": ""
       },
       {
@@ -2916,8 +2916,8 @@
       }
     ],
     "summary": {
-      "PASS": 70,
-      "FAIL": 0,
+      "PASS": 69,
+      "FAIL": 1,
       "XFAIL": 0,
       "XPASS": 0,
       "INERT": 1
@@ -2930,6 +2930,6 @@
     "XPASS": 0,
     "INERT": 22
   },
-  "commit": "0626556e9005a0ac6c9fa6189649c1252ea93e64",
-  "generated_at": "2026-10-31T23:18:39Z"
+  "commit": "8b5a3a973b5831cf03c3939d9a4d394a98702fa3",
+  "generated_at": "2026-11-02T14:09:01Z"
 }

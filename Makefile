@@ -39,7 +39,7 @@ DEV_WAIT_TIMEOUT      ?= 180
 # Makefile.local (gitignored): copy Makefile.local.example -> Makefile.local and set it.
 # Contributors don't need it — lint/test and the import-linter contracts run without it.
 LUXARCH_REGISTRY ?=
-LUXARCH_VERSION := 0.335.0
+LUXARCH_VERSION := 0.336.0
 LUXARCH_IMAGE    ?= $(LUXARCH_REGISTRY)/luxardolabs/luxarch:$(LUXARCH_VERSION)
 # Dependency-CVE guard (luxaudit) — same private registry as luxarch, mount-only.
 # Scans the pinned poetry.locks against the live advisory feed (see .luxaudit.toml).
@@ -49,7 +49,7 @@ LUXAUDIT_IMAGE   ?= $(LUXARCH_REGISTRY)/luxardolabs/luxaudit:$(LUXAUDIT_VERSION)
 # ruff/mypy config byte-identical (see .luxlint.toml); ruff runs mount-only, mypy
 # runs as an in-repo tail (needs a current mypy for PEP 758 excepts — the baked
 # lint image freezes an older one, so the tail installs a fresh mypy).
-LUXLINT_VERSION := 0.72.0
+LUXLINT_VERSION := 0.73.0
 LUXLINT_IMAGE    ?= $(LUXARCH_REGISTRY)/luxardolabs/luxlint:$(LUXLINT_VERSION)
 # The gitleaks asset reads the luxlint ref as $(LUXLINT).
 LUXLINT          = $(LUXLINT_IMAGE)
@@ -2526,7 +2526,7 @@ TEST_ENV      := -e TEST_DATABASE_URL=postgresql+asyncpg://luxswirl_test:luxswir
                  -e PYTHONPATH=/repo/apps/backend:/repo/apps/backend/tests \
                  -e HYPOTHESIS_STORAGE_DIRECTORY=/out/.hypothesis
 
-# luxarch:test-block asset v10 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit test-block`.
+# luxarch:test-block asset v11 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit test-block`.
 # ── Test: THE suite, in the test image, against an isolated stack of real services ───────────────
 # Emitted by `luxarch --emit test-block`; paste below the build core (`luxarch --emit build-core`, v4:
 # it builds with the core's `img_*` helpers and TEST_IMAGE, and the repo's BUILD_ARGS, and quotes every
@@ -2566,6 +2566,17 @@ TEST_ENV      := -e TEST_DATABASE_URL=postgresql+asyncpg://luxswirl_test:luxswir
 #     production never has the role, and another run's server, or a marker left on storage that
 #     outlived its run, has another name. A service running Postgres that cannot be marked fails
 #     the run.
+#   - THE TEST-DB-BOUND PLUGIN runs in every process of the run. When TEST_WORKDIR holds the package
+#     `luxarch_test_db/` (the test-db-bound block's, `luxarch --emit test-db-bound --update
+#     conftest.py`), the suite's run loads it with `-p luxarch_test_db.identity -p
+#     luxarch_test_db.bound` (LUXARCH_TEST_DB_SCOPE=suite), and the migration tests' run with `-p
+#     luxarch_test_db.identity` (LUXARCH_TEST_DB_SCOPE=server: any database, on a server this run
+#     marked). Both put `luxarch_test_db/children` first on PYTHONPATH, before the image's own
+#     value: its `sitecustomize` installs the identity check in every Python process the run starts
+#     (a spawn or forkserver child, an alembic subprocess, an xdist worker), and no bytecode is read
+#     from the checkout (PYTHONPYCACHEPREFIX): a committed `.pyc` would stand in for its source. PYTEST_ARGS holding
+#     `--noconftest`, `--confcutdir`, a `@file` of arguments, or a `luxarch_test_db` plugin name is
+#     refused: each would run the suite without the block's conftest or its plugin.
 #   - Ctrl-C (or a SIGTERM) stops the suite, in any step (v3). `--init`'s tini forwards a signal to
 #     its own child only, which is the `sh` running pytest, so v2's Ctrl-C let a 60-second suite run
 #     to its end (measured: 58s). `TINI_KILL_PROCESS_GROUP=1` makes tini signal the whole group. Each
@@ -2630,7 +2641,8 @@ TEST_ENV      := -e TEST_DATABASE_URL=postgresql+asyncpg://luxswirl_test:luxswir
 #     test-db-bound block refuses both, by design, so these tests cannot run under it. TEST_MIGRATIONS
 #     names their directory (`tests/migrations`, its last part `migrations`): the main run ignores it
 #     (`--ignore`), and it runs alone with `--confcutdir` set to it, so no conftest above it, the
-#     block's included, is loaded; its own conftest.py builds and drops its databases. A one-off
+#     block's included, is loaded; its own conftest.py builds and drops its databases. The
+#     test-db-bound plugin's identity check still runs there (above). A one-off
 #     PYTEST_ARGS narrows the main run only: a path in it would otherwise run outside the block. Coverage
 #     appends both runs, and `make test` fails when either fails. Layout: `luxarch --playbook
 #     test-isolation`, "Migration tests".
@@ -2807,6 +2819,7 @@ test: test-reap ## THE suite (each of TEST_SUITES in turn): its own test image, 
 	[ -z $(call sq,$(findstring %,$(foreach s,$(test_suites),$(call test_suite,$(s),MOUNTS)))) ] || { echo 'REFUSING: a TEST_MOUNTS path holds %, which make reads as a pattern: each path is letters, digits and ._/@+-'; rm -rf "$$D"; exit 2; }; \
 	[ -n $(call sq,$(strip $(test_suites_narrowed))) ] || [ -z $(call sq,$(strip $(test_overlay_unmeasured))) ] || { printf 'REFUSING: no suite measures the overlay %s, and every suite mounting it leaves it out of its coverage: set <suite>_TEST_OVERLAY_COV := 1 on the suite holding its tests\n' $(call sq,$(strip $(test_overlay_unmeasured))); rm -rf "$$D"; exit 2; }; \
 	[ $(words $(test_overlay_measured)) = $(words $(sort $(test_overlay_measured))) ] || { printf 'REFUSING: two suites measure one overlay (%s): it counts in one ratchet, so set <suite>_TEST_OVERLAY_COV := 1 on one suite only\n' $(call sq,$(strip $(test_overlay_measured))); rm -rf "$$D"; exit 2; }; \
+	case "$${PYTEST_ARGS:-}" in (*noconftest*|*confcutdir*|*luxarch_test_db*|@*|*[[:space:]=]@*) printf 'REFUSING: PYTEST_ARGS is %s: --noconftest, --confcutdir, a @file of arguments or a luxarch_test_db plugin name runs the suite without the test-db-bound block'"'"'s conftest or plugin, which judge where it connects\n' "$$PYTEST_ARGS"; rm -rf "$$D"; exit 2;; esac; \
 	stop="$$D/stop"; kid=; insuite=; fast=$(if $(filter default,$(origin MAKECMDGOALS)),$(if $(filter test,$(MAKECMDGOALS)),,$(if $(filter test-fast,$(MAKECMDGOALS)),1))); \
 	kids() { p=$$1; if command -v pgrep >/dev/null 2>&1; then pgrep -P "$$p"; else set +f; for f in /proc/[0-9]*/stat; do read -r l < "$$f" 2>/dev/null || continue; set -- $${l##*)}; [ "$${2:-}" = "$$p" ] && { c=$${f#/proc/}; echo "$${c%/stat}"; }; done; set -f; fi; }; \
 	tree() { for c in $$(kids "$$1"); do tree "$$c"; done; kill -TERM "$$1" 2>/dev/null; }; \
@@ -2872,7 +2885,7 @@ test: test-reap ## THE suite (each of TEST_SUITES in turn): its own test image, 
 	  bg docker run --rm --init $$lab --label "luxarch.test-block.checkout=$$co" -e TINI_KILL_PROCESS_GROUP=1 $$net $(call sqw,$(call test_suite,$(s),ENV)) -e PYTEST_ADDOPTS="$${PYTEST_ARGS:-}" -e LUXARCH_TEST_RUN="$$tok" -e LUXARCH_TEST_MIGRATIONS="$$mig" -e LUXARCH_TEST_FAST="$$fast" \
 	    -e LUXARCH_TEST_COV=$(call sq,$(call test_suite,$(s),COV)) -e LUXARCH_TEST_OMIT="$$omit" -e COVERAGE_CORE=sysmon -e COVERAGE_FILE=/out/.coverage -e PYTHONDONTWRITEBYTECODE=1 \
 	    -v $(call sq,$(CURDIR)):/repo:ro $$mnt -v "$$D/cfg":/cfg:ro -v "$$out":/out -w /repo/$(call sq,$(call test_suite,$(s),WORKDIR)) "$$img" \
-	    sh -c 'm=$${LUXARCH_TEST_MIGRATIONS:-}; o=$${LUXARCH_TEST_OMIT:-}; python -m coverage run --branch --source="$$LUXARCH_TEST_COV" $${o:+"--omit=$$o"} -m pytest -c /cfg/pytest.ini --rootdir=. -p no:cacheprovider $${m:+"--ignore=$$m"}; s=$$?; if [ -n "$$m" ] && [ -z "$${LUXARCH_TEST_FAST:-}" ]; then PYTEST_ADDOPTS= python -m coverage run --append --branch --source="$$LUXARCH_TEST_COV" $${o:+"--omit=$$o"} -m pytest -c /cfg/pytest.ini --rootdir=. -p no:cacheprovider --confcutdir="$$m" "$$m"; ms=$$?; [ "$$ms" = 0 ] || echo "FAIL  the migration tests in $$m failed (exit $$ms)"; [ "$$s" != 0 ] || s=$$ms; fi; python -m coverage report --show-missing --precision=2 > /out/coverage.txt; echo $$? > /out/coverage.rc; python -m coverage json -q -o - > /out/coverage.json; cat /out/coverage.txt; exit $$s'; \
+	    sh -c 'm=$${LUXARCH_TEST_MIGRATIONS:-}; o=$${LUXARCH_TEST_OMIT:-}; unset LUXARCH_TEST_DB_REFUSALS LUXARCH_TEST_DB_TARGET; p=; if [ -e luxarch_test_db ]; then PYTHONPATH="$$PWD/luxarch_test_db/children$${PYTHONPATH:+:$$PYTHONPATH}"; PYTHONPYCACHEPREFIX=/tmp/luxarch-pycache; export PYTHONPATH PYTHONPYCACHEPREFIX; p=1; fi; LUXARCH_TEST_DB_SCOPE=suite python -m coverage run --branch --source="$$LUXARCH_TEST_COV" $${o:+"--omit=$$o"} -m pytest -c /cfg/pytest.ini --rootdir=. -p no:cacheprovider $${p:+-p luxarch_test_db.identity -p luxarch_test_db.bound} $${m:+"--ignore=$$m"}; s=$$?; if [ -n "$$m" ] && [ -z "$${LUXARCH_TEST_FAST:-}" ]; then PYTEST_ADDOPTS= LUXARCH_TEST_DB_SCOPE=server python -m coverage run --append --branch --source="$$LUXARCH_TEST_COV" $${o:+"--omit=$$o"} -m pytest -c /cfg/pytest.ini --rootdir=. -p no:cacheprovider $${p:+-p luxarch_test_db.identity} --confcutdir="$$m" "$$m"; ms=$$?; [ "$$ms" = 0 ] || echo "FAIL  the migration tests in $$m failed (exit $$ms)"; [ "$$s" != 0 ] || s=$$ms; fi; python -m coverage report --show-missing --precision=2 > /out/coverage.txt; echo $$? > /out/coverage.rc; python -m coverage json -q -o - > /out/coverage.json; cat /out/coverage.txt; exit $$s'; \
 	  rc=$$?; \
 	  [ "$$rc" = 0 ] || { echo "FAIL  the suite failed (exit $$rc)"; exit 1; }; \
 	  [ -z "$$fast" ] || { echo "test-fast: passed, with no coverage verdict and no migration tests (make test runs both)"; exit 0; }; \

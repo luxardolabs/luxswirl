@@ -8,6 +8,8 @@ middleware that was not installed, or installed under a condition, fails here.
 
 from __future__ import annotations
 
+import logging
+
 import pytest
 from app.core.config import Settings, settings
 from app.core.trusted_host import (
@@ -45,6 +47,37 @@ async def test_forged_host_is_refused_on_every_route(path: str) -> None:
     async with _client(peer="10.0.0.7") as c:
         r = await c.get(path, headers={"Host": "attacker.example"})
     assert r.status_code == 400
+
+
+async def test_forged_host_refusal_is_logged_with_the_host(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    with caplog.at_level(logging.WARNING, logger="app.core.trusted_host"):
+        async with _client(peer="10.0.0.7") as c:
+            r = await c.get("/login", headers={"Host": "attacker.example"})
+    assert r.status_code == 400
+    [record] = [x for x in caplog.records if x.name == "app.core.trusted_host"]
+    assert record.levelno == logging.WARNING
+    assert "attacker.example" in record.getMessage()
+
+
+async def test_forged_host_refusal_carries_the_security_headers() -> None:
+    # The guard answers before the app's own headers middleware, so it sets them itself.
+    async with _client(peer="10.0.0.7") as c:
+        r = await c.get("/login", headers={"Host": "attacker.example"})
+    assert r.status_code == 400
+    assert r.headers["X-Frame-Options"] == "DENY"
+    assert r.headers["X-Content-Type-Options"] == "nosniff"
+    assert r.headers["Cache-Control"] == "no-store"
+    assert "default-src 'none'" in r.headers["Content-Security-Policy"]
+
+
+async def test_allowed_host_matches_in_any_case_and_with_a_trailing_dot() -> None:
+    async with _client() as c:
+        upper = await c.get("/health", headers={"Host": ALLOWED.upper()})
+        dotted = await c.get("/health", headers={"Host": f"{ALLOWED}."})
+    assert upper.status_code == 200
+    assert dotted.status_code == 200
 
 
 async def test_forged_host_from_loopback_is_refused_off_the_health_path() -> None:
