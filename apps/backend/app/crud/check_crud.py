@@ -111,7 +111,6 @@ class CheckCRUD:
         enabled_only: bool = False,
         tag: str | None = None,
         search: str | None = None,
-        exclude_internal: bool = False,
         skip: int = 0,
         limit: int = 50,
     ) -> tuple[Sequence[Check], int]:
@@ -122,7 +121,6 @@ class CheckCRUD:
             enabled_only=enabled_only,
             tag=tag,
             search=search,
-            exclude_internal=exclude_internal,
         )
         total = (
             await db.execute(select(func.count(Check.id)).where(*clauses))
@@ -193,7 +191,6 @@ class CheckCRUD:
         enabled_only: bool,
         tag: str | None,
         search: str | None,
-        exclude_internal: bool = False,
     ) -> list[ColumnElement[bool]]:
         """The WHERE clauses the check lists share."""
         clauses: list[ColumnElement[bool]] = []
@@ -210,8 +207,6 @@ class CheckCRUD:
             clauses.append(
                 or_(Check.display_name.ilike(pattern), Check.target.ilike(pattern))
             )
-        if exclude_internal:
-            clauses.append(Check.check_type != "internal")
         return clauses
 
     @staticmethod
