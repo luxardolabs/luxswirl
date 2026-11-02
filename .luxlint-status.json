@@ -62,16 +62,10 @@
     },
     {
       "rule": "secret.githooks_wired",
-      "status": "FAIL",
+      "status": "PASS",
       "since": "0.10.0",
-      "violations": 1,
-      "sites": [
-        {
-          "path": ".",
-          "line": null,
-          "detail": "core.hooksPath is the absolute path /mnt/luxardolabs/luxswirl/hooks: not this checkout's hooks/ as seen here, and not the hooks/ of a worktree this repo registers (.git/worktrees/*/gitdir) \u2014 a deleted agent worktree, a container mount path or another repo's hooks never runs this repo's committed hooks. run `luxlint --emit-hooks | sh` (it sets `core.hooksPath hooks`)"
-        }
-      ],
+      "violations": 0,
+      "sites": [],
       "deferred": false
     },
     {
@@ -204,13 +198,13 @@
     }
   ],
   "summary": {
-    "PASS": 22,
-    "FAIL": 1,
+    "PASS": 23,
+    "FAIL": 0,
     "XFAIL": 0,
     "XPASS": 0,
     "INERT": 0
   },
   "mypy": "separate: `luxlint --mypy` ([mypy].baseline ratchet)",
-  "commit": "e59df1c93916a646bccb14850a78a5708aff9e4c",
-  "generated_at": "2026-11-02T20:50:01Z"
+  "commit": "32dbbca77043ab76ed9287a4b86577a612b449b1",
+  "generated_at": "2026-11-02T21:07:48Z"
 }
