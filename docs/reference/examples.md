@@ -572,7 +572,7 @@ ______________________________________________________________________
 
 ### Webhook
 
-**Required config**: `post_url`. **Optional**: `request_body_preset` (`json` or `form`, default `json`), `additional_headers` (object), `verify_ssl` (default true), `timeout` (seconds, default 10).
+**Required config**: `post_url`. **Optional**: `request_body_preset` (`json` or `form`, default `json`), `additional_headers` (object; each name an HTTP token, each value printable ASCII with no CR, LF or other control character), `verify_ssl` (default true), `timeout` (seconds, default 10).
 
 The webhook sends a **fixed JSON payload** describing the event — the body is not user-templated. The payload includes: `check_name`, `check_type`, `target`, `agent_id`, `agent_name`, `status`, `success`, `previous_status`, `latency_ms`, `timestamp`, `error_message`, `error_type`, `http_status_code`, `alert_name`, `alert_description`, `is_recovery`, and `consecutive_failures`.
 
