@@ -149,15 +149,31 @@ class AlertCRUD:
     async def delete_check_mapping(
         db: AsyncSession, alert_id: UUID, check_id: UUID
     ) -> int:
+        """Delete one alert-check mapping; how many rows went (0 or 1).
+
+        Counts the ids DELETE ... RETURNING hands back: typed, unlike `rowcount`.
+        """
         result = await db.execute(
-            delete(AlertCheckMapping).where(
+            delete(AlertCheckMapping)
+            .where(
                 and_(
                     AlertCheckMapping.alert_id == alert_id,
                     AlertCheckMapping.check_id == check_id,
                 )
             )
+            .returning(AlertCheckMapping.id)
         )
-        return result.rowcount or 0  # type: ignore[attr-defined]
+        return len(result.scalars().all())
+
+    @staticmethod
+    async def list_check_mappings(
+        db: AsyncSession, check_id: UUID
+    ) -> Sequence[AlertCheckMapping]:
+        """Every alert mapping of one check, with its per-mapping state."""
+        result = await db.execute(
+            select(AlertCheckMapping).where(AlertCheckMapping.check_id == check_id)
+        )
+        return result.scalars().all()
 
     @staticmethod
     async def list_alert_ids_for_check(db: AsyncSession, check_id: UUID) -> list[UUID]:

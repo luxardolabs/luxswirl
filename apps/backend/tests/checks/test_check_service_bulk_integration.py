@@ -6,10 +6,13 @@ check_core_service.py that the basic CRUD tests don't reach.
 
 from __future__ import annotations
 
-from uuid import uuid4
+from datetime import timedelta
+from uuid import UUID, uuid4
 
 import pytest
+from app.core.datetime_utils import utc_now
 from app.core.exceptions import CheckNotFoundException
+from app.crud.alert_crud import AlertCRUD
 from app.crud.check_crud import CheckCRUD
 from app.models.check_model import Check
 from app.schemas.check_schema import CheckCreate, CheckUpdate
@@ -285,6 +288,73 @@ class TestCloneCheck:
 
         alert_ids = await AlertCoreService.get_alert_ids_for_check(db, cloned.id)
         assert sorted(alert_ids) == sorted([live.id, off.id, own.id])
+
+    async def _source_with_alert_state(
+        self, db: AsyncSession
+    ) -> tuple[Check, list[UUID]]:
+        """A source check whose global and own alert mappings are both turned
+        off, carry overrides and are snoozed."""
+        agent = make_agent()
+        global_alert = make_alert(is_global=True)
+        own_alert = make_alert()
+        db.add_all([agent, global_alert, own_alert])
+        await db.flush()
+        source = await CheckCoreService.create_check(
+            db,
+            agent.id,
+            CheckCreate(
+                display_name="quiet",
+                check_type="ping",
+                target="127.0.0.1",
+                retry_interval_seconds=30,
+            ),
+            skip_config_update=True,
+        )
+        await AlertCoreService.add_check(db, own_alert.id, source.id)
+        for alert_id in (global_alert.id, own_alert.id):
+            mapping = await AlertCRUD.get_check_mapping(db, alert_id, source.id)
+            assert mapping is not None
+            mapping.is_enabled = False
+            mapping.override_resend_interval = 45
+            mapping.override_max_resends = 2
+            mapping.snoozed_until = utc_now() + timedelta(hours=1)
+        await db.flush()
+        return source, [global_alert.id, own_alert.id]
+
+    async def _assert_clone_state(
+        self, db: AsyncSession, check_id: UUID, alert_ids: list[UUID]
+    ) -> None:
+        for alert_id in alert_ids:
+            mapping = await AlertCRUD.get_check_mapping(db, alert_id, check_id)
+            assert mapping is not None
+            assert mapping.is_enabled is False
+            assert mapping.override_resend_interval == 45
+            assert mapping.override_max_resends == 2
+            # A snooze is about the source's own incident: the clone starts
+            # unsnoozed.
+            assert mapping.snoozed_until is None
+
+    async def test_a_clone_keeps_each_alert_mapping_state_but_not_the_snooze(
+        self, db: AsyncSession
+    ):
+        source, alert_ids = await self._source_with_alert_state(db)
+
+        cloned = await CheckCoreService.clone_check(
+            db, source.id, source.agent_id, skip_config_update=True
+        )
+
+        await self._assert_clone_state(db, cloned.id, alert_ids)
+
+    async def test_the_web_clone_keeps_the_state_of_the_alerts_it_keeps(
+        self, db: AsyncSession
+    ):
+        source, alert_ids = await self._source_with_alert_state(db)
+
+        cloned = await CheckCoreService.clone_check_with_alerts(
+            db, source.id, source.agent_id, None, alert_ids
+        )
+
+        await self._assert_clone_state(db, cloned.id, alert_ids)
 
     async def test_a_check_stored_without_a_timeout_clones_with_the_default(
         self, db: AsyncSession

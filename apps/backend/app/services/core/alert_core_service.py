@@ -469,6 +469,35 @@ class AlertCoreService:
         return mapping.id
 
     @staticmethod
+    async def copy_check_mappings(
+        db: AsyncSession,
+        source_check_id: UUID,
+        target_check_id: UUID,
+    ) -> None:
+        """Map the target check to every alert of the source, state included.
+
+        Each of the target's mappings takes the source mapping's `is_enabled`
+        and `override_*` settings, so an alert the operator turned off for the
+        source stays off for the copy. That holds for a mapping the target
+        already has, such as a global alert create_check gave it, too. The
+        snooze is not copied: it pauses notifications about the source's own
+        current failure, which the new check does not share, and carrying it
+        over would silence the new check's first failures.
+        """
+        held = {
+            mapping.alert_id: mapping
+            for mapping in await AlertCRUD.list_check_mappings(db, target_check_id)
+        }
+        for source in await AlertCRUD.list_check_mappings(db, source_check_id):
+            mapping = held.get(source.alert_id) or await AlertCRUD.add_check_mapping(
+                db, source.alert_id, target_check_id
+            )
+            mapping.is_enabled = source.is_enabled
+            mapping.override_resend_interval = source.override_resend_interval
+            mapping.override_max_resends = source.override_max_resends
+            await AlertCRUD.save_check_mapping(db, mapping)
+
+    @staticmethod
     async def remove_check(
         db: AsyncSession,
         alert_id: UUID,
