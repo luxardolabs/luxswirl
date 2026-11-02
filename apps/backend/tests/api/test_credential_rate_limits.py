@@ -27,6 +27,7 @@ from app.main import app
 from app.models.enum_model import JobStatus, JobType
 from app.models.job_model import Job
 from app.schemas.registration_key_schema import RegistrationKeyCreate
+from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.registration_key_core_service import RegistrationKeyCoreService
 from fastapi import HTTPException
 from fixtures.factories import make_agent
@@ -355,6 +356,44 @@ async def test_another_agent_s_recovery_secret_is_refused(
     )
 
     assert resp.status_code == 401, resp.text
+
+
+async def test_a_recovery_secret_never_rewrites_a_pending_agent_that_holds_a_key(
+    client: AsyncClient, db: AsyncSession, registration_key: str
+) -> None:
+    # An admin can issue a pending agent its key; from then on only that key
+    # updates the agent.
+    agent_id, secret = await _registered(client, registration_key)
+    await AgentCoreService.generate_agent_key(db, agent_id)
+
+    resp = await client.post(
+        "/api/v1/agent/heartbeat",
+        json={**_beat(agent_id), "hostname": "forged"},
+        headers={"X-Agent-Recovery-Secret": secret},
+    )
+
+    assert resp.status_code == 200, resp.text
+    agent = await AgentCoreService.get_agent_by_id(db, agent_id)
+    await db.refresh(agent)
+    assert agent.hostname == "secret-holder"
+
+
+async def test_a_refused_shared_key_heartbeat_is_not_logged_as_authenticated(
+    client: AsyncClient, db: AsyncSession, caplog: pytest.LogCaptureFixture
+) -> None:
+    agent = make_agent(approval_status="pending", api_key_hash=None)
+    db.add(agent)
+    await db.flush()
+
+    with caplog.at_level(logging.WARNING, logger="luxswirl.security"):
+        resp = await client.post(
+            "/api/v1/agent/heartbeat", json=_beat(agent.id), headers=_WRONG
+        )
+
+    assert resp.status_code == 401, resp.text
+    assert not [
+        r for r in caplog.records if "shared registration key" in r.getMessage()
+    ]
 
 
 async def test_a_heartbeat_on_the_shared_registration_key_is_logged_for_upgrade(

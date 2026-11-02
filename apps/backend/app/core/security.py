@@ -445,16 +445,16 @@ async def authenticate_heartbeat(
                 refused = True
                 raise
         else:
-            logger.warning(
-                "Heartbeat authenticated by the shared registration key: "
-                "upgrade this agent so it sends its recovery secret",
-                extra={"agent_id": str(agent.id)},
-            )
             try:
                 await verify_registration_token(authorization, db)
             except HTTPException as refusal:
                 refused = refusal.status_code == status.HTTP_401_UNAUTHORIZED
                 raise
+            logger.warning(
+                "Heartbeat authenticated by the shared registration key: "
+                "upgrade this agent so it sends its recovery secret",
+                extra={"agent_id": str(agent.id)},
+            )
     finally:
         if not refused:
             attempt.release()
@@ -470,6 +470,8 @@ def verify_agent_recovery_secret(agent: Agent, recovery_secret: str | None) -> N
     Raises:
         HTTPException: 401 if the secret is missing or is not this agent's
     """
+    if not settings.security.auth_enabled:
+        return
     if not recovery_secret_matches(agent.recovery_secret_hash, recovery_secret):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

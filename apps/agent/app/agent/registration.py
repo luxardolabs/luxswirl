@@ -5,6 +5,7 @@ Handles agent registration with the server and API key recovery.
 """
 
 import os
+import time
 from typing import Any
 from uuid import UUID
 
@@ -16,6 +17,18 @@ from app.agent.http_client import server_client
 from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.agent.registration")
+
+
+# Seconds to wait after a 429 that names no usable Retry-After.
+_DEFAULT_RETRY_AFTER = 60.0
+
+
+def _retry_after(response: httpx.Response) -> float:
+    """The seconds a 429 asks the agent to wait: its Retry-After, or a minute."""
+    try:
+        return max(1.0, float(response.headers.get("Retry-After", "")))
+    except ValueError:
+        return _DEFAULT_RETRY_AFTER
 
 
 class AgentRegistration:
@@ -32,6 +45,12 @@ class AgentRegistration:
         self.config = config
         self.credentials = credentials
         self.logger = logger
+        # A recovery the server refused (401) cannot succeed until the agent is
+        # reconfigured and restarted; one it rate-limited (429) waits out its
+        # Retry-After. Either way the agent stops asking every heartbeat, so it
+        # never spends the recover-key budget its address shares with others.
+        self._recovery_refused = False
+        self._recovery_not_before = 0.0
         self.hostname: str | None = None  # Will be set by caller
 
     async def register_with_server(self) -> bool:
@@ -145,6 +164,8 @@ class AgentRegistration:
         Returns:
             True if key retrieved and saved successfully
         """
+        if self._recovery_refused or time.monotonic() < self._recovery_not_before:
+            return False
         recovery_secret = self.credentials.recovery_secret
         if not recovery_secret:
             self.logger.warning(
@@ -207,10 +228,23 @@ class AgentRegistration:
                 return False
 
         except httpx.HTTPStatusError as e:
+            status_code = e.response.status_code
+            if status_code == 401:
+                self._recovery_refused = True
+                self.logger.exception(
+                    "Key recovery refused: the server accepts neither this "
+                    "registration key nor this recovery secret. Set "
+                    "LUXSWIRL_AUTH_KEY to an active registration key and restart "
+                    "the agent; it will not ask again until then",
+                    extra={"status_code": status_code},
+                )
+                return False
+            if status_code == 429:
+                self._recovery_not_before = time.monotonic() + _retry_after(e.response)
             self.logger.exception(
                 "Key recovery failed",
                 extra={
-                    "status_code": e.response.status_code,
+                    "status_code": status_code,
                     "response_text": e.response.text,
                 },
             )

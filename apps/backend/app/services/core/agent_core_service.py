@@ -710,30 +710,34 @@ class AgentCoreService:
         """Apply heartbeat update and build the response payload.
 
         Caller handles HTTP-layer auth and passes ``using_agent_key``: whether
-        the agent's own key authenticated the heartbeat, rather than the shared
-        registration key every install holds.
+        the agent's own key authenticated the heartbeat, rather than a pending
+        credential (its recovery secret, or the shared registration key from
+        an agent build that sends no secret).
 
         The heartbeat is applied (identity, liveness, health, a metric row)
-        when the agent's own key sent it, or when the agent is pending (its
-        only credential is the registration key). Any other registration-key
-        heartbeat writes nothing: it only reads the status back, which is how
-        an approved agent that has not stored its key yet learns to recover
-        it, and an agent whose key was revoked is not rewritten by whoever
-        holds the shared key. Jobs go only to the agent's own key.
+        when the agent's own key sent it, or when the agent is pending and has
+        no key of its own (the pending credential is all it holds). Any other
+        pending-credential heartbeat writes nothing: it only reads the status
+        back, which is how an approved agent that has not stored its key yet
+        learns to recover it, and an agent that holds a key is never rewritten
+        without it. Jobs go only to the agent's own key.
         """
         # Locked, so the pending check below and an approval of the same agent
         # never interleave: the tags a pending agent suggests land either before
         # approval judges them, or not at all.
         await AgentCRUD.lock(db, agent_id)
         agent = await AgentCoreService.get_agent_by_id(db, agent_id)
-        if using_agent_key or agent.approval_status == AgentApprovalStatus.PENDING:
+        if using_agent_key or (
+            agent.approval_status == AgentApprovalStatus.PENDING
+            and not agent.api_key_hash
+        ):
             agent = await AgentCoreService.update_from_heartbeat(
                 db, agent_id, heartbeat
             )
         else:
             logger.info(
-                "Registration-key heartbeat for an agent that is not pending: "
-                "status returned, nothing applied",
+                "Pending-credential heartbeat for an agent that is not pending "
+                "or holds a key: status returned, nothing applied",
                 extra={"agent_id": str(agent.id)},
             )
 
