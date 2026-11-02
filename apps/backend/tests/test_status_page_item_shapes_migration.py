@@ -293,3 +293,31 @@ async def test_the_migration_runs_twice_to_the_same_result(db: AsyncSession) -> 
     await _migrate(db)
 
     assert await _items(db, page_id) == once
+
+
+async def test_a_listed_group_keeps_at_most_its_first_1000_checks(
+    db: AsyncSession,
+) -> None:
+    """No group comes out listing more checks than the admin API and the editor
+    take (MAX_GROUP_CHECKS), so every stored group can be written back."""
+    over = [str(uuid4()) for _ in range(1003)]
+    at_cap = [str(uuid4()) for _ in range(1000)]
+    under = [str(uuid4()) for _ in range(3)]
+    page_id = (
+        await _stored(
+            db,
+            [
+                _shaped(0, checks=over),
+                _shaped(1, checks=at_cap),
+                _shaped(2, checks=under),
+            ],
+        )
+    ).id
+
+    await _migrate(db)
+
+    assert await _items(db, page_id) == [
+        _shaped(0, checks=over[:1000]),
+        _shaped(1, checks=at_cap),
+        _shaped(2, checks=under),
+    ]
