@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from typing import Any
 from uuid import UUID
 
+import anyio
 import pytest
 import pytest_asyncio
 from app.core.config import settings
@@ -15,13 +17,19 @@ from app.models.enum_model import HttpMethod
 from app.models.mcp_tool_call_model import MCPToolCall
 from app.models.user_model import User
 from app.schemas.api_token_schema import ApiTokenCreate
+from app.services.core.api_audit_core_service import ApiAuditCoreService
 from app.services.core.api_token_core_service import ApiTokenCoreService
 from app.services.core.auth_core_service import AuthCoreService
-from app.services.core.mcp_audit_core_service import masked_arguments
+from app.services.core.mcp_audit_core_service import (
+    USER_AGENT_LENGTH,
+    MCPAuditCoreService,
+    masked_arguments,
+)
 from fixtures.factories import make_user
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.types import Message
 
 pytestmark = pytest.mark.integration
 
@@ -226,3 +234,84 @@ async def test_profile_ignores_a_forged_user_filter(db: AsyncSession) -> None:
     assert r.status_code == 200
     assert "bob-secret-route" not in r.text
     assert detail.status_code in (303, 307, 403)
+
+
+# ── Integrity: a client that disconnects mid-response still leaves its row ───
+
+
+async def test_a_call_cancelled_during_its_audit_write_is_still_recorded(
+    db: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A client that disconnects makes the outer BaseHTTPMiddleware cancel its task
+    group, with the audit write in flight; the write still completes."""
+    _, token_id, plaintext = await _user_token(db, "viewer")
+    write_started = anyio.Event()
+    log_call = ApiAuditCoreService.log_call
+
+    async def slow_log_call(*args: Any, **kwargs: Any) -> None:
+        write_started.set()
+        await anyio.sleep(0.2)
+        await log_call(*args, **kwargs)
+
+    monkeypatch.setattr(ApiAuditCoreService, "log_call", slow_log_call)
+    host = settings.allowed_hosts[0]
+    scope = {
+        "type": "http",
+        "asgi": {"version": "3.0"},
+        "http_version": "1.1",
+        "method": "GET",
+        "scheme": "https",
+        "path": "/api/v1/admin/me",
+        "raw_path": b"/api/v1/admin/me",
+        "root_path": "",
+        "query_string": b"",
+        "headers": [
+            (b"host", host.encode()),
+            (b"authorization", f"Bearer {plaintext}".encode()),
+        ],
+        "client": ("203.0.113.9", 4000),
+        "server": (host, 443),
+    }
+    sent: list[Message] = []
+
+    async def receive() -> Message:
+        return {"type": "http.request", "body": b"", "more_body": False}
+
+    async def send(message: Message) -> None:
+        sent.append(message)
+
+    limiter.reset()
+    async with anyio.create_task_group() as tg:
+        tg.start_soon(app, scope, receive, send)
+        with anyio.fail_after(10):
+            await write_started.wait()
+        tg.cancel_scope.cancel()
+    limiter.reset()
+
+    assert sent and sent[0]["type"] == "http.response.start"
+    rows = await _rows(db, token_id)
+    assert [(r.route, r.status_code) for r in rows] == [("/api/v1/admin/me", 200)]
+
+
+# ── Integrity: an MCP row keeps the user agent cut as an API row does ─────────
+
+
+async def test_mcp_user_agent_is_cut_like_the_api_rows(db: AsyncSession) -> None:
+    await MCPAuditCoreService.log_call(
+        db,
+        principal=None,
+        tool_name="long-ua-probe",
+        arguments={},
+        success=True,
+        error_message=None,
+        duration_ms=1,
+        denial_code=None,
+        ip_address=None,
+        user_agent="A" * 10_000,
+    )
+    await db.flush()
+    row = await db.scalar(
+        select(MCPToolCall).where(MCPToolCall.tool_name == "long-ua-probe")
+    )
+    assert row is not None
+    assert row.user_agent == "A" * USER_AGENT_LENGTH
