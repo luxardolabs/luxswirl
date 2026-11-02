@@ -27,6 +27,9 @@ from app.schemas.api_token_schema import ApiPrincipal
 AUDIT_RETENTION = timedelta(days=90)
 # The longest tool name the audit log keeps (the column's width); an agent may send any.
 TOOL_NAME_LENGTH = 100
+# The longest client name kept, by the MCP and admin API logs alike: enough to tell
+# clients apart, never a payload.
+USER_AGENT_LENGTH = 256
 
 # What a synthetic script is stored as: its size alone.
 _SCRIPT_SIZE = re.compile(r"<\d+ characters>")
@@ -56,6 +59,11 @@ def _masked(key: object, value: object) -> object:
 def storable_text(text: str) -> str:
     """`text` without the NUL characters Postgres refuses in text and JSON."""
     return text.replace("\x00", "")
+
+
+def storable_user_agent(user_agent: str | None) -> str | None:
+    """`user_agent` as an audit row keeps it: cut to `USER_AGENT_LENGTH`."""
+    return storable_text(user_agent)[:USER_AGENT_LENGTH] if user_agent else None
 
 
 def storable_address(value: str | None) -> str | None:
@@ -100,7 +108,7 @@ class MCPAuditCoreService:
             ),
             duration_ms=duration_ms,
             ip_address=storable_address(ip_address),
-            user_agent=storable_text(user_agent) if user_agent else None,
+            user_agent=storable_user_agent(user_agent),
             denial_code=denial_code,
         )
 

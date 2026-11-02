@@ -5,7 +5,10 @@ with the token, its user and the matched route's TEMPLATE. This middleware, arou
 the routes, times the request, takes the status from the response it sends, and
 writes the row after the response in a transaction of its own (`worker_session`),
 as `MCPAuthMiddleware` audits /mcp: the request's own rollback never loses the row,
-and a failed audit write is logged and never fails the request. An unauthenticated
+and a failed audit write is logged and never fails the request. The write is
+shielded from cancellation: a client that disconnects makes the outer
+`BaseHTTPMiddleware` (SecurityHeaders) cancel its task group, and the row is still
+written before the cancellation lands. An unauthenticated
 request is never marked, so it leaves no row. The raw path, the query string and
 the body are never read.
 """
@@ -15,6 +18,7 @@ import time
 from dataclasses import dataclass
 from uuid import UUID
 
+import anyio
 from starlette.requests import Request
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
@@ -106,7 +110,8 @@ class AdminApiAuditMiddleware:
         finally:
             caller = state.get(_STATE_KEY)
             if isinstance(caller, AuditedCaller):
-                await _audit(scope, caller, status_code, start)
+                with anyio.CancelScope(shield=True):
+                    await _audit(scope, caller, status_code, start)
 
 
 async def _audit(

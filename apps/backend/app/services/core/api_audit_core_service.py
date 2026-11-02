@@ -20,11 +20,10 @@ from app.services.core.mcp_audit_core_service import (
     AUDIT_RETENTION,
     storable_address,
     storable_text,
+    storable_user_agent,
     window_start,
 )
 
-# The longest client name kept: enough to tell clients apart, never a payload.
-USER_AGENT_LENGTH = 256
 # The route column's width.
 ROUTE_LENGTH = 255
 
@@ -56,11 +55,7 @@ class ApiAuditCoreService:
                 status_code=status_code,
                 duration_ms=duration_ms,
                 ip_address=storable_address(ip_address),
-                user_agent=(
-                    storable_text(user_agent)[:USER_AGENT_LENGTH]
-                    if user_agent
-                    else None
-                ),
+                user_agent=storable_user_agent(user_agent),
             ),
         )
 
