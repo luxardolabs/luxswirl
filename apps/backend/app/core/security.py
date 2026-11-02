@@ -17,10 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.bcrypt_secret import bcrypt_matches
 from app.core.config import settings
 from app.core.datetime_utils import utc_now
-from app.core.rate_limit import (
-    count_heartbeat_registration_refusal,
-    heartbeat_registration_retry_after,
-)
+from app.core.rate_limit import reserve_heartbeat_registration_attempt
 from app.core.safe_redirect import safe_redirect_target
 from app.crud import admin_bootstrap_crud
 from app.db import get_db
@@ -415,8 +412,10 @@ async def authenticate_heartbeat(
     that agent's status back (`AgentCoreService.process_heartbeat`).
 
     The registration key is held to its own budget here, as on /register:
-    each key refused counts against `client`, and past the budget the fallback
-    answers 429 without checking the key. A right key costs nothing.
+    each key refused counts against `client` for this agent alone, and past
+    every part of the budget the fallback answers 429 without checking the
+    key. A right key costs nothing, and one agent's refusals never shut out
+    another agent behind the same address.
     """
     if agent.api_key_hash:
         try:
@@ -425,19 +424,22 @@ async def authenticate_heartbeat(
         except HTTPException as e:
             if e.status_code != 401:
                 raise
-    retry_after = heartbeat_registration_retry_after(client)
-    if retry_after is not None:
+    attempt = reserve_heartbeat_registration_attempt(client, agent.id)
+    if isinstance(attempt, int):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="Too many refused registration keys",
-            headers={"Retry-After": str(retry_after)},
+            headers={"Retry-After": str(attempt)},
         )
+    key_refused = False
     try:
         await verify_registration_token(authorization, db)
     except HTTPException as refused:
-        if refused.status_code == status.HTTP_401_UNAUTHORIZED:
-            count_heartbeat_registration_refusal(client)
+        key_refused = refused.status_code == status.HTTP_401_UNAUTHORIZED
         raise
+    finally:
+        if not key_refused:
+            attempt.release()
     return False
 
 

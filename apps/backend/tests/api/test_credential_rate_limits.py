@@ -9,6 +9,7 @@ and one address could guess keys forever.
 
 from __future__ import annotations
 
+import asyncio
 import base64
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
@@ -17,14 +18,16 @@ from uuid import UUID, uuid4
 import bcrypt
 import pytest
 import pytest_asyncio
+from app.core import security
 from app.core.config import settings
 from app.core.datetime_utils import utc_now
-from app.core.rate_limit import limiter
+from app.core.rate_limit import current_rate_limits, limiter, update_rate_limits
 from app.main import app
 from app.models.enum_model import JobStatus, JobType
 from app.models.job_model import Job
 from app.schemas.registration_key_schema import RegistrationKeyCreate
 from app.services.core.registration_key_core_service import RegistrationKeyCoreService
+from fastapi import HTTPException
 from fixtures.factories import make_agent
 from httpx import ASGITransport, AsyncClient
 from limits import parse
@@ -232,6 +235,82 @@ async def test_wrong_registration_keys_on_the_heartbeat_spend_the_registration_b
     assert wrong == [401] * allowed + [429], wrong
     assert right.status_code == 429, right.text
     assert int(right.headers["Retry-After"]) > 0
+
+
+async def test_one_agent_s_refused_keys_never_shut_out_another_at_the_same_address(
+    client: AsyncClient, db: AsyncSession, registration_key: str
+) -> None:
+    # An agent still on a revoked key heartbeats every interval and is refused;
+    # a pending agent on the same host must still reach its approval.
+    stale = make_agent(approval_status="pending", api_key_hash=None)
+    pending = make_agent(approval_status="pending", api_key_hash=None)
+    db.add_all([stale, pending])
+    await db.flush()
+    allowed = parse(settings.security.registration_rate_limit).amount
+
+    for _ in range(allowed + 1):
+        await client.post(
+            "/api/v1/agent/heartbeat", json=_beat(stale.id), headers=_WRONG
+        )
+    resp = await client.post(
+        "/api/v1/agent/heartbeat",
+        json=_beat(pending.id),
+        headers={"Authorization": f"Bearer {registration_key}"},
+    )
+
+    assert resp.status_code == 200, resp.text
+
+
+async def test_a_concurrent_burst_of_wrong_keys_gets_no_more_checks_than_the_budget(
+    client: AsyncClient, db: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Each check awaits the database; a burst must not all pass a count that
+    # none of them has made yet.
+    async def slow_refusal(authorization: str | None, db: AsyncSession) -> str:
+        await asyncio.sleep(0.01)
+        raise HTTPException(status_code=401, detail="Invalid registration token")
+
+    monkeypatch.setattr(security, "verify_registration_token", slow_refusal)
+    agent = make_agent(approval_status="pending", api_key_hash=None)
+    allowed = parse(settings.security.registration_rate_limit).amount
+
+    async def one() -> int:
+        try:
+            await security.authenticate_heartbeat(
+                agent, "Bearer wrong", db, "198.51.100.99"
+            )
+        except HTTPException as refused:
+            return refused.status_code
+        return 200
+
+    burst = await asyncio.gather(*(one() for _ in range(50)))
+
+    assert burst.count(401) == allowed, burst
+    assert burst.count(429) == 50 - allowed, burst
+
+
+async def test_every_part_of_a_multi_part_registration_limit_holds_on_the_heartbeat(
+    client: AsyncClient, db: AsyncSession
+) -> None:
+    before = current_rate_limits().registration
+    update_rate_limits(registration="100/day;2/minute")
+    try:
+        agent = make_agent(approval_status="pending", api_key_hash=None)
+        db.add(agent)
+        await db.flush()
+
+        statuses = [
+            (
+                await client.post(
+                    "/api/v1/agent/heartbeat", json=_beat(agent.id), headers=_WRONG
+                )
+            ).status_code
+            for _ in range(3)
+        ]
+    finally:
+        update_rate_limits(registration=before)
+
+    assert statuses == [401, 401, 429], statuses
 
 
 async def test_malformed_registrations_do_not_spend_the_budget(
