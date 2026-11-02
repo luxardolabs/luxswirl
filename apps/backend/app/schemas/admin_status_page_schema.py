@@ -19,7 +19,10 @@ from app.schemas.paginated_response_schema import PaginatedResponse
 from app.schemas.status_page_schema import StatusBarMinutes
 
 # The most items one page holds, checks one group lists, and checks one page
-# names in all (its check items and its groups' lists together).
+# names in all (its check items and its groups' lists together). A new page is
+# held to them here; a change to a stored page may keep what it already holds
+# past them, never grow it, so `StatusPageCoreService` judges that against the
+# stored page.
 MAX_ITEMS = 500
 MAX_GROUP_CHECKS = 1000
 MAX_PAGE_CHECKS = 10_000
@@ -109,6 +112,10 @@ PageItems = Annotated[
     Field(max_length=MAX_ITEMS),
     AfterValidator(_within_page_cap),
 ]
+"""A new page's items, within the caps."""
+
+ReplacedItems = list[StatusPageItem]
+"""A stored page's items, replaced whole: judged against the stored page."""
 
 
 class EditorReorderItem(BaseModel):
@@ -132,7 +139,8 @@ class EditorReorderItem(BaseModel):
         return self
 
 
-EditorReorder = Annotated[list[EditorReorderItem], Field(max_length=MAX_ITEMS)]
+EditorReorder = list[EditorReorderItem]
+"""The web editor's reorder: judged against the stored page it reorders."""
 
 
 class AdminStatusPageItems(BaseModel):
@@ -140,7 +148,7 @@ class AdminStatusPageItems(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    items: PageItems
+    items: ReplacedItems
 
 
 class AdminStatusPageCreate(BaseModel):
