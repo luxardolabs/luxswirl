@@ -10,8 +10,9 @@ See core.request_helpers.client_ip_from_request for the trust model.
 import hashlib
 import time
 from dataclasses import dataclass, replace
+from uuid import UUID
 
-from limits import RateLimitItem, RateLimitItemPerMinute, parse
+from limits import RateLimitItem, RateLimitItemPerMinute, parse, parse_many
 from limits.storage import MemoryStorage
 from limits.strategies import FixedWindowRateLimiter
 from slowapi import Limiter
@@ -110,26 +111,59 @@ def registration_rate_limit() -> str:
 
 # The bucket counting registration keys refused on the heartbeat, which falls
 # back to that key for an agent without its own. Only refusals count: a pending
-# agent heartbeats with the right key every interval and must not run out.
+# agent heartbeats with the right key every interval and must not run out. Each
+# (client address, agent) pair has its own count, so an agent whose key keeps
+# being refused locks out only itself, never another agent behind the same
+# address; an unknown agent id is refused before any key is checked. This
+# budget is the heartbeat's own: /register and /recover-key keep theirs.
 _HEARTBEAT_REGISTRATION_REFUSALS = "heartbeat-registration-key-refusals"
 
 
-def heartbeat_registration_retry_after(client: str) -> int | None:
-    """Seconds to wait when `client` has spent the registration budget on the
-    heartbeat with refused keys; None while under it. Counts nothing."""
-    limit = parse(registration_rate_limit())
-    if limiter.limiter.test(limit, _HEARTBEAT_REGISTRATION_REFUSALS, client):
-        return None
-    stats = limiter.limiter.get_window_stats(
-        limit, _HEARTBEAT_REGISTRATION_REFUSALS, client
-    )
-    return max(1, int(stats.reset_time - time.time()))
+@dataclass(frozen=True)
+class RegistrationAttempt:
+    """One heartbeat registration-key check, already counted in every part of
+    the limit, so concurrent checks cannot all pass a count none has made."""
+
+    limits: tuple[RateLimitItem, ...]
+    keys: tuple[str, ...]
+
+    def release(self) -> None:
+        """Give the count back: the key was not refused.
+
+        A window that ended since the count was made holds nothing of it, so
+        nothing is given back there (the next window never starts below zero).
+        """
+        storage = limiter.limiter.storage
+        for limit in self.limits:
+            key = limit.key_for(*self.keys)
+            if storage.get(key) > 0:
+                storage.incr(key, limit.get_expiry(), amount=-1)
 
 
-def count_heartbeat_registration_refusal(client: str) -> None:
-    """Count one registration key the heartbeat refused, against `client`."""
-    limiter.limiter.hit(
-        parse(registration_rate_limit()), _HEARTBEAT_REGISTRATION_REFUSALS, client
+def reserve_heartbeat_registration_attempt(
+    client: str, agent_id: UUID
+) -> RegistrationAttempt | int:
+    """Count one registration-key check on `agent_id`'s heartbeat from
+    `client`, in every part of the registration limit, before the key is read.
+
+    Returns the attempt, to `release()` unless the key is refused, or, when
+    any part of the limit is spent, the seconds to wait (and counts nothing).
+    """
+    keys = (_HEARTBEAT_REGISTRATION_REFUSALS, client, str(agent_id))
+    limits = tuple(parse_many(registration_rate_limit()))
+    attempt = RegistrationAttempt(limits=limits, keys=keys)
+    spent = [limit for limit in limits if not limiter.limiter.hit(limit, *keys)]
+    if not spent:
+        return attempt
+    attempt.release()
+    return max(
+        max(
+            1,
+            int(
+                limiter.limiter.get_window_stats(limit, *keys).reset_time - time.time()
+            ),
+        )
+        for limit in spent
     )
 
 
