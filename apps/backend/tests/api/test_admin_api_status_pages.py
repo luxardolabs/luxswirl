@@ -375,6 +375,87 @@ async def test_a_page_naming_too_many_checks_is_refused_before_any_query(
     assert "at most 10000 checks" in created.text
 
 
+async def _stored_page(db: AsyncSession, items: list[dict[str, object]]) -> str:
+    """A page stored past the caps, as the web editor once let one grow."""
+    page = await StatusPageCoreService.create_status_page(
+        db, StatusPageCreate(name="big", slug=_slug(), items=items)
+    )
+    return str(page.id)
+
+
+async def test_a_page_past_the_item_cap_is_written_back_as_read(
+    db: AsyncSession, client: AsyncClient
+) -> None:
+    editor = await _as(db, "editor")
+    page_id = await _stored_page(
+        db,
+        [{"type": "group", "name": f"g{i}", "filter": {}} for i in range(501)],
+    )
+    read = await client.get(f"{PAGES}/{page_id}", headers=editor)
+    items = [
+        {k: v for k, v in item.items() if k != "order"}
+        for item in reversed(read.json()["items"])
+    ]
+
+    written = await client.put(
+        f"{PAGES}/{page_id}/items", json={"items": items}, headers=editor
+    )
+    grown = await client.put(
+        f"{PAGES}/{page_id}/items",
+        json={"items": [*items, {"type": "group", "name": "new", "filter": {}}]},
+        headers=editor,
+    )
+
+    assert written.status_code == 200, written.text[:300]
+    assert [i["name"] for i in written.json()["items"]] == [i["name"] for i in items]
+    assert grown.status_code == 422, grown.text[:300]
+    assert "at most 501 items" in grown.text
+
+
+async def test_a_page_past_the_check_cap_is_written_back_as_read(
+    db: AsyncSession, client: AsyncClient
+) -> None:
+    editor = await _as(db, "editor")
+    agent = make_agent()
+    db.add(agent)
+    await db.flush()
+    checks = [make_check(agent_id=agent.id) for _ in range(10_001)]
+    db.add_all(checks)
+    await db.flush()
+    ids = [str(c.id) for c in checks]
+    page_id = await _stored_page(
+        db,
+        [
+            *(
+                {
+                    "type": "group",
+                    "name": f"g{i}",
+                    "checks": ids[i * 1000 : (i + 1) * 1000],
+                }
+                for i in range(10)
+            ),
+            {"type": "check", "check_id": ids[-1]},
+        ],
+    )
+    read = await client.get(f"{PAGES}/{page_id}", headers=editor)
+    items = [
+        {k: v for k, v in item.items() if k != "order"} for item in read.json()["items"]
+    ]
+
+    written = await client.put(
+        f"{PAGES}/{page_id}/items", json={"items": items}, headers=editor
+    )
+    grown = await client.put(
+        f"{PAGES}/{page_id}/items",
+        json={"items": [*items, {"type": "check", "check_id": str(uuid4())}]},
+        headers=editor,
+    )
+
+    assert written.status_code == 200, written.text[:300]
+    assert grown.status_code == 422, grown.text[:300]
+    assert "at most 10001 checks" in grown.text
+
+
 # ── Slugs ───────────────────────────────────────────────────────────────────
 
 

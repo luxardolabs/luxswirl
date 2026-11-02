@@ -207,6 +207,92 @@ async def test_a_reorder_cannot_name_more_checks_than_a_page_takes(
         )
 
 
+async def _over_cap_page(db: AsyncSession, items: list[dict[str, Any]]) -> Any:
+    """A page stored past the caps, as the editor once let one grow."""
+    return await StatusPageCoreService.create_status_page(
+        db,
+        StatusPageCreate(name="big", slug=f"big-{uuid4().hex[:8]}", items=items),
+    )
+
+
+def _in_place(page: Any) -> list[dict[str, Any]]:
+    """The editor's reorder of the page as it stands, last item first."""
+    reorder: list[dict[str, Any]] = []
+    for index in reversed(range(len(page.items))):
+        item = page.items[index]
+        entry: dict[str, Any] = {"type": item["type"], "oldIndex": index}
+        if "checks" in item:
+            entry["checks"] = item["checks"]
+        reorder.append(entry)
+    return reorder
+
+
+async def test_a_page_past_the_item_cap_can_still_be_reordered(
+    db: AsyncSession,
+) -> None:
+    page = await _over_cap_page(
+        db, [{"type": "check", "check_id": str(uuid4())} for _ in range(501)]
+    )
+    reversed_ids = [i["check_id"] for i in reversed(page.items)]
+
+    await StatusPageCoreService.reorder_all_items(db, page.id, _in_place(page))
+
+    stored = await StatusPageCoreService.get_status_page(db, page.id)
+    assert [i["check_id"] for i in stored.items] == reversed_ids
+
+
+async def test_a_reorder_cannot_grow_a_page_past_the_item_cap(
+    db: AsyncSession,
+) -> None:
+    page = await _over_cap_page(
+        db, [{"type": "check", "check_id": str(uuid4())} for _ in range(501)]
+    )
+    [check_id] = await _check_ids(db)
+    grown = [*_in_place(page), {"type": "check", "checkId": check_id}]
+
+    with pytest.raises(ValueError, match="at most 501 items"):
+        await StatusPageCoreService.reorder_all_items(db, page.id, grown)
+    with pytest.raises(ValueError, match="at most 500"):
+        await StatusPageCoreService.add_check_to_page(db, page.id, UUID(check_id))
+    with pytest.raises(ValueError, match="at most 500"):
+        await StatusPageCoreService.add_group_to_page(db, page.id, "one more", None)
+
+
+def _past_the_check_cap() -> list[dict[str, Any]]:
+    """Ten groups of 1000 checks and one check item: 10,001 checks."""
+    groups: list[dict[str, Any]] = [
+        {
+            "type": "group",
+            "name": f"g{i}",
+            "checks": [str(uuid4()) for _ in range(1000)],
+        }
+        for i in range(10)
+    ]
+    return [*groups, {"type": "check", "check_id": str(uuid4())}]
+
+
+async def test_a_page_past_the_check_cap_can_still_be_reordered(
+    db: AsyncSession,
+) -> None:
+    page = await _over_cap_page(db, _past_the_check_cap())
+
+    await StatusPageCoreService.reorder_all_items(db, page.id, _in_place(page))
+
+    stored = await StatusPageCoreService.get_status_page(db, page.id)
+    assert [i["type"] for i in stored.items] == ["check"] + ["group"] * 10
+
+
+async def test_a_reorder_cannot_grow_a_page_past_the_check_cap(
+    db: AsyncSession,
+) -> None:
+    page = await _over_cap_page(db, _past_the_check_cap())
+    # One check new to the page, placed on its own: a page of 12 items.
+    grown = [*_in_place(page), {"type": "check", "checkId": str(uuid4())}]
+
+    with pytest.raises(ValueError, match="at most 10001 checks"):
+        await StatusPageCoreService.reorder_all_items(db, page.id, grown)
+
+
 async def test_a_check_dragged_out_of_a_group_stays_on_the_page(
     client: AsyncClient, db: AsyncSession
 ) -> None:

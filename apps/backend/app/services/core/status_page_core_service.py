@@ -53,8 +53,20 @@ def _named_check_ids(items: list[dict[str, Any]]) -> set[str]:
     return named
 
 
+def _item_cap(stored: list[dict[str, Any]]) -> int:
+    """The most items a change may leave the page: the cap, or what it already
+    holds past it."""
+    return max(MAX_ITEMS, len(stored))
+
+
+def _check_cap(stored: list[dict[str, Any]]) -> int:
+    """The most checks a change may leave the page naming: the cap, or what it
+    already names past it."""
+    return max(MAX_PAGE_CHECKS, len(_named_check_ids(stored)))
+
+
 def _room_for_one_more(items: list[dict[str, Any]]) -> None:
-    """Refuse an item past what one page holds, the most a reorder takes."""
+    """Refuse an item past what one page holds."""
     if len(items) >= MAX_ITEMS:
         raise ValueError(f"A page holds at most {MAX_ITEMS} items")
 
@@ -524,6 +536,21 @@ class StatusPageCoreService:
         return await StatusPageCRUD.count_private(db)
 
     @staticmethod
+    def require_within_caps(
+        items: list[dict[str, Any]], stored: list[dict[str, Any]]
+    ) -> None:
+        """Refuse items that grow a page past the caps; a page stored past
+        them keeps what it holds, never more.
+
+        Raises:
+            ValueError: If the items hold more than the page may
+        """
+        if len(items) > _item_cap(stored):
+            raise ValueError(f"A page holds at most {_item_cap(stored)} items")
+        if len(_named_check_ids(items)) > _check_cap(stored):
+            raise ValueError(f"A page names at most {_check_cap(stored)} checks")
+
+    @staticmethod
     async def reorder_all_items(
         db: AsyncSession, status_page_id: UUID, client_items: list[dict[str, Any]]
     ) -> StatusPageInDB:
@@ -559,6 +586,12 @@ class StatusPageCoreService:
             },
         )
 
+        # Each entry is at most one item: a page grows no further past the cap.
+        if len(reordered) > _item_cap(status_page.items):
+            raise ValueError(
+                f"A page holds at most {_item_cap(status_page.items)} items"
+            )
+
         # Build new items array based on client state
         new_items = []
         placed_indexes = [
@@ -593,8 +626,10 @@ class StatusPageCoreService:
         )
 
         named = _named_check_ids(new_items)
-        if len(named) > MAX_PAGE_CHECKS:
-            raise ValueError(f"A page names at most {MAX_PAGE_CHECKS} checks")
+        if len(named) > _check_cap(status_page.items):
+            raise ValueError(
+                f"A page names at most {_check_cap(status_page.items)} checks"
+            )
         # Only a check dragged into a group leaves its own place; any other item
         # left out of the reorder would be deleted with it.
         grouped = {c for i in new_items for c in i.get("checks") or []}

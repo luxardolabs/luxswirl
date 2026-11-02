@@ -165,11 +165,21 @@ class AdminStatusPageCoreService:
     async def replace_items(
         db: AsyncSession, status_page_id: UUID, data: AdminStatusPageItems
     ) -> AdminStatusPage:
-        """The page's items become exactly these, in this order."""
-        await StatusPageCoreService.get_status_page(db, status_page_id)  # 404 first
+        """The page's items become exactly these, in this order, within the
+        caps or, for a page stored past them, what it already holds."""
+        # 404 first; the page stays locked until the write, so the caps are
+        # judged against what is written over.
+        stored = await StatusPageCoreService.get_status_page_for_update(
+            db, status_page_id
+        )
+        items = _stored_items(data.items)
+        try:
+            StatusPageCoreService.require_within_caps(items, stored.items)
+        except ValueError as exc:
+            raise ValidationException(str(exc)) from None
         await AdminStatusPageCoreService._require_references(db, data.items)
         updated = await StatusPageCoreService.update_status_page(
-            db, status_page_id, StatusPageUpdate(items=_stored_items(data.items))
+            db, status_page_id, StatusPageUpdate(items=items)
         )
         return _response(updated)
 
