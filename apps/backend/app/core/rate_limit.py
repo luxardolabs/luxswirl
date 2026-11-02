@@ -12,7 +12,7 @@ import time
 from dataclasses import dataclass, replace
 from uuid import UUID
 
-from limits import RateLimitItem, RateLimitItemPerMinute, parse, parse_many
+from limits import RateLimitItem, parse_many
 from limits.storage import MemoryStorage
 from limits.strategies import FixedWindowRateLimiter
 from slowapi import Limiter
@@ -177,36 +177,71 @@ def reserve_pending_heartbeat_attempt(
 class KeyedLimiter:
     """A per-key count for a surface this limiter cannot decorate, such as the /mcp mount.
 
-    Port of LuxWX's `KeyedLimiter`. Each call counts one request and answers in the
-    same step, so a concurrent burst cannot slip past the limit before it is counted.
+    Port of LuxWX's `KeyedLimiter`. Every part of a multi-part limit
+    (`300/minute;1000/hour`) holds, as slowapi's decorators hold them. Each call
+    counts one request in every part and answers in the same step, with no await
+    between, so a concurrent burst cannot slip past the limit before it is counted.
     LuxSwirl's limiter keeps its counts in process memory, and so does this.
     """
 
-    def __init__(self, limit: RateLimitItem) -> None:
-        self.limit = limit
+    def __init__(self, limit: str) -> None:
+        self.limits = tuple(parse_many(check_rate_limit(limit)))
         self.storage = MemoryStorage()
         self.strategy = FixedWindowRateLimiter(self.storage)
 
+    def _wait(self, spent: list[RateLimitItem], surface: str, client: str) -> int:
+        """Seconds until every spent part has room: the longest of their waits.
+
+        A window that ended since the refused count has a reset time already
+        past, so the wait is at least a second.
+        """
+        return max(
+            max(
+                1,
+                int(
+                    self.strategy.get_window_stats(limit, surface, client).reset_time
+                    - time.time()
+                ),
+            )
+            for limit in spent
+        )
+
     def retry_after(self, surface: str, client: str) -> int | None:
-        """Count one request; seconds to wait when over the limit, None while under it."""
-        if self.strategy.hit(self.limit, surface, client):
+        """Count one request in every part; seconds to wait when any part is
+        over its limit (and then the count is given back), None while all are under.
+        """
+        spent = [
+            limit
+            for limit in self.limits
+            if not self.strategy.hit(limit, surface, client)
+        ]
+        if not spent:
             return None
-        stats = self.strategy.get_window_stats(self.limit, surface, client)
-        return max(1, int(stats.reset_time - time.time()))
+        for limit in self.limits:
+            key = limit.key_for(surface, client)
+            if self.storage.get(key) > 0:
+                self.storage.incr(key, limit.get_expiry(), amount=-1)
+        return self._wait(spent, surface, client)
 
     def over_limit(self, surface: str, client: str) -> int | None:
-        """Seconds to wait when `client` is already at the limit; None while under it.
+        """Seconds to wait when `client` is already at the limit of any part;
+        None while under every part.
 
         Counts nothing: for a limit on failures, counted with `count` once one fails.
         """
-        if self.strategy.test(self.limit, surface, client):
+        spent = [
+            limit
+            for limit in self.limits
+            if not self.strategy.test(limit, surface, client)
+        ]
+        if not spent:
             return None
-        stats = self.strategy.get_window_stats(self.limit, surface, client)
-        return max(1, int(stats.reset_time - time.time()))
+        return self._wait(spent, surface, client)
 
     def count(self, surface: str, client: str) -> None:
-        """Count one event (a failure) against `client`."""
-        self.strategy.hit(self.limit, surface, client)
+        """Count one event (a failure) against `client`, in every part."""
+        for limit in self.limits:
+            self.strategy.hit(limit, surface, client)
 
     def reset(self) -> None:
         """Forget every count (the test suite's reset, as `limiter.reset()`)."""
@@ -217,6 +252,7 @@ class KeyedLimiter:
 # not a route this limiter can decorate (the /mcp mount authenticates in its own ASGI
 # middleware). Only a refused token counts; a client at the limit is refused before
 # its token is looked up.
-credential_attempts = KeyedLimiter(RateLimitItemPerMinute(10))
-# Requests one API token may make per minute over /mcp: the admin API's own budget.
-mcp_token_calls = KeyedLimiter(parse(settings.security.admin_api_rate_limit))
+credential_attempts = KeyedLimiter("10/minute")
+# Requests one API token may make over /mcp: the admin API's own budget, every part
+# of it, read once at import as the admin routers' decorators read it.
+mcp_token_calls = KeyedLimiter(settings.security.admin_api_rate_limit)
