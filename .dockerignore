@@ -1,8 +1,14 @@
+# Patterns are anchored at the build context root (the repo root): `__pycache__/` alone excludes
+# only ./__pycache__, never apps/backend/app/__pycache__. Anything that must stay out of the images
+# wherever it appears (bytecode, tool caches, editor droppings, secrets, local databases) is written
+# `**/…`. Root-only patterns below (tests/, docs/, data/, *.md, …) are root-only on purpose: the
+# Dockerfiles COPY apps/*/tests into the test stage, and apps/backend/app ships its own *.md notes.
+
 # Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
+**/__pycache__/
+**/*.py[cod]
+**/*$py.class
+**/*.so
 .Python
 build/
 develop-eggs/
@@ -18,18 +24,18 @@ var/
 wheels/
 pip-wheel-metadata/
 share/python-wheels/
-*.egg-info/
+**/*.egg-info/
 .installed.cfg
 *.egg
 MANIFEST
-.pytest_cache/
-.coverage
-htmlcov/
-.tox/
-.nox/
-.hypothesis/
-*.cover
-*.log
+**/.pytest_cache/
+**/.coverage
+**/htmlcov/
+**/.tox/
+**/.nox/
+**/.hypothesis/
+**/*.cover
+**/*.log
 venv/
 ENV/
 env/
@@ -44,12 +50,12 @@ yarn-debug.log*
 yarn-error.log*
 
 # IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-.DS_Store
+**/.vscode/
+**/.idea/
+**/*.swp
+**/*.swo
+**/*~
+**/.DS_Store
 
 # Git
 .git/
@@ -71,17 +77,17 @@ tests/
 *.test.js
 
 # Build artifacts
-*.pyc
-*.pyo
-*.pyd
+**/*.pyc
+**/*.pyo
+**/*.pyd
 .Python
 pip-log.txt
 pip-delete-this-directory.txt
 
 # Environment files (should use docker env vars)
-.env
-.env.*
-*.env
+**/.env
+**/.env.*
+**/*.env
 
 # CI/CD
 .github/
@@ -108,25 +114,25 @@ deploy.sh
 config/examples/
 
 # Logs and databases (if any local copies)
-*.log
-*.sqlite
-*.db
+**/*.log
+**/*.sqlite
+**/*.db
 
 # Runtime data (agent-specific, should not be in image)
 src/app/reports/
 src/app/data/
 reports/
 data/
-*.json.bak
-*_credentials.json
+**/*.json.bak
+**/*_credentials.json
 
 # Backups — local DB/volume snapshots, never belong in the image context
 backups/
 
 # Build artifacts and editor caches
 .claude/
-.ruff_cache/
-.mypy_cache/
+**/.ruff_cache/
+**/.mypy_cache/
 .cache/
 
 # Lock files (already installed via requirements.txt)
@@ -141,3 +147,4 @@ ping_generator*.py
 tailwind.config.js
 
 # Keep only essentials for runtime
+./.dockerignore
