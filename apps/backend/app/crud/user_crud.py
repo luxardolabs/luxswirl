@@ -13,6 +13,11 @@ from app.core.datetime_utils import utc_now
 from app.models.enum_model import UserRole
 from app.models.user_model import User
 
+# The first key of the two-key advisory lock that serialises sign-ins per
+# username (the second is the username's hashtext). Any constant works: the
+# two-key space does not overlap the one-key space other advisory locks use.
+_LOGIN_LOCK_CLASS = 1_826_301_557
+
 
 class UserCRUD:
     """Database queries for users."""
@@ -80,20 +85,33 @@ class UserCRUD:
     async def get_by_username_for_login(
         db: AsyncSession, username: str, *, lock_wait_ms: int
     ) -> User | None:
-        """The user a sign-in judges, row-locked until the transaction ends and
-        re-read from the database, so a concurrent sign-in for the same account
-        waits for this one and then reads what it committed (the failure count
-        and the lock).
+        """The user a sign-in judges, re-read from the database after every
+        earlier sign-in for the same username has committed, and row-locked
+        until the transaction ends.
 
-        The read waits at most `lock_wait_ms` for the row (PostgreSQL
-        lock_not_available, 55P03, past it), well inside a request's statement
-        timeout. The wait is set for this read alone; the savepoint keeps the
-        caller's transaction usable after a refusal, and a lock taken inside
-        it is held to the transaction's end.
+        Sign-ins are serialised on the username, not the row: a transaction
+        advisory lock keyed on it is taken whether or not the user exists, so
+        a concurrent sign-in for an unknown name queues exactly as one for a
+        real account does, and neither the wait nor its refusal tells the two
+        apart. The second sign-in then reads the failure count and lock the
+        first committed.
+
+        Both locks wait at most `lock_wait_ms` (PostgreSQL lock_not_available,
+        55P03, past it), well inside a request's statement timeout. The wait is
+        set for these reads alone; the savepoint keeps the caller's transaction
+        usable after a refusal, and a lock taken inside it is held to the
+        transaction's end.
         """
         async with db.begin_nested():
             await db.execute(
                 select(func.set_config("lock_timeout", f"{lock_wait_ms}ms", True))
+            )
+            await db.execute(
+                select(
+                    func.pg_advisory_xact_lock(
+                        _LOGIN_LOCK_CLASS, func.hashtext(username)
+                    )
+                )
             )
             result = await db.execute(
                 select(User)

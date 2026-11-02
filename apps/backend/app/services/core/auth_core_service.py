@@ -45,8 +45,8 @@ class AuthCoreService:
     ACCOUNT_LOCK_DURATION_MINUTES = 30
     SESSION_LIFETIME_DAYS = 7
     PASSWORD_BCRYPT_ROUNDS = 12
-    # How long a sign-in waits behind other sign-ins for the same account (each
-    # holds the user row through its bcrypt check) before it is refused as busy
+    # How long a sign-in waits behind other sign-ins for the same username (each
+    # holds its lock through its bcrypt check) before it is refused as busy
     # (429). Below the web pool's 5 s statement_timeout, whose expiry is a 500.
     LOGIN_LOCK_WAIT_MS = 3000
 
@@ -199,7 +199,7 @@ class AuthCoreService:
         """The user row a sign-in judges, locked to this transaction.
 
         Raises:
-            LoginBusyException: If other sign-ins for the account held it past
+            LoginBusyException: If other sign-ins for the username held it past
                 LOGIN_LOCK_WAIT_MS
         """
         try:
@@ -215,7 +215,7 @@ class AuthCoreService:
             # Security: the refusal costs a bcrypt check like any other answer.
             self.verify_password(password, self._FAKE_PASSWORD_HASH)
             logger.warning(
-                "Login attempt refused: sign-ins for the account are queued",
+                "Login attempt refused: sign-ins for the username are queued",
                 extra={
                     "event": "auth.failure.busy",
                     "username": username,
@@ -256,9 +256,10 @@ class AuthCoreService:
         security_settings = await SettingsCoreService.get_security_settings(db)
 
         # No user has a username no column can hold; it is an unknown user.
-        # The row is locked before bcrypt: a concurrent sign-in for this account
-        # waits, then reads the failure count and lock this one commits, so no
-        # guess is checked against the real hash past the limit.
+        # Sign-ins for one username are serialised before bcrypt, whether or not
+        # it names a user: a concurrent sign-in waits, then reads the failure
+        # count and lock this one commits, so no guess is checked against the
+        # real hash past the limit, and the queue says nothing of who exists.
         user = (
             await self._user_for_login(
                 db, username, password, client_ip=client_ip, user_agent=user_agent

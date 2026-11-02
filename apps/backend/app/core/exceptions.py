@@ -160,7 +160,7 @@ class CheckBusyException(LuxSwirlException):
 
 class LoginBusyException(LuxSwirlException):
     """Raised when a sign-in waited too long behind other sign-ins for the same
-    account: they are judged one at a time, so the lockout sees every guess."""
+    username: they are judged one at a time, so the lockout sees every guess."""
 
     status_code = 429
     error_code = "LOGIN_BUSY"
@@ -168,7 +168,7 @@ class LoginBusyException(LuxSwirlException):
     def __init__(self) -> None:
         super().__init__(
             message=(
-                "Too many sign-in attempts for this account at once. "
+                "Too many sign-in attempts for this username at once. "
                 "Try again in a moment."
             ),
         )

@@ -467,7 +467,7 @@ Use the reset-password action to set a new password; **Must Change** defaults to
 
 After too many failed login attempts (see `security.max_failed_attempts`), an account locks for `security.account_lock_duration_minutes`. An admin can unlock it immediately with the unlock action.
 
-Sign-ins for one account are judged one at a time, so guesses sent in parallel each count and none is checked once the account locks. A sign-in queued more than 3 seconds behind others for the same account is refused with 429 (`LOGIN_BUSY`); trying again a moment later works.
+Sign-ins for one username are judged one at a time, so guesses sent in parallel each count and none is checked once the account locks. A sign-in queued more than 3 seconds behind others for the same username is refused with 429 (`LOGIN_BUSY`); trying again a moment later works.
 
 ### Deleting a User
 
