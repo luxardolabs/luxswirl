@@ -364,13 +364,14 @@ ______________________________________________________________________
 
 ## Troubleshooting
 
-| Symptom                                     | Cause / fix                                                                                                                                            |
-| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Check not executing**                     | Confirm it's enabled (green toggle) and the agent is online and approved; click **Reload** on the agent card to force a sync                           |
-| **No results in the dashboard**             | The check hasn't run yet (wait up to one interval); confirm the agent is sending results (reporter backlog = 0); the "Last Check" column should update |
-| **"Invalid configuration" on create**       | Read the field in the error — common: a scheme in a ping/tcp target, port out of 1–65535, timeout ≥ interval, invalid JSON in headers/body             |
-| **Succeeds locally, fails on the agent**    | The agent is in a different network / DNS / firewall context — SSH to the agent host and test connectivity manually                                    |
-| **Bulk operation didn't affect all checks** | Confirm **Select all matching filters** was clicked; review the active filters (they may exclude some); ensure you have permission                     |
+| Symptom                                     | Cause / fix                                                                                                                                                                                           |
+| ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Check not executing**                     | Confirm it's enabled (green toggle) and the agent is online and approved; click **Reload** on the agent card to force a sync                                                                          |
+| **No results in the dashboard**             | The check hasn't run yet (wait up to one interval); confirm the agent is sending results (reporter backlog = 0); the "Last Check" column should update                                                |
+| **"Invalid configuration" on create**       | Read the field in the error — common: a scheme in a ping/tcp target, port out of 1–65535, timeout ≥ interval, invalid JSON in headers/body                                                            |
+| **Result error "Invalid configuration: …"** | The agent cannot use the target as written (a host name with a label over 63 characters or a null character, a port that is not a number); edit the check. The agent logs it once, not every interval |
+| **Succeeds locally, fails on the agent**    | The agent is in a different network / DNS / firewall context — SSH to the agent host and test connectivity manually                                                                                   |
+| **Bulk operation didn't affect all checks** | Confirm **Select all matching filters** was clicked; review the active filters (they may exclude some); ensure you have permission                                                                    |
 
 ______________________________________________________________________
 

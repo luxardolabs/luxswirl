@@ -438,6 +438,81 @@ class TestTimeoutHandling:
         (execution,) = await _executions(worker_db, key)
         assert execution.status == SchedulerExecutionStatus.FAILED
 
+    async def test_a_scheduled_run_past_its_limit_is_timed_out_without_a_traceback(
+        self, worker_db, caplog
+    ):
+        lease = uuid4()
+        key = await _seed_job(
+            worker_db,
+            max_runtime_seconds=1,
+            lease_token=lease,
+            lease_expires_at=datetime.now(UTC) + timedelta(minutes=5),
+        )
+
+        with caplog.at_level(logging.WARNING):
+            await _overrunning_svc()._execute_job(key, lease)
+
+        (execution,) = await _executions(worker_db, key)
+        assert execution.error_message == "Job timed out after 1 seconds"
+        logged = [r for r in caplog.records if r.getMessage() == "Job timed out"]
+        assert len(logged) == 1, caplog.text
+        assert not logged[0].exc_info
+
+    async def test_a_scheduled_job_raising_its_own_timeout_is_a_failure_with_its_cause(
+        self, worker_db, caplog
+    ):
+        """A connect or query timeout inside the job is not the run's limit."""
+        lease = uuid4()
+        key = await _seed_job(
+            worker_db,
+            lease_token=lease,
+            lease_expires_at=datetime.now(UTC) + timedelta(minutes=5),
+        )
+
+        with caplog.at_level(logging.WARNING):
+            await _svc(raises=TimeoutError("connect timed out"))._execute_job(
+                key, lease
+            )
+
+        (execution,) = await _executions(worker_db, key)
+        assert execution.status == SchedulerExecutionStatus.FAILED
+        assert execution.error_message == "connect timed out"
+        logged = [r for r in caplog.records if r.getMessage() == "Job failed"]
+        assert len(logged) == 1, caplog.text
+        assert logged[0].exc_info and logged[0].exc_info[0] is TimeoutError
+
+    @pytest.mark.parametrize("path", ["scheduled", "manual"])
+    async def test_a_job_whose_cancel_handling_raises_is_still_timed_out(
+        self, worker_db, path
+    ):
+        """The limit cancelled the job; what its cleanup raised is not the cause."""
+        lease = uuid4()
+        held = {
+            "lease_token": lease,
+            "lease_expires_at": datetime.now(UTC) + timedelta(minutes=5),
+        }
+        key = await _seed_job(
+            worker_db, max_runtime_seconds=1, **(held if path == "scheduled" else {})
+        )
+        svc = SchedulerCoreService()
+
+        async def _cleanup_fails(**_kwargs):
+            try:
+                await asyncio.sleep(60)
+            except asyncio.CancelledError:
+                raise RuntimeError("cleanup failed") from None
+            return {"ok": True}
+
+        svc.job_functions["test_noop"] = _cleanup_fails
+
+        if path == "scheduled":
+            await svc._execute_job(key, lease)
+        else:
+            out = await svc.execute_job_synchronously(key)
+            assert out.error == "Job timed out after 1 seconds"
+        (execution,) = await _executions(worker_db, key)
+        assert execution.error_message == "Job timed out after 1 seconds"
+
 
 class TestJobHistory:
     async def test_returns_job_and_its_executions(self, worker_db):

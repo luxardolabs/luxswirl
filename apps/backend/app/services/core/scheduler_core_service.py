@@ -157,18 +157,19 @@ class SchedulerCoreService:
                 status="running",
             )
 
+            max_runtime_seconds = job.max_runtime_seconds
+            # The run's own limit: a TimeoutError the job raises itself (a
+            # connect or query timeout) is a failure with a cause, not this.
+            deadline = asyncio.timeout(max_runtime_seconds)
+
             try:
                 # Get the function
                 function_name = job.function_name
 
                 if function_name in self.job_functions:
                     func = self.job_functions[function_name]
-
-                    # Execute with timeout
-                    result = await asyncio.wait_for(
-                        func(**(job.parameters or {})),
-                        timeout=job.max_runtime_seconds,
-                    )
+                    async with deadline:
+                        result = await func(**(job.parameters or {}))
                 else:
                     raise LookupError(f"Function '{function_name}' not found")
 
@@ -211,24 +212,24 @@ class SchedulerCoreService:
                     extra={"job_key": job_key, "duration": execution.duration_seconds},
                 )
 
-            except TimeoutError:
-                execution.status = SchedulerExecutionStatus.FAILED
-                execution.error_message = (
-                    f"Job timed out after {job.max_runtime_seconds} seconds"
-                )
-                execution.completed_at = datetime.now(UTC)
-                await self._handle_job_failure(db, job, execution.error_message)
-                logger.exception("Job timed out", extra={"job_key": job_key})
-
             except Exception as e:
+                # The limit cancelled the job: whatever its cancellation raised
+                # (TimeoutError, or an error from its own cleanup) is not the cause.
+                if deadline.expired():
+                    error = f"Job timed out after {max_runtime_seconds} seconds"
+                    logger.warning(
+                        "Job timed out", extra={"job_key": job_key, "error": error}
+                    )
+                else:
+                    error = str(e) or type(e).__name__
+                    logger.exception(
+                        "Job failed",
+                        extra={"job_key": job_key, "error": error},
+                    )
                 execution.status = SchedulerExecutionStatus.FAILED
-                execution.error_message = str(e)
+                execution.error_message = error
                 execution.completed_at = datetime.now(UTC)
-                await self._handle_job_failure(db, job, str(e))
-                logger.exception(
-                    "Job failed",
-                    extra={"job_key": job_key, "error": str(e)},
-                )
+                await self._handle_job_failure(db, job, error)
 
             finally:
                 # Release the lease only if this run still holds it — worker_session
@@ -550,7 +551,9 @@ class SchedulerCoreService:
                     )
 
             except Exception as e:
-                if isinstance(e, TimeoutError) and deadline.expired():
+                # The limit cancelled the job: whatever its cancellation raised
+                # (TimeoutError, or an error from its own cleanup) is not the cause.
+                if deadline.expired():
                     error = f"Job timed out after {max_runtime_seconds} seconds"
                     logger.warning(
                         "Manual job run failed",
