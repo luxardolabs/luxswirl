@@ -1,4 +1,4 @@
-# luxarch:same-origin asset v4 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit same-origin`.
+# luxarch:same-origin asset v5 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit same-origin`.
 """The app refuses a cross-site POST: the one cross-site guard (FLEET-AUTH-SESSION-STANDARD §5).
 
 Emitted by ``luxarch --emit same-origin``. Drop it in at ``app/core/same_origin.py``; it is enforced
@@ -46,6 +46,13 @@ port. An ``Origin`` must be exactly ``scheme://host[:port]``, as a browser seria
 and ``Sec-Fetch-Site`` is not ``same-origin`` or ``none`` (v1 skipped it under ``same-site``, a
 sibling subdomain the app does not serve).
 
+The 403 carries a fixed set of security headers itself (``Cache-Control: no-store``,
+``X-Content-Type-Options: nosniff``, ``X-Frame-Options: DENY``, ``Referrer-Policy: no-referrer`` and
+a ``default-src 'none'`` Content-Security-Policy): it is added after the app's own headers
+middleware, so its refusal never passes through that one (v5). A refused websocket handshake gets
+the same 403 where the server supports the ASGI denial-response extension, and is otherwise closed
+with 1008 before it is accepted (the server then answers a bare 403).
+
 A request with neither header (a webhook, a server-to-server call, a CLI) is not a browser carrying a
 victim's cookies and passes. An endpoint that a third party must POST to from its own page (an OAuth
 provider's ``response_mode=form_post`` callback) is listed in ``cross_site_paths``; such a route has
@@ -71,6 +78,14 @@ _WS_SCHEMES = {
     "ws": "http",
     "wss": "https",
 }  # a websocket's scheme asks the same site question
+# v5: set on every refusal, which runs outside the app's own headers middleware.
+REFUSAL_HEADERS = {
+    "Cache-Control": "no-store",
+    "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'",
+    "Referrer-Policy": "no-referrer",
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+}
 # A serialized origin, as a browser sends it: scheme, host, optional port, nothing else
 _ORIGIN = re.compile(
     r"^(https?|wss?)://([A-Za-z0-9.-]+|\[[0-9A-Fa-f:.]+\])(?::[0-9]{1,5})?$",
@@ -212,6 +227,26 @@ class SameOriginMiddleware:
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] == "websocket" and not self._exempt(scope["path"]):
             if self._cross_site(scope):
+                if "websocket.http.response" in (scope.get("extensions") or {}):
+                    # v5: where the server can send an HTTP answer, the 403 with the headers
+                    await send(
+                        {
+                            "type": "websocket.http.response.start",
+                            "status": 403,
+                            "headers": [
+                                (k.lower().encode("latin-1"), v.encode("latin-1"))
+                                for k, v in REFUSAL_HEADERS.items()
+                            ]
+                            + [(b"content-type", b"text/plain; charset=utf-8")],
+                        }
+                    )
+                    await send(
+                        {
+                            "type": "websocket.http.response.body",
+                            "body": b"Cross-site request refused",
+                        }
+                    )
+                    return
                 # closing before the app accepts refuses the handshake (the server answers 403)
                 await receive()  # websocket.connect
                 await send({"type": "websocket.close", "code": 1008})
@@ -222,7 +257,9 @@ class SameOriginMiddleware:
             and not self._exempt(scope["path"])
             and self._cross_site(scope)
         ):
-            response = PlainTextResponse("Cross-site request refused", status_code=403)
+            response = PlainTextResponse(
+                "Cross-site request refused", status_code=403, headers=REFUSAL_HEADERS
+            )
             await response(scope, receive, send)
             return
         await self.app(scope, receive, send)

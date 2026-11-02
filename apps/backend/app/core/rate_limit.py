@@ -41,7 +41,10 @@ def api_token_rate_limit_key(request: Request) -> str:
 
 
 # Global limiter — imported by routers that need @limiter.limit(...) decorators.
-limiter = Limiter(key_func=_rate_limit_key)
+# One count per limited function, not per concrete path: a path parameter the
+# caller picks (`/users/{user_id}/reset-password`) would otherwise open a fresh
+# budget for every value (FLEET-RATE-LIMIT-STANDARD §3).
+limiter = Limiter(key_func=_rate_limit_key, key_style="endpoint")
 
 
 @dataclass(frozen=True)
