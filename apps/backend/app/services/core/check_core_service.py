@@ -510,7 +510,6 @@ class CheckCoreService:
         enabled_only: bool = False,
         tag: str | None = None,
         search: str | None = None,
-        exclude_internal: bool = False,
         limit: int = 50,
         offset: int = 0,
     ) -> tuple[Sequence[Check], int]:
@@ -524,7 +523,6 @@ class CheckCoreService:
             enabled_only: Only return enabled checks
             tag: Filter by tag (must have this tag)
             search: Search in display_name or target (case-insensitive)
-            exclude_internal: Exclude internal/system checks (agent self-monitoring)
             limit: Max results
             offset: Pagination offset
 
@@ -538,7 +536,6 @@ class CheckCoreService:
             enabled_only=enabled_only,
             tag=tag,
             search=search,
-            exclude_internal=exclude_internal,
             skip=offset,
             limit=limit,
         )
@@ -591,7 +588,6 @@ class CheckCoreService:
         enabled_only: bool = False,
         tag: str | None = None,
         search: str | None = None,
-        exclude_internal: bool = False,
         limit: int = 50,
         offset: int = 0,
     ) -> tuple[list[CheckInDB], int]:
@@ -608,7 +604,6 @@ class CheckCoreService:
             enabled_only=enabled_only,
             tag=tag,
             search=search,
-            exclude_internal=exclude_internal,
             limit=limit,
             offset=offset,
         )

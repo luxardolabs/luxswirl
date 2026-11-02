@@ -123,7 +123,6 @@ class ChecksViewService:
     ) -> tuple[list[CheckInDB], int]:
         """
         Get checks with pagination and filtering.
-        Excludes internal system checks (agent self-monitoring).
 
         Args:
             db: Database session
@@ -138,7 +137,6 @@ class ChecksViewService:
         Returns:
             Tuple of (checks, total count)
         """
-        # Get checks, excluding internal system checks
         checks, total = await CheckCoreService.list_check_rows(
             db=db,
             agent_id=agent_id,
@@ -146,7 +144,6 @@ class ChecksViewService:
             enabled_only=enabled_only,
             tag=tag,
             search=search,
-            exclude_internal=True,  # Hide system checks from user management
             offset=offset,
             limit=limit,
         )

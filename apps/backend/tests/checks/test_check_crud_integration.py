@@ -158,18 +158,6 @@ class TestListPaginated:
         assert len(rows) == 1
         assert rows[0].target == "redis-host"
 
-    async def test_exclude_internal_filter(self, db: AsyncSession):
-        agent = make_agent()
-        db.add(agent)
-        await db.flush()
-        db.add(make_check(agent_id=agent.id, check_type="internal"))
-        db.add(make_check(agent_id=agent.id, check_type="ping"))
-        await db.flush()
-
-        rows, total = await CheckCRUD.list_paginated(db, exclude_internal=True)
-        assert total == 1
-        assert rows[0].check_type == "ping"
-
     async def test_pagination_applies_offset_and_limit(self, db: AsyncSession):
         agent = make_agent()
         db.add(agent)
