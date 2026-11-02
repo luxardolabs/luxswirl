@@ -11,6 +11,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.schemas.agent_schema import AgentResponse, AgentUpdate
+from app.schemas.base_schema import StorableText
 from app.schemas.paginated_response_schema import PaginatedResponse
 
 # What the agent reports about itself, never set from outside.
@@ -47,7 +48,7 @@ class AdminAgentReason(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    reason: str | None = Field(None, max_length=500)
+    reason: StorableText | None = Field(None, max_length=500)
 
 
 class AgentPage(PaginatedResponse[AgentResponse]):

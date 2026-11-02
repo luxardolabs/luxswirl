@@ -10,8 +10,10 @@ The job runs for its owner only while they may still edit, and keeps what it
 made (counts and first errors) on the job.
 """
 
+from typing import Any
 from uuid import UUID
 
+from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.background.maintenance_handlers._bulk_outcome import finish
@@ -20,7 +22,7 @@ from app.core.credential_mask import mask_credentials
 from app.core.exceptions import NotFoundException
 from app.models.enum_model import BulkCheckOutcome
 from app.models.maintenance_job_model import MaintenanceJob
-from app.schemas.check_schema import BulkCheckCreateRequest
+from app.schemas.check_schema import BulkCheckCreateRequest, BulkCheckCreateResponse
 from app.services.core.alert_core_service import AlertCoreService
 from app.services.core.check_core_service import CheckCoreService
 from app.shared.logger import get_logger
@@ -42,7 +44,7 @@ async def handle(db: AsyncSession, job: MaintenanceJob) -> None:
     await require_owner_may_edit(db, job)
 
     agent_id = UUID(agent_id_raw) if isinstance(agent_id_raw, str) else agent_id_raw
-    requests = [BulkCheckCreateRequest(**r) for r in raw_requests]
+    requests, refused = _validated(raw_requests)
 
     logger.info(
         "Bulk creating checks",
@@ -53,7 +55,11 @@ async def handle(db: AsyncSession, job: MaintenanceJob) -> None:
         },
     )
 
-    result = await CheckCoreService.bulk_create_checks(db, agent_id, requests)
+    result = (
+        await CheckCoreService.bulk_create_checks(db, agent_id, requests)
+        if requests
+        else BulkCheckCreateResponse(total=0, succeeded=0, failed=0, results=[])
+    )
 
     # An alert deleted since the job was queued is reported, not assigned.
     alert_errors: list[str] = []
@@ -87,8 +93,9 @@ async def handle(db: AsyncSession, job: MaintenanceJob) -> None:
         "Created",
         {
             "success_count": result.succeeded,
-            "failure_count": result.failed,
-            "errors": [
+            "failure_count": result.failed + len(refused),
+            "errors": refused
+            + [
                 f"{mask_credentials(r.url)}: {r.error or 'not created'}"
                 for r in result.results
                 if r.status == BulkCheckOutcome.FAILED
@@ -97,3 +104,19 @@ async def handle(db: AsyncSession, job: MaintenanceJob) -> None:
         },
         fail_when_nothing_done=True,
     )
+
+
+def _validated(
+    raw_requests: list[dict[str, Any]],
+) -> tuple[list[BulkCheckCreateRequest], list[str]]:
+    """Each entry validated on its own: the requests that pass, and an error for
+    each one refused, naming its fields but never repeating what they held."""
+    requests: list[BulkCheckCreateRequest] = []
+    refused: list[str] = []
+    for index, raw in enumerate(raw_requests):
+        try:
+            requests.append(BulkCheckCreateRequest.model_validate(raw))
+        except ValidationError as exc:
+            fields = sorted({".".join(map(str, e["loc"])) for e in exc.errors()})
+            refused.append(f"Entry {index + 1} refused: {', '.join(fields)}")
+    return requests, refused

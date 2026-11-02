@@ -11,7 +11,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.models.enum_model import CheckType
-from app.schemas.base_schema import TagList
+from app.schemas.base_schema import StorableText, TagList
 from app.schemas.check_schema import DnsRecordTypeField, HttpMethodField
 
 # The settings an entry may leave out, kept as they are when it does: an export
@@ -40,18 +40,18 @@ class CheckExport(BaseModel):
     # Stripped as CheckCreate strips: a surrogate in any text is refused here.
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
-    name: str
+    name: StorableText
     check_type: CheckType
-    target: str
+    target: StorableText
     interval: int = Field(default=60, description="Interval in seconds")
     timeout: int = Field(default=5, description="Timeout in seconds")
     retry_attempts: int = Field(default=2, description="Number of retry attempts")
     enabled: bool = Field(default=True, description="Whether check is enabled")
-    description: str | None = None
+    description: StorableText | None = None
     http_method: HttpMethodField = None
     expected_status: int | None = None
-    json_path: str | None = None
-    expected_value: str | None = None
+    json_path: StorableText | None = None
+    expected_value: StorableText | None = None
     tags: TagList | None = None
     retry_interval_seconds: int | None = Field(
         default=None, description="Seconds between retries"
@@ -63,15 +63,21 @@ class CheckExport(BaseModel):
         default=None, description="Verify SSL certificates (http, json)"
     )
     record_type: DnsRecordTypeField = None
-    nameserver: str | None = Field(default=None, description="DNS nameserver")
+    nameserver: StorableText | None = Field(default=None, description="DNS nameserver")
     port: int | None = Field(default=None, description="DNS port")
-    expect_value: str | None = Field(default=None, description="Expected DNS answer")
-    connection_string: str | None = Field(
+    expect_value: StorableText | None = Field(
+        default=None, description="Expected DNS answer"
+    )
+    connection_string: StorableText | None = Field(
         default=None, description="Database connection string (mysql, postgres)"
     )
-    query: str | None = Field(default=None, description="SQL query (mysql, postgres)")
-    script_code: str | None = Field(default=None, description="Synthetic script")
-    depends_on: str | None = Field(
+    query: StorableText | None = Field(
+        default=None, description="SQL query (mysql, postgres)"
+    )
+    script_code: StorableText | None = Field(
+        default=None, description="Synthetic script"
+    )
+    depends_on: StorableText | None = Field(
         default=None,
         description="Name of the check, on the agent imported onto, this one depends on",
     )

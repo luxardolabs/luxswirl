@@ -9,7 +9,7 @@ from typing import Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from app.schemas.base_schema import PlainText
+from app.schemas.base_schema import PlainText, StorableText
 from app.schemas.paginated_response_schema import PaginatedResponse
 from app.schemas.user_schema import UserCreate, UserResponse, UserUpdate
 
@@ -52,7 +52,7 @@ class AdminPasswordReset(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    new_password: str = Field(..., min_length=8, max_length=100)
+    new_password: StorableText = Field(..., min_length=8, max_length=100)
     must_change: bool = Field(
         True, description="The user must change it at next sign-in"
     )

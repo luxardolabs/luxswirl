@@ -9,7 +9,7 @@ from uuid import UUID
 from pydantic import Field
 
 from app.models.enum_model import ArtifactContentType, CheckArtifactType
-from app.schemas.base_schema import BaseSchema
+from app.schemas.base_schema import BaseSchema, StorableText
 
 
 class CheckArtifactCreate(BaseSchema):
@@ -30,10 +30,12 @@ class CheckArtifactCreate(BaseSchema):
     )
     artifact_type: CheckArtifactType = Field(..., description="Type of artifact")
     content_type: ArtifactContentType = Field(..., description="MIME type")
-    filename: str = Field(
+    filename: StorableText = Field(
         ..., description="Original filename for download", max_length=255
     )
-    data_base64: str = Field(..., description="Binary artifact data (base64 encoded)")
+    data_base64: StorableText = Field(
+        ..., description="Binary artifact data (base64 encoded)"
+    )
 
     def get_binary_data(self) -> bytes:
         """Decode base64 data to bytes."""

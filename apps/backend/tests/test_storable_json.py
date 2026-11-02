@@ -2,20 +2,25 @@
 
 A JSON escape such as `"\\ud800"` decodes to a lone surrogate, text UTF-8
 cannot encode, and PostgreSQL refuses a NUL. Stored in a free-form JSON field,
-either makes every later read of that row fail. So every free-form JSON field a
-route takes is a StorableJson, every text field is in a model that refuses a
-surrogate, and a report's result holding one is refused on its own.
+either makes every later read of that row fail, and a NUL in a text column
+fails the write itself. So every free-form JSON field a route takes is a
+StorableJson, every text field refuses both a NUL and a surrogate, and a
+report's result holding one is refused on its own.
 """
 
 from __future__ import annotations
 
+import annotationlib
+import importlib
+import inspect
 import json
+import pkgutil
 import types
 import typing
 from collections.abc import AsyncIterator
 from typing import Any, Union, get_args, get_origin
 
-import annotated_types
+import app.services.core as app_services_core
 import pytest
 import pytest_asyncio
 from _route_table import iter_routes
@@ -26,8 +31,12 @@ from app.main import app
 from app.models.check_result_model import CheckResult
 from app.schemas.api_token_schema import ApiTokenCreate
 from app.schemas.base_schema import (
+    IpAddressText,
+    StorableText,
+    canonical_ip,
     refuse_control_chars,
     refuse_control_chars_in_notes,
+    refuse_unstorable_text,
     storable_json,
 )
 from app.schemas.check_result_schema import CheckResultCreate
@@ -35,6 +44,7 @@ from app.schemas.status_page_schema import StatusPageCreate
 from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.api_token_core_service import ApiTokenCoreService
 from app.services.core.status_page_core_service import StatusPageCoreService
+from app.services.views.web_users_view_service import WebUsersViewService
 from fastapi import params
 from fastapi.routing import APIRoute
 from fixtures.factories import make_agent, make_check, make_user
@@ -53,6 +63,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 SURROGATE = "a\ud800"
+NUL = "a\x00b"
 
 
 def _members(annotation: Any) -> list[Any]:
@@ -63,23 +74,22 @@ def _members(annotation: Any) -> list[Any]:
     return [annotation]
 
 
-# What, on a text field, makes pydantic refuse a lone surrogate: a string
-# constraint (pydantic then reads the text as UTF-8), or the control-character
-# check, which refuses a surrogate. test_each_text_guard_refuses_a_surrogate
+# What, on a text field, refuses both a NUL and a lone surrogate. A string
+# constraint, a pattern or stripping refuses a surrogate but takes a NUL, so
+# none of them is enough. test_each_text_guard_refuses_what_no_column_can_store
 # holds each one to it.
-_TEXT_VALIDATORS = {refuse_control_chars, refuse_control_chars_in_notes}
+_TEXT_VALIDATORS = {
+    canonical_ip,
+    refuse_control_chars,
+    refuse_control_chars_in_notes,
+    refuse_unstorable_text,
+}
 
 
 def _guards_text(meta: Any) -> bool:
     if isinstance(meta, FieldInfo):
         return any(_guards_text(m) for m in meta.metadata)
-    return (
-        isinstance(
-            meta, (annotated_types.MinLen, annotated_types.MaxLen, StringConstraints)
-        )
-        or getattr(meta, "pattern", None) is not None
-        or getattr(meta, "func", None) in _TEXT_VALIDATORS
-    )
+    return getattr(meta, "func", None) in _TEXT_VALIDATORS
 
 
 def _walk(
@@ -101,7 +111,7 @@ def _walk(
         _walk(base, guarded, where, found, pending)
     elif annotation is str:
         if not guarded:
-            found.append(f"{where}: text taking a surrogate")
+            found.append(f"{where}: text taking a NUL or a surrogate")
     elif annotation in (Any, dict, object):
         found.append(f"{where}: free-form JSON")
     elif isinstance(annotation, type) and issubclass(annotation, BaseModel):
@@ -119,10 +129,42 @@ ITEMS_VALIDATED_IN_SERVICES: dict[str, type[BaseModel]] = {
 }
 
 
+def _submodules(package: types.ModuleType) -> list[types.ModuleType]:
+    return [
+        importlib.import_module(info.name)
+        for info in pkgutil.iter_modules(package.__path__, package.__name__ + ".")
+    ]
+
+
+def _form_models() -> set[type[BaseModel]]:
+    """The models a core service takes, whatever reached it: a web form, an MCP
+    tool, an import. Each is a parameter of a core service's public method, so
+    a form's input is held to the same rule as a JSON body's."""
+    models: set[type[BaseModel]] = set()
+    for module in _submodules(app_services_core):
+        for _, cls in inspect.getmembers(module, inspect.isclass):
+            if cls.__module__ != module.__name__:
+                continue
+            for name, func in inspect.getmembers(cls, inspect.isfunction):
+                if name.startswith("_"):
+                    continue
+                # A name imported for type checking alone (an ORM model) stays
+                # a forward reference: no request schema is imported that way.
+                hints = typing.get_type_hints(
+                    func, format=annotationlib.Format.FORWARDREF
+                )
+                hints.pop("return", None)
+                for hint in hints.values():
+                    models.update(
+                        m
+                        for m in _members(hint)
+                        if isinstance(m, type) and issubclass(m, BaseModel)
+                    )
+    return models
+
+
 def _body_models() -> set[type[BaseModel]]:
-    """The models a JSON request body is validated against. A form body is left
-    out: its text is UTF-8 by app.core.form_charset, and JSON a form field
-    carries is validated by the service that parses it."""
+    """The models a JSON request body is validated against."""
     models: set[type[BaseModel]] = set(ITEMS_VALIDATED_IN_SERVICES.values())
     for route, _ in iter_routes(app.routes):
         if (
@@ -141,18 +183,17 @@ def _body_models() -> set[type[BaseModel]]:
 def _unguarded() -> list[str]:
     found: list[str] = []
     seen: set[type[BaseModel]] = set()
-    pending = list(_body_models())
+    pending = list(_body_models() | _form_models())
     while pending:
         model = pending.pop()
         if model in seen:
             continue
         seen.add(model)
-        strips = bool(model.model_config.get("str_strip_whitespace"))
         for name, field in model.model_fields.items():
             where = f"{model.__name__}.{name}"
             if where in ITEMS_VALIDATED_IN_SERVICES:
                 continue
-            _walk(field.rebuild_annotation(), strips, where, found, pending)
+            _walk(field.rebuild_annotation(), False, where, found, pending)
     return sorted(set(found))
 
 
@@ -160,33 +201,63 @@ def test_the_walk_sees_the_request_bodies() -> None:
     assert len(_body_models()) >= 30
 
 
+def test_the_walk_sees_the_form_models() -> None:
+    names = {m.__name__ for m in _form_models()}
+
+    assert {"UserCreate", "UserUpdate", "CheckCreate", "AlertCreate"} <= names
+
+
 def test_every_request_body_field_refuses_what_no_column_can_store() -> None:
-    assert _unguarded() == []
+    unguarded = _unguarded()
+    assert unguarded == [], "\n".join(unguarded)
+
+
+@pytest.mark.parametrize("bad", [SURROGATE, NUL])
+@pytest.mark.parametrize(
+    "annotation",
+    [
+        typing.Annotated[str, AfterValidator(refuse_control_chars)],
+        typing.Annotated[str, AfterValidator(refuse_control_chars_in_notes)],
+        StorableText,
+        typing.Annotated[StorableText | None, Field(max_length=10)],
+        IpAddressText,
+    ],
+)
+def test_each_text_guard_refuses_what_no_column_can_store(
+    annotation: Any, bad: str
+) -> None:
+    with pytest.raises(ValidationError):
+        TypeAdapter(annotation).validate_python(bad)
 
 
 @pytest.mark.parametrize(
     "annotation",
     [
         typing.Annotated[str, Field(max_length=10)],
-        typing.Annotated[str, Field(min_length=1)],
         typing.Annotated[str, Field(pattern=r"^.*$")],
         typing.Annotated[str, StringConstraints(strip_whitespace=True)],
-        typing.Annotated[str, AfterValidator(refuse_control_chars)],
-        typing.Annotated[str, AfterValidator(refuse_control_chars_in_notes)],
     ],
 )
-def test_each_text_guard_refuses_a_surrogate(annotation: Any) -> None:
-    with pytest.raises(ValidationError):
-        TypeAdapter(annotation).validate_python(SURROGATE)
+def test_a_string_constraint_alone_takes_a_nul(annotation: Any) -> None:
+    """Why the walk does not count a constraint as a guard."""
+    assert TypeAdapter(annotation).validate_python(NUL) == NUL
 
 
-def test_a_stripping_model_refuses_a_surrogate() -> None:
-    class Stripping(BaseModel):
+def test_storable_text_keeps_what_a_column_can_store() -> None:
+    text = "café 😀\n\ttab"
+
+    assert TypeAdapter(StorableText).validate_python(text) == text
+
+
+def test_a_nul_in_a_body_model_is_refused() -> None:
+    """The walk's verdict holds at runtime: a str field it passes refuses a NUL."""
+
+    class Body(BaseModel):
         model_config = ConfigDict(str_strip_whitespace=True)
-        text: str
+        text: StorableText
 
     with pytest.raises(ValidationError):
-        Stripping(text=SURROGATE)
+        Body(text=NUL)
 
 
 @pytest.mark.parametrize(
@@ -234,7 +305,7 @@ def _result(check_id: str, metrics: dict[str, Any]) -> dict[str, Any]:
 
 
 @pytest.mark.integration
-@pytest.mark.parametrize("bad", [SURROGATE, "a\x00b"])
+@pytest.mark.parametrize("bad", [SURROGATE, NUL])
 async def test_a_result_with_unstorable_metrics_is_refused_on_its_own(
     client: AsyncClient, db: AsyncSession, bad: str
 ) -> None:
@@ -319,12 +390,14 @@ async def test_an_import_entry_holding_a_surrogate_is_refused_before_queueing(
 
 
 @pytest.mark.integration
-@pytest.mark.parametrize("full_name", [SURROGATE, "café 😀"])
-async def test_a_user_full_name_holding_a_surrogate_is_refused(
-    client: AsyncClient, db: AsyncSession, full_name: str
+@pytest.mark.parametrize(
+    ("case", "full_name"), [("s", SURROGATE), ("n", NUL), ("ok", "café 😀")]
+)
+async def test_a_user_full_name_holding_unstorable_text_is_refused(
+    client: AsyncClient, db: AsyncSession, case: str, full_name: str
 ) -> None:
     body = {
-        "username": "surrogatecase" + str(len(full_name)),
+        "username": "unstorable" + case,
         "password": "Xy7#kq9!Lm2$vB",
         "role": "viewer",
         "full_name": full_name,
@@ -336,11 +409,70 @@ async def test_a_user_full_name_holding_a_surrogate_is_refused(
         headers=await _admin_headers(db),
     )
 
-    assert resp.status_code == (422 if full_name == SURROGATE else 201), resp.text
+    assert resp.status_code == (201 if case == "ok" else 422), resp.text
 
 
 @pytest.mark.integration
-@pytest.mark.parametrize("bad", [SURROGATE, "a\x00b"])
+@pytest.mark.parametrize("bad", [SURROGATE, NUL])
+async def test_the_user_form_refuses_unstorable_text(
+    db: AsyncSession, bad: str
+) -> None:
+    """The web form is held to the same schema: a refusal, never a failed write."""
+    user, error = await WebUsersViewService().create_user(
+        db,
+        username="unstorableform",
+        password="Xy7#kq9!Lm2$vB",
+        role="viewer",
+        full_name=bad,
+        is_active=True,
+        must_change_password=False,
+        created_by="admin",
+    )
+
+    assert user is None
+    assert error is not None and error.startswith("full_name: ")
+    target = make_user(role="viewer")
+    db.add(target)
+    await db.flush()
+    with pytest.raises(ValidationError):
+        await WebUsersViewService().update_user(
+            db,
+            target.id,
+            role="viewer",
+            full_name=bad,
+            is_active=True,
+            must_change_password=False,
+        )
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("field", [None, "display_name", "target", "description"])
+async def test_a_check_holding_a_nul_is_refused(
+    client: AsyncClient, db: AsyncSession, field: str | None
+) -> None:
+    agent = make_agent()
+    db.add(agent)
+    await db.flush()
+    body = {
+        "agent_id": str(agent.id),
+        "display_name": "web",
+        "check_type": "http",
+        "target": "https://x.test",
+    }
+    if field is not None:
+        body[field] = NUL
+
+    resp = await client.post(
+        "/api/v1/admin/checks",
+        content=json.dumps(body).encode(),
+        headers=await _admin_headers(db),
+    )
+
+    assert resp.status_code == (201 if field is None else 422), resp.text
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("bad", [SURROGATE, NUL])
 async def test_a_status_page_group_holding_unstorable_text_is_refused(
     db: AsyncSession, bad: str
 ) -> None:

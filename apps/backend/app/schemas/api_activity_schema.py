@@ -10,6 +10,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict
 
 from app.models.enum_model import AuditOutcome, HttpMethod, MCPDenialCode
+from app.schemas.base_schema import StorableText
 
 # The statuses that mean the API refused the token rather than failed the call.
 DENIED_STATUSES: tuple[int, ...] = (401, 403)
@@ -23,8 +24,8 @@ class ActivityFilters(BaseModel):
     days: int
     user_id: UUID | None = None
     api_token_id: UUID | None = None
-    tool_name: str | None = None
-    route: str | None = None
+    tool_name: StorableText | None = None
+    route: StorableText | None = None
     outcome: AuditOutcome | None = None
 
 
