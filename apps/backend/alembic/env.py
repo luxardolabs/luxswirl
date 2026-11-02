@@ -7,6 +7,7 @@ from alembic import context
 from app.core.config import settings
 from app.core.logging_config import configure_logging
 from app.core.logging_options import logging_options
+from app.core.secrets import load_existing
 
 # The package, not base_model: importing app.models registers every table on
 # Base.metadata, which autogenerate compares against.
@@ -56,6 +57,21 @@ def include_object(
         and not name.startswith(("idx_", "ix_", "uq_"))
     )
     return not timescale_owned
+
+
+def load_field_encryption_key() -> None:
+    """Put the server's field-encryption key into settings before migrating.
+
+    `alembic upgrade` runs as its own process before the server, whose lifespan
+    resolves the key from the env var or its file under /app/data. A migration
+    that reads or writes an encrypted column needs that same key: without it
+    `EncryptedJSON` reads every encrypted value as nothing and writes JSON
+    text. This reads the env var and file the server reads and never generates
+    a key, so a database the server has never run against stays keyless.
+    """
+    key = load_existing("field_encryption_key", settings.security.field_encryption_key)
+    if key:
+        settings.security.field_encryption_key = key
 
 
 def get_url() -> str:
@@ -133,6 +149,8 @@ def run_migrations_online() -> None:
     """Online migrations always run via a fresh async engine."""
     asyncio.run(run_async_migrations())
 
+
+load_field_encryption_key()
 
 if context.is_offline_mode():
     logger.info("Running migrations in offline mode")
