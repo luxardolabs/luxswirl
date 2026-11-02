@@ -573,7 +573,9 @@ class AuthCoreService:
         """
         # Core takes an id and refetches — the web layer's DTO never enters core, so the
         # row mutated below is always a live, session-attached ORM object.
-        user = await UserCRUD.get_by_id(db, user_id)
+        # Locked before the session purge, so a sign-in with the old password
+        # waits for this change and is then checked against the new hash.
+        user = await UserCRUD.get_by_id_for_update(db, user_id)
         if user is None:
             raise ValueError("User not found")
 
@@ -643,7 +645,9 @@ class AuthCoreService:
         if not valid:
             raise ValidationException(error_message)
 
-        user = await UserCRUD.get_by_id(db, user_id)
+        # Locked before the session purge, so a sign-in with the old password
+        # waits for this reset and is then checked against the new hash.
+        user = await UserCRUD.get_by_id_for_update(db, user_id)
         if user is None:
             raise UserNotFoundException(user_id)
 

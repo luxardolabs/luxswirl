@@ -124,6 +124,20 @@ class UserCRUD:
         return user
 
     @staticmethod
+    async def get_by_id_for_update(db: AsyncSession, user_id: UUID) -> User | None:
+        """The user, re-read and row-locked until the transaction ends, for a
+        password change: a sign-in for the account (which locks the same row)
+        waits for the change to commit and then checks the new hash, so it
+        cannot open a session the change's session purge misses."""
+        result = await db.execute(
+            select(User)
+            .where(User.id == user_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        return result.scalar_one_or_none()
+
+    @staticmethod
     async def get_by_id(db: AsyncSession, user_id: UUID) -> User | None:
         result = await db.execute(select(User).where(User.id == user_id))
         return result.scalar_one_or_none()
