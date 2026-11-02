@@ -8,12 +8,14 @@ from datetime import timedelta
 from uuid import UUID
 
 import bcrypt
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.bcrypt_secret import MAX_SECRET_BYTES, bcrypt_matches
 from app.core.common_passwords import is_common_password
 from app.core.datetime_utils import utc_now
 from app.core.exceptions import (
+    LoginBusyException,
     NotFoundException,
     UserNotFoundException,
     ValidationException,
@@ -22,12 +24,16 @@ from app.core.storable_text import storable_text
 from app.crud.session_crud import SessionCRUD
 from app.crud.user_crud import UserCRUD
 from app.models.session_model import Session
+from app.models.user_model import User
 from app.schemas.auth_schema import CurrentUserResponse, SessionResponse
 from app.services.core.api_token_core_service import ApiTokenCoreService
 from app.services.core.settings_core_service import SettingsCoreService
 from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.services.auth")
+
+# PostgreSQL lock_not_available: a row lock not granted within lock_timeout.
+_LOCK_NOT_AVAILABLE = "55P03"
 
 
 class AuthCoreService:
@@ -39,6 +45,10 @@ class AuthCoreService:
     ACCOUNT_LOCK_DURATION_MINUTES = 30
     SESSION_LIFETIME_DAYS = 7
     PASSWORD_BCRYPT_ROUNDS = 12
+    # How long a sign-in waits behind other sign-ins for the same account (each
+    # holds the user row through its bcrypt check) before it is refused as busy
+    # (429). Below the web pool's 5 s statement_timeout, whose expiry is a 500.
+    LOGIN_LOCK_WAIT_MS = 3000
 
     @staticmethod
     async def validate_password_complexity(
@@ -177,6 +187,44 @@ class AuthCoreService:
     # Generated with 12 rounds to match PASSWORD_BCRYPT_ROUNDS
     _FAKE_PASSWORD_HASH = "$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5GyYqNGxMhxyu"
 
+    async def _user_for_login(
+        self,
+        db: AsyncSession,
+        username: str,
+        password: str,
+        *,
+        client_ip: str | None,
+        user_agent: str | None,
+    ) -> User | None:
+        """The user row a sign-in judges, locked to this transaction.
+
+        Raises:
+            LoginBusyException: If other sign-ins for the account held it past
+                LOGIN_LOCK_WAIT_MS
+        """
+        try:
+            return await UserCRUD.get_by_username_for_login(
+                db, username, lock_wait_ms=self.LOGIN_LOCK_WAIT_MS
+            )
+        except DBAPIError as exc:
+            if _LOCK_NOT_AVAILABLE not in (
+                getattr(exc.orig, "sqlstate", None),
+                getattr(exc.orig, "pgcode", None),
+            ):
+                raise
+            # Security: the refusal costs a bcrypt check like any other answer.
+            self.verify_password(password, self._FAKE_PASSWORD_HASH)
+            logger.warning(
+                "Login attempt refused: sign-ins for the account are queued",
+                extra={
+                    "event": "auth.failure.busy",
+                    "username": username,
+                    "client_ip": client_ip,
+                    "user_agent": user_agent,
+                },
+            )
+            raise LoginBusyException() from exc
+
     async def authenticate_user(
         self,
         db: AsyncSession,
@@ -208,8 +256,13 @@ class AuthCoreService:
         security_settings = await SettingsCoreService.get_security_settings(db)
 
         # No user has a username no column can hold; it is an unknown user.
+        # The row is locked before bcrypt: a concurrent sign-in for this account
+        # waits, then reads the failure count and lock this one commits, so no
+        # guess is checked against the real hash past the limit.
         user = (
-            await UserCRUD.get_by_username(db, username)
+            await self._user_for_login(
+                db, username, password, client_ip=client_ip, user_agent=user_agent
+            )
             if storable_text(username)
             else None
         )

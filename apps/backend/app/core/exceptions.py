@@ -158,6 +158,22 @@ class CheckBusyException(LuxSwirlException):
         )
 
 
+class LoginBusyException(LuxSwirlException):
+    """Raised when a sign-in waited too long behind other sign-ins for the same
+    account: they are judged one at a time, so the lockout sees every guess."""
+
+    status_code = 429
+    error_code = "LOGIN_BUSY"
+
+    def __init__(self) -> None:
+        super().__init__(
+            message=(
+                "Too many sign-in attempts for this account at once. "
+                "Try again in a moment."
+            ),
+        )
+
+
 class StalePageException(LuxSwirlException):
     """Raised when an edit names a status page item by its position on a version
     of the page that has since changed, so the position may name another item."""
