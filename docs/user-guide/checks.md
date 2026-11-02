@@ -181,6 +181,8 @@ Validate DNS resolution and record values. **Use for:** DNS-server availability,
 | **SRV**   | Service locator        | `10 60 5060 sipserver.example.com.`   |
 | **CAA**   | CA authorization       | `0 issue "letsencrypt.org"`           |
 
+A TXT record split into several strings (any record over 255 bytes) is read as one value, its strings joined with nothing between, as SPF and DKIM read them; a byte that is not UTF-8 shows as its escape (`\xff`).
+
 **Succeeds** when the query returns ≥1 record (and matches expect value / count if set). **Reports** latency, the returned records and count, TTL, the authoritative flag, and (for CNAME) the canonical name. **Common issues:** NXDOMAIN (domain doesn't exist), no records of that type, timeout, value mismatch.
 
 ```

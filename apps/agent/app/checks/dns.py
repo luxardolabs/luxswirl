@@ -2,6 +2,7 @@
 DNS Check Module - Implements DNS query health checks.
 """
 
+from collections.abc import Iterable
 from typing import Any
 
 from app.checks._ssrf_policy import assert_target_allowed
@@ -225,9 +226,7 @@ class DNSCheck(BaseCheck):
             elif record_type == "MX":
                 records.append(f"{rdata.preference} {rdata.exchange}")
             elif record_type == "TXT":
-                # TXT records can have multiple strings
-                txt_value = " ".join([s.decode() for s in rdata.strings])
-                records.append(txt_value)
+                records.append(self._txt_value(rdata.strings))
             elif record_type == "NS" or record_type == "PTR":
                 records.append(str(rdata.target))
             elif record_type == "SOA":
@@ -245,6 +244,18 @@ class DNSCheck(BaseCheck):
                 records.append(str(rdata))
 
         return records
+
+    @staticmethod
+    def _txt_value(strings: Iterable[bytes]) -> str:
+        """Read one TXT record's character-strings as the text they carry.
+
+        A record over 255 bytes is sent as several strings, split wherever the
+        255th byte falls, even inside a multi-byte character, so the strings
+        are joined as bytes, with nothing between them (as SPF and DKIM read
+        them), before decoding. A byte that is not UTF-8 is shown as its
+        escape (``\\xff``), so a record the nameserver returned is always read.
+        """
+        return b"".join(strings).decode("utf-8", errors="backslashreplace")
 
     def _validate_expect_value(self, records: list[str], expect_value: str) -> bool:
         """Check if any record contains the expected value.
