@@ -15,6 +15,9 @@
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
+import time
 from collections.abc import AsyncIterator
 from datetime import datetime, timedelta
 from uuid import UUID, uuid4
@@ -23,6 +26,7 @@ import pytest
 import pytest_asyncio
 from app.core.config import settings
 from app.core.datetime_utils import utc_now
+from app.core.exceptions import CheckBusyException
 from app.core.rate_limit import limiter
 from app.crud.alert_crud import AlertCRUD
 from app.main import app
@@ -33,9 +37,11 @@ from app.models.enum_model import UserRole
 from app.models.notification_provider_model import NotificationProvider
 from app.schemas.admin_alert_schema import AdminAlertChecks
 from app.schemas.api_token_schema import ApiTokenCreate
+from app.schemas.check_schema import CheckUpdate
 from app.services.core.admin_alert_core_service import AdminAlertCoreService
 from app.services.core.alert_core_service import AlertCoreService
 from app.services.core.api_token_core_service import ApiTokenCoreService
+from app.services.core.check_core_service import CheckCoreService
 from fixtures.factories import (
     make_agent,
     make_alert,
@@ -584,3 +590,127 @@ async def test_a_judged_check_cannot_turn_synthetic_before_the_replacement_commi
     assert check is not None
     assert check.check_type != "synthetic"
     assert mapped == ({plain_id} if attach else set())
+
+
+async def _two_checks_and_an_alert(
+    worker_db, *, mapped: bool
+) -> tuple[UUID, UUID, UUID]:
+    """Two plain checks, in id order, and an alert (mapped to the lower one)."""
+    async with worker_db() as s:
+        agent = make_agent()
+        s.add(agent)
+        await s.flush()
+        low, high = sorted([uuid4(), uuid4()])
+        s.add_all(
+            [
+                make_check(agent_id=agent.id, id=low),
+                make_check(agent_id=agent.id, id=high),
+            ]
+        )
+        alert = make_alert()
+        s.add(alert)
+        await s.flush()
+        if mapped:
+            s.add(AlertCheckMapping(alert_id=alert.id, check_id=low, is_enabled=True))
+        await s.commit()
+        return low, high, alert.id
+
+
+async def _replace(worker_db, alert_id: UUID, check_ids: list[UUID]) -> None:
+    async with worker_db() as s:
+        await AdminAlertCoreService.set_checks(
+            s, UserRole.EDITOR, alert_id, AdminAlertChecks(check_ids=check_ids)
+        )
+        await s.commit()
+
+
+async def test_a_replacement_does_not_wait_on_a_check_being_changed(
+    worker_db,
+) -> None:
+    """A check another transaction holds for its own write is not waited for:
+    the replacement answers at once that the check is busy, and changes
+    nothing."""
+    low, _, alert_id = await _two_checks_and_an_alert(worker_db, mapped=False)
+    async with worker_db() as holder:
+        await holder.execute(
+            select(Check.id).where(Check.id == low).with_for_update(key_share=True)
+        )
+        started = time.monotonic()
+        with pytest.raises(CheckBusyException):
+            await _replace(worker_db, alert_id, [low])
+        elapsed = time.monotonic() - started
+        await holder.rollback()
+
+    assert elapsed < 1.0, elapsed
+    async with worker_db() as s:
+        assert not (
+            await s.scalars(
+                select(AlertCheckMapping).where(AlertCheckMapping.alert_id == alert_id)
+            )
+        ).all()
+
+
+async def test_a_replacement_and_a_bulk_modify_of_its_checks_never_deadlock(
+    worker_db, monkeypatch
+) -> None:
+    """A bulk modify updates the checks in the order the user sent (high, then
+    low) while a replacement names both: the modify completes, and the
+    replacement either completes or is told the checks are busy."""
+    low, high, alert_id = await _two_checks_and_an_alert(worker_db, mapped=False)
+    original = CheckCoreService.update_check
+    state: dict[str, asyncio.Task[None]] = {}
+
+    async def update_then_replace(db, check_id, data, *, actor_is_admin=False):
+        check = await original(db, check_id, data, actor_is_admin=actor_is_admin)
+        if "replace" not in state:
+            state["replace"] = asyncio.create_task(
+                _replace(worker_db, alert_id, [low, high])
+            )
+            await asyncio.sleep(0.3)
+        return check
+
+    monkeypatch.setattr(
+        CheckCoreService, "update_check", staticmethod(update_then_replace)
+    )
+    async with worker_db() as s:
+        await s.execute(text("SET LOCAL lock_timeout = '4s'"))
+        result = await CheckCoreService.bulk_modify(
+            s, [high, low], CheckUpdate(interval_seconds=120), actor_is_admin=True
+        )
+        await s.commit()
+
+    assert result["failure_count"] == 0, result
+    # The replacement completes, or is told its checks are busy: never a
+    # deadlock or a database error.
+    with contextlib.suppress(CheckBusyException):
+        await state["replace"]
+
+
+async def test_a_check_delete_and_a_detach_of_it_never_deadlock(
+    worker_db, monkeypatch
+) -> None:
+    """An editor's replacement judges a check (holding it) and an admin deletes
+    that check before the editor writes: both complete."""
+    low, _, alert_id = await _two_checks_and_an_alert(worker_db, mapped=True)
+    original = AlertCRUD.replace_check_mappings
+    state: dict[str, asyncio.Task[None]] = {}
+
+    async def delete_low() -> None:
+        async with worker_db() as s:
+            await s.execute(text("SET LOCAL lock_timeout = '4s'"))
+            await CheckCoreService.delete_check(s, low, actor_is_admin=True)
+            await s.commit()
+
+    async def delete_then_write(db, aid, current, wanted):
+        state["delete"] = asyncio.create_task(delete_low())
+        await asyncio.sleep(0.3)
+        return await original(db, aid, current, wanted)
+
+    monkeypatch.setattr(
+        AlertCRUD, "replace_check_mappings", staticmethod(delete_then_write)
+    )
+    await _replace(worker_db, alert_id, [])
+    await state["delete"]
+
+    async with worker_db() as s:
+        assert await s.get(Check, low) is None
