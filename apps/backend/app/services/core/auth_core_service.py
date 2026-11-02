@@ -262,14 +262,17 @@ class AuthCoreService:
 
         # Verify password
         if not self.verify_password(password, user.password_hash):
-            # Increment failed attempts
-            user.failed_login_attempts += 1
-
-            # Lock account if too many failures (using DB setting)
+            # Count the failure where it is stored, locking the account at the
+            # limit (DB settings): a concurrent failure waits and adds to it.
             max_attempts = security_settings["max_failed_attempts"]
+            lock_duration = security_settings["account_lock_duration_minutes"]
+            await UserCRUD.record_failed_login(
+                db,
+                user,
+                max_attempts=max_attempts,
+                lock_until=utc_now() + timedelta(minutes=lock_duration),
+            )
             if user.failed_login_attempts >= max_attempts:
-                lock_duration = security_settings["account_lock_duration_minutes"]
-                user.locked_until = utc_now() + timedelta(minutes=lock_duration)
                 logger.warning(
                     "Account locked due to too many failed attempts",
                     extra={

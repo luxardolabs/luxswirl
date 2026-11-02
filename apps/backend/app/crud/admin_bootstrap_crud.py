@@ -1,4 +1,4 @@
-# luxarch:admin-bootstrap-crud asset v4 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit admin-bootstrap-crud`.
+# luxarch:admin-bootstrap-crud asset v5 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit admin-bootstrap-crud`.
 """The user-table half of the admin bootstrap. `luxarch --emit admin-bootstrap-crud`.
 
 Drop this in at `app/crud/admin_bootstrap_crud.py`. It is the ONLY module of the bootstrap that
@@ -8,8 +8,8 @@ and never touches a column. The standard is `luxarch --doc FLEET-ADMIN-BOOTSTRAP
 What you edit is in the `EDIT THIS` regions: the model import, and the small functions that read
 or write its columns. Everything else is the standard and is compared line for line, so
 `luxarch --emit admin-bootstrap-crud --update app/crud/admin_bootstrap_crud.py` can carry your
-regions onto a newer version. The default `_end_sessions` body imports what it reads inside the
-function, so a body that ends sessions another way carries no import nothing reads.
+regions onto a newer version. The model-import region also imports the clock the default
+`_end_sessions` body reads: an app that ends sessions another way deletes that import with the body.
 
 `count_users` is deliberately NOT editable. "There are no users" is the fact the whole standard
 turns on: the seed applies only then, `/setup` exists only then. A count with a filter on it (no

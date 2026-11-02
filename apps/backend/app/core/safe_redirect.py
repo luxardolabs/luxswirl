@@ -1,4 +1,4 @@
-# luxarch:safe-redirect asset v2 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit safe-redirect`.
+# luxarch:safe-redirect asset v3 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit safe-redirect`.
 """The one safe-redirect helper (FLEET-AUTH-SESSION-STANDARD §6).
 
 Every user-supplied redirect target (`next`, `return_to`, a `Referer` fallback) goes through
@@ -16,9 +16,35 @@ An OAuth ``redirect_uri`` is a different check: it is matched exactly against th
 
 from __future__ import annotations
 
+import re
 from urllib.parse import unquote, urlsplit
 
 DEFAULT_TARGET = "/"
+_DECODE_ROUNDS = 5  # a path still changing after this many percent-decodes is refused
+_DOT_SEGMENTS = frozenset({".", ".."})
+
+
+def _dot_segment(path: str) -> bool:
+    """Whether a path holds a `.` or `..` segment. A backslash separates segments too (browsers
+    read it as `/`), and a segment ends at a `?`, `#` or `;` that a decoded path may carry."""
+    for segment in re.split(r"[/\\]", path):
+        if re.split(r"[?#;]", segment, maxsplit=1)[0] in _DOT_SEGMENTS:
+            return True
+    return False
+
+
+def _path_resolves_elsewhere(value: str) -> bool:
+    """Whether the path part of `value` (before the first `?` or `#`) holds a dot segment at any
+    percent-decoding depth, or is still changing after `_DECODE_ROUNDS` decodes."""
+    path = re.split(r"[?#]", value, maxsplit=1)[0]
+    for _ in range(_DECODE_ROUNDS):
+        if _dot_segment(path):
+            return True
+        decoded = unquote(path)
+        if decoded == path:
+            return False
+        path = decoded
+    return _dot_segment(path) or unquote(path) != path
 
 
 def safe_redirect_target(value: object, default: str = DEFAULT_TARGET) -> str:
@@ -26,7 +52,11 @@ def safe_redirect_target(value: object, default: str = DEFAULT_TARGET) -> str:
 
     Refused: anything that is not a string; a scheme or host (``https://x``, ``//x``); a backslash,
     which browsers read as a slash (``/\\x``); control characters and anything outside printable ASCII (the value goes into a header); and the same tricks once
-    percent-decoded (``/%2F%2Fx``).
+    percent-decoded (``/%2F%2Fx``). Also refused: a path holding a ``.`` or ``..`` segment at any
+    percent-decoding depth (``/app/./x``, ``/a/../x``, ``/app/%2e/x``, ``/app/%252e/x``), because
+    the browser resolves it and lands on a path other than the one a server-side check saw; and a
+    path still changing after ``_DECODE_ROUNDS`` decodes. Only the path is judged: dots in the
+    query or fragment are data (``/search?q=../x`` is kept).
     """
     if not isinstance(value, str):
         return default
@@ -45,4 +75,6 @@ def safe_redirect_target(value: object, default: str = DEFAULT_TARGET) -> str:
         parts = urlsplit(candidate)
         if parts.scheme or parts.netloc:
             return default
+    if _path_resolves_elsewhere(v):
+        return default
     return v
