@@ -11,10 +11,15 @@ from datetime import timedelta
 from typing import Any
 from uuid import UUID
 
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.datetime_utils import utc_now
-from app.core.exceptions import NotFoundException, ValidationException
+from app.core.exceptions import (
+    CheckBusyException,
+    NotFoundException,
+    ValidationException,
+)
 from app.core.synthetic_guard import SYNTHETIC, require_admin_actor
 from app.crud.alert_crud import AlertCRUD
 from app.crud.check_crud import CheckCRUD
@@ -32,6 +37,9 @@ from app.services.core.notification_core_service import NotificationCoreService
 from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.services.alert")
+
+# PostgreSQL's lock_not_available: a NOWAIT lock another transaction holds.
+_LOCK_NOT_AVAILABLE = "55P03"
 
 
 # Alert columns that are never null: an update leaves them when sent empty.
@@ -223,13 +231,24 @@ class AlertCoreService:
 
         The checks are held FOR SHARE until the caller's transaction ends, so
         none becomes synthetic between this judgement and the write it allows.
+        One that another transaction is changing is not waited for.
 
         Raises:
             ValidationException: A check id names no check.
             AuthorizationException: A synthetic check, and the actor is not
                 an admin.
+            CheckBusyException: Another transaction is changing one of the
+                checks; nothing was changed.
         """
-        checks = await CheckCRUD.share_lock_checks(db, check_ids)
+        try:
+            checks = await CheckCRUD.share_lock_checks(db, check_ids)
+        except DBAPIError as exc:
+            if _LOCK_NOT_AVAILABLE not in (
+                getattr(exc.orig, "sqlstate", None),
+                getattr(exc.orig, "pgcode", None),
+            ):
+                raise
+            raise CheckBusyException() from exc
         found = {c.id for c in checks}
         missing = [c for c in dict.fromkeys(check_ids) if c not in found]
         if missing:

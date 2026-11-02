@@ -142,6 +142,22 @@ class DuplicateResourceException(LuxSwirlException):
     error_code = "DUPLICATE_RESOURCE"
 
 
+class CheckBusyException(LuxSwirlException):
+    """Raised when a change must hold checks that another transaction is
+    changing; nothing was changed, and the change can be sent again."""
+
+    status_code = 409
+    error_code = "CHECK_BUSY"
+
+    def __init__(self) -> None:
+        super().__init__(
+            message=(
+                "A check in this change is being changed by another request, "
+                "so nothing was changed. Try again."
+            ),
+        )
+
+
 class StalePageException(LuxSwirlException):
     """Raised when an edit names a status page item by its position on a version
     of the page that has since changed, so the position may name another item."""

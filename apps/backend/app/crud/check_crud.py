@@ -79,6 +79,13 @@ class CheckCRUD:
 
     @staticmethod
     async def delete_check(db: AsyncSession, check: Check) -> None:
+        """Delete the check and its alert mappings.
+
+        The check's row is locked first: a transaction that holds it FOR SHARE
+        (an alert change judging it) finishes before the mappings are deleted,
+        so the two never wait on each other's rows.
+        """
+        await db.execute(select(Check.id).where(Check.id == check.id).with_for_update())
         await db.delete(check)
         await db.flush()
 
@@ -500,17 +507,22 @@ class CheckCRUD:
         """`check_ids`' checks, each held FOR SHARE until the transaction ends.
 
         A change to a held check (its type, say) waits for this transaction, so
-        what was judged of it stays true until the judged write commits. Rows
-        are locked in id order, so two holders never wait on each other.
+        what was judged of it stays true until the judged write commits. NOWAIT:
+        a check another transaction is changing raises at once (PostgreSQL
+        lock_not_available, 55P03) rather than waiting, so this read never
+        waits on a check writer, and never deadlocks with one. The savepoint
+        keeps the caller's transaction usable after that refusal; the locks
+        taken inside it are held to the transaction's end.
         """
         if not check_ids:
             return []
-        result = await db.execute(
-            select(Check)
-            .where(Check.id.in_(check_ids))
-            .order_by(Check.id)
-            .with_for_update(read=True)
-            # The locked row's values, not a copy this session loaded earlier.
-            .execution_options(populate_existing=True)
-        )
-        return list(result.scalars().all())
+        async with db.begin_nested():
+            result = await db.execute(
+                select(Check)
+                .where(Check.id.in_(check_ids))
+                .order_by(Check.id)
+                .with_for_update(read=True, nowait=True)
+                # The locked row's values, not a copy this session loaded earlier.
+                .execution_options(populate_existing=True)
+            )
+            return list(result.scalars().all())
