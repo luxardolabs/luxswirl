@@ -1142,13 +1142,13 @@
         },
         {
           "rule": "fw.mutating_route_authenticated",
-          "status": "PASS",
+          "status": "FAIL",
           "since": "0.84.0",
-          "violations": 0,
+          "violations": 1,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
-          "fix": "",
+          "fix": "Add an authenticating dependency (one of [auth].deps, an enforcing Security scheme, a dependency that refuses the anonymous caller with 401/403, or an Annotated alias resolving to one) and scope the object to the caller. A dependency that authenticates in a way luxarch cannot read (it lives in another package, or refuses through an exception handler) is declared in [auth].deps. If the route is genuinely public (login/oauth/register/logout, a webhook verified by signature, a public form), record it in [allowlist].auth_public = [{ function|path, evidence }].",
           "example": ""
         },
         {
@@ -2000,8 +2000,8 @@
         }
       ],
       "summary": {
-        "PASS": 161,
-        "FAIL": 2,
+        "PASS": 160,
+        "FAIL": 3,
         "XFAIL": 0,
         "XPASS": 0,
         "INERT": 18
@@ -2924,12 +2924,12 @@
     }
   },
   "summary": {
-    "PASS": 237,
-    "FAIL": 3,
+    "PASS": 236,
+    "FAIL": 4,
     "XFAIL": 0,
     "XPASS": 0,
     "INERT": 22
   },
-  "commit": "8b5a3a973b5831cf03c3939d9a4d394a98702fa3",
-  "generated_at": "2026-11-02T14:09:01Z"
+  "commit": "0c38ce79eee248dcc4c83e3a8a41e2a1f8fc637a",
+  "generated_at": "2026-11-02T16:40:27Z"
 }
