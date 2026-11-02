@@ -1,6 +1,6 @@
 {
   "guard": "luxarch",
-  "guard_version": "0.336.0",
+  "guard_version": "0.337.0",
   "repo": "/repo",
   "targets": [
     {
@@ -1758,12 +1758,12 @@
         },
         {
           "rule": "fw.single_use_claim_atomic",
-          "status": "INERT",
+          "status": "PASS",
           "since": "0.287.0",
           "violations": 0,
           "deferred": false,
-          "inert": true,
-          "inert_reason": "no code claims a single-use record (no check-then-write on a row, no marker write) \u2014 nothing to judge",
+          "inert": false,
+          "inert_reason": "",
           "fix": "",
           "example": ""
         },
@@ -2000,11 +2000,11 @@
         }
       ],
       "summary": {
-        "PASS": 160,
+        "PASS": 161,
         "FAIL": 3,
         "XFAIL": 0,
         "XPASS": 0,
-        "INERT": 18
+        "INERT": 17
       }
     },
     {
@@ -2300,13 +2300,13 @@
       },
       {
         "rule": "repo.makefile_no_fixed_tmp",
-        "status": "FAIL",
+        "status": "PASS",
         "since": "0.249.0",
-        "violations": 2,
+        "violations": 0,
         "deferred": false,
         "inert": false,
         "inert_reason": "",
-        "fix": "Use a per-run file and remove it on exit, in ONE shell: `@set -e; C=$$(mktemp); trap 'rm -f \"$$C\"' EXIT INT TERM; <cmd> > \"$$C\"; docker run -v \"$$C\":/x:ro \u2026`. A cache that must persist belongs in a gitignored path inside the repo, not /tmp. See --doc FLEET-MAKEFILE-STANDARD.",
+        "fix": "",
         "example": ""
       },
       {
@@ -2916,20 +2916,20 @@
       }
     ],
     "summary": {
-      "PASS": 69,
-      "FAIL": 1,
+      "PASS": 70,
+      "FAIL": 0,
       "XFAIL": 0,
       "XPASS": 0,
       "INERT": 1
     }
   },
   "summary": {
-    "PASS": 236,
-    "FAIL": 4,
+    "PASS": 238,
+    "FAIL": 3,
     "XFAIL": 0,
     "XPASS": 0,
-    "INERT": 22
+    "INERT": 21
   },
-  "commit": "32dbbca77043ab76ed9287a4b86577a612b449b1",
-  "generated_at": "2026-11-02T21:07:48Z"
+  "commit": "88439344a50d4eaec679c5c87567bd057dd3fab1",
+  "generated_at": "2026-11-02T21:46:23Z"
 }

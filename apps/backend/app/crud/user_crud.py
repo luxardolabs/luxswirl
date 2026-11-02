@@ -3,9 +3,10 @@ User CRUD - database queries for users.
 """
 
 from collections.abc import Sequence
+from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import case, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.datetime_utils import utc_now
@@ -42,6 +43,28 @@ class UserCRUD:
         await db.flush()
         await db.refresh(user)
         return user
+
+    @staticmethod
+    async def record_failed_login(
+        db: AsyncSession, user: User, *, max_attempts: int, lock_until: datetime
+    ) -> None:
+        """Count one failed sign-in in the statement that writes it, and lock the account
+        when the count reaches `max_attempts`. The row lock the UPDATE takes makes a
+        concurrent failure wait and add to this count, so none is lost. `user` is
+        refreshed with the stored values."""
+        raised = User.failed_login_attempts + 1
+        await db.execute(
+            update(User)
+            .where(User.id == user.id)
+            .values(
+                failed_login_attempts=raised,
+                locked_until=case(
+                    (raised >= max_attempts, lock_until), else_=User.locked_until
+                ),
+            )
+            .execution_options(synchronize_session=False)
+        )
+        await db.refresh(user, ["failed_login_attempts", "locked_until"])
 
     @staticmethod
     async def delete_user(db: AsyncSession, user: User) -> None:

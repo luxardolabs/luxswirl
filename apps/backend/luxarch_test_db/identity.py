@@ -1,4 +1,4 @@
-# luxarch:test-db-identity asset v1 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit test-db-identity`.
+# luxarch:test-db-identity asset v2 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit test-db-identity`.
 """Where a Postgres connection really is, asked of the server on that connection.
 
 TEST_DATABASE_URL's text does not say where the driver lands: a query `host`, a `hostaddr` in a
@@ -11,10 +11,12 @@ Production never has that role, and another run's server has another name. Outsi
 
 Every new driver connection any SQLAlchemy engine opens on a Postgres dialect (judged by its type:
 a `timescaledb://` URL's too) is asked, before anything else is sent on it, for
-`current_database()` and whether that role exists (`to_regrole`, which needs no catalog privilege).
-It is asked as the dialect opens it (`do_connect`, after the app's own `do_connect` listeners and
-before the pool's `first_connect`); one an engine's `creator=` opens, when the pool connects it; one
-opened before this module was installed, at its first checkout. What the answer must be depends on
+`current_database()` and whether that role exists (`to_regrole`, which needs no catalog privilege),
+under a `statement_timeout` of its own where the driver is not in autocommit, and asked again when
+the connection's own timeout cancels it on a cold server process. It is asked as the dialect opens it
+(`do_connect`, after the app's own `do_connect` listeners and before the pool's `first_connect`);
+one an engine's `creator=` opens, when the pool connects it; one opened before this module was
+installed, at its first checkout. What the answer must be depends on
 the process's scope, LUXARCH_TEST_DB_SCOPE, read once:
 
 - `suite` (the default; the suite's own run and every process it starts): the role exists and the
@@ -65,7 +67,18 @@ PYTEST_DONT_REWRITE: `sitecustomize` imports this module before pytest starts, a
 that it cannot rewrite its asserts (it has none), an error under the fleet's `filterwarnings`.
 """
 
+import contextlib
+import os
+import re
 import sys
+import tempfile
+from typing import Protocol, TypeGuard, runtime_checkable
+
+from sqlalchemy import event, make_url
+from sqlalchemy.dialects.postgresql.base import PGDialect
+from sqlalchemy.engine import Engine
+from sqlalchemy.engine.interfaces import Dialect
+from sqlalchemy.pool import Pool
 
 # The role the test block creates on each Postgres server it starts: `luxarch_test_server_<token>`,
 # named by the run's own token. A server carrying it is the one THIS run's test stack made: another
@@ -97,7 +110,6 @@ def _luxarch_test_db_in_test(what: str) -> str:
 
 def _luxarch_test_db_scope() -> str:
     """LUXARCH_TEST_DB_SCOPE, as the process first read it: `suite` when unset."""
-    import os
 
     if not _LUXARCH_TEST_DB_SCOPE:
         _LUXARCH_TEST_DB_SCOPE.append(
@@ -109,8 +121,6 @@ def _luxarch_test_db_scope() -> str:
 def _luxarch_test_db_log(what: str) -> None:
     """Record a refusal where the run's pytest reads it at its end: this process may be a child whose
     failure nobody looks at (a pool worker whose exception the app catches)."""
-    import contextlib
-    import os
 
     where = os.environ.get("LUXARCH_TEST_DB_REFUSALS", "")
     if not where:
@@ -137,7 +147,6 @@ def _luxarch_test_db_refuse(what: str) -> None:
 
 def _luxarch_test_db_logged() -> list[str]:
     """Every refusal a process of this run recorded in LUXARCH_TEST_DB_REFUSALS."""
-    import os
 
     where = os.environ.get("LUXARCH_TEST_DB_REFUSALS", "")
     out: list[str] = []
@@ -154,9 +163,6 @@ def _luxarch_test_db_logged() -> list[str]:
 
 def _luxarch_test_db_key(url: object) -> tuple[str, str | None, int | None, str | None]:
     """One database whatever the driver or the password; a SQLite file by its resolved path."""
-    import os
-
-    from sqlalchemy import make_url
 
     u = make_url(str(url) if not isinstance(url, str) else url)
     backend = u.get_backend_name()
@@ -187,7 +193,6 @@ def _luxarch_test_db_key(url: object) -> tuple[str, str | None, int | None, str 
 def _luxarch_test_db_target() -> tuple[str, str | None, int | None, str | None] | None:
     """The run's database: TEST_DATABASE_URL as it was when this module was installed, or, unset
     then (a suite conftest sets it), as it is the first time this is asked."""
-    import os
 
     if not _LUXARCH_TEST_DB_AT_IMPORT and os.environ.get("TEST_DATABASE_URL"):
         _LUXARCH_TEST_DB_AT_IMPORT.append(os.environ["TEST_DATABASE_URL"])
@@ -199,8 +204,6 @@ def _luxarch_test_db_target() -> tuple[str, str | None, int | None, str | None] 
     # `luxlint --emit-config conftest` builds); a SQLite file is per run already
     worker = os.environ.get("PYTEST_XDIST_WORKER", "")
     if worker and worker != "master" and key[0] != "sqlite" and key[3]:
-        from sqlalchemy import make_url
-
         u = make_url(target)
         if u.database:
             # keyed as the URL naming that database (a host-less URL is keyed whole)
@@ -211,8 +214,6 @@ def _luxarch_test_db_target() -> tuple[str, str | None, int | None, str | None] 
 
 def _luxarch_test_db_marker() -> str | None:
     """The role that marks this run's server (None: LUXARCH_TEST_RUN is not a run token)."""
-    import os
-    import re
 
     run = os.environ.get("LUXARCH_TEST_RUN", "")
     if not run:
@@ -238,7 +239,6 @@ def _luxarch_test_db_pg(dialect: object) -> bool:
     """`dialect` (a class or an instance) is SQLAlchemy's Postgres dialect or one built on it (a
     `timescaledb://`, `cockroachdb://` or `redshift+psycopg2://` URL's): judged by its type, never by
     the URL's backend name."""
-    from sqlalchemy.dialects.postgresql.base import PGDialect
 
     kind = dialect if isinstance(dialect, type) else type(dialect)
     return issubclass(kind, PGDialect) or getattr(dialect, "name", None) == "postgresql"
@@ -247,7 +247,6 @@ def _luxarch_test_db_pg(dialect: object) -> bool:
 def _luxarch_test_db_other_dialect(dialect: object) -> bool:
     """`dialect` is a SQLAlchemy dialect known not to be Postgres's (a pool built without an engine
     has none, and is not known not to be)."""
-    from sqlalchemy.engine.interfaces import Dialect
 
     return isinstance(dialect, Dialect) and not _luxarch_test_db_pg(dialect)
 
@@ -255,7 +254,6 @@ def _luxarch_test_db_other_dialect(dialect: object) -> bool:
 def _luxarch_test_db_is_postgres() -> bool:
     """The run's database is on Postgres: TEST_DATABASE_URL's dialect is Postgres's or built on it.
     A dialect that cannot be loaded is not known not to be."""
-    from sqlalchemy import make_url
 
     if _luxarch_test_db_target() is None:
         return False
@@ -269,9 +267,6 @@ def _luxarch_test_db_is_postgres() -> bool:
 def _luxarch_test_db_run_database() -> str | None:
     """The run's Postgres database: the one TEST_DATABASE_URL names in its PATH (`<db>_<worker>` in
     an xdist worker), or None when it names none there."""
-    import os
-
-    from sqlalchemy import make_url
 
     if _luxarch_test_db_target() is None:
         return None
@@ -316,23 +311,98 @@ def _luxarch_test_db_identity_refusal(row: object, allow: tuple[str, ...] = ()) 
     return ""
 
 
+# How long the question may take, whatever `statement_timeout` the connection carries (an app's
+# `server_settings` or `options`, a role's or database's default): a short one of the app's own
+# would cancel the question and refuse a connection that is where it should be, and none at all
+# would let an unresponsive server hang the run.
+_LUXARCH_TEST_DB_ASK_TIMEOUT = "10s"
+
+
+# Tries at the question. The first statement a fresh server process runs pays its warm-up
+# (TimescaleDB's loader looks its extension up: about 2 ms on an idle host, far more on a loaded
+# one), so a short timeout of the connection's own can cancel whatever is sent first; the next try
+# runs warm. Only a cancellation is tried again.
+_LUXARCH_TEST_DB_ASK_TRIES = 3
+
+
+def _luxarch_test_db_cancelled(e: BaseException) -> bool:
+    """`e` is the server cancelling a statement (SQLSTATE 57014), as psycopg, psycopg2 or
+    SQLAlchemy's asyncpg adapter raise it."""
+    return "57014" in (getattr(e, "sqlstate", None), getattr(e, "pgcode", None))
+
+
+def _luxarch_test_db_in_transaction(dbapi_conn: object) -> bool:
+    """The driver connection is already inside a transaction (an app's `do_connect` listener ran a
+    statement on it): psycopg's `info.transaction_status`, psycopg2's `get_transaction_status()`,
+    asyncpg's `is_in_transaction()` behind SQLAlchemy's adapter. False when none says so."""
+
+    with contextlib.suppress(Exception):
+        info = getattr(dbapi_conn, "info", None)
+        status = getattr(info, "transaction_status", None)
+        if status is not None:
+            return int(status) != 0
+        get = getattr(dbapi_conn, "get_transaction_status", None)
+        if callable(get):
+            return int(get()) != 0
+        inner = getattr(dbapi_conn, "_connection", None)
+        asks = getattr(inner, "is_in_transaction", None)
+        if callable(asks):
+            return bool(asks())
+    return False
+
+
 def _luxarch_test_db_ask_dbapi(dbapi_conn: object) -> object:
     """The identity row of a Postgres driver connection, asked on that connection, which is then left
-    as it was found: the transaction the question began (a driver not in autocommit) is ended, so the
-    dialect can still set its isolation level."""
+    as it was found. A driver not in autocommit asks inside the transaction its first statement
+    opens, under a `statement_timeout` of the question's own (`SET LOCAL`), and that transaction is
+    rolled back, its timeout with it, so the dialect can still set its isolation level. A driver in
+    autocommit is asked one statement at a time, opening no transaction of its own (one held open
+    across round trips would meet the connection's `idle_in_transaction_session_timeout`). A try
+    the connection's own timeout cancels is made again on the warmed process, up to
+    _LUXARCH_TEST_DB_ASK_TRIES times; anything else, or the last cancellation, is raised and the
+    connection refused. A connection handed over already inside a transaction (an app's `do_connect`
+    listener's statement) is asked in a savepoint that is rolled back, so that transaction is kept.
+    Stated limit: a connection timeout shorter than a warm question (well under
+    a millisecond) still refuses it."""
     make = getattr(dbapi_conn, "cursor", None)
     if not callable(make):
         return None
-    cursor = make()
-    try:
-        cursor.execute(_luxarch_test_db_identity())
-        row = cursor.fetchone()
-    finally:
-        cursor.close()
+    autocommit = getattr(dbapi_conn, "autocommit", False) is True
+    # a transaction the app already opened is kept: the question runs in a savepoint inside it
+    nested = not autocommit and _luxarch_test_db_in_transaction(dbapi_conn)
     end = getattr(dbapi_conn, "rollback", None)
-    if callable(end):
-        end()
-    return tuple(row) if row is not None else None
+    for attempt in range(_LUXARCH_TEST_DB_ASK_TRIES):
+        cursor = make()
+        try:
+            try:
+                if nested:
+                    cursor.execute("SAVEPOINT luxarch_test_db_ask")
+                if not autocommit:
+                    cursor.execute(
+                        f"SET LOCAL statement_timeout = '{_LUXARCH_TEST_DB_ASK_TIMEOUT}'"
+                    )
+                cursor.execute(_luxarch_test_db_identity())
+                row = cursor.fetchone()
+            except Exception as e:
+                if (
+                    attempt + 1 < _LUXARCH_TEST_DB_ASK_TRIES
+                    and _luxarch_test_db_cancelled(e)
+                ):
+                    continue
+                raise
+            return tuple(row) if row is not None else None
+        finally:
+            try:
+                if nested:
+                    # the savepoint's `SET LOCAL` ends with it; the app's transaction stays
+                    cursor.execute("ROLLBACK TO SAVEPOINT luxarch_test_db_ask")
+                    cursor.execute("RELEASE SAVEPOINT luxarch_test_db_ask")
+            finally:
+                cursor.close()
+                # the question's transaction ends, its timeout with it, however the question went
+                if not autocommit and not nested and callable(end):
+                    end()
+    return None
 
 
 def _luxarch_test_db_confirm(row: object, allow: tuple[str, ...] = ()) -> None:
@@ -344,7 +414,6 @@ def _luxarch_test_db_confirm(row: object, allow: tuple[str, ...] = ()) -> None:
 
 def _luxarch_test_db_close(dbapi_conn: object) -> None:
     """Close a refused driver connection; one that will not close is refused all the same."""
-    import contextlib
 
     with contextlib.suppress(Exception):
         getattr(dbapi_conn, "close", lambda: None)()
@@ -407,7 +476,18 @@ def _luxarch_test_db_check_identity(
     try:
         row = _luxarch_test_db_ask_dbapi(dbapi_conn)
     except Exception as e:
-        row = f"{type(e).__name__} asking it"
+        # the server's own words (a cancelled statement reads as one), on one line
+        try:
+            said = " ".join(str(e).split())[:300] or str(
+                getattr(e, "sqlstate", None) or getattr(e, "pgcode", None) or ""
+            )
+        except Exception:
+            said = ""  # an error that cannot print itself is refused all the same
+        row = (
+            f"{type(e).__name__} asking it: {said}"
+            if said
+            else f"{type(e).__name__} asking it"
+        )
     # the suite's own engine on the maintenance database, while it creates a worker's
     allow = ("postgres",) if _LUXARCH_TEST_DB_CREATING else ()
     try:
@@ -473,14 +553,12 @@ _LUXARCH_TEST_DB_SEEN: dict[str, str] = {}
 
 def _luxarch_test_db_children() -> str:
     """This package's `children` directory, whose `sitecustomize` installs the check."""
-    import os
 
     return os.path.join(os.path.dirname(os.path.realpath(__file__)), "children")
 
 
 def _luxarch_test_db_with_children(path: str) -> str:
     """PYTHONPATH `path` with `children` first, and nowhere else."""
-    import os
 
     here = _luxarch_test_db_children()
     rest = [p for p in path.split(os.pathsep) if p and os.path.realpath(p) != here]
@@ -490,7 +568,6 @@ def _luxarch_test_db_with_children(path: str) -> str:
 def _luxarch_test_db_carried() -> dict[str, str]:
     """The settings a child is handed: PYTHONPATH with `children` first, and the run's own
     LUXARCH_TEST_* (as the environment holds them now, else as this process last saw them)."""
-    import os
 
     out = {
         "PYTHONPATH": _luxarch_test_db_with_children(os.environ.get("PYTHONPATH", ""))
@@ -511,8 +588,6 @@ def _luxarch_test_db_audit(event: str, args: tuple[object, ...]) -> None:
     run's settings back; one `subprocess` starts with a dict environment of its own gets them put
     into that environment. Nothing is ever refused here: a test may change the environment as it
     likes (`mock.patch.dict(os.environ)`, `os.environ.clear()`)."""
-    import contextlib
-    import os
 
     if event == "subprocess.Popen" and len(args) >= 4:
         env = args[3]
@@ -547,11 +622,6 @@ def _luxarch_test_db_audit(event: str, args: tuple[object, ...]) -> None:
 def install() -> None:
     """Ask every SQLAlchemy connection the process opens from here on where it is. Installing twice
     adds nothing."""
-    import os
-
-    from sqlalchemy import event
-    from sqlalchemy.engine import Engine
-    from sqlalchemy.pool import Pool
 
     _luxarch_test_db_scope()
     # a process the run started holds to the database the run fixed, whatever a test re-pointed
@@ -579,8 +649,6 @@ def install() -> None:
 def refusals_directory() -> None:
     """Give the run a directory every process it starts records its refusals in (kept when the
     environment already names one: an xdist worker shares its controller's)."""
-    import os
-    import tempfile
 
     if not os.environ.get("LUXARCH_TEST_DB_REFUSALS"):
         os.environ["LUXARCH_TEST_DB_REFUSALS"] = tempfile.mkdtemp(
@@ -591,40 +659,57 @@ def refusals_directory() -> None:
     _luxarch_test_db_carried()
 
 
+@runtime_checkable
+class _LuxarchTestDbSession(Protocol):
+    """What `report` uses of pytest's Session."""
+
+    exitstatus: object
+    config: object
+
+
+def _luxarch_test_db_is_session(session: object) -> TypeGuard[_LuxarchTestDbSession]:
+    """`session` is pytest's own Session, judged by its class (`_pytest.main.Session`) and never
+    through the `pytest` module: a test may have dropped that from `sys.modules`, and this module,
+    which `sitecustomize` loads into every process the run starts, never imports pytest."""
+    return any(
+        k.__module__ == "_pytest.main" and k.__qualname__ == "Session"
+        for k in type(session).__mro__
+    )
+
+
 def report(session: object, problems: list[str]) -> None:
     """Fail the run on `problems`, through pytest's terminal reporter (standard error when it is off);
     an xdist worker hands them to the controller as its `shouldfail`, the one thing a worker's run
-    reports that the controller stops on."""
-    import sys
-
-    import pytest
-
-    if not isinstance(session, pytest.Session):
+    reports that the controller stops on. The failure is recorded on the session before anything
+    that can raise, the check that it is pytest's Session included (a test can rename that class):
+    an xdist worker whose session-finish hook raises reports nothing to the controller, and its
+    run would pass."""
+    text = (
+        "luxarch test-db-bound: FAIL — the suite is not on its throwaway database:\n  - "
+        + "\n  - ".join(problems)
+    )
+    if problems and isinstance(session, _LuxarchTestDbSession):
+        workeroutput = getattr(session.config, "workeroutput", None)
+        if isinstance(workeroutput, dict):
+            workeroutput["shouldfail"] = text
+        session.exitstatus = 1
+    if not _luxarch_test_db_is_session(session):
         raise AssertionError(
             f"luxarch test-db-bound: pytest handed {session!r}, not its Session"
         )
     if not problems:
         return
-    text = (
-        "luxarch test-db-bound: FAIL — the suite is not on its throwaway database:\n  - "
-        + "\n  - ".join(problems)
-    )
-    reporter = session.config.pluginmanager.get_plugin("terminalreporter")
+    manager = getattr(session.config, "pluginmanager", None)
+    reporter = manager.get_plugin("terminalreporter") if manager is not None else None
     if reporter is not None:
         reporter.write_line("")
         reporter.write_line(text, red=True)
     else:
         sys.stderr.write(f"\n{text}\n")
-    session.exitstatus = 1
-    workeroutput = getattr(session.config, "workeroutput", None)
-    if isinstance(workeroutput, dict):
-        workeroutput["shouldfail"] = text
 
 
 def pytest_plugin_registered(plugin: object, manager: object) -> None:
     """Installed the moment pytest registers this module (`-p` is read before any conftest)."""
-    import sys
-
     if plugin is sys.modules.get(__name__):
         install()
 

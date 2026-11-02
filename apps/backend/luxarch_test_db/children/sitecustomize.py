@@ -1,4 +1,4 @@
-# luxarch:test-db-children asset v1 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit test-db-children`.
+# luxarch:test-db-children asset v2 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit test-db-children`.
 """Every Python process the test run starts asks each Postgres connection where it is.
 
 `make test` puts this directory first on PYTHONPATH, so Python runs this module as it starts any
@@ -13,13 +13,14 @@ check is stopped before it runs anything: Python reports a failing `sitecustomiz
 would run the process unchecked.
 """
 
+import importlib
+import importlib.util
+import os
+import sys
+from importlib.machinery import PathFinder
+
 
 def _luxarch_test_db_children() -> None:
-    import importlib.util
-    import os
-    import sys
-    from importlib.machinery import PathFinder
-
     here = os.path.dirname(os.path.realpath(__file__))
     if importlib.util.find_spec("sqlalchemy") is not None:
         # the package is found where this file is, never through PYTHONPATH: a repo directory on
@@ -27,9 +28,9 @@ def _luxarch_test_db_children() -> None:
         top = os.path.dirname(os.path.dirname(here))
         sys.path.insert(0, top)
         try:
-            from luxarch_test_db import identity
-
-            identity.install()
+            # imported by name, once the package's directory is on the path: never at this module's
+            # top, where it would import SQLAlchemy in a process that has none
+            importlib.import_module("luxarch_test_db.identity").install()
         except BaseException as e:
             sys.stderr.write(
                 "luxarch test-db-bound: could not install luxarch_test_db.identity in this "

@@ -1,4 +1,4 @@
-# luxarch:same-origin asset v5 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit same-origin`.
+# luxarch:same-origin asset v6 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit same-origin`.
 """The app refuses a cross-site POST: the one cross-site guard (FLEET-AUTH-SESSION-STANDARD §5).
 
 Emitted by ``luxarch --emit same-origin``. Drop it in at ``app/core/same_origin.py``; it is enforced
@@ -19,9 +19,11 @@ Wire it on the app, with the same ALLOWED_HOSTS the trusted-host middleware uses
 A websocket handshake is judged by the same test and closed with 1008 before the app accepts it: a
 browser sends the visitor's cookies with a handshake from any page and always says where it came from
 in ``Origin``, so another site's page could otherwise open an authenticated socket (cross-site
-websocket hijacking). For this question ``ws`` is ``http`` and ``wss`` is ``https``: in the scope, in
-``X-Forwarded-Proto`` (a proxy may forward the handshake's own scheme) and in ``Origin``. An
-unsafe-method request (POST, PUT, PATCH, DELETE) is refused with 403 when:
+websocket hijacking). For a handshake only, ``ws`` is ``http`` and ``wss`` is ``https``: in the
+scope, in ``X-Forwarded-Proto`` (a proxy may forward the handshake's own scheme), in ``Origin`` and
+in ``Referer``. A plain request names its site with ``http`` or ``https`` alone, so a ``ws``/``wss``
+Origin or Referer on one is another site, and ``X-Forwarded-Proto: ws`` on one is no scheme (the
+scope's is used). An unsafe-method request (POST, PUT, PATCH, DELETE) is refused with 403 when:
 
 * ``Sec-Fetch-Site`` is ``cross-site``; or
 * ``Origin`` is ``null``, is not a serialized origin, names a host the app does not serve
@@ -77,7 +79,7 @@ _SCHEMES = frozenset({"http", "https"})
 _WS_SCHEMES = {
     "ws": "http",
     "wss": "https",
-}  # a websocket's scheme asks the same site question
+}  # a handshake's scheme asks the same site question; a plain request's never says ws/wss
 # v5: set on every refusal, which runs outside the app's own headers middleware.
 REFUSAL_HEADERS = {
     "Cache-Control": "no-store",
@@ -88,6 +90,10 @@ REFUSAL_HEADERS = {
 }
 # A serialized origin, as a browser sends it: scheme, host, optional port, nothing else
 _ORIGIN = re.compile(
+    r"^(https?)://([A-Za-z0-9.-]+|\[[0-9A-Fa-f:.]+\])(?::[0-9]{1,5})?$", re.IGNORECASE
+)
+# A handshake's Origin may also carry the socket's own scheme (a native client)
+_WS_ORIGIN = re.compile(
     r"^(https?|wss?)://([A-Za-z0-9.-]+|\[[0-9A-Fa-f:.]+\])(?::[0-9]{1,5})?$",
     re.IGNORECASE,
 )
@@ -105,25 +111,33 @@ def _host_allowed(host: str, allowed_hosts: Sequence[str]) -> bool:
 
 
 def _this_site(
-    scheme: str, host: str, allowed_hosts: Sequence[str], own_scheme: str
+    scheme: str,
+    host: str,
+    allowed_hosts: Sequence[str],
+    own_scheme: str,
+    websocket: bool = False,
 ) -> bool:
-    """https is this site's scheme always; http only when the request itself is http."""
+    """https is this site's scheme always; http only when the request itself is http. For a
+    websocket handshake, wss is https and ws is http."""
     scheme = scheme.lower()
-    scheme = _WS_SCHEMES.get(scheme, scheme)
+    if websocket:
+        scheme = _WS_SCHEMES.get(scheme, scheme)
     if scheme not in _SCHEMES or (scheme == "http" and own_scheme != "http"):
         return False
     return _host_allowed(host, allowed_hosts)
 
 
-def _foreign_origin(origin: str, allowed_hosts: Sequence[str], own_scheme: str) -> bool:
-    m = _ORIGIN.match(origin.strip())
+def _foreign_origin(
+    origin: str, allowed_hosts: Sequence[str], own_scheme: str, websocket: bool = False
+) -> bool:
+    m = (_WS_ORIGIN if websocket else _ORIGIN).match(origin.strip())
     if m is None:  # `null`, or not a serialized origin (a path, userinfo, a space)
         return True
-    return not _this_site(m.group(1), m.group(2), allowed_hosts, own_scheme)
+    return not _this_site(m.group(1), m.group(2), allowed_hosts, own_scheme, websocket)
 
 
 def _foreign_referer(
-    referer: str, allowed_hosts: Sequence[str], own_scheme: str
+    referer: str, allowed_hosts: Sequence[str], own_scheme: str, websocket: bool = False
 ) -> bool:
     try:
         parts = urlsplit(referer.strip())
@@ -132,7 +146,9 @@ def _foreign_referer(
             return True
     except ValueError:
         return True
-    return not _this_site(parts.scheme, parts.hostname, allowed_hosts, own_scheme)
+    return not _this_site(
+        parts.scheme, parts.hostname, allowed_hosts, own_scheme, websocket
+    )
 
 
 def is_cross_site(
@@ -140,12 +156,14 @@ def is_cross_site(
     allowed_hosts: Sequence[str],
     *,
     scheme: str | None = None,
+    websocket: bool = False,
 ) -> bool:
     """Whether a request's own headers say it came from another site. Every value of a repeated
     header is judged, whatever the case of its name (a Starlette `Headers` is read with getlist).
     The request's own scheme is `X-Forwarded-Proto`'s when set, else `scheme` (the ASGI scope's;
     https when not given). With no `Origin`, `Referer` is judged unless `Sec-Fetch-Site` says
-    same-origin."""
+    same-origin. `websocket=True` judges a handshake: ws and wss count as http and https in the
+    scheme, X-Forwarded-Proto, Origin and Referer; a plain request accepts http and https only."""
     getlist = getattr(headers, "getlist", None)
 
     def values(name: str) -> list[str]:
@@ -160,18 +178,24 @@ def is_cross_site(
     forwarded = [v.strip().lower() for v in values("x-forwarded-proto")]
     # one value, or the first hop's (a proxy chain appends: `https, http`)
     first = forwarded[0].split(",")[0].strip() if forwarded else ""
-    first = _WS_SCHEMES.get(first, first)
-    own_scheme = first if first in _SCHEMES else (scheme or "https").lower()
+    own_scheme = (scheme or "https").lower()
+    if websocket:
+        first = _WS_SCHEMES.get(first, first)
+        own_scheme = _WS_SCHEMES.get(own_scheme, own_scheme)
+    own_scheme = first if first in _SCHEMES else own_scheme
     fetch_site = [v.strip().lower() for v in values("sec-fetch-site")]
     if "cross-site" in fetch_site:
         return True
     origins = values("origin")
     if origins:
-        return any(_foreign_origin(o, allowed_hosts, own_scheme) for o in origins)
+        return any(
+            _foreign_origin(o, allowed_hosts, own_scheme, websocket) for o in origins
+        )
     if fetch_site and all(v in ("same-origin", "none") for v in fetch_site):
         return False
     return any(
-        _foreign_referer(r, allowed_hosts, own_scheme) for r in values("referer")
+        _foreign_referer(r, allowed_hosts, own_scheme, websocket)
+        for r in values("referer")
     )
 
 
@@ -220,9 +244,12 @@ class SameOriginMiddleware:
             headers.setdefault(k.decode("latin-1").lower(), []).append(
                 v.decode("latin-1")
             )
-        scheme = scope.get("scheme")
-        scheme = _WS_SCHEMES.get(scheme, scheme) if scheme else None
-        return is_cross_site(headers, self.allowed_hosts, scheme=scheme)
+        return is_cross_site(
+            headers,
+            self.allowed_hosts,
+            scheme=scope.get("scheme"),
+            websocket=scope["type"] == "websocket",
+        )
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] == "websocket" and not self._exempt(scope["path"]):

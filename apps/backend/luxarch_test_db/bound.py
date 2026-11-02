@@ -1,4 +1,4 @@
-# luxarch:test-db-bound-plugin asset v1 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit test-db-bound-plugin`.
+# luxarch:test-db-bound-plugin asset v2 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit test-db-bound-plugin`.
 """The suite's database, asked of the running suite: every test on its throwaway database, in one
 rolled-back transaction.
 
@@ -89,6 +89,23 @@ What it does not claim:
   runs in the suite's own processes.
 """
 
+import asyncio
+import contextlib
+import gc
+import importlib
+import inspect
+import os
+import re
+import sys
+from collections.abc import AsyncIterator, Iterator
+from urllib.parse import parse_qsl, unquote, urlsplit
+
+import pytest
+from sqlalchemy import create_engine, event, make_url, text
+from sqlalchemy.engine import URL, Connection, Engine
+from sqlalchemy.exc import DBAPIError
+from sqlalchemy.pool import NullPool, Pool, PoolProxiedConnection
+
 from .identity import (
     _LUXARCH_TEST_DB_AT_IMPORT,
     _LUXARCH_TEST_DB_CREATING,
@@ -107,6 +124,27 @@ from .identity import (
     refusals_directory,
     report,
 )
+
+# The optional parts, each needed only by a suite that has it: SQLAlchemy's asyncio needs greenlet,
+# which a sync-only app need not have, and pytest-asyncio is an async suite's. Imported here, at the
+# module's top, and the ImportError kept: the async path raises it when it is reached.
+try:
+    from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
+except ImportError as e:
+    _LUXARCH_TEST_DB_NO_ASYNC: ImportError | None = e
+else:
+    _LUXARCH_TEST_DB_NO_ASYNC = None
+try:
+    import pytest_asyncio
+except ImportError as e:
+    _LUXARCH_TEST_DB_NO_PYTEST_ASYNCIO: ImportError | None = e
+else:
+    _LUXARCH_TEST_DB_NO_PYTEST_ASYNCIO = None
+
+# SQLite's authorizer codes (sqlite3.h), the same for every driver: the stdlib's and pysqlite3.
+_SQLITE_OK = 0
+_SQLITE_DENY = 1
+_SQLITE_ATTACH = 24
 
 # The settings the conftest.py carrying the test-db-bound block hands over (`configure`): the app
 # object (owns dependency_overrides), the session dependency its routes use, and the app's own
@@ -170,7 +208,6 @@ def configure(app: str, dependency: str, factory: str) -> None:
 
 
 def _luxarch_test_db_load(path: str) -> object:
-    import importlib
 
     mod, _, attr = path.partition(":")
     if not attr:
@@ -191,7 +228,6 @@ def _luxarch_test_db_repointed(now: str) -> bool:
 def _luxarch_test_db_tmp_base() -> str:
     """This run's `tmp_path` base, as pytest's tmp_path factory holds it ("" before a test asked for
     one): `--basetemp` when given, else the numbered directory pytest made for the run."""
-    import os
 
     config = _LUXARCH_TEST_DB_CONFIG[0] if _LUXARCH_TEST_DB_CONFIG else None
     factory = getattr(config, "_tmp_path_factory", None)
@@ -205,7 +241,6 @@ def _luxarch_test_db_ok(
     """`got` is the run's database: the one TEST_DATABASE_URL named, or, for SQLite, a file made for
     the run: in that file's own directory (made for the run, `tempfile.mkdtemp()`), or under this
     run's `tmp_path` base (a per-test copy of the migrated template)."""
-    import os
 
     want = _luxarch_test_db_target()
     if want is None or got is None:
@@ -237,7 +272,6 @@ def _luxarch_test_db_bind_url(session: object) -> object:
 def _luxarch_test_db_files(dbapi_conn: object) -> list[str]:
     """Every file a SQLite DBAPI connection has open that is not the run's ("" files are in memory):
     the main database and each ATTACHed one, as the driver reports them."""
-    import os
 
     make = getattr(dbapi_conn, "cursor", None)
     cursor = make() if callable(make) else None
@@ -266,8 +300,6 @@ def _luxarch_test_db_attach_ok(file: object) -> bool:
     """A file an ATTACH or VACUUM INTO names is the run's: in memory, or a file the run's database may
     be (beside it, under this run's tmp_path base) with no second hard link. A `file:` URI is judged
     by its path. None (SQLite hands no name for a bound or computed one) is never the run's."""
-    import os
-    from urllib.parse import parse_qsl, unquote, urlsplit
 
     if file is None:
         return False
@@ -292,21 +324,18 @@ def _luxarch_test_db_authorize(action: int, file: object = None, *_: object) -> 
     """The SQLite authorizer every stdlib connection gets: an ATTACH (VACUUM INTO attaches its target
     too) of a file that is not the run's is denied, whatever runs it (SQLAlchemy, a raw DBAPI
     cursor, the stdlib); one of the run's own files is allowed."""
-    import sqlite3
-
-    if action == sqlite3.SQLITE_ATTACH and not _luxarch_test_db_attach_ok(file):
+    if action == _SQLITE_ATTACH and not _luxarch_test_db_attach_ok(file):
         _LUXARCH_TEST_DB_REFUSED.append(
             f"an ATTACH or VACUUM INTO of {file!r}, not the run's, denied by the SQLite driver"
         )
-        return sqlite3.SQLITE_DENY
-    return sqlite3.SQLITE_OK
+        return _SQLITE_DENY
+    return _SQLITE_OK
 
 
 def _luxarch_test_db_from_coverage(caller: object) -> bool:
     """`caller` (the frame that called the driver's `connect`) is coverage.py's own SQLite layer: the
     module `coverage.sqlitedb` as imported (`coverage.sqldata` before coverage 7), judged by its
     module namespace itself, never by a name a frame carries."""
-    import sys
 
     namespace = getattr(caller, "f_globals", None)
     for name in ("coverage.sqlitedb", "coverage.sqldata"):
@@ -355,7 +384,6 @@ class _LuxarchTestDbDriver:
         """coverage.py's own connection, on its file: refused when that file has a second hard link
         (another file's bytes). It gets no authorizer: `combine` ATTACHes each parallel data file
         by a bound name, which an authorizer cannot read."""
-        import os
 
         conn = self.original(*args, **kwargs)
         cursor = conn.cursor()
@@ -378,7 +406,6 @@ class _LuxarchTestDbDriver:
         want = _luxarch_test_db_target()
         if want is None or want[0] != "sqlite":
             return self.original(*args, **kwargs)
-        import inspect
 
         here = inspect.currentframe()
         if _luxarch_test_db_from_coverage(here.f_back if here is not None else None):
@@ -433,7 +460,6 @@ def _luxarch_test_db_wrap_sqlite3() -> None:
     """Every SQLite connection the process opens from here on through the stdlib (`sqlite3`,
     `sqlite3.dbapi2`, `_sqlite3`: SQLAlchemy's pysqlite, aiosqlite's worker thread, a bare call) or
     `pysqlite3` is judged like an engine's: refused on another file, and given the authorizer."""
-    import importlib
 
     drivers: list[tuple[str, tuple[str, ...]]] = [
         ("_sqlite3", ("sqlite3", "sqlite3.dbapi2", "_sqlite3")),
@@ -455,11 +481,6 @@ def _luxarch_test_db_wrap_sqlite3() -> None:
 
 def _luxarch_test_db_listen() -> None:
     """Refuse, and record, every connection an engine opens to another database."""
-    import re
-
-    from sqlalchemy import event
-    from sqlalchemy.engine import Engine
-    from sqlalchemy.pool import Pool
 
     def _check(conn: object) -> None:
         engine = getattr(conn, "engine", None)
@@ -526,7 +547,6 @@ def _luxarch_test_db_listen() -> None:
         # thread's loop) fails inside the driver with nothing naming the cause
         if not _LUXARCH_TEST_DB_LOOP or _LUXARCH_TEST_DB_MODE[:1] != ["held"]:
             return
-        import asyncio
 
         try:
             running = asyncio.get_running_loop()
@@ -562,7 +582,6 @@ def _luxarch_test_db_listen() -> None:
             raise AssertionError(f"luxarch test-db-bound: refused {what}")
 
     def _check_returned(dbapi_conn: object, record: object) -> None:
-        import contextlib
 
         if dbapi_conn is None:
             return
@@ -593,8 +612,6 @@ def _luxarch_test_db_listen() -> None:
 
 def _luxarch_test_db_session_url(dep: object) -> object:
     """The URL of the engine behind the session `dep` hands a route."""
-    import asyncio
-    import inspect
 
     if not callable(dep):
         raise AssertionError(f"{TEST_DB_SESSION_DEPENDENCY} is not callable")
@@ -724,9 +741,6 @@ def _luxarch_test_db_empty_server(c: object) -> None:
     """Empty the app's tables on a server database, in the transaction `c` (a SQLAlchemy Connection)
     is in. On Postgres it waits for its locks at most `_LUXARCH_TEST_DB_LOCK_TIMEOUT`, then fails
     naming the sessions holding them, where an idle transaction would otherwise hang the run."""
-    from sqlalchemy import text
-    from sqlalchemy.engine import Connection
-    from sqlalchemy.exc import DBAPIError
 
     if not isinstance(c, Connection):
         raise AssertionError(
@@ -819,7 +833,6 @@ def _luxarch_test_db_empty_sqlite(raw: object) -> None:
     """Empty every table but `alembic_version` on a SQLite driver connection (the pool's proxy for
     it), outside any transaction, so `PRAGMA foreign_keys = OFF` takes effect (inside one it does
     nothing)."""
-    from sqlalchemy.pool import PoolProxiedConnection
 
     if not isinstance(raw, PoolProxiedConnection):
         raise AssertionError(
@@ -863,7 +876,6 @@ def _luxarch_test_db_worker_statements(u: object, name: str) -> list[str]:
     """The statements that make `name` a fresh empty database on TEST_DATABASE_URL's server. `u` is
     the URL object, never its text: a refusal's traceback prints its arguments, and a URL object
     prints its password masked."""
-    from sqlalchemy.engine import URL
 
     if not isinstance(u, URL):
         raise TypeError(
@@ -890,7 +902,6 @@ def _luxarch_test_db_create_worker_database(config: object) -> str:
     is nothing to create (a serial run, a SQLite database). Only a process xdist started as a worker
     (`config.workerinput`) creates one: a pytest a worker's test starts inherits the worker's
     environment, and dropping the worker's database under it would empty it mid-run."""
-    import os
 
     want = _luxarch_test_db_target()
     workerinput = getattr(config, "workerinput", None)
@@ -907,10 +918,6 @@ def _luxarch_test_db_create_worker_database(config: object) -> str:
             "luxarch test-db-bound: under pytest -n each worker runs on its own database, which "
             f"the block creates on Postgres, not {want[0]}"
         )
-    import asyncio
-
-    from sqlalchemy import create_engine, make_url, text
-    from sqlalchemy.pool import NullPool
 
     name = str(want[3])
     # a URL object, never its text: the password stays out of every local a traceback can print
@@ -918,8 +925,8 @@ def _luxarch_test_db_create_worker_database(config: object) -> str:
     statements = _luxarch_test_db_worker_statements(run_url, name)
     admin_url = run_url.set(database="postgres")
     if admin_url.get_dialect().is_async:
-        from sqlalchemy.ext.asyncio import create_async_engine
-
+        if _LUXARCH_TEST_DB_NO_ASYNC is not None:
+            raise _LUXARCH_TEST_DB_NO_ASYNC
         aengine = create_async_engine(
             admin_url, isolation_level="AUTOCOMMIT", poolclass=NullPool
         )
@@ -960,13 +967,10 @@ def _luxarch_test_db_create_worker_database(config: object) -> str:
 
 
 def _luxarch_test_db_fixtures() -> tuple[object, object, object, object]:
-    """The block's fixtures, built here so the block imports nothing at module level: the autouse
+    """The plugin's fixtures: the autouse
     isolation for an async factory and for a sync one (each passes through for the other kind),
     `real_commits`, the flag a test requests to commit for real, and `luxarch_worker_database`, the
     session fixture that creates an xdist worker's database."""
-    from collections.abc import AsyncIterator, Iterator
-
-    import pytest
 
     def held(dbapi: object) -> None:
         _LUXARCH_TEST_DB_HELD[:] = [dbapi]
@@ -984,8 +988,6 @@ def _luxarch_test_db_fixtures() -> tuple[object, object, object, object]:
 
     @pytest.fixture(autouse=True)
     def _luxarch_test_db_isolated_sync(request: object) -> Iterator[None]:
-        from sqlalchemy import text
-        from sqlalchemy.engine import Engine
 
         if not TEST_DB_SESSION_FACTORY or _luxarch_test_db_is_async():
             yield
@@ -1061,9 +1063,7 @@ def _luxarch_test_db_fixtures() -> tuple[object, object, object, object]:
                 )
                 _LUXARCH_TEST_DB_REFUSED.append(_luxarch_test_db_in_test(what))
 
-    try:
-        import pytest_asyncio
-    except ImportError:
+    if _LUXARCH_TEST_DB_NO_PYTEST_ASYNCIO is not None:
         return (
             real_commits,
             _luxarch_test_db_isolated_sync,
@@ -1072,12 +1072,11 @@ def _luxarch_test_db_fixtures() -> tuple[object, object, object, object]:
         )
 
     async def _luxarch_test_db_isolated_async(request: object) -> AsyncIterator[None]:
-        from sqlalchemy import text
-        from sqlalchemy.ext.asyncio import AsyncEngine
-
         if not TEST_DB_SESSION_FACTORY or not _luxarch_test_db_is_async():
             yield
             return
+        if _LUXARCH_TEST_DB_NO_ASYNC is not None:
+            raise _LUXARCH_TEST_DB_NO_ASYNC
         _factory, kw, bind = _luxarch_test_db_factory()
         if not isinstance(bind, AsyncEngine):
             raise AssertionError(
@@ -1106,7 +1105,6 @@ def _luxarch_test_db_fixtures() -> tuple[object, object, object, object]:
                     identity,
                 )
                 held(raw.dbapi_connection)
-                import asyncio
 
                 _LUXARCH_TEST_DB_LOOP[:] = [asyncio.get_running_loop()]
                 _LUXARCH_TEST_DB_MODE[:] = ["held"]
@@ -1191,7 +1189,6 @@ def _luxarch_test_db_problems() -> list[str]:
         return [
             "TEST_DATABASE_URL is not set: there is no throwaway database to be bound to"
         ]
-    import os
 
     out = list(_LUXARCH_TEST_DB_REFUSED[_LUXARCH_TEST_DB_REPORTED[0] :])
     _LUXARCH_TEST_DB_REPORTED[0] = len(_LUXARCH_TEST_DB_REFUSED)
@@ -1262,7 +1259,6 @@ def _luxarch_test_db_bound(item: object, teardown: bool = False) -> None:
 
 def pytest_plugin_registered(plugin: object, manager: object) -> None:
     """Installed the moment pytest registers this module (`-p` is read before any conftest)."""
-    import sys
 
     if plugin is sys.modules.get(__name__) and not _LUXARCH_TEST_DB_REGISTERED:
         _LUXARCH_TEST_DB_REGISTERED.append(True)
@@ -1270,7 +1266,6 @@ def pytest_plugin_registered(plugin: object, manager: object) -> None:
 
 
 def pytest_configure(config: object) -> None:
-    import pytest
 
     scope = _luxarch_test_db_scope()
     if scope != "suite":
@@ -1295,10 +1290,6 @@ def pytest_sessionfinish(session: object, exitstatus: object) -> None:
     started recorded), TEST_DATABASE_URL re-pointed, and every engine still alive that is on another
     database (a lifespan's SessionLocal, a module-level engine: code that writes there the moment it
     is used)."""
-    import gc
-    import os
-
-    from sqlalchemy.engine import Engine
 
     want = _luxarch_test_db_target()
     problems = sorted(set(_LUXARCH_TEST_DB_REFUSED) | set(_luxarch_test_db_logged()))

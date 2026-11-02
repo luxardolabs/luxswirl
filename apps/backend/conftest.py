@@ -1,4 +1,4 @@
-# luxarch:test-db-bound asserter v6 — DO NOT edit the marker line above (repo.makefile_test_db_harness finds it).
+# luxarch:test-db-bound asserter v7 — DO NOT edit the marker line above (repo.makefile_test_db_harness finds it).
 #
 # THE SUITE'S DATABASE, ASKED OF THE RUNNING SUITE
 # Every test runs on the database TEST_DATABASE_URL names, in one transaction that is rolled back,
@@ -17,9 +17,11 @@
 # `make test` loads the plugin (`-p luxarch_test_db.identity -p luxarch_test_db.bound`, the package's
 # `children` directory first on PYTHONPATH). A pytest run without it fails at this conftest.
 #
-# NOTE FOR ADOPTERS: this block carries NO module-level imports (it is pasted below existing code,
-# where an import is ruff E402) and defines no pytest hook or fixture: the plugin's own hooks and
-# fixtures (`real_commits`, `luxarch_worker_database`) run beside the repo's.
+# NOTE FOR ADOPTERS: this block is a conftest.py of its own, so its one import sits at its top; it
+# defines no pytest hook or fixture: the plugin's own hooks and fixtures (`real_commits`,
+# `luxarch_worker_database`) run beside the repo's.
+
+import sys
 
 # --- EDIT THIS: the app object (owns dependency_overrides) and the session dependency its routes use.
 TEST_DB_APP_IMPORT = "app.main:app"
@@ -32,8 +34,6 @@ TEST_DB_SESSION_FACTORY = "app.db.database:AsyncSessionLocal"
 
 def _luxarch_test_db_settings() -> None:
     """Hand the settings to the plugin pytest loaded with `-p luxarch_test_db.bound`."""
-    import sys
-
     plugin = sys.modules.get("luxarch_test_db.bound")
     if plugin is None:
         raise RuntimeError(
