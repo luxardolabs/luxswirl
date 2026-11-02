@@ -130,17 +130,8 @@ class AdminAlertCoreService:
     async def set_checks(
         db: AsyncSession, role: UserRole, alert_id: UUID, data: AdminAlertChecks
     ) -> AlertMappingChange:
-        alert = await AlertCoreService.get_alert_by_id(db, alert_id)
-        # Refused as global before the checks are judged.
-        AlertCoreService.require_check_list(alert)
-        _, current = await AlertCoreService.get_mapped_ids(db, alert_id)
-        # The checks gained and lost are judged; one kept is not touched.
-        changed = list(set(current) ^ set(data.check_ids))
-        await AlertCoreService.require_checks(
-            db, changed, actor_is_admin=role == UserRole.ADMIN
-        )
         added, removed = await AlertCoreService.set_checks(
-            db, alert_id, list(dict.fromkeys(data.check_ids))
+            db, alert_id, data.check_ids, actor_is_admin=role == UserRole.ADMIN
         )
         return AlertMappingChange(added=added, removed=removed)
 

@@ -9,6 +9,8 @@
 - A field sent as null is cleared; a required one cannot be.
 - Two replacements of an alert's providers at once leave one mapping, not a
   database error.
+- A replacement of an alert's checks writes only the change it judged: a
+  synthetic check attached after it read the list is not detached unjudged.
 """
 
 from __future__ import annotations
@@ -24,9 +26,13 @@ from app.core.datetime_utils import utc_now
 from app.core.rate_limit import limiter
 from app.crud.alert_crud import AlertCRUD
 from app.main import app
+from app.models.alert_check_mapping_model import AlertCheckMapping
 from app.models.alert_notification_mapping_model import AlertNotificationMapping
+from app.models.enum_model import UserRole
 from app.models.notification_provider_model import NotificationProvider
+from app.schemas.admin_alert_schema import AdminAlertChecks
 from app.schemas.api_token_schema import ApiTokenCreate
+from app.services.core.admin_alert_core_service import AdminAlertCoreService
 from app.services.core.alert_core_service import AlertCoreService
 from app.services.core.api_token_core_service import ApiTokenCoreService
 from fixtures.factories import (
@@ -415,3 +421,55 @@ async def test_two_replacements_at_once_leave_one_mapping(
             .where(AlertNotificationMapping.alert_id == alert_id)
         )
     assert count == 1
+
+
+async def test_a_synthetic_check_attached_mid_replacement_is_not_detached_unjudged(
+    worker_db, monkeypatch
+) -> None:
+    """An editor's replacement reads the list, an admin then attaches a
+    synthetic check and commits: the editor's write removes only what it read
+    and judged, so the synthetic check stays watched."""
+    async with worker_db() as s:
+        agent = make_agent()
+        s.add(agent)
+        await s.flush()
+        synthetic = make_check(
+            agent_id=agent.id,
+            check_type="synthetic",
+            target="https://a.example",
+            script_code="await page.goto('https://a.example')",
+        )
+        plain = make_check(agent_id=agent.id)
+        alert = make_alert()
+        s.add_all([synthetic, plain, alert])
+        await s.commit()
+        synthetic_id, plain_id, alert_id = synthetic.id, plain.id, alert.id
+    original = AlertCRUD.list_check_ids
+    raced = {"done": False}
+
+    async def read_then_attach(db, aid):
+        rows = await original(db, aid)
+        if not raced["done"]:
+            raced["done"] = True
+            async with worker_db() as admin:
+                await AlertCoreService.add_check(admin, alert_id, synthetic_id)
+                await admin.commit()
+        return rows
+
+    monkeypatch.setattr(AlertCRUD, "list_check_ids", staticmethod(read_then_attach))
+    async with worker_db() as s:
+        await AdminAlertCoreService.set_checks(
+            s, UserRole.EDITOR, alert_id, AdminAlertChecks(check_ids=[plain_id])
+        )
+        await s.commit()
+
+    async with worker_db() as s:
+        mapped = set(
+            await s.scalars(
+                select(AlertCheckMapping.check_id).where(
+                    AlertCheckMapping.alert_id == alert_id
+                )
+            )
+        )
+    assert raced["done"]
+    assert mapped == {synthetic_id, plain_id}

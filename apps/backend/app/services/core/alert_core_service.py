@@ -399,17 +399,37 @@ class AlertCoreService:
 
     @staticmethod
     async def set_checks(
-        db: AsyncSession, alert_id: UUID, check_ids: list[UUID]
+        db: AsyncSession,
+        alert_id: UUID,
+        check_ids: list[UUID],
+        *,
+        actor_is_admin: bool,
     ) -> tuple[int, int]:
         """Make `check_ids` exactly a non-global alert's checks; (added, removed).
 
+        The alert is locked and its list read once: the checks gained and
+        lost against that read are judged, and the write is that same change,
+        so a check mapped after the read is neither judged nor removed. A
+        check kept is not touched.
+
         Raises:
+            NotFoundException: No such alert.
             ValidationException: The alert is global: it reaches checks by its
-                filters as they are created, not by a list.
+                filters as they are created, not by a list. Or a check id
+                names no check.
+            AuthorizationException: A synthetic check gained or lost, and the
+                actor is not an admin.
         """
+        await AlertCRUD.lock(db, alert_id)
         alert = await AlertCoreService.get_alert_by_id(db, alert_id)
+        # Refused as global before the checks are judged.
         AlertCoreService.require_check_list(alert)
-        return await AlertCRUD.replace_check_mappings(db, alert_id, check_ids)
+        current = set(await AlertCRUD.list_check_ids(db, alert_id))
+        wanted = list(dict.fromkeys(check_ids))
+        await AlertCoreService.require_checks(
+            db, list(current ^ set(wanted)), actor_is_admin=actor_is_admin
+        )
+        return await AlertCRUD.replace_check_mappings(db, alert_id, current, wanted)
 
     @staticmethod
     async def add_check(
