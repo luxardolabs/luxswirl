@@ -61,8 +61,65 @@ def test_scrub_text_masks_the_whole_value_in_any_case(raw: str, masked: str) -> 
     assert masked in scrub_text(raw), scrub_text(raw)
 
 
-def test_scrub_text_leaves_ordinary_text_alone() -> None:
-    text = "check web-01 failed: HTTP 503 from https://example.com/health"
+@pytest.mark.parametrize(
+    ("raw", "masked"),
+    [
+        # An empty user name is valid in a PostgreSQL, MySQL or Redis URL.
+        ("postgresql://:s3cret@db:5432/x", "postgresql://:***@db:5432/x"),
+        ("mysql://:s3cret@db/x", "mysql://:***@db/x"),
+        ("redis://:s3cret@cache:6379/0", "redis://:***@cache:6379/0"),
+        ("postgresql://:p@ss@db/x", "postgresql://:***@db/x"),
+        ("amqp://:s3cret@[fe80::1%eth0]:5672/", "amqp://:***@[fe80::1%eth0]:5672/"),
+        ("dsn='postgresql://:s3cret@db/x'", "dsn='postgresql://:***@db/x'"),
+        ('{"dsn": "postgresql://:s3cret@db/x"}', '{"dsn": "postgresql://:***@db/x"}'),
+        # A percent-encoded user name, `:` or `@` and all.
+        ("postgresql://us%3Aer:s3cret@db/x", "postgresql://us%3Aer:***@db/x"),
+        ("postgresql://u%40x:s3cret@db/x", "postgresql://u%40x:***@db/x"),
+        # The password runs from the first `:`, so a `:` in it is masked too.
+        ("postgresql://u:s3cret:more@db/x", "postgresql://u:***@db/x"),
+        ("postgresql://u:s3cret@[::1]:5432/x", "postgresql://u:***@[::1]:5432/x"),
+        # Every URL in a line, whatever its user name.
+        (
+            "a postgresql://:pw1@a/x and mysql://u:pw2@b/y",
+            "a postgresql://:***@a/x and mysql://u:***@b/y",
+        ),
+        (
+            "https://h/x?user=a&password=s3cret&y=1",
+            "https://h/x?user=a&password=***&y=1",
+        ),
+    ],
+)
+def test_scrub_text_masks_a_url_password_whatever_the_user_name(
+    raw: str, masked: str
+) -> None:
+    assert scrub_text(raw) == masked
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        "postgresql://:pw1@a/x,mysql://:pw2@b/y",
+        "['postgresql://:pw1@a/x','mysql://:pw2@b/y']",
+    ],
+)
+def test_scrub_text_masks_both_of_two_adjoining_urls(raw: str) -> None:
+    out = scrub_text(raw)
+    assert "pw1" not in out
+    assert "pw2" not in out
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "check web-01 failed: HTTP 503 from https://example.com/health",
+        # A user with no password carries no secret: left as it is.
+        "ssh://user@host/x",
+        "ssh://user@host:22/p@x",
+        "postgresql://[::1]:5432/x",
+        "mail ops@example.com about postgresql://db/x",
+    ],
+)
+def test_scrub_text_leaves_ordinary_text_alone(text: str) -> None:
     assert scrub_text(text) == text
 
 
