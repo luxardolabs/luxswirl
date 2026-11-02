@@ -226,7 +226,7 @@ class CheckCoreService:
         2. Validates the target agent exists
         3. Merges source config with any user overrides
         4. Creates a new check via create_check()
-        5. Copies alert assignments from source
+        5. Copies alert assignments from source, each with its state
         6. Returns the newly created cloned check
 
         Args:
@@ -293,13 +293,10 @@ class CheckCoreService:
         # A clone that silently loses its alert wiring is a monitoring gap the
         # operator cannot see: the check exists, it runs, and nothing is ever
         # notified about it, so a failure rolls the clone back rather than
-        # producing a half-wired one. create_check has already given the clone
-        # every global alert, so only the source's others are added.
-        source_alert_ids = await AlertCoreService.get_alert_ids_for_check(db, check_id)
-        held = set(await AlertCoreService.get_alert_ids_for_check(db, cloned_check.id))
-        for alert_id in source_alert_ids:
-            if alert_id not in held:
-                await AlertCoreService.add_check(db, alert_id, cloned_check.id)
+        # producing a half-wired one. Each mapping keeps the source's enabled
+        # state and overrides, the global alerts create_check gave the clone
+        # included; a snooze is not copied.
+        await AlertCoreService.copy_check_mappings(db, check_id, cloned_check.id)
 
         logger.info(
             "Cloned check",
