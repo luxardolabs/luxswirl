@@ -21,7 +21,10 @@ from app.core.rate_limit import current_rate_limits, limiter, update_rate_limits
 from app.crud.setting_crud import SettingCRUD
 from app.main import app
 from app.models.setting_model import Setting
+from app.services.core.admin_setting_core_service import AdminSettingCoreService
+from app.services.core.auth_core_service import AuthCoreService
 from app.services.core.settings_core_service import SettingsCoreService
+from fixtures.factories import make_user
 from httpx import ASGITransport, AsyncClient
 from pydantic import ValidationError
 from sqlalchemy import text
@@ -366,3 +369,101 @@ async def test_startup_reads_a_row_that_holds_a_bare_value(
 
     expected = bare or settings.security.registration_rate_limit
     assert current_rate_limits().registration == expected
+
+
+async def _store_a_value_that_is_not_a_limit(db: AsyncSession) -> None:
+    """A row saved before the rate-limit settings were validated."""
+    await SettingsCoreService.update_setting(db, "security.api_rate_limit", "10/15mins")
+    await SettingsCoreService.load_rate_limits(db)
+
+
+async def test_a_stored_limit_that_is_not_a_limit_reads_as_not_applied(
+    seeded: AsyncSession,
+) -> None:
+    await _store_a_value_that_is_not_a_limit(seeded)
+
+    setting = await SettingsCoreService.get_setting_response(
+        seeded, "security.api_rate_limit"
+    )
+    listed = {
+        s.key: s for s in await SettingsCoreService.list_settings(seeded, "security")
+    }
+
+    for read in (setting, listed["security.api_rate_limit"]):
+        assert read is not None
+        assert read.applied is False
+        assert read.in_effect == settings.security.api_rate_limit
+    assert listed["security.login_rate_limit"].applied is True
+
+
+async def test_a_bare_null_stored_limit_reads_as_not_applied(
+    seeded: AsyncSession,
+) -> None:
+    await seeded.execute(
+        text("UPDATE settings SET value = CAST('null' AS json) WHERE key = :k"),
+        {"k": "security.registration_rate_limit"},
+    )
+    seeded.expire_all()
+    await SettingsCoreService.load_rate_limits(seeded)
+
+    setting = await SettingsCoreService.get_setting_response(
+        seeded, "security.registration_rate_limit"
+    )
+
+    assert setting is not None
+    assert setting.applied is False
+    assert setting.in_effect == settings.security.registration_rate_limit
+
+
+async def test_a_stored_limit_in_effect_reads_as_applied(seeded: AsyncSession) -> None:
+    await SettingsCoreService.set_setting(
+        seeded, "security.api_rate_limit", "50/minute"
+    )
+
+    setting = await SettingsCoreService.get_setting_response(
+        seeded, "security.api_rate_limit"
+    )
+
+    assert setting is not None
+    assert setting.applied is True
+    assert setting.in_effect is None
+
+
+async def test_the_admin_api_marks_a_stored_limit_that_is_not_a_limit(
+    seeded: AsyncSession,
+) -> None:
+    await _store_a_value_that_is_not_a_limit(seeded)
+
+    setting = await AdminSettingCoreService.get_setting(
+        seeded, "security.api_rate_limit"
+    )
+
+    assert setting.value == "10/15mins"
+    assert setting.applied is False
+    assert setting.in_effect == settings.security.api_rate_limit
+
+
+async def test_the_settings_page_shows_the_limit_in_effect_not_the_ignored_one(
+    seeded: AsyncSession,
+) -> None:
+    await _store_a_value_that_is_not_a_limit(seeded)
+    admin = make_user(role="admin")
+    seeded.add(admin)
+    await seeded.flush()
+    _, token = await AuthCoreService().create_session(seeded, admin.id)
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url=f"https://{OWN}"
+    ) as c:
+        c.cookies.set(settings.security.session_cookie_name, token)
+        page = await c.get("/settings/defaults")
+
+    assert page.status_code == 200, page.text
+    card = page.text.split('id="setting-security-api_rate_limit"', 1)[1]
+    card = card.split('id="setting-', 1)[0]
+    assert "Not applied" in card
+    assert f'value="{settings.security.api_rate_limit}"' in card
+    assert 'value="10/15mins"' not in card
+    # The ignored stored value is named, and Reset is offered.
+    assert "10/15mins" in card
+    assert "data-setting-reset" in card

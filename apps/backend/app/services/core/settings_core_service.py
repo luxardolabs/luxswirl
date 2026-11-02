@@ -15,7 +15,7 @@ from app.core.config import settings
 from app.core.default_settings import DEFAULT_SETTINGS
 from app.core.display_settings import update_display_settings
 from app.core.exceptions import NotFoundException, ValidationException
-from app.core.rate_limit import update_rate_limits
+from app.core.rate_limit import current_rate_limits, update_rate_limits
 from app.core.rate_limit_format import check_rate_limit
 from app.crud.setting_crud import SettingCRUD
 from app.models.enum_model import SettingValueType
@@ -176,6 +176,29 @@ def _fits_type(value: SettingScalar, value_type: SettingValueType) -> bool:
     return False
 
 
+def _response(setting: Setting) -> SettingResponse:
+    """The setting as it is read, marked not applied when the server ignores
+    its stored value.
+
+    A rate limit stored before limits were validated can hold a value that is
+    not a limit (`10/15mins`). Startup leaves the environment's limit in effect
+    for it, so it reads as not applied, with the limit in effect.
+    """
+    response = SettingResponse.model_validate(setting)
+    limit = _RATE_LIMIT_KEYS.get(response.key)
+    if limit is None:
+        return response
+    stored = response.value.get("value")
+    try:
+        if not isinstance(stored, str):
+            raise ValueError(f"{stored!r} is not a rate limit")
+        check_rate_limit(stored)
+    except ValueError:
+        in_effect: str = getattr(current_rate_limits(), limit)
+        return response.model_copy(update={"applied": False, "in_effect": in_effect})
+    return response
+
+
 class SettingsCoreService:
     """Service for settings operations."""
 
@@ -239,7 +262,7 @@ class SettingsCoreService:
             The setting, or None if not found
         """
         setting = await SettingCRUD.get_by_key(db, key)
-        return None if setting is None else SettingResponse.model_validate(setting)
+        return None if setting is None else _response(setting)
 
     @staticmethod
     async def list_settings(
@@ -251,7 +274,7 @@ class SettingsCoreService:
             if category is None
             else await SettingCRUD.list_by_category(db, category)
         )
-        return [SettingResponse.model_validate(setting) for setting in rows]
+        return [_response(setting) for setting in rows]
 
     @staticmethod
     async def get_settings_by_category(
@@ -269,7 +292,7 @@ class SettingsCoreService:
             The category's settings
         """
         return [
-            SettingResponse.model_validate(setting)
+            _response(setting)
             for setting in await SettingCRUD.list_by_category(db, category)
         ]
 
@@ -308,7 +331,7 @@ class SettingsCoreService:
 
         # The key alone: a value can be a secret (the metrics bearer token).
         logger.info("Updated setting", extra={"setting_key": key})
-        return SettingResponse.model_validate(setting)
+        return _response(setting)
 
     @staticmethod
     async def set_setting(
@@ -404,7 +427,7 @@ class SettingsCoreService:
         setting = await SettingCRUD.save_setting(db, setting)
 
         logger.info("Reset setting to default", extra={"setting_key": key})
-        return SettingResponse.model_validate(setting)
+        return _response(setting)
 
     @staticmethod
     async def create_setting(

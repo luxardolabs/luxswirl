@@ -31,6 +31,11 @@ class SettingResponse(BaseModel):
     validation: dict[str, Any] | None
     created_at: Any
     updated_at: Any
+    # False when the stored value is not one the server can apply (a rate
+    # limit saved before limits were validated); `in_effect` is then the value
+    # the server applies instead.
+    applied: bool = True
+    in_effect: SettingScalar = None
 
     @field_validator("value", "default_value", mode="before")
     @classmethod

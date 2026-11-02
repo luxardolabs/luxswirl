@@ -34,6 +34,17 @@ class AdminSetting(BaseModel):
     generated: bool = Field(
         ..., description="Generated, never set to a value; read masked"
     )
+    applied: bool = Field(
+        True,
+        description=(
+            "False when the stored value is not one the server can apply (a rate"
+            " limit saved before limits were validated); `in_effect` is applied"
+            " instead"
+        ),
+    )
+    in_effect: SettingScalar = Field(
+        None, description="When `applied` is false, the value in effect"
+    )
     updated_at: datetime
 
 

@@ -372,7 +372,7 @@ New checks inherit these; existing checks are unchanged and users can override p
 - **API Rate Limit** (`security.api_rate_limit`, **string**) — requests per IP address to the Prometheus `/metrics` endpoint. Default **`100/minute`**.
 - **Agent Registration Rate Limit** (`security.registration_rate_limit`, **string**) — agent registrations and key recoveries per IP address, refused keys included. Default **`5/hour`**.
 
-> Rate limits are strings such as `10/15minutes` or `100/minute`, not numbers; join several with `;`. A change applies from the next request, and starts every client's count for that limit afresh. Each default is the matching `SECURITY__` environment setting, so a reset returns to it. A value that is not a limit, or that allows no requests, is refused.
+> Rate limits are strings such as `10/15minutes` or `100/minute`, not numbers; join several with `;`. A change applies from the next request, and starts every client's count for that limit afresh. Each default is the matching `SECURITY__` environment setting, so a reset returns to it. A value that is not a limit, or that allows no requests, is refused. A stored value that is not a limit (one saved before limits were checked) is ignored, and the environment's limit applies: its card shows the limit in effect, marked **Not applied** with the ignored value named, and Reset or Save puts a valid one in its place.
 
 #### Password Complexity
 
