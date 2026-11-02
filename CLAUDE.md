@@ -327,7 +327,7 @@ The JSON API has two surfaces, each with its own prefix and credential: the agen
 | ------ | -------------------------------------- | ---------------------------------- | ---------------------------------------- |
 | `POST` | `/api/v1/agent/register`               | Registration key                   | Register a new agent (pending approval)  |
 | `POST` | `/api/v1/agent/{agent_id}/recover-key` | Registration key + recovery secret | Issue a fresh agent key to a known agent |
-| `POST` | `/api/v1/agent/heartbeat`              | Agent key or registration key      | Report liveness and self-metrics         |
+| `POST` | `/api/v1/agent/heartbeat`              | Agent key, or recovery secret      | Report liveness and self-metrics         |
 | `GET`  | `/api/v1/agent/checks?agent_id={id}`   | Agent key                          | The checks this agent should run         |
 | `POST` | `/api/v1/agent/reports`                | Agent key                          | Submit a batch of check results          |
 | `POST` | `/api/v1/agent/jobs/{job_id}/start`    | Key of the job's own agent         | Report a job started (it is running)     |

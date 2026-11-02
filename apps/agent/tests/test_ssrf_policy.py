@@ -21,6 +21,7 @@ import httpx
 import pytest
 from app.agent import http_client
 from app.agent.check_manager import CheckManager
+from app.agent.credentials import AgentCredentials
 from app.agent.heartbeat import HeartbeatSender
 from app.checks import _ssrf_policy
 from app.checks.dns import DNSCheck
@@ -186,7 +187,7 @@ async def test_a_heartbeat_response_sets_the_policy() -> None:
         },
         reporter=None,
         job_processor=_NoJobs(),
-        credentials=None,
+        credentials=AgentCredentials(),
         process=None,
         on_config_reload=None,
         on_agent_approved=None,

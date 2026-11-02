@@ -17,7 +17,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.bcrypt_secret import bcrypt_matches
 from app.core.config import settings
 from app.core.datetime_utils import utc_now
-from app.core.rate_limit import reserve_heartbeat_registration_attempt
+from app.core.rate_limit import reserve_pending_heartbeat_attempt
+from app.core.recovery_secret import recovery_secret_matches
 from app.core.safe_redirect import safe_redirect_target
 from app.crud import admin_bootstrap_crud
 from app.db import get_db
@@ -399,24 +400,27 @@ def verify_token(token: str) -> dict[str, Any]:
 async def authenticate_heartbeat(
     agent: Agent,
     authorization: str | None,
+    recovery_secret: str | None,
     db: AsyncSession,
     client: str,
 ) -> bool:
     """Authenticate a heartbeat; True when the agent's own key was used.
 
     An agent with its own key must present it; only a 401 from that check
-    falls back to the registration key (an approved agent that has not stored
-    its key yet). Any other refusal (a paused or disabled agent) stands. The
-    registration key is shared by every install, so a False here never lets
-    the heartbeat write onto an agent that has its own key: core only reads
-    that agent's status back (`AgentCoreService.process_heartbeat`).
+    falls back to the pending credential (an approved agent that has not
+    stored its key yet). Any other refusal (a paused or disabled agent)
+    stands. A False here never lets the heartbeat write onto an agent that has
+    its own key: core only reads that agent's status back
+    (`AgentCoreService.process_heartbeat`).
 
-    The registration key is held to its own budget here, as on /register:
-    each key refused counts against `client`, for this agent and for the
-    address as a whole (`reserve_heartbeat_registration_attempt`), and past
-    any part of either budget the fallback answers 429 without checking the
-    key. A right key is given back once checked, and one stuck agent never
-    shuts out another behind the same address.
+    The pending credential is the agent's own recovery secret (header
+    X-Agent-Recovery-Secret), issued to it alone at registration. An agent
+    build that sends no secret is checked against the shared registration key
+    instead, with a warning to upgrade it. Either way each credential refused
+    counts against `client` for this agent alone
+    (`reserve_pending_heartbeat_attempt`), past the registration budget the
+    heartbeat answers 429 without checking it, and a right one is given back
+    once checked.
     """
     if agent.api_key_hash:
         try:
@@ -425,23 +429,53 @@ async def authenticate_heartbeat(
         except HTTPException as e:
             if e.status_code != 401:
                 raise
-    attempt = reserve_heartbeat_registration_attempt(client, agent.id)
+    attempt = reserve_pending_heartbeat_attempt(client, agent.id)
     if isinstance(attempt, int):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Too many refused registration keys",
+            detail="Too many refused agent credentials",
             headers={"Retry-After": str(attempt)},
         )
-    key_refused = False
+    refused = False
     try:
-        await verify_registration_token(authorization, db)
-    except HTTPException as refused:
-        key_refused = refused.status_code == status.HTTP_401_UNAUTHORIZED
-        raise
+        if recovery_secret is not None:
+            try:
+                verify_agent_recovery_secret(agent, recovery_secret)
+            except HTTPException:
+                refused = True
+                raise
+        else:
+            logger.warning(
+                "Heartbeat authenticated by the shared registration key: "
+                "upgrade this agent so it sends its recovery secret",
+                extra={"agent_id": str(agent.id)},
+            )
+            try:
+                await verify_registration_token(authorization, db)
+            except HTTPException as refusal:
+                refused = refusal.status_code == status.HTTP_401_UNAUTHORIZED
+                raise
     finally:
-        if not key_refused:
+        if not refused:
             attempt.release()
     return False
+
+
+def verify_agent_recovery_secret(agent: Agent, recovery_secret: str | None) -> None:
+    """Refuse unless `recovery_secret` is the one issued to `agent` at registration.
+
+    A pending agent's own credential: issued to this agent alone, so a guess at
+    it is a guess at one agent, never at every install.
+
+    Raises:
+        HTTPException: 401 if the secret is missing or is not this agent's
+    """
+    if not recovery_secret_matches(agent.recovery_secret_hash, recovery_secret):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid agent recovery secret",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
 
 async def verify_registration_token(

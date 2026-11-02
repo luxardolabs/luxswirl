@@ -30,6 +30,7 @@ from typing import Any
 import httpx
 import pytest
 from app.agent import http_client
+from app.agent.credentials import AgentCredentials
 from app.agent.dead_letter import Delivery, classify_response
 from app.agent.heartbeat import HeartbeatSender
 from app.agent.reporter import Reporter
@@ -312,7 +313,7 @@ async def test_the_heartbeat_carries_dead_letter_count() -> None:
         },
         reporter=_StubReporter(),
         job_processor=_StubJobs(),
-        credentials=None,
+        credentials=AgentCredentials(),
         process=_StubProcess(),
         on_config_reload=None,
         on_agent_approved=None,

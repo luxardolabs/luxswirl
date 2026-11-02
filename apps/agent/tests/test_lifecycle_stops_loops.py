@@ -19,6 +19,7 @@ import httpx
 import pytest
 import pytest_asyncio
 from app.agent import http_client
+from app.agent.credentials import AgentCredentials
 from app.agent.heartbeat import HeartbeatSender
 from app.agent.lifecycle import LifecycleManager
 
@@ -84,7 +85,7 @@ def _sender() -> HeartbeatSender:
         },
         reporter=_Stoppable(),
         job_processor=_Stoppable(),
-        credentials=None,
+        credentials=AgentCredentials(),
         process=None,
         on_config_reload=None,
         on_agent_approved=None,

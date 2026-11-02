@@ -29,6 +29,7 @@ Encryption Key = PBKDF2-HMAC-SHA256(hostname + machine-id, 100,000 iterations)
 
 1. **First Run:** Agent registers with server using `LUXSWIRL_AUTH_KEY` (registration key)
 1. **Registered:** Server returns the new `agent_id` and a per-agent `recovery_secret`, once. The server keeps only the secret's SHA-256 digest.
+1. **Pending:** Until it holds its own key, the agent authenticates each heartbeat with its recovery secret (header `X-Agent-Recovery-Secret`); the server compares it in constant time, and a wrong one counts against that agent's registration budget.
 1. **Approved:** After an admin approves the agent, the agent fetches its `api_key` from `POST /api/v1/agent/{agent_id}/recover-key`, presenting the registration key **and** its recovery secret (header `X-Agent-Recovery-Secret`). The registration key alone, which every install shares, never issues a key for an agent.
 1. **Encryption:** Agent encrypts credentials (`agent_id`, `api_key`, `recovery_secret`) using derived key
 1. **Storage:** Encrypted blob saved to `/app/data/agent_credentials.json` (binary format)

@@ -613,13 +613,22 @@ class HeartbeatSender:
                     )
 
     def _auth_headers(self) -> dict[str, str]:
-        """The Authorization header for the agent's CURRENT key.
+        """The headers that authenticate a heartbeat with the agent's CURRENT credentials.
 
-        Read per request, so a key issued on approval is sent from the next
-        heartbeat on without rebuilding anything.
+        The Authorization header carries the agent's own key once it has one.
+        Until then it carries the registration key, and the agent's recovery
+        secret (header X-Agent-Recovery-Secret), issued to it alone at
+        registration, is what the server checks. Read per request, so a key
+        issued on approval is sent from the next heartbeat on without
+        rebuilding anything.
         """
+        headers: dict[str, str] = {}
         auth_key = self.config.get("auth_key")
-        return {"Authorization": f"Bearer {auth_key}"} if auth_key else {}
+        if auth_key:
+            headers["Authorization"] = f"Bearer {auth_key}"
+        if not self.credentials.api_key and self.credentials.recovery_secret:
+            headers["X-Agent-Recovery-Secret"] = self.credentials.recovery_secret
+        return headers
 
     def start(self) -> None:
         """Start the heartbeat sender."""
