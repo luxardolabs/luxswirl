@@ -494,3 +494,23 @@ class CheckCRUD:
         )
         result = await db.execute(query)
         return list(result.scalars().all())
+
+    @staticmethod
+    async def share_lock_checks(db: AsyncSession, check_ids: list[UUID]) -> list[Check]:
+        """`check_ids`' checks, each held FOR SHARE until the transaction ends.
+
+        A change to a held check (its type, say) waits for this transaction, so
+        what was judged of it stays true until the judged write commits. Rows
+        are locked in id order, so two holders never wait on each other.
+        """
+        if not check_ids:
+            return []
+        result = await db.execute(
+            select(Check)
+            .where(Check.id.in_(check_ids))
+            .order_by(Check.id)
+            .with_for_update(read=True)
+            # The locked row's values, not a copy this session loaded earlier.
+            .execution_options(populate_existing=True)
+        )
+        return list(result.scalars().all())
