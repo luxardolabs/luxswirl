@@ -93,8 +93,9 @@
                         <p class="text-sm text-dark-text-muted mb-3">
                             Revoke the agent-specific key and void its recovery secret. That install can never
                             recover a key: it registers again as a new pending agent, which an admin must approve
-                            (or reject). Any copy of its credentials is dead too. To keep the agent and only
-                            rotate its key, regenerate instead.
+                            (or reject). Any copy of its credentials is dead too. An agent registered before
+                            recovery secrets existed cannot register again by itself: delete its credentials file
+                            and restart it. To keep the agent and only rotate its key, regenerate instead.
                         </p>
                         {{ confirm_action_btn(icon_svg=ICO_BAN, label='Revoke Key', color='red',
                             hx_delete=agent_urls.revoke_key,

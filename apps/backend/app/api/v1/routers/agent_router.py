@@ -79,7 +79,11 @@ async def agent_heartbeat(
     agent with no key yet; for one that has a key it only returns the status.
     """
     return await AgentCoreService.process_heartbeat(
-        db, sender.agent_id, sender.heartbeat, using_agent_key=sender.using_agent_key
+        db,
+        sender.agent_id,
+        sender.heartbeat,
+        using_agent_key=sender.using_agent_key,
+        verified_key_hash=sender.verified_key_hash,
     )
 
 

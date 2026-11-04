@@ -25,10 +25,11 @@
                     </p>
                     {% else %}
                     <p class="text-sm text-dark-text-muted leading-relaxed">
-                        This is the <strong>only time</strong> you will see this key, and no agent can use it:
-                        this agent holds no recovery secret the server accepts (its key was revoked, or it registered
-                        before recovery secrets existed), so it cannot fetch a key. That install registers again as a
-                        new pending agent: approve the new one, and delete this one.
+                        This is the <strong>only time</strong> you will see this key, and the agent cannot fetch it
+                        now: an agent fetches its key only while it is active and holds a recovery secret the server
+                        accepts. A pending, paused or disabled agent fetches one once it is active. A revoked agent has
+                        no secret: it registers again as a new pending agent, which you approve. One registered before
+                        recovery secrets existed has none either: delete its credentials file and restart it.
                     </p>
                     {% endif %}
                 </div>
@@ -84,10 +85,11 @@
                             "Agent-specific key saved and activated". Its registration key must still be active.
                         </p>
                         {% else %}
-                        <p class="font-semibold text-sm mb-1">Approve the Agent That Registers Again</p>
+                        <p class="font-semibold text-sm mb-1">Activate, or Approve the Agent That Registers Again</p>
                         <p class="text-xs text-dark-text-muted">
-                            The agent logs "registering again; approve the new agent" and appears as a new pending
-                            agent. Its registration key must still be active.
+                            A revoked agent logs "registering again; approve the new agent" and appears as a new
+                            pending agent; one with no secret at all logs "holds no recovery secret". Its registration
+                            key must still be active.
                         </p>
                         {% endif %}
                     </div>

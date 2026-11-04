@@ -72,3 +72,21 @@ async def test_a_revoke_during_a_key_recovery_leaves_no_working_key(
     assert agent.api_key_hash is None or not bcrypt.checkpw(
         key.encode(), agent.api_key_hash.encode()
     ), "the key recovered with the secret works after the revoke committed"
+
+
+# K2: a key generated for a pending agent was promised a recovery that
+# recover-key refuses (it answers only an active agent). Only an active agent
+# with a secret on record can fetch a key, and the panel says which.
+async def test_only_an_active_agent_with_a_secret_can_recover_a_key(worker_db) -> None:
+    async with worker_db() as s:
+        agent, _secret = await AgentCoreService.register_agent(s, hostname="k2.test")
+        await s.commit()
+    async with worker_db() as s:
+        pending = await AgentCoreService.can_recover_key(s, agent.id)
+        await AgentCoreService.approve_agent(s, agent.id, actor_is_admin=True)
+        active = await AgentCoreService.can_recover_key(s, agent.id)
+        await AgentCoreService.revoke_agent_key(s, agent.id)
+        revoked = await AgentCoreService.can_recover_key(s, agent.id)
+        await s.commit()
+
+    assert (pending, active, revoked) == (False, True, False)

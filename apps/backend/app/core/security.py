@@ -28,7 +28,11 @@ from app.services.core.auth_core_service import AuthCoreService
 from app.services.core.registration_key_core_service import (
     RegistrationKeyCoreService,
 )
-from app.shared.agent_protocol import RECOVERY_SECRET_REFUSED, REFUSAL_HEADER
+from app.shared.agent_protocol import (
+    AGENT_KEY_REFUSED,
+    RECOVERY_SECRET_REFUSED,
+    REFUSAL_HEADER,
+)
 from app.shared.logger import get_logger
 
 if TYPE_CHECKING:
@@ -450,7 +454,18 @@ async def authenticate_heartbeat(
                 await verify_registration_token(authorization, db)
             except HTTPException as refusal:
                 refused = refusal.status_code == status.HTTP_401_UNAUTHORIZED
-                raise
+                if not refused:
+                    raise
+                # Marked as the server's refusal of the heartbeat's key, which
+                # an agent tells apart from a gateway's 401.
+                raise HTTPException(
+                    status_code=refusal.status_code,
+                    detail=refusal.detail,
+                    headers={
+                        **(refusal.headers or {}),
+                        REFUSAL_HEADER: AGENT_KEY_REFUSED,
+                    },
+                ) from refusal
             logger.warning(
                 "Heartbeat authenticated by the shared registration key: "
                 "upgrade this agent so it sends its recovery secret",

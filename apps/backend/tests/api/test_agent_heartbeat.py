@@ -24,7 +24,11 @@ from app.models.agent_model import Agent
 from app.schemas.registration_key_schema import RegistrationKeyCreate
 from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.registration_key_core_service import RegistrationKeyCoreService
-from app.shared.agent_protocol import RECOVERY_SECRET_REFUSED, REFUSAL_HEADER
+from app.shared.agent_protocol import (
+    AGENT_KEY_REFUSED,
+    RECOVERY_SECRET_REFUSED,
+    REFUSAL_HEADER,
+)
 from fixtures.factories import make_agent
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -397,9 +401,9 @@ async def test_after_a_regenerate_the_secret_still_recovers_a_key(
     assert resp.json()["api_key"].startswith("luxswirl_ak_")
 
 
-# A refusal that is not of the secret (a wrong key alone, a registration key
-# recover-key does not take) carries no mark: the agent never registers again
-# on it.
+# A refusal that is not of the secret carries no secret mark: a wrong key
+# alone is marked as the key's refusal, and a registration key recover-key
+# does not take is not marked. The agent never registers again on either.
 async def test_other_refusals_are_not_marked_as_refusing_the_secret(
     client: AsyncClient, db: AsyncSession, registration_token: str
 ) -> None:
@@ -421,6 +425,6 @@ async def test_other_refusals_are_not_marked_as_refusing_the_secret(
     )
 
     assert key_alone.status_code == 401, key_alone.text
-    assert REFUSAL_HEADER not in key_alone.headers
+    assert key_alone.headers[REFUSAL_HEADER] == AGENT_KEY_REFUSED
     assert wrong_registration_key.status_code == 401, wrong_registration_key.text
     assert REFUSAL_HEADER not in wrong_registration_key.headers

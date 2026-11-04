@@ -32,7 +32,11 @@ from app.agent import http_client
 from app.agent import registration as registration_module
 from app.agent.core import LuxSwirlAgent
 from app.agent.credentials import AgentCredentials
-from app.shared.agent_protocol import RECOVERY_SECRET_REFUSED, REFUSAL_HEADER
+from app.shared.agent_protocol import (
+    AGENT_KEY_REFUSED,
+    RECOVERY_SECRET_REFUSED,
+    REFUSAL_HEADER,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -45,6 +49,8 @@ CHECKS = "/api/v1/agent/checks"
 REGISTER = "/api/v1/agent/register"
 # The header the real server marks its refusal of a recovery secret with.
 MARK = {REFUSAL_HEADER: RECOVERY_SECRET_REFUSED}
+# ...and its refusal of a heartbeat's key (sent without the secret).
+MARK_KEY = {REFUSAL_HEADER: AGENT_KEY_REFUSED}
 
 
 @dataclass
@@ -132,7 +138,9 @@ class Server:
                 return httpx.Response(
                     401, json={"detail": "Invalid agent recovery secret"}, headers=MARK
                 )
-            return httpx.Response(401, json={"detail": "Invalid agent key"})
+            return httpx.Response(
+                401, json={"detail": "Invalid agent key"}, headers=MARK_KEY
+            )
         if request.url.path == CHECKS:
             if own:
                 return httpx.Response(200, json={"checks": []})
@@ -954,3 +962,86 @@ async def test_h2_control_older_server_html_401_keeps_secret_home(
     await _beat_until([agent], lambda: len(server.heartbeats()) >= 14)
     assert health.exists()
     assert all("X-Agent-Recovery-Secret" not in b.headers for b in tail)
+
+
+# Round 6, attacker J. J2: a gateway that keeps answering JSON 401 got the
+# secret on 9 of 10 heartbeats: an unmarked 401 to the secret left the key
+# refused. The server never sends one, so the agent stops sending the secret
+# and, until a 200, believes only the server's marked refusal of its key.
+async def test_j2_a_sustained_gateway_401_gets_the_secret_at_most_once(
+    server: Server, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    server.current_key = STALE_KEY  # the key is valid throughout
+    await _install(server, SPRING_401, 10)
+    agent = _agent(monkeypatch, tmp_path, server.agent_id)
+
+    await _beat_until([agent], lambda: len(server.heartbeats()) >= 12)
+
+    with_secret = [
+        b for b in server.heartbeats()[:10] if "X-Agent-Recovery-Secret" in b.headers
+    ]
+    assert len(with_secret) <= 1, f"secret sent on {len(with_secret)} of 10 beats"
+    assert agent.credentials.api_key == STALE_KEY
+    assert not agent.heartbeat_sender.key_refused
+
+
+# ...while the server's marked refusal after such a gateway still starts a
+# recovery: a key regenerated meanwhile is recovered.
+async def test_j2_after_a_gateway_the_servers_refusal_still_recovers(
+    server: Server, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    server.current_key = "luxswirl_ak_regenerated_by_operator"
+    await _install(server, SPRING_401, 2)
+    agent = _agent(monkeypatch, tmp_path, server.agent_id)
+
+    await _beat_until([agent], lambda: agent.credentials.api_key == server.current_key)
+
+    assert agent.credentials.api_key == server.current_key
+    assert len(server.recoveries()) == 1
+
+
+def _legacy(tmp_path: Path, server: Server) -> None:
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    AgentCredentials(str(tmp_path / "agent_credentials.json")).save(
+        server.agent_id, STALE_KEY
+    )
+
+
+# J3: a legacy agent (a key, no recovery secret) behind a gateway that sends
+# one JSON 401 was told, at ERROR, to delete its credentials file, though its
+# key works. It says so only on the server's marked refusal (or a run of
+# unmarked ones, from an older server that marks none).
+async def test_j3_one_gateway_401_never_says_delete_the_credentials(
+    server: Server,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    server.current_key = STALE_KEY
+    _legacy(tmp_path, server)
+    await _install(server, SPRING_401, 1)
+    agent = _agent(monkeypatch, tmp_path, server.agent_id)
+
+    await _beat_until([agent], lambda: len(server.heartbeats()) >= 5)
+
+    assert agent.credentials.api_key == STALE_KEY
+    assert not [
+        r for r in caplog.records if "delete its credentials file" in r.getMessage()
+    ]
+
+
+async def test_j3_the_servers_refusal_of_a_legacy_key_says_so(
+    server: Server,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    server.current_key = "luxswirl_ak_regenerated_by_operator"
+    _legacy(tmp_path, server)
+    agent = _agent(monkeypatch, tmp_path, server.agent_id)
+
+    await _beat_until([agent], lambda: len(server.heartbeats()) >= 3)
+
+    assert [
+        r for r in caplog.records if "delete its credentials file" in r.getMessage()
+    ]
