@@ -41,6 +41,16 @@ logger = get_logger("luxswirl.agent.heartbeat")
 HEALTH_FILE = Path(os.getenv("LUXSWIRL_HEALTH_FILE", "/app/data/agent_health"))
 
 
+def _is_app_refusal(response: httpx.Response) -> bool:
+    """Whether a 401 is the server's own JSON refusal (`{"detail": ...}`),
+    not a proxy's page."""
+    try:
+        body = response.json()
+    except ValueError:
+        return False
+    return isinstance(body, dict) and "detail" in body
+
+
 def _stamp_liveness() -> None:
     """Record a successful heartbeat for the container health check (best-effort)."""
     try:
@@ -117,6 +127,12 @@ class HeartbeatSender:
         # own key (regenerated or revoked): the agent recovers a new one, and
         # does not stamp its liveness file until it has.
         self.key_refused = False
+        # Whether the server says in its answer if the agent's key was
+        # accepted (`agent_key_accepted`): None until its first answer. A
+        # server from before that field answers the recovery secret just as it
+        # answers an accepted key when the key was revoked, so the agent sends
+        # such a server its key alone, and reads its 401 as the refusal.
+        self.server_reports_key_acceptance: bool | None = None
         # The no-recovery-secret refusal is logged once, not every heartbeat.
         self._unrecoverable_logged = False
 
@@ -271,10 +287,11 @@ class HeartbeatSender:
                     }
 
                     # Send heartbeat
+                    headers = self._auth_headers()
                     response = await server_client().post(
                         heartbeat_url,
                         json=heartbeat,
-                        headers=self._auth_headers(),
+                        headers=headers,
                         timeout=10.0,
                     )
 
@@ -289,15 +306,19 @@ class HeartbeatSender:
                             # Not while its own key is refused: an agent that
                             # cannot authenticate reads unhealthy, though the
                             # server answers its recovery secret.
-                            refused = self._own_key_refused(response_data)
+                            refused = self._own_key_refused(
+                                response_data,
+                                sent_secret="X-Agent-Recovery-Secret" in headers,
+                            )
                             if refused and not self.key_refused:
                                 self.logger.warning(
                                     "The server no longer accepts this agent's "
                                     "key (regenerated or revoked): recovering "
                                     "a new one"
                                 )
-                            self.key_refused = refused
-                            if not self.key_refused:
+                            if refused is not None:
+                                self.key_refused = refused
+                            if refused is False:
                                 _stamp_liveness()
                                 # A recovered key the disk refused is saved
                                 # once it can be.
@@ -368,6 +389,7 @@ class HeartbeatSender:
                             },
                         )
                         if response.status_code == 401:
+                            self._read_refusal(response, headers)
                             self._log_unrecoverable_refusal()
 
                 except httpx.RequestError:
@@ -621,21 +643,59 @@ class HeartbeatSender:
             extra={"check_count": len(self.checks), "reason": reason},
         )
 
-    def _own_key_refused(self, response_data: dict[str, Any]) -> bool:
+    def _own_key_refused(
+        self, response_data: dict[str, Any], *, sent_secret: bool
+    ) -> bool | None:
         """Whether the server, answering this heartbeat, no longer accepts the
-        agent's own key (an operator regenerated or revoked it).
+        agent's own key (an operator regenerated or revoked it); None when the
+        answer does not say.
 
         The heartbeat carries the key and the recovery secret, so the server
         answers a refused key by the secret, with `agent_key_accepted` false.
-        A server from before that field says the same with its "retrieve your
-        key" message, which it sends only when the key did not authenticate.
+        A server from before that field never says the key was accepted: its
+        "retrieve your key" message says a regenerated key was refused, but a
+        revoked key answered by the secret looks like an accepted one. So such
+        a server is sent the key alone (`_auth_headers`), and only a 200 to the
+        key alone, or a 401 (`_read_refusal`), says what it thinks of the key.
         """
         if not self.credentials.api_key:
             return False
         accepted = response_data.get("agent_key_accepted")
-        if accepted is None:
-            return bool(response_data.get("message"))
-        return accepted is False
+        if isinstance(accepted, bool):
+            self.server_reports_key_acceptance = True
+            return not accepted
+        self.server_reports_key_acceptance = False
+        if response_data.get("message"):
+            return True
+        if not sent_secret:
+            # The key alone authenticated this heartbeat.
+            return False
+        # The secret rode along, so the 200 may be the secret's: it says
+        # nothing of the key. A key a 401 already refused stays refused, and
+        # otherwise the next heartbeat sends the key alone to find out.
+        return None
+
+    def _read_refusal(self, response: httpx.Response, headers: dict[str, str]) -> None:
+        """Read a 401 to the agent's key alone as the server refusing it.
+
+        Only a server from before `agent_key_accepted` is sent the key alone
+        (a newer one answers a refused key by the secret, never with a 401),
+        and only the app's own JSON refusal counts: a proxy's 401 says nothing
+        about the key.
+        """
+        if (
+            not self.credentials.api_key
+            or self.server_reports_key_acceptance is not False
+            or "X-Agent-Recovery-Secret" in headers
+            or not _is_app_refusal(response)
+        ):
+            return
+        if not self.key_refused:
+            self.logger.warning(
+                "The server no longer accepts this agent's key (regenerated "
+                "or revoked): recovering a new one"
+            )
+        self.key_refused = True
 
     async def _handle_agent_approval(self, response_data: dict[str, Any]) -> None:
         """Retrieve the agent's own key when the server says it needs one.
@@ -704,9 +764,22 @@ class HeartbeatSender:
         auth_key = self.config.get("auth_key")
         if auth_key:
             headers["Authorization"] = f"Bearer {auth_key}"
-        if self.credentials.recovery_secret:
+        if self.credentials.recovery_secret and not self._send_key_alone():
             headers["X-Agent-Recovery-Secret"] = self.credentials.recovery_secret
         return headers
+
+    def _send_key_alone(self) -> bool:
+        """Whether this heartbeat carries the agent's key without its secret.
+
+        Only to a server from before `agent_key_accepted`, while its key is
+        not known to be refused: that server's 200 to the key and the secret
+        does not say which one it accepted (see `_own_key_refused`).
+        """
+        return (
+            bool(self.credentials.api_key)
+            and self.server_reports_key_acceptance is False
+            and not self.key_refused
+        )
 
     def start(self) -> None:
         """Start the heartbeat sender."""

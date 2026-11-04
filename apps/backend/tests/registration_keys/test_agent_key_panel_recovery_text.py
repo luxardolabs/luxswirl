@@ -48,3 +48,32 @@ def test_a_lost_credentials_file_means_registering_again() -> None:
 
     assert "lost its credentials file" in html
     assert "registers again" in html
+
+
+GENERATED_PANEL = "partials/panels/registration_keys/agent_key_generated_panel.html"
+
+
+def _render_generated() -> str:
+    agent = SimpleNamespace(id=uuid4(), agent_name="edge-01")
+    html = templates.get_template(GENERATED_PANEL).render(
+        agent=agent, plaintext_key="luxswirl_ak_shown_once"
+    )
+    return re.sub(r"\s+", " ", html)
+
+
+def test_the_generated_key_panel_never_says_to_set_it_as_the_registration_key() -> None:
+    # LUXSWIRL_AUTH_KEY is the registration key the agent recovers its own key
+    # with: an agent key put there makes that recovery fail.
+    html = _render_generated()
+
+    assert "LUXSWIRL_AUTH_KEY=luxswirl_ak_shown_once" not in html
+    assert "Restart the agent to pick up the new key" not in html
+    assert "that variable holds the agent's registration key" in html
+    assert "fetches a key of its own" in html
+
+
+def test_revoke_rotates_the_key_rather_than_locking_the_agent_out() -> None:
+    html = _render()
+
+    assert "unable to connect" not in html
+    assert "to stop the agent, disable or archive it" in html

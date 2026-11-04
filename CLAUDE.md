@@ -335,7 +335,7 @@ The JSON API has two surfaces, each with its own prefix and credential: the agen
 | `POST` | `/api/v1/agent/jobs/{job_id}/results`  | Key of the job's own agent         | Submit a job's results                   |
 | `POST` | `/api/v1/agent/artifacts`              | Agent key                          | Upload an artifact for one of its checks |
 
-A pending agent proves its heartbeat with its recovery secret (header `X-Agent-Recovery-Secret`); an agent build that sends no secret is still checked against the registration key, logged as a warning to upgrade it. Each refused pending credential counts against that agent's registration budget (`reserve_pending_heartbeat_attempt`).
+A pending agent proves its heartbeat with its recovery secret (header `X-Agent-Recovery-Secret`); an agent build that sends no secret is still checked against the registration key, logged as a warning to upgrade it. Each refused pending credential counts against that agent's registration budget (`reserve_pending_heartbeat_attempt`). An approved agent sends its secret beside its key on every heartbeat; when an operator has regenerated or revoked the key, the server answers by the secret with `agent_key_accepted: false` (no 401, nothing counted), and the agent recovers a new key from `recover-key` (`apps/agent/app/agent/heartbeat.py`). A server from before that field cannot say a revoked key was refused, so the agent sends it the key alone and reads its JSON 401 as the refusal; a proxy's 401 changes nothing.
 
 The agent builds every one of these from `LUXSWIRL_SERVER_URL`, the server's address with no path (`apps/agent/app/agent/server_api.py`), and refuses to start on one that carries a path, credentials or an invalid port.
 
@@ -430,7 +430,7 @@ Agent credentials (`agent_id` + `api_key`) are automatically encrypted using **F
 
 1. **Registration:** Agent registers with server using `LUXSWIRL_AUTH_KEY` (registration key)
 1. **Approval:** Server generates unique agent-specific API key; the agent fetches it with the registration key plus the per-agent recovery secret it was given at registration
-1. **Storage:** Agent encrypts and saves credentials to persistent Docker volume
+1. **Storage:** Agent encrypts and saves credentials to persistent Docker volume, atomically (a temporary file, fsync, then rename), so a failed save leaves the old file whole
 1. **Restart:** Agent loads and decrypts credentials automatically using container-derived key
 
 **Encryption details:**

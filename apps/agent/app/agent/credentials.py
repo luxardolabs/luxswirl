@@ -15,6 +15,7 @@ import hashlib
 import json
 import os
 import socket
+import tempfile
 from pathlib import Path
 from uuid import UUID
 
@@ -225,12 +226,11 @@ class AgentCredentials:
                 encrypted = fernet.encrypt(plaintext)
 
                 # Write encrypted binary data
-                self.credentials_file.write_bytes(encrypted)
+                self._write_atomically(encrypted)
                 logger.debug("Saved encrypted credentials")
             else:
                 # Write plaintext JSON (for debugging/testing only)
-                with open(self.credentials_file, "w") as f:
-                    json.dump(data, f, indent=2)
+                self._write_atomically(json.dumps(data, indent=2).encode())
                 logger.warning("Saved plaintext credentials (encryption disabled)")
 
             # Set restrictive file permissions (owner read/write only)
@@ -262,6 +262,35 @@ class AgentCredentials:
                 extra={"credentials_file": str(self.credentials_file)},
             )
             return False
+
+    def _write_atomically(self, content: bytes) -> None:
+        """Replace the credentials file with `content`, all or nothing.
+
+        Written to a temporary file beside it (owner-only from the start),
+        flushed to disk, then renamed over it: a save that fails part way (a
+        full disk) leaves the old file whole, with the agent's id and recovery
+        secret, instead of an empty one.
+        """
+        directory = self.credentials_file.parent
+        fd, tmp_name = tempfile.mkstemp(
+            dir=directory, prefix=f".{self.credentials_file.name}.", suffix=".tmp"
+        )
+        tmp_path = Path(tmp_name)
+        try:
+            with os.fdopen(fd, "wb") as tmp:
+                tmp.write(content)
+                tmp.flush()
+                os.fsync(tmp.fileno())
+            os.replace(tmp_path, self.credentials_file)
+        except BaseException:
+            tmp_path.unlink(missing_ok=True)
+            raise
+        # The rename itself reaches the disk once the directory is flushed.
+        dir_fd = os.open(directory, os.O_RDONLY)
+        try:
+            os.fsync(dir_fd)
+        finally:
+            os.close(dir_fd)
 
     def hold_unsaved(self, api_key: str) -> None:
         """Use `api_key` though it could not be saved, and save it later

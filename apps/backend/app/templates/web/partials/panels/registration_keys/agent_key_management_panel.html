@@ -90,9 +90,9 @@
                     <div class="flex-1">
                         <h4 class="font-semibold text-red-400 mb-1">Revoke Agent-Specific Key</h4>
                         <p class="text-sm text-dark-text-muted mb-3">
-                            Permanently revoke the agent-specific key. The agent will be unable to connect
-                            until a new key is generated here, or the agent recovers one with a registration
-                            key and its own recovery secret.
+                            Revoke the agent-specific key. An agent holding its recovery secret recovers a new
+                            key at its next heartbeat with its registration key, so this rotates the key; to stop
+                            the agent, disable or archive it.
                         </p>
                         {{ confirm_action_btn(icon_svg=ICO_BAN, label='Revoke Key', color='red',
                             hx_delete=agent_urls.revoke_key,
