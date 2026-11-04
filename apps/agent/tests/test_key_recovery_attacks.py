@@ -49,6 +49,12 @@ class Server:
     recover_status: int = 200
     forged_401s: int = 0  # the next N heartbeats get a 401 whatever they carry
     config_version: str = "v1"
+    # False: a server from before agent_key_accepted (only its message says
+    # the key did not authenticate).
+    sends_key_accepted: bool = True
+    # Heartbeats the real server would answer 401 and count against the
+    # agent's pending budget: a refused key with no secret beside it.
+    counted_refusals: int = 0
     requests: list[httpx.Request] = field(default_factory=list)
     _counter: itertools.count = field(default_factory=lambda: itertools.count(1))
 
@@ -75,12 +81,16 @@ class Server:
                 "config_version": self.config_version,
             }
             if own:
-                return httpx.Response(200, json=body | {"agent_key_accepted": True})
+                if self.sends_key_accepted:
+                    body["agent_key_accepted"] = True
+                return httpx.Response(200, json=body)
             if secret == SECRET:
-                return httpx.Response(
-                    200,
-                    json=body | {"message": "recover", "agent_key_accepted": False},
-                )
+                body["message"] = "recover"
+                if self.sends_key_accepted:
+                    body["agent_key_accepted"] = False
+                return httpx.Response(200, json=body)
+            if secret is None:
+                self.counted_refusals += 1
             return httpx.Response(401, json={"detail": "Invalid agent key"})
         if request.url.path == CHECKS:
             if own:
@@ -171,7 +181,8 @@ async def test_a1_single_forged_401_does_not_abandon_a_valid_key(
     for beat in tail:
         # The key was never refused by the server: it must still be used.
         assert beat.headers.get("Authorization") == f"Bearer {STALE_KEY}"
-        assert "X-Agent-Recovery-Secret" not in beat.headers
+    assert server.recoveries() == []
+    assert agent.credentials.api_key == STALE_KEY
 
 
 # --------------------------------------------------------------------------
@@ -314,3 +325,82 @@ async def test_control_no_refusal(
         b.headers["Authorization"] == f"Bearer {STALE_KEY}" for b in server.heartbeats()
     )
     assert health.exists()
+
+
+# Round 2.
+#
+# D1. The first heartbeat after a key change carried only the old key: the
+# real server answers that 401 and counts it against the agent's pending
+# budget (5 an hour), so a few key changes or restarts locked the agent out of
+# recovery. The secret now rides on every heartbeat, so a refused key is
+# answered (agent_key_accepted false), never counted.
+async def test_d1_a_refused_key_is_answered_not_counted(
+    server: Server, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    server.current_key = "luxswirl_ak_regenerated_by_operator"
+    agent = _agent(monkeypatch, tmp_path, server.agent_id)
+
+    await _beat_until([agent], lambda: agent.credentials.api_key == server.current_key)
+
+    assert agent.credentials.api_key == server.current_key
+    assert server.counted_refusals == 0
+    assert all(
+        b.headers.get("X-Agent-Recovery-Secret") == SECRET for b in server.heartbeats()
+    )
+
+
+# D2 / C2. A server from before agent_key_accepted: a stray 401 must not make
+# the agent replace (or stop vouching for) a key the server still accepts...
+async def test_d2_an_older_server_that_accepts_the_key_keeps_it(
+    server: Server, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    health = tmp_path / "agent_health"
+    monkeypatch.setattr(heartbeat_module, "HEALTH_FILE", health)
+    server.sends_key_accepted = False
+    server.forged_401s = 1
+    agent = _agent(monkeypatch, tmp_path, server.agent_id)
+
+    await _beat_until([agent], lambda: len(server.heartbeats()) >= 8)
+
+    assert server.recoveries() == []
+    assert agent.credentials.api_key == STALE_KEY
+    assert not agent.heartbeat_sender.key_refused
+    assert health.exists()
+
+
+# ...and its "retrieve your key" message still says when the key is refused.
+async def test_d2_an_older_server_that_refuses_the_key_gets_it_recovered(
+    server: Server, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    server.sends_key_accepted = False
+    server.current_key = "luxswirl_ak_regenerated_by_operator"
+    agent = _agent(monkeypatch, tmp_path, server.agent_id)
+
+    await _beat_until([agent], lambda: agent.credentials.api_key == server.current_key)
+
+    assert agent.credentials.api_key == server.current_key
+    assert len(server.recoveries()) == 1
+
+
+# C1. A recovered key the disk refused lived in memory only, never saved: a
+# restart then had to recover again (and could not, with the registration key
+# revoked). It is saved once the disk takes it.
+async def test_c1_an_unsaved_key_is_saved_once_the_disk_takes_it(
+    server: Server, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    agent = _agent(monkeypatch, tmp_path, server.agent_id)
+    creds_path = tmp_path / "agent_credentials.json"
+    creds_path.unlink()
+    creds_path.mkdir()  # the save fails while this is a directory
+    server.current_key = "luxswirl_ak_regenerated_by_operator"
+
+    await _beat_until([agent], lambda: agent.credentials.api_key == server.current_key)
+    assert agent.credentials.unsaved
+    creds_path.rmdir()  # the disk takes writes again
+    await _beat_until([agent], lambda: not agent.credentials.unsaved)
+
+    reloaded = AgentCredentials(str(creds_path))
+    assert reloaded.load()
+    assert reloaded.api_key == server.current_key
+    assert reloaded.recovery_secret == SECRET
+    assert len(server.recoveries()) == 1

@@ -292,10 +292,10 @@ class AgentRegistration:
             if self.credentials.save(agent_id, api_key):
                 self.logger.info("Agent-specific key saved and activated")
             else:
-                self.credentials.api_key = api_key
+                self.credentials.hold_unsaved(api_key)
                 self.logger.error(
-                    "Failed to save agent-specific key: using it until the "
-                    "agent restarts, which then recovers another"
+                    "Failed to save agent-specific key: using it, and saving "
+                    "it at each heartbeat until the save succeeds"
                 )
             # Update config to use agent-specific key for future requests
             self.config["auth_key"] = api_key
