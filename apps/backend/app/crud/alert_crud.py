@@ -3,9 +3,10 @@ Alert CRUD - database queries for alerts, alert mappings, and notification logs.
 """
 
 from collections.abc import Collection, Sequence
+from datetime import datetime, timedelta
 from uuid import UUID
 
-from sqlalchemy import and_, delete, func, select
+from sqlalchemy import and_, case, delete, func, literal, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -564,6 +565,59 @@ class AlertCRUD:
             for alert_id in alert_ids
         )
         await db.flush()
+
+    @staticmethod
+    async def snooze_check_mapping(
+        db: AsyncSession,
+        alert_id: UUID,
+        check_id: UUID,
+        *,
+        now: datetime,
+        extend_by: timedelta,
+        latest: datetime,
+    ) -> datetime | None:
+        """Snooze the pair `extend_by` past its live snooze, or past `now`
+        when it has none, and never past `latest`; the new snoozed_until, or
+        None when the pair is not mapped.
+
+        One UPDATE that reads and writes the row together: a detach committed
+        meanwhile leaves no row to match, never a write the ORM finds missing.
+        """
+        current = AlertCheckMapping.snoozed_until
+        start = case((current > now, current), else_=literal(now))
+        result = await db.execute(
+            update(AlertCheckMapping)
+            .where(
+                AlertCheckMapping.alert_id == alert_id,
+                AlertCheckMapping.check_id == check_id,
+            )
+            .values(
+                snoozed_until=func.least(
+                    start + extend_by, literal(latest), type_=current.type
+                )
+            )
+            .returning(AlertCheckMapping.snoozed_until)
+            .execution_options(synchronize_session=False)
+        )
+        return result.scalar_one_or_none()
+
+    @staticmethod
+    async def unsnooze_check_mapping(
+        db: AsyncSession, alert_id: UUID, check_id: UUID
+    ) -> bool:
+        """Clear the pair's snooze; whether the pair is mapped. One UPDATE, so
+        a detach committed meanwhile is a miss, not a stale write."""
+        result = await db.execute(
+            update(AlertCheckMapping)
+            .where(
+                AlertCheckMapping.alert_id == alert_id,
+                AlertCheckMapping.check_id == check_id,
+            )
+            .values(snoozed_until=None)
+            .returning(AlertCheckMapping.id)
+            .execution_options(synchronize_session=False)
+        )
+        return result.scalar_one_or_none() is not None
 
     @staticmethod
     async def save_check_mapping(

@@ -685,38 +685,39 @@ class AlertCoreService:
             minutes: Minutes to add to snooze time (default: 15)
 
         Returns:
-            Updated AlertCheckMapping with snoozed_until set
+            The pair, with its new snoozed_until.
 
         Raises:
-            NotFoundException: If alert-check mapping not found
+            NotFoundException: If alert-check mapping not found, detached by
+                another request meanwhile included
         """
+        now = utc_now()
+        # One UPDATE that reads the current snooze and writes the new one: a
+        # pair detached meanwhile is not found, never a stale ORM write.
+        # However often it is extended, a snooze ends within MAX_SNOOZE.
+        new_snooze_time = await AlertCRUD.snooze_check_mapping(
+            db,
+            alert_id,
+            check_id,
+            now=now,
+            extend_by=timedelta(minutes=minutes),
+            latest=now + MAX_SNOOZE,
+        )
+        if new_snooze_time is None:
+            raise NotFoundException(
+                f"Alert-check mapping not found for alert {alert_id} and check {check_id}"
+            )
+        # The row is held by the UPDATE until commit, so it is still there.
         mapping = await AlertCRUD.get_check_mapping(db, alert_id, check_id)
-
-        if not mapping:
+        if mapping is None:
             raise NotFoundException(
                 f"Alert-check mapping not found for alert {alert_id} and check {check_id}"
             )
 
-        # Calculate new snooze time
-        now = utc_now()
-
-        if mapping.snoozed_until and mapping.snoozed_until > now:
-            # Already snoozed - extend from current snooze time
-            new_snooze_time = mapping.snoozed_until + timedelta(minutes=minutes)
-        else:
-            # Not currently snoozed - start from now
-            new_snooze_time = now + timedelta(minutes=minutes)
-        # However often it is extended, a snooze ends within MAX_SNOOZE.
-        new_snooze_time = min(new_snooze_time, now + MAX_SNOOZE)
-
-        # Update the mapping
-        mapping.snoozed_until = new_snooze_time
-        mapping = await AlertCRUD.save_check_mapping(db, mapping)
-
         logger.info(
             "Alert-check mapping snoozed",
             extra={
-                "snoozed_until": str(mapping.snoozed_until),
+                "snoozed_until": str(new_snooze_time),
                 "alert_name": mapping.alert.name,
                 "alert_id": str(mapping.alert.id),
                 "check_name": mapping.check.display_name,
@@ -747,15 +748,18 @@ class AlertCoreService:
         Raises:
             NotFoundException: If alert-check mapping not found
         """
-        mapping = await AlertCRUD.get_check_mapping(db, alert_id, check_id)
-
-        if not mapping:
+        # One UPDATE: a pair detached meanwhile is not found, never a stale
+        # ORM write.
+        if not await AlertCRUD.unsnooze_check_mapping(db, alert_id, check_id):
             raise NotFoundException(
                 f"Alert-check mapping not found for alert {alert_id} and check {check_id}"
             )
-
-        # Clear the snooze
-        mapping.snoozed_until = None
+        # The row is held by the UPDATE until commit, so it is still there.
+        mapping = await AlertCRUD.get_check_mapping(db, alert_id, check_id)
+        if mapping is None:
+            raise NotFoundException(
+                f"Alert-check mapping not found for alert {alert_id} and check {check_id}"
+            )
 
         logger.info(
             "Alert-check mapping un-snoozed (notifications resumed)",
