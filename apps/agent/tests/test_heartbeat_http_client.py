@@ -89,7 +89,7 @@ async def test_each_heartbeat_sends_the_key_held_at_that_moment(
     ]
 
 
-async def test_a_pending_agent_proves_its_recovery_secret_until_it_holds_its_own_key(
+async def test_the_recovery_secret_rides_on_every_heartbeat(
     seen: list[httpx.Request],
 ) -> None:
     sender = _sender("registration-key")
@@ -99,7 +99,9 @@ async def test_a_pending_agent_proves_its_recovery_secret_until_it_holds_its_own
     sender.config["auth_key"] = "agent-key"
     await sender.send_shutdown_heartbeat("run-1")
 
+    # Pending, it is the agent's credential; approved, the server checks it
+    # only if the key is refused, and answers instead of counting a 401.
     pending, approved = seen
     assert pending.headers["x-agent-recovery-secret"] == "luxswirl_rs_" + "ab" * 32
-    assert "x-agent-recovery-secret" not in approved.headers
+    assert approved.headers["x-agent-recovery-secret"] == "luxswirl_rs_" + "ab" * 32
     assert approved.headers["authorization"] == "Bearer agent-key"

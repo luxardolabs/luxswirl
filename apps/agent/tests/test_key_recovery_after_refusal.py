@@ -186,7 +186,7 @@ async def test_a_refused_key_is_replaced_by_a_recovered_one(
         await _close_clients(agent)
 
 
-async def test_heartbeats_after_recovery_carry_the_new_key_and_no_secret(
+async def test_heartbeats_after_recovery_carry_the_new_key(
     server: Server, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     agent = _agent(monkeypatch, tmp_path, server.agent_id)
@@ -199,7 +199,6 @@ async def test_heartbeats_after_recovery_carry_the_new_key_and_no_secret(
     assert beats
     for beat in beats:
         assert beat.headers["Authorization"] == f"Bearer {NEW_KEY}"
-        assert "X-Agent-Recovery-Secret" not in beat.headers
     assert server.recoveries() == []
 
 

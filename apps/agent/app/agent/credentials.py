@@ -50,6 +50,9 @@ class AgentCredentials:
         # Issued once at registration; recover-key needs it with the
         # registration key. None for credentials saved before it existed.
         self.recovery_secret: str | None = None
+        # True while api_key is a recovered key the file does not hold yet
+        # (its save failed): retry_unsaved() writes it once it can.
+        self.unsaved = False
         self._encryption_enabled = True  # Can be disabled via env var for debugging
 
         # Check if encryption should be disabled (for testing/migration)
@@ -244,6 +247,7 @@ class AgentCredentials:
             self.agent_id = agent_id
             self.api_key = api_key
             self.recovery_secret = recovery_secret
+            self.unsaved = False
 
             logger.info(
                 "Saved agent credentials",
@@ -258,6 +262,20 @@ class AgentCredentials:
                 extra={"credentials_file": str(self.credentials_file)},
             )
             return False
+
+    def hold_unsaved(self, api_key: str) -> None:
+        """Use `api_key` though it could not be saved, and save it later
+        (`retry_unsaved`): the server has already replaced the old key."""
+        self.api_key = api_key
+        self.unsaved = True
+
+    def retry_unsaved(self) -> None:
+        """Save a key `hold_unsaved` kept in memory only, if there is one."""
+        if not self.unsaved or self.agent_id is None or not self.api_key:
+            return
+        if self.save(self.agent_id, self.api_key):
+            self.unsaved = False
+            logger.info("Saved the recovered agent key that could not be saved before")
 
     def has_credentials(self) -> bool:
         """Check if credentials are loaded."""
@@ -278,6 +296,7 @@ class AgentCredentials:
             self.agent_id = None
             self.api_key = None
             self.recovery_secret = None
+            self.unsaved = False
 
             # Delete credentials file if it exists
             if self.credentials_file.exists():
