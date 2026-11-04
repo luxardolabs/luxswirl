@@ -49,6 +49,11 @@ class LuxSwirlAgent:
         self.interval = config.get("interval", 60)
         self.checks: list[BaseCheck] = []
 
+        # The registration key (LUXSWIRL_AUTH_KEY), kept apart from auth_key,
+        # which becomes the agent's own key once it has one: re-registering
+        # and recovering a key both need the registration key.
+        self.config.setdefault("registration_key", self.config.get("auth_key", ""))
+
         # Load or register agent credentials
         self.credentials = AgentCredentials()
         if self.credentials.load():

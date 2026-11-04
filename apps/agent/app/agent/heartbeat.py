@@ -343,6 +343,8 @@ class HeartbeatSender:
                                 "response_text": response.text,
                             },
                         )
+                        if response.status_code == 401:
+                            self._drop_refused_key()
 
                 except httpx.RequestError:
                     self.logger.warning("Failed to send heartbeat", exc_info=True)
@@ -613,6 +615,37 @@ class HeartbeatSender:
                         "retrieved: the key recovery log line says why, and "
                         "whether it is asked again or needs a restart"
                     )
+
+    def _drop_refused_key(self) -> None:
+        """After the server refused the agent's own key (401), stop using it.
+
+        An operator regenerated or revoked it. The agent drops the key from
+        memory and goes back to the pending credential: the next heartbeat
+        carries its recovery secret (and the registration key), the server
+        answers `approval_status: active`, and `_handle_agent_approval`
+        recovers a new key, under the recovery's own back-off. The credentials
+        file keeps the old key until a new one is saved over it, so a restart
+        before then refuses it again and takes the same path.
+
+        A refusal of the pending credential (no key held) changes nothing, and
+        an agent with no recovery secret has nothing to prove itself with.
+        """
+        if not self.credentials.api_key:
+            return
+        if not self.credentials.recovery_secret:
+            self.logger.error(
+                "The server refused this agent's key, and the agent holds no "
+                "recovery secret to recover a new one: delete its credentials "
+                "file and restart it to register again, then approve the new agent"
+            )
+            return
+        self.credentials.api_key = None
+        self.config["auth_key"] = self.config.get("registration_key", "")
+        self.logger.warning(
+            "The server refused this agent's key (regenerated or revoked): "
+            "proving its recovery secret to recover a new one; the stored key "
+            "is kept until a new one is saved"
+        )
 
     def _auth_headers(self) -> dict[str, str]:
         """The headers that authenticate a heartbeat with the agent's CURRENT credentials.

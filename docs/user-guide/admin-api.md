@@ -213,7 +213,7 @@ The keys agents register with. Every route takes an admin's token, as the web UI
 | `POST` | `/api/v1/admin/registration-keys`             | `{"name", "description"?}`; `201` with the plaintext `key`, shown only now    |
 | `POST` | `/api/v1/admin/registration-keys/{id}/revoke` | `{"reason"?}`: no agent registers or recovers its key with it again           |
 
-The token's user is recorded as `created_by` and `revoked_by`. A key revoked once stays revoked as first recorded: revoking it again is a `422`. A revoked key is kept, not deleted, so its usage and revocation stay on record. An approved agent keeps working after the key it registered with is revoked, since it uses its own key. A pending agent, or one that has not fetched its own key yet, uses the registration key for its heartbeat and key recovery, so it needs another registration key.
+The token's user is recorded as `created_by` and `revoked_by`. A key revoked once stays revoked as first recorded: revoking it again is a `422`. A revoked key is kept, not deleted, so its usage and revocation stay on record. An approved agent keeps working after the key it registered with is revoked, since it uses its own key. A pending agent, or one that has not fetched its own key yet, needs the registration key for key recovery, so it needs another registration key; so does an approved agent whose own key is regenerated or revoked, since it recovers the new key the same way.
 
 ## Agent jobs
 
