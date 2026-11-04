@@ -306,6 +306,7 @@ async def admin_revoke_agent_key(
     principal: ApiEditor,
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> Response:
-    """Revoke the agent's key: it cannot connect until it has another."""
+    """Revoke the agent's key. An agent holding its recovery secret recovers
+    another at its next heartbeat; disabling the agent is what stops it."""
     await AdminAgentCoreService.revoke_key(db, agent_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

@@ -765,6 +765,7 @@ class AgentCoreService:
             heartbeat_interval=heartbeat_interval,
             check_sync_interval=check_sync_interval,
             message=message,
+            agent_key_accepted=using_agent_key,
             jobs=jobs_list,
             approval_status=agent.approval_status,
             report_interval=agent.report_interval,

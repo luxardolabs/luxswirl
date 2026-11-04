@@ -58,12 +58,15 @@ class Server:
         secret = request.headers.get("X-Agent-Recovery-Secret")
         if request.url.path == HEARTBEAT:
             if self.current_key and auth == f"Bearer {self.current_key}":
-                return httpx.Response(200, json={"approval_status": "active"})
+                return httpx.Response(
+                    200, json={"approval_status": "active", "agent_key_accepted": True}
+                )
             if secret == SECRET:
                 return httpx.Response(
                     200,
                     json={
                         "approval_status": "active",
+                        "agent_key_accepted": False,
                         "message": "Agent approved - retrieve your agent-specific key",
                     },
                 )
@@ -75,6 +78,12 @@ class Server:
                 return httpx.Response(401, json={"detail": "no"})
             self.current_key = NEW_KEY
             return httpx.Response(200, json={"api_key": NEW_KEY, "message": "ok"})
+        if request.url.path == "/api/v1/agent/checks":
+            # The real server refuses a key it does not take with 401, never
+            # 404 (which the agent reads as "this agent is gone").
+            if self.current_key and auth == f"Bearer {self.current_key}":
+                return httpx.Response(200, json={"checks": []})
+            return httpx.Response(401, json={"detail": "Invalid agent key"})
         return httpx.Response(404)
 
 
