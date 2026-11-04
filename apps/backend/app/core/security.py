@@ -457,14 +457,15 @@ async def authenticate_heartbeat(
                 refused = refusal.status_code == status.HTTP_401_UNAUTHORIZED
                 if not refused:
                     raise
-                # The key the heartbeat carried is refused. A pending agent
-                # that never had a key of its own sent the registration key;
-                # any other sent its own key, whether it still has one or a
-                # revoke cleared it (it proves its recovery secret next, and
-                # learns whether a revoke voided that too).
-                never_keyed = (
-                    not agent.api_key_hash
-                    and agent.approval_status == AgentApprovalStatus.PENDING
+                # The key the heartbeat carried is refused. An agent that
+                # never had a key of its own (pending, or rejected, which only
+                # a pending agent can be) sent the registration key; any other
+                # sent its own key, whether it still has one or a revoke
+                # cleared it (it proves its recovery secret next, and learns
+                # whether a revoke voided that too).
+                never_keyed = not agent.api_key_hash and agent.approval_status in (
+                    AgentApprovalStatus.PENDING,
+                    AgentApprovalStatus.REJECTED,
                 )
                 raise HTTPException(
                     status_code=refusal.status_code,
