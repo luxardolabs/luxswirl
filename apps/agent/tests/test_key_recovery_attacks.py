@@ -12,7 +12,9 @@ fetched with the recovered key.
 from __future__ import annotations
 
 import asyncio
+import errno
 import itertools
+import os
 from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -52,6 +54,9 @@ class Server:
     # False: a server from before agent_key_accepted (only its message says
     # the key did not authenticate).
     sends_key_accepted: bool = True
+    # True: the key was revoked, so no key hash is left, and the server sends
+    # no "retrieve your key" message (process_heartbeat).
+    revoked: bool = False
     # Heartbeats the real server would answer 401 and count against the
     # agent's pending budget: a refused key with no secret beside it.
     counted_refusals: int = 0
@@ -85,7 +90,8 @@ class Server:
                     body["agent_key_accepted"] = True
                 return httpx.Response(200, json=body)
             if secret == SECRET:
-                body["message"] = "recover"
+                if not self.revoked:
+                    body["message"] = "recover"
                 if self.sends_key_accepted:
                     body["agent_key_accepted"] = False
                 return httpx.Response(200, json=body)
@@ -404,3 +410,109 @@ async def test_c1_an_unsaved_key_is_saved_once_the_disk_takes_it(
     assert reloaded.api_key == server.current_key
     assert reloaded.recovery_secret == SECRET
     assert len(server.recoveries()) == 1
+
+
+# E1. A server from before agent_key_accepted, with the key REVOKED: it keeps
+# no key hash, so it answers the secret with 200, approval active and no
+# message, which looks just like an accepted key. The agent sends such a server
+# its key alone, reads the 401 as the refusal, and recovers a key.
+async def test_e1_an_older_server_that_revoked_the_key_gets_it_recovered(
+    server: Server, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    health = tmp_path / "agent_health"
+    monkeypatch.setattr(heartbeat_module, "HEALTH_FILE", health)
+    server.sends_key_accepted = False
+    server.revoked = True
+    server.current_key = None
+    agent = _agent(monkeypatch, tmp_path, server.agent_id)
+
+    await _beat_until([agent], lambda: agent.credentials.api_key == server.current_key)
+
+    assert agent.credentials.api_key == server.current_key
+    assert len(server.recoveries()) == 1
+    assert not agent.heartbeat_sender.key_refused
+
+
+async def test_e1_an_older_server_that_revoked_the_key_never_reads_it_live(
+    server: Server, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    health = tmp_path / "agent_health"
+    monkeypatch.setattr(heartbeat_module, "HEALTH_FILE", health)
+    server.sends_key_accepted = False
+    server.revoked = True
+    server.current_key = None
+    server.recover_status = 401  # the registration key was revoked too
+    agent = _agent(monkeypatch, tmp_path, server.agent_id)
+
+    await _beat_until([agent], lambda: len(server.heartbeats()) >= 8)
+
+    assert agent.heartbeat_sender.key_refused
+    assert not health.exists()
+
+
+# ...while an older server that accepts the key keeps it, sent alone: no
+# recovery, no secret after the first answer, live.
+async def test_e1_an_older_server_that_accepts_the_key_is_sent_the_key_alone(
+    server: Server, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    health = tmp_path / "agent_health"
+    monkeypatch.setattr(heartbeat_module, "HEALTH_FILE", health)
+    server.sends_key_accepted = False
+    agent = _agent(monkeypatch, tmp_path, server.agent_id)
+
+    await _beat_until([agent], lambda: len(server.heartbeats()) >= 6)
+
+    assert server.recoveries() == []
+    assert agent.credentials.api_key == STALE_KEY
+    assert health.exists()
+    later = server.heartbeats()[1:]
+    assert all("X-Agent-Recovery-Secret" not in r.headers for r in later)
+
+
+# ...and a proxy's 401 to the key alone is not the server refusing it.
+async def test_e1_a_proxy_401_to_the_key_alone_keeps_the_key(
+    server: Server, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    server.sends_key_accepted = False
+    agent = _agent(monkeypatch, tmp_path, server.agent_id)
+    await _beat_until([agent], lambda: len(server.heartbeats()) >= 2)
+    server.forged_401s = 3
+
+    await _beat_until([agent], lambda: len(server.heartbeats()) >= 8)
+
+    assert server.recoveries() == []
+    assert agent.credentials.api_key == STALE_KEY
+    assert not agent.heartbeat_sender.key_refused
+
+
+# E3. A save that fails part way (a full disk) left the credentials file
+# empty: the old key and the recovery secret were gone, and a restart
+# registered a new agent. The file is replaced whole or not at all.
+def test_e3_a_failed_save_leaves_the_old_credentials_file_whole(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    creds_path = tmp_path / "agent_credentials.json"
+    agent_id = uuid4()
+    creds = AgentCredentials(str(creds_path))
+    assert creds.save(agent_id, STALE_KEY, SECRET)
+
+    # A full disk takes a small write into the page cache and refuses it when
+    # it is flushed: truncate-then-write empties the file first.
+    def full_disk(*_args: Any) -> None:
+        raise OSError(errno.ENOSPC, "No space left on device")
+
+    def truncate_then_full(self: Path, data: bytes) -> int:
+        with self.open("wb"):
+            pass
+        raise OSError(errno.ENOSPC, "No space left on device")
+
+    monkeypatch.setattr(os, "fsync", full_disk)
+    monkeypatch.setattr(Path, "write_bytes", truncate_then_full)
+    assert not creds.save(agent_id, "luxswirl_ak_new")
+    monkeypatch.undo()
+
+    reloaded = AgentCredentials(str(creds_path))
+    assert reloaded.load()
+    assert reloaded.api_key == STALE_KEY
+    assert reloaded.recovery_secret == SECRET
+    assert [p.name for p in tmp_path.iterdir()] == [creds_path.name]

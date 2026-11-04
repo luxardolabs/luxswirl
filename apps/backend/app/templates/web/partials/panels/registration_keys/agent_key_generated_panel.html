@@ -16,10 +16,11 @@
             <div class="flex items-start gap-3">
                 <span class="w-6 h-6 text-orange-400 flex-shrink-0 mt-0.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/exclamation-triangle.svg" %}</span>
                 <div class="flex-1">
-                    <p class="font-semibold text-orange-400 mb-2">IMPORTANT - Save This Key Now!</p>
+                    <p class="font-semibold text-orange-400 mb-2">Shown Once - Nothing to Configure</p>
                     <p class="text-sm text-dark-text-muted leading-relaxed">
-                        This is the <strong>only time</strong> you will see this key.
-                        It cannot be retrieved later. Copy it now and store it securely.
+                        This is the <strong>only time</strong> you will see this key, and the agent does not need it:
+                        at its next heartbeat the agent finds its old key refused and fetches a key of its own,
+                        which replaces this one.
                     </p>
                 </div>
             </div>
@@ -51,10 +52,12 @@
                         1
                     </div>
                     <div class="flex-1">
-                        <p class="font-semibold text-sm mb-1">Update Agent Configuration</p>
-                        <code class="text-xs bg-dark-bg-primary px-2 py-1 rounded block overflow-x-auto">
-                            LUXSWIRL_AUTH_KEY={{ plaintext_key }}
-                        </code>
+                        <p class="font-semibold text-sm mb-1">Leave the Agent's Configuration As It Is</p>
+                        <p class="text-xs text-dark-text-muted">
+                            Do not put this key in <code class="text-brand-400">LUXSWIRL_AUTH_KEY</code>: that variable holds the
+                            agent's registration key, which it needs to fetch its own key. The agent keeps its key in its
+                            encrypted credentials file (<code class="text-brand-400">/app/data/agent_credentials.json</code>).
+                        </p>
                     </div>
                 </div>
 
@@ -65,9 +68,10 @@
                         2
                     </div>
                     <div class="flex-1">
-                        <p class="font-semibold text-sm mb-1">Restart Agent</p>
+                        <p class="font-semibold text-sm mb-1">Wait One Heartbeat</p>
                         <p class="text-xs text-dark-text-muted">
-                            Restart the agent to pick up the new key. The old key is now invalid.
+                            The old key is now invalid. No restart is needed: within a heartbeat the agent logs
+                            "Agent-specific key saved and activated". Its registration key must still be active.
                         </p>
                     </div>
                 </div>
@@ -81,7 +85,9 @@
                     <div class="flex-1">
                         <p class="font-semibold text-sm mb-1">Key Recovery</p>
                         <p class="text-xs text-dark-text-muted">
-                            If this key is lost, use a registration key to recover via the <code class="text-brand-400">/agents/{{ agent.id }}/recover-key</code> endpoint
+                            The agent fetches its key from <code class="text-brand-400">/api/v1/agent/{{ agent.id }}/recover-key</code>
+                            with its registration key and the recovery secret in its credentials file. An agent that lost its
+                            credentials file registers again.
                         </p>
                     </div>
                 </div>
@@ -97,7 +103,7 @@
             <ul class="text-xs text-dark-text-muted space-y-2">
                 <li class="flex items-start gap-2">
                     <span class="w-3 h-3 text-brand-500 flex-shrink-0 mt-0.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/check.svg" %}</span>
-                    <span>Store in a secure secrets manager or environment variables</span>
+                    <span>Never set it as <code class="text-brand-400">LUXSWIRL_AUTH_KEY</code>: that is the registration key</span>
                 </li>
                 <li class="flex items-start gap-2">
                     <span class="w-3 h-3 text-brand-500 flex-shrink-0 mt-0.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/check.svg" %}</span>
