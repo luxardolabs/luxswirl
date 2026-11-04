@@ -143,5 +143,5 @@ class AdminAgentCoreService:
 
     @staticmethod
     async def revoke_key(db: AsyncSession, agent_id: UUID) -> None:
-        """Clear the agent's key: it cannot connect until it has another."""
+        """Clear the agent's key and recovery secret: that install must register again."""
         await AgentCoreService.revoke_agent_key(db, agent_id)

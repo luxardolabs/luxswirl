@@ -193,6 +193,9 @@ class LuxSwirlAgent:
             on_config_reload=self._reload_checks,
             on_agent_approved=self._handle_agent_approved,
         )
+        self.heartbeat_sender.on_recovery_secret_refused = (
+            self._handle_recovery_secret_refused
+        )
         self.heartbeat_sender.hostname = self.hostname
         self.heartbeat_sender.ip_address = self.ip_address
         self.heartbeat_sender.checks = self.checks
@@ -244,39 +247,53 @@ class LuxSwirlAgent:
         """Handle agent approval and key recovery (callback for heartbeat_sender)."""
         success = await self.registration.recover_agent_key()
         if success:
-            new_auth_key = self.config["auth_key"]
+            await self._move_clients_to_auth_key()
+        return success
 
-            # Reporter caches auth_key and bakes the Authorization header into
-            # its httpx client at start(). Refresh both so subsequent reports
-            # use the new agent-specific key instead of the registration token.
-            if self.reporter:
-                self.reporter.auth_key = new_auth_key
-                if self.reporter.client:
-                    await self.reporter.client.aclose()
-                    self.reporter.client = httpx.AsyncClient(
-                        timeout=30.0,
-                        headers={
-                            "User-Agent": "LuxSwirl-Agent/1.0",
-                            "Content-Type": "application/json",
-                            "Authorization": f"Bearer {new_auth_key}",
-                        },
-                    )
-                    self.logger.info("Updated reporter client with agent-specific key")
+    async def _handle_recovery_secret_refused(self) -> bool:
+        """A heartbeat refused the recovery secret (a revoke): recover or,
+        refused there too, register again (callback for heartbeat_sender).
+        Every HTTP client moves to whatever key that left in config."""
+        before = self.config.get("auth_key")
+        registered = await self.registration.register_again_after_revoke()
+        if self.config.get("auth_key") != before:
+            await self._move_clients_to_auth_key()
+        return registered
 
-            # Update job processor client with new key
-            if self.job_processor and self.job_processor.client:
-                await self.job_processor.client.aclose()
-                job_timeout = self.config.get("job_timeout", 30.0)
-                self.job_processor.client = httpx.AsyncClient(
-                    timeout=job_timeout,
+    async def _move_clients_to_auth_key(self) -> None:
+        """Rebuild the reporter's and job processor's clients on config's auth_key."""
+        new_auth_key = self.config["auth_key"]
+
+        # Reporter caches auth_key and bakes the Authorization header into
+        # its httpx client at start(). Refresh both so subsequent reports
+        # use the new agent-specific key instead of the registration token.
+        if self.reporter:
+            self.reporter.auth_key = new_auth_key
+            if self.reporter.client:
+                await self.reporter.client.aclose()
+                self.reporter.client = httpx.AsyncClient(
+                    timeout=30.0,
                     headers={
                         "User-Agent": "LuxSwirl-Agent/1.0",
                         "Content-Type": "application/json",
                         "Authorization": f"Bearer {new_auth_key}",
                     },
                 )
-                self.logger.info("Updated job processor client with agent-specific key")
-        return success
+                self.logger.info("Updated reporter client with agent-specific key")
+
+        # Update job processor client with new key
+        if self.job_processor and self.job_processor.client:
+            await self.job_processor.client.aclose()
+            job_timeout = self.config.get("job_timeout", 30.0)
+            self.job_processor.client = httpx.AsyncClient(
+                timeout=job_timeout,
+                headers={
+                    "User-Agent": "LuxSwirl-Agent/1.0",
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {new_auth_key}",
+                },
+            )
+            self.logger.info("Updated job processor client with the agent's key")
 
     # ========================================================================
     # Public API methods (delegate to modules)

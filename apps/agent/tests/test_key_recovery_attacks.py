@@ -41,6 +41,7 @@ STALE_KEY = "luxswirl_ak_stale"
 SERVER_URL = "https://server.example"
 HEARTBEAT = "/api/v1/agent/heartbeat"
 CHECKS = "/api/v1/agent/checks"
+REGISTER = "/api/v1/agent/register"
 
 
 @dataclass
@@ -63,6 +64,12 @@ class Server:
     # Heartbeats the real server would answer 401 and count against the
     # agent's pending budget: a refused key with no secret beside it.
     counted_refusals: int = 0
+    # True: the key was revoked, which voids the recovery secret too: a
+    # heartbeat and recover-key refuse it, and only registering again helps.
+    secret_voided: bool = False
+    register_status: int = 201
+    new_agent_id: UUID = field(default_factory=uuid4)
+    new_secret: str = "luxswirl_rs_" + "ef" * 32
     requests: list[httpx.Request] = field(default_factory=list)
     _counter: itertools.count = field(default_factory=lambda: itertools.count(1))
 
@@ -74,6 +81,9 @@ class Server:
 
     def check_fetches(self) -> list[httpx.Request]:
         return [r for r in self.requests if r.url.path == CHECKS]
+
+    def registrations(self) -> list[httpx.Request]:
+        return [r for r in self.requests if r.url.path == REGISTER]
 
     def handle(self, request: httpx.Request) -> httpx.Response:
         self.requests.append(request)
@@ -92,7 +102,9 @@ class Server:
                 if self.sends_key_accepted:
                     body["agent_key_accepted"] = True
                 return httpx.Response(200, json=body)
-            if secret == SECRET:
+            if secret == self.new_secret and auth == f"Bearer {REG_KEY}":
+                return httpx.Response(200, json={"approval_status": "pending"})
+            if secret == SECRET and not self.secret_voided:
                 if not self.revoked:
                     body["message"] = "recover"
                 if self.sends_key_accepted:
@@ -108,10 +120,21 @@ class Server:
         if request.url.path == f"/api/v1/agent/{self.agent_id}/recover-key":
             if self.recover_status != 200:
                 return httpx.Response(self.recover_status, json={"detail": "no"})
-            if auth != f"Bearer {REG_KEY}" or secret != SECRET:
+            if auth != f"Bearer {REG_KEY}" or secret != SECRET or self.secret_voided:
                 return httpx.Response(401, json={"detail": "no"})
             self.current_key = f"luxswirl_ak_{next(self._counter)}"
             return httpx.Response(200, json={"api_key": self.current_key})
+        if request.url.path == REGISTER:
+            if self.register_status != 201 or auth != f"Bearer {REG_KEY}":
+                return httpx.Response(self.register_status, json={"detail": "no"})
+            return httpx.Response(
+                201,
+                json={
+                    "agent_id": str(self.new_agent_id),
+                    "recovery_secret": self.new_secret,
+                    "status": "pending",
+                },
+            )
         return httpx.Response(404)
 
 
@@ -338,12 +361,12 @@ async def test_control_no_refusal(
 
 # Round 2.
 #
-# D1. The first heartbeat after a key change carried only the old key: the
-# real server answers that 401 and counts it against the agent's pending
-# budget (5 an hour), so a few key changes or restarts locked the agent out of
-# recovery. The secret now rides on every heartbeat, so a refused key is
-# answered (agent_key_accepted false), never counted.
-async def test_d1_a_refused_key_is_answered_not_counted(
+# D1. The first heartbeat after a key change carries only the old key, and
+# the real server counts that 401 against the agent's pending budget (5 an
+# hour). The secret is sent only after the server refused the key (the owner
+# ruled it must not ride beside an accepted key, G5), so a key change costs
+# the budget exactly one refusal, never one per heartbeat.
+async def test_d1_a_refused_key_costs_one_counted_refusal(
     server: Server, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     server.current_key = "luxswirl_ak_regenerated_by_operator"
@@ -352,10 +375,10 @@ async def test_d1_a_refused_key_is_answered_not_counted(
     await _beat_until([agent], lambda: agent.credentials.api_key == server.current_key)
 
     assert agent.credentials.api_key == server.current_key
-    assert server.counted_refusals == 0
-    assert all(
-        b.headers.get("X-Agent-Recovery-Secret") == SECRET for b in server.heartbeats()
-    )
+    assert server.counted_refusals == 1
+    first, second = server.heartbeats()[:2]
+    assert "X-Agent-Recovery-Secret" not in first.headers
+    assert second.headers.get("X-Agent-Recovery-Secret") == SECRET
 
 
 # D2 / C2. A server from before agent_key_accepted: a stray 401 must not make
@@ -643,3 +666,109 @@ def test_f4_a_symlinked_credentials_file_is_written_through(tmp_path: Path) -> N
     reloaded = AgentCredentials(str(target))
     assert reloaded.load()
     assert reloaded.api_key == "luxswirl_ak_new"
+
+
+# G2 (round 4, owner ruling): the recovery secret rode beside an accepted
+# key on every heartbeat, so one captured heartbeat held key and secret. While
+# the server accepts the key, the secret never leaves the agent.
+async def test_g2_no_heartbeat_with_an_accepted_key_carries_the_secret(
+    server: Server, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    agent = _agent(monkeypatch, tmp_path, server.agent_id)
+
+    await _beat_until([agent], lambda: len(server.heartbeats()) >= 5)
+
+    assert len(server.heartbeats()) >= 5
+    assert all("X-Agent-Recovery-Secret" not in b.headers for b in server.heartbeats())
+
+
+# ...nor once a regenerated key was recovered: it is sent while the key is
+# refused, then never again.
+async def test_g2_the_secret_stops_once_the_new_key_is_accepted(
+    server: Server, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    server.current_key = "luxswirl_ak_regenerated_by_operator"
+    agent = _agent(monkeypatch, tmp_path, server.agent_id)
+    await _beat_until([agent], lambda: agent.credentials.api_key == server.current_key)
+    server.requests.clear()
+
+    await _beat_until([agent], lambda: len(server.heartbeats()) >= 4)
+
+    assert all("X-Agent-Recovery-Secret" not in b.headers for b in server.heartbeats())
+    assert agent.credentials.recovery_secret == SECRET
+
+
+# G5 (owner ruling): a Revoke voids the recovery secret. The agent, its key
+# refused and then its secret, asks recover-key once, is refused there too,
+# and registers again as a new pending agent, once, not at every heartbeat.
+async def test_g5_after_a_revoke_the_agent_registers_again_once(
+    server: Server, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    server.current_key = None
+    server.revoked = True
+    server.secret_voided = True
+    agent = _agent(monkeypatch, tmp_path, server.agent_id)
+    await agent.reporter.connect()
+    try:
+        await _beat_until([agent], lambda: len(server.registrations()) >= 1)
+        await _beat_until([agent], lambda: len(server.heartbeats()) >= 12)
+
+        assert len(server.recoveries()) == 1
+        assert len(server.registrations()) == 1
+        (register,) = server.registrations()
+        assert register.headers["Authorization"] == f"Bearer {REG_KEY}"
+        # The new agent's credentials replaced the dead ones.
+        reloaded = AgentCredentials(str(tmp_path / "agent_credentials.json"))
+        assert reloaded.load()
+        assert reloaded.agent_id == server.new_agent_id
+        assert reloaded.api_key is None
+        assert reloaded.recovery_secret == server.new_secret
+        # It now heartbeats as that pending agent, and its reports go out
+        # with the registration key, not the revoked one.
+        last = server.heartbeats()[-1]
+        assert last.headers["Authorization"] == f"Bearer {REG_KEY}"
+        assert last.headers["X-Agent-Recovery-Secret"] == server.new_secret
+        assert agent.config["agent_id"] == server.new_agent_id
+        assert agent.reporter.client is not None
+        assert agent.reporter.client.headers["Authorization"] == f"Bearer {REG_KEY}"
+    finally:
+        await agent.reporter.close()
+
+
+# ...and a registration that fails (no active registration key) keeps the old
+# credentials and is not tried again at every heartbeat.
+async def test_g5_a_failed_registration_after_a_revoke_keeps_the_credentials(
+    server: Server, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    server.current_key = None
+    server.revoked = True
+    server.secret_voided = True
+    server.register_status = 401
+    agent = _agent(monkeypatch, tmp_path, server.agent_id)
+
+    await _beat_until([agent], lambda: len(server.heartbeats()) >= 12)
+
+    assert len(server.heartbeats()) >= 12
+    assert len(server.registrations()) == 1
+    assert len(server.recoveries()) == 1
+    reloaded = AgentCredentials(str(tmp_path / "agent_credentials.json"))
+    assert reloaded.load()
+    assert reloaded.agent_id == server.agent_id
+    assert reloaded.recovery_secret == SECRET
+
+
+# ...while a proxy's 401 to a heartbeat that carried the secret neither asks
+# recover-key nor registers again.
+async def test_g5_a_proxy_401_to_the_secret_registers_nothing(
+    server: Server, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    server.current_key = "luxswirl_ak_regenerated_by_operator"
+    server.recover_status = 503  # recovery cannot finish: the secret keeps riding
+    agent = _agent(monkeypatch, tmp_path, server.agent_id)
+    await _beat_until([agent], lambda: agent.heartbeat_sender.key_refused)
+    server.forged_401s = 5
+
+    await _beat_until([agent], lambda: len(server.heartbeats()) >= 10)
+
+    assert server.registrations() == []
+    assert agent.credentials.agent_id == server.agent_id

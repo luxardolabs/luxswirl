@@ -72,8 +72,17 @@ def test_the_generated_key_panel_never_says_to_set_it_as_the_registration_key() 
     assert "fetches a key of its own" in html
 
 
-def test_revoke_rotates_the_key_rather_than_locking_the_agent_out() -> None:
+def test_regenerate_says_the_agent_recovers_its_new_key_by_itself() -> None:
     html = _render()
 
-    assert "unable to connect" not in html
-    assert "to stop the agent, disable or archive it" in html
+    assert "the agent keeps its recovery secret" in html
+    assert "recovers a new one by itself" in html
+
+
+def test_revoke_says_the_install_must_register_again() -> None:
+    html = _render()
+
+    assert "void its recovery secret" in html
+    assert "can never recover a key" in html
+    assert "registers again as a new pending agent" in html
+    assert "to stop the agent, disable or archive it" not in html

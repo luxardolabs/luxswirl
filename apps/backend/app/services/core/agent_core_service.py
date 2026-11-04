@@ -908,9 +908,13 @@ class AgentCoreService:
     @staticmethod
     async def revoke_agent_key(db: AsyncSession, agent_id: UUID) -> AgentOption:
         """
-        Revoke agent API key (clears api_key_hash).
+        Revoke the agent's API key and its recovery secret (clears both hashes).
 
-        Agent will be unable to connect until new key is generated or recovered.
+        Unlike a regenerate, which leaves the secret so the agent recovers its
+        new key by itself, a revoke ends this install: with no secret on
+        record neither a heartbeat nor recover-key accepts the one it holds
+        (or any copy of it), so it must register again for an operator to
+        approve.
 
         Args:
             db: Database session
@@ -924,14 +928,15 @@ class AgentCoreService:
         """
         agent = await AgentCoreService.get_agent_by_id(db, agent_id)
 
-        # Clear key
+        # Clear the key and the secret that would recover another
         agent.api_key_hash = None
         agent.api_key_created_at = None
         agent.api_key_last_used = None
+        agent.recovery_secret_hash = None
 
         await AgentCRUD.save_agent(db, agent)
         logger.info(
-            "Revoked API key for agent",
+            "Revoked API key and recovery secret for agent",
             extra={"agent_id": str(agent_id)},
         )
 

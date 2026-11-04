@@ -32,6 +32,9 @@ _DEFAULT_RETRY_AFTER = 60.0
 _RECOVERY_REPEAT_WINDOW = 3600.0
 _MIN_RECOVERY_GAP = 60.0
 
+# How long a failed re-registration (after a revoke) waits before the next.
+_REGISTER_AGAIN_WAIT = 300.0
+
 
 # The longest a 429 can hold recovery back: a value past it (or one that is
 # not a finite number) comes from something other than this server, and must
@@ -75,6 +78,11 @@ class AgentRegistration:
         # before the next: see _RECOVERY_REPEAT_WINDOW.
         self._last_recovered: float | None = None
         self._recovery_gap = 0.0
+        # Set when recover-key, asked after a heartbeat refused the secret,
+        # was refused by the server itself; and when registering again may
+        # next be tried after a failed attempt.
+        self._secret_refused = False
+        self._register_again_not_before = 0.0
         self.hostname: str | None = None  # Will be set by caller
 
     def registration_key(self) -> str | None:
@@ -214,13 +222,46 @@ class AgentRegistration:
         )
         return await self._register_afresh()
 
+    async def register_again_after_revoke(self) -> bool:
+        """Answer a heartbeat that refused the recovery secret as well as the key.
+
+        A Revoke voids the secret, so this install can never recover a key.
+        The agent asks recover-key once to be sure; refused there by the
+        server itself (its JSON 401) it registers again as a new pending
+        agent, for an operator to approve. The old credentials are replaced
+        only once the new registration is saved: a registration that fails
+        (no active registration key) keeps them and is tried again after a
+        wait, never at every heartbeat.
+
+        Returns:
+            True if the agent registered again
+        """
+        if time.monotonic() < self._register_again_not_before:
+            return False
+        if await self.recover_agent_key(secret_refused=True):
+            return False
+        if not self._secret_refused:
+            return False
+        self._secret_refused = False
+        self.logger.warning(
+            "The server refuses this agent's recovery secret (its key was "
+            "revoked): registering again; approve the new agent"
+        )
+        if not await self.register_with_server():
+            self._register_again_not_before = time.monotonic() + _REGISTER_AGAIN_WAIT
+            return False
+        # The new agent proves itself with the registration key and its new
+        # secret until it is approved and recovers its own key.
+        self.config["auth_key"] = self.registration_key()
+        return True
+
     async def _register_afresh(self) -> bool:
         """Drop the stored credentials and register as a new agent."""
         self.credentials.clear()
         self.config.pop("agent_id", None)
         return await self.register_with_server()
 
-    async def recover_agent_key(self) -> bool:
+    async def recover_agent_key(self, *, secret_refused: bool = False) -> bool:
         """
         Recover/retrieve agent-specific API key from server.
 
@@ -229,6 +270,12 @@ class AgentRegistration:
         secret (header X-Agent-Recovery-Secret). Credentials saved before the
         secret existed cannot recover: the agent registers afresh instead, and
         an operator approves the new registration.
+
+        Args:
+            secret_refused: A heartbeat refused the recovery secret: the
+                server's own 401 here then means the secret is void (a
+                revoke), not that the registration key is wrong, and is left
+                to `register_again_after_revoke`.
 
         Returns:
             True if key retrieved and saved successfully
@@ -309,6 +356,13 @@ class AgentRegistration:
                 self.logger.warning(
                     "Key recovery got a 401 that is not the server's: asking "
                     "again later",
+                    extra={"status_code": status_code},
+                )
+                return False
+            if status_code == 401 and secret_refused:
+                self._secret_refused = True
+                self.logger.warning(
+                    "Key recovery refused: the recovery secret is void",
                     extra={"status_code": status_code},
                 )
                 return False
