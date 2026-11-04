@@ -203,6 +203,13 @@ services:
       POSTGRES_DB: luxswirl_test
       POSTGRES_USER: luxswirl_test
       POSTGRES_PASSWORD: luxswirl_test
+    # No TimescaleDB job scheduler. init_timescale adds the app's policies (retention on
+    # check_artifacts, check_results and agent_metrics, compression, aggregate refreshes)
+    # and the scheduler runs each one ~1s later, while the first tests are already running:
+    # it dropped a test's committed rows dated past a retention window, and deadlocked the
+    # test-db-bound block's TRUNCATE. A test that wants a policy's effect runs it itself
+    # (`CALL run_job`), which needs no background worker.
+    command: ["postgres", "-c", "timescaledb.max_background_workers=0"]
     # Readiness = an AUTHENTICATED TCP query, never a bare `pg_isready`. With no -h,
     # pg_isready connects over the unix SOCKET — which the postgres entrypoint's temporary
     # initdb server also listens on, BEFORE the role/password exist. A socket probe therefore
