@@ -1005,16 +1005,19 @@ class CheckCoreService:
             check.id: check
             for check in await CheckCRUD.get_checks_by_ids(db, check_ids)
         }
-        # get_agent_by_id RAISES when the agent is gone, so resolve it here and
-        # keep the miss as a per-check failure — the loop used to record one
-        # failure per check for a bad target, and callers count on that shape.
+        # get_admitted_agent RAISES when the agent is gone or takes no checks
+        # (pending, rejected, archived), so resolve it here and keep the refusal
+        # as a per-check failure — the loop records one failure per check for a
+        # bad target, and callers count on that shape.
         new_agent = None
         new_agent_error: str | None = None
         if new_agent_id:
             try:
-                new_agent = await AgentCoreService.get_agent_by_id(db, new_agent_id)
+                new_agent = await CheckCoreService.get_admitted_agent(db, new_agent_id)
             except AgentNotFoundException:
                 new_agent_error = f"Target agent {new_agent_id} not found"
+            except ValidationException as e:
+                new_agent_error = e.message
 
         for check_id in check_ids:
             try:

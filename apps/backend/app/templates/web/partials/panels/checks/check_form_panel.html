@@ -31,13 +31,22 @@
                     <label class="label" for="agent_id">Agent</label>
                     {% call select(name="agent_id", id="agent_id", required=true, class="input") %}
                         <option value="">Select an agent...</option>
+                        {% if unlisted_owner %}
+                        <option value="{{ unlisted_owner.id }}" selected>
+                            {{ unlisted_owner.agent_name or unlisted_owner.id }}{% if unlisted_owner.hostname %} ({{ unlisted_owner.hostname }}){% endif %} ({{ unlisted_owner.approval_status }})
+                        </option>
+                        {% endif %}
                         {% for agent in agents %}
                         <option value="{{ agent.id }}" {% if check and check.agent_id == agent.id %}selected{% endif %}>
                             {{ agent.agent_name or agent.id }}{% if agent.hostname %} ({{ agent.hostname }}){% endif %}
                         </option>
                         {% endfor %}
                     {% endcall %}
+                    {% if unlisted_owner %}
+                    <p class="text-xs text-yellow-400 mt-1">This check's agent is {{ unlisted_owner.approval_status }}: it takes no checks, so this check does not run. Saving keeps it there.</p>
+                    {% else %}
                     <p class="text-xs text-dark-text-muted mt-1">Agent to run this check</p>
+                    {% endif %}
                 </div>
 
                 <div id="display-name-field">

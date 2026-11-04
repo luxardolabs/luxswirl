@@ -188,6 +188,35 @@ class TestBulkModify:
         reloaded = await CheckCRUD.get_by_id(db, check.id)
         assert reloaded.agent_id == agent_b.id
 
+    @pytest.mark.parametrize("approval_status", ["pending", "rejected", "archived"])
+    async def test_a_move_to_an_agent_that_takes_no_checks_is_refused(
+        self, db: AsyncSession, approval_status: str
+    ):
+        """The web's bulk move job runs this: a target that takes no checks
+        fails each check and leaves it where it was."""
+        owner = make_agent()
+        target = make_agent(approval_status=approval_status)
+        db.add_all([owner, target])
+        await db.flush()
+        check = make_check(agent_id=owner.id)
+        db.add(check)
+        await db.flush()
+
+        result = await CheckCoreService.bulk_modify(
+            db,
+            [check.id],
+            CheckUpdate(),
+            new_agent_id=target.id,
+            actor_is_admin=True,
+        )
+
+        assert result["success_count"] == 0
+        assert result["failure_count"] == 1
+        assert "takes no checks" in result["errors"][0]
+        reloaded = await CheckCRUD.get_by_id(db, check.id)
+        assert reloaded is not None
+        assert reloaded.agent_id == owner.id
+
 
 # ---------------------------------------------------------------------------
 # clone_check

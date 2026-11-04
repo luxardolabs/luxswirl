@@ -32,6 +32,8 @@ These apply to every check type:
 | **Replicate**        | Configure a tag selector; the check runs on **every** matching agent, independently — you get one result series per agent — and new matching agents pick it up automatically | Multi-region / multi-vantage monitoring — probe an external API from every region to compare latency and catch regional outages   |
 | **Distribute**       | Configure a tag selector; the check is assigned to exactly **one** agent from the matching pool, chosen deterministically by hash; if the pool changes, the hash re-maps it  | Sharing a large monitoring workload evenly across a fleet (load spread + basic HA) rather than running every check on every agent |
 
+A check's agent must be one that takes checks: active, paused or disabled. Creating, cloning, importing or moving a check onto a pending, rejected or archived agent is refused (`422`, "Agent <name> is archived: it takes no checks"), by every path: the web forms, bulk modify, the admin API, MCP and jobs. A check already on an archived agent stays there and does not run; its edit form shows that agent, labelled archived, and saving it keeps it there. Restore the agent, or move the check with **Modify**, to run it again.
+
 ### Depends On (alert dependency)
 
 Set a **parent** check to suppress this check's alerts while the parent is failing — one alert for the root cause instead of an alert storm from every downstream check.
@@ -322,13 +324,13 @@ Select checks with the row checkboxes; when every check on the page is selected,
 
 ### Bulk modify panel fields
 
-| Field              | Range / options                         |
-| ------------------ | --------------------------------------- |
-| Interval (seconds) | 10–86400                                |
-| Timeout (seconds)  | 1–300                                   |
-| Retries            | 0–10                                    |
-| Agent              | Reassign to a different agent           |
-| Alert              | No change / Clear all / select an alert |
+| Field              | Range / options                                       |
+| ------------------ | ----------------------------------------------------- |
+| Interval (seconds) | 10–86400                                              |
+| Timeout (seconds)  | 1–300                                                 |
+| Retries            | 0–10                                                  |
+| Agent              | Reassign to a different agent (one that takes checks) |
+| Alert              | No change / Clear all / select an alert               |
 
 ______________________________________________________________________
 
