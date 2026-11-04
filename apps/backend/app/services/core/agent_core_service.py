@@ -15,9 +15,9 @@ from app.core.config import settings
 from app.core.datetime_utils import utc_now
 from app.core.exceptions import (
     AgentNotFoundException,
-    AuthenticationException,
     AuthorizationException,
     DuplicateResourceException,
+    RecoverySecretRefusedException,
     ValidationException,
 )
 from app.core.recovery_secret import recovery_secret_digest, recovery_secret_matches
@@ -256,9 +256,14 @@ class AgentCoreService:
         all refused the same way, after the same digest comparison.
 
         Raises:
-            AuthenticationException: If the agent and secret do not match
+            RecoverySecretRefusedException: If the agent and secret do not
+                match (marked, so the agent registers again)
             AuthorizationException: If the agent is not active
         """
+        # Locked to the end of the transaction, so a revoke never commits
+        # between this check of the secret and the key it issues: the revoke
+        # waits, then clears that key too.
+        await AgentCRUD.lock(db, agent_id)
         agent = await AgentCRUD.get_by_id_with_checks(db, agent_id)
         stored = agent.recovery_secret_hash if agent is not None else None
         if agent is None or not recovery_secret_matches(stored, recovery_secret):
@@ -272,7 +277,7 @@ class AgentCoreService:
                     "secret_on_record": bool(stored),
                 },
             )
-            raise AuthenticationException("Invalid agent recovery credentials")
+            raise RecoverySecretRefusedException("Invalid agent recovery credentials")
         if agent.approval_status != "active":
             logger.warning(
                 "SECURITY AUDIT: Agent key recovery refused",
@@ -830,6 +835,18 @@ class AgentCoreService:
         )
 
     @staticmethod
+    async def can_recover_key(db: AsyncSession, agent_id: UUID) -> bool:
+        """Whether the agent's install can fetch a key the server issues it:
+        only one holding a recovery secret the server still has on record
+        (a revoke voids it; an agent registered before secrets has none).
+
+        Raises:
+            AgentNotFoundException: If agent not found
+        """
+        agent = await AgentCoreService.get_agent_by_id(db, agent_id)
+        return bool(agent.recovery_secret_hash)
+
+    @staticmethod
     async def generate_agent_key(
         db: AsyncSession, agent_id: UUID
     ) -> tuple[AgentOption, str]:
@@ -885,6 +902,9 @@ class AgentCoreService:
             AgentNotFoundException: If agent not found
         """
 
+        # Locked and read as stored now, so a revoke committed meanwhile is
+        # never written over with this session's older copy of the row.
+        await AgentCRUD.lock(db, agent_id)
         agent = await AgentCoreService.get_agent_by_id(db, agent_id)
 
         # Generate new key
@@ -926,6 +946,9 @@ class AgentCoreService:
         Raises:
             AgentNotFoundException: If agent not found
         """
+        # Locked: a key recovery in flight finishes first, and its key is
+        # cleared here with the rest.
+        await AgentCRUD.lock(db, agent_id)
         agent = await AgentCoreService.get_agent_by_id(db, agent_id)
 
         # Clear the key and the secret that would recover another

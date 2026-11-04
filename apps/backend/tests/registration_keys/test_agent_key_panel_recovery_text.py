@@ -53,10 +53,10 @@ def test_a_lost_credentials_file_means_registering_again() -> None:
 GENERATED_PANEL = "partials/panels/registration_keys/agent_key_generated_panel.html"
 
 
-def _render_generated() -> str:
+def _render_generated(*, recoverable: bool = True) -> str:
     agent = SimpleNamespace(id=uuid4(), agent_name="edge-01")
     html = templates.get_template(GENERATED_PANEL).render(
-        agent=agent, plaintext_key="luxswirl_ak_shown_once"
+        agent=agent, plaintext_key="luxswirl_ak_shown_once", recoverable=recoverable
     )
     return re.sub(r"\s+", " ", html)
 
@@ -86,3 +86,14 @@ def test_revoke_says_the_install_must_register_again() -> None:
     assert "can never recover a key" in html
     assert "registers again as a new pending agent" in html
     assert "to stop the agent, disable or archive it" not in html
+
+
+def test_a_key_for_an_agent_with_no_secret_never_promises_it_fetches_it() -> None:
+    # After a revoke the install's secret is void: it cannot fetch the key
+    # generated for it, and registers again instead (round 1, attacker I #3).
+    html = _render_generated(recoverable=False)
+
+    assert "fetches a key of its own" not in html
+    assert "Agent-specific key saved and activated" not in html
+    assert "no agent can use it" in html
+    assert "registers again as a new pending agent" in html

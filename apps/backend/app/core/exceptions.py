@@ -6,6 +6,8 @@ from typing import Any
 
 from pydantic import ValidationError
 
+from app.shared.agent_protocol import RECOVERY_SECRET_REFUSED, REFUSAL_HEADER
+
 
 def validation_message(exc: ValidationError) -> str:
     """A schema refusal as `<field>: <reason>` per error, without pydantic's input echo.
@@ -31,6 +33,8 @@ class LuxSwirlException(Exception):
 
     status_code = 500
     error_code = "INTERNAL_ERROR"
+    # Response headers the error is rendered with.
+    headers: dict[str, str] = {}
 
     def __init__(self, message: str, details: dict[str, Any] | None = None):
         self.message = message
@@ -208,6 +212,14 @@ class AuthenticationException(LuxSwirlException):
 
     status_code = 401
     error_code = "AUTHENTICATION_FAILED"
+
+
+class RecoverySecretRefusedException(AuthenticationException):
+    """An agent's recovery secret (or the agent it names) is refused: marked
+    with the agent protocol's refusal header, which tells the agent it can
+    never recover a key with it and must register again."""
+
+    headers = {REFUSAL_HEADER: RECOVERY_SECRET_REFUSED}
 
 
 class AuthorizationException(LuxSwirlException):

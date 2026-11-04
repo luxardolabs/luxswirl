@@ -24,6 +24,7 @@ from app.models.agent_model import Agent
 from app.schemas.registration_key_schema import RegistrationKeyCreate
 from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.registration_key_core_service import RegistrationKeyCoreService
+from app.shared.agent_protocol import RECOVERY_SECRET_REFUSED, REFUSAL_HEADER
 from fixtures.factories import make_agent
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -339,7 +340,9 @@ async def test_a_revoke_voids_the_recovery_secret(
     )
 
     assert resp.status_code == 401, resp.text
-    assert "detail" in resp.json() or "error" in resp.json()
+    # Marked as the server's refusal of the secret: the agent registers
+    # again on this 401, and on no gateway's.
+    assert resp.headers[REFUSAL_HEADER] == RECOVERY_SECRET_REFUSED
     agent = await db.get(Agent, agent_id)
     assert agent is not None
     await db.refresh(agent)
@@ -367,6 +370,7 @@ async def test_g5_after_a_revoke_a_captured_secret_recovers_no_key(
 
     assert stolen.status_code == 401, stolen.text
     assert "api_key" not in stolen.json()
+    assert stolen.headers[REFUSAL_HEADER] == RECOVERY_SECRET_REFUSED
     agent = await db.get(Agent, agent_id)
     assert agent is not None
     await db.refresh(agent)
@@ -391,3 +395,32 @@ async def test_after_a_regenerate_the_secret_still_recovers_a_key(
 
     assert resp.status_code == 200, resp.text
     assert resp.json()["api_key"].startswith("luxswirl_ak_")
+
+
+# A refusal that is not of the secret (a wrong key alone, a registration key
+# recover-key does not take) carries no mark: the agent never registers again
+# on it.
+async def test_other_refusals_are_not_marked_as_refusing_the_secret(
+    client: AsyncClient, db: AsyncSession, registration_token: str
+) -> None:
+    agent_id, secret, _ = await _registered_and_approved(client, db, registration_token)
+    limiter.reset()
+    await AgentCoreService.regenerate_agent_key(db, agent_id)
+
+    key_alone = await client.post(
+        "/api/v1/agent/heartbeat",
+        json=_beat(str(agent_id)),
+        headers={"Authorization": "Bearer luxswirl_ak_wrong"},
+    )
+    wrong_registration_key = await client.post(
+        f"/api/v1/agent/{agent_id}/recover-key",
+        headers={
+            "Authorization": "Bearer luxswirl_rk_wrong",
+            "X-Agent-Recovery-Secret": secret,
+        },
+    )
+
+    assert key_alone.status_code == 401, key_alone.text
+    assert REFUSAL_HEADER not in key_alone.headers
+    assert wrong_registration_key.status_code == 401, wrong_registration_key.text
+    assert REFUSAL_HEADER not in wrong_registration_key.headers

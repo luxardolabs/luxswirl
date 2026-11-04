@@ -17,11 +17,20 @@
                 <span class="w-6 h-6 text-orange-400 flex-shrink-0 mt-0.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/exclamation-triangle.svg" %}</span>
                 <div class="flex-1">
                     <p class="font-semibold text-orange-400 mb-2">Shown Once - Nothing to Configure</p>
+                    {% if recoverable %}
                     <p class="text-sm text-dark-text-muted leading-relaxed">
                         This is the <strong>only time</strong> you will see this key, and the agent does not need it:
                         at its next heartbeat the agent finds its old key refused and fetches a key of its own,
                         which replaces this one.
                     </p>
+                    {% else %}
+                    <p class="text-sm text-dark-text-muted leading-relaxed">
+                        This is the <strong>only time</strong> you will see this key, and no agent can use it:
+                        this agent holds no recovery secret the server accepts (its key was revoked, or it registered
+                        before recovery secrets existed), so it cannot fetch a key. That install registers again as a
+                        new pending agent: approve the new one, and delete this one.
+                    </p>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -68,11 +77,19 @@
                         2
                     </div>
                     <div class="flex-1">
+                        {% if recoverable %}
                         <p class="font-semibold text-sm mb-1">Wait One Heartbeat</p>
                         <p class="text-xs text-dark-text-muted">
-                            The old key is now invalid. No restart is needed: within a heartbeat the agent logs
+                            The old key is now invalid. No restart is needed: within a few heartbeats the agent logs
                             "Agent-specific key saved and activated". Its registration key must still be active.
                         </p>
+                        {% else %}
+                        <p class="font-semibold text-sm mb-1">Approve the Agent That Registers Again</p>
+                        <p class="text-xs text-dark-text-muted">
+                            The agent logs "registering again; approve the new agent" and appears as a new pending
+                            agent. Its registration key must still be active.
+                        </p>
+                        {% endif %}
                     </div>
                 </div>
 

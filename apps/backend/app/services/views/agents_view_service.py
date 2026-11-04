@@ -455,6 +455,7 @@ class AgentsViewService:
             current_user,
             agent,
             plaintext_key,
+            recoverable=await AgentCoreService.can_recover_key(db, agent_id),
         )
 
     @staticmethod
@@ -468,6 +469,7 @@ class AgentsViewService:
             current_user,
             agent,
             plaintext_key,
+            recoverable=await AgentCoreService.can_recover_key(db, agent_id),
         )
 
     @staticmethod
@@ -476,13 +478,15 @@ class AgentsViewService:
         current_user: AuthedUser,
         agent: AgentOption,
         plaintext_key: str,
+        *,
+        recoverable: bool,
     ) -> Response:
         """Render the 'key generated — copy it once' panel."""
         return templates.TemplateResponse(
             request,
             "partials/panels/registration_keys/agent_key_generated_panel.html",
             AgentsViewService.build_key_generated_panel_context(
-                request, current_user, agent, plaintext_key
+                request, current_user, agent, plaintext_key, recoverable=recoverable
             ),
         )
 
@@ -608,13 +612,18 @@ class AgentsViewService:
         current_user: AuthedUser,
         agent: AgentOption,
         plaintext_key: str,
+        *,
+        recoverable: bool,
     ) -> dict[str, Any]:
-        """'Key generated — copy this once' panel context."""
+        """'Key generated — copy this once' panel context. `recoverable`:
+        whether the agent can fetch the key (it holds a recovery secret the
+        server still has); after a revoke it cannot, and registers again."""
         return {
             "request": request,
             "current_user": current_user,
             "agent": agent,
             "plaintext_key": plaintext_key,
+            "recoverable": recoverable,
         }
 
     # ------------------------------------------------------------------

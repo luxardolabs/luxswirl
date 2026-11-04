@@ -23,6 +23,7 @@ from __future__ import annotations
 import httpx
 
 from app.checks._ssrf_http import VettedTransport
+from app.shared.agent_protocol import RECOVERY_SECRET_REFUSED, REFUSAL_HEADER
 
 _server_client: httpx.AsyncClient | None = None
 _check_clients: dict[bool, httpx.AsyncClient] = {}
@@ -49,6 +50,15 @@ def is_app_refusal(response: httpx.Response) -> bool:
     except ValueError:
         return False
     return isinstance(body, dict) and ("detail" in body or "error" in body)
+
+
+def refuses_recovery_secret(response: httpx.Response) -> bool:
+    """Whether a 401 is the LuxSwirl server refusing the agent's recovery
+    secret: marked with the agent protocol's refusal header, which no proxy,
+    gateway or other service sends. Only that refusal, to the heartbeat and
+    to recover-key alike, makes the agent register again."""
+    mark = response.headers.get(REFUSAL_HEADER)
+    return isinstance(mark, str) and mark == RECOVERY_SECRET_REFUSED
 
 
 def check_client(*, verify: bool = True) -> httpx.AsyncClient:
