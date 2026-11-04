@@ -173,6 +173,9 @@ class HeartbeatSender:
     # The key hash the agent's key was checked against, so core can tell a
     # key changed (revoked, regenerated) since: None when no key was used.
     verified_key_hash: str | None
+    # Likewise the recovery secret's hash, when the secret authenticated the
+    # heartbeat (a revoke voids it): None when no secret was used.
+    verified_secret_hash: str | None
 
 
 @limiter.limit(settings.security.agent_api_rate_limit)
@@ -194,14 +197,17 @@ async def require_heartbeat_sender(
     """
     agent = await AgentCoreService.get_agent_by_id(db, heartbeat.agent_id)
     verified_key_hash = agent.api_key_hash
+    verified_secret_hash = agent.recovery_secret_hash
     using_agent_key = await authenticate_heartbeat(
         agent, authorization, recovery_secret, db, client_ip_from_request(request)
     )
+    used_secret = not using_agent_key and recovery_secret is not None
     return HeartbeatSender(
         heartbeat=heartbeat,
         agent_id=agent.id,
         using_agent_key=using_agent_key,
         verified_key_hash=verified_key_hash if using_agent_key else None,
+        verified_secret_hash=verified_secret_hash if used_secret else None,
     )
 
 

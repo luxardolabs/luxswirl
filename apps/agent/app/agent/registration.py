@@ -15,8 +15,9 @@ import httpx
 from app.agent import server_api
 from app.agent.credentials import AgentCredentials
 from app.agent.http_client import (
-    is_app_refusal,
+    is_marked_refusal,
     refuses_recovery_secret,
+    refuses_registration_key,
     server_client,
 )
 from app.shared.logger import get_logger
@@ -72,9 +73,10 @@ class AgentRegistration:
         self.config = config
         self.credentials = credentials
         self.logger = logger
-        # A recovery the server refused (401) cannot succeed until the agent is
-        # reconfigured and restarted; one it rate-limited (429) waits out its
-        # Retry-After. Either way the agent stops asking every heartbeat, so it
+        # A recovery whose registration key the server refused (its marked
+        # refusal) cannot succeed until the agent is reconfigured and
+        # restarted; one it rate-limited (429) waits out its Retry-After, and
+        # one refused unmarked (not the server's) waits a minute. Either way the agent stops asking every heartbeat, so it
         # never spends the recover-key budget its address shares with others.
         self._recovery_refused = False
         self._recovery_not_before = 0.0
@@ -176,22 +178,29 @@ class AgentRegistration:
 
             # Save credentials (without agent-specific key yet - will get it
             # after approval) and the recovery secret that key recovery needs.
+            # The server has created the agent already, so one it cannot save
+            # is used all the same: registering again would create another
+            # pending agent for this one install at every try.
             if self.credentials.save(agent_id, recovery_secret=recovery_secret):
-                self.config["agent_id"] = agent_id
-                # A new agent and secret: a refusal of the old ones holds
-                # nothing back from these.
-                self._recovery_refused = False
-                self._recovery_not_before = 0.0
-                self._last_recovered = None
-                self._recovery_gap = 0.0
                 self.logger.info(
                     "Saved agent credentials",
                     extra={"agent_id": str(agent_id)},
                 )
-                return True
             else:
-                self.logger.error("Failed to save credentials")
-                return False
+                self.credentials.hold_unsaved_registration(agent_id, recovery_secret)
+                self.logger.error(
+                    "Failed to save the new agent's credentials: using them, "
+                    "and saving them at each heartbeat until the save succeeds",
+                    extra={"agent_id": str(agent_id)},
+                )
+            self.config["agent_id"] = agent_id
+            # A new agent and secret: a refusal of the old ones holds
+            # nothing back from these.
+            self._recovery_refused = False
+            self._recovery_not_before = 0.0
+            self._last_recovered = None
+            self._recovery_gap = 0.0
+            return True
 
         except httpx.HTTPStatusError as e:
             self.logger.exception(
@@ -231,10 +240,11 @@ class AgentRegistration:
 
         A Revoke voids the secret, so this install can never recover a key.
         The agent asks recover-key once to be sure; refused there by the
-        server itself (its JSON 401) it registers again as a new pending
-        agent, for an operator to approve. The old credentials are replaced
-        only once the new registration is saved: a registration that fails
-        (no active registration key) keeps them and is tried again after
+        server itself (its marked refusal of the secret) it registers again as
+        a new pending agent, for an operator to approve. The old credentials
+        are replaced only once the server has taken the new registration: a
+        registration that fails (no active registration key) keeps them and
+        is tried again after
         `_REGISTER_AGAIN_WAIT`, without asking recover-key again, never at
         every heartbeat. The heartbeat calls this at each beat until it
         returns True or the server accepts a credential again, so the retry
@@ -356,29 +366,30 @@ class AgentRegistration:
 
         except httpx.HTTPStatusError as e:
             status_code = e.response.status_code
-            if status_code == 401 and not is_app_refusal(e.response):
-                # Not the server's refusal (a proxy's page): asked again later.
+            if status_code in (401, 403) and not is_marked_refusal(e.response):
+                # Not the server's refusal (a proxy's, a gateway's): temporary,
+                # asked again later.
                 self._recovery_not_before = time.monotonic() + _DEFAULT_RETRY_AFTER
                 self.logger.warning(
-                    "Key recovery got a 401 that is not the server's: asking "
-                    "again later",
+                    "Key recovery got a refusal the server did not mark: "
+                    "asking again later",
                     extra={"status_code": status_code},
                 )
                 return False
-            if status_code == 401 and refuses_recovery_secret(e.response):
+            if refuses_recovery_secret(e.response):
                 self._secret_refused = True
                 self.logger.warning(
                     "Key recovery refused: the recovery secret is void",
                     extra={"status_code": status_code},
                 )
                 return False
-            if status_code == 401:
+            if refuses_registration_key(e.response):
                 self._recovery_refused = True
                 self.logger.exception(
-                    "Key recovery refused: the server accepts neither this "
-                    "registration key nor this recovery secret. Set "
-                    "LUXSWIRL_AUTH_KEY to an active registration key and restart "
-                    "the agent; it will not ask again until then",
+                    "Key recovery refused: the server does not accept this "
+                    "registration key. Set LUXSWIRL_AUTH_KEY to an active "
+                    "registration key and restart the agent; it will not ask "
+                    "again until then",
                     extra={"status_code": status_code},
                 )
                 return False

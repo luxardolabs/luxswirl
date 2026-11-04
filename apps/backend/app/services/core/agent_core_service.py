@@ -712,14 +712,29 @@ class AgentCoreService:
         *,
         using_agent_key: bool,
         verified_key_hash: str | None,
+        verified_secret_hash: str | None,
     ) -> AgentHeartbeatResponse:
         """Apply heartbeat update and build the response payload.
 
         Caller handles HTTP-layer auth and passes ``using_agent_key``: whether
         the agent's own key authenticated the heartbeat (checked against
         ``verified_key_hash``, which must still be the agent's), rather than a
-        pending credential (its recovery secret, or the shared registration key from
-        an agent build that sends no secret).
+        pending credential (its recovery secret, checked against
+        ``verified_secret_hash``, or the shared registration key from an agent
+        build that sends no secret).
+
+        What the credential was checked against is judged again once the row
+        is locked, since an operator may have changed the agent meanwhile: a
+        key changed since is answered as refused (`agent_key_accepted`
+        false); an agent no longer active is refused as its key check would
+        refuse it now; a recovery secret voided since (a revoke) is refused
+        as the secret check would refuse it now.
+
+        Raises:
+            AuthorizationException: The key was checked while the agent was
+                active, and it is not any more.
+            RecoverySecretRefusedException: The recovery secret was checked,
+                and a revoke voided it since.
 
         The heartbeat is applied (identity, liveness, health, a metric row)
         when the agent's own key sent it, or when the agent is pending and has
@@ -742,6 +757,17 @@ class AgentCoreService:
                 extra={"agent_id": str(agent.id)},
             )
             using_agent_key = False
+        if using_agent_key and agent.approval_status != AgentApprovalStatus.ACTIVE:
+            # Disabled, paused or archived after its key was checked.
+            raise AuthorizationException(
+                f"Agent is not active. Current status: {agent.approval_status}"
+            )
+        if (
+            verified_secret_hash is not None
+            and agent.recovery_secret_hash != verified_secret_hash
+        ):
+            # Revoked after its recovery secret was checked: the secret is void.
+            raise RecoverySecretRefusedException("Invalid agent recovery secret")
         if using_agent_key or (
             agent.approval_status == AgentApprovalStatus.PENDING
             and not agent.api_key_hash

@@ -180,6 +180,7 @@ async def _heartbeat_version(
         ),
         using_agent_key=True,
         verified_key_hash=agent.api_key_hash,
+        verified_secret_hash=None,
     )
     return response.config_version
 

@@ -3,7 +3,8 @@
 When an operator regenerates or revokes an agent's key, the agent's stored key
 stops working: every heartbeat it sends with that key is a 401. The agent used
 to keep sending it forever (and reload it on every restart), so it never asked
-for the new one. Now a 401 on a heartbeat sent with its own key makes it drop
+for the new one. Now the server's marked 401 on a heartbeat sent with its own
+key makes it drop
 that key from memory and prove itself with its recovery secret instead; the
 server answers `approval_status: active`, and the agent recovers a new key with
 the registration key and the secret, saves it, and moves every HTTP client to
@@ -26,6 +27,13 @@ from app.agent import core as core_module
 from app.agent import http_client
 from app.agent.core import LuxSwirlAgent
 from app.agent.credentials import AgentCredentials
+from app.shared.agent_protocol import (
+    AGENT_KEY_REFUSED,
+    RECOVERY_SECRET_REFUSED,
+    REFUSAL_HEADER,
+    REFUSED,
+    REGISTRATION_KEY_REFUSED,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -70,12 +78,28 @@ class Server:
                         "message": "Agent approved - retrieve your agent-specific key",
                     },
                 )
-            return httpx.Response(401, json={"detail": "Invalid agent key"})
+            # The real server marks every refusal it sends an agent.
+            mark = RECOVERY_SECRET_REFUSED if secret else AGENT_KEY_REFUSED
+            return httpx.Response(
+                401,
+                json={"detail": "Invalid agent key"},
+                headers={REFUSAL_HEADER: mark},
+            )
         if request.url.path == f"/api/v1/agent/{self.agent_id}/recover-key":
+            if self.recover_status == 401 or auth != f"Bearer {REG_KEY}":
+                return httpx.Response(
+                    401,
+                    json={"detail": "no"},
+                    headers={REFUSAL_HEADER: REGISTRATION_KEY_REFUSED},
+                )
             if self.recover_status != 200:
                 return httpx.Response(self.recover_status, json={"detail": "no"})
-            if auth != f"Bearer {REG_KEY}" or secret != SECRET:
-                return httpx.Response(401, json={"detail": "no"})
+            if secret != SECRET:
+                return httpx.Response(
+                    401,
+                    json={"detail": "no"},
+                    headers={REFUSAL_HEADER: RECOVERY_SECRET_REFUSED},
+                )
             self.current_key = NEW_KEY
             return httpx.Response(200, json={"api_key": NEW_KEY, "message": "ok"})
         if request.url.path == "/api/v1/agent/checks":
@@ -83,7 +107,11 @@ class Server:
             # 404 (which the agent reads as "this agent is gone").
             if self.current_key and auth == f"Bearer {self.current_key}":
                 return httpx.Response(200, json={"checks": []})
-            return httpx.Response(401, json={"detail": "Invalid agent key"})
+            return httpx.Response(
+                401,
+                json={"detail": "Invalid agent key"},
+                headers={REFUSAL_HEADER: REFUSED},
+            )
         return httpx.Response(404)
 
 

@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import AuthenticatedAgentId
-from app.core.openapi_operations import HandlerNamedRoute
+from app.core.agent_refusals import AgentProtocolRoute
 from app.db import get_db
 from app.schemas.base_schema import ErrorResponse
 from app.schemas.check_schema import CheckListResponse
@@ -19,7 +19,7 @@ from app.services.core.check_api_core_service import CheckApiCoreService
 from app.shared.logger import get_logger
 
 # Agent-facing router (agents call these)
-router = APIRouter(route_class=HandlerNamedRoute, tags=["Checks"])
+router = APIRouter(route_class=AgentProtocolRoute, tags=["Checks"])
 
 
 logger = get_logger("luxswirl.api.checks")
