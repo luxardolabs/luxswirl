@@ -14,7 +14,7 @@ import httpx
 
 from app.agent import server_api
 from app.agent.credentials import AgentCredentials
-from app.agent.http_client import server_client
+from app.agent.http_client import is_app_refusal, server_client
 from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.agent.registration")
@@ -303,6 +303,15 @@ class AgentRegistration:
 
         except httpx.HTTPStatusError as e:
             status_code = e.response.status_code
+            if status_code == 401 and not is_app_refusal(e.response):
+                # Not the server's refusal (a proxy's page): asked again later.
+                self._recovery_not_before = time.monotonic() + _DEFAULT_RETRY_AFTER
+                self.logger.warning(
+                    "Key recovery got a 401 that is not the server's: asking "
+                    "again later",
+                    extra={"status_code": status_code},
+                )
+                return False
             if status_code == 401:
                 self._recovery_refused = True
                 self.logger.exception(

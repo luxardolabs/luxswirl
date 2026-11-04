@@ -15,6 +15,8 @@ import asyncio
 import errno
 import itertools
 import os
+import stat
+import tempfile
 from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -27,6 +29,7 @@ import pytest_asyncio
 from app.agent import core as core_module
 from app.agent import heartbeat as heartbeat_module
 from app.agent import http_client
+from app.agent import registration as registration_module
 from app.agent.core import LuxSwirlAgent
 from app.agent.credentials import AgentCredentials
 
@@ -516,3 +519,127 @@ def test_e3_a_failed_save_leaves_the_old_credentials_file_whole(
     assert reloaded.api_key == STALE_KEY
     assert reloaded.recovery_secret == SECRET
     assert [p.name for p in tmp_path.iterdir()] == [creds_path.name]
+
+
+def _proxy_401_on_first_recovery(srv: Server) -> None:
+    """The first recover-key call meets a proxy's 401 page, not the app's."""
+    state = {"hit": False}
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/recover-key") and not state["hit"]:
+            state["hit"] = True
+            srv.requests.append(request)
+            return httpx.Response(401, text="<html>401 Authorization Required</html>")
+        return srv.handle(request)
+
+    http_client._server_client = httpx.AsyncClient(
+        transport=httpx.MockTransport(handle)
+    )
+
+
+# F1. A proxy's 401 to one recover-key call stranded the agent until restart:
+# any 401 there marked recovery refused. Only the server's own refusal does.
+async def test_f1_a_proxy_401_on_recover_key_is_asked_again(
+    server: Server, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(registration_module, "_DEFAULT_RETRY_AFTER", 0.0)
+    _proxy_401_on_first_recovery(server)
+    server.current_key = "luxswirl_ak_regenerated_by_operator"
+    agent = _agent(monkeypatch, tmp_path, server.agent_id)
+
+    await _beat_until([agent], lambda: agent.credentials.api_key == server.current_key)
+
+    assert agent.credentials.api_key == server.current_key
+    assert len(server.recoveries()) == 2
+
+
+# ...while the server's own 401 there still stops recovery until restart.
+async def test_f1_the_servers_401_on_recover_key_stops_recovery(
+    server: Server, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    server.recover_status = 401
+    server.current_key = "luxswirl_ak_regenerated_by_operator"
+    agent = _agent(monkeypatch, tmp_path, server.agent_id)
+
+    await _beat_until([agent], lambda: len(server.heartbeats()) >= 8)
+
+    assert len(server.recoveries()) == 1
+    assert agent.heartbeat_sender.key_refused
+
+
+def _saved(path: Path, agent_id: UUID) -> AgentCredentials:
+    creds = AgentCredentials(str(path))
+    assert creds.save(agent_id, STALE_KEY, SECRET)
+    return creds
+
+
+# F2. Where no rename can replace the file (a single-file mount: EBUSY; a
+# directory the agent cannot write: EACCES), every save failed. It is
+# rewritten in place there instead.
+@pytest.mark.parametrize("where", ["rename", "temp file"])
+def test_f2_a_file_no_rename_can_replace_is_rewritten_in_place(
+    where: str, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    path = tmp_path / "agent_credentials.json"
+    agent_id = uuid4()
+    creds = _saved(path, agent_id)
+
+    def busy(*_args: Any, **_kwargs: Any) -> Any:
+        raise OSError(errno.EBUSY, "Device or resource busy")
+
+    def denied(*_args: Any, **_kwargs: Any) -> Any:
+        raise OSError(errno.EACCES, "Permission denied")
+
+    if where == "rename":
+        monkeypatch.setattr(os, "replace", busy)
+    else:
+        monkeypatch.setattr(tempfile, "mkstemp", denied)
+    assert creds.save(agent_id, "luxswirl_ak_new")
+    monkeypatch.undo()
+
+    reloaded = AgentCredentials(str(path))
+    assert reloaded.load()
+    assert reloaded.api_key == "luxswirl_ak_new"
+    assert reloaded.recovery_secret == SECRET
+    assert [p.name for p in tmp_path.iterdir()] == [path.name]
+
+
+# F3. A filesystem that cannot flush a directory (EINVAL): the file was
+# already replaced, yet save() reported failure. The save stands.
+def test_f3_a_directory_that_cannot_be_flushed_does_not_fail_the_save(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    path = tmp_path / "agent_credentials.json"
+    agent_id = uuid4()
+    creds = _saved(path, agent_id)
+    real_fsync = os.fsync
+
+    def fsync(fd: int) -> None:
+        if stat.S_ISDIR(os.fstat(fd).st_mode):
+            raise OSError(errno.EINVAL, "Invalid argument")
+        real_fsync(fd)
+
+    monkeypatch.setattr(os, "fsync", fsync)
+    assert creds.save(agent_id, "luxswirl_ak_new")
+    assert creds.api_key == "luxswirl_ak_new"
+
+
+# F4. A symlinked credentials path: the rename replaced the link with a
+# regular file, and the persistent target kept the old key.
+def test_f4_a_symlinked_credentials_file_is_written_through(tmp_path: Path) -> None:
+    (tmp_path / "persist").mkdir()
+    (tmp_path / "data").mkdir()
+    target = tmp_path / "persist" / "creds"
+    link = tmp_path / "data" / "agent_credentials.json"
+    agent_id = uuid4()
+    _saved(target, agent_id)
+    link.symlink_to(target)
+
+    creds = AgentCredentials(str(link))
+    assert creds.load()
+    assert creds.save(agent_id, "luxswirl_ak_new")
+
+    assert link.is_symlink()
+    reloaded = AgentCredentials(str(target))
+    assert reloaded.load()
+    assert reloaded.api_key == "luxswirl_ak_new"

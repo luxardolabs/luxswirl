@@ -23,7 +23,7 @@ import httpx
 import psutil
 
 from app.agent import server_api
-from app.agent.http_client import server_client
+from app.agent.http_client import is_app_refusal, server_client
 from app.checks._ssrf_policy import apply_server_policy
 from app.shared.logger import get_logger
 
@@ -39,16 +39,6 @@ logger = get_logger("luxswirl.agent.heartbeat")
 # heartbeat the server ACCEPTED, so a wedged agent stops stamping and reads unhealthy even
 # though its process is still alive.
 HEALTH_FILE = Path(os.getenv("LUXSWIRL_HEALTH_FILE", "/app/data/agent_health"))
-
-
-def _is_app_refusal(response: httpx.Response) -> bool:
-    """Whether a 401 is the server's own JSON refusal (`{"detail": ...}`),
-    not a proxy's page."""
-    try:
-        body = response.json()
-    except ValueError:
-        return False
-    return isinstance(body, dict) and "detail" in body
 
 
 def _stamp_liveness() -> None:
@@ -687,7 +677,7 @@ class HeartbeatSender:
             not self.credentials.api_key
             or self.server_reports_key_acceptance is not False
             or "X-Agent-Recovery-Secret" in headers
-            or not _is_app_refusal(response)
+            or not is_app_refusal(response)
         ):
             return
         if not self.key_refused:
