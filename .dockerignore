@@ -58,7 +58,7 @@ yarn-error.log*
 **/.DS_Store
 
 # Git
-.git/
+**/.git
 .gitignore
 .gitattributes
 
@@ -124,7 +124,13 @@ src/app/data/
 reports/
 data/
 **/*.json.bak
-**/*_credentials.json
+
+# Credentials and keys, at any depth (no image needs one)
+**/*credentials.json
+**/*.pem
+**/id_rsa*
+**/id_ecdsa*
+**/id_ed25519*
 
 # Backups — local DB/volume snapshots, never belong in the image context
 backups/
