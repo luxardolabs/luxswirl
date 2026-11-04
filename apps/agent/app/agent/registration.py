@@ -101,6 +101,12 @@ class AgentRegistration:
         auth_key: str | None = self.config.get("auth_key")
         return auth_key
 
+    @property
+    def secret_refused(self) -> bool:
+        """Whether recover-key refused the recovery secret as void (a revoke)
+        and the agent has not registered again since."""
+        return self._secret_refused
+
     def _hold_back_repeated_recovery(self) -> None:
         """Hold the next recovery back when this one followed another soon.
 

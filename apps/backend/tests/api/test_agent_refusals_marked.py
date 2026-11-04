@@ -287,9 +287,11 @@ async def test_with_auth_off_a_paused_agents_heartbeat_is_answered(
 
 # P2: a pending agent with neither a key nor a secret (an agent build from
 # before secrets) whose registration key is refused was marked as refusing
-# an agent key it never had.
+# an agent key it never had. Round 9, Q1: likewise a rejected one, which
+# only a pending agent can become.
+@pytest.mark.parametrize("rejected", [False, True])
 async def test_a_keyless_agents_refused_registration_key_is_named(
-    client: AsyncClient, db: AsyncSession
+    client: AsyncClient, db: AsyncSession, rejected: bool
 ) -> None:
     _, registration_key = await RegistrationKeyCoreService.create_key(
         db, RegistrationKeyCreate(name="keyless"), created_by="tests"
@@ -300,6 +302,8 @@ async def test_a_keyless_agents_refused_registration_key_is_named(
         headers={"Authorization": f"Bearer {registration_key}"},
     )
     agent_id = UUID(resp.json()["agent_id"])
+    if rejected:
+        await AgentCoreService.reject_agent(db, agent_id)
     limiter.reset()
 
     refused = await client.post(

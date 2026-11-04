@@ -248,6 +248,11 @@ class LuxSwirlAgent:
         success = await self.registration.recover_agent_key()
         if success:
             await self._move_clients_to_auth_key()
+        elif self.registration.secret_refused:
+            # recover-key refused the secret as void (a revoke), though the
+            # heartbeat did not (a server with authentication off lets the
+            # heartbeat through): register again from here too.
+            await self._handle_recovery_secret_refused()
         return success
 
     async def _handle_recovery_secret_refused(self) -> bool:
