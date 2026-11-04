@@ -95,5 +95,7 @@ def test_a_key_for_an_agent_with_no_secret_never_promises_it_fetches_it() -> Non
 
     assert "fetches a key of its own" not in html
     assert "Agent-specific key saved and activated" not in html
-    assert "no agent can use it" in html
+    assert "the agent cannot fetch it now" in html
     assert "registers again as a new pending agent" in html
+    # K1: an agent with no secret at all never registers again by itself.
+    assert "delete its credentials file and restart it" in html

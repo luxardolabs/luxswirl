@@ -243,6 +243,7 @@ async def test_pending_heartbeat_tags_landing_during_approval(
                     tags=["role:browser"],
                 ),
                 using_agent_key=False,
+                verified_key_hash=None,
             )
             await hb.commit()
 

@@ -711,12 +711,14 @@ class AgentCoreService:
         heartbeat: AgentHeartbeat,
         *,
         using_agent_key: bool,
+        verified_key_hash: str | None,
     ) -> AgentHeartbeatResponse:
         """Apply heartbeat update and build the response payload.
 
         Caller handles HTTP-layer auth and passes ``using_agent_key``: whether
-        the agent's own key authenticated the heartbeat, rather than a pending
-        credential (its recovery secret, or the shared registration key from
+        the agent's own key authenticated the heartbeat (checked against
+        ``verified_key_hash``, which must still be the agent's), rather than a
+        pending credential (its recovery secret, or the shared registration key from
         an agent build that sends no secret).
 
         The heartbeat is applied (identity, liveness, health, a metric row)
@@ -732,6 +734,14 @@ class AgentCoreService:
         # approval judges them, or not at all.
         await AgentCRUD.lock(db, agent_id)
         agent = await AgentCoreService.get_agent_by_id(db, agent_id)
+        if using_agent_key and agent.api_key_hash != verified_key_hash:
+            # The key was revoked or regenerated after it was checked: this
+            # heartbeat is answered as one whose key is refused.
+            logger.info(
+                "Agent key changed while its heartbeat was checked: not applied",
+                extra={"agent_id": str(agent.id)},
+            )
+            using_agent_key = False
         if using_agent_key or (
             agent.approval_status == AgentApprovalStatus.PENDING
             and not agent.api_key_hash
@@ -836,15 +846,19 @@ class AgentCoreService:
 
     @staticmethod
     async def can_recover_key(db: AsyncSession, agent_id: UUID) -> bool:
-        """Whether the agent's install can fetch a key the server issues it:
-        only one holding a recovery secret the server still has on record
-        (a revoke voids it; an agent registered before secrets has none).
+        """Whether the agent's install can fetch a key the server issues it
+        now: only an active agent holding a recovery secret the server still
+        has on record (a revoke voids it; an agent registered before secrets
+        has none; recover-key refuses an agent that is not active).
 
         Raises:
             AgentNotFoundException: If agent not found
         """
         agent = await AgentCoreService.get_agent_by_id(db, agent_id)
-        return bool(agent.recovery_secret_hash)
+        return (
+            bool(agent.recovery_secret_hash)
+            and agent.approval_status == AgentApprovalStatus.ACTIVE
+        )
 
     @staticmethod
     async def generate_agent_key(

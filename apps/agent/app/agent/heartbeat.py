@@ -25,6 +25,7 @@ import psutil
 from app.agent import server_api
 from app.agent.http_client import (
     is_app_refusal,
+    refuses_agent_key,
     refuses_recovery_secret,
     server_client,
 )
@@ -43,6 +44,10 @@ logger = get_logger("luxswirl.agent.heartbeat")
 # heartbeat the server ACCEPTED, so a wedged agent stops stamping and reads unhealthy even
 # though its process is still alive.
 HEALTH_FILE = Path(os.getenv("LUXSWIRL_HEALTH_FILE", "/app/data/agent_health"))
+
+# Unmarked key refusals in a row (an older server's, which marks none) before
+# an agent with no recovery secret says its key is lost.
+_UNMARKED_REFUSALS_TO_TRUST = 3
 
 
 def _stamp_liveness() -> None:
@@ -137,6 +142,13 @@ class HeartbeatSender:
         # and the secret with a 200 that does not say which it took: the next
         # heartbeat carries the key alone, and its answer settles it.
         self._probe_key_alone = False
+        # Set by an unmarked 401 to a heartbeat carrying the secret, which the
+        # server never sends (it answers the secret, or refuses it marked):
+        # something else answers for it, so until a 200 only the server's
+        # marked refusal of the key counts. And the run of key refusals since
+        # the last 200, so one gateway 401 never reads as a lost key.
+        self._distrust_unmarked = False
+        self._key_refusals = 0
 
         # Agent state (updated by parent)
         self.hostname: str | None = None
@@ -390,6 +402,8 @@ class HeartbeatSender:
 
                     if response.status_code == 200:
                         self._secret_refused = False
+                        self._distrust_unmarked = False
+                        self._key_refusals = 0
                     await self._register_again_if_refused()
 
                 except httpx.RequestError:
@@ -696,12 +710,23 @@ class HeartbeatSender:
         if not is_app_refusal(response):
             return
         if "X-Agent-Recovery-Secret" not in headers:
-            if self.credentials.api_key:
-                self._note_key_refused()
+            if not self.credentials.api_key:
+                return
+            marked = refuses_agent_key(response)
+            if self._distrust_unmarked and not marked:
+                return
+            self._key_refusals += 1
+            self._note_key_refused()
+            if marked or self._key_refusals >= _UNMARKED_REFUSALS_TO_TRUST:
                 self._log_unrecoverable_refusal()
             return
         if refuses_recovery_secret(response):
             self._secret_refused = True
+        else:
+            # Not the server's answer to the secret: stop sending it, and
+            # wait for the server's own word on the key.
+            self.key_refused = False
+            self._distrust_unmarked = True
 
     async def _register_again_if_refused(self) -> None:
         """While the server refuses the recovery secret, ask the agent to
