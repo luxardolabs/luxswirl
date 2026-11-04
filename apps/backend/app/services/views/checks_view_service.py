@@ -27,6 +27,7 @@ from app.models.enum_model import (
     UserRole,
     options_for,
 )
+from app.schemas.agent_schema import AgentOption
 from app.schemas.auth_schema import AuthedUser
 from app.schemas.check_schema import (
     BulkCheckCreateRequest,
@@ -286,10 +287,19 @@ class ChecksViewService:
         assigned_alert_ids = await AlertCoreService.get_alert_ids_for_check(
             db, check.id
         )
+        # The picker lists the agents that take checks. One whose owner is not
+        # among them (archived, say) shows that owner, chosen and labelled with
+        # its status, so the form neither hides it nor makes the user pick another.
+        unlisted_owner = None
+        if all(agent.id != check.agent_id for agent in agents):
+            unlisted_owner = AgentOption.model_validate(
+                await AgentCoreService.get_agent_by_id(db, check.agent_id)
+            )
 
         return {
             "check": check,
             "agents": agents,
+            "unlisted_owner": unlisted_owner,
             "alerts": alerts,
             "assigned_alert_ids": assigned_alert_ids,
         }
@@ -386,6 +396,7 @@ class ChecksViewService:
             "mode": "create",
             "assigned_alert_ids": [],
             "agents": form_data["agents"],
+            "unlisted_owner": None,
             "alerts": form_data["alerts"],
             "available_check_tags": await CheckCoreService.get_all_check_tags(db),
             "available_tags": await AgentCoreService.list_agent_tags(db),
@@ -415,6 +426,7 @@ class ChecksViewService:
             "check": check,
             "mode": "edit",
             "agents": form_data["agents"],
+            "unlisted_owner": form_data["unlisted_owner"],
             "alerts": form_data["alerts"],
             "assigned_alert_ids": form_data["assigned_alert_ids"],
             "available_check_tags": await CheckCoreService.get_all_check_tags(db),
@@ -443,6 +455,7 @@ class ChecksViewService:
             "create_urls": build_check_create_urls(request),
             "check": check,
             "agents": form_data["agents"],
+            "unlisted_owner": None,
             "alerts": form_data["alerts"],
             "assigned_alert_ids": await AlertCoreService.get_alert_ids_for_check(
                 db, check.id
@@ -1019,7 +1032,12 @@ class ChecksViewService:
         """Resolve selection + enqueue bulk_check_modify job.
 
         Returns (MaintenanceJobResponse, resolved_count).
+
+        Raises:
+            ValidationException: the target agent takes no checks; nothing queued.
         """
+        if new_agent_id is not None:
+            await CheckCoreService.get_admitted_agent(db, new_agent_id)
         ids = await ChecksViewService._resolve_bulk_check_ids(
             db, select_all, agent, enabled, tag, check_ids, list_limit=10000
         )

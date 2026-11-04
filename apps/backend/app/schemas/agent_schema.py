@@ -277,6 +277,7 @@ class AgentOption(BaseSchema):
     agent_name: str | None = None
     hostname: str | None = None
     tags: list[str] | None = None
+    approval_status: AgentApprovalStatus | None = None
 
 
 class AgentHeartbeat(BaseSchema):
