@@ -24,6 +24,15 @@ logger = get_logger("luxswirl.agent.registration")
 _DEFAULT_RETRY_AFTER = 60.0
 
 
+# How soon a recovery may follow the one before it: a key recovered again
+# within this many seconds of the last was taken by another copy of this agent
+# (a cloned host holding the same credentials), and each recovery regenerates
+# the key the other copy holds. The wait doubles each time, from the first
+# to the last value, so two copies settle into one recovery an hour.
+_RECOVERY_REPEAT_WINDOW = 3600.0
+_MIN_RECOVERY_GAP = 60.0
+
+
 # The longest a 429 can hold recovery back: a value past it (or one that is
 # not a finite number) comes from something other than this server, and must
 # not strand the agent until it restarts.
@@ -62,6 +71,10 @@ class AgentRegistration:
         # never spends the recover-key budget its address shares with others.
         self._recovery_refused = False
         self._recovery_not_before = 0.0
+        # When the last recovery succeeded (monotonic), and the wait it set
+        # before the next: see _RECOVERY_REPEAT_WINDOW.
+        self._last_recovered: float | None = None
+        self._recovery_gap = 0.0
         self.hostname: str | None = None  # Will be set by caller
 
     def registration_key(self) -> str | None:
@@ -73,6 +86,35 @@ class AgentRegistration:
             return key
         auth_key: str | None = self.config.get("auth_key")
         return auth_key
+
+    def _hold_back_repeated_recovery(self) -> None:
+        """Hold the next recovery back when this one followed another soon.
+
+        A key recovered again within `_RECOVERY_REPEAT_WINDOW` of the last was
+        most likely taken by another copy of this agent; each recovery
+        replaces the other copy's key, so without a wait the two would trade
+        it at every heartbeat. The wait starts at `_MIN_RECOVERY_GAP` and
+        doubles up to the window.
+        """
+        now = time.monotonic()
+        if (
+            self._last_recovered is not None
+            and now - self._last_recovered < _RECOVERY_REPEAT_WINDOW
+        ):
+            self._recovery_gap = min(
+                max(self._recovery_gap * 2, _MIN_RECOVERY_GAP),
+                _RECOVERY_REPEAT_WINDOW,
+            )
+            self._recovery_not_before = now + self._recovery_gap
+            self.logger.warning(
+                "Agent key recovered again soon after the last recovery: another "
+                "copy of this agent (a cloned host with the same credentials) "
+                "may be using its key. Waiting before recovering again",
+                extra={"wait_seconds": self._recovery_gap},
+            )
+        else:
+            self._recovery_gap = 0.0
+        self._last_recovered = now
 
     async def register_with_server(self) -> bool:
         """Register this agent with the server and save credentials.
@@ -128,6 +170,8 @@ class AgentRegistration:
                 # nothing back from these.
                 self._recovery_refused = False
                 self._recovery_not_before = 0.0
+                self._last_recovered = None
+                self._recovery_gap = 0.0
                 self.logger.info(
                     "Saved agent credentials",
                     extra={"agent_id": str(agent_id)},
@@ -240,15 +284,22 @@ class AgentRegistration:
                 extra={"server_message": message},
             )
 
-            # Save agent-specific key to credentials file
+            self._hold_back_repeated_recovery()
+            # Save agent-specific key to credentials file. The server has
+            # already replaced the old key with this one, so it is used even
+            # when it cannot be saved: dropping it would only ask again, and
+            # replace it again, at every heartbeat.
             if self.credentials.save(agent_id, api_key):
-                # Update config to use agent-specific key for future requests
-                self.config["auth_key"] = api_key
                 self.logger.info("Agent-specific key saved and activated")
-                return True
             else:
-                self.logger.error("Failed to save agent-specific key")
-                return False
+                self.credentials.api_key = api_key
+                self.logger.error(
+                    "Failed to save agent-specific key: using it until the "
+                    "agent restarts, which then recovers another"
+                )
+            # Update config to use agent-specific key for future requests
+            self.config["auth_key"] = api_key
+            return True
 
         except httpx.HTTPStatusError as e:
             status_code = e.response.status_code

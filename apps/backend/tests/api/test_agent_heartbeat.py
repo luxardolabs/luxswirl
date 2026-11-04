@@ -258,3 +258,66 @@ async def test_heartbeat_timestamp_cannot_pin_last_seen_in_the_future(
     await db.refresh(agent)
     assert agent.last_seen is not None
     assert agent.last_seen <= utc_now() + timedelta(minutes=5), agent.last_seen
+
+
+async def _registered_and_approved(
+    client: AsyncClient, db: AsyncSession, registration_token: str
+) -> tuple[UUID, str, str]:
+    """An agent registered for real (so it holds a recovery secret), then
+    approved: its id, its recovery secret and its own key."""
+    resp = await client.post(
+        "/api/v1/agent/register",
+        json={"hostname": "key-holder"},
+        headers={"Authorization": f"Bearer {registration_token}"},
+    )
+    assert resp.status_code == 201, resp.text
+    agent_id = UUID(resp.json()["agent_id"])
+    _, key = await AgentCoreService.approve_agent(db, agent_id, actor_is_admin=True)
+    return agent_id, resp.json()["recovery_secret"], key
+
+
+async def test_the_response_says_the_agent_key_was_accepted(
+    client: AsyncClient, db: AsyncSession, registration_token: str
+) -> None:
+    agent_id, secret, key = await _registered_and_approved(
+        client, db, registration_token
+    )
+
+    resp = await client.post(
+        "/api/v1/agent/heartbeat",
+        json=_beat(str(agent_id)),
+        headers={"Authorization": f"Bearer {key}", "X-Agent-Recovery-Secret": secret},
+    )
+
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["agent_key_accepted"] is True
+
+
+@pytest.mark.parametrize("change", ["regenerate", "revoke"])
+async def test_a_replaced_key_with_the_secret_is_told_its_key_was_not_accepted(
+    client: AsyncClient, db: AsyncSession, registration_token: str, change: str
+) -> None:
+    """The agent proves its secret alongside a key the server no longer
+    takes: the heartbeat is answered, active, and says the key was refused,
+    which is how the agent tells a real refusal from a stray 401."""
+    agent_id, secret, old_key = await _registered_and_approved(
+        client, db, registration_token
+    )
+    if change == "regenerate":
+        await AgentCoreService.regenerate_agent_key(db, agent_id)
+    else:
+        await AgentCoreService.revoke_agent_key(db, agent_id)
+
+    resp = await client.post(
+        "/api/v1/agent/heartbeat",
+        json=_beat(str(agent_id)),
+        headers={
+            "Authorization": f"Bearer {old_key}",
+            "X-Agent-Recovery-Secret": secret,
+        },
+    )
+
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["approval_status"] == "active"
+    assert resp.json()["agent_key_accepted"] is False
+    assert resp.json()["jobs"] == []

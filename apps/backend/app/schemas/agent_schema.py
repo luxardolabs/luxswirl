@@ -415,6 +415,14 @@ class AgentHeartbeatResponse(BaseSchema):
     heartbeat_interval: int = Field(60, description="Heartbeat interval in seconds")
     check_sync_interval: int = Field(60, description="Check sync interval in seconds")
     message: str | None = Field(None, description="Optional message to agent")
+    agent_key_accepted: bool = Field(
+        False,
+        description=(
+            "Whether the agent's own key authenticated this heartbeat. False "
+            "when its pending credential (recovery secret) did: an approved "
+            "agent then recovers a new key"
+        ),
+    )
     jobs: list[dict[str, Any]] = Field(
         default_factory=list, description="Pending jobs to execute"
     )
