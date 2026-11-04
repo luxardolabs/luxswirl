@@ -39,17 +39,17 @@ DEV_WAIT_TIMEOUT      ?= 180
 # Makefile.local (gitignored): copy Makefile.local.example -> Makefile.local and set it.
 # Contributors don't need it — lint/test and the import-linter contracts run without it.
 LUXARCH_REGISTRY ?=
-LUXARCH_VERSION := 0.339.0
+LUXARCH_VERSION := 0.339.4
 LUXARCH_IMAGE    ?= $(LUXARCH_REGISTRY)/luxardolabs/luxarch:$(LUXARCH_VERSION)
 # Dependency-CVE guard (luxaudit) — same private registry as luxarch, mount-only.
 # Scans the pinned poetry.locks against the live advisory feed (see .luxaudit.toml).
-LUXAUDIT_VERSION := 0.15.0
+LUXAUDIT_VERSION := 0.16.0
 LUXAUDIT_IMAGE   ?= $(LUXARCH_REGISTRY)/luxardolabs/luxaudit:$(LUXAUDIT_VERSION)
 # Lint/type/test-standard guard (luxlint) — same private registry. Owns the fleet
 # ruff/mypy config byte-identical (see .luxlint.toml); ruff runs mount-only, mypy
 # runs as an in-repo tail (needs a current mypy for PEP 758 excepts — the baked
 # lint image freezes an older one, so the tail installs a fresh mypy).
-LUXLINT_VERSION := 0.73.0
+LUXLINT_VERSION := 0.74.0
 LUXLINT_IMAGE    ?= $(LUXARCH_REGISTRY)/luxardolabs/luxlint:$(LUXLINT_VERSION)
 # The gitleaks asset reads the luxlint ref as $(LUXLINT).
 LUXLINT          = $(LUXLINT_IMAGE)
@@ -2985,7 +2985,7 @@ migration-check: test-build ## Verify alembic migrations match the models — `a
 # `|| true` on the run: --json exits non-zero when the repo is red — a red repo still has a
 # valid, committable status. `set -e` so a failed stamp aborts (never a false "wrote").
 STAMP = python3 -c 'import json,sys,os; d=json.load(open(sys.argv[1])); g=d.get("guard"); g==sys.argv[3] or sys.exit(f"status: {sys.argv[1]} holds {g!r} output, expected {sys.argv[3]!r}; refusing to stamp"); d["commit"]=os.environ["SHA"]; d["generated_at"]=os.environ["TS"]; json.dump(d,open(sys.argv[2],"w"),indent=2)'
-# luxarch:guard-run asset v4 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit guard-run`.
+# luxarch:guard-run asset v5 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit guard-run`.
 # ── GUARD_RUN: how every guard sees this checkout ───────────────────────────────────────────────────
 # Emitted by `luxarch --emit guard-run`; paste it above the targets that run the guards (`status:`, and
 # `arch:` / `lint:` / `audit:` where they run a guard image).
@@ -3032,7 +3032,7 @@ override GUARD_PWD := $(shell pwd -P)
 $(if $(and $(filter command,$(origin CURDIR)),$(or $(filter 0,$(MAKELEVEL)),$(guard_dry))),,$(if $(and $(GUARD_HERE),$(call guard_same,$(GUARD_HERE),$(GUARD_PWD)),$(call guard_same,$(GUARD_HERE),$(CURDIR))),,$(if $(filter environment%,$(origin GUARD_MAIN)),$(error REFUSING: GUARD_MAIN comes from the environment, so the caller chose a tree to mount: unset it))$(error REFUSING: make runs in $(GUARD_PWD) (CURDIR $(CURDIR)), not in this makefile's directory $(or $(GUARD_HERE),(not found)), so every guard would read the wrong tree: run make -C <the makefile's directory>)))
 override GUARD_RUN = guard_slot_run() ( $(guard_slot_body) exec "$$@" ); guard_slot_run $(guard_slot_vals) docker run --rm -v '$(subst ','\'',$(CURDIR))':/repo $(if $(GUARD_MAIN),$(if $(call guard_same,$(CURDIR),$(GUARD_MAIN)),,-v '$(subst ','\'',$(GUARD_MAIN))':'$(subst ','\'',$(GUARD_MAIN))':ro))
 #
-# ── Heavy-job slots (v4): at most HEAVY_SLOTS heavy jobs run on this machine at once ─────────────────
+# ── Heavy-job slots (v5): at most HEAVY_SLOTS heavy jobs run on this machine at once ─────────────────
 # A full guard scan, the full gate (`make check`) and the full test suite each hold one slot for as long
 # as they run, counted across every checkout, session and user on the machine; the next one waits. Ten
 # parallel full scans once held 40 GiB on one host, and its timing tests failed at load 60. A slot is a
@@ -3043,6 +3043,9 @@ override GUARD_RUN = guard_slot_run() ( $(guard_slot_body) exec "$$@" ); guard_s
 # exits, on a normal exit, Ctrl-C or kill -9 alike: there is no cleanup step and nothing goes stale.
 # It is taken with flock(1), or where there is none (macOS) with python3's fcntl.flock on the same
 # descriptor; with neither, the job is refused, naming both.
+# The slot code runs in the recipe's own shell and holds under `set -e` there, as the fleet's
+# recipes run: a held slot, a slot file another job made first or an ancestor that exits mid-walk
+# moves the job on, never ends it.
 #   - WAITING polls each second and, once it has waited a second, prints one line on stderr naming
 #     the jobs that hold the slots (each holder writes `slot.<n>.who` as it takes one, a job nested
 #     through an ancestor as its own lock is granted). A job never fails for want of a slot, and
@@ -3108,19 +3111,19 @@ override guard_slot_body = gs_d=$$1 gs_n=$$2 gs_job=$$3; shift 3; \
     gs_a=$$PPID; while [ -z "$$gs_have" ] && [ "$$gs_a" -gt 1 ] 2>/dev/null && [ -d "/proc/$$gs_a/fd" ]; do gs_i=1; \
       while [ "$$gs_i" -le "$$gs_n" ]; do gs_f=$$gs_d/slot.$$gs_i; \
         if [ "/proc/$$gs_a/fd/9" -ef "$$gs_f" ] && { ( exec 9<"$$gs_f"; gs_lock ); [ $$? = 75 ]; }; then gs_have=1; gs_anc=1; break; fi; gs_i=$$((gs_i + 1)); done; \
-      gs_a=$$(sed -e "s/.*) . //" -e "s/ .*//" "/proc/$$gs_a/stat" 2>/dev/null); done; \
+      gs_a=$$(sed -e "s/.*) . //" -e "s/ .*//" "/proc/$$gs_a/stat" 2>/dev/null) || gs_a=; done; \
     if [ -n "$${gs_anc:-}" ]; then exec 9<"$$gs_f"; ( if command -v flock >/dev/null 2>&1; then flock 9; else python3 -I -c "import fcntl; fcntl.flock(9, fcntl.LOCK_EX)"; fi && gs_who ) >/dev/null 2>&1 & fi; fi; \
   if [ -z "$$gs_x$$gs_have" ]; then \
     if [ -L "$$gs_d" ] || { [ ! -d "$$gs_d" ] && ! mkdir -m 1777 "$$gs_d" 2>/dev/null && [ ! -d "$$gs_d" ]; }; then \
       echo "REFUSING: the heavy-job slot directory $$gs_d (HEAVY_SLOT_DIR) is not a directory this job can use" >&2; exit 2; fi; \
     gs_w=; gs_r=75; while :; do gs_i=1; \
       while [ "$$gs_i" -le "$$gs_n" ]; do gs_f=$$gs_d/slot.$$gs_i; \
-        if [ ! -e "$$gs_f" ] && [ ! -L "$$gs_f" ]; then gs_t=$$(mktemp "$$gs_d/.slot.XXXXXX") && { chmod 644 "$$gs_t"; ln "$$gs_t" "$$gs_f" 2>/dev/null; rm -f "$$gs_t"; }; fi; \
+        if [ ! -e "$$gs_f" ] && [ ! -L "$$gs_f" ]; then gs_t=$$(mktemp "$$gs_d/.slot.XXXXXX") && { chmod 644 "$$gs_t"; ln "$$gs_t" "$$gs_f" 2>/dev/null || :; rm -f "$$gs_t"; }; fi; \
         if [ -L "$$gs_f" ] || [ ! -f "$$gs_f" ] || [ ! -r "$$gs_f" ]; then \
           echo "REFUSING: $$gs_f is not a plain file this job can read, so the heavy-job slots cannot be counted: remove it" >&2; exit 2; fi; \
-        exec 9<"$$gs_f"; gs_lock; gs_r=$$?; [ "$$gs_r" = 75 ] || break 2; gs_i=$$((gs_i + 1)); done; \
+        exec 9<"$$gs_f"; gs_r=0; gs_lock || gs_r=$$?; [ "$$gs_r" = 75 ] || break 2; gs_i=$$((gs_i + 1)); done; \
       if [ -z "$$gs_w" ]; then gs_w=0; elif [ "$$gs_w" = 0 ]; then gs_w=1; gs_h=; gs_i=1; while [ "$$gs_i" -le "$$gs_n" ]; do gs_o=; gs_f=$$gs_d/slot.$$gs_i.who; \
-          if [ -f "$$gs_f" ] && [ ! -L "$$gs_f" ]; then read -r gs_o < "$$gs_f"; fi; gs_h="$$gs_h$${gs_h:+; }$${gs_o:-slot $$gs_i: holder unknown}"; gs_i=$$((gs_i + 1)); done; \
+          if [ -f "$$gs_f" ] && [ ! -L "$$gs_f" ]; then read -r gs_o < "$$gs_f" || :; fi; gs_h="$$gs_h$${gs_h:+; }$${gs_o:-slot $$gs_i: holder unknown}"; gs_i=$$((gs_i + 1)); done; \
         echo "$$gs_job: waiting for a heavy-job slot ($$gs_n in use in $$gs_d, held by: $$gs_h)" >&2; fi; \
       sleep 1; done; \
     [ "$$gs_r" = 0 ] || { echo "REFUSING: could not lock the heavy-job slot $$gs_f with flock(1) or python3 (exit $$gs_r)" >&2; exit 2; }; \
