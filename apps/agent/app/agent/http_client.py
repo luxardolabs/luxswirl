@@ -36,6 +36,21 @@ def server_client() -> httpx.AsyncClient:
     return _server_client
 
 
+def is_app_refusal(response: httpx.Response) -> bool:
+    """Whether a refusal is the LuxSwirl server's own JSON error, not a proxy's.
+
+    The server answers with FastAPI's `{"detail": ...}` or its own
+    `{"error": ..., "message": ...}` envelope; a proxy or load balancer in
+    front answers with a page of its own, which says nothing about the
+    agent's credentials.
+    """
+    try:
+        body = response.json()
+    except ValueError:
+        return False
+    return isinstance(body, dict) and ("detail" in body or "error" in body)
+
+
 def check_client(*, verify: bool = True) -> httpx.AsyncClient:
     """Return the shared client for check targets with this TLS-verification setting.
 

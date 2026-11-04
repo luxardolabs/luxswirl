@@ -11,6 +11,7 @@ container restarts.
 """
 
 import base64
+import errno
 import hashlib
 import json
 import os
@@ -24,6 +25,49 @@ from cryptography.fernet import Fernet, InvalidToken
 from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.credentials")
+
+# Why a rename cannot replace the credentials file: it is a mount of its own
+# (EBUSY, EXDEV), or its directory takes no new file (EACCES, EPERM).
+_NO_RENAME_ERRNOS = frozenset({errno.EBUSY, errno.EXDEV, errno.EACCES, errno.EPERM})
+
+
+def _write_in_place(target: Path, content: bytes, reason: OSError) -> None:
+    """Rewrite `target` in place, where no rename can replace it.
+
+    Opened without truncating, written, then cut to length and flushed: a
+    write that fails part way can still leave the file damaged, which is why
+    this is only the fallback.
+    """
+    logger.warning(
+        "Credentials file cannot be replaced atomically: rewriting it in place",
+        extra={"credentials_file": str(target), "reason": reason.strerror},
+    )
+    fd = os.open(target, os.O_WRONLY | os.O_CREAT, 0o600)
+    with os.fdopen(fd, "wb") as handle:
+        handle.write(content)
+        handle.truncate()
+        handle.flush()
+        os.fsync(handle.fileno())
+
+
+def _sync_directory(directory: Path) -> None:
+    """Flush a rename in `directory` to disk, where the filesystem can.
+
+    The file is already replaced when this runs, so a filesystem that cannot
+    flush a directory (EINVAL on some network and FUSE mounts) only loses the
+    guarantee that the rename survives a power cut; the save still stands.
+    """
+    try:
+        dir_fd = os.open(directory, os.O_RDONLY)
+        try:
+            os.fsync(dir_fd)
+        finally:
+            os.close(dir_fd)
+    except OSError as exc:
+        logger.warning(
+            "Could not flush the credentials directory after saving",
+            extra={"directory": str(directory), "reason": exc.strerror},
+        )
 
 
 class AgentCredentials:
@@ -269,28 +313,39 @@ class AgentCredentials:
         Written to a temporary file beside it (owner-only from the start),
         flushed to disk, then renamed over it: a save that fails part way (a
         full disk) leaves the old file whole, with the agent's id and recovery
-        secret, instead of an empty one.
+        secret, instead of an empty one. A symlinked path is written through
+        to its target. Where no rename can land (the file is a mount of its
+        own, or its directory takes no new files) the file is rewritten in
+        place, as it was before saves were atomic.
         """
-        directory = self.credentials_file.parent
-        fd, tmp_name = tempfile.mkstemp(
-            dir=directory, prefix=f".{self.credentials_file.name}.", suffix=".tmp"
-        )
+        target = self.credentials_file.resolve()
+        try:
+            fd, tmp_name = tempfile.mkstemp(
+                dir=target.parent, prefix=f".{target.name}.", suffix=".tmp"
+            )
+        except OSError as exc:
+            if exc.errno not in _NO_RENAME_ERRNOS:
+                raise
+            _write_in_place(target, content, exc)
+            return
         tmp_path = Path(tmp_name)
         try:
             with os.fdopen(fd, "wb") as tmp:
                 tmp.write(content)
                 tmp.flush()
                 os.fsync(tmp.fileno())
-            os.replace(tmp_path, self.credentials_file)
+            try:
+                os.replace(tmp_path, target)
+            except OSError as exc:
+                if exc.errno not in _NO_RENAME_ERRNOS:
+                    raise
+                tmp_path.unlink(missing_ok=True)
+                _write_in_place(target, content, exc)
+                return
         except BaseException:
             tmp_path.unlink(missing_ok=True)
             raise
-        # The rename itself reaches the disk once the directory is flushed.
-        dir_fd = os.open(directory, os.O_RDONLY)
-        try:
-            os.fsync(dir_fd)
-        finally:
-            os.close(dir_fd)
+        _sync_directory(target.parent)
 
     def hold_unsaved(self, api_key: str) -> None:
         """Use `api_key` though it could not be saved, and save it later
