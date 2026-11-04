@@ -32,6 +32,7 @@ from app.shared.agent_protocol import (
     AGENT_KEY_REFUSED,
     RECOVERY_SECRET_REFUSED,
     REFUSAL_HEADER,
+    REGISTRATION_KEY_REFUSED,
 )
 from app.shared.logger import get_logger
 
@@ -456,14 +457,19 @@ async def authenticate_heartbeat(
                 refused = refusal.status_code == status.HTTP_401_UNAUTHORIZED
                 if not refused:
                     raise
-                # Marked as the server's refusal of the heartbeat's key, which
-                # an agent tells apart from a gateway's 401.
+                # The key the heartbeat carried is refused: the agent's own,
+                # for an agent that holds one (it proves its recovery secret
+                # next), else the registration key.
                 raise HTTPException(
                     status_code=refusal.status_code,
                     detail=refusal.detail,
                     headers={
                         **(refusal.headers or {}),
-                        REFUSAL_HEADER: AGENT_KEY_REFUSED,
+                        REFUSAL_HEADER: (
+                            AGENT_KEY_REFUSED
+                            if agent.api_key_hash
+                            else REGISTRATION_KEY_REFUSED
+                        ),
                     },
                 ) from refusal
             logger.warning(
@@ -501,6 +507,14 @@ def verify_agent_recovery_secret(agent: Agent, recovery_secret: str | None) -> N
         )
 
 
+# A refusal of the shared registration key, marked as the server's: the
+# agent needs another LUXSWIRL_AUTH_KEY.
+_REGISTRATION_KEY_REFUSAL = {
+    "WWW-Authenticate": "Bearer",
+    REFUSAL_HEADER: REGISTRATION_KEY_REFUSED,
+}
+
+
 async def verify_registration_token(
     authorization: Annotated[str | None, Header()] = None,
     db: AsyncSession | None = None,
@@ -528,7 +542,7 @@ async def verify_registration_token(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Missing Authorization header",
-            headers={"WWW-Authenticate": "Bearer"},
+            headers=dict(_REGISTRATION_KEY_REFUSAL),
         )
 
     # Extract token from "Bearer <token>"
@@ -537,7 +551,7 @@ async def verify_registration_token(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid Authorization header format. Expected: Bearer <token>",
-            headers={"WWW-Authenticate": "Bearer"},
+            headers=dict(_REGISTRATION_KEY_REFUSAL),
         )
 
     token = parts[1]
@@ -562,7 +576,7 @@ async def verify_registration_token(
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Invalid registration token",
-        headers={"WWW-Authenticate": "Bearer"},
+        headers=dict(_REGISTRATION_KEY_REFUSAL),
     )
 
 

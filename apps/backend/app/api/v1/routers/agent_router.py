@@ -18,7 +18,7 @@ from app.api.deps import (
     KeyedRegistration,
     RecoveryRegistrationKeyRequired,
 )
-from app.core.openapi_operations import HandlerNamedRoute
+from app.core.agent_refusals import AgentProtocolRoute
 from app.db import get_db
 from app.models.enum_model import AgentApprovalStatus
 from app.schemas.agent_schema import (
@@ -32,7 +32,7 @@ from app.shared.logger import get_logger
 logger = get_logger("luxswirl.agent_router")
 
 # Agent-facing router (agents call these endpoints)
-agent_ops_router = APIRouter(route_class=HandlerNamedRoute, tags=["Agent Operations"])
+agent_ops_router = APIRouter(route_class=AgentProtocolRoute, tags=["Agent Operations"])
 
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
@@ -84,6 +84,7 @@ async def agent_heartbeat(
         sender.heartbeat,
         using_agent_key=sender.using_agent_key,
         verified_key_hash=sender.verified_key_hash,
+        verified_secret_hash=sender.verified_secret_hash,
     )
 
 

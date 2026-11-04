@@ -352,6 +352,8 @@ services:
 
 ### Updating to New Version
 
+Update the server first, then its agents: an agent needs a server from its own release or a later one. The agent believes a refusal (a 401 or 403) only when the server marks it as its own (header `X-LuxSwirl-Refused`); a server from before that header marks nothing, so an agent newer than its server treats every refusal as temporary and never recovers a regenerated key or replaces a revoked one by itself. See [Refusals the agent believes](../user-guide/agents.md#refusals-the-agent-believes).
+
 ```bash
 # Pull latest image
 docker compose pull luxswirl_agent

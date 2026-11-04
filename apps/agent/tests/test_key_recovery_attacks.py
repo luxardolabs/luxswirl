@@ -36,6 +36,8 @@ from app.shared.agent_protocol import (
     AGENT_KEY_REFUSED,
     RECOVERY_SECRET_REFUSED,
     REFUSAL_HEADER,
+    REFUSED,
+    REGISTRATION_KEY_REFUSED,
 )
 
 pytestmark = pytest.mark.unit
@@ -51,6 +53,9 @@ REGISTER = "/api/v1/agent/register"
 MARK = {REFUSAL_HEADER: RECOVERY_SECRET_REFUSED}
 # ...and its refusal of a heartbeat's key (sent without the secret).
 MARK_KEY = {REFUSAL_HEADER: AGENT_KEY_REFUSED}
+# ...of the registration key, and any other refusal.
+MARK_REG = {REFUSAL_HEADER: REGISTRATION_KEY_REFUSED}
+MARK_OTHER = {REFUSAL_HEADER: REFUSED}
 
 
 @dataclass
@@ -99,6 +104,20 @@ class Server:
         return [r for r in self.requests if r.url.path == REGISTER]
 
     def handle(self, request: httpx.Request) -> httpx.Response:
+        response = self._answer(request)
+        if self.sends_key_accepted or REFUSAL_HEADER not in response.headers:
+            return response
+        # A server from before agent_key_accepted marks no refusal either.
+        headers = {
+            k: v
+            for k, v in response.headers.items()
+            if k.lower() not in (REFUSAL_HEADER.lower(), "content-length")
+        }
+        return httpx.Response(
+            response.status_code, headers=headers, content=response.content
+        )
+
+    def _answer(self, request: httpx.Request) -> httpx.Response:
         self.requests.append(request)
         auth = request.headers.get("Authorization")
         secret = request.headers.get("X-Agent-Recovery-Secret")
@@ -144,12 +163,12 @@ class Server:
         if request.url.path == CHECKS:
             if own:
                 return httpx.Response(200, json={"checks": []})
-            return httpx.Response(401, json={"detail": "no"})
+            return httpx.Response(401, json={"detail": "no"}, headers=MARK_OTHER)
         if request.url.path == f"/api/v1/agent/{self.agent_id}/recover-key":
+            if self.recover_status == 401 or auth != f"Bearer {REG_KEY}":
+                return httpx.Response(401, json={"detail": "no"}, headers=MARK_REG)
             if self.recover_status != 200:
                 return httpx.Response(self.recover_status, json={"detail": "no"})
-            if auth != f"Bearer {REG_KEY}":
-                return httpx.Response(401, json={"detail": "no"})
             if secret != SECRET or self.secret_voided:
                 return httpx.Response(
                     401,
@@ -160,7 +179,9 @@ class Server:
             return httpx.Response(200, json={"api_key": self.current_key})
         if request.url.path == REGISTER:
             if self.register_status != 201 or auth != f"Bearer {REG_KEY}":
-                return httpx.Response(self.register_status, json={"detail": "no"})
+                status = self.register_status if self.register_status != 201 else 401
+                headers = MARK_REG if status in (401, 403) else {}
+                return httpx.Response(status, json={"detail": "no"}, headers=headers)
             return httpx.Response(
                 201,
                 json={
@@ -434,18 +455,26 @@ async def test_d2_an_older_server_that_accepts_the_key_keeps_it(
     assert health.exists()
 
 
-# ...and its "retrieve your key" message still says when the key is refused.
-async def test_d2_an_older_server_that_refuses_the_key_gets_it_recovered(
+# ...and its refusal of a regenerated key, unmarked like every refusal of a
+# server from before the mark, is temporary to this agent (which needs a
+# server that marks): it keeps its key, never sends its secret, recovers and
+# registers nothing, and reads unhealthy while the heartbeat fails.
+async def test_d2_an_older_servers_unmarked_refusal_changes_nothing(
     server: Server, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
+    health = tmp_path / "agent_health"
+    monkeypatch.setattr(heartbeat_module, "HEALTH_FILE", health)
     server.sends_key_accepted = False
     server.current_key = "luxswirl_ak_regenerated_by_operator"
     agent = _agent(monkeypatch, tmp_path, server.agent_id)
 
-    await _beat_until([agent], lambda: agent.credentials.api_key == server.current_key)
+    await _beat_until([agent], lambda: len(server.heartbeats()) >= 8)
 
-    assert agent.credentials.api_key == server.current_key
-    assert len(server.recoveries()) == 1
+    assert agent.credentials.api_key == STALE_KEY
+    assert all("X-Agent-Recovery-Secret" not in b.headers for b in server.heartbeats())
+    assert server.recoveries() == []
+    assert server.registrations() == []
+    assert not health.exists()
 
 
 # C1. A recovered key the disk refused lived in memory only, never saved: a
@@ -472,11 +501,10 @@ async def test_c1_an_unsaved_key_is_saved_once_the_disk_takes_it(
     assert len(server.recoveries()) == 1
 
 
-# E1. A server from before agent_key_accepted, with the key REVOKED: it keeps
-# no key hash, so it answers the secret with 200, approval active and no
-# message, which looks just like an accepted key. The agent sends such a server
-# its key alone, reads the 401 as the refusal, and recovers a key.
-async def test_e1_an_older_server_that_revoked_the_key_gets_it_recovered(
+# E1. A server from before the mark, with the key REVOKED: its 401s are not
+# marked, so they are temporary to this agent. It keeps its credentials,
+# registers nothing over them, and never reads live while refused.
+async def test_e1_an_older_server_that_revoked_the_key_is_never_read_live(
     server: Server, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     health = tmp_path / "agent_health"
@@ -484,29 +512,13 @@ async def test_e1_an_older_server_that_revoked_the_key_gets_it_recovered(
     server.sends_key_accepted = False
     server.revoked = True
     server.current_key = None
-    agent = _agent(monkeypatch, tmp_path, server.agent_id)
-
-    await _beat_until([agent], lambda: agent.credentials.api_key == server.current_key)
-
-    assert agent.credentials.api_key == server.current_key
-    assert len(server.recoveries()) == 1
-    assert not agent.heartbeat_sender.key_refused
-
-
-async def test_e1_an_older_server_that_revoked_the_key_never_reads_it_live(
-    server: Server, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    health = tmp_path / "agent_health"
-    monkeypatch.setattr(heartbeat_module, "HEALTH_FILE", health)
-    server.sends_key_accepted = False
-    server.revoked = True
-    server.current_key = None
-    server.recover_status = 401  # the registration key was revoked too
     agent = _agent(monkeypatch, tmp_path, server.agent_id)
 
     await _beat_until([agent], lambda: len(server.heartbeats()) >= 8)
 
-    assert agent.heartbeat_sender.key_refused
+    assert agent.credentials.api_key == STALE_KEY
+    assert server.recoveries() == []
+    assert server.registrations() == []
     assert not health.exists()
 
 
@@ -1045,3 +1057,178 @@ async def test_j3_the_servers_refusal_of_a_legacy_key_says_so(
     assert [
         r for r in caplog.records if "delete its credentials file" in r.getMessage()
     ]
+
+
+# Round 7, attacker L. The agent inferred the server's intent from unmarked
+# 401s on three endpoints. Now every refusal the server sends is marked, and
+# an unmarked 401 or 403 is temporary wherever it comes.
+def _gateway_on_heartbeat(server: Server, nth: int) -> Any:
+    """The `nth` heartbeat gets a gateway's JSON 401; all else reaches the
+    (marking) server."""
+    seen = [0]
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        if request.url.path == HEARTBEAT:
+            seen[0] += 1
+            if seen[0] == nth:
+                server.requests.append(request)
+                return httpx.Response(401, json=SPRING_401)
+        return server.handle(request)
+
+    return handle
+
+
+def _gateway_on_first_recovery(server: Server) -> Any:
+    """The first recover-key gets a gateway's JSON 401, as the server's own
+    unmarked registration-key refusal once looked."""
+    blocked = [1]
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/recover-key") and blocked[0]:
+            blocked[0] -= 1
+            server.requests.append(request)
+            return httpx.Response(401, json=SPRING_401)
+        return server.handle(request)
+
+    return handle
+
+
+async def _through(handler: Any) -> None:
+    await http_client.aclose_all()
+    http_client._server_client = httpx.AsyncClient(
+        transport=httpx.MockTransport(handler)
+    )
+
+
+# L1: a gateway's JSON 401 to the one heartbeat that carried the secret left
+# the agent distrusting every unmarked refusal, and an older server marks
+# none, so it never recovered. Now that 401 is temporary: the next heartbeat
+# proves the secret again, and the regenerated key is recovered.
+async def test_l1_a_gateway_401_on_the_secret_beat_still_recovers(
+    server: Server, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    server.current_key = "luxswirl_ak_regenerated_by_operator"
+    await _through(_gateway_on_heartbeat(server, nth=2))
+    agent = _agent(monkeypatch, tmp_path, server.agent_id)
+
+    await _beat_until(
+        [agent], lambda: agent.credentials.api_key == server.current_key, timeout=3.0
+    )
+
+    assert agent.credentials.api_key == server.current_key
+    assert len(server.recoveries()) == 1
+    assert server.registrations() == []
+
+
+# L3: one gateway JSON 401 on recover-key (the server's registration-key
+# refusal was an unmarked JSON 401 too) stopped recovery for the life of the
+# process: a regenerated key was never recovered, a revoked agent never
+# registered again. Only the server's marked registration-key refusal stops
+# recovery now; the gateway's is asked again after a minute.
+async def test_l3_a_gateway_401_on_recover_key_still_recovers_a_regenerated_key(
+    server: Server, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(registration_module, "_DEFAULT_RETRY_AFTER", 0.05)
+    server.current_key = "luxswirl_ak_regenerated_by_operator"
+    await _through(_gateway_on_first_recovery(server))
+    agent = _agent(monkeypatch, tmp_path, server.agent_id)
+
+    await _beat_until(
+        [agent], lambda: agent.credentials.api_key == server.current_key, timeout=3.0
+    )
+
+    assert agent.credentials.api_key == server.current_key
+    assert len(server.recoveries()) == 2
+
+
+async def test_l3_a_gateway_401_on_recover_key_still_registers_after_a_revoke(
+    server: Server, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(registration_module, "_DEFAULT_RETRY_AFTER", 0.05)
+    server.current_key = None
+    server.revoked = True
+    server.secret_voided = True
+    await _through(_gateway_on_first_recovery(server))
+    agent = _agent(monkeypatch, tmp_path, server.agent_id)
+
+    await _beat_until([agent], lambda: len(server.registrations()) >= 1, timeout=3.0)
+
+    assert len(server.registrations()) == 1
+
+
+# ...and an unmarked 403 is as temporary as an unmarked 401.
+async def test_an_unmarked_403_on_recover_key_is_asked_again(
+    server: Server, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(registration_module, "_DEFAULT_RETRY_AFTER", 0.05)
+    server.current_key = "luxswirl_ak_regenerated_by_operator"
+    blocked = [1]
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/recover-key") and blocked[0]:
+            blocked[0] -= 1
+            server.requests.append(request)
+            return httpx.Response(403, json={"detail": "Forbidden"})
+        return server.handle(request)
+
+    await _through(handle)
+    agent = _agent(monkeypatch, tmp_path, server.agent_id)
+
+    await _beat_until(
+        [agent], lambda: agent.credentials.api_key == server.current_key, timeout=3.0
+    )
+
+    assert agent.credentials.api_key == server.current_key
+
+
+# L2: after a revoke the server took the new registration (201) but the
+# credentials file could not be written; the agent registered AGAIN every
+# _REGISTER_AGAIN_WAIT, and the server created another pending agent each
+# time. The accepted registration is used from memory, and saved once the
+# disk takes it.
+def _disk_full(*_args: Any, **_kwargs: Any) -> None:
+    raise OSError(errno.ENOSPC, "No space left on device")
+
+
+async def test_l2_an_unsaveable_registration_registers_once(
+    server: Server, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(registration_module, "_REGISTER_AGAIN_WAIT", 0.05)
+    server.current_key = None
+    server.revoked = True
+    server.secret_voided = True
+    agent = _agent(monkeypatch, tmp_path, server.agent_id)
+    write = agent.credentials._write_atomically
+    monkeypatch.setattr(agent.credentials, "_write_atomically", _disk_full)
+
+    await _beat_until([agent], lambda: len(server.heartbeats()) >= 10, timeout=3.0)
+    assert len(server.registrations()) == 1
+    assert agent.credentials.unsaved
+    assert agent.config["agent_id"] == server.new_agent_id
+
+    monkeypatch.setattr(agent.credentials, "_write_atomically", write)
+    await _beat_until([agent], lambda: not agent.credentials.unsaved, timeout=3.0)
+
+    reloaded = AgentCredentials(str(tmp_path / "agent_credentials.json"))
+    assert reloaded.load()
+    assert reloaded.agent_id == server.new_agent_id
+    assert reloaded.recovery_secret == server.new_secret
+    assert reloaded.api_key is None
+    assert len(server.registrations()) == 1
+
+
+async def test_l2_control_a_refused_registration_is_tried_again(
+    server: Server, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # The retry is right when the server created nothing.
+    monkeypatch.setattr(registration_module, "_REGISTER_AGAIN_WAIT", 0.05)
+    server.current_key = None
+    server.revoked = True
+    server.secret_voided = True
+    server.register_status = 401
+    agent = _agent(monkeypatch, tmp_path, server.agent_id)
+
+    await _beat_until([agent], lambda: len(server.registrations()) >= 2, timeout=3.0)
+
+    assert len(server.registrations()) >= 2
+    assert agent.credentials.agent_id == server.agent_id

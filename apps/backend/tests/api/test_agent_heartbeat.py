@@ -28,6 +28,7 @@ from app.shared.agent_protocol import (
     AGENT_KEY_REFUSED,
     RECOVERY_SECRET_REFUSED,
     REFUSAL_HEADER,
+    REGISTRATION_KEY_REFUSED,
 )
 from fixtures.factories import make_agent
 from httpx import ASGITransport, AsyncClient
@@ -403,7 +404,8 @@ async def test_after_a_regenerate_the_secret_still_recovers_a_key(
 
 # A refusal that is not of the secret carries no secret mark: a wrong key
 # alone is marked as the key's refusal, and a registration key recover-key
-# does not take is not marked. The agent never registers again on either.
+# does not take as the registration key's. The agent never registers again on
+# either.
 async def test_other_refusals_are_not_marked_as_refusing_the_secret(
     client: AsyncClient, db: AsyncSession, registration_token: str
 ) -> None:
@@ -427,4 +429,4 @@ async def test_other_refusals_are_not_marked_as_refusing_the_secret(
     assert key_alone.status_code == 401, key_alone.text
     assert key_alone.headers[REFUSAL_HEADER] == AGENT_KEY_REFUSED
     assert wrong_registration_key.status_code == 401, wrong_registration_key.text
-    assert REFUSAL_HEADER not in wrong_registration_key.headers
+    assert wrong_registration_key.headers[REFUSAL_HEADER] == REGISTRATION_KEY_REFUSED

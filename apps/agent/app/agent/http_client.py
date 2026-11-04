@@ -27,6 +27,8 @@ from app.shared.agent_protocol import (
     AGENT_KEY_REFUSED,
     RECOVERY_SECRET_REFUSED,
     REFUSAL_HEADER,
+    REFUSAL_STATUSES,
+    REGISTRATION_KEY_REFUSED,
 )
 
 _server_client: httpx.AsyncClient | None = None
@@ -41,35 +43,43 @@ def server_client() -> httpx.AsyncClient:
     return _server_client
 
 
-def is_app_refusal(response: httpx.Response) -> bool:
-    """Whether a refusal is the LuxSwirl server's own JSON error, not a proxy's.
+def _refusal_mark(response: httpx.Response) -> str | None:
+    """The server's refusal mark on a 401 or 403, or None.
 
-    The server answers with FastAPI's `{"detail": ...}` or its own
-    `{"error": ..., "message": ...}` envelope; a proxy or load balancer in
-    front answers with a page of its own, which says nothing about the
-    agent's credentials.
+    The LuxSwirl server marks every refusal it sends an agent
+    (`app.shared.agent_protocol`). A 401 or 403 without the mark is not the
+    server's word on the agent's credentials, whatever its body looks like:
+    a proxy, a gateway, a misrouted service or a server from before the mark
+    sent it, and the agent retries it as a temporary failure.
     """
-    try:
-        body = response.json()
-    except ValueError:
-        return False
-    return isinstance(body, dict) and ("detail" in body or "error" in body)
+    if response.status_code not in REFUSAL_STATUSES:
+        return None
+    mark = response.headers.get(REFUSAL_HEADER)
+    return mark if isinstance(mark, str) and mark else None
+
+
+def is_marked_refusal(response: httpx.Response) -> bool:
+    """Whether a 401 or 403 is the LuxSwirl server's own refusal."""
+    return _refusal_mark(response) is not None
 
 
 def refuses_agent_key(response: httpx.Response) -> bool:
-    """Whether a heartbeat's 401 is the LuxSwirl server refusing the agent's
-    key: marked with the refusal header. An older server does not mark it."""
-    mark = response.headers.get(REFUSAL_HEADER)
-    return isinstance(mark, str) and mark == AGENT_KEY_REFUSED
+    """Whether the server refused a heartbeat's key, sent without the
+    recovery secret: the agent proves its secret next."""
+    return _refusal_mark(response) == AGENT_KEY_REFUSED
 
 
 def refuses_recovery_secret(response: httpx.Response) -> bool:
-    """Whether a 401 is the LuxSwirl server refusing the agent's recovery
-    secret: marked with the agent protocol's refusal header, which no proxy,
-    gateway or other service sends. Only that refusal, to the heartbeat and
-    to recover-key alike, makes the agent register again."""
-    mark = response.headers.get(REFUSAL_HEADER)
-    return isinstance(mark, str) and mark == RECOVERY_SECRET_REFUSED
+    """Whether the server refused the agent's recovery secret (a Revoke voids
+    it). Only that refusal, to the heartbeat and to recover-key alike, makes
+    the agent register again."""
+    return _refusal_mark(response) == RECOVERY_SECRET_REFUSED
+
+
+def refuses_registration_key(response: httpx.Response) -> bool:
+    """Whether the server refused the shared registration key: the agent
+    cannot recover a key or register until LUXSWIRL_AUTH_KEY is changed."""
+    return _refusal_mark(response) == REGISTRATION_KEY_REFUSED
 
 
 def check_client(*, verify: bool = True) -> httpx.AsyncClient:

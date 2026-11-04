@@ -353,13 +353,25 @@ class AgentCredentials:
         self.api_key = api_key
         self.unsaved = True
 
+    def hold_unsaved_registration(
+        self, agent_id: UUID, recovery_secret: str | None
+    ) -> None:
+        """Use a new registration though it could not be saved, and save it
+        later (`retry_unsaved`): the server has already created the agent, so
+        registering again would create another."""
+        self.agent_id = agent_id
+        self.api_key = None
+        self.recovery_secret = recovery_secret
+        self.unsaved = True
+
     def retry_unsaved(self) -> None:
-        """Save a key `hold_unsaved` kept in memory only, if there is one."""
-        if not self.unsaved or self.agent_id is None or not self.api_key:
+        """Save credentials `hold_unsaved` or `hold_unsaved_registration` kept
+        in memory only, if there are any."""
+        if not self.unsaved or self.agent_id is None:
             return
-        if self.save(self.agent_id, self.api_key):
+        if self.save(self.agent_id, self.api_key, self.recovery_secret):
             self.unsaved = False
-            logger.info("Saved the recovered agent key that could not be saved before")
+            logger.info("Saved the agent credentials that could not be saved before")
 
     def has_credentials(self) -> bool:
         """Check if credentials are loaded."""

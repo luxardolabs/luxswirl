@@ -244,6 +244,7 @@ async def test_pending_heartbeat_tags_landing_during_approval(
                 ),
                 using_agent_key=False,
                 verified_key_hash=None,
+                verified_secret_hash=None,
             )
             await hb.commit()
 
