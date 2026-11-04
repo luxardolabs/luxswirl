@@ -194,7 +194,7 @@ An agent is addressed by its own id. Reads take any token; every change takes an
 | `PATCH`  | `/api/v1/admin/agents/{id}`                | editor | Change its name, tags and configuration: the web edit form's fields                                                                                              |
 | `DELETE` | `/api/v1/admin/agents/{id}`                | editor | Delete it, its checks and their results in the background; `202` with the job                                                                                    |
 | `POST`   | `/api/v1/admin/agents/{id}/{action}`       | editor | `approve`, `reject`, `pause`, `resume`, `disable`, `enable`, `archive`, `restore`, `force-reload`                                                                |
-| `POST`   | `/api/v1/admin/agents/{id}/key`            | editor | A first key for an agent with none; `201` with `api_key`, shown this once                                                                                        |
+| `POST`   | `/api/v1/admin/agents/{id}/key`            | editor | A first key for an agent with none; `201` with `api_key`, shown this once (after a revoke the agent's install cannot fetch it: it registers again)               |
 | `POST`   | `/api/v1/admin/agents/{id}/key/regenerate` | editor | A new key in place of the current one, which stops working; the recovery secret is kept, so the agent recovers its own key, which replaces it; `201`, shown once |
 | `DELETE` | `/api/v1/admin/agents/{id}/key`            | editor | Revoke the key and void the recovery secret: that install can never recover a key, and registers again as a new pending agent for an admin to approve; `204`     |
 

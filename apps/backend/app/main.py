@@ -305,13 +305,15 @@ async def luxswirl_exception_handler(
         "LuxSwirl exception",
         extra={"exception_message": exc.message, "details": exc.details},
     )
-    return render_error_response(
+    response = render_error_response(
         request,
         exc.status_code,
         exc.message,
         error_code=exc.error_code,
         detail=exc.details or None,
     )
+    response.headers.update(exc.headers)
+    return response
 
 
 @app.exception_handler(ValueError)

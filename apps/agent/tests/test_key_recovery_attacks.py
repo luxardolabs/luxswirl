@@ -32,6 +32,7 @@ from app.agent import http_client
 from app.agent import registration as registration_module
 from app.agent.core import LuxSwirlAgent
 from app.agent.credentials import AgentCredentials
+from app.shared.agent_protocol import RECOVERY_SECRET_REFUSED, REFUSAL_HEADER
 
 pytestmark = pytest.mark.unit
 
@@ -42,6 +43,8 @@ SERVER_URL = "https://server.example"
 HEARTBEAT = "/api/v1/agent/heartbeat"
 CHECKS = "/api/v1/agent/checks"
 REGISTER = "/api/v1/agent/register"
+# The header the real server marks its refusal of a recovery secret with.
+MARK = {REFUSAL_HEADER: RECOVERY_SECRET_REFUSED}
 
 
 @dataclass
@@ -70,6 +73,10 @@ class Server:
     register_status: int = 201
     new_agent_id: UUID = field(default_factory=uuid4)
     new_secret: str = "luxswirl_rs_" + "ef" * 32
+    # Refused heartbeat credentials the real server takes before it answers
+    # 429 instead (its pending budget, 5 an hour); None: no budget.
+    pending_budget: int | None = None
+    _refused_heartbeats: int = 0
     requests: list[httpx.Request] = field(default_factory=list)
     _counter: itertools.count = field(default_factory=lambda: itertools.count(1))
 
@@ -112,6 +119,19 @@ class Server:
                 return httpx.Response(200, json=body)
             if secret is None:
                 self.counted_refusals += 1
+            if self.pending_budget is not None:
+                self._refused_heartbeats += 1
+                if self._refused_heartbeats > self.pending_budget:
+                    return httpx.Response(
+                        429,
+                        json={"detail": "Too many refused agent credentials"},
+                        headers={"Retry-After": "3600"},
+                    )
+            if secret is not None:
+                # The real server marks its refusal of the secret.
+                return httpx.Response(
+                    401, json={"detail": "Invalid agent recovery secret"}, headers=MARK
+                )
             return httpx.Response(401, json={"detail": "Invalid agent key"})
         if request.url.path == CHECKS:
             if own:
@@ -120,8 +140,14 @@ class Server:
         if request.url.path == f"/api/v1/agent/{self.agent_id}/recover-key":
             if self.recover_status != 200:
                 return httpx.Response(self.recover_status, json={"detail": "no"})
-            if auth != f"Bearer {REG_KEY}" or secret != SECRET or self.secret_voided:
+            if auth != f"Bearer {REG_KEY}":
                 return httpx.Response(401, json={"detail": "no"})
+            if secret != SECRET or self.secret_voided:
+                return httpx.Response(
+                    401,
+                    json={"error": "AUTHENTICATION_FAILED", "message": "no"},
+                    headers=MARK,
+                )
             self.current_key = f"luxswirl_ak_{next(self._counter)}"
             return httpx.Response(200, json={"api_key": self.current_key})
         if request.url.path == REGISTER:
@@ -772,3 +798,159 @@ async def test_g5_a_proxy_401_to_the_secret_registers_nothing(
 
     assert server.registrations() == []
     assert agent.credentials.agent_id == server.agent_id
+
+
+# Round 5 (attacker I #2): a registration that failed after a revoke was
+# tried again only on another 401 to the secret, but the real server answers
+# 429 once the agent's pending budget is spent (by then, minute 5), so the
+# retry waited up to an hour. It is tried on its own wait, whatever the
+# heartbeat is answered.
+async def test_r5_a_failed_registration_is_retried_past_the_pending_budget(
+    server: Server, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(registration_module, "_REGISTER_AGAIN_WAIT", 0.2)
+    server.current_key = None
+    server.revoked = True
+    server.secret_voided = True
+    server.register_status = 401  # no active registration key, at first
+    server.pending_budget = 3
+    agent = _agent(monkeypatch, tmp_path, server.agent_id)
+    await _beat_until([agent], lambda: len(server.registrations()) >= 1)
+    server.register_status = 201  # the operator issues a registration key
+
+    await _beat_until(
+        [agent], lambda: agent.credentials.agent_id == server.new_agent_id
+    )
+
+    assert agent.credentials.agent_id == server.new_agent_id
+    assert len(server.registrations()) == 2
+    # recover-key was asked once, not again on each retry.
+    assert len(server.recoveries()) == 1
+
+
+# Round 5, attacker H. H1: a gateway in front of the server (Spring Cloud
+# Gateway, an auth sidecar, a second FastAPI service a proxy misroutes to)
+# answers a 401 with JSON of its own, which the agent took for the server's
+# refusal of its secret, and registered again over valid credentials. Only a
+# 401 the server marks (X-LuxSwirl-Refused) makes it register again.
+SPRING_401 = {
+    "timestamp": "2026-11-04T10:00:00.000+00:00",
+    "status": 401,
+    "error": "Unauthorized",
+    "path": "/api/v1/agent/heartbeat",
+}
+
+
+def _gateway(server: Server, body: dict[str, Any] | None, blocked: list[int]) -> Any:
+    """Wrap the fake server: the next `blocked[0]` requests get the gateway's
+    401 (JSON `body`, or an HTML page when None), then traffic flows again."""
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        if blocked[0] > 0:
+            blocked[0] -= 1
+            server.requests.append(request)
+            if body is None:
+                return httpx.Response(
+                    401, text="<html>401 Authorization Required</html>"
+                )
+            return httpx.Response(401, json=body)
+        return server.handle(request)
+
+    return handle
+
+
+async def _install(server: Server, body: dict[str, Any] | None, n: int) -> None:
+    await http_client.aclose_all()
+    http_client._server_client = httpx.AsyncClient(
+        transport=httpx.MockTransport(_gateway(server, body, [n]))
+    )
+
+
+async def _run_blip(
+    server: Server,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    body: dict[str, Any] | None,
+) -> LuxSwirlAgent:
+    # The key is VALID throughout: nothing was regenerated or revoked.
+    server.current_key = STALE_KEY
+    # The gateway refuses three requests in a row: heartbeat, the next
+    # heartbeat (now carrying the secret), and the recover-key it triggers;
+    # it is back by the time the agent registers.
+    await _install(server, body, 3)
+    agent = _agent(monkeypatch, tmp_path, server.agent_id)
+    await _beat_until([agent], lambda: len(server.heartbeats()) >= 8)
+    return agent
+
+
+async def test_h1_a_gateway_json_401_blip_discards_valid_credentials(
+    server: Server, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    agent = await _run_blip(server, monkeypatch, tmp_path, SPRING_401)
+
+    reloaded = AgentCredentials(str(tmp_path / "agent_credentials.json"))
+    assert reloaded.load()
+    # The server never refused the key: the agent must still hold it.
+    assert server.registrations() == [], "registered a new agent over a valid key"
+    assert reloaded.agent_id == server.agent_id
+    assert reloaded.api_key == STALE_KEY
+    assert agent.config["auth_key"] == STALE_KEY
+
+
+async def test_h1_control_an_html_401_blip_keeps_the_credentials(
+    server: Server, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    agent = await _run_blip(server, monkeypatch, tmp_path, None)
+
+    reloaded = AgentCredentials(str(tmp_path / "agent_credentials.json"))
+    assert reloaded.load()
+    assert server.registrations() == []
+    assert reloaded.agent_id == server.agent_id
+    assert reloaded.api_key == STALE_KEY
+    assert agent.config["auth_key"] == STALE_KEY
+
+
+# H2. One gateway JSON 401 against a server from before agent_key_accepted
+# (origin/main): the key stays valid, but key_refused never clears unless a
+# recovery succeeds. With the registration key revoked (documented as fine
+# for an approved agent), the secret rides every heartbeat and the liveness
+# file is never stamped again, until a restart.
+async def test_h2_older_server_one_json_401_secret_rides_forever(
+    server: Server, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    health = tmp_path / "agent_health"
+    monkeypatch.setattr(heartbeat_module, "HEALTH_FILE", health)
+    server.current_key = STALE_KEY
+    server.sends_key_accepted = False
+    server.recover_status = 401  # registration key revoked
+    await _install(server, SPRING_401, 1)
+    agent = _agent(monkeypatch, tmp_path, server.agent_id)
+    await _beat_until([agent], lambda: len(server.heartbeats()) >= 10)
+
+    tail = server.heartbeats()[-5:]
+    assert all(b.headers.get("Authorization") == f"Bearer {STALE_KEY}" for b in tail)
+    health.unlink(missing_ok=True)
+    await _beat_until([agent], lambda: len(server.heartbeats()) >= 14)
+    assert health.exists(), "never stamped live although the server takes its key"
+    assert all("X-Agent-Recovery-Secret" not in b.headers for b in tail), (
+        "secret rides beside a key the server accepts"
+    )
+
+
+async def test_h2_control_older_server_html_401_keeps_secret_home(
+    server: Server, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    health = tmp_path / "agent_health"
+    monkeypatch.setattr(heartbeat_module, "HEALTH_FILE", health)
+    server.current_key = STALE_KEY
+    server.sends_key_accepted = False
+    server.recover_status = 401
+    await _install(server, None, 1)
+    agent = _agent(monkeypatch, tmp_path, server.agent_id)
+    await _beat_until([agent], lambda: len(server.heartbeats()) >= 10)
+
+    tail = server.heartbeats()[-5:]
+    health.unlink(missing_ok=True)
+    await _beat_until([agent], lambda: len(server.heartbeats()) >= 14)
+    assert health.exists()
+    assert all("X-Agent-Recovery-Secret" not in b.headers for b in tail)

@@ -14,7 +14,11 @@ import httpx
 
 from app.agent import server_api
 from app.agent.credentials import AgentCredentials
-from app.agent.http_client import is_app_refusal, server_client
+from app.agent.http_client import (
+    is_app_refusal,
+    refuses_recovery_secret,
+    server_client,
+)
 from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.agent.registration")
@@ -230,19 +234,23 @@ class AgentRegistration:
         server itself (its JSON 401) it registers again as a new pending
         agent, for an operator to approve. The old credentials are replaced
         only once the new registration is saved: a registration that fails
-        (no active registration key) keeps them and is tried again after a
-        wait, never at every heartbeat.
+        (no active registration key) keeps them and is tried again after
+        `_REGISTER_AGAIN_WAIT`, without asking recover-key again, never at
+        every heartbeat. The heartbeat calls this at each beat until it
+        returns True or the server accepts a credential again, so the retry
+        does not wait for another 401 (past the pending budget the server
+        answers 429).
 
         Returns:
             True if the agent registered again
         """
         if time.monotonic() < self._register_again_not_before:
             return False
-        if await self.recover_agent_key(secret_refused=True):
-            return False
         if not self._secret_refused:
-            return False
-        self._secret_refused = False
+            if await self.recover_agent_key():
+                return False
+            if not self._secret_refused:
+                return False
         self.logger.warning(
             "The server refuses this agent's recovery secret (its key was "
             "revoked): registering again; approve the new agent"
@@ -250,6 +258,7 @@ class AgentRegistration:
         if not await self.register_with_server():
             self._register_again_not_before = time.monotonic() + _REGISTER_AGAIN_WAIT
             return False
+        self._secret_refused = False
         # The new agent proves itself with the registration key and its new
         # secret until it is approved and recovers its own key.
         self.config["auth_key"] = self.registration_key()
@@ -261,7 +270,7 @@ class AgentRegistration:
         self.config.pop("agent_id", None)
         return await self.register_with_server()
 
-    async def recover_agent_key(self, *, secret_refused: bool = False) -> bool:
+    async def recover_agent_key(self) -> bool:
         """
         Recover/retrieve agent-specific API key from server.
 
@@ -271,11 +280,8 @@ class AgentRegistration:
         secret existed cannot recover: the agent registers afresh instead, and
         an operator approves the new registration.
 
-        Args:
-            secret_refused: A heartbeat refused the recovery secret: the
-                server's own 401 here then means the secret is void (a
-                revoke), not that the registration key is wrong, and is left
-                to `register_again_after_revoke`.
+        A 401 the server marks as refusing the recovery secret (a revoke
+        voided it) is left to `register_again_after_revoke`.
 
         Returns:
             True if key retrieved and saved successfully
@@ -359,7 +365,7 @@ class AgentRegistration:
                     extra={"status_code": status_code},
                 )
                 return False
-            if status_code == 401 and secret_refused:
+            if status_code == 401 and refuses_recovery_secret(e.response):
                 self._secret_refused = True
                 self.logger.warning(
                     "Key recovery refused: the recovery secret is void",

@@ -28,6 +28,7 @@ from app.services.core.auth_core_service import AuthCoreService
 from app.services.core.registration_key_core_service import (
     RegistrationKeyCoreService,
 )
+from app.shared.agent_protocol import RECOVERY_SECRET_REFUSED, REFUSAL_HEADER
 from app.shared.logger import get_logger
 
 if TYPE_CHECKING:
@@ -473,10 +474,15 @@ def verify_agent_recovery_secret(agent: Agent, recovery_secret: str | None) -> N
     if not settings.security.auth_enabled:
         return
     if not recovery_secret_matches(agent.recovery_secret_hash, recovery_secret):
+        # Marked as the server's refusal of the secret (a revoke voids it), so
+        # the agent registers again on this 401 and on no one else's.
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid agent recovery secret",
-            headers={"WWW-Authenticate": "Bearer"},
+            headers={
+                "WWW-Authenticate": "Bearer",
+                REFUSAL_HEADER: RECOVERY_SECRET_REFUSED,
+            },
         )
 
 
