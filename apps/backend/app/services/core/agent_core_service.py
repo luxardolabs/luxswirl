@@ -757,8 +757,13 @@ class AgentCoreService:
                 extra={"agent_id": str(agent.id)},
             )
             using_agent_key = False
-        if using_agent_key and agent.approval_status != AgentApprovalStatus.ACTIVE:
-            # Disabled, paused or archived after its key was checked.
+        if (
+            settings.security.auth_enabled
+            and using_agent_key
+            and agent.approval_status != AgentApprovalStatus.ACTIVE
+        ):
+            # Disabled, paused or archived after its key was checked (with
+            # authentication off the key check judges no status either).
             raise AuthorizationException(
                 f"Agent is not active. Current status: {agent.approval_status}"
             )

@@ -27,6 +27,7 @@ from app.agent.http_client import (
     is_marked_refusal,
     refuses_agent_key,
     refuses_recovery_secret,
+    refuses_registration_key,
     server_client,
 )
 from app.checks._ssrf_policy import apply_server_policy
@@ -691,7 +692,11 @@ class HeartbeatSender:
         if not is_marked_refusal(response):
             return
         if "X-Agent-Recovery-Secret" not in headers:
-            if self.credentials.api_key and refuses_agent_key(response):
+            # The key alone was sent, so a refusal of the key it carried is
+            # a refusal of the agent's key, whatever the server named it.
+            if self.credentials.api_key and (
+                refuses_agent_key(response) or refuses_registration_key(response)
+            ):
                 self._note_key_refused()
                 self._log_unrecoverable_refusal()
             return

@@ -1232,3 +1232,30 @@ async def test_l2_control_a_refused_registration_is_tried_again(
 
     assert len(server.registrations()) >= 2
     assert agent.credentials.agent_id == server.agent_id
+
+
+# Round 8, N1: the server marked a revoked agent's key, sent alone, as a
+# refused registration key (a revoke clears the key hash), and the agent acted
+# only on `agent-key`: it never proved its secret, never learned a revoke
+# voided it, and never registered again. A key sent alone and refused is the
+# agent's key refused, whichever key the server names.
+async def test_n1_a_key_alone_refused_as_a_registration_key_still_registers_again(
+    server: Server, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    server.current_key = None
+    server.revoked = True
+    server.secret_voided = True
+    answer = server._answer
+
+    def named_registration_key(request: httpx.Request) -> httpx.Response:
+        response = answer(request)
+        if response.headers.get(REFUSAL_HEADER) == AGENT_KEY_REFUSED:
+            return httpx.Response(401, json={"detail": "no"}, headers=MARK_REG)
+        return response
+
+    monkeypatch.setattr(server, "_answer", named_registration_key)
+    agent = _agent(monkeypatch, tmp_path, server.agent_id)
+
+    await _beat_until([agent], lambda: len(server.registrations()) >= 1, timeout=3.0)
+
+    assert len(server.registrations()) == 1

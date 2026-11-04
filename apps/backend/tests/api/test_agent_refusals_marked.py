@@ -244,6 +244,47 @@ async def test_a_refusal_names_what_it_refused(
     assert recover_disabled.headers[REFUSAL_HEADER] == REFUSED
 
 
+# Round 8, N1: a revoke clears the key hash, so the revoked key the agent
+# still sends alone was marked `registration-key`, as if a pending agent had
+# sent it; the agent never proved its secret and never registered again. It
+# is the agent's key that is refused.
+async def test_a_revoked_key_sent_alone_is_marked_as_the_agents_key(
+    client: AsyncClient, db: AsyncSession
+) -> None:
+    agent_id, _secret, key, _ = await _registered_and_approved(client, db)
+    limiter.reset()
+    await AgentCoreService.revoke_agent_key(db, agent_id)
+
+    refused = await client.post(
+        f"{AGENT_PREFIX}/heartbeat",
+        json=_beat(agent_id),
+        headers={"Authorization": f"Bearer {key}"},
+    )
+
+    assert refused.status_code == 401, refused.text
+    assert refused.headers[REFUSAL_HEADER] == AGENT_KEY_REFUSED
+
+
+# Round 8, O3: with authentication off the key check judges no status, but
+# the recheck after the row lock refused a paused agent's heartbeat 403.
+@pytest.mark.parametrize("pause", [True, False])
+async def test_with_auth_off_a_paused_agents_heartbeat_is_answered(
+    client: AsyncClient, db: AsyncSession, monkeypatch, pause: bool
+) -> None:
+    agent_id, _secret, key, _ = await _registered_and_approved(client, db)
+    if pause:
+        await AgentCoreService.pause_agent(db, agent_id, reason="tests")
+    monkeypatch.setattr(settings.security, "auth_enabled", False)
+
+    resp = await client.post(
+        f"{AGENT_PREFIX}/heartbeat",
+        json=_beat(agent_id),
+        headers={"Authorization": f"Bearer {key}"},
+    )
+
+    assert resp.status_code == 200, resp.text
+
+
 # P2: a pending agent with neither a key nor a secret (an agent build from
 # before secrets) whose registration key is refused was marked as refusing
 # an agent key it never had.

@@ -11,11 +11,15 @@ The value names what was refused, where the agent acts on it:
 
 - `recovery-secret`: the agent's recovery secret (a revoke voids it): the
   agent registers again.
-- `agent-key`: a heartbeat's key, sent without the secret: the agent proves
-  its recovery secret next, to recover a new key.
+- `agent-key`: a heartbeat's key, sent without the secret, from an agent
+  that has held a key (a revoke clears it): the agent proves its recovery
+  secret next, to recover a new key or learn that a revoke voided it.
 - `registration-key`: the shared registration key (register, recover-key, a
-  heartbeat of an agent with neither a key nor a secret): the agent needs a
+  heartbeat from a pending agent that never had a key): the agent needs a
   new LUXSWIRL_AUTH_KEY.
+
+The one 403 on an agent route left unmarked is the same-origin guard's
+refusal of a cross-site browser request, which an agent never sends.
 - `refused`: any other refusal (an agent that is not active, a job or check
   that is not its own).
 """
