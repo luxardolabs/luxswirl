@@ -64,6 +64,16 @@ class AgentRegistration:
         self._recovery_not_before = 0.0
         self.hostname: str | None = None  # Will be set by caller
 
+    def registration_key(self) -> str | None:
+        """The registration key: `registration_key`, kept apart by the agent
+        because `auth_key` becomes its own key once it has one, else
+        `auth_key` (a config that never held an agent key)."""
+        if "registration_key" in self.config:
+            key: str | None = self.config["registration_key"]
+            return key
+        auth_key: str | None = self.config.get("auth_key")
+        return auth_key
+
     async def register_with_server(self) -> bool:
         """Register this agent with the server and save credentials.
 
@@ -73,7 +83,7 @@ class AgentRegistration:
         Returns:
             True if registration successful, False otherwise
         """
-        auth_key = self.config.get("auth_key")
+        auth_key = self.registration_key()
         register_url = server_api.register_url(self.config)
 
         # Build registration payload
@@ -191,9 +201,7 @@ class AgentRegistration:
             return False
 
         agent_id = self.config.get("agent_id")
-        registration_key = self.config.get(
-            "auth_key"
-        )  # This should be the registration key
+        registration_key = self.registration_key()
 
         if not agent_id:
             self.logger.error("Cannot recover key: no agent_id")
