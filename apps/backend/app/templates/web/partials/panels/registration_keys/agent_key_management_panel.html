@@ -71,8 +71,9 @@
                     <div class="flex-1">
                         <h4 class="font-semibold text-blue-400 mb-1">Regenerate Agent-Specific Key</h4>
                         <p class="text-sm text-dark-text-muted mb-3">
-                            Generate a new agent-specific key. The old key will be immediately revoked.
-                            The new key will be shown once and cannot be retrieved later.
+                            Generate a new agent-specific key. The old key stops working now; the agent keeps
+                            its recovery secret, so at its next heartbeat it finds its key refused and recovers
+                            a new one by itself with its registration key. Nothing to configure or restart.
                         </p>
                         {{ confirm_action_btn(icon_svg=ICO_KEY, label='Regenerate Key', color='amber',
                             hx_post=agent_urls.regenerate_key,
@@ -90,9 +91,10 @@
                     <div class="flex-1">
                         <h4 class="font-semibold text-red-400 mb-1">Revoke Agent-Specific Key</h4>
                         <p class="text-sm text-dark-text-muted mb-3">
-                            Revoke the agent-specific key. An agent holding its recovery secret recovers a new
-                            key at its next heartbeat with its registration key, so this rotates the key; to stop
-                            the agent, disable or archive it.
+                            Revoke the agent-specific key and void its recovery secret. That install can never
+                            recover a key: it registers again as a new pending agent, which an admin must approve
+                            (or reject). Any copy of its credentials is dead too. To keep the agent and only
+                            rotate its key, regenerate instead.
                         </p>
                         {{ confirm_action_btn(icon_svg=ICO_BAN, label='Revoke Key', color='red',
                             hx_delete=agent_urls.revoke_key,
@@ -111,10 +113,11 @@
                 Key Recovery Information
             </h4>
             <p class="text-sm text-dark-text-muted mb-3">
-                An approved agent recovers a new agent-specific key itself by calling the recovery endpoint with
+                An approved agent whose key is refused recovers a new agent-specific key itself by calling the recovery endpoint with
                 <strong>both</strong> a valid <strong>registration key</strong> and its own <strong>recovery secret</strong>.
                 The server issues the recovery secret once, at registration, and the agent keeps it in its
-                credentials file next to its key. A registration key alone recovers nothing.
+                credentials file next to its key, sending it only once the server refuses that key.
+                A registration key alone recovers nothing. After a revoke, neither does the secret.
             </p>
             <div class="p-3 bg-dark-bg-tertiary rounded text-xs font-mono text-dark-text-muted">
                 POST /api/v1/agent/{{ agent.id }}/recover-key<br/>

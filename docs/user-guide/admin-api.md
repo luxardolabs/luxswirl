@@ -187,16 +187,16 @@ Each result carries `success`, `latency_ms`, `error`, `error_type`, `http_status
 
 An agent is addressed by its own id. Reads take any token; every change takes an editor's or an admin's, as in the web UI. A change that moves a synthetic check to another host (a rename or retag into or out of its selector, an approval it already matches) or removes one (deleting the agent that runs it) is an admin's (`403`).
 
-| Method   | Path                                       | Role   | Does                                                                                                                          |
-| -------- | ------------------------------------------ | ------ | ----------------------------------------------------------------------------------------------------------------------------- |
-| `GET`    | `/api/v1/admin/agents`                     | any    | One page of agents; `search` (name, hostname, address), `archived`, `exclude_pending`                                         |
-| `GET`    | `/api/v1/admin/agents/{id}`                | any    | One agent; `has_api_key` says whether it has a key, never the key or its hash                                                 |
-| `PATCH`  | `/api/v1/admin/agents/{id}`                | editor | Change its name, tags and configuration: the web edit form's fields                                                           |
-| `DELETE` | `/api/v1/admin/agents/{id}`                | editor | Delete it, its checks and their results in the background; `202` with the job                                                 |
-| `POST`   | `/api/v1/admin/agents/{id}/{action}`       | editor | `approve`, `reject`, `pause`, `resume`, `disable`, `enable`, `archive`, `restore`, `force-reload`                             |
-| `POST`   | `/api/v1/admin/agents/{id}/key`            | editor | A first key for an agent with none; `201` with `api_key`, shown this once                                                     |
-| `POST`   | `/api/v1/admin/agents/{id}/key/regenerate` | editor | A new key in place of the current one, which stops working; `201`, shown once (the agent recovers its own, which replaces it) |
-| `DELETE` | `/api/v1/admin/agents/{id}/key`            | editor | Revoke the key; an agent holding its recovery secret recovers another (disable it to stop it); `204`                          |
+| Method   | Path                                       | Role   | Does                                                                                                                                                             |
+| -------- | ------------------------------------------ | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET`    | `/api/v1/admin/agents`                     | any    | One page of agents; `search` (name, hostname, address), `archived`, `exclude_pending`                                                                            |
+| `GET`    | `/api/v1/admin/agents/{id}`                | any    | One agent; `has_api_key` says whether it has a key, never the key or its hash                                                                                    |
+| `PATCH`  | `/api/v1/admin/agents/{id}`                | editor | Change its name, tags and configuration: the web edit form's fields                                                                                              |
+| `DELETE` | `/api/v1/admin/agents/{id}`                | editor | Delete it, its checks and their results in the background; `202` with the job                                                                                    |
+| `POST`   | `/api/v1/admin/agents/{id}/{action}`       | editor | `approve`, `reject`, `pause`, `resume`, `disable`, `enable`, `archive`, `restore`, `force-reload`                                                                |
+| `POST`   | `/api/v1/admin/agents/{id}/key`            | editor | A first key for an agent with none; `201` with `api_key`, shown this once                                                                                        |
+| `POST`   | `/api/v1/admin/agents/{id}/key/regenerate` | editor | A new key in place of the current one, which stops working; the recovery secret is kept, so the agent recovers its own key, which replaces it; `201`, shown once |
+| `DELETE` | `/api/v1/admin/agents/{id}/key`            | editor | Revoke the key and void the recovery secret: that install can never recover a key, and registers again as a new pending agent for an admin to approve; `204`     |
 
 The agent reports its own `agent_run_id`, `ip_address` and `version`: a change to them, or to any field the edit form does not have, is a `422`, and a name another agent already has is a `409`. `reject`, `pause` and `disable` take an optional `{"reason": "..."}`, kept as `status_reason`. An action the agent's status does not allow (approving an active agent, resuming one that is not paused) is a `422`. `approve` returns no key: the agent fetches its own with its recovery secret, as after a web approval. `key` on an agent that has one is a `400`; use `key/regenerate`.
 
@@ -213,7 +213,7 @@ The keys agents register with. Every route takes an admin's token, as the web UI
 | `POST` | `/api/v1/admin/registration-keys`             | `{"name", "description"?}`; `201` with the plaintext `key`, shown only now    |
 | `POST` | `/api/v1/admin/registration-keys/{id}/revoke` | `{"reason"?}`: no agent registers or recovers its key with it again           |
 
-The token's user is recorded as `created_by` and `revoked_by`. A key revoked once stays revoked as first recorded: revoking it again is a `422`. A revoked key is kept, not deleted, so its usage and revocation stay on record. An approved agent keeps working after the key it registered with is revoked, since it uses its own key. A pending agent, or one that has not fetched its own key yet, needs the registration key for key recovery, so it needs another registration key; so does an approved agent whose own key is regenerated or revoked, since it recovers the new key the same way.
+The token's user is recorded as `created_by` and `revoked_by`. A key revoked once stays revoked as first recorded: revoking it again is a `422`. A revoked key is kept, not deleted, so its usage and revocation stay on record. An approved agent keeps working after the key it registered with is revoked, since it uses its own key. A pending agent, or one that has not fetched its own key yet, needs the registration key for key recovery, so it needs another registration key; so does an approved agent whose own key is regenerated, since it recovers the new key the same way, and one whose key is revoked, since it registers again.
 
 ## Agent jobs
 

@@ -293,20 +293,16 @@ async def test_the_response_says_the_agent_key_was_accepted(
     assert resp.json()["agent_key_accepted"] is True
 
 
-@pytest.mark.parametrize("change", ["regenerate", "revoke"])
-async def test_a_replaced_key_with_the_secret_is_told_its_key_was_not_accepted(
-    client: AsyncClient, db: AsyncSession, registration_token: str, change: str
+async def test_a_regenerated_key_with_the_secret_is_told_its_key_was_not_accepted(
+    client: AsyncClient, db: AsyncSession, registration_token: str
 ) -> None:
-    """The agent proves its secret alongside a key the server no longer
-    takes: the heartbeat is answered, active, and says the key was refused,
-    which is how the agent tells a real refusal from a stray 401."""
+    """A regenerate keeps the recovery secret: the agent, its key refused,
+    proves the secret beside it, and the heartbeat is answered, active, saying
+    the key was refused, so the agent recovers its new key."""
     agent_id, secret, old_key = await _registered_and_approved(
         client, db, registration_token
     )
-    if change == "regenerate":
-        await AgentCoreService.regenerate_agent_key(db, agent_id)
-    else:
-        await AgentCoreService.revoke_agent_key(db, agent_id)
+    await AgentCoreService.regenerate_agent_key(db, agent_id)
 
     resp = await client.post(
         "/api/v1/agent/heartbeat",
@@ -321,3 +317,77 @@ async def test_a_replaced_key_with_the_secret_is_told_its_key_was_not_accepted(
     assert resp.json()["approval_status"] == "active"
     assert resp.json()["agent_key_accepted"] is False
     assert resp.json()["jobs"] == []
+
+
+async def test_a_revoke_voids_the_recovery_secret(
+    client: AsyncClient, db: AsyncSession, registration_token: str
+) -> None:
+    """A revoke ends the install: the agent's key and its secret are both
+    refused at the heartbeat, with the server's own JSON 401."""
+    agent_id, secret, old_key = await _registered_and_approved(
+        client, db, registration_token
+    )
+    await AgentCoreService.revoke_agent_key(db, agent_id)
+
+    resp = await client.post(
+        "/api/v1/agent/heartbeat",
+        json=_beat(str(agent_id)),
+        headers={
+            "Authorization": f"Bearer {old_key}",
+            "X-Agent-Recovery-Secret": secret,
+        },
+    )
+
+    assert resp.status_code == 401, resp.text
+    assert "detail" in resp.json() or "error" in resp.json()
+    agent = await db.get(Agent, agent_id)
+    assert agent is not None
+    await db.refresh(agent)
+    assert agent.api_key_hash is None
+    assert agent.recovery_secret_hash is None
+
+
+# G5: one captured heartbeat (key and secret) plus the shared registration key
+# outlived a Revoke: recover-key issued its holder a new key. A revoke voids
+# the secret, so recover-key refuses it.
+async def test_g5_after_a_revoke_a_captured_secret_recovers_no_key(
+    client: AsyncClient, db: AsyncSession, registration_token: str
+) -> None:
+    agent_id, secret, _ = await _registered_and_approved(client, db, registration_token)
+    limiter.reset()  # registration spent one of the address's budget
+    await AgentCoreService.revoke_agent_key(db, agent_id)
+
+    stolen = await client.post(
+        f"/api/v1/agent/{agent_id}/recover-key",
+        headers={
+            "Authorization": f"Bearer {registration_token}",
+            "X-Agent-Recovery-Secret": secret,
+        },
+    )
+
+    assert stolen.status_code == 401, stolen.text
+    assert "api_key" not in stolen.json()
+    agent = await db.get(Agent, agent_id)
+    assert agent is not None
+    await db.refresh(agent)
+    assert agent.api_key_hash is None
+
+
+# A regenerate keeps the secret: the agent recovers its new key by itself.
+async def test_after_a_regenerate_the_secret_still_recovers_a_key(
+    client: AsyncClient, db: AsyncSession, registration_token: str
+) -> None:
+    agent_id, secret, _ = await _registered_and_approved(client, db, registration_token)
+    limiter.reset()
+    await AgentCoreService.regenerate_agent_key(db, agent_id)
+
+    resp = await client.post(
+        f"/api/v1/agent/{agent_id}/recover-key",
+        headers={
+            "Authorization": f"Bearer {registration_token}",
+            "X-Agent-Recovery-Secret": secret,
+        },
+    )
+
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["api_key"].startswith("luxswirl_ak_")
