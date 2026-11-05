@@ -1,6 +1,6 @@
 {
   "guard": "luxarch",
-  "guard_version": "0.343.0",
+  "guard_version": "0.344.0",
   "repo": "/repo",
   "targets": [
     {
@@ -1889,6 +1889,17 @@
           "example": ""
         },
         {
+          "rule": "fw.stylesheet_compiled",
+          "status": "INERT",
+          "since": "0.344.0",
+          "violations": 0,
+          "deferred": false,
+          "inert": true,
+          "inert_reason": "1 stylesheet(s) could not be judged (an href opening with Jinja, a computed, relative or unmounted path, a file in neither the tree nor a build output, or a `<style>` block of Jinja): apps/backend/app/templates/web/layouts/public_status.html:32 <style> holding Jinja. NOT a clearance.",
+          "fix": "",
+          "example": ""
+        },
+        {
           "rule": "obs.method_span",
           "status": "INERT",
           "since": "0.10.0",
@@ -2037,7 +2048,7 @@
         "FAIL": 3,
         "XFAIL": 0,
         "XPASS": 0,
-        "INERT": 17
+        "INERT": 18
       }
     },
     {
@@ -2994,8 +3005,8 @@
     "FAIL": 5,
     "XFAIL": 0,
     "XPASS": 0,
-    "INERT": 21
+    "INERT": 22
   },
-  "commit": "77ce56b753ee45726195237a80ae3e4dd8da7d8c",
-  "generated_at": "2026-11-05T03:11:51Z"
+  "commit": "48fdb3c9e9ab89192de95242a9313f0d31b103a3",
+  "generated_at": "2026-11-05T19:31:47Z"
 }

@@ -1,4 +1,4 @@
-# luxarch:migration-chain asset v2 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit migration-chain`.
+# luxarch:migration-chain asset v3 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit migration-chain`.
 # luxarch:migration-chain verifier v3 — DO NOT edit the marker line above (repo.migrations_build_schema finds it).
 #
 # WHY THIS FILE EXISTS
@@ -36,7 +36,10 @@ from __future__ import annotations
 import importlib
 import os
 import sys
-from typing import Any
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from sqlalchemy import Connection, MetaData
 
 # --- EDIT THIS ---------------------------------------------------------------------------------------
 # The declarative Base, imported from the PACKAGE that registers every model (its `__init__` imports all
@@ -59,10 +62,18 @@ def _load(path: str) -> object:
     return obj
 
 
-def _metadata(obj: object) -> object:
-    return getattr(
+def _metadata(obj: object) -> MetaData:
+    from sqlalchemy import MetaData
+
+    found = getattr(
         obj, "metadata", obj
     )  # a declarative Base has .metadata; a MetaData is itself
+    if not isinstance(found, MetaData):
+        raise TypeError(
+            f"METADATA_IMPORT={METADATA_IMPORT!r} is {type(found).__name__}, not a declarative "
+            "Base or a MetaData"
+        )
+    return found
 
 
 def _op_name(diff: object) -> str:
@@ -72,7 +83,7 @@ def _op_name(diff: object) -> str:
     return str(diff[0]) if isinstance(diff, tuple) and diff else str(diff)
 
 
-def _compare_sync(sync_conn, metadata) -> list[Any]:  # type: ignore[no-untyped-def]
+def _compare_sync(sync_conn: Connection, metadata: MetaData) -> list[object]:
     from alembic.autogenerate import compare_metadata
     from alembic.migration import MigrationContext
 
@@ -80,7 +91,7 @@ def _compare_sync(sync_conn, metadata) -> list[Any]:  # type: ignore[no-untyped-
     return list(compare_metadata(ctx, metadata))
 
 
-def _diff(url: str, metadata: object) -> list[Any]:
+def _diff(url: str, metadata: MetaData) -> list[object]:
     """Own the engine lifecycle end-to-end (no shared pool, no NullPool) — same reason as schema-drift."""
     from sqlalchemy import make_url
 
@@ -89,7 +100,7 @@ def _diff(url: str, metadata: object) -> list[Any]:
 
         from sqlalchemy.ext.asyncio import create_async_engine
 
-        async def _run() -> list[Any]:
+        async def _run() -> list[object]:
             engine = create_async_engine(url)
             try:
                 async with engine.connect() as conn:
@@ -116,7 +127,7 @@ def main() -> int:
     diffs = [
         d for d in _diff(url, metadata) if not _op_name(d).startswith("modify_comment")
     ]
-    tables = len(getattr(metadata, "tables", {}))
+    tables = len(metadata.tables)
     print(f"tables in metadata: {tables}")
     print(
         f"structural diff after `alembic upgrade head` from empty: {len(diffs)} op(s)"
