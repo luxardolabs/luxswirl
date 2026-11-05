@@ -14,6 +14,7 @@ from uuid import UUID
 
 import bcrypt
 import pytest
+from app.core.rate_limit import reserve_key_recovery_attempt
 from app.models.agent_model import Agent
 from app.services.core.agent_core_service import AgentCoreService
 from sqlalchemy import select
@@ -63,7 +64,11 @@ async def test_a_revoke_during_a_key_recovery_leaves_no_working_key(
         staticmethod(operator_revokes_meanwhile),
     )
     async with worker_db() as capturer:
-        key = await AgentCoreService.recover_agent_key(capturer, agent_id, secret)
+        attempt = reserve_key_recovery_attempt("revoke-race")
+        assert not isinstance(attempt, int)
+        key = await AgentCoreService.recover_agent_key(
+            capturer, agent_id, secret, attempt
+        )
         await capturer.commit()
     await asyncio.wait_for(revoke[0], timeout=10.0)
 

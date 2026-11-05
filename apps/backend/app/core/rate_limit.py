@@ -105,25 +105,32 @@ def api_rate_limit() -> str:
 
 
 def registration_rate_limit() -> str:
-    """The limit on registration-key checks: agent registration and key recovery."""
+    """The limit on registration-key checks: agent registrations, and the
+    credentials refused on key recoveries and pending heartbeats."""
     return _current.registration
 
 
-# The bucket counting credentials refused on a pending agent's heartbeat: its
-# recovery secret, or the shared registration key from an agent build that
-# sends no secret. Only refusals count: a pending agent heartbeats with the
-# right credential every interval and must not run out. Each (client address,
-# agent) pair has its own count, so an agent whose credential keeps being
-# refused locks out only itself; an unknown agent id is refused before any
-# credential is checked. This budget is the heartbeat's own: /register and
-# /recover-key keep theirs.
+# The buckets counting refused credentials, where the right credential is
+# presented over and over and must never run out. Each check is counted before
+# the credential is read and given back once it is not refused, so concurrent
+# guesses cannot all pass a count none has made; a refusal keeps its count.
+#
+# A pending agent's heartbeat: its recovery secret, or the shared registration
+# key from an agent build that sends no secret. A pending agent heartbeats with
+# the right credential every interval. Each (client address, agent) pair has
+# its own count, so an agent whose credential keeps being refused locks out
+# only itself; an unknown agent id is refused before any credential is checked.
 _HEARTBEAT_PENDING_REFUSALS = "heartbeat-pending-credential-refusals"
+# A key recovery: the registration key, then the agent's recovery secret. Every
+# agent behind one address recovers after an approval, a regenerate or a
+# revoke. One count per client address, whatever agent id the path names, so a
+# guess cannot open a fresh budget by naming another agent.
+_KEY_RECOVERY_REFUSALS = "key-recovery-credential-refusals"
 
 
 @dataclass(frozen=True)
-class PendingCredentialAttempt:
-    """One pending-heartbeat credential check, already counted in every part of
-    the limit, so concurrent checks cannot all pass a count none has made.
+class CredentialAttempt:
+    """One credential check, already counted in every part of the limit.
     Concurrent checks with the right credential can see each other's counts,
     so the right credential goes free only once checked."""
 
@@ -143,21 +150,17 @@ class PendingCredentialAttempt:
                 storage.incr(key, limit.get_expiry(), amount=-1)
 
 
-def reserve_pending_heartbeat_attempt(
-    client: str, agent_id: UUID
-) -> PendingCredentialAttempt | int:
-    """Count one credential check on pending `agent_id`'s heartbeat from
-    `client`, in every part of the registration limit, before the credential
-    is read.
+def _reserve_refusal_count(keys: tuple[str, ...]) -> CredentialAttempt | int:
+    """Count one credential check under `keys`, in every part of the
+    registration limit, before the credential is read.
 
     Returns the attempt, to `release()` unless the credential is refused, or,
     when any part of the limit is spent, the seconds to wait (and counts
     nothing).
     """
-    keys = (_HEARTBEAT_PENDING_REFUSALS, client, str(agent_id))
     limits = tuple(parse_many(registration_rate_limit()))
     spent = [limit for limit in limits if not limiter.limiter.hit(limit, *keys)]
-    attempt = PendingCredentialAttempt(limits=limits, keys=keys)
+    attempt = CredentialAttempt(limits=limits, keys=keys)
     if not spent:
         return attempt
     attempt.release()
@@ -172,6 +175,20 @@ def reserve_pending_heartbeat_attempt(
         )
         for limit in spent
     )
+
+
+def reserve_pending_heartbeat_attempt(
+    client: str, agent_id: UUID
+) -> CredentialAttempt | int:
+    """Count one credential check on pending `agent_id`'s heartbeat from
+    `client` (see `_reserve_refusal_count`)."""
+    return _reserve_refusal_count((_HEARTBEAT_PENDING_REFUSALS, client, str(agent_id)))
+
+
+def reserve_key_recovery_attempt(client: str) -> CredentialAttempt | int:
+    """Count one key recovery's credential checks from `client` (see
+    `_reserve_refusal_count`)."""
+    return _reserve_refusal_count((_KEY_RECOVERY_REFUSALS, client))
 
 
 class KeyedLimiter:

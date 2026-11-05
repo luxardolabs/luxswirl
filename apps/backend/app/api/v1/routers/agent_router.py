@@ -101,13 +101,15 @@ async def agent_heartbeat(
 )
 async def recover_agent_key(
     agent_id: UUID,
-    _key: RecoveryRegistrationKeyRequired,
+    attempt: RecoveryRegistrationKeyRequired,
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     recovery_secret: Annotated[
         str | None, Header(alias="X-Agent-Recovery-Secret")
     ] = None,
 ) -> AgentKeyRecoveryResponse:
-    new_key = await AgentCoreService.recover_agent_key(db, agent_id, recovery_secret)
+    new_key = await AgentCoreService.recover_agent_key(
+        db, agent_id, recovery_secret, attempt
+    )
 
     return AgentKeyRecoveryResponse(
         agent_id=agent_id,

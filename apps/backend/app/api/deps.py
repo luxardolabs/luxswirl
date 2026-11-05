@@ -29,7 +29,12 @@ from app.api.audit_middleware import mark_authenticated
 from app.core.authorization import scope_grants
 from app.core.config import settings
 from app.core.exceptions import AgentNotFoundException
-from app.core.rate_limit import limiter, registration_rate_limit
+from app.core.rate_limit import (
+    CredentialAttempt,
+    limiter,
+    registration_rate_limit,
+    reserve_key_recovery_attempt,
+)
 from app.core.request_helpers import client_ip_from_request
 from app.core.security import (
     authenticate_heartbeat,
@@ -76,22 +81,37 @@ async def require_registration_key(
 KeyedRegistration = Annotated[AgentRegisterRequest, Depends(require_registration_key)]
 
 
-@limiter.limit(registration_rate_limit)
+@limiter.limit(settings.security.agent_api_rate_limit)
 async def require_recovery_registration_key(
     request: Request,
     agent_id: UUID,
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     authorization: Annotated[str | None, Header()] = None,
-) -> None:
-    """Passes once a key recovery for `agent_id` has presented a valid
-    registration key; a refusal is audited. The agent's own recovery secret is
-    the other half, checked in core."""
+) -> CredentialAttempt:
+    """The recovery's credential check, counted, once a key recovery for
+    `agent_id` has presented a valid registration key; a refusal is audited.
+
+    Only refused recoveries spend the registration budget of the caller's
+    address (`reserve_key_recovery_attempt`): past it, the recovery answers 429
+    without checking anything. A refused registration key keeps its count
+    here; core checks the agent's own recovery secret, the other half, and
+    gives the count back unless it refuses it.
+    """
+    attempt = reserve_key_recovery_attempt(client_ip_from_request(request))
+    if isinstance(attempt, int):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many refused key recoveries",
+            headers={"Retry-After": str(attempt)},
+        )
     await verify_recovery_registration_key(agent_id, authorization, db)
+    return attempt
 
 
-# A key recovery authenticated by the registration key (path parameter agent_id).
+# A key recovery authenticated by the registration key (path parameter
+# agent_id), and its count, for core to give back once the secret is checked.
 RecoveryRegistrationKeyRequired = Annotated[
-    None, Depends(require_recovery_registration_key)
+    CredentialAttempt, Depends(require_recovery_registration_key)
 ]
 
 

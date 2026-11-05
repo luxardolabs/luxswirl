@@ -293,6 +293,72 @@ async def test_secret_guesses_spend_the_recovery_rate_limit(
     assert statuses[allowed] == 429, statuses
 
 
+async def test_recoveries_with_the_right_credentials_spend_nothing(
+    client: AsyncClient, db: AsyncSession, reg_key: str
+) -> None:
+    """Every agent behind one address recovers after an approval, a regenerate
+    or a revoke: right recoveries, however many, never run out the budget."""
+    allowed = parse(settings.security.registration_rate_limit).amount
+    agents = []
+    for _ in range(allowed + 1):
+        agent_id, secret = await _register(client, reg_key)
+        await _approve(db, agent_id)
+        agents.append((agent_id, secret))
+        # /register keeps a budget of its own; this test spends recoveries.
+        limiter.reset()
+
+    statuses = [
+        (await _recover(client, agent_id, bearer=reg_key, secret=secret)).status_code
+        for _ in range(2)
+        for agent_id, secret in agents
+    ]
+
+    assert set(statuses) == {200}, statuses
+
+
+async def test_only_refused_recoveries_spend_the_address_budget(
+    client: AsyncClient, db: AsyncSession, reg_key: str
+) -> None:
+    """Refusals of either half, against any agent id, share the address's one
+    budget; right recoveries between them give nothing back that a refusal
+    spent. Past the budget even the right credentials wait, told how long."""
+    allowed = parse(settings.security.registration_rate_limit).amount
+    agent_id, secret = await _register(client, reg_key)
+    await _approve(db, agent_id)
+
+    refusals = []
+    for n in range(allowed):
+        if n % 2:
+            refused = await _recover(client, uuid4(), bearer=reg_key, secret="guess")
+        else:
+            refused = await _recover(client, agent_id, bearer="wrong", secret=secret)
+        refusals.append(refused.status_code)
+        if n < allowed - 1:
+            right = await _recover(client, agent_id, bearer=reg_key, secret=secret)
+            assert right.status_code == 200, right.text
+    spent = await _recover(client, agent_id, bearer=reg_key, secret=secret)
+
+    assert refusals == [401] * allowed, refusals
+    assert spent.status_code == 429, spent.text
+    assert int(spent.headers["Retry-After"]) >= 1, spent.headers
+
+
+async def test_a_recovery_refused_as_not_active_spends_nothing(
+    client: AsyncClient, reg_key: str
+) -> None:
+    """A pending agent polling recover-key with its right credentials is told
+    it is not active, as often as it asks, and keeps its budget."""
+    allowed = parse(settings.security.registration_rate_limit).amount
+    agent_id, secret = await _register(client, reg_key)
+
+    statuses = [
+        (await _recover(client, agent_id, bearer=reg_key, secret=secret)).status_code
+        for _ in range(allowed + 1)
+    ]
+
+    assert set(statuses) == {403}, statuses
+
+
 async def test_the_stored_digest_is_not_a_recovery_secret(
     client: AsyncClient, db: AsyncSession, reg_key: str
 ) -> None:

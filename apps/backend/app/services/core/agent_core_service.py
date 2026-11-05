@@ -20,6 +20,7 @@ from app.core.exceptions import (
     RecoverySecretRefusedException,
     ValidationException,
 )
+from app.core.rate_limit import CredentialAttempt
 from app.core.recovery_secret import recovery_secret_digest, recovery_secret_matches
 from app.core.synthetic_guard import SYNTHETIC, require_admin_actor
 from app.crud.agent_crud import AgentCRUD
@@ -245,7 +246,10 @@ class AgentCoreService:
 
     @staticmethod
     async def recover_agent_key(
-        db: AsyncSession, agent_id: UUID, recovery_secret: str | None
+        db: AsyncSession,
+        agent_id: UUID,
+        recovery_secret: str | None,
+        attempt: CredentialAttempt,
     ) -> str:
         """Issue an active agent a fresh key, once it proves its recovery secret.
 
@@ -255,43 +259,55 @@ class AgentCoreService:
         before secrets existed (no hash), a missing secret and a wrong one are
         all refused the same way, after the same digest comparison.
 
+        `attempt` is this recovery's count against its address's budget: a
+        refused secret keeps it, and anything else gives it back, so an agent
+        recovering with the right credentials never spends the budget.
+
         Raises:
             RecoverySecretRefusedException: If the agent and secret do not
                 match (marked, so the agent registers again)
             AuthorizationException: If the agent is not active
         """
-        # Locked to the end of the transaction, so a revoke never commits
-        # between this check of the secret and the key it issues: the revoke
-        # waits, then clears that key too.
-        await AgentCRUD.lock(db, agent_id)
-        agent = await AgentCRUD.get_by_id_with_checks(db, agent_id)
-        stored = agent.recovery_secret_hash if agent is not None else None
-        if agent is None or not recovery_secret_matches(stored, recovery_secret):
-            logger.warning(
-                "SECURITY AUDIT: Agent key recovery refused",
-                extra={
-                    "event": "agent_key_recovery_refused",
-                    "agent_id": str(agent_id),
-                    "agent_known": agent is not None,
-                    "secret_presented": bool(recovery_secret),
-                    "secret_on_record": bool(stored),
-                },
-            )
-            raise RecoverySecretRefusedException("Invalid agent recovery credentials")
-        if agent.approval_status != "active":
-            logger.warning(
-                "SECURITY AUDIT: Agent key recovery refused",
-                extra={
-                    "event": "agent_key_recovery_refused",
-                    "agent_id": str(agent_id),
-                    "approval_status": agent.approval_status,
-                },
-            )
-            raise AuthorizationException(
-                "Agent must be active to recover key. "
-                f"Current status: {agent.approval_status}"
-            )
-        _, new_key = await AgentCoreService.regenerate_agent_key(db, agent_id)
+        refused = False
+        try:
+            # Locked to the end of the transaction, so a revoke never commits
+            # between this check of the secret and the key it issues: the
+            # revoke waits, then clears that key too.
+            await AgentCRUD.lock(db, agent_id)
+            agent = await AgentCRUD.get_by_id_with_checks(db, agent_id)
+            stored = agent.recovery_secret_hash if agent is not None else None
+            if agent is None or not recovery_secret_matches(stored, recovery_secret):
+                refused = True
+                logger.warning(
+                    "SECURITY AUDIT: Agent key recovery refused",
+                    extra={
+                        "event": "agent_key_recovery_refused",
+                        "agent_id": str(agent_id),
+                        "agent_known": agent is not None,
+                        "secret_presented": bool(recovery_secret),
+                        "secret_on_record": bool(stored),
+                    },
+                )
+                raise RecoverySecretRefusedException(
+                    "Invalid agent recovery credentials"
+                )
+            if agent.approval_status != "active":
+                logger.warning(
+                    "SECURITY AUDIT: Agent key recovery refused",
+                    extra={
+                        "event": "agent_key_recovery_refused",
+                        "agent_id": str(agent_id),
+                        "approval_status": agent.approval_status,
+                    },
+                )
+                raise AuthorizationException(
+                    "Agent must be active to recover key. "
+                    f"Current status: {agent.approval_status}"
+                )
+            _, new_key = await AgentCoreService.regenerate_agent_key(db, agent_id)
+        finally:
+            if not refused:
+                attempt.release()
         logger.warning(
             "SECURITY AUDIT: Agent key recovered",
             extra={"event": "agent_key_recovered", "agent_id": str(agent_id)},

@@ -352,7 +352,7 @@ DEFAULT_SETTINGS: list[dict[str, Any]] = [
         "value": "5/hour",
         "type": "string",
         "display_name": "Agent Registration Rate Limit",
-        "description": "Agent registrations and key recoveries per IP address, refused keys included (format: count/period, e.g., '5/hour')",
+        "description": "Agent registrations per IP address, refused keys included, and refused key recoveries per IP address (format: count/period, e.g., '5/hour')",
         "validation": None,
     },
     # Password Complexity
