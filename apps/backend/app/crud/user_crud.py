@@ -120,8 +120,15 @@ class UserCRUD:
         then judged one at a time against the committed failure count and
         lock, from one budget. The row is re-read by id under its lock, so a
         rename between the two reads still yields this user, serialised by
-        the row lock every sign-in also takes."""
-        async with db.begin_nested():
+        the row lock every sign-in also takes.
+
+        The caller is signed in, so its session row has a pending write (the
+        auth dependency's last-activity stamp). The savepoint is taken on the
+        connection, not the session, so nothing is flushed: holding that
+        row while waiting here would deadlock against a password change of
+        the same user, whose session purge deletes it."""
+        connection = await db.connection()
+        async with connection.begin_nested():
             await UserCRUD._wait_at_most(db, lock_wait_ms)
             username = await db.scalar(select(User.username).where(User.id == user_id))
             user = None
