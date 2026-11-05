@@ -20,6 +20,7 @@ from app.core.config import settings
 from app.core.rate_limit import (
     BUSY_RETRY_AFTER_SECONDS,
     IN_FLIGHT_SECONDS,
+    buckets_in_flight,
     limiter,
     reserve_key_recovery_attempt,
     reset_in_flight,
@@ -153,7 +154,7 @@ def test_buckets_with_nothing_in_flight_are_dropped() -> None:
             attempt.settle(refused=True)
         assert isinstance(reserve_key_recovery_attempt(address), int)
 
-    assert rate_limit._in_flight == {}
+    assert buckets_in_flight() == 0
 
 
 # ── Over HTTP: a fleet behind one address recovering at once ─────────────────
@@ -162,7 +163,9 @@ def test_buckets_with_nothing_in_flight_are_dropped() -> None:
 @pytest_asyncio.fixture
 async def client(db, monkeypatch) -> AsyncIterator[AsyncClient]:
     monkeypatch.setattr(settings.security, "auth_enabled", True)
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as c:
         yield c
 
 

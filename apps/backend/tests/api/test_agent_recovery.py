@@ -359,6 +359,34 @@ async def test_a_recovery_refused_as_not_active_spends_nothing(
     assert set(statuses) == {403}, statuses
 
 
+async def test_revoked_agents_asking_recover_key_spend_no_budget(
+    client: AsyncClient, db: AsyncSession, reg_key: str
+) -> None:
+    """A revoked agent asks recover-key once with its voided secret before it
+    registers again: revoking more agents behind one address than the budget
+    allows leaves the others' recoveries open."""
+    allowed = parse(settings.security.registration_rate_limit).amount
+    revoked = []
+    for _ in range(allowed + 1):
+        agent_id, secret = await _register(client, reg_key)
+        await _approve(db, agent_id)
+        await AgentCoreService.revoke_agent_key(db, agent_id)
+        revoked.append((agent_id, secret))
+        # /register keeps a budget of its own; this test spends recoveries.
+        limiter.reset()
+    agent_id, secret = await _register(client, reg_key)
+    await _approve(db, agent_id)
+
+    voided = [
+        (await _recover(client, a, bearer=reg_key, secret=s)).status_code
+        for a, s in revoked
+    ]
+    right = await _recover(client, agent_id, bearer=reg_key, secret=secret)
+
+    assert voided == [401] * (allowed + 1), voided
+    assert right.status_code == 200, right.text
+
+
 async def test_the_stored_digest_is_not_a_recovery_secret(
     client: AsyncClient, db: AsyncSession, reg_key: str
 ) -> None:
