@@ -116,6 +116,46 @@ def test_a_check_never_settled_stops_holding_room(
     assert not isinstance(reserve_key_recovery_attempt(ADDRESS), int)
 
 
+def _room() -> int:
+    """How many checks the address may start now (each settled not refused)."""
+    held = []
+    while not isinstance(attempt := reserve_key_recovery_attempt(ADDRESS), int):
+        held.append(attempt)
+    for attempt in held:
+        attempt.settle(refused=False)
+    return len(held)
+
+
+def test_a_refusal_settled_after_its_room_expired_is_still_counted(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    clock = [1000.0]
+    monkeypatch.setattr(rate_limit.time, "monotonic", lambda: clock[0])
+    slow = reserve_key_recovery_attempt(ADDRESS)
+    assert not isinstance(slow, int)
+    clock[0] += IN_FLIGHT_SECONDS
+    # Another check starts meanwhile, which drops the expired room.
+    other = reserve_key_recovery_attempt(ADDRESS)
+    assert not isinstance(other, int)
+    other.settle(refused=False)
+
+    slow.settle(refused=True)
+
+    assert _room() == ALLOWED - 1
+
+
+def test_buckets_with_nothing_in_flight_are_dropped() -> None:
+    for n in range(50):
+        address = f"2001:db8::{n:x}"
+        for _ in range(ALLOWED):
+            attempt = reserve_key_recovery_attempt(address)
+            assert not isinstance(attempt, int)
+            attempt.settle(refused=True)
+        assert isinstance(reserve_key_recovery_attempt(address), int)
+
+    assert rate_limit._in_flight == {}
+
+
 # ── Over HTTP: a fleet behind one address recovering at once ─────────────────
 
 
