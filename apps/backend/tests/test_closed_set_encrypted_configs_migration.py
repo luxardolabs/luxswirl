@@ -21,7 +21,6 @@ from types import ModuleType
 from typing import Any
 from uuid import UUID
 
-import app.core.secrets as secrets_module
 import pytest
 from alembic import command
 from alembic.config import Config
@@ -213,30 +212,3 @@ def _run_alembic_env() -> None:
     cfg = Config("alembic.ini", output_buffer=io.StringIO())
     cfg.set_main_option("sqlalchemy.url", TEST_DATABASE_URL)
     command.stamp(cfg, "head", sql=True)
-
-
-async def test_alembic_env_loads_the_server_s_key_from_its_file(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    """The real stack: no env key, the key only in /app/data. Every migration
-    must run with that key, as the server will."""
-    key = Fernet.generate_key().decode()
-    (tmp_path / "field_encryption_key").write_text(key)
-    monkeypatch.setattr(secrets_module, "SECRETS_DIR", tmp_path)
-    monkeypatch.setattr(settings.security, "field_encryption_key", "")
-
-    await asyncio.to_thread(_run_alembic_env)
-
-    assert settings.security.field_encryption_key == key
-
-
-async def test_alembic_env_never_generates_a_key(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    monkeypatch.setattr(secrets_module, "SECRETS_DIR", tmp_path)
-    monkeypatch.setattr(settings.security, "field_encryption_key", "")
-
-    await asyncio.to_thread(_run_alembic_env)
-
-    assert settings.security.field_encryption_key == ""
-    assert not (tmp_path / "field_encryption_key").exists()

@@ -57,10 +57,6 @@ services:
     # Internal port only - exposed via nginx
     expose:
       - "9000"
-    volumes:
-      # Persists the generated SECRET_KEY + field encryption key. ${DATA_DIR} keeps a
-      # sandbox's secrets out of dev's directory.
-      - ./data/${DATA_DIR:-.}/server:/app/data
     # Every app setting — log level, CORS, database URL, secrets, retention —
     # comes from the environment file. Nothing is set inline here, so this file
     # never silently overrides what the operator wrote (a compose `environment:`
@@ -252,6 +248,9 @@ services:
       # Required by the app settings (anything importing app.core.config,
       # alembic env.py included): the Host names the suite's ASGI clients send.
       ALLOWED_HOSTS: test,route-smoke
+      # The suite's own required secrets, never a deployment's.
+      SECURITY__SECRET_KEY: luxswirl-test-suite-secret-key-not-for-deploys
+      SECURITY__FIELD_ENCRYPTION_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
     # No source bind-mounts — app/shared/tests are baked in by `make test-build`.
     # `run --rm tests` overrides this; the default keeps the container alive so
     # it does not exit when brought up via `up`.

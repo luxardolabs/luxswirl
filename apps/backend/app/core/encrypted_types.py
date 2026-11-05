@@ -28,17 +28,21 @@ def _fernet_for(key: str) -> Fernet:
     return Fernet(key.encode())
 
 
-def _configured_fernet() -> Fernet | None:
-    """The Fernet for the key configured now; None when there is none.
+def _configured_fernet() -> Fernet:
+    """The Fernet for the key configured now.
 
     Read on every use, never kept on the type: SQLAlchemy runs each column
     type through a per-dialect copy, so a cipher cached on an instance outlives
-    the key it was built from (the key is resolved at startup, after the
-    models are imported).
+    the key it was built from.
+
+    Raises:
+        DatabaseException: No key is configured (the setting is required, so
+            only code that cleared it reaches this): nothing is written or
+            read in the clear.
     """
     key = settings.security.field_encryption_key
     if not key or key.strip() == "":
-        return None
+        raise DatabaseException("No field encryption key is configured")
     return _fernet_for(key)
 
 
@@ -84,8 +88,8 @@ class EncryptedString(TypeDecorator[str]):
         """
         super().__init__(length, **kwargs)
 
-    def _get_fernet(self) -> Fernet | None:
-        """The cipher for the configured key; None skips encryption."""
+    def _get_fernet(self) -> Fernet:
+        """The cipher for the configured key."""
         return _configured_fernet()
 
     def process_bind_param(self, value: str | None, dialect: Dialect) -> str | None:
@@ -97,15 +101,12 @@ class EncryptedString(TypeDecorator[str]):
             dialect: SQLAlchemy dialect (unused)
 
         Returns:
-            Base64-encoded encrypted string, or plaintext if no encryption key
+            Base64-encoded encrypted string
         """
         if value is None:
             return None
 
         fernet = self._get_fernet()
-        if fernet is None:
-            # No encryption key configured - store as plaintext
-            return value
 
         # NO plaintext fallback. This branch is reached only when a key IS
         # configured and encryption FAILED — and the columns this type is used
@@ -139,9 +140,6 @@ class EncryptedString(TypeDecorator[str]):
             return None
 
         fernet = self._get_fernet()
-        if fernet is None:
-            # No encryption key configured - return as-is
-            return value
 
         try:
             # Try to decrypt (will fail if plaintext)
@@ -181,8 +179,8 @@ class EncryptedJSON(TypeDecorator[JsonContainer]):
     impl = Text
     cache_ok = True
 
-    def _get_fernet(self) -> Fernet | None:
-        """The cipher for the configured key; None skips encryption."""
+    def _get_fernet(self) -> Fernet:
+        """The cipher for the configured key."""
         return _configured_fernet()
 
     def process_bind_param(
@@ -202,9 +200,6 @@ class EncryptedJSON(TypeDecorator[JsonContainer]):
             return None
 
         fernet = self._get_fernet()
-        if fernet is None:
-            # No encryption key - store as JSON
-            return json.dumps(value)
 
         # NO plaintext fallback — same reasoning as EncryptedString above. This
         # type backs `check_config`, which holds API keys and query credentials.
@@ -237,9 +232,6 @@ class EncryptedJSON(TypeDecorator[JsonContainer]):
             return None
 
         fernet = self._get_fernet()
-        if fernet is None:
-            # No encryption key - parse as JSON
-            return _json_container(value)
 
         try:
             # Try to decrypt (will fail if plaintext JSON)

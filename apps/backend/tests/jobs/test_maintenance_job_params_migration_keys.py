@@ -9,7 +9,6 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-import app.core.secrets as secrets_module
 import pytest
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
@@ -63,9 +62,8 @@ PARAMS = {"agent_id": str(uuid4()), "mode": "merge", "checks": [{"name": "x"}]}
 
 
 async def test_control_downgrade_with_the_same_key_restores_params(
-    db: AsyncSession, field_key: str, monkeypatch, tmp_path
+    db: AsyncSession, field_key: str, monkeypatch
 ) -> None:
-    monkeypatch.setattr(secrets_module, "SECRETS_DIR", tmp_path)
     job_id = await _encrypted_row(db, PARAMS)
     await db.run_sync(lambda s: _run(s.connection(), "downgrade"))
     assert json.loads(await _stored(db, job_id)) == PARAMS
@@ -73,11 +71,10 @@ async def test_control_downgrade_with_the_same_key_restores_params(
 
 
 async def test_downgrade_without_the_key_does_not_wipe_params(
-    db: AsyncSession, field_key: str, monkeypatch, tmp_path
+    db: AsyncSession, field_key: str, monkeypatch
 ) -> None:
-    """Downgrading where the key cannot be found (no env, no file) must fail,
-    not write `{}` over every encrypted row."""
-    monkeypatch.setattr(secrets_module, "SECRETS_DIR", tmp_path)
+    """Downgrading with no key configured must fail, not write `{}` over every
+    encrypted row."""
     job_id = await _encrypted_row(db, PARAMS)
     before = await _stored(db, job_id)
     monkeypatch.setattr(settings.security, "field_encryption_key", "")
@@ -87,10 +84,9 @@ async def test_downgrade_without_the_key_does_not_wipe_params(
 
 
 async def test_downgrade_under_another_key_does_not_wipe_params(
-    db: AsyncSession, field_key: str, monkeypatch, tmp_path
+    db: AsyncSession, field_key: str, monkeypatch
 ) -> None:
     """A row the downgrade cannot decrypt must not silently become `{}`."""
-    monkeypatch.setattr(secrets_module, "SECRETS_DIR", tmp_path)
     job_id = await _encrypted_row(db, PARAMS)
     before = await _stored(db, job_id)
     monkeypatch.setattr(
@@ -101,17 +97,12 @@ async def test_downgrade_under_another_key_does_not_wipe_params(
     assert await _stored(db, job_id) == before
 
 
-async def test_upgrade_reads_the_key_from_the_server_s_file(
-    db: AsyncSession, monkeypatch, tmp_path
+async def test_upgrade_encrypts_with_the_configured_key(
+    db: AsyncSession, monkeypatch
 ) -> None:
-    """The real stack: no env key, the key only in /app/data. Upgrade must
-    encrypt with that key."""
+    """Upgrade encrypts with SECURITY__FIELD_ENCRYPTION_KEY, as the server reads it."""
     key = Fernet.generate_key().decode()
-    (tmp_path / "field_encryption_key").write_text(key)
-    monkeypatch.setattr(secrets_module, "SECRETS_DIR", tmp_path)
-    monkeypatch.setattr(settings.security, "field_encryption_key", "")
+    monkeypatch.setattr(settings.security, "field_encryption_key", key)
     job_id = await _encrypted_row(db, PARAMS)
     stored = await _stored(db, job_id)
     assert json.loads(Fernet(key.encode()).decrypt(stored.encode())) == PARAMS
-    # leave the schema as head found it
-    monkeypatch.setattr(settings.security, "field_encryption_key", key)

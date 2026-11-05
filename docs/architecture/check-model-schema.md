@@ -75,7 +75,7 @@ Three columns use the transparent field-encryption types from `apps/backend/app/
 - `target` and `connection_string_encrypted` use `EncryptedString` (backed by a SQL `String`).
 - `check_config` uses `EncryptedJSON` (backed by SQL `Text`; the whole JSON object is encrypted as one blob, so no field-level SQL querying is possible).
 
-Both use Fernet (AES-128-CBC + HMAC) with the key from `SECURITY__FIELD_ENCRYPTION_KEY`. Encryption/decryption is automatic on write/read. If no key is configured, values are stored as plaintext, and existing plaintext values decrypt as-is to support migration.
+Both use Fernet (AES-128-CBC + HMAC) with the key from `SECURITY__FIELD_ENCRYPTION_KEY`. Encryption/decryption is automatic on write/read. The key is a required setting, so nothing is written in the clear; a value stored as plaintext before encryption still reads as-is.
 
 ## Derived `@property` accessors
 

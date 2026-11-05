@@ -21,7 +21,6 @@ import json
 import sqlalchemy as sa
 from alembic import op
 from app.core.config import settings
-from app.core.secrets import load_existing
 from cryptography.fernet import Fernet, InvalidToken
 from sqlalchemy.engine import Connection
 
@@ -41,12 +40,8 @@ jobs = sa.table(
 
 
 def _server_fernet() -> Fernet | None:
-    """The cipher for the server's key, or None when it has none.
-
-    `alembic upgrade` runs before the server, whose lifespan resolves the key
-    from its file; this reads the same env var and file, never generating one.
-    """
-    key = load_existing("field_encryption_key", settings.security.field_encryption_key)
+    """The cipher for the server's key (SECURITY__FIELD_ENCRYPTION_KEY)."""
+    key = settings.security.field_encryption_key
     return Fernet(key.encode()) if key else None
 
 

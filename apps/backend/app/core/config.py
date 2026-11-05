@@ -159,9 +159,11 @@ class SecuritySettings(BaseSettings):
     """Security configuration."""
 
     auth_enabled: bool = Field(default=True, description="Enable authentication")
+    # Required, no default: the deployment sets SECURITY__SECRET_KEY. An unset,
+    # empty or short value refuses to start.
     secret_key: str = Field(
-        default="",
-        description="Secret key for JWT. Resolved at startup via env → /app/data/secret_key → generate.",
+        min_length=32,
+        description="Secret key for JWT signing (SECURITY__SECRET_KEY, at least 32 characters)",
     )
     algorithm: str = Field(default="HS256", description="JWT algorithm")
     access_token_expire_minutes: int = Field(
@@ -257,18 +259,14 @@ class SecuritySettings(BaseSettings):
         description="Path for session cookie",
     )
 
-    # Field-level encryption for sensitive database data.
-    # Resolved at startup via env override → /app/data/field_encryption_key →
-    # auto-generate-and-persist (see core/secrets.py:resolve_runtime_secrets).
-    # Operator never has to type this value; existing deployments with the env
-    # var set continue to work unchanged.
+    # Field-level encryption for sensitive database data. Required, no default:
+    # the deployment sets SECURITY__FIELD_ENCRYPTION_KEY to a Fernet key. An
+    # unset, empty or malformed value refuses to start.
     field_encryption_key: str = Field(
-        default="",
+        min_length=32,
         description=(
             "Fernet key for encrypting sensitive database fields (check targets, "
-            "check_config, connection strings). Auto-generated on first boot if unset; "
-            "override with SECURITY__FIELD_ENCRYPTION_KEY env var if injecting from a "
-            "secrets manager."
+            "check_config, connection strings): SECURITY__FIELD_ENCRYPTION_KEY"
         ),
     )
 
@@ -289,14 +287,7 @@ class SecuritySettings(BaseSettings):
     @field_validator("field_encryption_key")
     @classmethod
     def validate_encryption_key(cls, v: str) -> str:
-        """Validate Fernet key format if a value is provided.
-
-        Empty values are allowed at config-load time — `resolve_runtime_secrets()`
-        will fill them in during lifespan startup before any DB query runs.
-        """
-        if not v or v.strip() == "":
-            return ""
-
+        """Refuse a value that is not a Fernet key (url-safe base64 of 32 bytes)."""
         try:
             Fernet(v.encode())  # raises if invalid format/length
         except Exception as e:

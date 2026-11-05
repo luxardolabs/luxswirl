@@ -287,13 +287,16 @@ sudo lsof -i :9000
 #### 4. Missing environment variables
 
 ```bash
-# Error: "SECRET_KEY is required"
+# Error: a validation error naming security.secret_key or
+# security.field_encryption_key (missing, or shorter than 32 characters)
 
-# Generate secret key
-python3 -c "import secrets; print(secrets.token_urlsafe(32))"
+# Generate each once and keep it:
+python3 -c "import secrets; print(secrets.token_urlsafe(64))"
+python3 -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'
 
-# Add to .env:
-SECRET_KEY=generated_key_here
+# Add to .env.<env>:
+SECURITY__SECRET_KEY=<the first value>
+SECURITY__FIELD_ENCRYPTION_KEY=<the second value>
 ```
 
 #### 5. Database schema not initialized

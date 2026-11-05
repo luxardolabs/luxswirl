@@ -1,4 +1,4 @@
-"""An encrypted column must never store plaintext when a key is configured.
+"""An encrypted column never stores plaintext.
 
 `EncryptedString` and `EncryptedJSON` back the columns that hold check targets
 with embedded credentials, database connection strings and `check_config` API
@@ -50,17 +50,17 @@ class TestEncryptedString:
         assert "hunter2" not in stored
         assert col.process_result_value(stored, None) == "hunter2"
 
-    def test_no_key_configured_still_stores_plaintext(self, monkeypatch):
-        """The documented no-encryption mode. Distinct from a FAILURE to
-        encrypt, and the reason the raise is scoped to the except branch."""
-        col = EncryptedString()
-        monkeypatch.setattr(col, "_get_fernet", lambda: None)
-        assert col.process_bind_param("hunter2", None) == "hunter2"
+    def test_no_key_configured_refuses_to_write(self, monkeypatch):
+        """The key is a required setting; code that cleared it writes nothing."""
+        monkeypatch.setattr(settings.security, "field_encryption_key", "")
+
+        with pytest.raises(DatabaseException):
+            EncryptedString().process_bind_param("hunter2", None)
 
 
 def test_a_column_follows_the_key_configured_now(field_key, monkeypatch) -> None:
     """A type that has encrypted under one key encrypts under the next: the
-    key is resolved at startup, after the models (and their types) exist."""
+    type reads the configured key on every use."""
     col = EncryptedString()
     first = col.process_bind_param("hunter2", None)
     assert first is not None
@@ -72,8 +72,6 @@ def test_a_column_follows_the_key_configured_now(field_key, monkeypatch) -> None
     assert second is not None
     assert Fernet(second_key.encode()).decrypt(second.encode()) == b"hunter2"
 
-    monkeypatch.setattr(settings.security, "field_encryption_key", "")
-    assert col.process_bind_param("hunter2", None) == "hunter2"
 
 
 class TestEncryptedJSON:

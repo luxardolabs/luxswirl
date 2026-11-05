@@ -1,8 +1,8 @@
-"""A field-encryption key for one test, and none for the next.
+"""A fresh field-encryption key for one test.
 
-The suite runs with no key, so encrypted columns store plaintext. The encrypted
-column types read the configured key on every use, so setting it for one test
-encrypts that test's writes and nothing after it.
+The suite runs under its own key (SECURITY__FIELD_ENCRYPTION_KEY in the test
+environment). The encrypted column types read the configured key on every use,
+so setting another for one test encrypts that test's writes under it alone.
 """
 
 from __future__ import annotations
