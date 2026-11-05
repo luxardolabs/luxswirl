@@ -236,12 +236,11 @@ SERVER__CORS_ORIGINS=["https://luxswirl.example.com:9000"]
 SERVER__ENVIRONMENT=production
 LOG__LEVEL=INFO
 
-# Security. SECURITY__SECRET_KEY (JWT) and SECURITY__FIELD_ENCRYPTION_KEY are
-# auto-generated on first boot and persisted under /app/data on the server
-# volume — operators do not need to set them. Override only to inject from a
-# secrets manager:
-#   SECURITY__SECRET_KEY=$(python3 -c "import secrets; print(secrets.token_urlsafe(64))")
-#   SECURITY__FIELD_ENCRYPTION_KEY=$(python3 -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')
+# Security (REQUIRED): the server refuses to start without both, or with one
+# shorter than 32 characters. Generate each once (below) and keep it: a new
+# field-encryption key cannot read the check credentials stored under the old one.
+SECURITY__SECRET_KEY=
+SECURITY__FIELD_ENCRYPTION_KEY=
 
 # Agent registration key — generate in the UI (Settings → Registration Keys)
 # after first login, then set this before starting the agent service.
@@ -261,10 +260,11 @@ SMTP_FROM=noreply@example.com
 # POSTGRES_PASSWORD: required, you choose the value
 openssl rand -base64 32
 
-# SECURITY__SECRET_KEY: optional. The server auto-generates one on first boot
-# and persists it to ./data/server. Generate manually only if injecting from a
-# secrets manager:
+# SECURITY__SECRET_KEY: required
 python3 -c "import secrets; print(secrets.token_urlsafe(64))"
+
+# SECURITY__FIELD_ENCRYPTION_KEY: required, a Fernet key
+python3 -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'
 ```
 
 ### Step 4: Review the Compose Files (Optional)
@@ -318,8 +318,6 @@ services:
       # ALLOWED_HOSTS / SERVER__CORS_ORIGINS / SECURITY__* come from your .env file.
     expose:
       - "9000"   # Internal only; reach it via nginx
-    volumes:
-      - ./data/server:/app/data  # Persists auto-generated secret + encryption key
 
   luxswirl_agent:
     image: ghcr.io/luxardolabs/luxswirl-agent:2026.09.0
@@ -518,11 +516,9 @@ nano /opt/luxswirl/.env
 # Database — single connection URL (SQLAlchemy/asyncpg DSN)
 DATABASE__URL=postgresql+asyncpg://luxswirl:CHANGE_THIS_SECURE_PASSWORD@localhost:5432/luxswirl
 
-# Security
-# SECURITY__SECRET_KEY: optional. If unset, the server auto-generates one on
-# first boot and persists to ./data/server. Set only if injecting from a
-# secrets manager. SECURITY__FIELD_ENCRYPTION_KEY is handled the same way.
-# SECURITY__SECRET_KEY=
+# Security (REQUIRED; generate as in Step 3 and keep them)
+SECURITY__SECRET_KEY=
+SECURITY__FIELD_ENCRYPTION_KEY=
 SERVER__CORS_ORIGINS=["https://luxswirl.example.com"]
 # The public hostname, plus localhost: the systemd agent below posts to
 # http://localhost:9000.

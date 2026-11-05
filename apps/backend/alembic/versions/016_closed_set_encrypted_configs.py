@@ -127,8 +127,8 @@ def migrate(connection: Connection) -> None:
         if encrypted:
             raise RuntimeError(
                 f"{encrypted} check config(s) are encrypted and no encryption key "
-                "is configured: set SECURITY__FIELD_ENCRYPTION_KEY or restore "
-                "/app/data/field_encryption_key, then run the migration again"
+                "is configured: set SECURITY__FIELD_ENCRYPTION_KEY to the key they were "
+                "encrypted with, then run the migration again"
             )
         return
 

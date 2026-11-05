@@ -99,14 +99,15 @@ services:
       SERVER__CORS_ORIGINS: '["https://your-domain.com:9000"]'
       SERVER__CORS_CREDENTIALS: "true"
 
+      # Security (REQUIRED, at least 32 characters each; generate once and keep them)
+      SECURITY__SECRET_KEY: ${SECRET_KEY}
+      SECURITY__FIELD_ENCRYPTION_KEY: ${FIELD_ENCRYPTION_KEY}
+
       # Logging
       LOG__LEVEL: INFO
 
     ports:
       - "9000:9000"
-
-    volumes:
-      - server_data:/app/data  # Persists auto-generated secret + encryption key
 
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/health"]
@@ -118,11 +119,9 @@ services:
 volumes:
   timescale_data:
     driver: local
-  server_data:
-    driver: local
 ```
 
-> `POSTGRES_PASSWORD` is read from a `.env` file (or the shell). The server's `SECURITY__SECRET_KEY` (JWT) and `SECURITY__FIELD_ENCRYPTION_KEY` are auto-generated on first boot and persisted under `/app/data` — you do not need to set them unless injecting from a secrets manager.
+> `POSTGRES_PASSWORD`, `SECRET_KEY` and `FIELD_ENCRYPTION_KEY` are read from a `.env` file (or the shell). The server refuses to start without `SECURITY__SECRET_KEY` and `SECURITY__FIELD_ENCRYPTION_KEY`; see [.env File](#env-file-production-secrets) for how to generate them. Keep the field-encryption key: a new one cannot read the check credentials stored under the old one.
 
 ### 2. Start Services
 
@@ -206,8 +205,8 @@ SERVER__CORS_ORIGINS: '["https://server.example.com:9000", "https://monitoring.e
 
 | Variable                         | Required | Default        | Description                                                                                                         |
 | -------------------------------- | -------- | -------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `SECURITY__SECRET_KEY`           | No       | Auto-generated | JWT signing key. Auto-generated + persisted to `/app/data` on first boot; set only to inject from a secrets manager |
-| `SECURITY__FIELD_ENCRYPTION_KEY` | No       | Auto-generated | Fernet key for encrypting sensitive DB fields. Auto-generated + persisted on first boot                             |
+| `SECURITY__SECRET_KEY`           | Yes      | None    | JWT signing key, at least 32 characters                                                                   |
+| `SECURITY__FIELD_ENCRYPTION_KEY` | Yes      | None    | Fernet key for encrypting sensitive DB fields; keep it, since a new key cannot read what the old one stored |
 
 ### Logging Configuration
 
@@ -294,20 +293,15 @@ services:
       SERVER__CORS_ORIGINS: '["https://monitoring.yourdomain.com:9000"]'
       SERVER__CORS_CREDENTIALS: "true"
 
-      # Security. SECRET_KEY + FIELD_ENCRYPTION_KEY are auto-generated and
-      # persisted to /app/data on first boot; override only from a secrets
-      # manager. Pass them explicitly only if you manage them externally:
-      #   SECURITY__SECRET_KEY: ${SECRET_KEY}
-      #   SECURITY__FIELD_ENCRYPTION_KEY: ${FIELD_ENCRYPTION_KEY}
+      # Security (REQUIRED, at least 32 characters each; generate once and keep them)
+      SECURITY__SECRET_KEY: ${SECRET_KEY}
+      SECURITY__FIELD_ENCRYPTION_KEY: ${FIELD_ENCRYPTION_KEY}
 
       # Logging
       LOG__LEVEL: INFO
 
     ports:
       - "9000:9000"
-
-    volumes:
-      - server_data:/app/data  # Persists auto-generated secret + encryption key
 
     networks:
       - luxswirl_internal
@@ -360,8 +354,6 @@ services:
 volumes:
   timescale_data:
     driver: local
-  server_data:
-    driver: local
 
 networks:
   luxswirl_internal:
@@ -378,10 +370,11 @@ networks:
 # Database password (used by the timescaledb container + DATABASE__URL)
 POSTGRES_PASSWORD=your_secure_db_password_here
 
-# Optional: only if you inject secrets yourself instead of letting the server
-# auto-generate + persist them on first boot.
-# SECURITY__SECRET_KEY=$(python3 -c "import secrets; print(secrets.token_urlsafe(64))")
-# SECURITY__FIELD_ENCRYPTION_KEY=$(python3 -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')
+# Required server secrets. Generate each once and keep it:
+#   python3 -c "import secrets; print(secrets.token_urlsafe(64))"
+SECRET_KEY=your_generated_secret_key_here
+#   python3 -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'
+FIELD_ENCRYPTION_KEY=your_generated_fernet_key_here
 ```
 
 ### SSL/TLS Setup with Nginx
@@ -964,10 +957,9 @@ SERVER__CORS_ORIGINS: '["https://monitoring.yourdomain.com:9000"]'
 ### 4. Enable Security Features
 
 ```yaml
-# SECRET_KEY (JWT) and FIELD_ENCRYPTION_KEY are auto-generated + persisted to
-# /app/data on first boot. Override only to inject from a secrets manager:
-# SECURITY__SECRET_KEY: "<token-urlsafe-64>"
-# SECURITY__FIELD_ENCRYPTION_KEY: "<fernet-key>"
+# Both are required; the server refuses to start without them.
+SECURITY__SECRET_KEY: "<token-urlsafe-64>"
+SECURITY__FIELD_ENCRYPTION_KEY: "<fernet-key>"
 ```
 
 ### 5. Set Resource Limits

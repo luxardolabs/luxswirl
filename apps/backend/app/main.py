@@ -47,7 +47,6 @@ from app.core.logging_options import logging_options
 from app.core.openapi_operations import operation_id
 from app.core.rate_limit import limiter
 from app.core.same_origin import SameOriginMiddleware
-from app.core.secrets import resolve_runtime_secrets
 from app.core.security_headers import SecurityHeadersMiddleware, add_security_headers
 from app.core.synthetic_security import SyntheticSecurityError
 from app.core.trusted_host import AllowedHostsMiddleware
@@ -112,9 +111,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     logger.info("Environment", extra={"environment": settings.server.environment})
     logger.info("Database", extra={"database_url": settings.database.url})
     logger.info("CORS origins", extra={"cors_origins": settings.server.cors_origins})
-
-    # Resolve runtime secrets (SECRET_KEY, field_encryption_key) before any code reads them.
-    resolve_runtime_secrets(settings)
 
     # Initialize database
     await init_db()
