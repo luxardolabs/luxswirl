@@ -229,6 +229,11 @@ def reserve_key_recovery_attempt(client: str) -> CredentialAttempt | int:
     return _reserve_refusal_count((_KEY_RECOVERY_REFUSALS, client))
 
 
+def buckets_in_flight() -> int:
+    """How many buckets hold a check in flight now."""
+    return len(_in_flight)
+
+
 def reset_in_flight() -> None:
     """Forget every check in flight, as `limiter.reset()` forgets the counts."""
     _in_flight.clear()

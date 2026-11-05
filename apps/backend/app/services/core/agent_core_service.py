@@ -260,8 +260,9 @@ class AgentCoreService:
         all refused the same way, after the same digest comparison.
 
         `attempt` is this recovery's check against its address's budget: a
-        refused secret is counted, and nothing else is, so an agent recovering
-        with the right credentials never spends the budget.
+        refused secret is counted, unless the agent is known and has no secret
+        on record, and nothing else is, so an agent recovering with the right
+        credentials never spends the budget.
 
         Raises:
             RecoverySecretRefusedException: If the agent and secret do not
@@ -277,7 +278,11 @@ class AgentCoreService:
             agent = await AgentCRUD.get_by_id_with_checks(db, agent_id)
             stored = agent.recovery_secret_hash if agent is not None else None
             if agent is None or not recovery_secret_matches(stored, recovery_secret):
-                refused = True
+                # A known agent with no secret on record (a revoke voided it,
+                # or it registered before secrets) has nothing left to guess:
+                # its refusal spends no budget, so revoking a fleet behind one
+                # address never locks that address's recoveries out.
+                refused = agent is None or stored is not None
                 logger.warning(
                     "SECURITY AUDIT: Agent key recovery refused",
                     extra={
