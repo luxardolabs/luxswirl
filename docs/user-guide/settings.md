@@ -370,7 +370,7 @@ New checks inherit these; existing checks are unchanged and users can override p
 
 - **Login Rate Limit** (`security.login_rate_limit`, **string**) — password checks per IP address, at `/login` and the change-password form. Default **`10/15minutes`**.
 - **API Rate Limit** (`security.api_rate_limit`, **string**) — requests per IP address to the Prometheus `/metrics` endpoint. Default **`100/minute`**.
-- **Agent Registration Rate Limit** (`security.registration_rate_limit`, **string**) — agent registrations per IP address, refused keys included, and refused key recoveries per IP address (a recovery with the right registration key and recovery secret is not counted). Default **`5/hour`**.
+- **Agent Registration Rate Limit** (`security.registration_rate_limit`, **string**) — agent registrations per IP address, refused keys included, and refused key recoveries per IP address (a recovery with the right registration key and recovery secret is not counted; while it is being checked it holds room, so recoveries past the limit at the same moment wait two seconds). Default **`5/hour`**.
 
 > Rate limits are strings such as `10/15minutes` or `100/minute`, not numbers; join several with `;`. A change applies from the next request, and starts every client's count for that limit afresh. Each default is the matching `SECURITY__` environment setting, so a reset returns to it. A value that is not a limit, or that allows no requests, is refused. A stored value that is not a limit (one saved before limits were checked) is ignored, and the environment's limit applies: its card shows the limit in effect, marked **Not applied** with the ignored value named, and Reset or Save puts a valid one in its place.
 

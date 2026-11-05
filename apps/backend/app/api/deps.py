@@ -93,9 +93,9 @@ async def require_recovery_registration_key(
 
     Only refused recoveries spend the registration budget of the caller's
     address (`reserve_key_recovery_attempt`): past it, the recovery answers 429
-    without checking anything. A refused registration key keeps its count
-    here; core checks the agent's own recovery secret, the other half, and
-    gives the count back unless it refuses it.
+    without checking anything. A refused registration key is counted here;
+    core checks the agent's own recovery secret, the other half, and settles
+    the attempt.
     """
     attempt = reserve_key_recovery_attempt(client_ip_from_request(request))
     if isinstance(attempt, int):
@@ -104,12 +104,19 @@ async def require_recovery_registration_key(
             detail="Too many refused key recoveries",
             headers={"Retry-After": str(attempt)},
         )
-    await verify_recovery_registration_key(agent_id, authorization, db)
+    try:
+        await verify_recovery_registration_key(agent_id, authorization, db)
+    except HTTPException:
+        attempt.settle(refused=True)
+        raise
+    except BaseException:
+        attempt.settle(refused=False)
+        raise
     return attempt
 
 
 # A key recovery authenticated by the registration key (path parameter
-# agent_id), and its count, for core to give back once the secret is checked.
+# agent_id), and its attempt, for core to settle once the secret is checked.
 RecoveryRegistrationKeyRequired = Annotated[
     CredentialAttempt, Depends(require_recovery_registration_key)
 ]
