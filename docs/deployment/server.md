@@ -78,7 +78,7 @@ services:
     restart: unless-stopped
 
     # Apply DB migrations on boot, then start uvicorn.
-    command: ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 9000"]
+    command: ["sh", "-c", "alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port 9000"]
 
     depends_on:
       timescaledb:
@@ -274,7 +274,7 @@ services:
     restart: unless-stopped
 
     # Apply DB migrations on boot, then start uvicorn.
-    command: ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 9000"]
+    command: ["sh", "-c", "alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port 9000"]
 
     depends_on:
       timescaledb:
