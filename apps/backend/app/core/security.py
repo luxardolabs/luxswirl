@@ -425,8 +425,7 @@ async def authenticate_heartbeat(
     instead, with a warning to upgrade it. Either way each credential refused
     counts against `client` for this agent alone
     (`reserve_pending_heartbeat_attempt`), past the registration budget the
-    heartbeat answers 429 without checking it, and a right one is given back
-    once checked.
+    heartbeat answers 429 without checking it, and a right one leaves no count.
     """
     if agent.api_key_hash:
         try:
@@ -485,8 +484,7 @@ async def authenticate_heartbeat(
                 extra={"agent_id": str(agent.id)},
             )
     finally:
-        if not refused:
-            attempt.release()
+        attempt.settle(refused=refused)
     return False
 
 

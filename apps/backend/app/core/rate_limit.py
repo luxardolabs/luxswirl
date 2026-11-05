@@ -8,6 +8,7 @@ See core.request_helpers.client_ip_from_request for the trust model.
 """
 
 import hashlib
+import itertools
 import time
 from dataclasses import dataclass, replace
 from uuid import UUID
@@ -111,9 +112,11 @@ def registration_rate_limit() -> str:
 
 
 # The buckets counting refused credentials, where the right credential is
-# presented over and over and must never run out. Each check is counted before
-# the credential is read and given back once it is not refused, so concurrent
-# guesses cannot all pass a count none has made; a refusal keeps its count.
+# presented over and over and must never run out. Only a refusal is counted in
+# the limit's window. A check still in flight is held apart, in this process,
+# until it is settled: a burst of concurrent guesses cannot all pass a count
+# none has made yet, and right credentials in flight together never spend the
+# window.
 #
 # A pending agent's heartbeat: its recovery secret, or the shared registration
 # key from an agent build that sends no secret. A pending agent heartbeats with
@@ -127,68 +130,99 @@ _HEARTBEAT_PENDING_REFUSALS = "heartbeat-pending-credential-refusals"
 # guess cannot open a fresh budget by naming another agent.
 _KEY_RECOVERY_REFUSALS = "key-recovery-credential-refusals"
 
+# Checks in flight, per bucket: the monotonic time each began. One a request
+# never settles (it was cancelled, or failed before its credential was read)
+# stops holding room after IN_FLIGHT_SECONDS.
+IN_FLIGHT_SECONDS = 60.0
+_in_flight: dict[tuple[str, ...], dict[int, float]] = {}
+_next_attempt = itertools.count()
+
+# The wait answered when the window still has room but checks in flight fill
+# it: they settle in about a request's time.
+BUSY_RETRY_AFTER_SECONDS = 2
+
+
+def _held(keys: tuple[str, ...], now: float) -> dict[int, float]:
+    """The bucket's checks in flight, those past IN_FLIGHT_SECONDS dropped."""
+    held = {
+        n: began
+        for n, began in _in_flight.get(keys, {}).items()
+        if now - began < IN_FLIGHT_SECONDS
+    }
+    _in_flight[keys] = held
+    return held
+
 
 @dataclass(frozen=True)
 class CredentialAttempt:
-    """One credential check, already counted in every part of the limit.
-    Concurrent checks with the right credential can see each other's counts,
-    so the right credential goes free only once checked."""
+    """One credential check in flight, holding room in its bucket until it is
+    settled. Settled once; a second settle does nothing."""
 
     limits: tuple[RateLimitItem, ...]
     keys: tuple[str, ...]
+    number: int
 
-    def release(self) -> None:
-        """Give the count back: the credential was not refused.
-
-        A window that ended since the count was made holds nothing of it, so
-        nothing is given back there (the next window never starts below zero).
-        """
-        storage = limiter.limiter.storage
-        for limit in self.limits:
-            key = limit.key_for(*self.keys)
-            if storage.get(key) > 0:
-                storage.incr(key, limit.get_expiry(), amount=-1)
+    def settle(self, *, refused: bool) -> None:
+        """End the check: a refusal is counted in every part of the limit's
+        window; a credential not refused leaves no trace."""
+        held = _in_flight.get(self.keys, {})
+        if held.pop(self.number, None) is None:
+            return
+        if not held:
+            _in_flight.pop(self.keys, None)
+        if refused:
+            for limit in self.limits:
+                limiter.limiter.hit(limit, *self.keys)
 
 
 def _reserve_refusal_count(keys: tuple[str, ...]) -> CredentialAttempt | int:
-    """Count one credential check under `keys`, in every part of the
+    """Hold room for one credential check under `keys`, in every part of the
     registration limit, before the credential is read.
 
-    Returns the attempt, to `release()` unless the credential is refused, or,
-    when any part of the limit is spent, the seconds to wait (and counts
-    nothing).
+    Returns the attempt, to `settle()` once the credential is checked, or the
+    seconds to wait (holding nothing): until the window ends when its refusals
+    alone spend a part of the limit, else BUSY_RETRY_AFTER_SECONDS when checks
+    in flight fill the room left.
     """
     limits = tuple(parse_many(registration_rate_limit()))
-    spent = [limit for limit in limits if not limiter.limiter.hit(limit, *keys)]
-    attempt = CredentialAttempt(limits=limits, keys=keys)
-    if not spent:
-        return attempt
-    attempt.release()
-    # A window that ended since the refused count has a reset time already
-    # past, so the wait is at least a second.
-    return max(
-        max(
-            1,
-            int(
-                limiter.limiter.get_window_stats(limit, *keys).reset_time - time.time()
-            ),
-        )
-        for limit in spent
-    )
+    now = time.monotonic()
+    held = _held(keys, now)
+    spent: list[int] = []
+    busy = False
+    for limit in limits:
+        reset_time, remaining = limiter.limiter.get_window_stats(limit, *keys)
+        if remaining <= 0:
+            # A window that ended since the last refusal has a reset time
+            # already past, so the wait is at least a second.
+            spent.append(max(1, int(reset_time - time.time())))
+        elif remaining <= len(held):
+            busy = True
+    if spent:
+        return max(spent)
+    if busy:
+        return BUSY_RETRY_AFTER_SECONDS
+    number = next(_next_attempt)
+    held[number] = now
+    return CredentialAttempt(limits=limits, keys=keys, number=number)
 
 
 def reserve_pending_heartbeat_attempt(
     client: str, agent_id: UUID
 ) -> CredentialAttempt | int:
-    """Count one credential check on pending `agent_id`'s heartbeat from
-    `client` (see `_reserve_refusal_count`)."""
+    """Hold room for one credential check on pending `agent_id`'s heartbeat
+    from `client` (see `_reserve_refusal_count`)."""
     return _reserve_refusal_count((_HEARTBEAT_PENDING_REFUSALS, client, str(agent_id)))
 
 
 def reserve_key_recovery_attempt(client: str) -> CredentialAttempt | int:
-    """Count one key recovery's credential checks from `client` (see
+    """Hold room for one key recovery's credential checks from `client` (see
     `_reserve_refusal_count`)."""
     return _reserve_refusal_count((_KEY_RECOVERY_REFUSALS, client))
+
+
+def reset_in_flight() -> None:
+    """Forget every check in flight, as `limiter.reset()` forgets the counts."""
+    _in_flight.clear()
 
 
 class KeyedLimiter:

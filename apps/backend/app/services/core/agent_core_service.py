@@ -259,9 +259,9 @@ class AgentCoreService:
         before secrets existed (no hash), a missing secret and a wrong one are
         all refused the same way, after the same digest comparison.
 
-        `attempt` is this recovery's count against its address's budget: a
-        refused secret keeps it, and anything else gives it back, so an agent
-        recovering with the right credentials never spends the budget.
+        `attempt` is this recovery's check against its address's budget: a
+        refused secret is counted, and nothing else is, so an agent recovering
+        with the right credentials never spends the budget.
 
         Raises:
             RecoverySecretRefusedException: If the agent and secret do not
@@ -306,8 +306,7 @@ class AgentCoreService:
                 )
             _, new_key = await AgentCoreService.regenerate_agent_key(db, agent_id)
         finally:
-            if not refused:
-                attempt.release()
+            attempt.settle(refused=refused)
         logger.warning(
             "SECURITY AUDIT: Agent key recovered",
             extra={"event": "agent_key_recovered", "agent_id": str(agent_id)},
