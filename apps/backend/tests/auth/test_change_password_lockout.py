@@ -28,6 +28,8 @@ from app.services.core.auth_core_service import AuthCoreService
 from fixtures.factories import make_user
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import func, select
+from sqlalchemy.exc import DBAPIError
+from sqlalchemy.orm.exc import StaleDataError
 
 pytestmark = pytest.mark.integration
 
@@ -240,3 +242,57 @@ async def test_the_web_forms_commit_the_count_and_keep_the_session(
             select(func.count()).select_from(Session).where(Session.user_id == uid)
         )
     assert sessions == 1
+
+
+async def _request(auth: AuthCoreService, s, token: str, uid, current: str) -> str:
+    """One change-password request as the app runs it: the auth dependency's
+    verify_session dirties the session row, then the change, then the commit.
+    Returns the outcome, or the SQLSTATE of a database error."""
+    try:
+        assert await auth.verify_session(s, token) is not None
+        outcome = await _change(auth, s, uid, current) or "changed"
+        await s.commit()
+    except DBAPIError as exc:
+        await s.rollback()
+        return f"db-error:{getattr(exc.orig, 'sqlstate', '')}"
+    except StaleDataError:
+        # The guess's own session was ended by the owner's change: its
+        # last-activity write finds no row. Not a lock cycle.
+        await s.rollback()
+        return "session-ended"
+    return outcome
+
+
+async def test_a_guess_from_another_session_does_not_abort_the_owners_change(
+    worker_db, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The owner changes the password from session A while a stolen cookie
+    (session B) sends a wrong guess. The guess's lock wait must not hold
+    session B's row, which the owner's change deletes with every session:
+    that cycle was a deadlock that rolled the owner's change back."""
+    uid = await _seed(worker_db, "cp-dl")
+    tokens = []
+    for _ in range(2):
+        async with worker_db() as s:
+            _, token = await AuthCoreService().create_session(s, uid)
+            await s.commit()
+        tokens.append(token)
+    real = AuthCoreService.validate_password_complexity
+
+    async def slow(db, password: str):  # the owner holds the locks a while
+        await asyncio.sleep(1.5)
+        return await real(db, password)
+
+    monkeypatch.setattr(
+        AuthCoreService, "validate_password_complexity", staticmethod(slow)
+    )
+    auth = AuthCoreService()
+    async with worker_db() as s1, worker_db() as s2:
+        owner = asyncio.create_task(_request(auth, s1, tokens[0], uid, RIGHT))
+        await asyncio.sleep(0.3)
+        guess = asyncio.create_task(_request(auth, s2, tokens[1], uid, "wrong"))
+        owner_out, guess_out = await asyncio.gather(owner, guess)
+    assert owner_out == "changed", owner_out
+    assert not guess_out.startswith("db-error"), guess_out
+    user = await _stored(worker_db, "cp-dl")
+    assert AuthCoreService.verify_password(NEW, user.password_hash)
