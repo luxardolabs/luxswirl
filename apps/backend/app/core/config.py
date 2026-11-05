@@ -190,7 +190,8 @@ class SecuritySettings(BaseSettings):
         default="600/minute",
         description=(
             "Rate limit per IP on the agent-authenticated routes (heartbeat, "
-            "reports, check list, job start and results, artifacts), one budget "
+            "reports, check list, job start and results, artifacts) and on key "
+            "recovery, one budget "
             "per key-checking dependency. Each request bcrypt-checks the "
             "agent's key, so this bounds key guessing; it sits well above real "
             "agent traffic (a report every 10 s, plus polling) so many agents "
@@ -209,8 +210,8 @@ class SecuritySettings(BaseSettings):
         default="5/hour",
         description=(
             "Default of the security.registration_rate_limit setting: agent "
-            "registrations and key recoveries per IP, refused keys included "
-            "(count/period)"
+            "registrations per IP, refused keys included, and refused key "
+            "recoveries per IP (count/period)"
         ),
     )
     password_reset_rate_limit: str = Field(
