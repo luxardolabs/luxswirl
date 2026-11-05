@@ -196,7 +196,7 @@ ______________________________________________________________________
 - ✅ Username + password (bcrypt hashed)
 - ✅ Session-based (secure cookies)
 - ✅ Per-IP login rate limiting (default `10/15minutes`) to slow brute-force attempts
-- ✅ Per-account lockout (default: 5 failed attempts → 30-minute lock); both values configurable in Settings → Security
+- ✅ Per-account lockout (default: 5 failed attempts → 30-minute lock); both values configurable in Settings → Security; a wrong current password on a password change counts toward it
 
 **NOT supported**:
 

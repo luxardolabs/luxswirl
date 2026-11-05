@@ -467,6 +467,8 @@ Use the reset-password action to set a new password; **Must Change** defaults to
 
 After too many failed login attempts (see `security.max_failed_attempts`), an account locks for `security.account_lock_duration_minutes`. An admin can unlock it immediately with the unlock action.
 
+A wrong current password on a password change (the change-password page, My Account, or the forced change at first sign-in) counts as a failed sign-in, from the same budget. While the account is locked, a password change is refused with the same message as a wrong current password; on an unlocked account the right current password resets the count, as a successful sign-in does. A password change queues with the account's sign-ins and gets the same 429 below. A lock ends no session: a user already signed in stays signed in, whether the lock came from a sign-in or a password change.
+
 Sign-ins for one username are judged one at a time, so guesses sent in parallel each count and none is checked once the account locks. A sign-in queued more than 3 seconds behind others for the same username is refused with 429 (`LOGIN_BUSY`); trying again a moment later works.
 
 ### Deleting a User
@@ -543,7 +545,7 @@ ______________________________________________________________________
 
 ### Account Locked
 
-After repeated failed logins, the account locks for `security.account_lock_duration_minutes`. An admin can unlock it immediately from **Settings → User Management** using the unlock action.
+After repeated failed logins or wrong current passwords on a password change, the account locks for `security.account_lock_duration_minutes`. An admin can unlock it immediately from **Settings → User Management** using the unlock action.
 
 ______________________________________________________________________
 
