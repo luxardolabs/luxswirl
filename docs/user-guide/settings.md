@@ -363,7 +363,7 @@ New checks inherit these; existing checks are unchanged and users can override p
 #### Session & Authentication
 
 - **Session Lifetime (days)** (`security.session_lifetime_days`, int) — Default **7**, range 1–90.
-- **Maximum Failed Login Attempts** (`security.max_failed_attempts`, int) — Default **5**, range 3–10.
+- **Maximum Failed Login Attempts** (`security.max_failed_attempts`, int) — Default **5**, range 3–10. A wrong current password on a password change counts as a failed login.
 - **Account Lock Duration (minutes)** (`security.account_lock_duration_minutes`, int) — Default **30**, range 5–1440.
 
 #### Rate Limiting
