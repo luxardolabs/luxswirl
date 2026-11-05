@@ -307,7 +307,7 @@ services:
     container_name: luxswirl_server
     restart: unless-stopped
     # Runs DB migrations on boot, then starts uvicorn.
-    command: ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 9000"]
+    command: ["sh", "-c", "alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port 9000"]
     depends_on:
       timescaledb:
         condition: service_healthy

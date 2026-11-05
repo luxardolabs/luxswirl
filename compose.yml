@@ -41,6 +41,7 @@ services:
     volumes:
       - luxswirl_db_data:/var/lib/postgresql/data
     restart: unless-stopped
+    oom_score_adj: -500
     networks:
       - luxswirl-network
     healthcheck:
@@ -52,7 +53,7 @@ services:
   luxswirl_server:
     image: ${SERVER_IMAGE:-ghcr.io/luxardolabs/luxswirl-backend}:${TAG:?set TAG in .env.${ENV}}
     container_name: luxswirl_server${STACK_SUFFIX:-}
-    command: ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 9000"]
+    command: ["sh", "-c", "alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port 9000"]
     # Internal port only - exposed via nginx
     expose:
       - "9000"
@@ -68,6 +69,7 @@ services:
     env_file:
       - .env.${ENV:?set ENV in .env.<env> — it names the file to load}
     restart: unless-stopped
+    oom_score_adj: -500
     networks:
       - luxswirl-network
     depends_on:
@@ -101,6 +103,7 @@ services:
     env_file:
       - .env.${ENV:?set ENV in .env.<env> — it names the file to load}
     restart: unless-stopped
+    oom_score_adj: -500
     networks:
       - luxswirl-network
     depends_on:
@@ -123,6 +126,7 @@ services:
       luxswirl_server:
         condition: service_healthy
     restart: unless-stopped
+    oom_score_adj: -500
 
   # ── profile: standalone-agent ────────────────────────────────────────────
   # An agent-only node: no server, no database, reporting to a remote LuxSwirl.
@@ -152,6 +156,7 @@ services:
       - LUXSWIRL_SERVER_URL=${LUXSWIRL_SERVER_URL:-}
     network_mode: host
     restart: always
+    oom_score_adj: -500
 
   # ── profile: chronosphere ────────────────────────────────────────────────
   # Optional: ship LuxSwirl's Prometheus metrics to a Chronosphere account.
@@ -176,6 +181,7 @@ services:
       - ENVIRONMENT=${CHRONOSPHERE_ENVIRONMENT:-prod}
       - PLATFORM=luxswirl
     restart: unless-stopped
+    oom_score_adj: -500
     networks:
       - luxswirl-network
     depends_on:
@@ -222,6 +228,7 @@ services:
       timeout: 3s
       retries: 15
     restart: "no"
+    oom_score_adj: 500
 
   tests:
     profiles: ["test"]
@@ -250,6 +257,7 @@ services:
     # it does not exit when brought up via `up`.
     command: ["tail", "-f", "/dev/null"]
     restart: "no"
+    oom_score_adj: 500
 
 volumes:
   luxswirl_db_data:
