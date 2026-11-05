@@ -6,7 +6,7 @@ from collections.abc import Sequence
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import case, func, or_, select, text, update
+from sqlalchemy import ColumnElement, case, func, or_, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.datetime_utils import utc_now
@@ -103,25 +103,59 @@ class UserCRUD:
         transaction's end.
         """
         async with db.begin_nested():
-            await db.execute(
-                select(func.set_config("lock_timeout", f"{lock_wait_ms}ms", True))
-            )
-            await db.execute(
-                select(
-                    func.pg_advisory_xact_lock(
-                        _LOGIN_LOCK_CLASS, func.hashtext(username)
-                    )
-                )
-            )
-            result = await db.execute(
-                select(User)
-                .where(User.username == username)
-                .with_for_update()
-                .execution_options(populate_existing=True)
-            )
-            user = result.scalar_one_or_none()
+            await UserCRUD._wait_at_most(db, lock_wait_ms)
+            await UserCRUD._queue_on_username(db, username)
+            user = await UserCRUD._locked_where(db, User.username == username)
             await db.execute(text("SET LOCAL lock_timeout = DEFAULT"))
         return user
+
+    @staticmethod
+    async def get_by_id_for_login(
+        db: AsyncSession, user_id: UUID, *, lock_wait_ms: int
+    ) -> User | None:
+        """The user a signed-in user's current-password check judges, taken
+        under the same locks a sign-in for their username takes, in the same
+        order (the username's advisory lock, then the row), with the same
+        `lock_wait_ms`. A sign-in and a password change for one account are
+        then judged one at a time against the committed failure count and
+        lock, from one budget. The row is re-read by id under its lock, so a
+        rename between the two reads still yields this user, serialised by
+        the row lock every sign-in also takes."""
+        async with db.begin_nested():
+            await UserCRUD._wait_at_most(db, lock_wait_ms)
+            username = await db.scalar(select(User.username).where(User.id == user_id))
+            user = None
+            if username is not None:
+                await UserCRUD._queue_on_username(db, username)
+                user = await UserCRUD._locked_where(db, User.id == user_id)
+            await db.execute(text("SET LOCAL lock_timeout = DEFAULT"))
+        return user
+
+    @staticmethod
+    async def _wait_at_most(db: AsyncSession, lock_wait_ms: int) -> None:
+        await db.execute(
+            select(func.set_config("lock_timeout", f"{lock_wait_ms}ms", True))
+        )
+
+    @staticmethod
+    async def _queue_on_username(db: AsyncSession, username: str) -> None:
+        await db.execute(
+            select(
+                func.pg_advisory_xact_lock(_LOGIN_LOCK_CLASS, func.hashtext(username))
+            )
+        )
+
+    @staticmethod
+    async def _locked_where(
+        db: AsyncSession, condition: ColumnElement[bool]
+    ) -> User | None:
+        result = await db.execute(
+            select(User)
+            .where(condition)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        return result.scalar_one_or_none()
 
     @staticmethod
     async def get_by_id_for_update(db: AsyncSession, user_id: UUID) -> User | None:

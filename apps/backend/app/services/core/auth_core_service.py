@@ -5,6 +5,7 @@ Auth Service - handles authentication, session management, and security.
 import hashlib
 import secrets
 from datetime import timedelta
+from typing import Any
 from uuid import UUID
 
 import bcrypt
@@ -34,6 +35,15 @@ logger = get_logger("luxswirl.services.auth")
 
 # PostgreSQL lock_not_available: a row lock not granted within lock_timeout.
 _LOCK_NOT_AVAILABLE = "55P03"
+
+
+def _lock_wait_ran_out(exc: DBAPIError) -> bool:
+    """Whether `exc` is PostgreSQL's lock_not_available: a sign-in lock wait
+    that ran past LOGIN_LOCK_WAIT_MS."""
+    return _LOCK_NOT_AVAILABLE in (
+        getattr(exc.orig, "sqlstate", None),
+        getattr(exc.orig, "pgcode", None),
+    )
 
 
 class AuthCoreService:
@@ -207,10 +217,7 @@ class AuthCoreService:
                 db, username, lock_wait_ms=self.LOGIN_LOCK_WAIT_MS
             )
         except DBAPIError as exc:
-            if _LOCK_NOT_AVAILABLE not in (
-                getattr(exc.orig, "sqlstate", None),
-                getattr(exc.orig, "pgcode", None),
-            ):
+            if not _lock_wait_ran_out(exc):
                 raise
             # Security: the refusal costs a bcrypt check like any other answer.
             self.verify_password(password, self._FAKE_PASSWORD_HASH)
@@ -224,6 +231,41 @@ class AuthCoreService:
                 },
             )
             raise LoginBusyException() from exc
+
+    async def _count_failure(
+        self,
+        db: AsyncSession,
+        user: User,
+        security_settings: dict[str, Any],
+        *,
+        client_ip: str | None = None,
+        user_agent: str | None = None,
+    ) -> int:
+        """Count one wrong password where it is stored, locking the account at
+        the limit (DB settings): a concurrent failure waits and adds to it.
+        Logs the lock when this failure reached it; returns the limit."""
+        max_attempts: int = security_settings["max_failed_attempts"]
+        lock_duration = security_settings["account_lock_duration_minutes"]
+        await UserCRUD.record_failed_login(
+            db,
+            user,
+            max_attempts=max_attempts,
+            lock_until=utc_now() + timedelta(minutes=lock_duration),
+        )
+        if user.failed_login_attempts >= max_attempts:
+            logger.warning(
+                "Account locked due to too many failed attempts",
+                extra={
+                    "event": "auth.account_locked",
+                    "locked_until": str(user.locked_until),
+                    "lock_duration_minutes": lock_duration,
+                    "username": user.username,
+                    "user_id": str(user.id),
+                    "client_ip": client_ip,
+                    "user_agent": user_agent,
+                },
+            )
+        return max_attempts
 
     async def authenticate_user(
         self,
@@ -316,29 +358,13 @@ class AuthCoreService:
 
         # Verify password
         if not self.verify_password(password, user.password_hash):
-            # Count the failure where it is stored, locking the account at the
-            # limit (DB settings): a concurrent failure waits and adds to it.
-            max_attempts = security_settings["max_failed_attempts"]
-            lock_duration = security_settings["account_lock_duration_minutes"]
-            await UserCRUD.record_failed_login(
+            max_attempts = await self._count_failure(
                 db,
                 user,
-                max_attempts=max_attempts,
-                lock_until=utc_now() + timedelta(minutes=lock_duration),
+                security_settings,
+                client_ip=client_ip,
+                user_agent=user_agent,
             )
-            if user.failed_login_attempts >= max_attempts:
-                logger.warning(
-                    "Account locked due to too many failed attempts",
-                    extra={
-                        "event": "auth.account_locked",
-                        "locked_until": str(user.locked_until),
-                        "lock_duration_minutes": lock_duration,
-                        "username": username,
-                        "client_ip": client_ip,
-                        "user_agent": user_agent,
-                    },
-                )
-
             logger.warning(
                 "Failed login attempt",
                 extra={
@@ -576,15 +602,61 @@ class AuthCoreService:
         """
         # Core takes an id and refetches — the web layer's DTO never enters core, so the
         # row mutated below is always a live, session-attached ORM object.
-        # Locked before the session purge, so a sign-in with the old password
-        # waits for this change and is then checked against the new hash.
-        user = await UserCRUD.get_by_id_for_update(db, user_id)
+        # The current password is checked as a sign-in checks a password, under
+        # the same locks (so a sign-in with the old password waits for this
+        # change and is then checked against the new hash) and on the same
+        # failed-attempt budget: a stolen session cannot guess past the lockout.
+        try:
+            user = await UserCRUD.get_by_id_for_login(
+                db, user_id, lock_wait_ms=self.LOGIN_LOCK_WAIT_MS
+            )
+        except DBAPIError as exc:
+            if not _lock_wait_ran_out(exc):
+                raise
+            # Security: the refusal costs a bcrypt check like any other answer.
+            self.verify_password(current_password, self._FAKE_PASSWORD_HASH)
+            logger.warning(
+                "Password change refused: sign-ins for the account are queued",
+                extra={"event": "auth.password_change.busy", "user_id": str(user_id)},
+            )
+            raise LoginBusyException() from exc
         if user is None:
             raise ValueError("User not found")
 
-        # Verify current password
-        if not self.verify_password(current_password, user.password_hash):
+        # A locked or inactive account is refused as a wrong password is, after
+        # one bcrypt check, as sign-in refuses it: the answer says nothing more.
+        if user.is_locked or not user.is_active:
+            self.verify_password(current_password, self._FAKE_PASSWORD_HASH)
+            logger.warning(
+                "Password change refused for locked or inactive account",
+                extra={
+                    "event": "auth.password_change.refused",
+                    "locked_until": str(user.locked_until),
+                    "is_active": user.is_active,
+                    "username": user.username,
+                    "user_id": str(user.id),
+                },
+            )
             raise ValueError("Current password is incorrect")
+
+        if not self.verify_password(current_password, user.password_hash):
+            security_settings = await SettingsCoreService.get_security_settings(db)
+            max_attempts = await self._count_failure(db, user, security_settings)
+            logger.warning(
+                "Password change with wrong current password",
+                extra={
+                    "event": "auth.password_change.bad_password",
+                    "attempt": user.failed_login_attempts,
+                    "max_attempts": max_attempts,
+                    "username": user.username,
+                    "user_id": str(user.id),
+                },
+            )
+            raise ValueError("Current password is incorrect")
+
+        # The right password resets the count, as a successful sign-in does.
+        user.failed_login_attempts = 0
+        user.locked_until = None
 
         # Validate new password complexity
         valid, error_message = await self.validate_password_complexity(db, new_password)
