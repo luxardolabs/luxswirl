@@ -121,7 +121,7 @@ volumes:
     driver: local
 ```
 
-> `POSTGRES_PASSWORD`, `SECRET_KEY` and `FIELD_ENCRYPTION_KEY` are read from a `.env` file (or the shell). The server refuses to start without `SECURITY__SECRET_KEY` and `SECURITY__FIELD_ENCRYPTION_KEY`; see [.env File](#env-file-production-secrets) for how to generate them. Keep the field-encryption key: a new one cannot read the check credentials stored under the old one.
+> `POSTGRES_PASSWORD`, `SECRET_KEY` and `FIELD_ENCRYPTION_KEY` are read from a `.env` file (or the shell). The server refuses to start without `SECURITY__SECRET_KEY` and `SECURITY__FIELD_ENCRYPTION_KEY`; see [.env File](#env-file-production-secrets) for how to generate them. Keep the field-encryption key: a new one cannot read the check credentials stored under the old one. A server that generated its own keys keeps them in its data directory (`data/server/secret_key` and `data/server/field_encryption_key` beside the compose file, or `/app/data` on its volume): set the two settings from those files, never new values. A field-encryption key other than the one the data was stored under refuses to read it.
 
 ### 2. Start Services
 
@@ -203,9 +203,9 @@ SERVER__CORS_ORIGINS: '["https://server.example.com:9000", "https://monitoring.e
 
 ### Security Settings
 
-| Variable                         | Required | Default        | Description                                                                                                         |
-| -------------------------------- | -------- | -------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `SECURITY__SECRET_KEY`           | Yes      | None    | JWT signing key, at least 32 characters                                                                   |
+| Variable                         | Required | Default | Description                                                                                                 |
+| -------------------------------- | -------- | ------- | ----------------------------------------------------------------------------------------------------------- |
+| `SECURITY__SECRET_KEY`           | Yes      | None    | JWT signing key, at least 32 characters                                                                     |
 | `SECURITY__FIELD_ENCRYPTION_KEY` | Yes      | None    | Fernet key for encrypting sensitive DB fields; keep it, since a new key cannot read what the old one stored |
 
 ### Logging Configuration

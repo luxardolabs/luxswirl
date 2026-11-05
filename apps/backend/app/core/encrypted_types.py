@@ -4,6 +4,8 @@ Custom SQLAlchemy types for field-level encryption.
 Provides transparent encryption/decryption for sensitive database fields.
 """
 
+import base64
+import binascii
 import json
 from functools import lru_cache
 from typing import Any
@@ -20,6 +22,38 @@ logger = get_logger("luxswirl.models.encrypted")
 
 # What an EncryptedJSON column holds: a JSON object or array.
 JsonContainer = dict[str, Any] | list[Any]
+
+
+# A Fernet token: version byte 0x80, then a timestamp, IV, ciphertext and HMAC
+# (57 bytes at the least), url-safe base64.
+_FERNET_VERSION = 0x80
+_FERNET_MIN_BYTES = 57
+
+
+def _is_fernet_token(value: str) -> bool:
+    """Whether ``value`` is shaped as a Fernet token (a value some key encrypted)."""
+    try:
+        raw = base64.urlsafe_b64decode(value.encode())
+    except ValueError, binascii.Error:
+        return False
+    return len(raw) >= _FERNET_MIN_BYTES and raw[0] == _FERNET_VERSION
+
+
+def _refuse_wrong_key() -> None:
+    """A stored token the configured key cannot decrypt: it was encrypted under
+    another key. Reading it as plaintext would hand its ciphertext on as the
+    value, and the next save would lose it, so the read fails loudly.
+
+    Raises:
+        DatabaseException: Always.
+    """
+    logger.error(
+        "An encrypted field does not decrypt under the configured "
+        "SECURITY__FIELD_ENCRYPTION_KEY: it was encrypted under another key"
+    )
+    raise DatabaseException(
+        "An encrypted field does not decrypt under the configured key"
+    )
 
 
 @lru_cache(maxsize=4)
@@ -146,8 +180,10 @@ class EncryptedString(TypeDecorator[str]):
             decrypted = fernet.decrypt(value.encode())
             return decrypted.decode()
         except InvalidToken:
-            # Not encrypted - return plaintext as-is
-            # This handles migration from plaintext to encrypted
+            # A value stored before encryption reads as it is; one encrypted
+            # under another key is refused.
+            if _is_fernet_token(value):
+                _refuse_wrong_key()
             return value
         # swallowed-exceptions: a row we cannot decrypt still has to load —
         # failing the read would take out every page that touches the table,
@@ -237,7 +273,10 @@ class EncryptedJSON(TypeDecorator[JsonContainer]):
             # Try to decrypt (will fail if plaintext JSON)
             decrypted = fernet.decrypt(value.encode())
         except InvalidToken:
-            # Not encrypted - parse as plaintext JSON (migration support)
+            # JSON stored before encryption reads as it is; a value encrypted
+            # under another key is refused.
+            if _is_fernet_token(value):
+                _refuse_wrong_key()
             return _json_container(value)
         # swallowed-exceptions: a row we cannot decrypt still has to load —
         # failing the read would take out every page that touches the table,
