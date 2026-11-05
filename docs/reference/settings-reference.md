@@ -85,11 +85,11 @@ Authentication, rate limiting, password policy, and SSRF network protection. The
 
 #### Session & Authentication
 
-| Key                                      | Default | Type | Allowed / Validation | Description                                                      |
-| ---------------------------------------- | ------- | ---- | -------------------- | ---------------------------------------------------------------- |
-| `security.session_lifetime_days`         | 7       | int  | 1–90                 | How long users stay logged in before requiring re-authentication |
-| `security.max_failed_attempts`           | 5       | int  | 3–10                 | Number of failed login attempts before account locks             |
-| `security.account_lock_duration_minutes` | 30      | int  | 5–1440               | How long accounts remain locked after too many failed attempts   |
+| Key                                      | Default | Type | Allowed / Validation | Description                                                                                 |
+| ---------------------------------------- | ------- | ---- | -------------------- | ------------------------------------------------------------------------------------------- |
+| `security.session_lifetime_days`         | 7       | int  | 1–90                 | How long users stay logged in before requiring re-authentication                            |
+| `security.max_failed_attempts`           | 5       | int  | 3–10                 | Failed sign-ins, and wrong current passwords on a password change, before the account locks |
+| `security.account_lock_duration_minutes` | 30      | int  | 5–1440               | How long accounts remain locked after too many failed attempts                              |
 
 #### Rate Limiting
 
