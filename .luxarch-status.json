@@ -1,6 +1,6 @@
 {
   "guard": "luxarch",
-  "guard_version": "0.339.5",
+  "guard_version": "0.343.0",
   "repo": "/repo",
   "targets": [
     {
@@ -1142,13 +1142,13 @@
         },
         {
           "rule": "fw.mutating_route_authenticated",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.84.0",
-          "violations": 1,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
-          "fix": "Add an authenticating dependency (one of [auth].deps, an enforcing Security scheme, a dependency that refuses the anonymous caller with 401/403, or an Annotated alias resolving to one) and scope the object to the caller. A dependency that authenticates in a way luxarch cannot read (it lives in another package, or refuses through an exception handler) is declared in [auth].deps. If the route is genuinely public (login/oauth/register/logout, a webhook verified by signature, a public form), record it in [allowlist].auth_public = [{ function|path, evidence }].",
+          "fix": "",
           "example": ""
         },
         {
@@ -1551,7 +1551,7 @@
           "rule": "fw.credential_routes_limited",
           "status": "FAIL",
           "since": "0.215.0",
-          "violations": 9,
+          "violations": 8,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
@@ -1769,13 +1769,13 @@
         },
         {
           "rule": "fw.logout_revokes_server_side",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.288.0",
-          "violations": 1,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
-          "fix": "Revoke on the server, not only in the browser: give the user a `sessions_valid_after` timestamp, set it to now at logout, and have the auth dependency (which already loads the user) refuse a token issued before it. That signs out everywhere with no extra I/O. Use a per-token denylist only if signing out one device alone is a product need. Prove it with the shipped replay test, which this rule then credits whatever the revocation's shape: `luxarch --emit logout-revokes > tests/test_logout_revokes.py`, listing the path in LOGOUT_PATHS. See --doc FLEET-AUTH-SESSION-STANDARD \u00a72.1.",
+          "fix": "",
           "example": ""
         },
         {
@@ -1848,6 +1848,39 @@
           "rule": "fw.no_concurrent_session_use",
           "status": "PASS",
           "since": "0.328.0",
+          "violations": 0,
+          "deferred": false,
+          "inert": false,
+          "inert_reason": "",
+          "fix": "",
+          "example": ""
+        },
+        {
+          "rule": "fw.js_attributes_take_json",
+          "status": "FAIL",
+          "since": "0.340.0",
+          "violations": 56,
+          "deferred": false,
+          "inert": false,
+          "inert_reason": "",
+          "fix": "Pass the value as a `data-*` attribute and read it in the component (`x-data` reading `$el.dataset.label`, or the .js file reading `el.dataset.label`): autoescaping makes it safe there. Where the component needs the value inline, write it as `|tojson` in a SINGLE-quoted attribute, outside any JS string: `x-data='{ label: {{ label|tojson }} }'`. Never `'{{ x }}'` inside an Alpine, htmx or `on*` attribute, and never `|tojson` in a double-quoted one (`x-data=\"f({{ x|tojson }})\"`). A macro parameter that is a JavaScript attribute's whole value is code: pass it a constant, and pass the data it needs as its own parameter the macro renders into `data-*`. See --playbook hypermedia.",
+          "example": ""
+        },
+        {
+          "rule": "fw.settings_secrets_required",
+          "status": "FAIL",
+          "since": "0.341.0",
+          "violations": 2,
+          "deferred": false,
+          "inert": false,
+          "inert_reason": "",
+          "fix": "Declare the secret with no default and a refusal of empty, short and placeholder values: `SECRET_KEY: SecretStr = Field(min_length=32)`, or a `@field_validator('SECRET_KEY')` that raises on a value shorter than 32 or found in the `.env` example. The deployment sets it; a fresh `secrets.token_urlsafe(32)` printed once is a good one. A second key (field encryption beside session signing) is its own required field, not derived from the first.",
+          "example": ""
+        },
+        {
+          "rule": "fw.router_modules_mounted",
+          "status": "PASS",
+          "since": "0.343.0",
           "violations": 0,
           "deferred": false,
           "inert": false,
@@ -2000,7 +2033,7 @@
         }
       ],
       "summary": {
-        "PASS": 161,
+        "PASS": 164,
         "FAIL": 3,
         "XFAIL": 0,
         "XPASS": 0,
@@ -2717,6 +2750,28 @@
         "example": ""
       },
       {
+        "rule": "repo.compose_oom_ranked",
+        "status": "FAIL",
+        "since": "0.343.0",
+        "violations": 8,
+        "deferred": false,
+        "inert": false,
+        "inert_reason": "",
+        "fix": "Give every service the deployed stack runs `oom_score_adj: -500` (from -999 to -500), and every service of the test profile `oom_score_adj: 500` (any positive value). The kernel then kills a test or guard container (the guard-run block runs those at +500) before the app or its database when the Docker VM runs out of memory. Write the number in compose.yml itself, not through a variable. See --playbook compose-hygiene.",
+        "example": ""
+      },
+      {
+        "rule": "repo.compose_restarts_after_kill",
+        "status": "PASS",
+        "since": "0.343.0",
+        "violations": 0,
+        "deferred": false,
+        "inert": false,
+        "inert_reason": "",
+        "fix": "",
+        "example": ""
+      },
+      {
         "rule": "repo.compose_up_selects_services",
         "status": "PASS",
         "since": "0.264.0",
@@ -2894,13 +2949,13 @@
       },
       {
         "rule": "repo.entrypoint_execs",
-        "status": "PASS",
+        "status": "FAIL",
         "since": "0.27.0",
-        "violations": 0,
+        "violations": 1,
         "deferred": false,
         "inert": false,
         "inert_reason": "",
-        "fix": "",
+        "fix": "Use exec-form `CMD [\"uvicorn\", \u2026]` / `CMD [\"python3\", \"-m\", \"app.main\"]`, or in a migrate-then-serve wrapper `exec` the server (`sh -c \"alembic upgrade head && exec uvicorn \u2026\"`) \u2014 else SIGTERM hits `sh`, not the server, and shutdown is never graceful. A compose `command:`/`entrypoint:` replaces the image's start, so the same holds there. See --doc FLEET-BUILD-DEPLOY-STANDARD.",
         "example": ""
       },
       {
@@ -2928,19 +2983,19 @@
     ],
     "summary": {
       "PASS": 71,
-      "FAIL": 0,
+      "FAIL": 2,
       "XFAIL": 0,
       "XPASS": 0,
       "INERT": 1
     }
   },
   "summary": {
-    "PASS": 239,
-    "FAIL": 3,
+    "PASS": 242,
+    "FAIL": 5,
     "XFAIL": 0,
     "XPASS": 0,
     "INERT": 21
   },
-  "commit": "3f51c00e0b5da0141133945df9bc008fb0442dbc",
-  "generated_at": "2026-11-05T02:04:13Z"
+  "commit": "77ce56b753ee45726195237a80ae3e4dd8da7d8c",
+  "generated_at": "2026-11-05T03:11:51Z"
 }
