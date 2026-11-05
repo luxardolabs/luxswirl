@@ -1,4 +1,4 @@
-# luxarch:test-db-identity asset v2 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit test-db-identity`.
+# luxarch:test-db-identity asset v3 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit test-db-identity`.
 """Where a Postgres connection really is, asked of the server on that connection.
 
 TEST_DATABASE_URL's text does not say where the driver lands: a query `host`, a `hostaddr` in a
@@ -351,6 +351,24 @@ def _luxarch_test_db_in_transaction(dbapi_conn: object) -> bool:
     return False
 
 
+def _luxarch_test_db_forget_failed_begin(dbapi_conn: object) -> None:
+    """asyncpg keeps a transaction whose `BEGIN` the server cancelled as the connection's open one
+    (its `_top_xact`, in a failed state), and SQLAlchemy's asyncpg adapter, which tracks a transaction
+    only once its `BEGIN` succeeds, has nothing to roll back: the next try's `BEGIN` would go out as a
+    `SAVEPOINT`, outside any transaction. Where the server says none is open, that record is dropped."""
+
+    with contextlib.suppress(Exception):
+        inner = getattr(dbapi_conn, "_connection", None)
+        asks = getattr(inner, "is_in_transaction", None)
+        if (
+            inner is not None
+            and getattr(inner, "_top_xact", None) is not None
+            and callable(asks)
+            and not asks()
+        ):
+            inner._top_xact = None
+
+
 def _luxarch_test_db_ask_dbapi(dbapi_conn: object) -> object:
     """The identity row of a Postgres driver connection, asked on that connection, which is then left
     as it was found. A driver not in autocommit asks inside the transaction its first statement
@@ -360,7 +378,8 @@ def _luxarch_test_db_ask_dbapi(dbapi_conn: object) -> object:
     across round trips would meet the connection's `idle_in_transaction_session_timeout`). A try
     the connection's own timeout cancels is made again on the warmed process, up to
     _LUXARCH_TEST_DB_ASK_TRIES times; anything else, or the last cancellation, is raised and the
-    connection refused. A connection handed over already inside a transaction (an app's `do_connect`
+    connection refused; a try whose `BEGIN` itself was cancelled leaves the driver idle for the next
+    (`_luxarch_test_db_forget_failed_begin`). A connection handed over already inside a transaction (an app's `do_connect`
     listener's statement) is asked in a savepoint that is rolled back, so that transaction is kept.
     Stated limit: a connection timeout shorter than a warm question (well under
     a millisecond) still refuses it."""
@@ -402,6 +421,8 @@ def _luxarch_test_db_ask_dbapi(dbapi_conn: object) -> object:
                 # the question's transaction ends, its timeout with it, however the question went
                 if not autocommit and not nested and callable(end):
                     end()
+                if not autocommit and not nested:
+                    _luxarch_test_db_forget_failed_begin(dbapi_conn)
     return None
 
 
