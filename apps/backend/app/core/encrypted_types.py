@@ -7,6 +7,7 @@ Provides transparent encryption/decryption for sensitive database fields.
 import base64
 import binascii
 import json
+import re
 from functools import lru_cache
 from typing import Any
 
@@ -28,10 +29,17 @@ JsonContainer = dict[str, Any] | list[Any]
 # (57 bytes at the least), url-safe base64.
 _FERNET_VERSION = 0x80
 _FERNET_MIN_BYTES = 57
+_FERNET_ALPHABET = re.compile(r"[A-Za-z0-9_-]+={0,2}")
 
 
 def _is_fernet_token(value: str) -> bool:
-    """Whether ``value`` is shaped as a Fernet token (a value some key encrypted)."""
+    """Whether ``value`` is shaped as a Fernet token (a value some key encrypted).
+
+    A token is url-safe base64 alone: any other character (JSON's brackets and
+    quotes, a space) makes it plaintext, whatever a lenient decoder would read.
+    """
+    if not _FERNET_ALPHABET.fullmatch(value):
+        return False
     try:
         raw = base64.urlsafe_b64decode(value.encode())
     except ValueError, binascii.Error:

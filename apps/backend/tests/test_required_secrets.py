@@ -3,6 +3,7 @@ malformed value refuses to start, and the `.env` example's value is refused."""
 
 from __future__ import annotations
 
+import secrets
 import string
 from pathlib import Path
 
@@ -88,11 +89,10 @@ def test_the_env_example_values_are_refused() -> None:
         " " * 40,
         "\t" * 40,
         "changeme-changeme-changeme-changeme",
-        "your-secret-key-min-32-chars-here!!",
         "abababababababababababababababab",
     ],
 )
-def test_a_blank_repetitive_or_placeholder_secret_key_is_refused(secret: str) -> None:
+def test_a_blank_or_repetitive_secret_key_is_refused(secret: str) -> None:
     with pytest.raises(ValidationError, match="secret_key"):
         SecuritySettings(
             secret_key=secret, field_encryption_key=Fernet.generate_key().decode()
@@ -108,3 +108,13 @@ def test_a_refused_value_is_not_in_the_error() -> None:
 
     assert mistyped not in str(refused.value)
     assert almost_key not in str(refused.value)
+
+
+def test_generated_secret_keys_are_accepted() -> None:
+    """Generated url-safe text holds any word by chance; none is refused."""
+    key = Fernet.generate_key().decode()
+    for _ in range(20_000):
+        SecuritySettings(secret_key=secrets.token_urlsafe(64), field_encryption_key=key)
+    # The sample a word match refused.
+    lucky = "-TjiBB9wjg8NLbgWeqUKIkajzYOURIkxfy2lKBmpGXGyX5QTt_-0bLThbmRvaKGdNHjDeYHVZ83Jmskq6hUC4A"
+    SecuritySettings(secret_key=lucky, field_encryption_key=key)

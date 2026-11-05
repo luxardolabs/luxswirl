@@ -211,7 +211,7 @@ CORS credentials/methods/headers are also configurable (`SERVER__CORS_CREDENTIAL
 
 ### Security (`SECURITY__`)
 
-Secrets (`SECURITY__SECRET_KEY`, `SECURITY__FIELD_ENCRYPTION_KEY`) are required: the server refuses to start without them, or with one shorter than 32 characters. Generate each once and keep it; a new field-encryption key cannot read the check credentials stored under the old one. A server that generated its own keys keeps them in its data directory (`data/server/secret_key` and `data/server/field_encryption_key` beside the compose file, or `/app/data` on its volume): set the two settings from those files, never new values. A field-encryption key other than the one the data was stored under refuses to read it.
+Secrets (`SECURITY__SECRET_KEY`, `SECURITY__FIELD_ENCRYPTION_KEY`) are required: the server refuses to start without them, with one shorter than 32 characters or too repetitive to be generated, or with a field key that is not a Fernet key. Generate each once and keep it; a new field-encryption key cannot read the check credentials stored under the old one. A server that generated its own keys keeps them in its data directory (`data/server/secret_key` and `data/server/field_encryption_key` beside the compose file, or `/app/data` on its volume): set the two settings from those files, never new values. A field-encryption key other than the one the data was stored under refuses to read it.
 
 There is no shared API token. Agents authenticate with a registration key and then their own agent key; `/metrics` takes its own optional bearer token (`metrics.bearer_token`, Settings > API Keys). `SECURITY__AUTH_TOKENS` and the `/app/data/api_token` file earlier versions generated are no longer read, and both can be removed.
 

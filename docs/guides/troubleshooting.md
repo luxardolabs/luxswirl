@@ -288,7 +288,8 @@ sudo lsof -i :9000
 
 ```bash
 # Error: a validation error naming security.secret_key or
-# security.field_encryption_key (missing, or shorter than 32 characters)
+# security.field_encryption_key (missing, shorter than 32 characters, too
+# repetitive to be generated, or for the field key not a Fernet key)
 
 # Generate each once and keep it:
 python3 -c "import secrets; print(secrets.token_urlsafe(64))"

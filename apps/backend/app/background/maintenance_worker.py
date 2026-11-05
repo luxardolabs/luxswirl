@@ -21,6 +21,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.datetime_utils import utc_now
+from app.core.exceptions import DatabaseException
 from app.db import worker_session
 from app.models.maintenance_job_model import MaintenanceJob
 from app.services.core.maintenance_job_core_service import MaintenanceJobCoreService
@@ -45,18 +46,30 @@ _POLL_ERROR_BACKOFF_SECONDS = 5.0
 _TERMINAL_RETENTION = timedelta(hours=6)
 
 
-async def _claim_one() -> MaintenanceJob | None:
+_UNREADABLE_PARAMS = (
+    "The job's parameters do not decrypt under the configured "
+    "SECURITY__FIELD_ENCRYPTION_KEY"
+)
+
+
+async def _claim_one() -> MaintenanceJob | UUID | None:
     """Claim the next queued row + mark running. Returns None when queue empty.
 
     The FOR UPDATE SKIP LOCKED + mark_running happens in a single transaction
     (committed by worker_session on exit) so the row is irrevocably ours by the
-    time we hand back control.
+    time we hand back control. A row whose params the configured key cannot
+    read is marked failed instead, and its id returned: left queued, it would
+    be claimed again on every poll and hold back every job behind it.
     """
     async with worker_session() as db:
-        job = await MaintenanceJobCoreService.claim_next(db)
-        if job is None:
+        job_id = await MaintenanceJobCoreService.claim_next(db)
+        if job_id is None:
             return None
-        return await MaintenanceJobCoreService.mark_running(db, job.id)
+        try:
+            return await MaintenanceJobCoreService.mark_running(db, job_id)
+        except DatabaseException:
+            await MaintenanceJobCoreService.mark_failed(db, job_id, _UNREADABLE_PARAMS)
+            return job_id
 
 
 class JobFailed(RuntimeError):
@@ -115,6 +128,12 @@ async def process_next_job() -> bool:
     job = await _claim_one()
     if job is None:
         return False
+    if isinstance(job, UUID):
+        logger.error(
+            "Maintenance job failed: its parameters do not decrypt",
+            extra={"job_id": str(job)},
+        )
+        return True
 
     logger.info(
         "Maintenance worker claimed job",
