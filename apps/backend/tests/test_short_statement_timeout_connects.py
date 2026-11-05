@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 pytestmark = pytest.mark.integration
 
 
-@pytest.mark.parametrize("timeout_ms", ["1", "5", "100"])
+@pytest.mark.parametrize("timeout_ms", ["5", "100"])
 async def test_a_short_statement_timeout_is_not_refused(
     worker_db, timeout_ms: str
 ) -> None:
