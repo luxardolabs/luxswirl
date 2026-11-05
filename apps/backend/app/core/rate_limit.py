@@ -10,7 +10,7 @@ See core.request_helpers.client_ip_from_request for the trust model.
 import hashlib
 import itertools
 import time
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from uuid import UUID
 
 from limits import RateLimitItem, parse_many
@@ -130,10 +130,11 @@ _HEARTBEAT_PENDING_REFUSALS = "heartbeat-pending-credential-refusals"
 # guess cannot open a fresh budget by naming another agent.
 _KEY_RECOVERY_REFUSALS = "key-recovery-credential-refusals"
 
-# Checks in flight, per bucket: the monotonic time each began. One a request
-# never settles (it was cancelled, or failed before its credential was read)
-# stops holding room after IN_FLIGHT_SECONDS.
-IN_FLIGHT_SECONDS = 60.0
+# Checks in flight, per bucket: the monotonic time each began. Every path that
+# reserves settles in a `finally`; a check that still is not settled after
+# IN_FLIGHT_SECONDS stops holding room. That is far past any credential check:
+# each of its statements is cut at the database's statement timeout.
+IN_FLIGHT_SECONDS = 300.0
 _in_flight: dict[tuple[str, ...], dict[int, float]] = {}
 _next_attempt = itertools.count()
 
@@ -149,11 +150,14 @@ def _held(keys: tuple[str, ...], now: float) -> dict[int, float]:
         for n, began in _in_flight.get(keys, {}).items()
         if now - began < IN_FLIGHT_SECONDS
     }
-    _in_flight[keys] = held
+    if held:
+        _in_flight[keys] = held
+    else:
+        _in_flight.pop(keys, None)
     return held
 
 
-@dataclass(frozen=True)
+@dataclass
 class CredentialAttempt:
     """One credential check in flight, holding room in its bucket until it is
     settled. Settled once; a second settle does nothing."""
@@ -161,13 +165,17 @@ class CredentialAttempt:
     limits: tuple[RateLimitItem, ...]
     keys: tuple[str, ...]
     number: int
+    settled: bool = field(default=False, init=False)
 
     def settle(self, *, refused: bool) -> None:
         """End the check: a refusal is counted in every part of the limit's
-        window; a credential not refused leaves no trace."""
-        held = _in_flight.get(self.keys, {})
-        if held.pop(self.number, None) is None:
+        window, whether or not its room was still held; a credential not
+        refused leaves no trace."""
+        if self.settled:
             return
+        self.settled = True
+        held = _in_flight.get(self.keys, {})
+        held.pop(self.number, None)
         if not held:
             _in_flight.pop(self.keys, None)
         if refused:
@@ -203,6 +211,7 @@ def _reserve_refusal_count(keys: tuple[str, ...]) -> CredentialAttempt | int:
         return BUSY_RETRY_AFTER_SECONDS
     number = next(_next_attempt)
     held[number] = now
+    _in_flight[keys] = held
     return CredentialAttempt(limits=limits, keys=keys, number=number)
 
 
