@@ -155,6 +155,21 @@ class ServerSettings(BaseSettings):
         return [host for host in hosts if host]
 
 
+# What SECURITY__SECRET_KEY must be: a generated value, never a placeholder.
+SECRET_KEY_MIN_LENGTH = 32
+SECRET_KEY_MIN_DISTINCT = 10
+SECRET_KEY_PLACEHOLDER_WORDS = (
+    "changeme",
+    "change-me",
+    "change_me",
+    "your",
+    "example",
+    "secret-key",
+    "secret_key",
+    "placeholder",
+)
+
+
 class SecuritySettings(BaseSettings):
     """Security configuration."""
 
@@ -162,7 +177,7 @@ class SecuritySettings(BaseSettings):
     # Required, no default: the deployment sets SECURITY__SECRET_KEY. An unset,
     # empty or short value refuses to start.
     secret_key: str = Field(
-        min_length=32,
+        min_length=SECRET_KEY_MIN_LENGTH,
         description="Secret key for JWT signing (SECURITY__SECRET_KEY, at least 32 characters)",
     )
     algorithm: str = Field(default="HS256", description="JWT algorithm")
@@ -284,6 +299,24 @@ class SecuritySettings(BaseSettings):
         start on one rather than fail every request to its route."""
         return check_rate_limit(v)
 
+    @field_validator("secret_key")
+    @classmethod
+    def validate_secret_key(cls, v: str) -> str:
+        """Refuse a secret key that is blank, low in variety, or a placeholder."""
+        if len(v.strip()) < SECRET_KEY_MIN_LENGTH:
+            raise ValueError(
+                f"SECURITY__SECRET_KEY must be at least {SECRET_KEY_MIN_LENGTH} "
+                "characters, not counting surrounding whitespace"
+            )
+        if len(set(v)) < SECRET_KEY_MIN_DISTINCT:
+            raise ValueError(
+                "SECURITY__SECRET_KEY is too repetitive to be a generated secret"
+            )
+        lowered = v.lower()
+        if any(word in lowered for word in SECRET_KEY_PLACEHOLDER_WORDS):
+            raise ValueError("SECURITY__SECRET_KEY is a placeholder: generate one")
+        return v
+
     @field_validator("field_encryption_key")
     @classmethod
     def validate_encryption_key(cls, v: str) -> str:
@@ -292,8 +325,8 @@ class SecuritySettings(BaseSettings):
             Fernet(v.encode())  # raises if invalid format/length
         except Exception as e:
             raise ValueError(
-                f"Invalid SECURITY__FIELD_ENCRYPTION_KEY format: {e}\n"
-                "Key must be a valid Fernet key (base64-encoded 32 bytes)"
+                "SECURITY__FIELD_ENCRYPTION_KEY is not a Fernet key "
+                "(url-safe base64 of 32 bytes)"
             ) from e
 
         return v
@@ -301,7 +334,11 @@ class SecuritySettings(BaseSettings):
     # Unknown keys are ignored, like the other settings groups: an env file that still
     # sets a retired key (SECURITY__INITIAL_ADMIN_*, replaced by INITIAL_ADMIN_*) must
     # not stop the server. main.py logs a warning naming any retired key it finds.
-    model_config = SettingsConfigDict(env_prefix="SECURITY_", extra="ignore")
+    # A refused value never appears in the error: it is raised at import, before
+    # the log redactor runs, and the value may be a real secret mistyped.
+    model_config = SettingsConfigDict(
+        env_prefix="SECURITY_", extra="ignore", hide_input_in_errors=True
+    )
 
 
 class LoggingSettings(BaseSettings):
@@ -370,6 +407,7 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         env_nested_delimiter="__",
         case_sensitive=False,
+        hide_input_in_errors=True,
     )
 
     @property

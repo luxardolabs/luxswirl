@@ -49,6 +49,13 @@ The published images are pulled from GitHub Container Registry:
 - `ghcr.io/luxardolabs/luxswirl-backend` (the server)
 - `ghcr.io/luxardolabs/luxswirl-agent` (the agent)
 
+The server needs two secrets in its environment file, `SECURITY__SECRET_KEY` and `SECURITY__FIELD_ENCRYPTION_KEY`, and refuses to start without them. Generate each once and keep it (a new field-encryption key cannot read what the old one stored):
+
+```bash
+python3 -c "import secrets; print(secrets.token_urlsafe(64))"                      # SECURITY__SECRET_KEY
+python3 -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'  # SECURITY__FIELD_ENCRYPTION_KEY
+```
+
 Bring up the server first (database + server). The agent is started later, once you have a registration key.
 
 ```bash

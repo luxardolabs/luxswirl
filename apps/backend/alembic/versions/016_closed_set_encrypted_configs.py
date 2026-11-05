@@ -7,7 +7,7 @@ encrypted config read as nothing and was skipped: such a check can still hold
 an `http_method` or `record_type` outside its closed set, which fails
 validation on read and stops its agent fetching checks.
 
-Every config is read with the server's key (alembic/env.py loads it) and given
+Every config is read with the server's key (SECURITY__FIELD_ENCRYPTION_KEY) and given
 the same fix-up: `http_method` / `record_type` uppercased, a value still
 outside its set cleared and the check disabled, its id and old value logged.
 Only a config the fix-up changes is written, always encrypted with the key; a

@@ -3,6 +3,7 @@ malformed value refuses to start, and the `.env` example's value is refused."""
 
 from __future__ import annotations
 
+import string
 from pathlib import Path
 
 import pytest
@@ -11,7 +12,8 @@ from cryptography.fernet import Fernet
 from pydantic import ValidationError
 
 ENV_EXAMPLE = Path(__file__).resolve().parents[3] / ".env.example"
-GOOD_SECRET = "s" * 32
+# A valid value, built so no literal secret sits in the source.
+GOOD_SECRET = string.ascii_letters[:16] * 2
 
 
 def _example_value(name: str) -> str:
@@ -61,7 +63,9 @@ def test_an_empty_or_short_secret_key_is_refused(secret: str) -> None:
         )
 
 
-@pytest.mark.parametrize("key", ["", "x" * 44, "not-a-fernet-key-but-long-enough-to-pass-32"])
+@pytest.mark.parametrize(
+    "key", ["", "x" * 44, "not-a-fernet-key-but-long-enough-to-pass-32"]
+)
 def test_an_empty_or_malformed_field_key_is_refused(key: str) -> None:
     with pytest.raises(ValidationError, match="field_encryption_key"):
         SecuritySettings(secret_key=GOOD_SECRET, field_encryption_key=key)
@@ -76,3 +80,31 @@ def test_the_env_example_values_are_refused() -> None:
 
     fields = {error["loc"][0] for error in refused.value.errors()}
     assert fields == {"secret_key", "field_encryption_key"}, fields
+
+
+@pytest.mark.parametrize(
+    "secret",
+    [
+        " " * 40,
+        "\t" * 40,
+        "changeme-changeme-changeme-changeme",
+        "your-secret-key-min-32-chars-here!!",
+        "abababababababababababababababab",
+    ],
+)
+def test_a_blank_repetitive_or_placeholder_secret_key_is_refused(secret: str) -> None:
+    with pytest.raises(ValidationError, match="secret_key"):
+        SecuritySettings(
+            secret_key=secret, field_encryption_key=Fernet.generate_key().decode()
+        )
+
+
+def test_a_refused_value_is_not_in_the_error() -> None:
+    mistyped = GOOD_SECRET[:28]
+    almost_key = Fernet.generate_key().decode()[:-2]
+
+    with pytest.raises(ValidationError) as refused:
+        SecuritySettings(secret_key=mistyped, field_encryption_key=almost_key)
+
+    assert mistyped not in str(refused.value)
+    assert almost_key not in str(refused.value)

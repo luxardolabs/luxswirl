@@ -73,7 +73,6 @@ def test_a_column_follows_the_key_configured_now(field_key, monkeypatch) -> None
     assert Fernet(second_key.encode()).decrypt(second.encode()) == b"hunter2"
 
 
-
 class TestEncryptedJSON:
     def test_encryption_failure_raises_rather_than_storing_plaintext(self, monkeypatch):
         col = EncryptedJSON()
@@ -122,3 +121,30 @@ class TestEncryptedJSONReads:
         monkeypatch.setattr(col, "_get_fernet", lambda: Fernet(key.encode()))
 
         assert col.process_result_value(raw, None) is None
+
+
+def test_a_value_encrypted_under_another_key_is_refused_not_passed_on(
+    field_key, monkeypatch, caplog
+) -> None:
+    """A token the configured key cannot decrypt was stored under another key:
+    handed on as plaintext, its ciphertext would become the check's target and
+    the next save would lose it."""
+    other = Fernet.generate_key().decode()
+    string_token = Fernet(other.encode()).encrypt(b"postgresql://u:hunter2@db/app")
+    json_token = Fernet(other.encode()).encrypt(b'{"api_key": "hunter2"}')
+
+    with pytest.raises(DatabaseException):
+        EncryptedString().process_result_value(string_token.decode(), None)
+    with pytest.raises(DatabaseException):
+        EncryptedJSON().process_result_value(json_token.decode(), None)
+    assert "does not decrypt under the configured" in caplog.text
+
+
+def test_plaintext_and_null_still_read_under_a_key(field_key) -> None:
+    assert EncryptedString().process_result_value("https://example.com", None) == (
+        "https://example.com"
+    )
+    assert EncryptedJSON().process_result_value('{"timeout": 5}', None) == {
+        "timeout": 5
+    }
+    assert EncryptedString().process_result_value(None, None) is None
