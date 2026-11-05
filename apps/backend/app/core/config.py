@@ -155,19 +155,9 @@ class ServerSettings(BaseSettings):
         return [host for host in hosts if host]
 
 
-# What SECURITY__SECRET_KEY must be: a generated value, never a placeholder.
+# What SECURITY__SECRET_KEY must be: a generated value, never a typed one.
 SECRET_KEY_MIN_LENGTH = 32
 SECRET_KEY_MIN_DISTINCT = 10
-SECRET_KEY_PLACEHOLDER_WORDS = (
-    "changeme",
-    "change-me",
-    "change_me",
-    "your",
-    "example",
-    "secret-key",
-    "secret_key",
-    "placeholder",
-)
 
 
 class SecuritySettings(BaseSettings):
@@ -302,7 +292,11 @@ class SecuritySettings(BaseSettings):
     @field_validator("secret_key")
     @classmethod
     def validate_secret_key(cls, v: str) -> str:
-        """Refuse a secret key that is blank, low in variety, or a placeholder."""
+        """Refuse a secret key that is blank or too repetitive to be generated.
+
+        A typed placeholder (`changeme-changeme-…`) is refused as repetitive;
+        no word is matched, since generated url-safe text holds any word by
+        chance."""
         if len(v.strip()) < SECRET_KEY_MIN_LENGTH:
             raise ValueError(
                 f"SECURITY__SECRET_KEY must be at least {SECRET_KEY_MIN_LENGTH} "
@@ -312,9 +306,6 @@ class SecuritySettings(BaseSettings):
             raise ValueError(
                 "SECURITY__SECRET_KEY is too repetitive to be a generated secret"
             )
-        lowered = v.lower()
-        if any(word in lowered for word in SECRET_KEY_PLACEHOLDER_WORDS):
-            raise ValueError("SECURITY__SECRET_KEY is a placeholder: generate one")
         return v
 
     @field_validator("field_encryption_key")

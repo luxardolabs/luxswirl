@@ -148,3 +148,11 @@ def test_plaintext_and_null_still_read_under_a_key(field_key) -> None:
         "timeout": 5
     }
     assert EncryptedString().process_result_value(None, None) is None
+
+
+def test_plaintext_json_holding_a_token_string_reads(field_key) -> None:
+    """A legacy JSON value that holds another system's Fernet token as a string
+    is plaintext: only url-safe base64 alone is shaped as a token."""
+    foreign = Fernet(Fernet.generate_key()).encrypt(b"keystone").decode()
+
+    assert EncryptedJSON().process_result_value(f'["{foreign}"]', None) == [foreign]

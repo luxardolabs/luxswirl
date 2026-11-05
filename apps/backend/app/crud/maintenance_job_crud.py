@@ -77,14 +77,16 @@ class MaintenanceJobCRUD:
         return result.scalars().one_or_none()
 
     @staticmethod
-    async def claim_next(db: AsyncSession) -> MaintenanceJob | None:
-        """Atomically claim the oldest queued row via FOR UPDATE SKIP LOCKED.
+    async def claim_next(db: AsyncSession) -> UUID | None:
+        """Atomically claim the oldest queued row via FOR UPDATE SKIP LOCKED: its id.
 
-        Caller is responsible for marking running + committing in the same
-        transaction so no other worker can claim the row in parallel.
+        Only the id is read, so a row whose params cannot be read is still
+        claimed (and failed) rather than refusing every claim. Caller is
+        responsible for marking running + committing in the same transaction so
+        no other worker can claim the row in parallel.
         """
         result = await db.execute(
-            select(MaintenanceJob)
+            select(MaintenanceJob.id)
             .where(MaintenanceJob.status == MaintenanceJobStatus.QUEUED.value)
             .order_by(MaintenanceJob.created_at.asc())
             .limit(1)

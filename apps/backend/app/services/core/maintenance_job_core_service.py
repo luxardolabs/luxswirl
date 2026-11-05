@@ -93,7 +93,7 @@ class MaintenanceJobCoreService:
         return MaintenanceJobResponse.model_validate(existing)
 
     @staticmethod
-    async def claim_next(db: AsyncSession) -> MaintenanceJob | None:
+    async def claim_next(db: AsyncSession) -> UUID | None:
         return await MaintenanceJobCRUD.claim_next(db)
 
     @staticmethod
