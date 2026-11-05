@@ -9,7 +9,8 @@ The check now runs as a sign-in does: the user row is read under the sign-in
 lock (the username's advisory lock, then the row FOR UPDATE, waiting at most
 LOGIN_LOCK_WAIT_MS), a locked account is refused as a wrong password is, a
 wrong password is counted with the sign-in's budget, and a right one resets
-the count. A lock it causes ends no session, as a sign-in's lock ends none.
+the count. A lock it causes suspends the user's sessions without deleting
+them, as a sign-in's lock does.
 """
 
 from __future__ import annotations
@@ -27,7 +28,7 @@ from app.models.user_model import User
 from app.services.core.auth_core_service import AuthCoreService
 from fixtures.factories import make_user
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm.exc import StaleDataError
 
@@ -213,17 +214,20 @@ async def _signed_in_client(worker_db, username: str, failed: int):
 @pytest.mark.parametrize(
     "path", ["/change-password", "/profile/change-password"], ids=["page", "profile"]
 )
-async def test_the_web_forms_commit_the_count_and_keep_the_session(
+async def test_the_web_forms_commit_the_count_and_suspend_the_session(
     worker_db, monkeypatch: pytest.MonkeyPatch, path: str
 ) -> None:
     """Through the real request transaction: the count a refused change makes
-    is committed, and the lock it reaches ends no session (a sign-in's lock
-    ends none either)."""
+    is committed, and the lock it reaches treats the user's sessions as a
+    sign-in's lock does: suspended (the next request is sent to sign in) but
+    not deleted, so they work again once the lock is lifted."""
     monkeypatch.setattr(settings.security, "auth_enabled", True)
     limiter.reset()
     username = f"cp-web-{path.count('/')}"
     uid, client = await _signed_in_client(worker_db, username, failed=4)
+    profile = app.url_path_for("profile.show")
     async with client:
+        assert (await client.get(profile)).status_code == 200
         r = await client.post(
             path,
             data={
@@ -232,16 +236,26 @@ async def test_the_web_forms_commit_the_count_and_keep_the_session(
                 "confirm_password": NEW,
             },
         )
-    limiter.reset()
-    assert r.status_code == 400
-    user = await _stored(worker_db, username)
-    assert user.failed_login_attempts == 5
-    assert user.is_locked
-    async with worker_db() as s:
-        sessions = await s.scalar(
-            select(func.count()).select_from(Session).where(Session.user_id == uid)
+        assert r.status_code == 400
+        user = await _stored(worker_db, username)
+        assert user.failed_login_attempts == 5
+        assert user.is_locked
+        suspended = await client.get(profile)
+        assert suspended.status_code in (302, 303, 307)
+        assert suspended.headers["location"].startswith(
+            app.url_path_for("auth.login_page")
         )
-    assert sessions == 1
+        async with worker_db() as s:
+            sessions = await s.scalar(
+                select(func.count()).select_from(Session).where(Session.user_id == uid)
+            )
+            assert sessions == 1
+            await s.execute(
+                update(User).where(User.id == uid).values(locked_until=None)
+            )
+            await s.commit()
+        assert (await client.get(profile)).status_code == 200
+    limiter.reset()
 
 
 async def _request(auth: AuthCoreService, s, token: str, uid, current: str) -> str:
