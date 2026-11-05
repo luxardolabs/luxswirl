@@ -310,3 +310,30 @@ async def test_a_guess_from_another_session_does_not_abort_the_owners_change(
     assert not guess_out.startswith("db-error"), guess_out
     user = await _stored(worker_db, "cp-dl")
     assert AuthCoreService.verify_password(NEW, user.password_hash)
+
+
+async def test_a_user_loaded_before_the_wait_is_judged_as_committed(
+    worker_db,
+) -> None:
+    """Over HTTP the auth dependency has already loaded the user (4 failures)
+    before the change queues behind the locking sign-in: the change must judge
+    the lock that sign-in commits, not the stale user in memory."""
+    uid = await _seed(worker_db, "cp-stale", failed=4)
+    async with worker_db() as s:
+        _, token = await AuthCoreService().create_session(s, uid)
+        await s.commit()
+    auth = AuthCoreService()
+    async with worker_db() as s1, worker_db() as s2:
+        session = await auth.verify_session(s2, token)
+        assert session is not None
+        assert session.user.failed_login_attempts == 4
+        assert await auth.authenticate_user(s1, "cp-stale", "wrong") is None
+        change = asyncio.create_task(_change(auth, s2, uid, RIGHT))
+        await asyncio.sleep(0.5)
+        assert not change.done()
+        await s1.commit()
+        assert await change == WRONG
+        await s2.commit()
+    user = await _stored(worker_db, "cp-stale")
+    assert user.failed_login_attempts == 5
+    assert AuthCoreService.verify_password(RIGHT, user.password_hash)
