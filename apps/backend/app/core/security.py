@@ -382,11 +382,13 @@ async def authenticate_heartbeat(
         and recovery_secret is None
         and bearer_holds_agent_key(authorization)
     ):
-        logger.warning(
-            "Heartbeat refused: a token in the agent-key format is not this "
-            "agent's key",
-            extra={"agent_id": str(agent.id)},
-        )
+        # An agent with a key has already logged this, in `verify_agent_token`.
+        if not agent.api_key_hash:
+            logger.warning(
+                "Heartbeat refused: a token in the agent-key format, and this "
+                "agent has no key",
+                extra={"agent_id": str(agent.id)},
+            )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid agent API key",

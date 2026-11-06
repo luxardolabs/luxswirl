@@ -404,6 +404,29 @@ async def test_with_auth_off_an_agent_format_token_is_not_refused(
     assert resp.json()["agent_key_accepted"] is False, resp.text
 
 
+async def test_a_stale_key_is_logged_once_per_heartbeat(
+    client: AsyncClient, db: AsyncSession, caplog: pytest.LogCaptureFixture
+) -> None:
+    stale = await _agent_key_format_token(db)
+    agent = make_agent(
+        approval_status="active",
+        api_key_hash=bcrypt.hashpw(b"the-right-key", bcrypt.gensalt(rounds=4)).decode(),
+    )
+    db.add(agent)
+    await db.flush()
+
+    with caplog.at_level(logging.WARNING, logger="luxswirl.security"):
+        resp = await client.post(
+            "/api/v1/agent/heartbeat",
+            json=_beat(agent.id),
+            headers={"Authorization": f"Bearer {stale}"},
+        )
+
+    assert resp.status_code == 401, resp.text
+    lines = [r for r in caplog.records if r.name == "luxswirl.security"]
+    assert len(lines) == 1, [r.getMessage() for r in lines]
+
+
 def test_no_registration_key_is_in_the_agent_key_format() -> None:
     key = RegistrationKeyCoreService.generate_key()
 
