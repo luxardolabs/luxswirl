@@ -67,11 +67,11 @@
         {% if (current_value != default_value or not setting.applied) and current_user.role == 'admin' %}
         {# data-setting-reset marks the button for settings.js's two-click
            confirm; the key rides in the markup, not parsed out of the URL. #}
-        {%- set reset_attrs %}data-setting-reset data-setting-key="{{ setting.key }}"{% endset %}
         {{ icon_reset(title='Reset to default',
                       hx_post=setting.urls.reset,
                       hx_target='#setting-' ~ setting.key|replace('.', '-'),
-                      extra_attrs=reset_attrs,
+                      extra_attrs='data-setting-reset',
+                      attrs={'data-setting-key': setting.key},
                       extra_classes='flex-shrink-0') }}
         {% endif %}
     </div>
@@ -100,7 +100,6 @@
                 <div class="flex items-center gap-2 flex-1">
                     <span class="text-xs text-dark-text-muted uppercase tracking-wide">Value:</span>
                     <div class="relative">
-                        {%- set number_attrs %}aria-label="{{ setting.display_name }} value" step="{{ '0.01' if value_type == 'float' else '1' }}"{% endset -%}
                         {# undefined-guards: setting.validation is a JSONB blob whose min/max are genuinely optional per setting #}
                         {%- set min_value = setting.validation.min if setting.validation and setting.validation.min is defined else none -%}
                         {# undefined-guards: same — max is optional per setting #}
@@ -109,7 +108,7 @@
                                  min=min_value,
                                  max=max_value,
                                  class='px-3 py-1.5 pr-12 text-sm bg-dark-bg-tertiary border border-dark-border rounded-md focus:outline-none focus:ring-2 focus:ring-brand-500',
-                                 extra_attrs=number_attrs) }}
+                                 attrs={'aria-label': setting.display_name ~ ' value', 'step': '0.01' if value_type == 'float' else '1'}) }}
                         <!-- Unit Label -->
                         <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-dark-text-muted">
                             {% if 'seconds' in setting.key %}s{% elif 'minutes' in setting.key %}min{% elif 'days' in setting.key %}days{% elif 'milliseconds' in setting.key or '_ms' in setting.key %}ms{% endif %}
@@ -123,14 +122,14 @@
                     <span class="text-xs text-dark-text-muted uppercase tracking-wide">Value:</span>
                     {% if setting.validation and setting.validation.enum %}
                         <!-- Dropdown for enum values - auto-saves on change -->
-                        {% call select(id=false, name="value", class="pl-3 pr-8 py-1.5 text-sm bg-dark-bg-tertiary border border-dark-border rounded-md focus:outline-none focus:ring-2 focus:ring-brand-500", extra_attrs=('aria-label="' ~ (setting.display_name) ~ ' value" data-autosubmit')) %}
+                        {% call select(id=false, name="value", class="pl-3 pr-8 py-1.5 text-sm bg-dark-bg-tertiary border border-dark-border rounded-md focus:outline-none focus:ring-2 focus:ring-brand-500", extra_attrs='data-autosubmit', attrs={'aria-label': setting.display_name ~ ' value'}) %}
                             {% for option in setting.validation.enum %}
                             <option value="{{ option }}" {% if shown_value == option %}selected{% endif %}>{{ option }}</option>
                             {% endfor %}
                         {% endcall %}
                     {% else %}
                         <!-- Text input for free-form strings -->
-                        {{ input(id=false, name="value", value=shown_value, class="flex-1 px-3 py-1.5 text-sm bg-dark-bg-tertiary border border-dark-border rounded-md focus:outline-none focus:ring-2 focus:ring-brand-500", extra_attrs=('aria-label="' ~ (setting.display_name) ~ ' value"')) }}
+                        {{ input(id=false, name="value", value=shown_value, class="flex-1 px-3 py-1.5 text-sm bg-dark-bg-tertiary border border-dark-border rounded-md focus:outline-none focus:ring-2 focus:ring-brand-500", attrs={'aria-label': setting.display_name ~ ' value'}) }}
                     {% endif %}
                 </div>
                 {% if not (setting.validation and setting.validation.enum) %}

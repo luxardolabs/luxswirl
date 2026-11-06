@@ -58,7 +58,7 @@
             </p>
             <div class="flex flex-wrap gap-2">
                 {% for tag in available_tags %}
-                {{ tag_pill_button(tag, color='blue', extra_attrs='data-add-selector-tag-from-suggestion="' ~ tag ~ '"') }}
+                {{ tag_pill_button(tag, color='blue', attrs={'data-add-selector-tag-from-suggestion': tag}) }}
                 {% endfor %}
             </div>
         </div>
@@ -81,7 +81,7 @@
             <div class="flex flex-wrap gap-2" id="tag-browser-bottom">
                 {% for tag in available_tags %}
                 {{ tag_pill_button(tag, color='blue', extra_classes='tag-browser-btn',
-                                   extra_attrs='data-add-selector-tag-from-suggestion="' ~ tag ~ '" data-tag="' ~ tag ~ '"') }}
+                                   attrs={'data-add-selector-tag-from-suggestion': tag, 'data-tag': tag}) }}
                 {% endfor %}
             </div>
         </div>

@@ -72,14 +72,14 @@
             <!-- Actions -->
             <div class="flex items-center gap-2 pt-3 border-t border-dark-border">
                 {% if provider.is_enabled %}
-                    {{ btn_disable(extra_classes='flex-1', extra_attrs='hx-post="' ~ provider.urls.toggle ~ '" hx-swap="none" title="Disable"') }}
+                    {{ btn_disable(extra_classes='flex-1', extra_attrs='hx-swap="none" title="Disable"', attrs={'hx-post': provider.urls.toggle}) }}
                 {% else %}
-                    {{ btn_enable(extra_classes='flex-1', extra_attrs='hx-post="' ~ provider.urls.toggle ~ '" hx-swap="none" title="Enable"') }}
+                    {{ btn_enable(extra_classes='flex-1', extra_attrs='hx-swap="none" title="Enable"', attrs={'hx-post': provider.urls.toggle}) }}
                 {% endif %}
                 {% set test_spinner %}<span class="htmx-indicator absolute inset-0 flex items-center justify-center bg-dark-bg-tertiary/80 rounded" id="test-spinner-{{ provider.id }}"><span class="animate-spin h-4 w-4 text-brand-500 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/arrow-path.svg" %}</span></span>{% endset %}
                 {{ text_btn(test_spinner, 'Test', style='secondary', size='sm', type='button',
                             extra_classes='flex-1 relative',
-                            extra_attrs='hx-post="' ~ provider.urls.test ~ '" hx-swap="none" hx-indicator="#test-spinner-' ~ provider.id ~ '" title="Send test notification"') }}
+                            extra_attrs='hx-swap="none" title="Send test notification"', attrs={'hx-post': provider.urls.test, 'hx-indicator': '#test-spinner-' ~ provider.id}) }}
                 {{ btn_edit_text(extra_classes='flex-1', hx_get=provider.urls.edit_form, hx_target='#panel-container', hx_swap='innerHTML') }}
                 {% if current_user.role == 'admin' %}
                 {{ delete_icon_button(delete_url=provider.urls.delete, target_id='provider-' ~ provider.id) }}

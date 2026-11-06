@@ -264,7 +264,7 @@
                 {{ tag_pill_button('deprecated', 'red') }}
                 {{ tag_pill_button('admin', 'purple') }}
             </div>
-            <p class="text-xs text-dark-text-muted mt-3">Args: <code>label</code>, <code>color</code> (brand/green/blue/yellow/orange/red/purple), <code>extra_classes</code>, <code>extra_attrs</code>.</p>
+            <p class="text-xs text-dark-text-muted mt-3">Args: <code>label</code>, <code>color</code> (brand/green/blue/yellow/orange/red/purple), <code>extra_classes</code>, <code>attrs</code> (a dict literal, any value), <code>extra_attrs</code> (a constant string).</p>
         </div>
 
         {# Collapse toggle #}
@@ -279,7 +279,7 @@
                     {{ collapse_toggle('Reporter Configuration', toggle_attr='data-demo-toggle-2') }}
                 </div>
             </div>
-            <p class="text-xs text-dark-text-muted mt-3">Args: <code>label</code>, <code>chevron_id</code>, <code>toggle_attr</code> (default <code>data-toggle-collapse</code>), <code>extra_classes</code>, <code>label_classes</code>, <code>extra_attrs</code>. Override <code>extra_classes</code> for non-card layouts (subtle, section, etc).</p>
+            <p class="text-xs text-dark-text-muted mt-3">Args: <code>label</code>, <code>chevron_id</code>, <code>toggle_attr</code> (default <code>data-toggle-collapse</code>), <code>extra_classes</code>, <code>label_classes</code>, <code>attrs</code> (a dict literal, any value), <code>extra_attrs</code> (a constant string). Override <code>extra_classes</code> for non-card layouts (subtle, section, etc).</p>
         </div>
 
         {# Toggle switch #}
@@ -306,7 +306,7 @@
                     </div>
                 </div>
             </div>
-            <p class="text-xs text-dark-text-muted mt-3">Args: <code>enabled</code> (bool), <code>size</code> (<code>sm</code>|<code>md</code>), <code>on_color</code> (default <code>green</code>; <code>brand</code> available for non-enable semantics), <code>hx_post</code>, <code>hx_target</code>, <code>hx_swap</code> (default <code>outerHTML</code>), <code>hx_trigger</code>, <code>title</code>, <code>extra_attrs</code>.</p>
+            <p class="text-xs text-dark-text-muted mt-3">Args: <code>enabled</code> (bool), <code>size</code> (<code>sm</code>|<code>md</code>), <code>on_color</code> (default <code>green</code>; <code>brand</code> available for non-enable semantics), <code>hx_post</code>, <code>hx_target</code>, <code>hx_swap</code> (default <code>outerHTML</code>), <code>hx_trigger</code>, <code>title</code>, <code>attrs</code> (a dict literal, any value), <code>extra_attrs</code> (a constant string).</p>
         </div>
 
         {# Link button #}
@@ -319,7 +319,7 @@
                 {{ link_btn('Generate Key', color='brand') }}
                 {{ link_btn('Revoke access', color='red') }}
             </div>
-            <p class="text-xs text-dark-text-muted mt-3">Args: <code>label</code>, <code>color</code> (follows action mapping above), <code>hx_get</code>, <code>hx_post</code>, <code>hx_target</code>, <code>hx_swap</code>, <code>extra_classes</code>, <code>extra_attrs</code>.</p>
+            <p class="text-xs text-dark-text-muted mt-3">Args: <code>label</code>, <code>color</code> (follows action mapping above), <code>hx_get</code>, <code>hx_post</code>, <code>hx_target</code>, <code>hx_swap</code>, <code>extra_classes</code>, <code>attrs</code> (a dict literal, any value), <code>extra_attrs</code> (a constant string).</p>
         </div>
     </div>
 </section>

@@ -25,7 +25,7 @@
                     <p class="text-xs text-blue-400 mb-1.5">Click to add:</p>
                     <div class="flex flex-wrap gap-1.5">
                         {% for tag in available_agent_tags %}
-                        {{ tag_pill_button(tag, color='blue', extra_attrs='data-add-agent-tag="' ~ tag ~ '"') }}
+                        {{ tag_pill_button(tag, color='blue', attrs={'data-add-agent-tag': tag}) }}
                         {% endfor %}
                     </div>
                 </div>

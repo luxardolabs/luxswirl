@@ -83,6 +83,7 @@ async def test_each_item_removes_itself(client: AsyncClient, page: StatusPage) -
 
     assert resp.status_code == 200, resp.text[:500]
     removes = re.findall(
-        rf"htmx\.ajax\('DELETE', '/status-pages/{page.id}/remove-item/(\d+)'", resp.text
+        rf'data-ajax-method="DELETE"\s+data-ajax-url="/status-pages/{page.id}/remove-item/(\d+)"',
+        resp.text,
     )
     assert sorted(int(index) for index in removes) == [0, 1, 2, 3]

@@ -33,8 +33,8 @@ function toggleSidebar() {
 
 /**
  * Trigger the Alpine close sequence on whatever panel is currently mounted
- * inside #panel-container. Mirrors the inline expression on the macro
- * (`show = false; setTimeout(...innerHTML='', 300)`).
+ * inside #panel-container. Mirrors close() in panel_wrapper's x-data
+ * (`show = false`, then #panel-container emptied 300ms later).
  */
 function closePanel() {
     const container = document.getElementById('panel-container');
@@ -49,6 +49,29 @@ function closePanel() {
         }
     }
     container.innerHTML = '';
+}
+
+/**
+ * Send the request a confirm_action_btn describes in its data-* attributes, at
+ * its confirming click. The source carries htmx's in-flight state: the button,
+ * unless data-ajax-source names another element. data-ajax-target may be
+ * `closest <selector>`, resolved from the button. data-page-version-from names
+ * the element whose data-page-version goes out as X-Page-Version.
+ */
+function sendConfirmedAction(button) {
+    const { ajaxMethod, ajaxUrl, ajaxTarget, ajaxSwap, ajaxSource, ajaxAfter, pageVersionFrom } = button.dataset;
+    const options = {
+        source: ajaxSource ? document.querySelector(ajaxSource) : button,
+        target: ajaxTarget.startsWith('closest ') ? button.closest(ajaxTarget.substring(8)) : ajaxTarget,
+        swap: ajaxSwap,
+    };
+    if (pageVersionFrom) {
+        options.headers = { 'X-Page-Version': document.querySelector(pageVersionFrom).dataset.pageVersion };
+    }
+    const request = window.htmx.ajax(ajaxMethod, ajaxUrl, options);
+    if (ajaxAfter === 'reload') {
+        request.then(() => document.body.dispatchEvent(new CustomEvent('refreshPage')));
+    }
 }
 
 function showToast(message, type = 'success') {
@@ -87,6 +110,7 @@ function showToast(message, type = 'success') {
 export function init() {
     window.showToast = showToast;
     window.closePanel = closePanel;
+    window.sendConfirmedAction = sendConfirmedAction;
 
     document.addEventListener('click', (e) => {
         // Sidebar toggle

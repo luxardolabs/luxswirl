@@ -114,7 +114,7 @@
 {% macro input(name='', type='text', value='', placeholder='', required=false, autofocus=false,
                autocomplete=none, minlength=none, min=none, max=none, id=none,
                class='input w-full', hx_get='', hx_post='', hx_target='', hx_select='',
-               hx_trigger='', hx_include='', hx_swap='', extra_attrs='') %}
+               hx_trigger='', hx_include='', hx_swap='', extra_attrs='', attrs={}) %}
 {%- set field_id = name if id is none else id -%}
 <input type="{{ type }}"
        {%- if field_id %} id="{{ field_id }}"{% endif %}
@@ -135,14 +135,14 @@
        {%- if hx_include %} hx-include="{{ hx_include }}"{% endif %}
        {%- if hx_swap %} hx-swap="{{ hx_swap }}"{% endif %}
        class="{{ class }}"
-       {{ extra_attrs | safe }}>
+       {{ attrs | xmlattr }} {{ extra_attrs | safe }}>
 {% endmacro %}
 
 {# Checkbox / radio — the same branded toggle input; pass type='radio' for a radio.
    `id` is rendered only when given (these often have neither name nor id). #}
 {% macro checkbox(name='', id=none, checked=false, value='', type='checkbox', class='',
                   hx_get='', hx_post='', hx_target='', hx_select='', hx_trigger='',
-                  hx_include='', extra_attrs='') %}
+                  hx_include='', extra_attrs='', attrs={}) %}
 <input type="{{ type }}"
        {%- if name %} name="{{ name }}"{% endif %}
        {%- if id %} id="{{ id }}"{% endif %}
@@ -155,14 +155,14 @@
        {%- if hx_trigger %} hx-trigger="{{ hx_trigger }}"{% endif %}
        {%- if hx_include %} hx-include="{{ hx_include }}"{% endif %}
        class="{{ class }}"
-       {{ extra_attrs | safe }}>
+       {{ attrs | xmlattr }} {{ extra_attrs | safe }}>
 {% endmacro %}
 
 {# Multi-line text field. `value` is the content; pass the body via value= rather than
    a call-block so a caller can't accidentally inject unescaped markup. #}
 {% macro textarea(name='', value='', rows=3, placeholder='', required=false, id=none,
                   class='input w-full', hx_get='', hx_post='', hx_target='', hx_trigger='',
-                  hx_select='', hx_include='', hx_swap='', extra_attrs='') %}
+                  hx_select='', hx_include='', hx_swap='', extra_attrs='', attrs={}) %}
 {%- set field_id = name if id is none else id -%}
 <textarea
         {%- if name %} name="{{ name }}"{% endif %}
@@ -178,14 +178,14 @@
         {%- if hx_include %} hx-include="{{ hx_include }}"{% endif %}
         {%- if hx_swap %} hx-swap="{{ hx_swap }}"{% endif %}
         class="{{ class }}"
-        {{ extra_attrs | safe }}>{{ value }}</textarea>
+        {{ attrs | xmlattr }} {{ extra_attrs | safe }}>{{ value }}</textarea>
 {% endmacro %}
 
 {# Select wrapper — the page supplies the <option> loop as the macro body:
    {% call select('agent_id', class='input') %}<option ...>…</option>{% endcall %} #}
 {% macro select(name='', id=none, class='input', required=false, hx_get='', hx_post='',
                 hx_target='', hx_select='', hx_trigger='', hx_include='', hx_swap='',
-                extra_attrs='') %}
+                extra_attrs='', attrs={}) %}
 {%- set field_id = name if id is none else id -%}
 <select {% if name %}name="{{ name }}"{% endif %}
         {%- if field_id %} id="{{ field_id }}"{% endif %}
@@ -198,5 +198,5 @@
         {%- if hx_include %} hx-include="{{ hx_include }}"{% endif %}
         {%- if hx_swap %} hx-swap="{{ hx_swap }}"{% endif %}
         class="{{ class }}"
-        {{ extra_attrs | safe }}>{{ caller() }}</select>
+        {{ attrs | xmlattr }} {{ extra_attrs | safe }}>{{ caller() }}</select>
 {% endmacro %}

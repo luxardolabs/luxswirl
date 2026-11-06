@@ -54,8 +54,7 @@
             <label for="agent-timeout-input" class="text-sm font-medium text-dark-text-primary mb-2">Agent Timeout Threshold</label>
             <div class="flex gap-2">
                 {{ input(name="timeout", type="number", value=metrics_settings.agent_timeout_seconds, id="agent-timeout-input", min="30", max="3600", class="flex-1 px-3 py-2 bg-dark-bg-tertiary border border-dark-border rounded-lg text-dark-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-brand-500", extra_attrs='step="30"') }}
-                {%- set save_attrs %}hx-post="{{ metrics_urls.update_timeout }}" hx-target="#metrics-card" hx-swap="outerHTML" hx-include="#agent-timeout-input"{% endset %}
-                {{ btn_save(label='Save', size='sm', extra_attrs=save_attrs) }}
+                {{ btn_save(label='Save', size='sm', extra_attrs='hx-target="#metrics-card" hx-swap="outerHTML" hx-include="#agent-timeout-input"', attrs={'hx-post': metrics_urls.update_timeout}) }}
             </div>
             <p class="text-xs text-dark-text-muted mt-1">Seconds without heartbeat before agent marked as down</p>
         </div>

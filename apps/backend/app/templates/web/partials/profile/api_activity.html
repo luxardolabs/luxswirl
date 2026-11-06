@@ -9,12 +9,12 @@
     <div class="flex flex-wrap items-center justify-between gap-2">
         <div class="flex">
             {% for tab in surface_tabs %}
-            {{ segmented_option(tab.label, active=tab.active, extra_attrs='hx-get="' ~ tab.url ~ '" hx-target="#api-activity" hx-swap="outerHTML"') }}
+            {{ segmented_option(tab.label, active=tab.active, extra_attrs='hx-target="#api-activity" hx-swap="outerHTML"', attrs={'hx-get': tab.url}) }}
             {% endfor %}
         </div>
         <div class="flex">
             {% for tab in day_tabs %}
-            {{ segmented_option(tab.label, active=tab.active, extra_attrs='hx-get="' ~ tab.url ~ '" hx-target="#api-activity" hx-swap="outerHTML"') }}
+            {{ segmented_option(tab.label, active=tab.active, extra_attrs='hx-target="#api-activity" hx-swap="outerHTML"', attrs={'hx-get': tab.url}) }}
             {% endfor %}
         </div>
     </div>
