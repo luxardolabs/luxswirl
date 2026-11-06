@@ -12,8 +12,9 @@ The value names what was refused, where the agent acts on it:
 - `recovery-secret`: the agent's recovery secret (a revoke voids it): the
   agent registers again.
 - `agent-key`: a heartbeat's key, sent without the secret, from an agent
-  that has held a key (a revoke clears it): the agent proves its recovery
-  secret next, to recover a new key or learn that a revoke voided it.
+  that has held a key (a revoke clears it), or any token in the agent-key
+  format: the agent proves its recovery secret next, to recover a new key or
+  learn that a revoke voided it.
 - `registration-key`: the shared registration key (register, recover-key, a
   heartbeat from a pending agent that never had a key): the agent needs a
   new LUXSWIRL_AUTH_KEY.
