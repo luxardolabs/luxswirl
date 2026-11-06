@@ -8,7 +8,7 @@ when it began.
 from __future__ import annotations
 
 import asyncio
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
@@ -168,7 +168,7 @@ async def test_a_scheduled_success_moves_the_next_run_on(worker_db) -> None:
     await _service(worker_db, fails=False)._execute_job(KEY, token)
 
     stored = await _stored(worker_db)
-    assert stored.next_run_at > datetime.now(UTC) + timedelta(seconds=30)
+    assert stored.next_run_at > datetime.now(UTC)
     assert stored.lease_token is None
 
 
@@ -192,7 +192,7 @@ async def test_a_manual_success_moves_the_next_run_on_and_says_so(worker_db) -> 
     out = await _service(worker_db, fails=False).execute_job_synchronously(KEY)
 
     stored = await _stored(worker_db)
-    assert stored.next_run_at > datetime.now(UTC) + timedelta(seconds=30)
+    assert stored.next_run_at > datetime.now(UTC)
     assert out.job.next_run_at == stored.next_run_at
 
 

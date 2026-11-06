@@ -1758,13 +1758,13 @@
         },
         {
           "rule": "fw.single_use_claim_atomic",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.287.0",
-          "violations": 5,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
-          "fix": "Claim it in one statement that only matches an available row: `update(Model).where(Model.token_hash == h, Model.used_at.is_(None), Model.expires_at > now).values(used_at=now).returning(Model)`, and refuse when it returns no row. When a side effect (a payment call) must sit between the check and the write, serialize the claimers first: load the row with `.with_for_update()` (a crud method that always locks counts), or take `pg_advisory_xact_lock(<key>)` before the load, the lock to use where the app also writes that row from a separate session (a row lock deadlocks there). See --doc FLEET-AUTH-SESSION-STANDARD \u00a71.2.",
+          "fix": "",
           "example": ""
         },
         {
@@ -2044,8 +2044,8 @@
         }
       ],
       "summary": {
-        "PASS": 165,
-        "FAIL": 2,
+        "PASS": 166,
+        "FAIL": 1,
         "XFAIL": 0,
         "XPASS": 0,
         "INERT": 18
@@ -3001,12 +3001,12 @@
     }
   },
   "summary": {
-    "PASS": 245,
-    "FAIL": 2,
+    "PASS": 246,
+    "FAIL": 1,
     "XFAIL": 0,
     "XPASS": 0,
     "INERT": 22
   },
-  "commit": "94b5b64f95d5c4138f7f73ffa3f2fe3438d69c9f",
-  "generated_at": "2026-11-06T20:57:28Z"
+  "commit": "495070a8a5944c51359fe52689adeb1e0415a4f5",
+  "generated_at": "2026-11-06T21:07:30Z"
 }
