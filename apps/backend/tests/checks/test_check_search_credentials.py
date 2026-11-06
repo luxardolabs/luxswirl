@@ -7,6 +7,8 @@ surface here is one a viewer reaches.
 
 from __future__ import annotations
 
+import subprocess
+import sys
 import time
 from collections.abc import AsyncIterator
 
@@ -251,3 +253,70 @@ def test_an_unclosed_value_is_masked_to_the_end(value: str) -> None:
 )
 def test_a_url_is_still_cut_to_its_scheme_and_host(value: str, url: str) -> None:
     assert mask_url_paths(value) == url
+
+
+@pytest.mark.parametrize(
+    "prefix",
+    [
+        "",
+        "...",
+        "-",
+        "+",
+        ".",
+        "1.",
+        "404-",
+        "1.2.3.4-",
+        "-x",
+        "1a.",
+        "x",
+        "a.",
+        "(",
+        "=",
+    ],
+)
+def test_a_url_is_cut_whatever_runs_into_its_scheme(prefix: str) -> None:
+    cut = mask_url_paths(f"{prefix}https://hooks.example.test/services/hook-s3cret")
+
+    assert "hook-s3cret" not in cut
+    assert "hooks.example.test" in cut
+
+
+@pytest.mark.parametrize(
+    "value",
+    ["pwd=", "pwd='", 'pwd="', "pwd=\\\\"],
+    ids=["bare", "quote", "double-quote", "backslashes"],
+)
+def test_masking_a_long_value_costs_little_memory(value: str) -> None:
+    """One MCP argument can reach 4 MiB: run under a limit it would pass with a stack."""
+    script = (
+        "import resource\n"
+        "from app.core.credential_mask import mask_credentials\n"
+        f"hostile = {value!r} + 'a' * (4 * 1024 * 1024)\n"
+        "limit = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * 1024 + 200 * 1024 * 1024\n"
+        "resource.setrlimit(resource.RLIMIT_DATA, (limit, limit))\n"
+        "mask_credentials(hostile)\n"
+    )
+
+    done = subprocess.run(
+        [sys.executable, "-c", script], capture_output=True, text=True, timeout=60
+    )
+
+    assert done.returncode == 0, done.stderr[-300:]
+
+
+@pytest.mark.parametrize(
+    "target",
+    [
+        "https://api.example.com/v2?token=abc&region=eu-west",
+        'https://api.example.com/v2?token="abc"&region=eu-west',
+        "Server=db;Pwd={abc};Region=eu-west",
+    ],
+)
+def test_a_word_after_a_closed_value_is_kept(target: str) -> None:
+    assert "eu-west" in mask_credentials(target)
+
+
+def test_a_word_after_a_value_left_open_is_masked_with_it() -> None:
+    masked = mask_credentials('https://api.example.com/v2?token="abc&region=eu-west')
+
+    assert masked == "https://api.example.com/v2?token=***"
