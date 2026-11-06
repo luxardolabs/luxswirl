@@ -4,7 +4,7 @@ Security utilities - authentication and authorization.
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Annotated
 from urllib.parse import urlencode
 from uuid import UUID
@@ -341,32 +341,6 @@ async def require_editor_web(
 # ========================================================================
 
 
-def _heartbeat_key_refused(
-    agent: Agent, detail: str, headers: Mapping[str, str] | None
-) -> HTTPException:
-    """The 401 for a heartbeat whose key is refused, marked with what was refused.
-
-    An agent that never had a key of its own (pending, or rejected, which only a
-    pending agent can be) sent the registration key; any other sent its own key,
-    whether it still has one or a revoke cleared it (it proves its recovery secret
-    next, and learns whether a revoke voided that too).
-    """
-    never_keyed = not agent.api_key_hash and agent.approval_status in (
-        AgentApprovalStatus.PENDING,
-        AgentApprovalStatus.REJECTED,
-    )
-    return HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail=detail,
-        headers={
-            **(headers or {}),
-            REFUSAL_HEADER: (
-                REGISTRATION_KEY_REFUSED if never_keyed else AGENT_KEY_REFUSED
-            ),
-        },
-    )
-
-
 async def authenticate_heartbeat(
     agent: Agent,
     authorization: str | None,
@@ -393,7 +367,8 @@ async def authenticate_heartbeat(
 
     A token in the agent-key format cannot be a registration key, so it is
     refused here unchecked and spends nothing: an agent on a regenerated or
-    revoked key keeps getting the marked 401 that sends it to its secret.
+    revoked key keeps getting the marked 401 that sends it to its secret. That
+    401 is unbudgeted, so its mark is the same whatever state the agent is in.
     """
     if agent.api_key_hash:
         try:
@@ -402,9 +377,20 @@ async def authenticate_heartbeat(
         except HTTPException as e:
             if e.status_code != 401:
                 raise
-    if recovery_secret is None and bearer_holds_agent_key(authorization):
-        raise _heartbeat_key_refused(
-            agent, "Invalid agent API key", {"WWW-Authenticate": "Bearer"}
+    if (
+        settings.security.auth_enabled
+        and recovery_secret is None
+        and bearer_holds_agent_key(authorization)
+    ):
+        logger.warning(
+            "Heartbeat refused: a token in the agent-key format is not this "
+            "agent's key",
+            extra={"agent_id": str(agent.id)},
+        )
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid agent API key",
+            headers={"WWW-Authenticate": "Bearer", REFUSAL_HEADER: AGENT_KEY_REFUSED},
         )
     attempt = reserve_pending_heartbeat_attempt(client, agent.id)
     if isinstance(attempt, int):
@@ -428,8 +414,27 @@ async def authenticate_heartbeat(
                 refused = refusal.status_code == status.HTTP_401_UNAUTHORIZED
                 if not refused:
                     raise
-                raise _heartbeat_key_refused(
-                    agent, refusal.detail, refusal.headers
+                # The key the heartbeat carried is refused. An agent that
+                # never had a key of its own (pending, or rejected, which only
+                # a pending agent can be) sent the registration key; any other
+                # sent its own key, whether it still has one or a revoke
+                # cleared it (it proves its recovery secret next, and learns
+                # whether a revoke voided that too).
+                never_keyed = not agent.api_key_hash and agent.approval_status in (
+                    AgentApprovalStatus.PENDING,
+                    AgentApprovalStatus.REJECTED,
+                )
+                raise HTTPException(
+                    status_code=refusal.status_code,
+                    detail=refusal.detail,
+                    headers={
+                        **(refusal.headers or {}),
+                        REFUSAL_HEADER: (
+                            REGISTRATION_KEY_REFUSED
+                            if never_keyed
+                            else AGENT_KEY_REFUSED
+                        ),
+                    },
                 ) from refusal
             logger.warning(
                 "Heartbeat authenticated by the shared registration key: "

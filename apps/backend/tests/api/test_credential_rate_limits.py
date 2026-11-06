@@ -30,11 +30,7 @@ from app.models.job_model import Job
 from app.schemas.registration_key_schema import RegistrationKeyCreate
 from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.registration_key_core_service import RegistrationKeyCoreService
-from app.shared.agent_protocol import (
-    AGENT_KEY_REFUSED,
-    REFUSAL_HEADER,
-    REGISTRATION_KEY_REFUSED,
-)
+from app.shared.agent_protocol import AGENT_KEY_REFUSED, REFUSAL_HEADER
 from fastapi import HTTPException
 from fixtures.factories import make_agent
 from httpx import ASGITransport, AsyncClient
@@ -339,11 +335,12 @@ async def test_a_revoked_key_keeps_its_marked_401_and_spends_nothing(
     assert {a.headers[REFUSAL_HEADER] for a in answers} == {AGENT_KEY_REFUSED}
 
 
-async def test_an_agent_key_from_an_agent_that_never_had_one_names_the_registration_key(
-    client: AsyncClient, db: AsyncSession
+@pytest.mark.parametrize("approval_status", ["pending", "rejected"])
+async def test_an_unbudgeted_refusal_does_not_say_what_state_the_agent_is_in(
+    client: AsyncClient, db: AsyncSession, approval_status: str
 ) -> None:
     key = await _agent_key_format_token(db)
-    agent = make_agent(approval_status="pending", api_key_hash=None)
+    agent = make_agent(approval_status=approval_status, api_key_hash=None)
     db.add(agent)
     await db.flush()
     allowed = parse(settings.security.registration_rate_limit).amount
@@ -358,7 +355,53 @@ async def test_an_agent_key_from_an_agent_that_never_had_one_names_the_registrat
     ]
 
     assert [a.status_code for a in answers] == [401] * (allowed + 1)
-    assert {a.headers[REFUSAL_HEADER] for a in answers} == {REGISTRATION_KEY_REFUSED}
+    assert {a.headers[REFUSAL_HEADER] for a in answers} == {AGENT_KEY_REFUSED}
+
+
+async def test_a_refused_agent_format_token_on_an_agent_with_no_key_is_logged(
+    client: AsyncClient, db: AsyncSession, caplog: pytest.LogCaptureFixture
+) -> None:
+    key = await _agent_key_format_token(db)
+    agent = make_agent(approval_status="pending", api_key_hash=None)
+    db.add(agent)
+    await db.flush()
+
+    with caplog.at_level(logging.WARNING, logger="luxswirl.security"):
+        resp = await client.post(
+            "/api/v1/agent/heartbeat",
+            json=_beat(agent.id),
+            headers={"Authorization": f"Bearer {key}"},
+        )
+
+    assert resp.status_code == 401, resp.text
+    refused = [r for r in caplog.records if "agent-key format" in r.getMessage()]
+    assert refused, [r.getMessage() for r in caplog.records]
+    assert key not in caplog.text
+
+
+@pytest.mark.parametrize("approval_status", ["pending", "active"])
+async def test_with_auth_off_an_agent_format_token_is_not_refused(
+    client: AsyncClient,
+    db: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+    approval_status: str,
+) -> None:
+    # `active` is a revoked agent: with auth off it learns its key is gone from this
+    # 200 and registers again, as an agent holding no secret must.
+    key = await _agent_key_format_token(db)
+    agent = make_agent(approval_status=approval_status, api_key_hash=None)
+    db.add(agent)
+    await db.flush()
+    monkeypatch.setattr(settings.security, "auth_enabled", False)
+
+    resp = await client.post(
+        "/api/v1/agent/heartbeat",
+        json=_beat(agent.id),
+        headers={"Authorization": f"Bearer {key}"},
+    )
+
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["agent_key_accepted"] is False, resp.text
 
 
 def test_no_registration_key_is_in_the_agent_key_format() -> None:
