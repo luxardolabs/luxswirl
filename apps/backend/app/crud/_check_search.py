@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 
 async def ids_matching_search(
-    db: AsyncSession, narrowed: Select[tuple[UUID, str, str]], search: str
+    db: AsyncSession, narrowed: Select[UUID, str, str], search: str
 ) -> list[UUID]:
     """The ids among `narrowed`'s (id, display_name, target) rows that match `search`."""
     needle = search.casefold()

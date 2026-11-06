@@ -66,7 +66,7 @@ async def _claim_one() -> MaintenanceJob | None:
         try:
             return await MaintenanceJobCoreService.mark_running(db, job_id)
         except DatabaseException:
-            logger.error(
+            logger.exception(
                 "Maintenance queue stopped: this job's parameters do not decrypt "
                 "under the configured SECURITY__FIELD_ENCRYPTION_KEY",
                 extra={"job_id": str(job_id)},
