@@ -10,6 +10,8 @@
  * "added/not added" visual indicator.
  */
 
+import { tagPill } from './tag-pill.js';
+
 let sortableInstance = null;
 let selectedTags = [];
 let checkActionsInitialized = false;
@@ -138,17 +140,12 @@ function initializeTagFiltering() {
         if (!selectedTagsContainer) return;
         selectedTagsContainer.innerHTML = '';
         selectedTags.forEach(tag => {
-            const pill = document.createElement('span');
-            pill.className = 'inline-flex items-center gap-1 px-2 py-1 bg-brand-600/20 text-brand-300 rounded-full text-xs border border-brand-500/30';
-            pill.innerHTML = `
-                ${tag}
-                <button type="button" class="remove-tag-btn hover:text-white" data-tag="${tag}">
-                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                    </svg>
-                </button>
-            `;
-            selectedTagsContainer.appendChild(pill);
+            selectedTagsContainer.appendChild(tagPill(tag, {
+                pillClass: 'inline-flex items-center gap-1 px-2 py-1 bg-brand-600/20 text-brand-300 rounded-full text-xs border border-brand-500/30',
+                buttonClass: 'remove-tag-btn hover:text-white',
+                dataKey: 'tag',
+                element: 'span',
+            }));
         });
         if (hiddenTagsInput) {
             hiddenTagsInput.value = selectedTags.join(',');

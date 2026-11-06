@@ -7,15 +7,6 @@ let selectorTags = [];
 let availableTags = [];
 
 /**
- * Escape HTML to prevent XSS
- */
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
-
-/**
  * Render selector tags
  */
 function renderTags() {
@@ -163,12 +154,13 @@ function showSuggestions(filter) {
         return;
     }
 
-    suggestionsDiv.innerHTML = filtered.slice(0, 10).map(tag => `
-        <div class="px-4 py-2 hover:bg-dark-bg-tertiary cursor-pointer text-sm font-mono text-dark-text-primary transition-colors"
-             data-add-selector-tag-from-suggestion="${escapeHtml(tag)}">
-            ${escapeHtml(tag)}
-        </div>
-    `).join('');
+    suggestionsDiv.replaceChildren(...filtered.slice(0, 10).map(tag => {
+        const suggestion = document.createElement('div');
+        suggestion.className = 'px-4 py-2 hover:bg-dark-bg-tertiary cursor-pointer text-sm font-mono text-dark-text-primary transition-colors';
+        suggestion.dataset.addSelectorTagFromSuggestion = tag;
+        suggestion.textContent = tag;
+        return suggestion;
+    }));
     suggestionsDiv.classList.remove('hidden');
 }
 
