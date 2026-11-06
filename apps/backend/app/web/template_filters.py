@@ -12,6 +12,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from jinja2 import Environment, pass_eval_context
 from jinja2.filters import do_xmlattr
 from jinja2.nodes import EvalContext
+from markupsafe import Markup
 
 from app.core.credential_mask import mask_credentials
 from app.core.display_settings import current_display_settings
@@ -266,8 +267,8 @@ def _compute_static_version() -> str:
     ]
 
 
-# What HTML lets an attribute's name hold; Alpine's `@click` and htmx's `hx-on::x` pass.
-_ATTRIBUTE_NAME = re.compile(r"""[^\s"'<>/=]+""")
+# The attribute names the templates write, Alpine's `@click` and htmx's `hx-on::x` among them.
+_ATTRIBUTE_NAME = re.compile(r"[A-Za-z_:@][A-Za-z0-9_:.@-]*")
 
 
 @pass_eval_context
@@ -279,7 +280,8 @@ def strict_xmlattr(
     Jinja's skips a missing field silently and leaves Markup unescaped. Each value
     here is read with `str`, so a missing field raises under StrictUndefined as it
     does anywhere else in a template, and reaches Jinja's filter as plain text,
-    which it escapes. None still leaves the attribute out.
+    which it escapes once (Markup is unescaped first). None still leaves the
+    attribute out.
 
     Raises:
         ValueError: A key is not an attribute name.
@@ -288,7 +290,12 @@ def strict_xmlattr(
     for name, value in values.items():
         if not _ATTRIBUTE_NAME.fullmatch(name):
             raise ValueError(f"not an attribute name: {name!r}")
-        checked[name] = None if value is None else "".join(str(value))
+        if value is None:
+            checked[name] = None
+        elif isinstance(value, Markup):
+            checked[name] = value.unescape()
+        else:
+            checked[name] = str(value)
     return do_xmlattr(eval_ctx, checked, autospace)
 
 
