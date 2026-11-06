@@ -186,15 +186,78 @@ async def test_two_steps_that_mask_alike_keep_their_own_rows(
         assert (number in viewer) == (number in editor), number
 
 
-def test_keys_that_mask_alike_stay_apart_and_in_step() -> None:
+def test_a_key_keeps_one_name_through_a_document() -> None:
     first, second = _steps_differing_only_in_a_credential()
 
-    one = mask_mapping({first: 1.0, second: 2.0})
-    other = mask_mapping({second: 20.0, first: 10.0})
+    masked = mask_mapping(
+        {"durations": {first: 1.0, second: 2.0}, "timings": {second: 20.0, first: 10.0}}
+    )
 
-    assert len(one) == len(other) == 2
-    assert set(one) == set(other)
-    assert {name: (one[name], other[name]) for name in one} == {
-        "https://app.example.com/login?token=***": (1.0, 10.0),
-        "https://app.example.com/login?token=*** (2)": (2.0, 20.0),
+    assert masked == {
+        "durations": {
+            "https://app.example.com/login?token=***": 1.0,
+            "https://app.example.com/login?token=*** (2)": 2.0,
+        },
+        "timings": {
+            "https://app.example.com/login?token=*** (2)": 20.0,
+            "https://app.example.com/login?token=***": 10.0,
+        },
     }
+
+
+def test_a_key_missing_from_one_mapping_keeps_its_name_in_the_other() -> None:
+    first, second = _steps_differing_only_in_a_credential()
+
+    masked = mask_mapping(
+        {"durations": {first: 1.0, second: 2.0}, "timings": {second: 20.0}}
+    )
+
+    durations = masked["durations"]
+    timings = masked["timings"]
+    assert isinstance(durations, dict)
+    assert isinstance(timings, dict)
+    [name] = timings
+    assert durations[name] == 2.0
+
+
+def test_a_key_that_already_reads_like_a_number_does_not_merge() -> None:
+    first, second = _steps_differing_only_in_a_credential()
+    literal = "https://app.example.com/login?token=*** (2)"
+
+    for keys in ([first, second, literal], [literal, first, second]):
+        masked = mask_mapping({key: index for index, key in enumerate(keys)})
+
+        assert sorted(v for v in masked.values() if isinstance(v, int)) == [0, 1, 2]
+
+
+def test_the_names_do_not_depend_on_how_the_secrets_sort() -> None:
+    base = "https://app.example.com/login?token="
+
+    low_first = mask_mapping({f"{base}AAA": 1.0, f"{base}ZZZ": 2.0})
+    high_first = mask_mapping({f"{base}ZZZ": 1.0, f"{base}AAA": 2.0})
+
+    assert low_first == high_first
+
+
+async def test_a_step_with_no_timing_reads_the_same_figures_as_an_editor(
+    client: AsyncClient, db: AsyncSession
+) -> None:
+    first, second = _steps_differing_only_in_a_credential()
+    metrics = json.dumps(
+        {
+            "synthetic": {
+                "status": "passed",
+                "track_durations": {first: 1.0, second: 2.0},
+                "track_timings": {
+                    second: {"navigationStart": 1000, "loadEventEnd": 1222},
+                },
+            }
+        }
+    )
+
+    viewer = await _panel(client, db, "synthetic", "viewer", metrics)
+    editor = await _panel(client, db, "synthetic", "editor", metrics)
+
+    assert "BBB222" not in viewer
+    for number in ("1000ms", "2000ms", "3000"):
+        assert (number in viewer) == (number in editor), number
