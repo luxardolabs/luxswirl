@@ -1,6 +1,6 @@
 {
   "guard": "luxaudit",
-  "guard_version": "0.16.0",
+  "guard_version": "0.17.0",
   "repo": "/repo",
   "packages": 214,
   "source": "apps/backend/poetry.lock, apps/agent/poetry.lock, apps/backend/package-lock.json",
@@ -14,6 +14,7 @@
   "deferred": [],
   "banned": [],
   "not_audited": [],
+  "by_public_version": [],
   "warnings": [],
   "image": {
     "ref": "ghcr.io/luxardolabs/luxswirl-backend:2026.09.0, ghcr.io/luxardolabs/luxswirl-agent:2026.09.0",
@@ -32,6 +33,6 @@
     "expired": [],
     "unjudged": []
   },
-  "commit": "495070a8a5944c51359fe52689adeb1e0415a4f5",
-  "generated_at": "2026-11-06T21:07:30Z"
+  "commit": "201e934769fd8323fba8c6813239cf80e01e9d88",
+  "generated_at": "2026-11-06T23:55:38Z"
 }
