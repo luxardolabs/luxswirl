@@ -95,7 +95,7 @@ A check is addressed by its own id. Reads take any token; writes take an editor'
 | `POST`   | `/api/v1/admin/checks/{id}/enable`  | editor | Enable it                                                                          |
 | `POST`   | `/api/v1/admin/checks/{id}/disable` | editor | Disable it                                                                         |
 
-The list takes `page` (from 1) and `per_page` (1-200, default 50), and filters `agent_id`, `check_type`, `tag`, `search` (name or target), `enabled_only` and `status` (`up`, `down` or `unknown`).
+The list takes `page` (from 1) and `per_page` (1-200, default 50), and filters `agent_id`, `check_type`, `tag`, `search` (name, or target with its credentials masked), `enabled_only` and `status` (`up`, `down` or `unknown`).
 
 Every check the API returns carries its health, as the status dashboard shows it:
 
