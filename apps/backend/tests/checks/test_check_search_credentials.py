@@ -13,7 +13,7 @@ from collections.abc import AsyncIterator
 import pytest
 import pytest_asyncio
 from app.core.config import settings
-from app.core.credential_mask import mask_credentials
+from app.core.credential_mask import mask_credentials, mask_url_paths
 from app.core.rate_limit import limiter
 from app.crud.check_crud import CheckCRUD
 from app.main import app
@@ -190,3 +190,64 @@ def test_a_quoted_value_still_runs_to_its_closing_quote(
     value: str, masked: str
 ) -> None:
     assert mask_credentials(value) == masked
+
+
+SIZE = 256 * 1024
+
+
+@pytest.mark.parametrize(
+    "hostile",
+    [
+        "pwd={ " * (SIZE // 6),
+        "Server=x;" + "pwd={ " * (SIZE // 6),
+        "password='" + "\\" * SIZE,
+        "password=' " * (SIZE // 11),
+    ],
+    ids=["braces", "odbc-braces", "backslashes", "quotes"],
+)
+def test_masking_a_long_value_takes_no_time(hostile: str) -> None:
+    """An MCP argument can reach 4 MiB, and a result's metrics have no limit."""
+    started = time.perf_counter()
+    mask_credentials(hostile)
+    elapsed = time.perf_counter() - started
+
+    assert elapsed < 1.0, elapsed
+
+
+def test_cutting_a_long_run_of_scheme_characters_takes_no_time() -> None:
+    hostile = "https://203.0.113.9/'" + "a." * (SIZE // 2)
+
+    started = time.perf_counter()
+    mask_url_paths(hostile)
+    elapsed = time.perf_counter() - started
+
+    assert elapsed < 1.0, elapsed
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "host=db password='my pass\\' dbname=app",
+        'host=db password="my pass\\" dbname=app',
+        "host=db password='my pass",
+        "host=db password='my pass\\",
+        "Server=db;Pwd={my pass",
+        "pwd={my pass",
+    ],
+)
+def test_an_unclosed_value_is_masked_to_the_end(value: str) -> None:
+    masked = mask_credentials(value)
+
+    assert "pass" not in masked.replace("password", ""), masked
+    assert "***" in masked
+
+
+@pytest.mark.parametrize(
+    ("value", "url"),
+    [
+        ("see https://ha.lan/api/webhook/abc for it", "see https://ha.lan/... for it"),
+        ("x+y.z://h/p", "x+y.z://h/..."),
+    ],
+)
+def test_a_url_is_still_cut_to_its_scheme_and_host(value: str, url: str) -> None:
+    assert mask_url_paths(value) == url
