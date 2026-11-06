@@ -1868,13 +1868,13 @@
         },
         {
           "rule": "fw.settings_secrets_required",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.341.0",
-          "violations": 2,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
-          "fix": "Declare the secret with no default and a refusal of empty, short and placeholder values: `SECRET_KEY: SecretStr = Field(min_length=32)`, or a `@field_validator('SECRET_KEY')` that raises on a value shorter than 32 or found in the `.env` example. The deployment sets it; a fresh `secrets.token_urlsafe(32)` printed once is a good one. A second key (field encryption beside session signing) is its own required field, not derived from the first.",
+          "fix": "",
           "example": ""
         },
         {
@@ -2044,8 +2044,8 @@
         }
       ],
       "summary": {
-        "PASS": 164,
-        "FAIL": 3,
+        "PASS": 165,
+        "FAIL": 2,
         "XFAIL": 0,
         "XPASS": 0,
         "INERT": 18
@@ -2762,13 +2762,13 @@
       },
       {
         "rule": "repo.compose_oom_ranked",
-        "status": "FAIL",
+        "status": "PASS",
         "since": "0.343.0",
-        "violations": 8,
+        "violations": 0,
         "deferred": false,
         "inert": false,
         "inert_reason": "",
-        "fix": "Give every service the deployed stack runs `oom_score_adj: -500` (from -999 to -500), and every service of the test profile `oom_score_adj: 500` (any positive value). The kernel then kills a test or guard container (the guard-run block runs those at +500) before the app or its database when the Docker VM runs out of memory. Write the number in compose.yml itself, not through a variable. See --playbook compose-hygiene.",
+        "fix": "",
         "example": ""
       },
       {
@@ -2960,13 +2960,13 @@
       },
       {
         "rule": "repo.entrypoint_execs",
-        "status": "FAIL",
+        "status": "PASS",
         "since": "0.27.0",
-        "violations": 1,
+        "violations": 0,
         "deferred": false,
         "inert": false,
         "inert_reason": "",
-        "fix": "Use exec-form `CMD [\"uvicorn\", \u2026]` / `CMD [\"python3\", \"-m\", \"app.main\"]`, or in a migrate-then-serve wrapper `exec` the server (`sh -c \"alembic upgrade head && exec uvicorn \u2026\"`) \u2014 else SIGTERM hits `sh`, not the server, and shutdown is never graceful. A compose `command:`/`entrypoint:` replaces the image's start, so the same holds there. See --doc FLEET-BUILD-DEPLOY-STANDARD.",
+        "fix": "",
         "example": ""
       },
       {
@@ -2993,20 +2993,20 @@
       }
     ],
     "summary": {
-      "PASS": 71,
-      "FAIL": 2,
+      "PASS": 73,
+      "FAIL": 0,
       "XFAIL": 0,
       "XPASS": 0,
       "INERT": 1
     }
   },
   "summary": {
-    "PASS": 242,
-    "FAIL": 5,
+    "PASS": 245,
+    "FAIL": 2,
     "XFAIL": 0,
     "XPASS": 0,
     "INERT": 22
   },
-  "commit": "5796d12bb96633391c2972242cb427078a7cfc89",
-  "generated_at": "2026-11-05T20:00:32Z"
+  "commit": "09e769763ac32694f36191a60a92a64433b76d66",
+  "generated_at": "2026-11-06T01:54:06Z"
 }
