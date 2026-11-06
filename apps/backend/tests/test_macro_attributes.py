@@ -16,6 +16,7 @@ from typing import Any
 import pytest
 from app.web.templates import templates
 from jinja2 import UndefinedError
+from markupsafe import Markup
 
 pytestmark = pytest.mark.unit
 
@@ -440,17 +441,31 @@ def test_a_missing_name_under_attrs_raises_at_render() -> None:
         _render("{{ btn_disable(attrs={'data-tag': no_such_name}) }}")
 
 
-def test_markup_under_attrs_is_escaped_too() -> None:
-    """A `{% set %}` block is Markup, which must not leave its attribute."""
-    out = _render(
-        """{% set v %}x" onclick="1{% endset %}{{ btn_disable(attrs={'data-a': v}) }}"""
-    )
+@pytest.mark.parametrize(
+    "source",
+    [
+        """{% set v %}x" onclick="1{% endset %}{{ btn_disable(attrs={'data-a': v}) }}""",
+        "{{ btn_disable(attrs={'data-a': name | e}) }}",
+        "{{ btn_disable(attrs={'data-a': name | safe}) }}",
+    ],
+)
+def test_markup_under_attrs_is_refused(source: str) -> None:
+    with pytest.raises(ValueError, match="plain value"):
+        _render(source, name="a&b")
 
+
+class _StrIsMarkup:
+    def __str__(self) -> str:
+        return Markup('x" onclick="1')
+
+
+def test_a_value_whose_str_is_markup_stays_in_its_attribute() -> None:
     parser = _Tags()
-    parser.feed(out)
+    parser.feed(_render("{{ btn_disable(attrs={'data-a': v}) }}", v=_StrIsMarkup()))
+
     button = dict(parser.tags[0][1])
-    assert "onclick" not in button, out
-    assert button["data-a"] == 'x" onclick="1', out
+    assert "onclick" not in button
+    assert button["data-a"] == 'x" onclick="1'
 
 
 def test_none_leaves_the_attribute_out_and_other_values_keep_it() -> None:
@@ -461,20 +476,6 @@ def test_none_leaves_the_attribute_out_and_other_values_keep_it() -> None:
     assert "data-none" not in out
     assert 'data-empty=""' in out
     assert 'data-zero="0"' in out
-
-
-@pytest.mark.parametrize(
-    "source",
-    [
-        "{% set v %}/x?q={{ name }}{% endset %}{{ btn_disable(attrs={'data-a': v}) }}",
-        "{{ btn_disable(attrs={'data-a': '/x?q=' ~ (name | e)}) }}",
-    ],
-)
-def test_markup_holding_an_escaped_value_is_not_escaped_twice(source: str) -> None:
-    parser = _Tags()
-    parser.feed(_render(source, name="a&b"))
-
-    assert dict(parser.tags[0][1])["data-a"] == "/x?q=a&b"
 
 
 @pytest.mark.parametrize(
