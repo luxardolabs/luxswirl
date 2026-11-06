@@ -8,6 +8,7 @@ from uuid import UUID, uuid4
 from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.enum_model import SchedulerExecutionStatus
 from app.models.scheduler_model import JobConfiguration, JobExecution
 
 
@@ -127,8 +128,48 @@ class JobConfigurationCRUD:
         return job
 
     @staticmethod
-    async def reload(db: AsyncSession, job: JobConfiguration) -> None:
-        """Re-read a job a savepoint rollback expired."""
+    async def count_success(
+        db: AsyncSession,
+        job: JobConfiguration,
+        status: SchedulerExecutionStatus,
+        now: datetime,
+    ) -> None:
+        """Count a run that finished, in one statement, and re-read the job.
+
+        A run reads the job and then runs for as long as the job takes, so it adds to
+        the row as stored, never to what it read.
+        """
+        await db.execute(
+            update(JobConfiguration)
+            .where(JobConfiguration.id == job.id)
+            .values(
+                total_runs=JobConfiguration.total_runs + 1,
+                retry_count=0,
+                last_run_at=now,
+                last_status=status,
+            )
+            .execution_options(synchronize_session=False)
+        )
+        await db.refresh(job)
+
+    @staticmethod
+    async def count_failure(
+        db: AsyncSession, job: JobConfiguration, *, counts_as_retry: bool
+    ) -> None:
+        """Count a run that failed, in one statement, and re-read the job (see
+        `count_success`). A manual run is no retry. A savepoint's rollback may have
+        expired the job, and reading its id must not load it, so it is re-read first."""
+        await db.refresh(job)
+        await db.execute(
+            update(JobConfiguration)
+            .where(JobConfiguration.id == job.id)
+            .values(
+                failed_runs=JobConfiguration.failed_runs + 1,
+                retry_count=JobConfiguration.retry_count + int(counts_as_retry),
+                last_status=SchedulerExecutionStatus.FAILED,
+            )
+            .execution_options(synchronize_session=False)
+        )
         await db.refresh(job)
 
     @staticmethod

@@ -194,16 +194,13 @@ class SchedulerCoreService:
                 )
                 execution.status = final_status
 
-                # Reset retry count on success
-                job.retry_count = 0
-
                 # Calculate next run time
                 job.next_run_at = self._calculate_next_run(job)
 
-                # Update stats
-                job.last_run_at = datetime.now(UTC)
-                job.last_status = final_status
-                job.total_runs += 1
+                # Update stats, and reset the retry count on success
+                await JobConfigurationCRUD.count_success(
+                    db, job, final_status, datetime.now(UTC)
+                )
 
                 logger.info(
                     "Job completed with errors"
@@ -251,9 +248,7 @@ class SchedulerCoreService:
         - retry_limit = 0: Never auto-disable (infinite retries, critical jobs)
         - retry_limit > 0: Disable after retry_limit consecutive failures
         """
-        job.retry_count += 1
-        job.last_status = SchedulerExecutionStatus.FAILED
-        job.failed_runs += 1
+        await JobConfigurationCRUD.count_failure(db, job, counts_as_retry=True)
 
         # retry_limit = 0 means "never auto-disable" (infinite retries)
         if job.retry_limit == 0 or job.retry_count <= job.retry_limit:
@@ -536,13 +531,11 @@ class SchedulerCoreService:
                     execution.status = final_status
 
                     # Update job stats
-                    job.last_run_at = datetime.now(UTC)
-                    job.last_status = final_status
-                    job.total_runs += 1
-                    job.retry_count = 0
                     job.next_run_at = self._calculate_next_run(job)
+                    await JobConfigurationCRUD.count_success(
+                        db, job, final_status, datetime.now(UTC)
+                    )
 
-                    job = await JobConfigurationCRUD.save_job(db, job)
                     return SchedulerRunResult(
                         status=final_status,
                         execution_id=execution.id,
@@ -572,16 +565,13 @@ class SchedulerCoreService:
             # count vanished and the Run button answered a 500 instead of an
             # error toast. The savepoint's rollback expired both rows.
             await JobExecutionCRUD.reload(db, execution)
-            await JobConfigurationCRUD.reload(db, job)
             execution.status = SchedulerExecutionStatus.FAILED
             execution.error_message = error
             execution.completed_at = datetime.now(UTC)
             execution.duration_seconds = (
                 execution.completed_at - execution.started_at
             ).total_seconds()
-            job.last_status = SchedulerExecutionStatus.FAILED
-            job.failed_runs += 1
-            job = await JobConfigurationCRUD.save_job(db, job)
+            await JobConfigurationCRUD.count_failure(db, job, counts_as_retry=False)
             return SchedulerRunResult(
                 status=SchedulerExecutionStatus.FAILED,
                 execution_id=execution.id,
