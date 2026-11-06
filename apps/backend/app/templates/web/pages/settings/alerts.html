@@ -101,9 +101,9 @@
             <!-- Actions -->
             <div class="flex items-center gap-2 pt-3 border-t border-dark-border">
                 {% if alert.is_enabled %}
-                    {{ btn_disable(extra_classes='flex-1', extra_attrs='hx-post="' ~ alert.urls.toggle ~ '" hx-swap="none" title="Disable"') }}
+                    {{ btn_disable(extra_classes='flex-1', extra_attrs='hx-swap="none" title="Disable"', attrs={'hx-post': alert.urls.toggle}) }}
                 {% else %}
-                    {{ btn_enable(extra_classes='flex-1', extra_attrs='hx-post="' ~ alert.urls.toggle ~ '" hx-swap="none" title="Enable"') }}
+                    {{ btn_enable(extra_classes='flex-1', extra_attrs='hx-swap="none" title="Enable"', attrs={'hx-post': alert.urls.toggle}) }}
                 {% endif %}
                 {{ btn_edit_text(extra_classes='flex-1', hx_get=alert.urls.edit_form, hx_target='#panel-container', hx_swap='innerHTML') }}
                 {% if current_user.role == 'admin' %}

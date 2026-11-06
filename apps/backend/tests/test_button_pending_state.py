@@ -12,6 +12,7 @@ from __future__ import annotations
 import re
 
 import pytest
+from _paths import BACKEND_ROOT
 from app.web.templates import templates
 
 pytestmark = pytest.mark.unit
@@ -50,8 +51,11 @@ def test_a_button_that_writes_disables_itself_and_carries_a_spinner(call: str) -
 def test_the_confirm_button_sends_its_request_from_itself() -> None:
     """htmx.ajax puts the in-flight state on its source, which is the button."""
     html = _render("{{ confirm_action_btn(icon_svg=icon, hx_post='/x') }}")
+    script = (BACKEND_ROOT / "static/js/app.js").read_text()
 
-    assert "source: $el" in html
+    assert "sendConfirmedAction($el)" in html
+    assert "data-ajax-source" not in html
+    assert "source: ajaxSource ? document.querySelector(ajaxSource) : button" in script
 
 
 def test_a_submit_button_carries_the_spinner_its_form_shows() -> None:

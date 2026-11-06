@@ -4,6 +4,18 @@
 {% from 'macros/tables.html' import data_table %}
 {% set result = job.result %}
 
+{# One quick-create button. After a successful create it dims and disables itself so
+   the user gets immediate visual feedback; the page's `existing_checks` lookup renders
+   it as disabled on the next reload. #}
+{% macro quick_check_btn(svg, color, exists, title, url, include, vals) %}
+{{ icon_btn(svg, color=color, disabled=exists,
+            title=('Check already exists' if exists else title),
+            hx_post=url, hx_swap='none',
+            hx_include=include,
+            hx_vals=vals,
+            extra_attrs='hx-on::after-request="if(event.detail.successful){this.classList.add(\'opacity-30\',\'cursor-not-allowed\',\'pointer-events-none\');this.title=\'Check created\'}"') }}
+{% endmacro %}
+
 <!-- Scan Summary Stats -->
 <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
     <div class="card p-4">
@@ -111,7 +123,7 @@
                 <div class="flex flex-wrap gap-2">
                     {% for tag in available_check_tags %}
                     {{ tag_pill_button(tag, color='green', extra_classes='bulk-tag-browser-option',
-                                       extra_attrs='data-tag="' ~ tag ~ '"') }}
+                                       attrs={'data-tag': tag}) }}
                     {% endfor %}
                 </div>
             </div>
@@ -202,11 +214,6 @@
 
             <!-- Service Action Buttons -->
             <div class="flex items-center gap-1 flex-shrink-0">
-                {# After successful create, dim/disable the clicked button so the user
-                   gets immediate visual feedback. The page's `existing_checks` lookup
-                   will render it as disabled on next reload, making this purely a
-                   client-side nicety. #}
-                {% set on_success_disable = 'hx-on::after-request="if(event.detail.successful){this.classList.add(\'opacity-30\',\'cursor-not-allowed\',\'pointer-events-none\');this.title=\'Check created\'}"' %}
                 {% set quick_create_url = scan_action_urls.quick_create %}
                 {% set quick_include = "[name='interval'],[name='timeout'],[name='retry_attempts'],[name='agent_id'],[name='tags'],[name='expected_status'],[name='verify_ssl']" %}
 
@@ -217,12 +224,9 @@
                         {% set check_name = ("http_" ~ (host.hostname or host.ip) ~ "_" ~ port).replace(".", "_") %}
                         {% set exists = check_name in existing_checks %}
                         {% set http_svg %}<span class="w-3.5 h-3.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/globe-alt.svg" %}</span><span class="sr-only">HTTP:{{ port }}</span>{% endset %}
-                        {{ icon_btn(http_svg, color='brand', disabled=exists,
-                                    title=('Check already exists' if exists else 'Create HTTP check for port ' ~ port|string),
-                                    hx_post=quick_create_url, hx_swap='none',
-                                    hx_include=quick_include,
-                                    hx_vals='{"check_type":"http","target":"http://' ~ (host.hostname or host.ip) ~ ':' ~ port|string ~ '","display_name":"' ~ check_name ~ '","port":"' ~ port|string ~ '"}',
-                                    extra_attrs=on_success_disable) }}
+                        {{ quick_check_btn(http_svg, 'brand', exists, 'Create HTTP check for port ' ~ port|string,
+                                    quick_create_url, quick_include,
+                                    {'check_type': 'http', 'target': 'http://' ~ (host.hostname or host.ip) ~ ':' ~ port, 'display_name': check_name, 'port': port|string}) }}
                         {% endif %}
 
                         {# SSH ports (22, 2222) #}
@@ -230,12 +234,9 @@
                         {% set check_name = ("ssh_" ~ (host.hostname or host.ip) ~ "_" ~ port).replace(".", "_") %}
                         {% set exists = check_name in existing_checks %}
                         {% set ssh_svg %}<span class="w-3.5 h-3.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/command-line.svg" %}</span><span class="sr-only">SSH:{{ port }}</span>{% endset %}
-                        {{ icon_btn(ssh_svg, color='purple', disabled=exists,
-                                    title=('Check already exists' if exists else 'Create TCP check for SSH port ' ~ port|string),
-                                    hx_post=quick_create_url, hx_swap='none',
-                                    hx_include=quick_include,
-                                    hx_vals='{"check_type":"tcp","target":"' ~ (host.hostname or host.ip) ~ ':' ~ port|string ~ '","display_name":"' ~ check_name ~ '","port":"' ~ port|string ~ '"}',
-                                    extra_attrs=on_success_disable) }}
+                        {{ quick_check_btn(ssh_svg, 'purple', exists, 'Create TCP check for SSH port ' ~ port|string,
+                                    quick_create_url, quick_include,
+                                    {'check_type': 'tcp', 'target': (host.hostname or host.ip) ~ ':' ~ port, 'display_name': check_name, 'port': port|string}) }}
                         {% endif %}
 
                         {# Database ports (3306, 5432, 27017, 6379, 1433, 1521) #}
@@ -243,12 +244,9 @@
                         {% set check_name = ("db_" ~ (host.hostname or host.ip) ~ "_" ~ port).replace(".", "_") %}
                         {% set exists = check_name in existing_checks %}
                         {% set db_svg %}<span class="w-3.5 h-3.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/circle-stack.svg" %}</span><span class="sr-only">DB:{{ port }}</span>{% endset %}
-                        {{ icon_btn(db_svg, color='yellow', disabled=exists,
-                                    title=('Check already exists' if exists else 'Create TCP check for database port ' ~ port|string),
-                                    hx_post=quick_create_url, hx_swap='none',
-                                    hx_include=quick_include,
-                                    hx_vals='{"check_type":"tcp","target":"' ~ (host.hostname or host.ip) ~ ':' ~ port|string ~ '","display_name":"' ~ check_name ~ '","port":"' ~ port|string ~ '"}',
-                                    extra_attrs=on_success_disable) }}
+                        {{ quick_check_btn(db_svg, 'yellow', exists, 'Create TCP check for database port ' ~ port|string,
+                                    quick_create_url, quick_include,
+                                    {'check_type': 'tcp', 'target': (host.hostname or host.ip) ~ ':' ~ port, 'display_name': check_name, 'port': port|string}) }}
                         {% endif %}
                     {% endfor %}
                 {% endif %}
@@ -257,12 +255,9 @@
                 {% set check_name = ("ping_" ~ (host.hostname or host.ip)).replace(".", "_") %}
                 {% set exists = check_name in existing_checks %}
                 {% set ping_svg %}<span class="w-3.5 h-3.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/chart-bar.svg" %}</span><span class="sr-only">Ping</span>{% endset %}
-                {{ icon_btn(ping_svg, color='green', disabled=exists,
-                            title=('Check already exists' if exists else 'Create ping check'),
-                            hx_post=quick_create_url, hx_swap='none',
-                            hx_include=quick_include,
-                            hx_vals='{"check_type":"ping","target":"' ~ (host.hostname or host.ip) ~ '","display_name":"' ~ check_name ~ '"}',
-                            extra_attrs=on_success_disable) }}
+                {{ quick_check_btn(ping_svg, 'green', exists, 'Create ping check',
+                                    quick_create_url, quick_include,
+                                    {'check_type': 'ping', 'target': (host.hostname or host.ip), 'display_name': check_name}) }}
             </div>
         </div>
         {% endfor %}

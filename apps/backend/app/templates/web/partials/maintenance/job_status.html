@@ -22,7 +22,10 @@
      hx-swap="outerHTML"
      {% endif %}
      {% if job.status == 'done' %}
-     hx-on::load="window.dispatchEvent(new CustomEvent('maintenanceJobDone', { detail: { id: '{{ job.id }}', kind: '{{ job.kind }}', target_id: '{{ job.target_id or '' }}' } }))"
+     data-job-id="{{ job.id }}"
+     data-job-kind="{{ job.kind }}"
+     data-job-target="{{ job.target_id or '' }}"
+     hx-on::load="window.dispatchEvent(new CustomEvent('maintenanceJobDone', { detail: { id: this.dataset.jobId, kind: this.dataset.jobKind, target_id: this.dataset.jobTarget } }))"
      {% endif %}>
 
     <div class="flex items-center gap-3">

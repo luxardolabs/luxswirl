@@ -33,7 +33,8 @@
                                      hx_trigger='click',
                                      hx_swap='none',
                                      title=('Disable check' if check.enabled else 'Enable check'),
-                                     extra_attrs='hx-on::after-request="htmx.ajax(\'GET\', \'' ~ check_urls.detail ~ '\', {target: \'#check-detail-panel\', swap: \'innerHTML\'})"') }}
+                                     extra_attrs='hx-on::after-request="htmx.ajax(\'GET\', this.dataset.detailUrl, {target: \'#check-detail-panel\', swap: \'innerHTML\'})"',
+                                     attrs={'data-detail-url': check_urls.detail}) }}
 
                     <!-- Clone -->
                     {%- set clone_svg -%}<span class="w-3.5 h-3.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/document-duplicate.svg" %}</span>{%- endset -%}

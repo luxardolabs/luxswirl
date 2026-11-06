@@ -6,7 +6,6 @@
    item by its position sends it, and the server refuses one the page has moved
    past (409), so the editor redraws instead of changing the wrong item. #}
 <span hidden id="dashboard-page-version" data-page-version="{{ status_page.updated_at.isoformat() }}"></span>
-{% set editor_request = "source: document.getElementById('dashboard-items'), headers: {'X-Page-Version': document.getElementById('dashboard-page-version').dataset.pageVersion}" %}
 {% if status_page.items %}
     {% for item, item_urls in dashboard_items %}
         {% if item.type == 'group' %}
@@ -30,11 +29,11 @@
                             {% endif %}
                         </div>
                         <div class="flex items-center gap-2">
-                            {{ icon_edit(extra_classes='opacity-0 group-hover:opacity-100 rename-group-btn', extra_attrs='data-item-index="' ~ loop.index0 ~ '"') }}
+                            {{ icon_edit(extra_classes='opacity-0 group-hover:opacity-100 rename-group-btn', attrs={'data-item-index': loop.index0}) }}
                             {# Removing a dashboard item is an EditorUserWeb endpoint;
                                this partial renders on a CurrentUserWeb page. #}
                             {% if current_user.role in ('admin', 'editor') %}
-                            {{ delete_icon_button(delete_url=item_urls.remove, target_id='dashboard-item-' ~ loop.index0, hx_target='#dashboard-items', hx_swap='innerHTML', extra_classes='opacity-0 group-hover:opacity-100', ajax_extra=editor_request) }}
+                            {{ delete_icon_button(delete_url=item_urls.remove, target_id='dashboard-item-' ~ loop.index0, hx_target='#dashboard-items', hx_swap='innerHTML', extra_classes='opacity-0 group-hover:opacity-100', ajax_source='#dashboard-items', page_version_from='#dashboard-page-version') }}
                             {% endif %}
                         </div>
                     </div>
@@ -45,9 +44,9 @@
                         <!-- Filter controls -->
                         <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 flex-1">
                             {# JS-driven filters: no form name, addressed by class + data-item-index. #}
-                            {% set item_idx = 'data-item-index="' ~ loop.index0 ~ '"' %}
+                            {% set item_index = loop.index0 %}
                             {% call select(class='input text-xs filter-agent-select',
-                                           extra_attrs='aria-label="Filter by agent" ' ~ item_idx) %}
+                                           extra_attrs='aria-label="Filter by agent"', attrs={'data-item-index': item_index}) %}
                                 <option value="">All Agents</option>
                                 {% for agent in all_agents %}
                                 <option value="{{ agent.id }}" {% if item.filter.get('agent_id') == agent.id|string %}selected{% endif %}>
@@ -56,7 +55,7 @@
                                 {% endfor %}
                             {% endcall %}
                             {% call select(class='input text-xs filter-type-select',
-                                           extra_attrs='aria-label="Filter by type" ' ~ item_idx) %}
+                                           extra_attrs='aria-label="Filter by type"', attrs={'data-item-index': item_index}) %}
                                 <option value="">All Types</option>
                                 {% for check_type in all_types %}
                                 <option value="{{ check_type }}" {% if item.filter.get('check_type') == check_type %}selected{% endif %}>{{ check_type }}</option>
@@ -64,10 +63,10 @@
                             {% endcall %}
                             {{ input(class='input text-xs filter-tags-input', placeholder='Tags',
                                      value=(item.filter.tags|join(', ') if item.filter.get('tags') else ''),
-                                     extra_attrs=item_idx) }}
+                                     attrs={'data-item-index': item_index}) }}
                             {{ input(class='input text-xs filter-search-input', placeholder='Search...',
                                      value=item.filter.get('search', ''),
-                                     extra_attrs=item_idx) }}
+                                     attrs={'data-item-index': item_index}) }}
                         </div>
                     {% endif %}
                     {# One sort row for both group kinds — a dynamic group sits it
@@ -80,13 +79,13 @@
                         {% set current_direction = item.get('sort_direction', 'asc') %}
 
                         {# Sort toggles — icon_btn(active=…) renders the pressed state. #}
-                        {% set sort_attrs = 'data-group-sort data-group-index="' ~ loop.index0 ~ '"' %}
+                        {% set group_index = loop.index0 %}
 
                         <!-- Manual -->
                         {% set manual_ico %}<span class="w-3.5 h-3.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/bars-3.svg" %}</span>{% endset %}
                         {{ icon_btn(manual_ico, color='brand', title='Manual Order',
                                     active=(current_sort == 'manual'),
-                                    extra_attrs=sort_attrs ~ ' data-sort-by="manual" data-sort-direction="asc"') }}
+                                    extra_attrs='data-group-sort data-sort-by="manual" data-sort-direction="asc"', attrs={'data-group-index': group_index}) }}
 
                         <!-- Name -->
                         {% set name_dir = 'desc' if (current_sort == 'name' and current_direction == 'asc') else 'asc' %}
@@ -94,7 +93,7 @@
                         {{ icon_btn(name_lbl, color='purple',
                                     title='Sort by Name (' ~ ('Z-A' if (current_sort == 'name' and current_direction == 'asc') else 'A-Z') ~ ')',
                                     active=(current_sort == 'name'), extra_classes='font-bold text-xs',
-                                    extra_attrs=sort_attrs ~ ' data-sort-by="name" data-sort-direction="' ~ name_dir ~ '"') }}
+                                    extra_attrs='data-group-sort data-sort-by="name"', attrs={'data-group-index': group_index, 'data-sort-direction': name_dir}) }}
 
                         <!-- Status -->
                         {% set status_dir = 'desc' if (current_sort == 'status' and current_direction == 'asc') else 'asc' %}
@@ -102,7 +101,7 @@
                         {{ icon_btn(status_lbl, color='green',
                                     title='Sort by Status (' ~ ('Down First' if (current_sort == 'status' and current_direction == 'asc') else 'Up First') ~ ')',
                                     active=(current_sort == 'status'), extra_classes='text-xs',
-                                    extra_attrs=sort_attrs ~ ' data-sort-by="status" data-sort-direction="' ~ status_dir ~ '"') }}
+                                    extra_attrs='data-group-sort data-sort-by="status"', attrs={'data-group-index': group_index, 'data-sort-direction': status_dir}) }}
 
                         <!-- Latency -->
                         {% set latency_dir = 'desc' if (current_sort == 'latency' and current_direction == 'asc') else 'asc' %}
@@ -110,7 +109,7 @@
                         {{ icon_btn(latency_ico, color='yellow',
                                     title='Sort by Latency (' ~ ('Slow First' if (current_sort == 'latency' and current_direction == 'asc') else 'Fast First') ~ ')',
                                     active=(current_sort == 'latency'),
-                                    extra_attrs=sort_attrs ~ ' data-sort-by="latency" data-sort-direction="' ~ latency_dir ~ '"') }}
+                                    extra_attrs='data-group-sort data-sort-by="latency"', attrs={'data-group-index': group_index, 'data-sort-direction': latency_dir}) }}
 
                         <!-- Uptime -->
                         {% set uptime_dir = 'asc' if (current_sort == 'uptime' and current_direction == 'desc') else 'desc' %}
@@ -118,7 +117,7 @@
                         {{ icon_btn(uptime_lbl, color='pink',
                                     title='Sort by Uptime (' ~ ('Low First' if (current_sort == 'uptime' and current_direction == 'desc') else 'High First') ~ ')',
                                     active=(current_sort == 'uptime'), extra_classes='font-bold text-xs',
-                                    extra_attrs=sort_attrs ~ ' data-sort-by="uptime" data-sort-direction="' ~ uptime_dir ~ '"') }}
+                                    extra_attrs='data-group-sort data-sort-by="uptime"', attrs={'data-group-index': group_index, 'data-sort-direction': uptime_dir}) }}
                     </div>
                     {% if 'filter' in item %}
                     </div>
@@ -279,7 +278,7 @@
                 </div>
                 {% endif %}
                 {% if current_user.role in ('admin', 'editor') %}
-                {{ delete_icon_button(delete_url=item_urls.remove, target_id='dashboard-item-' ~ loop.index0, hx_target='#dashboard-items', hx_swap='innerHTML', extra_classes='opacity-0 group-hover:opacity-100 flex-shrink-0', ajax_extra=editor_request) }}
+                {{ delete_icon_button(delete_url=item_urls.remove, target_id='dashboard-item-' ~ loop.index0, hx_target='#dashboard-items', hx_swap='innerHTML', extra_classes='opacity-0 group-hover:opacity-100 flex-shrink-0', ajax_source='#dashboard-items', page_version_from='#dashboard-page-version') }}
                 {% endif %}
             </div>
         {% endif %}

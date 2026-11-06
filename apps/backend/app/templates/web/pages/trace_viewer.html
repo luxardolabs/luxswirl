@@ -58,8 +58,7 @@
                 <!-- Alternative: Download -->
                 <p class="text-xs text-dark-text-muted mb-2">Or download and view locally:</p>
                 <div class="flex gap-2">
-                    {% set download_attrs %}download="{{ filename }}"{% endset %}
-                    {{ btn_download(label='Download Trace', href=download_url, style='secondary', extra_classes='flex-1 py-2 text-sm', extra_attrs=download_attrs) }}
+                    {{ btn_download(label='Download Trace', href=download_url, style='secondary', extra_classes='flex-1 py-2 text-sm', attrs={'download': filename}) }}
                     {{ btn_copy(label='Copy CLI Command', extra_classes='flex-1 py-2 text-sm', extra_attrs='data-copy-trace-command title="Copy CLI command"') }}
                 </div>
 
