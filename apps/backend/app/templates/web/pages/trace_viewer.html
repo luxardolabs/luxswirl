@@ -63,7 +63,7 @@
                 </div>
 
                 <div id="copied-message" class="hidden mt-2 text-xs text-green-400">
-                    ✓ Copied: playwright show-trace {{ filename }}
+                    ✓ Copied: {{ cli_command }}
                 </div>
             </div>
         </div>
@@ -74,7 +74,7 @@
     {# Server values reach the module as data-* attributes; the post-open panel
        is rendered here rather than built as a JS template literal, so its icon
        and download href stay server-rendered. #}
-    <div id="trace-config" hidden data-filename="{{ filename }}"></div>
+    <div id="trace-config" hidden data-cli-command="{{ cli_command }}"></div>
 
     <div id="trace-opened-panel" hidden class="flex items-center justify-center min-h-screen p-8">
         <div class="max-w-2xl w-full mx-auto card p-8 text-center">
