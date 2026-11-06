@@ -7,11 +7,13 @@ surface here is one a viewer reaches.
 
 from __future__ import annotations
 
+import time
 from collections.abc import AsyncIterator
 
 import pytest
 import pytest_asyncio
 from app.core.config import settings
+from app.core.credential_mask import mask_credentials
 from app.core.rate_limit import limiter
 from app.crud.check_crud import CheckCRUD
 from app.main import app
@@ -134,3 +136,57 @@ async def test_the_dashboard_answers_a_right_guess_as_a_wrong_one(
     assert right.status_code == host.status_code == 200
     assert "the-check" not in right.text
     assert "the-check" in host.text
+
+
+async def test_the_dependents_picker_answers_a_right_guess_as_a_wrong_one(
+    client: AsyncClient, db: AsyncSession
+) -> None:
+    await _check(db, TARGETS[0])
+    agent = make_agent()
+    db.add(agent)
+    await db.flush()
+    parent = make_check(agent_id=agent.id, display_name="the-parent", check_type="http")
+    db.add(parent)
+    await db.flush()
+    editor = make_user(role="editor")
+    db.add(editor)
+    await db.flush()
+    _, session = await AuthCoreService().create_session(db, editor.id)
+    client.cookies.set(settings.security.session_cookie_name, session)
+    path = f"/checks/{parent.id}/dependents"
+
+    right = await client.get(path, params={"search": SECRET[:6]})
+    host = await client.get(path, params={"search": "db.internal"})
+
+    assert right.status_code == host.status_code == 200, right.text
+    assert "the-check" not in right.text
+    assert "the-check" in host.text
+
+
+@pytest.mark.parametrize("quote", ["'", '"'])
+def test_masking_an_unclosed_quote_of_backslashes_takes_no_time(quote: str) -> None:
+    """An agent, a target and every MCP argument reach this, on the event loop."""
+    hostile = f"password={quote}" + "\\" * 40
+
+    started = time.perf_counter()
+    masked = mask_credentials(hostile)
+    elapsed = time.perf_counter() - started
+
+    assert elapsed < 1.0, elapsed
+    assert "\\" not in masked
+
+
+@pytest.mark.parametrize(
+    ("value", "masked"),
+    [
+        ("password='a\\'b' dbname=x", "password=*** dbname=x"),
+        ('password="a\\"b" dbname=x', "password=*** dbname=x"),
+        ("password='a\\\nb' dbname=x", "password=*** dbname=x"),
+        ("password='a\\\\' dbname=x", "password=*** dbname=x"),
+        ("password=a\\ b dbname=x", "password=*** dbname=x"),
+    ],
+)
+def test_a_quoted_value_still_runs_to_its_closing_quote(
+    value: str, masked: str
+) -> None:
+    assert mask_credentials(value) == masked
