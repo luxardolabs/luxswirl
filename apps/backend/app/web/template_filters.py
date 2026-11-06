@@ -3,11 +3,15 @@ Jinja2 template filters for the web UI.
 """
 
 import hashlib
+import re
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from jinja2 import Environment
+from jinja2 import Environment, pass_eval_context
+from jinja2.filters import do_xmlattr
+from jinja2.nodes import EvalContext
 
 from app.core.credential_mask import mask_credentials
 from app.core.display_settings import current_display_settings
@@ -262,6 +266,32 @@ def _compute_static_version() -> str:
     ]
 
 
+# What HTML lets an attribute's name hold; Alpine's `@click` and htmx's `hx-on::x` pass.
+_ATTRIBUTE_NAME = re.compile(r"""[^\s"'<>/=]+""")
+
+
+@pass_eval_context
+def strict_xmlattr(
+    eval_ctx: EvalContext, values: Mapping[str, object], autospace: bool = True
+) -> str:
+    """Jinja's `xmlattr` for this app's templates, without its two gaps.
+
+    Jinja's skips a missing field silently and leaves Markup unescaped. Each value
+    here is read with `str`, so a missing field raises under StrictUndefined as it
+    does anywhere else in a template, and reaches Jinja's filter as plain text,
+    which it escapes. None still leaves the attribute out.
+
+    Raises:
+        ValueError: A key is not an attribute name.
+    """
+    checked: dict[str, str | None] = {}
+    for name, value in values.items():
+        if not _ATTRIBUTE_NAME.fullmatch(name):
+            raise ValueError(f"not an attribute name: {name!r}")
+        checked[name] = None if value is None else "".join(str(value))
+    return do_xmlattr(eval_ctx, checked, autospace)
+
+
 def register_filters(jinja_env: Environment) -> None:
     """
     Register all custom filters with a Jinja2 environment.
@@ -269,6 +299,7 @@ def register_filters(jinja_env: Environment) -> None:
     Args:
         jinja_env: Jinja2 environment instance
     """
+    jinja_env.filters["xmlattr"] = strict_xmlattr
     jinja_env.filters["humanize_seconds"] = humanize_seconds
     jinja_env.filters["format_datetime"] = format_datetime
     jinja_env.filters["humanize_number"] = humanize_number

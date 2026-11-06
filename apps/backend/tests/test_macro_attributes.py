@@ -1,6 +1,6 @@
 """A server value reaches a macro's tag only as an escaped attribute's value.
 
-`attrs` is rendered through `xmlattr`, so a value holding a quote stays inside its
+`attrs` is rendered through the app's strict `xmlattr`, so a value holding a quote stays inside its
 attribute and adds none of its own. The JavaScript attributes the macros write are
 constants that read `data-*`, so a value there never runs. Each test parses the
 output as a browser would, and compares the attribute names and the decoded values.
@@ -15,6 +15,7 @@ from typing import Any
 
 import pytest
 from app.web.templates import templates
+from jinja2 import UndefinedError
 
 pytestmark = pytest.mark.unit
 
@@ -417,3 +418,52 @@ def test_a_scanned_hostname_stays_inside_its_quick_create_values(value: str) -> 
         assert value in json.loads(button["hx-vals"] or "")["target"]
     pills = [b for b in _find(html, "button") if "data-tag" in b]
     assert [p["data-tag"] for p in pills] == [value]
+
+
+_BUTTONS = '{% from "macros/buttons.html" import btn_disable, text_btn %}'
+
+
+def _render(source: str, **context: Any) -> str:
+    return templates.env.from_string(_BUTTONS + source).render(**context)
+
+
+def test_a_missing_field_under_attrs_raises_at_render() -> None:
+    """A renamed URL is a loud error, never a button that posts nowhere."""
+    alert = SimpleNamespace(urls=SimpleNamespace())
+
+    with pytest.raises(UndefinedError):
+        _render("{{ btn_disable(attrs={'hx-post': alert.urls.toggle}) }}", alert=alert)
+
+
+def test_a_missing_name_under_attrs_raises_at_render() -> None:
+    with pytest.raises(UndefinedError):
+        _render("{{ btn_disable(attrs={'data-tag': no_such_name}) }}")
+
+
+def test_markup_under_attrs_is_escaped_too() -> None:
+    """A `{% set %}` block is Markup, which must not leave its attribute."""
+    out = _render(
+        """{% set v %}x" onclick="1{% endset %}{{ btn_disable(attrs={'data-a': v}) }}"""
+    )
+
+    parser = _Tags()
+    parser.feed(out)
+    button = dict(parser.tags[0][1])
+    assert "onclick" not in button, out
+    assert button["data-a"] == 'x" onclick="1', out
+
+
+def test_none_leaves_the_attribute_out_and_other_values_keep_it() -> None:
+    out = _render(
+        """{{ btn_disable(attrs={'data-none': none, 'data-empty': '', 'data-zero': 0}) }}"""
+    )
+
+    assert "data-none" not in out
+    assert 'data-empty=""' in out
+    assert 'data-zero="0"' in out
+
+
+@pytest.mark.parametrize("name", ["bad name", "a>b", 'a"b', "a=b", "a/b", ""])
+def test_a_key_that_is_not_an_attribute_name_is_refused(name: str) -> None:
+    with pytest.raises(ValueError, match="attribute name"):
+        _render("{{ btn_disable(attrs={name: 'x'}) }}", name=name)

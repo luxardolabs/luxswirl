@@ -30,7 +30,7 @@
         attrs={'hx-post': url, 'data-tag': tag}   any value: `xmlattr` escapes it
                                                   and refuses a bad name. Pass plain
                                                   values, never `|safe` or `|tojson`:
-                                                  xmlattr leaves Markup unescaped.
+                                                  this app's xmlattr escapes Markup too.
         extra_attrs='data-close-panel'            a constant string only: it is
                                                   written into the tag raw.
     hx_vals is a dict, written as single-quoted JSON.
