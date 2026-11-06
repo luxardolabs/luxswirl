@@ -41,7 +41,7 @@ async def check_detail_panel(
         hours = await CheckDetailViewService.resolve_default_chart_hours(db)
 
     detail = await CheckDetailViewService.get_check_detail(
-        db, request, check_id, hours=hours
+        db, request, check_id, current_user.role, hours=hours
     )
 
     if not detail:
