@@ -1,23 +1,23 @@
 <!-- Network Discovery Results -->
 {% from 'macros/buttons.html' import text_btn %}
 {% from 'macros/tables.html' import data_table %}
-{% set result = job.result %}
+{% set result = job_result %}
 
 <!-- Discovery Summary -->
 <div class="card p-5">
     <h3 class="text-sm font-semibold uppercase tracking-wide text-dark-text-secondary mb-4">Network Topology Discovery</h3>
     <div class="space-y-3 text-sm">
-        {% if result.agent_info %}
+        {% if result.hostname or result.is_containerized is not none %}
         <div class="grid grid-cols-2 gap-3">
             <div>
                 <span class="text-dark-text-muted">Hostname:</span>
-                <span class="text-dark-text-primary ml-2 font-mono">{{ result.agent_info.hostname or '-' }}</span>
+                <span class="text-dark-text-primary ml-2 font-mono">{{ result.hostname or '-' }}</span>
             </div>
-            {% if result.agent_info.container_mode is not none %}
+            {% if result.is_containerized is not none %}
             <div>
                 <span class="text-dark-text-muted">Container Mode:</span>
                 <span class="ml-2">
-                    {% if result.agent_info.container_mode %}
+                    {% if result.is_containerized %}
                     <span class="text-yellow-400">✓ Yes</span>
                     {% else %}
                     <span class="text-green-400">✗ No (Host mode)</span>
@@ -142,7 +142,7 @@
         <div class="flex-1">
             <h4 class="text-sm font-semibold text-yellow-400 mb-2">Warning</h4>
             <p class="text-sm text-yellow-300">{{ result.warning }}</p>
-            {% if result.agent_info and result.agent_info.container_mode %}
+            {% if result.is_containerized %}
             <p class="text-xs text-yellow-300/70 mt-2">
                 💡 For better network visibility, consider running the agent in host networking mode.
             </p>

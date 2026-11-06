@@ -14,6 +14,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
+from app.core.scan_panel import panel_result
 from app.web.templates import templates
 from jinja2 import UndefinedError
 from markupsafe import Markup
@@ -374,11 +375,10 @@ def _network_scan_context(hostname: str) -> dict[str, Any]:
         "summary": None,
         "discovered_hosts": [host],
         "categorized_hosts": {"web": [host], "ssh": [host], "database": [host]},
-        "chunk_metrics": [],
-        "chunks_scanned": 1,
     }
     return {
         "job": SimpleNamespace(result=result, agent_id="a", duration_seconds=1),
+        "job_result": panel_result("network_scan", result),
         "scan_response_pct": 100,
         "scan_hosts": [host],
         "scan_new_count": 1,

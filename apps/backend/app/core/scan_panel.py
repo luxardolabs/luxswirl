@@ -10,6 +10,51 @@ from typing import Any
 
 from app.core.scan_check_names import expected_check_names
 
+# Every key the job panels read off a result. The agent sends some of them only
+# sometimes (`chunks_scanned` only when it chunked, `real_gateway` only behind a
+# container), and the templates raise on a key that is absent.
+_DISCOVER_PANEL_KEYS = (
+    "arp_neighbors",
+    "default_gateway",
+    "docker_gateway",
+    "hostname",
+    "inferred_network",
+    "is_containerized",
+    "network_size",
+    "real_gateway",
+    "recommendations",
+    "warning",
+)
+_SCAN_PANEL_KEYS = (
+    "chunk_metrics",
+    "chunks_scanned",
+    "discovered_hosts",
+    "hosts_responding",
+    "hosts_scanned",
+    "scan_duration_seconds",
+    "summary",
+)
+# A scan's categories, of which it reports only those its ports asked about.
+_SCAN_CATEGORIES = ("web", "ssh", "database")
+
+
+def panel_result(job_type: str, result: dict[str, Any] | None) -> dict[str, Any]:
+    """`result` with every key its job type's panel reads, None where it has none."""
+    result = result or {}
+    if job_type == "network_discover":
+        return {**dict.fromkeys(_DISCOVER_PANEL_KEYS), **result}
+    if job_type == "network_scan":
+        categorized = result.get("categorized_hosts") or {}
+        return {
+            **dict.fromkeys(_SCAN_PANEL_KEYS),
+            **result,
+            "categorized_hosts": {
+                **{category: [] for category in _SCAN_CATEGORIES},
+                **categorized,
+            },
+        }
+    return result
+
 
 def _pct(part: int | None, whole: int | None) -> float | None:
     """`part` as a percentage of `whole`, or None when there is no whole."""
