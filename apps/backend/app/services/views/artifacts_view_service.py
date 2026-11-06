@@ -5,6 +5,7 @@ Mediates between web routers and `ArtifactCoreService` core, plus assembles the
 template context for the trace viewer (filename, size formatting).
 """
 
+import shlex
 from typing import Any
 from uuid import UUID
 
@@ -17,6 +18,16 @@ from app.services.core.artifact_core_service import ArtifactCoreService
 from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.web.services.artifacts")
+
+
+def _trace_cli_command(filename: str) -> str:
+    """The shell command that opens a trace, for an operator to paste.
+
+    An agent chooses the filename, so the shell must read it as one argument. A name
+    starting with `-` would read as an option, so it is given as a path.
+    """
+    path = f"./{filename}" if filename.startswith("-") else filename
+    return f"playwright show-trace {shlex.quote(path)}"
 
 
 class ArtifactsViewService:
@@ -67,6 +78,7 @@ class ArtifactsViewService:
             "current_user": current_user,
             "artifact_id": str(artifact_id),
             "filename": artifact.filename,
+            "cli_command": _trace_cli_command(artifact.filename),
             "size_kb": round(artifact.size_bytes / 1024, 1),
             # .path, not str(): url_for returns an absolute url from the
             # request's scheme/host, which behind TLS-terminating nginx can emit

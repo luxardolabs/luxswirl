@@ -31,8 +31,7 @@ function openTraceViewer(btn) {
 }
 
 function copyCommand(config) {
-    const command = `playwright show-trace ${config.dataset.filename}`;
-    navigator.clipboard.writeText(command).then(() => {
+    navigator.clipboard.writeText(config.dataset.cliCommand).then(() => {
         const msg = document.getElementById('copied-message');
         if (!msg) return;
         msg.classList.remove('hidden');
