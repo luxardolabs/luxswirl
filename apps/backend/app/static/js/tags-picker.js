@@ -17,17 +17,11 @@ function initCheckFormTagPicker(existingTags = []) {
     function renderTags() {
         tagsContainer.innerHTML = '';
         checkFormTags.forEach(tag => {
-            const pill = document.createElement('div');
-            pill.className = 'inline-flex items-center gap-1.5 px-2 py-0.5 bg-green-600/10 text-green-300 rounded text-xs font-mono border border-green-600/30';
-            pill.innerHTML = `
-                <span>${escapeHtml(tag)}</span>
-                <button type="button" class="hover:text-green-200 transition-colors tag-remove" data-tag="${escapeHtml(tag)}">
-                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                    </svg>
-                </button>
-            `;
-            tagsContainer.appendChild(pill);
+            tagsContainer.appendChild(tagPill(tag, {
+                pillClass: 'inline-flex items-center gap-1.5 px-2 py-0.5 bg-green-600/10 text-green-300 rounded text-xs font-mono border border-green-600/30',
+                buttonClass: 'hover:text-green-200 transition-colors tag-remove',
+                dataKey: 'tag',
+            }));
         });
 
         // Update hidden input
@@ -115,17 +109,11 @@ function initBulkTagPicker() {
     function renderTags() {
         tagsContainer.innerHTML = '';
         bulkTags.forEach(tag => {
-            const pill = document.createElement('div');
-            pill.className = 'inline-flex items-center gap-1.5 px-2 py-0.5 bg-green-600/10 text-green-300 rounded text-xs font-mono border border-green-600/30';
-            pill.innerHTML = `
-                <span>${escapeHtml(tag)}</span>
-                <button type="button" class="hover:text-green-200 transition-colors bulk-tag-remove" data-tag="${escapeHtml(tag)}">
-                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                    </svg>
-                </button>
-            `;
-            tagsContainer.appendChild(pill);
+            tagsContainer.appendChild(tagPill(tag, {
+                pillClass: 'inline-flex items-center gap-1.5 px-2 py-0.5 bg-green-600/10 text-green-300 rounded text-xs font-mono border border-green-600/30',
+                buttonClass: 'hover:text-green-200 transition-colors bulk-tag-remove',
+                dataKey: 'tag',
+            }));
         });
 
         // Update hidden input (comma-separated)
@@ -208,8 +196,25 @@ function initBulkTagPicker() {
     renderTags();
 }
 
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+// jobs.html loads this file as a classic script, so it cannot import tag-pill.js.
+// A tag is set as text and as a data attribute and never parsed as HTML.
+function tagPill(tag, { pillClass, buttonClass, dataKey }) {
+    const pill = document.createElement('div');
+    pill.className = pillClass;
+
+    const label = document.createElement('span');
+    label.textContent = tag;
+
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = buttonClass;
+    button.dataset[dataKey] = tag;
+    button.innerHTML = `
+        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+    `;
+
+    pill.append(label, button);
+    return pill;
 }

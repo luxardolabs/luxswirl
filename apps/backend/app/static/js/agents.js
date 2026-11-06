@@ -6,6 +6,7 @@
  */
 
 import { showToast } from './app.js';
+import { tagPill } from './tag-pill.js';
 
 /**
  * Handle pending count updates from backend HX-Trigger events
@@ -37,27 +38,15 @@ let tagsContainer = null;
 let tagInput = null;
 let hiddenInput = null;
 
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
-
 function renderAgentTags() {
     if (!tagsContainer) return;
     tagsContainer.innerHTML = '';
     agentTags.forEach(tag => {
-        const pill = document.createElement('div');
-        pill.className = 'inline-flex items-center gap-1 px-2 py-0.5 bg-blue-600/20 text-blue-400 rounded text-xs font-mono font-medium border border-blue-600/50';
-        pill.innerHTML = `
-            <span>${escapeHtml(tag)}</span>
-            <button type="button" data-remove-agent-tag="${escapeHtml(tag)}" class="hover:text-blue-300 transition-colors">
-                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                </svg>
-            </button>
-        `;
-        tagsContainer.appendChild(pill);
+        tagsContainer.appendChild(tagPill(tag, {
+            pillClass: 'inline-flex items-center gap-1 px-2 py-0.5 bg-blue-600/20 text-blue-400 rounded text-xs font-mono font-medium border border-blue-600/50',
+            buttonClass: 'hover:text-blue-300 transition-colors',
+            dataKey: 'removeAgentTag',
+        }));
     });
 
     // Update hidden input (comma-separated)
