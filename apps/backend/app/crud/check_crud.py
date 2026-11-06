@@ -25,6 +25,7 @@ from sqlalchemy.sql import ColumnElement
 
 from app.core.datetime_utils import utc_now
 from app.crud._check_health import current_result, health_condition
+from app.crud._check_search import ids_matching_search
 from app.models.agent_model import Agent
 from app.models.check_model import Check
 from app.models.enum_model import AssignmentMode, CheckHealthStatus
@@ -115,7 +116,8 @@ class CheckCRUD:
         limit: int = 50,
     ) -> tuple[Sequence[Check], int]:
         """Paginated list of checks with agent loaded and filters applied."""
-        clauses = CheckCRUD._list_filters(
+        clauses = await CheckCRUD._list_filters(
+            db,
             agent_id=agent_id,
             check_type=check_type,
             enabled_only=enabled_only,
@@ -156,7 +158,8 @@ class CheckCRUD:
         serve it with another.
         """
         current = current_result()
-        clauses = CheckCRUD._list_filters(
+        clauses = await CheckCRUD._list_filters(
+            db,
             agent_id=agent_id,
             check_type=check_type,
             enabled_only=enabled_only,
@@ -184,7 +187,8 @@ class CheckCRUD:
         ], total
 
     @staticmethod
-    def _list_filters(
+    async def _list_filters(
+        db: AsyncSession,
         *,
         agent_id: UUID | None,
         check_type: str | None,
@@ -203,10 +207,12 @@ class CheckCRUD:
         if tag:
             clauses.append(Check.tags.op("@>")(cast([tag], ARRAY(String))))
         if search:
-            pattern = f"%{search}%"
-            clauses.append(
-                or_(Check.display_name.ilike(pattern), Check.target.ilike(pattern))
+            matching = await ids_matching_search(
+                db,
+                select(Check.id, Check.display_name, Check.target).where(*clauses),
+                search,
             )
+            clauses.append(Check.id.in_(matching))
         return clauses
 
     @staticmethod

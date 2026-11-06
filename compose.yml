@@ -248,8 +248,7 @@ services:
       # Required by the app settings (anything importing app.core.config,
       # alembic env.py included): the Host names the suite's ASGI clients send.
       ALLOWED_HOSTS: test,route-smoke
-      # The suite's own required secrets, never a deployment's.
-      SECURITY__SECRET_KEY: luxswirl-test-suite-signing-value-not-for-deploys
+      # The suite's own required field key (32 zero bytes), never a deployment's.
       SECURITY__FIELD_ENCRYPTION_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
     # No source bind-mounts — app/shared/tests are baked in by `make test-build`.
     # `run --rm tests` overrides this; the default keeps the container alive so

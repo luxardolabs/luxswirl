@@ -35,13 +35,15 @@ _FERNET_ALPHABET = re.compile(r"[A-Za-z0-9_-]+={0,2}")
 def _is_fernet_token(value: str) -> bool:
     """Whether ``value`` is shaped as a Fernet token (a value some key encrypted).
 
-    A token is url-safe base64 alone: any other character (JSON's brackets and
-    quotes, a space) makes it plaintext, whatever a lenient decoder would read.
+    A token is url-safe base64 alone, with the surrounding whitespace Fernet's
+    own decoder ignores: any other character (JSON's brackets and quotes) makes
+    it plaintext, whatever a lenient decoder would read.
     """
-    if not _FERNET_ALPHABET.fullmatch(value):
+    token = value.strip()
+    if not _FERNET_ALPHABET.fullmatch(token):
         return False
     try:
-        raw = base64.urlsafe_b64decode(value.encode())
+        raw = base64.urlsafe_b64decode(token.encode())
     except ValueError, binascii.Error:
         return False
     return len(raw) >= _FERNET_MIN_BYTES and raw[0] == _FERNET_VERSION

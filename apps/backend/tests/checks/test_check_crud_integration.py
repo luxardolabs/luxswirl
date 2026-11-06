@@ -12,6 +12,7 @@ from uuid import uuid4
 import pytest
 from app.core.datetime_utils import utc_now
 from app.crud.check_crud import CheckCRUD
+from app.crud.check_result_crud import CheckResultCRUD
 from fixtures.factories import make_agent, make_check
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -157,6 +158,51 @@ class TestListPaginated:
         rows, _ = await CheckCRUD.list_paginated(db, search="redis")
         assert len(rows) == 1
         assert rows[0].target == "redis-host"
+
+    async def test_search_matches_literally_and_counts_only_matches(
+        self, db: AsyncSession
+    ):
+        agent = make_agent()
+        db.add(agent)
+        await db.flush()
+        db.add(make_check(agent_id=agent.id, display_name="a", target="Redis-Host"))
+        db.add(make_check(agent_id=agent.id, display_name="b", target="other.example"))
+        await db.flush()
+
+        rows, total = await CheckCRUD.list_paginated(db, search="redis-h", limit=1)
+        wildcard, none = await CheckCRUD.list_paginated(db, search="%")
+
+        assert [r.target for r in rows] == ["Redis-Host"]
+        assert total == 1
+        assert (list(wildcard), none) == ([], 0)
+
+    async def test_the_health_page_searches_targets(self, db: AsyncSession):
+        agent = make_agent()
+        db.add(agent)
+        await db.flush()
+        db.add(make_check(agent_id=agent.id, display_name="a", target="redis-host"))
+        db.add(make_check(agent_id=agent.id, display_name="b", target="other.example"))
+        await db.flush()
+
+        rows, total = await CheckCRUD.list_page_with_health(db, search="redis")
+
+        assert [check.target for check, _, _ in rows] == ["redis-host"]
+        assert total == 1
+
+    async def test_the_status_dashboard_searches_targets(self, db: AsyncSession):
+        agent = make_agent()
+        db.add(agent)
+        await db.flush()
+        db.add(make_check(agent_id=agent.id, display_name="a", target="redis-host"))
+        db.add(make_check(agent_id=agent.id, display_name="b", target="other.example"))
+        await db.flush()
+
+        rows, total = await CheckResultCRUD.get_checks_with_agents_filtered(
+            db, search="redis"
+        )
+
+        assert [row[0].target for row in rows] == ["redis-host"]
+        assert total == 1
 
     async def test_pagination_applies_offset_and_limit(self, db: AsyncSession):
         agent = make_agent()

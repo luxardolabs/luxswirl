@@ -236,10 +236,9 @@ SERVER__CORS_ORIGINS=["https://luxswirl.example.com:9000"]
 SERVER__ENVIRONMENT=production
 LOG__LEVEL=INFO
 
-# Security (REQUIRED): the server refuses to start without both, or with one
-# shorter than 32 characters. Generate each once (below) and keep it: a new
-# field-encryption key cannot read the check credentials stored under the old one.
-SECURITY__SECRET_KEY=
+# Security (REQUIRED): the server refuses to start without a valid Fernet key.
+# Generate it once (below) and keep it: a new key cannot read the check
+# credentials stored under the old one.
 SECURITY__FIELD_ENCRYPTION_KEY=
 
 # Agent registration key — generate in the UI (Settings → Registration Keys)
@@ -259,9 +258,6 @@ SMTP_FROM=noreply@example.com
 ```bash
 # POSTGRES_PASSWORD: required, you choose the value
 openssl rand -base64 32
-
-# SECURITY__SECRET_KEY: required
-python3 -c "import secrets; print(secrets.token_urlsafe(64))"
 
 # SECURITY__FIELD_ENCRYPTION_KEY: required, a Fernet key
 python3 -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'
@@ -516,8 +512,7 @@ nano /opt/luxswirl/.env
 # Database — single connection URL (SQLAlchemy/asyncpg DSN)
 DATABASE__URL=postgresql+asyncpg://luxswirl:CHANGE_THIS_SECURE_PASSWORD@localhost:5432/luxswirl
 
-# Security (REQUIRED; generate as in Step 3 and keep them)
-SECURITY__SECRET_KEY=
+# Security (REQUIRED; generate as in Step 3 and keep it)
 SECURITY__FIELD_ENCRYPTION_KEY=
 SERVER__CORS_ORIGINS=["https://luxswirl.example.com"]
 # The public hostname, plus localhost: the systemd agent below posts to

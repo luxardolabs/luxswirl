@@ -155,29 +155,10 @@ class ServerSettings(BaseSettings):
         return [host for host in hosts if host]
 
 
-# What SECURITY__SECRET_KEY must be: a generated value, never a typed one.
-SECRET_KEY_MIN_LENGTH = 32
-SECRET_KEY_MIN_DISTINCT = 10
-
-
 class SecuritySettings(BaseSettings):
     """Security configuration."""
 
     auth_enabled: bool = Field(default=True, description="Enable authentication")
-    # Required, no default: the deployment sets SECURITY__SECRET_KEY. An unset,
-    # empty or short value refuses to start.
-    secret_key: str = Field(
-        min_length=SECRET_KEY_MIN_LENGTH,
-        description="Secret key for JWT signing (SECURITY__SECRET_KEY, at least 32 characters)",
-    )
-    algorithm: str = Field(default="HS256", description="JWT algorithm")
-    access_token_expire_minutes: int = Field(
-        default=30,
-        ge=5,
-        le=43200,
-        description="Access token expiration in minutes",
-    )
-
     # Rate Limiting
     login_rate_limit: str = Field(
         default="10/15minutes",
@@ -288,25 +269,6 @@ class SecuritySettings(BaseSettings):
         """Refuse a limit slowapi could not count with, so the server will not
         start on one rather than fail every request to its route."""
         return check_rate_limit(v)
-
-    @field_validator("secret_key")
-    @classmethod
-    def validate_secret_key(cls, v: str) -> str:
-        """Refuse a secret key that is blank or too repetitive to be generated.
-
-        A typed placeholder (`changeme-changeme-…`) is refused as repetitive;
-        no word is matched, since generated url-safe text holds any word by
-        chance."""
-        if len(v.strip()) < SECRET_KEY_MIN_LENGTH:
-            raise ValueError(
-                f"SECURITY__SECRET_KEY must be at least {SECRET_KEY_MIN_LENGTH} "
-                "characters, not counting surrounding whitespace"
-            )
-        if len(set(v)) < SECRET_KEY_MIN_DISTINCT:
-            raise ValueError(
-                "SECURITY__SECRET_KEY is too repetitive to be a generated secret"
-            )
-        return v
 
     @field_validator("field_encryption_key")
     @classmethod

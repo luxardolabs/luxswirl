@@ -2554,9 +2554,8 @@ agent_TEST_OVERLAY_COV := 1
 TEST_MOUNTS          := $(call shared_overlay,/repo/apps/backend/app)
 # The suite reads TEST_DATABASE_URL (a name the app never reads, so an exported dev
 # DATABASE__URL can never aim the schema-dropping harness at the dev DB); DATABASE__URL
-# lands anything that builds the real engine on the throwaway DB too. The two secrets are
-# the suite's own, required settings (the Fernet key is 32 zero bytes),
-# never a deployment's. PYTHONPATH points
+# lands anything that builds the real engine on the throwaway DB too. The field key is the
+# suite's own, a required setting (32 zero bytes), never a deployment's. PYTHONPATH points
 # imports at the mounted source: `app.*` (apps/backend, with the shared SSOT overlaid on
 # its placeholder package app/shared) and `fixtures.*`.
 # The source is mounted read-only, so Hypothesis keeps its example DB in the run's own dir.
@@ -2564,7 +2563,6 @@ TEST_ENV      := -e TEST_DATABASE_URL=postgresql+asyncpg://luxswirl_test:luxswir
                  -e DATABASE__URL=postgresql+asyncpg://luxswirl_test:luxswirl_test@timescaledb-test:5432/luxswirl_test \
                  -e LUXSWIRL_INTEGRATION=1 \
                  -e ALLOWED_HOSTS=test,route-smoke \
-                 -e SECURITY__SECRET_KEY=luxswirl-test-suite-signing-value-not-for-deploys \
                  -e SECURITY__FIELD_ENCRYPTION_KEY=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA= \
                  -e PYTHONPATH=/repo/apps/backend:/repo/apps/backend/tests \
                  -e HYPOTHESIS_STORAGE_DIRECTORY=/out/.hypothesis

@@ -7,6 +7,7 @@ from uuid import UUID
 from sqlalchemy import and_, delete, or_, select, text, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import defer
 
 from app.core.datetime_utils import utc_now
 from app.models.enum_model import MaintenanceJobStatus
@@ -16,8 +17,11 @@ from app.models.maintenance_job_model import MaintenanceJob
 class MaintenanceJobCRUD:
     @staticmethod
     async def get_by_id(db: AsyncSession, job_id: UUID) -> MaintenanceJob | None:
+        """The job without its params, so its status reads under any key."""
         result = await db.execute(
-            select(MaintenanceJob).where(MaintenanceJob.id == job_id)
+            select(MaintenanceJob)
+            .options(defer(MaintenanceJob.params))
+            .where(MaintenanceJob.id == job_id)
         )
         return result.scalar_one_or_none()
 
@@ -25,9 +29,11 @@ class MaintenanceJobCRUD:
     async def get_inflight_for_target(
         db: AsyncSession, kind: str, target_id: UUID
     ) -> MaintenanceJob | None:
-        """Return the queued/running job for (kind, target_id), if any."""
+        """Return the queued/running job for (kind, target_id), if any, without its params."""
         result = await db.execute(
-            select(MaintenanceJob).where(
+            select(MaintenanceJob)
+            .options(defer(MaintenanceJob.params))
+            .where(
                 and_(
                     MaintenanceJob.kind == kind,
                     MaintenanceJob.target_id == target_id,
