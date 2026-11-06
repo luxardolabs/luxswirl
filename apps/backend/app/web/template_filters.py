@@ -12,7 +12,6 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from jinja2 import Environment, pass_eval_context
 from jinja2.filters import do_xmlattr
 from jinja2.nodes import EvalContext
-from markupsafe import Markup
 
 from app.core.credential_mask import mask_credentials
 from app.core.display_settings import current_display_settings
@@ -277,25 +276,22 @@ def strict_xmlattr(
 ) -> str:
     """Jinja's `xmlattr` for this app's templates, without its two gaps.
 
-    Jinja's skips a missing field silently and leaves Markup unescaped. Each value
+    Jinja's skips a missing field silently and writes Markup unescaped. Each value
     here is read with `str`, so a missing field raises under StrictUndefined as it
-    does anywhere else in a template, and reaches Jinja's filter as plain text,
-    which it escapes once (Markup is unescaped first). None still leaves the
-    attribute out.
+    does anywhere else in a template, and reaches Jinja's filter as an exact `str`,
+    which it escapes. Markup is refused: pass the plain value. None still leaves
+    the attribute out.
 
     Raises:
-        ValueError: A key is not an attribute name.
+        ValueError: A key is not an attribute name, or a value is already markup.
     """
     checked: dict[str, str | None] = {}
     for name, value in values.items():
         if not _ATTRIBUTE_NAME.fullmatch(name):
             raise ValueError(f"not an attribute name: {name!r}")
-        if value is None:
-            checked[name] = None
-        elif isinstance(value, Markup):
-            checked[name] = value.unescape()
-        else:
-            checked[name] = str(value)
+        if hasattr(value, "__html__"):
+            raise ValueError(f"attribute {name} takes a plain value, not markup")
+        checked[name] = None if value is None else str.__str__(str(value))
     return do_xmlattr(eval_ctx, checked, autospace)
 
 
