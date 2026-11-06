@@ -287,17 +287,14 @@ sudo lsof -i :9000
 #### 4. Missing environment variables
 
 ```bash
-# Error: a validation error naming security.secret_key or
-# security.field_encryption_key (missing, shorter than 32 characters, too
-# repetitive to be generated, or for the field key not a Fernet key)
+# Error: a validation error naming security.field_encryption_key (missing, or
+# not a Fernet key)
 
-# Generate each once and keep it:
-python3 -c "import secrets; print(secrets.token_urlsafe(64))"
+# Generate it once and keep it:
 python3 -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'
 
 # Add to .env.<env>:
-SECURITY__SECRET_KEY=<the first value>
-SECURITY__FIELD_ENCRYPTION_KEY=<the second value>
+SECURITY__FIELD_ENCRYPTION_KEY=<the value>
 ```
 
 #### 5. Database schema not initialized
@@ -312,6 +309,17 @@ docker compose exec luxswirl_server alembic upgrade head
 ```
 
 ______________________________________________________________________
+
+### Maintenance jobs stay queued: "Maintenance queue stopped"
+
+The log repeats `Maintenance queue stopped`, naming a `job_id`, and bulk deletes, imports and other maintenance jobs do not start. The oldest queued job's parameters do not decrypt under `SECURITY__FIELD_ENCRYPTION_KEY`. Nothing is lost: the job stays queued, and nothing behind it starts.
+
+1. Set `SECURITY__FIELD_ENCRYPTION_KEY` to the key the server has always used, and restart. Every queued job then runs.
+1. If the log still names a job, that job was queued while the wrong key was set, so the right key cannot read it. Remove that job, then queue the work again:
+
+```bash
+docker compose exec timescaledb psql -U luxswirl -c "DELETE FROM maintenance_jobs WHERE id = '<job_id>' AND status = 'queued'"
+```
 
 ### Server Crashes Randomly
 

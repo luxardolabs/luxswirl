@@ -150,9 +150,7 @@ SERVER__CORS_ORIGINS=["https://your-domain.com"]
 DATABASE__URL=postgresql+asyncpg://user:pass@host:5432/db
 DATABASE__POOL_SIZE=20
 
-# Security (required; generate each once and keep it)
-#   python3 -c "import secrets; print(secrets.token_urlsafe(64))"
-SECURITY__SECRET_KEY=
+# Security (required; generate it once and keep it)
 #   python3 -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'
 SECURITY__FIELD_ENCRYPTION_KEY=
 SECURITY__CSRF_ENABLED=true

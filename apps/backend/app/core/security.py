@@ -5,12 +5,10 @@ Security utilities - authentication and authorization.
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
-from datetime import timedelta
-from typing import TYPE_CHECKING, Annotated, Any
+from typing import TYPE_CHECKING, Annotated
 from urllib.parse import urlencode
 from uuid import UUID
 
-import jwt
 from fastapi import Cookie, Depends, Header, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -338,69 +336,8 @@ async def require_editor_web(
 
 
 # ========================================================================
-# JWT AND AGENT TOKEN AUTHENTICATION (for API and Agents)
+# AGENT TOKEN AUTHENTICATION
 # ========================================================================
-
-
-def create_access_token(
-    data: dict[str, Any], expires_delta: timedelta | None = None
-) -> str:
-    """
-    Create a JWT access token.
-
-    Args:
-        data: Dictionary of claims to encode in the token
-        expires_delta: Optional custom expiration time
-
-    Returns:
-        Encoded JWT token
-    """
-    to_encode = data.copy()
-
-    if expires_delta:
-        expire = utc_now() + expires_delta
-    else:
-        expire = utc_now() + timedelta(
-            minutes=settings.security.access_token_expire_minutes
-        )
-
-    to_encode.update({"exp": expire})
-    encoded_jwt: str = jwt.encode(
-        to_encode,
-        settings.security.secret_key,
-        algorithm=settings.security.algorithm,
-    )
-
-    return encoded_jwt
-
-
-def verify_token(token: str) -> dict[str, Any]:
-    """
-    Verify and decode a JWT token.
-
-    Args:
-        token: JWT token to verify
-
-    Returns:
-        Decoded token payload
-
-    Raises:
-        HTTPException: If token is invalid or expired
-    """
-    try:
-        payload: dict[str, Any] = jwt.decode(
-            token,
-            settings.security.secret_key,
-            algorithms=[settings.security.algorithm],
-        )
-        return payload
-    except jwt.PyJWTError as e:
-        logger.warning("Token verification failed", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not validate credentials",
-            headers={"WWW-Authenticate": "Bearer"},
-        ) from e
 
 
 async def authenticate_heartbeat(

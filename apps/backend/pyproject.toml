@@ -62,7 +62,6 @@ psutil = "^7.1.2"
 uuid7 = "^0.1.0"
 
 # Security
-PyJWT = "^2.10"  # sole JWT lib. python-jose was dropped: unmaintained, and it pulls
                  # ecdsa, whose Minerva timing CVE (PYSEC-2026-1325) has NO fix released.
 bcrypt = "^5.0.0"
 cryptography = "^50.0.0"  # CVE-2026-69247/69248/69249 + GHSA-537c-gmf6-5ccf floor

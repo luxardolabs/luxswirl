@@ -34,6 +34,7 @@ from app.crud._check_health import (
     health_condition,
     silent_after_seconds,
 )
+from app.crud._check_search import ids_matching_search
 from app.models.agent_model import Agent
 from app.models.check_artifact_model import CheckArtifact
 from app.models.check_model import Check
@@ -247,15 +248,6 @@ class CheckResultCRUD:
         if check_type:
             conditions.append(Check.check_type == check_type)
 
-        if search:
-            search_pattern = f"%{search}%"
-            conditions.append(
-                or_(
-                    Check.display_name.ilike(search_pattern),
-                    Check.target.ilike(search_pattern),
-                )
-            )
-
         if tags:
             # Overlap (&&): a check matches if its own tags OR its agent's tags
             # share ANY of the requested tags (OR semantics).
@@ -266,6 +258,16 @@ class CheckResultCRUD:
                     Agent.tags.op("&&")(tag_array),
                 )
             )
+
+        if search:
+            matching = await ids_matching_search(
+                db,
+                select(Check.id, Check.display_name, Check.target)
+                .join(Agent, Check.agent_id == Agent.id)
+                .where(*conditions),
+                search,
+            )
+            conditions.append(Check.id.in_(matching))
 
         if status in set(CheckHealthStatus):
             current = current_result()

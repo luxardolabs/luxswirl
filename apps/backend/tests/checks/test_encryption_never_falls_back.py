@@ -156,3 +156,15 @@ def test_plaintext_json_holding_a_token_string_reads(field_key) -> None:
     foreign = Fernet(Fernet.generate_key()).encrypt(b"keystone").decode()
 
     assert EncryptedJSON().process_result_value(f'["{foreign}"]', None) == [foreign]
+
+
+@pytest.mark.parametrize("around", ["{}\n", " {} ", "\t{}\r\n"])
+def test_a_wrong_key_token_with_surrounding_whitespace_is_refused(
+    field_key, around: str
+) -> None:
+    """Fernet's decoder ignores the whitespace, so a row restored by hand is
+    still a token: under another key it is refused, not read as plaintext."""
+    token = Fernet(Fernet.generate_key()).encrypt(b"hunter2").decode()
+
+    with pytest.raises(DatabaseException):
+        EncryptedString().process_result_value(around.format(token), None)
