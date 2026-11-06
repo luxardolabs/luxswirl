@@ -194,12 +194,13 @@ class SchedulerCoreService:
                 )
                 execution.status = final_status
 
-                # Calculate next run time
-                job.next_run_at = self._calculate_next_run(job)
-
-                # Update stats, and reset the retry count on success
+                # Update stats and the next run, and reset the retry count on success
                 await JobConfigurationCRUD.count_success(
-                    db, job, final_status, datetime.now(UTC)
+                    db,
+                    job,
+                    final_status,
+                    datetime.now(UTC),
+                    self._calculate_next_run(job),
                 )
 
                 logger.info(
@@ -531,9 +532,12 @@ class SchedulerCoreService:
                     execution.status = final_status
 
                     # Update job stats
-                    job.next_run_at = self._calculate_next_run(job)
                     await JobConfigurationCRUD.count_success(
-                        db, job, final_status, datetime.now(UTC)
+                        db,
+                        job,
+                        final_status,
+                        datetime.now(UTC),
+                        self._calculate_next_run(job),
                     )
 
                     return SchedulerRunResult(

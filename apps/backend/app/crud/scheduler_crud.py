@@ -133,6 +133,7 @@ class JobConfigurationCRUD:
         job: JobConfiguration,
         status: SchedulerExecutionStatus,
         now: datetime,
+        next_run_at: datetime | None,
     ) -> None:
         """Count a run that finished, in one statement, and re-read the job.
 
@@ -147,6 +148,7 @@ class JobConfigurationCRUD:
                 retry_count=0,
                 last_run_at=now,
                 last_status=status,
+                next_run_at=next_run_at,
             )
             .execution_options(synchronize_session=False)
         )
