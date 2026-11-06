@@ -463,7 +463,36 @@ def test_none_leaves_the_attribute_out_and_other_values_keep_it() -> None:
     assert 'data-zero="0"' in out
 
 
-@pytest.mark.parametrize("name", ["bad name", "a>b", 'a"b', "a=b", "a/b", ""])
+@pytest.mark.parametrize(
+    "source",
+    [
+        "{% set v %}/x?q={{ name }}{% endset %}{{ btn_disable(attrs={'data-a': v}) }}",
+        "{{ btn_disable(attrs={'data-a': '/x?q=' ~ (name | e)}) }}",
+    ],
+)
+def test_markup_holding_an_escaped_value_is_not_escaped_twice(source: str) -> None:
+    parser = _Tags()
+    parser.feed(_render(source, name="a&b"))
+
+    assert dict(parser.tags[0][1])["data-a"] == "/x?q=a&b"
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "bad name",
+        "a>b",
+        'a"b',
+        "a=b",
+        "a/b",
+        "",
+        "a\x00b",
+        "a\x01b",
+        "a\x7fb",
+        "a`b",
+        "a&b",
+    ],
+)
 def test_a_key_that_is_not_an_attribute_name_is_refused(name: str) -> None:
     with pytest.raises(ValueError, match="attribute name"):
         _render("{{ btn_disable(attrs={name: 'x'}) }}", name=name)
