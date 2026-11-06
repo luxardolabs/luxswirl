@@ -11,6 +11,7 @@ import re
 from typing import overload
 
 _MASK = "***"
+_MAX_DEPTH = 64
 # A URL's userinfo: everything between the scheme and the last `@` of the authority.
 _USERINFO = re.compile(r"(?<=://)[^/?#]*@")
 # The keys a secret goes by, in a libpq or ODBC string or a URL's query.
@@ -63,17 +64,29 @@ def mask_credentials(value: str | None) -> str | None:
     return pair.sub(rf"\1\2{_MASK}", masked)
 
 
-def mask_nested(value: object) -> object:
-    """`value` (decoded JSON) with every string in it, at any depth, masked."""
+def mask_nested(value: object, depth: int = 0) -> object:
+    """`value` (decoded JSON) with every string in it masked.
+
+    Nesting past `_MAX_DEPTH` is replaced whole: an agent chooses it, and recursing
+    to whatever depth it sent would end in a RecursionError.
+    """
+    if depth > _MAX_DEPTH:
+        return _MASK
     if isinstance(value, str):
         return mask_credentials(value)
     if isinstance(value, dict):
-        return mask_mapping(value)
+        return mask_mapping(value, depth)
     if isinstance(value, list):
-        return [mask_nested(item) for item in value]
+        return [mask_nested(item, depth + 1) for item in value]
     return value
 
 
-def mask_mapping(mapping: dict[str, object]) -> dict[str, object]:
-    """`mapping` with every string in its values, at any depth, masked."""
-    return {key: mask_nested(item) for key, item in mapping.items()}
+def mask_mapping(mapping: dict[str, object], depth: int = 0) -> dict[str, object]:
+    """`mapping` with every string in its keys and values masked (`mask_nested`).
+
+    A key can be a credential too: a synthetic step is named for its URL.
+    """
+    return {
+        mask_credentials(key): mask_nested(item, depth + 1)
+        for key, item in mapping.items()
+    }
