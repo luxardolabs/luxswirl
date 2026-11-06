@@ -11,6 +11,7 @@ from uuid import UUID
 import bcrypt
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.agent_key import new_agent_key
 from app.core.config import settings
 from app.core.datetime_utils import utc_now
 from app.core.exceptions import (
@@ -933,7 +934,7 @@ class AgentCoreService:
         # Raises AgentNotFoundException for an unknown agent.
         await AgentCoreService.get_agent_by_id(db, agent_id)
 
-        new_key = f"luxswirl_ak_{secrets.token_hex(16)}"
+        new_key = new_agent_key()
         salt = bcrypt.gensalt()
         key_hash = bcrypt.hashpw(new_key.encode("utf-8"), salt).decode("utf-8")
 
@@ -973,7 +974,7 @@ class AgentCoreService:
         agent = await AgentCoreService.get_agent_by_id(db, agent_id)
 
         # Generate new key
-        new_key = f"luxswirl_ak_{secrets.token_hex(16)}"
+        new_key = new_agent_key()
         salt = bcrypt.gensalt()
         key_hash = bcrypt.hashpw(new_key.encode("utf-8"), salt).decode("utf-8")
 
@@ -1067,7 +1068,7 @@ class AgentCoreService:
             require_admin_actor(actor_is_admin=actor_is_admin)
 
         # Generate agent-specific API key
-        api_key = f"luxswirl_ak_{secrets.token_hex(16)}"
+        api_key = new_agent_key()
         salt = bcrypt.gensalt()
         key_hash = bcrypt.hashpw(api_key.encode("utf-8"), salt).decode("utf-8")
 
