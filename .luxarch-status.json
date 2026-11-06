@@ -1857,13 +1857,13 @@
         },
         {
           "rule": "fw.js_attributes_take_json",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.340.0",
-          "violations": 56,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
-          "fix": "Pass the value as a `data-*` attribute and read it in the component (`x-data` reading `$el.dataset.label`, or the .js file reading `el.dataset.label`): autoescaping makes it safe there. Where the component needs the value inline, write it as `|tojson` in a SINGLE-quoted attribute, outside any JS string: `x-data='{ label: {{ label|tojson }} }'`. Never `'{{ x }}'` inside an Alpine, htmx or `on*` attribute, and never `|tojson` in a double-quoted one (`x-data=\"f({{ x|tojson }})\"`). A macro parameter that is a JavaScript attribute's whole value is code: pass it a constant, and pass the data it needs as its own parameter the macro renders into `data-*`. See --playbook hypermedia.",
+          "fix": "",
           "example": ""
         },
         {
@@ -2044,8 +2044,8 @@
         }
       ],
       "summary": {
-        "PASS": 165,
-        "FAIL": 2,
+        "PASS": 166,
+        "FAIL": 1,
         "XFAIL": 0,
         "XPASS": 0,
         "INERT": 18
@@ -3001,12 +3001,12 @@
     }
   },
   "summary": {
-    "PASS": 245,
-    "FAIL": 2,
+    "PASS": 246,
+    "FAIL": 1,
     "XFAIL": 0,
     "XPASS": 0,
     "INERT": 22
   },
-  "commit": "09e769763ac32694f36191a60a92a64433b76d66",
-  "generated_at": "2026-11-06T01:54:06Z"
+  "commit": "bf19f68ee2f1a474951300750122689589cc3bde",
+  "generated_at": "2026-11-06T04:13:47Z"
 }
