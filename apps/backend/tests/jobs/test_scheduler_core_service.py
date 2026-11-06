@@ -294,17 +294,12 @@ class TestManualRunPersists:
         """The savepoint's rollback expires the job row the success bookkeeping
         changed; the timeout's message must not read it back."""
         key = await _seed_job(worker_db)
-        real_save = JobConfigurationCRUD.save_job
-        calls = {"n": 0}
 
-        async def times_out_once(db, job):
-            calls["n"] += 1
-            if calls["n"] == 1:
-                raise TimeoutError()
-            return await real_save(db, job)
+        async def times_out(*_):
+            raise TimeoutError()
 
         monkeypatch.setattr(
-            JobConfigurationCRUD, "save_job", staticmethod(times_out_once)
+            JobConfigurationCRUD, "count_success", staticmethod(times_out)
         )
 
         out = await _svc().execute_job_synchronously(key)
