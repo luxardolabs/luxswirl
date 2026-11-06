@@ -20,6 +20,7 @@ import bcrypt
 import pytest
 import pytest_asyncio
 from app.core import security
+from app.core.agent_key import AGENT_KEY_PREFIX
 from app.core.config import settings
 from app.core.datetime_utils import utc_now
 from app.core.rate_limit import current_rate_limits, limiter, update_rate_limits
@@ -29,6 +30,11 @@ from app.models.job_model import Job
 from app.schemas.registration_key_schema import RegistrationKeyCreate
 from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.registration_key_core_service import RegistrationKeyCoreService
+from app.shared.agent_protocol import (
+    AGENT_KEY_REFUSED,
+    REFUSAL_HEADER,
+    REGISTRATION_KEY_REFUSED,
+)
 from fastapi import HTTPException
 from fixtures.factories import make_agent
 from httpx import ASGITransport, AsyncClient
@@ -261,6 +267,104 @@ async def test_one_agent_s_refused_keys_never_shut_out_another_at_the_same_addre
     )
 
     assert resp.status_code == 200, resp.text
+
+
+# ── A key in the agent-key format cannot be a registration key ────────────────
+
+
+async def _agent_key_format_token(db: AsyncSession) -> str:
+    """A key the server really issued, here to an agent no test heartbeats as."""
+    issuer = make_agent(approval_status="active", api_key_hash=None)
+    db.add(issuer)
+    await db.flush()
+    _, key = await AgentCoreService.generate_agent_key(db, issuer.id)
+    return key
+
+
+async def test_a_stale_key_keeps_its_marked_401_and_spends_nothing(
+    client: AsyncClient, db: AsyncSession
+) -> None:
+    stale = await _agent_key_format_token(db)
+    agent = make_agent(
+        approval_status="active",
+        api_key_hash=bcrypt.hashpw(b"the-right-key", bcrypt.gensalt(rounds=4)).decode(),
+    )
+    db.add(agent)
+    await db.flush()
+    allowed = parse(settings.security.registration_rate_limit).amount
+
+    answers = [
+        await client.post(
+            "/api/v1/agent/heartbeat",
+            json=_beat(agent.id),
+            headers={"Authorization": f"Bearer {stale}"},
+        )
+        for _ in range(allowed + 1)
+    ]
+    guesses = [
+        (
+            await client.post(
+                "/api/v1/agent/heartbeat", json=_beat(agent.id), headers=_WRONG
+            )
+        ).status_code
+        for _ in range(allowed + 1)
+    ]
+
+    assert [a.status_code for a in answers] == [401] * (allowed + 1)
+    assert {a.headers[REFUSAL_HEADER] for a in answers} == {AGENT_KEY_REFUSED}
+    # The budget is whole, and still spent by what could be a registration key.
+    assert guesses == [401] * allowed + [429], guesses
+
+
+async def test_a_revoked_key_keeps_its_marked_401_and_spends_nothing(
+    client: AsyncClient, db: AsyncSession
+) -> None:
+    agent = make_agent(approval_status="active", api_key_hash=None)
+    db.add(agent)
+    await db.flush()
+    _, key = await AgentCoreService.generate_agent_key(db, agent.id)
+    await AgentCoreService.revoke_agent_key(db, agent.id)
+    allowed = parse(settings.security.registration_rate_limit).amount
+
+    answers = [
+        await client.post(
+            "/api/v1/agent/heartbeat",
+            json=_beat(agent.id),
+            headers={"Authorization": f"Bearer {key}"},
+        )
+        for _ in range(allowed + 1)
+    ]
+
+    assert [a.status_code for a in answers] == [401] * (allowed + 1)
+    assert {a.headers[REFUSAL_HEADER] for a in answers} == {AGENT_KEY_REFUSED}
+
+
+async def test_an_agent_key_from_an_agent_that_never_had_one_names_the_registration_key(
+    client: AsyncClient, db: AsyncSession
+) -> None:
+    key = await _agent_key_format_token(db)
+    agent = make_agent(approval_status="pending", api_key_hash=None)
+    db.add(agent)
+    await db.flush()
+    allowed = parse(settings.security.registration_rate_limit).amount
+
+    answers = [
+        await client.post(
+            "/api/v1/agent/heartbeat",
+            json=_beat(agent.id),
+            headers={"Authorization": f"Bearer {key}"},
+        )
+        for _ in range(allowed + 1)
+    ]
+
+    assert [a.status_code for a in answers] == [401] * (allowed + 1)
+    assert {a.headers[REFUSAL_HEADER] for a in answers} == {REGISTRATION_KEY_REFUSED}
+
+
+def test_no_registration_key_is_in_the_agent_key_format() -> None:
+    key = RegistrationKeyCoreService.generate_key()
+
+    assert not key.startswith(AGENT_KEY_PREFIX), key
 
 
 # ── A pending agent's own credential: its recovery secret ─────────────────────
