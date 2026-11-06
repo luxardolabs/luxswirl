@@ -3,12 +3,18 @@
 `checks.target` is encrypted, each value under its own random IV, so SQL cannot
 match it: the search reads the rows the other filters narrowed, decrypted, and
 matches here. The match is a case-insensitive substring, with no wildcards.
+
+A target is matched as it is shown, with its credentials masked. A viewer reads it
+that way, and a match on the stored value would answer whether a guess at the
+password is right.
 """
 
 from uuid import UUID
 
 from sqlalchemy import Select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.credential_mask import mask_credentials
 
 
 async def ids_matching_search(
@@ -20,5 +26,6 @@ async def ids_matching_search(
     return [
         check_id
         for check_id, name, target in rows
-        if needle in (name or "").casefold() or needle in (target or "").casefold()
+        if needle in (name or "").casefold()
+        or needle in (mask_credentials(target) or "").casefold()
     ]
