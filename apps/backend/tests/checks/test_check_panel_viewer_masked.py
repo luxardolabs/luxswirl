@@ -13,6 +13,7 @@ from collections.abc import AsyncIterator
 import pytest
 import pytest_asyncio
 from app.core.config import settings
+from app.core.credential_mask import mask_mapping
 from app.main import app
 from app.services.core.auth_core_service import AuthCoreService
 from fixtures.factories import make_agent, make_check, make_check_result, make_user
@@ -45,7 +46,11 @@ async def client() -> AsyncIterator[AsyncClient]:
 
 
 async def _panel(
-    client: AsyncClient, db: AsyncSession, check_type: str, role: str
+    client: AsyncClient,
+    db: AsyncSession,
+    check_type: str,
+    role: str,
+    metrics: str = METRICS,
 ) -> str:
     agent = make_agent()
     user = make_user(role=role)
@@ -60,7 +65,7 @@ async def _panel(
             agent_id=agent.id,
             success=False,
             error=ERROR,
-            metrics=METRICS,
+            metrics=metrics,
         )
     )
     await db.flush()
@@ -92,3 +97,55 @@ async def test_an_editor_reads_the_error_as_it_was_reported(
     panel = await _panel(client, db, "http", "editor")
 
     assert SECRET in panel
+
+
+async def test_a_step_named_for_a_url_reads_masked(
+    client: AsyncClient, db: AsyncSession
+) -> None:
+    url = f"https://monitor:{SECRET}@app.example.com/login"
+    metrics = json.dumps(
+        {
+            "synthetic": {
+                "status": "passed",
+                "track_timings": {url: {}},
+                "track_durations": {url: 12.5},
+            }
+        }
+    )
+
+    panel = await _panel(client, db, "synthetic", "viewer", metrics)
+
+    assert "app.example.com/login" in panel
+    assert SECRET not in panel
+
+
+def _nested(depth: int) -> dict[str, object]:
+    value: dict[str, object] = {"leaf": f"postgresql://u:{SECRET}@db/app"}
+    for _ in range(depth):
+        value = {"a": value}
+    return value
+
+
+async def test_metrics_nested_very_deep_do_not_break_a_viewers_panel(
+    client: AsyncClient, db: AsyncSession
+) -> None:
+    metrics = json.dumps({"dns": _nested(800)})
+
+    panel = await _panel(client, db, "http", "viewer", metrics)
+
+    assert SECRET not in panel
+
+
+def test_a_value_past_the_depth_limit_is_masked_whole() -> None:
+    masked = mask_mapping(_nested(800))
+
+    assert SECRET not in json.dumps(masked)
+
+
+def test_a_value_within_the_depth_limit_keeps_its_shape() -> None:
+    masked: object = mask_mapping(_nested(50))
+
+    for _ in range(50):
+        assert isinstance(masked, dict)
+        masked = masked["a"]
+    assert masked == {"leaf": "postgresql://***@db/app"}
