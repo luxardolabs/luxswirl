@@ -84,9 +84,14 @@ def mask_nested(value: object, depth: int = 0) -> object:
 def mask_mapping(mapping: dict[str, object], depth: int = 0) -> dict[str, object]:
     """`mapping` with every string in its keys and values masked (`mask_nested`).
 
-    A key can be a credential too: a synthetic step is named for its URL.
+    A key can be a credential too: a synthetic step is named for its URL. Keys that
+    mask alike stay apart, numbered in the order of the keys themselves, so two
+    mappings over one set of keys stay in step.
     """
-    return {
-        mask_credentials(key): mask_nested(item, depth + 1)
-        for key, item in mapping.items()
-    }
+    names: dict[str, str] = {}
+    taken: dict[str, int] = {}
+    for key in sorted(mapping):
+        masked = mask_credentials(key)
+        taken[masked] = taken.get(masked, 0) + 1
+        names[key] = masked if taken[masked] == 1 else f"{masked} ({taken[masked]})"
+    return {names[key]: mask_nested(item, depth + 1) for key, item in mapping.items()}

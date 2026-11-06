@@ -149,3 +149,52 @@ def test_a_value_within_the_depth_limit_keeps_its_shape() -> None:
         assert isinstance(masked, dict)
         masked = masked["a"]
     assert masked == {"leaf": "postgresql://***@db/app"}
+
+
+def _steps_differing_only_in_a_credential() -> tuple[str, str]:
+    base = "https://app.example.com/login?token="
+    return f"{base}AAA111", f"{base}BBB222"
+
+
+@pytest.mark.parametrize("reversed_durations", [False, True])
+async def test_two_steps_that_mask_alike_keep_their_own_rows(
+    client: AsyncClient, db: AsyncSession, reversed_durations: bool
+) -> None:
+    first, second = _steps_differing_only_in_a_credential()
+    durations = {first: 1.0, second: 2.0}
+    if reversed_durations:
+        durations = {second: 2.0, first: 1.0}
+    metrics = json.dumps(
+        {
+            "synthetic": {
+                "status": "passed",
+                "track_timings": {
+                    first: {"navigationStart": 1000, "loadEventEnd": 1111},
+                    second: {"navigationStart": 1000, "loadEventEnd": 1222},
+                },
+                "track_durations": durations,
+            }
+        }
+    )
+
+    viewer = await _panel(client, db, "synthetic", "viewer", metrics)
+    editor = await _panel(client, db, "synthetic", "editor", metrics)
+
+    assert "AAA111" not in viewer
+    assert "BBB222" not in viewer
+    for number in ("111ms", "222ms", "1000", "2000", "3000"):
+        assert (number in viewer) == (number in editor), number
+
+
+def test_keys_that_mask_alike_stay_apart_and_in_step() -> None:
+    first, second = _steps_differing_only_in_a_credential()
+
+    one = mask_mapping({first: 1.0, second: 2.0})
+    other = mask_mapping({second: 20.0, first: 10.0})
+
+    assert len(one) == len(other) == 2
+    assert set(one) == set(other)
+    assert {name: (one[name], other[name]) for name in one} == {
+        "https://app.example.com/login?token=***": (1.0, 10.0),
+        "https://app.example.com/login?token=*** (2)": (2.0, 20.0),
+    }
