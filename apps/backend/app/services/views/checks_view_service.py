@@ -14,6 +14,7 @@ from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.check_target_validator import CheckTargetBlockedError
+from app.core.credential_mask import mask_credentials
 from app.core.exceptions import (
     AgentNotFoundException,
     CheckNotFoundException,
@@ -203,7 +204,7 @@ class ChecksViewService:
             if tag_lc and (not c.tags or tag_lc not in [t.lower() for t in c.tags]):
                 continue
             if search_lc:
-                hay = f"{c.display_name} {c.target}".lower()
+                hay = f"{c.display_name} {mask_credentials(c.target)}".lower()
                 if search_lc not in hay:
                     continue
             filtered.append(c)
