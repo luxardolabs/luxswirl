@@ -17,13 +17,14 @@ _USERINFO = re.compile(r"(?<=://)[^/?#]*@")
 _KEYS = r"(?:ssl)?password|passwd|pwd|secret|token|access_token|api_?key"
 # A value: braced (ODBC), quoted, or bare with backslash escapes (libpq). A brace or a
 # quote left open runs to the end of the text, so it is masked to the end, and a
-# scan never fails and starts again: this runs on the event loop, over text a
-# viewer can send, and must stay linear in it.
+# scan never fails and starts again. The loops are possessive, since nothing after
+# them can need one back, and a plain loop keeps a frame per character. This runs on
+# the event loop, over text a viewer can send, and must stay linear in time and space.
 _VALUE = (
     r"\{[^}]*(?:\}|\Z)"
-    r"|'(?:\\[\s\S]?|[^'\\])*(?:'|\Z)"
-    r'|"(?:\\[\s\S]?|[^"\\])*(?:"|\Z)'
-    r"|(?:\\.|[^\s;&#])+"
+    r"|'(?:\\[\s\S]?|[^'\\])*+(?:'|\Z)"
+    r'|"(?:\\[\s\S]?|[^"\\])*+(?:"|\Z)'
+    r"|(?:\\.|[^\s;&#])++"
 )
 _PAIR = re.compile(rf"(?i)(?<![\w.-])({_KEYS})(\s*=\s*)({_VALUE})")
 # An ODBC string (`;`-separated): a bare value runs to the `;`, spaces included.
@@ -31,9 +32,9 @@ _ODBC_PAIR = re.compile(
     rf"(?i)(?<![\w.-])({_KEYS})(\s*=\s*)(\{{[^}}]*(?:\}}|\Z)|[^;]*)"
 )
 # A URL in free text: its scheme and host, then everything up to a space or quote.
-_URL = re.compile(
-    r"(?i)(?<![a-z0-9+.-])([a-z][a-z0-9+.-]*://[^/\s'\"<>?#]+)[^\s'\"<>]*"
-)
+# The scheme is read from where its run of characters starts, so text run into it
+# still leaves the URL cut.
+_URL = re.compile(r"(?i)(?<![a-z0-9+.-])([a-z0-9+.-]+://[^/\s'\"<>?#]+)[^\s'\"<>]*")
 
 
 def mask_url_paths(text: str | None) -> str | None:
