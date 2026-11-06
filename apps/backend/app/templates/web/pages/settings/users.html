@@ -151,9 +151,7 @@
                         <!-- Unlock (if locked) — Approve/Enable = green per /settings/components -->
                         {% if user.locked_until %}
                         {% set unlock_svg %}<span class="w-3.5 h-3.5 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/lock-closed.svg" %}</span>{% endset %}
-                        <form method="POST" action="{{ user.urls.unlock }}" class="inline">
-                            {{ icon_btn(unlock_svg, color='green', title='Unlock Account', extra_attrs='type="submit"') }}
-                        </form>
+                        {{ icon_btn(unlock_svg, color='green', title='Unlock Account', hx_post=user.urls.unlock, hx_swap='none') }}
                         {% endif %}
 
                         {% if user.id != current_user.id %}
