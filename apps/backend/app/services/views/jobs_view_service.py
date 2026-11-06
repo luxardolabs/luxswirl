@@ -15,7 +15,7 @@ from fastapi import status as http_status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import NotFoundException
-from app.core.scan_panel import build_scan_view
+from app.core.scan_panel import build_scan_view, panel_result
 from app.models.enum_model import SERVER_RUNNER, JobStatus, JobType
 from app.schemas.auth_schema import AuthedUser
 from app.schemas.job_schema import JobCreate, JobInDB, JobUrls, ScanActionUrls
@@ -490,6 +490,7 @@ class JobsViewService:
             **build_scan_view(
                 job.result if job.job_type == "network_scan" else None, existing_checks
             ),
+            "job_result": panel_result(job.job_type, job.result),
             "job_urls": build_job_urls(request, job_id),
             "scan_action_urls": build_scan_action_urls(request, job_id),
             **build_discover_view(request, job),

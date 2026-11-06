@@ -2,7 +2,7 @@
 {% from 'macros/buttons.html' import text_btn, btn_create, filter_pill, icon_btn, tag_pill_button %}
 {% from 'macros/form_fields.html' import input, select %}
 {% from 'macros/tables.html' import data_table %}
-{% set result = job.result %}
+{% set result = job_result %}
 
 {# One quick-create button. After a successful create it dims and disables itself so
    the user gets immediate visual feedback; the page's `existing_checks` lookup renders
