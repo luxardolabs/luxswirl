@@ -61,3 +61,19 @@ def mask_credentials(value: str | None) -> str | None:
     masked = _USERINFO.sub(f"{_MASK}@", value)
     pair = _ODBC_PAIR if ";" in masked and "://" not in masked else _PAIR
     return pair.sub(rf"\1\2{_MASK}", masked)
+
+
+def mask_nested(value: object) -> object:
+    """`value` (decoded JSON) with every string in it, at any depth, masked."""
+    if isinstance(value, str):
+        return mask_credentials(value)
+    if isinstance(value, dict):
+        return mask_mapping(value)
+    if isinstance(value, list):
+        return [mask_nested(item) for item in value]
+    return value
+
+
+def mask_mapping(mapping: dict[str, object]) -> dict[str, object]:
+    """`mapping` with every string in its values, at any depth, masked."""
+    return {key: mask_nested(item) for key, item in mapping.items()}

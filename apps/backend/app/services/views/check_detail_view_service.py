@@ -12,9 +12,11 @@ from uuid import UUID
 from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.credential_mask import mask_credentials, mask_mapping
 from app.core.datetime_utils import utc_now
 from app.core.ssl_expiry import ssl_expiry_fields
 from app.core.synthetic_timings import build_synthetic_view
+from app.models.enum_model import UserRole
 from app.schemas.check_result_schema import RecentCheckResult
 from app.services.core.check_dependency_core_service import (
     CheckDependencyCoreService,
@@ -143,7 +145,11 @@ class CheckDetailViewService:
 
     @staticmethod
     async def get_check_detail(
-        db: AsyncSession, request: Request, check_id: UUID, hours: int = 4
+        db: AsyncSession,
+        request: Request,
+        check_id: UUID,
+        role: UserRole,
+        hours: int = 4,
     ) -> dict[str, Any] | None:
         """
         Get full check details including recent history.
@@ -151,11 +157,17 @@ class CheckDetailViewService:
         Args:
             db: Database session
             check_id: Check ID
+            role: The reader's role: a viewer reads each result masked
             hours: Number of hours of history to fetch (default: 4)
 
         Returns:
             Dictionary with check details
         """
+        masked = role == UserRole.VIEWER
+
+        def shown_error(error: str | None) -> str | None:
+            return mask_credentials(error) if masked else error
+
         # Get check with agent
         row = await CheckResultCoreService.get_check_with_agent(db, check_id)
 
@@ -191,11 +203,13 @@ class CheckDetailViewService:
         history: list[dict[str, Any]] = []
         for result in history_models:
             metrics = result.get_metrics()  # SSL cert already computed by the server
+            if masked:
+                metrics = mask_mapping(metrics)
             history_item: dict[str, Any] = {
                 "timestamp": result.timestamp.isoformat(),  # ISO string for JSON serialization
                 "success": result.success,
                 "latency_ms": result.latency_ms,
-                "error": result.error,
+                "error": shown_error(result.error),
                 "additional_data": metrics,
             }
 
@@ -407,7 +421,7 @@ class CheckDetailViewService:
                 "timestamp": result.timestamp.isoformat(),  # ISO string for template
                 "success": result.success,
                 "latency_ms": result.latency_ms,
-                "error": result.error,
+                "error": shown_error(result.error),
             }
             for result in status_bar_results
         ]

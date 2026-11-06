@@ -18,7 +18,7 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.credential_mask import mask_credentials
+from app.core.credential_mask import mask_credentials, mask_mapping
 from app.core.datetime_utils import utc_now
 from app.core.exceptions import NotFoundException, ValidationException
 from app.models.check_result_model import CheckResult
@@ -56,22 +56,6 @@ def _metrics(raw: str | None) -> dict[str, Any] | None:
 _VIEWER_SECTIONS = ("dns", "mysql", "postgres", "synthetic")
 
 
-def _masked(value: object) -> object:
-    """`value` (decoded JSON) with every string in it, at any depth, masked."""
-    if isinstance(value, str):
-        return mask_credentials(value)
-    if isinstance(value, dict):
-        return _masked_mapping(value)
-    if isinstance(value, list):
-        return [_masked(item) for item in value]
-    return value
-
-
-def _masked_mapping(mapping: dict[str, object]) -> dict[str, object]:
-    """`mapping` with every string in its values, at any depth, masked."""
-    return {key: _masked(item) for key, item in mapping.items()}
-
-
 def _viewer_metrics(metrics: dict[str, Any] | None) -> dict[str, Any] | None:
     """What of `metrics` a viewer reads: the panel's sections, masked."""
     if not metrics:
@@ -82,7 +66,7 @@ def _viewer_metrics(metrics: dict[str, Any] | None) -> dict[str, Any] | None:
     response = metrics.get("response")
     if isinstance(response, dict) and "ssl_certificate" in response:
         shown["response"] = {"ssl_certificate": response["ssl_certificate"]}
-    return _masked_mapping(shown)
+    return mask_mapping(shown)
 
 
 def _utc(moment: datetime) -> datetime:
