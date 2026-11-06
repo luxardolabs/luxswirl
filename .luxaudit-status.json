@@ -2,10 +2,10 @@
   "guard": "luxaudit",
   "guard_version": "0.16.0",
   "repo": "/repo",
-  "packages": 214,
+  "packages": 111,
   "source": "apps/backend/poetry.lock, apps/agent/poetry.lock, apps/backend/package-lock.json",
   "summary": {
-    "PASS": 214,
+    "PASS": 0,
     "FAIL": 0,
     "XFAIL": 0,
     "INERT": 1
@@ -15,6 +15,19 @@
   "banned": [],
   "not_audited": [],
   "warnings": [],
+  "error": "apps/backend/poetry.lock: osv: WARNING:pip_audit._cli:--no-deps is supported, but users are encouraged to fully hash their pinned dependencies\nWARNING:pip_audit._cli:Consider using a tool like `pip-compile`: https://pip-tools.readthedocs.io/en/latest/#using-hashes\nTraceback (most recent call last):\n  File \"/usr/local/lib/python3.14/site-packages/urllib3/connection.py\", line 239, in _new_conn\n    sock = connection.create_connect\napps/agent/poetry.lock: osv: WARNING:pip_audit._cli:--no-deps is supported, but users are encouraged to fully hash their pinned dependencies\nWARNING:pip_audit._cli:Consider using a tool like `pip-compile`: https://pip-tools.readthedocs.io/en/latest/#using-hashes\nTraceback (most recent call last):\n  File \"/usr/local/lib/python3.14/site-packages/urllib3/connection.py\", line 239, in _new_conn\n    sock = connection.create_connect",
+  "errors": [
+    "apps/backend/poetry.lock: osv: WARNING:pip_audit._cli:--no-deps is supported, but users are encouraged to fully hash their pinned dependencies",
+    "WARNING:pip_audit._cli:Consider using a tool like `pip-compile`: https://pip-tools.readthedocs.io/en/latest/#using-hashes",
+    "Traceback (most recent call last):",
+    "  File \"/usr/local/lib/python3.14/site-packages/urllib3/connection.py\", line 239, in _new_conn",
+    "    sock = connection.create_connect",
+    "apps/agent/poetry.lock: osv: WARNING:pip_audit._cli:--no-deps is supported, but users are encouraged to fully hash their pinned dependencies",
+    "WARNING:pip_audit._cli:Consider using a tool like `pip-compile`: https://pip-tools.readthedocs.io/en/latest/#using-hashes",
+    "Traceback (most recent call last):",
+    "  File \"/usr/local/lib/python3.14/site-packages/urllib3/connection.py\", line 239, in _new_conn",
+    "    sock = connection.create_connect"
+  ],
   "image": {
     "ref": "ghcr.io/luxardolabs/luxswirl-backend:2026.09.0, ghcr.io/luxardolabs/luxswirl-agent:2026.09.0",
     "inert": true,
@@ -32,6 +45,6 @@
     "expired": [],
     "unjudged": []
   },
-  "commit": "ba09b3086337d3d45d40c526160c741368afb06e",
-  "generated_at": "2026-11-06T17:43:52Z"
+  "commit": "e13566cbb979a3cf2423041e17849df781827d3c",
+  "generated_at": "2026-11-06T18:46:40Z"
 }
