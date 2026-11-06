@@ -42,20 +42,58 @@ def _html_written(source: str) -> list[str]:
     return written
 
 
-def test_the_sink_finder_sees_the_shapes_it_must_refuse() -> None:
-    found = _html_written(
-        "pill.innerHTML = `<b>${tag}</b>`;\nx.innerHTML = list.map(tag => `${tag}`);"
-    )
+# Every value first-party JavaScript writes into HTML, each read and found to be a
+# constant the code itself holds. A new one is a question to answer, not a name to
+# add: build it with DOM calls unless it is a constant too.
+_KNOWN_VALUES = {
+    ("alerts-form.js", "defaults.consecutive_failures"),
+    ("alerts-form.js", "defaults.latency_threshold_ms"),
+    ("alerts-form.js", "help"),
+    ("app.js", "icon"),
+    ("app.js", "textColor"),
+    ("confirm-double-click.js", "btn._confirmOrigHtml"),
+    ("confirm-double-click.js", "label"),
+    ("registration-keys.js", "originalHTML"),
+    ("settings.js", "originalHTML"),
+    ("tag-pill.js", "REMOVE_ICON"),
+}
 
-    assert any("tag" in text for text in found)
-    assert len(found) == 2
+
+def _values_written(text: str) -> list[str]:
+    """What an HTML sink's right side takes from outside its own literals."""
+    if text.startswith("`"):
+        return [value.strip() for value in re.findall(r"\$\{([^}]*)\}", text)]
+    without_literals = re.sub(r"'[^']*'|\"[^\"]*\"", "", text).strip()
+    without_literals = without_literals.strip("+ ").strip()
+    return [without_literals] if without_literals else []
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "x.innerHTML = `<b>${tag}</b>`;",
+        "x.innerHTML = `<b>${t}</b>`;",
+        "x.innerHTML = html;",
+        "x.innerHTML = '<b>' + tag + '</b>';",
+        "x.innerHTML = list.map(t => `${t}`).join('');",
+        "x.insertAdjacentHTML('beforeend', html);",
+    ],
+)
+def test_the_scan_sees_each_shape_of_a_value_written_as_html(source: str) -> None:
+    assert any(_values_written(text) for text in _html_written(source)), source
+
+
+def test_a_literal_written_as_html_is_not_a_value() -> None:
+    written = _html_written("x.innerHTML = '<b>ok</b>';\ny.innerHTML = `<i>ok</i>`;")
+
+    assert [_values_written(text) for text in written] == [[], []]
 
 
 @pytest.mark.parametrize("path", _first_party(), ids=lambda p: p.name)
-def test_no_tag_reaches_an_html_sink(path: Path) -> None:
+def test_html_sinks_write_only_known_constants(path: Path) -> None:
     for text in _html_written(path.read_text()):
-        assert not re.search(r"\$\{[^}]*\btags?\b", text), f"{path.name}: {text[:120]}"
-        assert not re.search(r"\.map\(\s*tags?\b", text), f"{path.name}: {text[:120]}"
+        for value in _values_written(text):
+            assert (path.name, value) in _KNOWN_VALUES, f"{path.name}: {value[:120]}"
 
 
 def test_a_file_loaded_as_a_classic_script_has_no_import() -> None:
