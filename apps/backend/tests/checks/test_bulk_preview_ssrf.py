@@ -9,16 +9,19 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import contextvars
 import datetime
 import os
 import socket
 import ssl
+import struct
 import tempfile
 import threading
 import time
 from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any
+from urllib.parse import urlparse
 
 import httpcore
 import pytest
@@ -27,9 +30,11 @@ from app.core.config import settings
 from app.core.rate_limit import limiter
 from app.main import app
 from app.services.core import check_core_service
+from app.services.core._check_bulk_names import bulk_display_name
 from app.services.core.auth_core_service import AuthCoreService
 from app.services.core.check_core_service import CheckCoreService
 from app.services.core.settings_core_service import SettingsCoreService
+from app.shared.ssrf_http import VettedBackend, VettedTransport
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
@@ -564,3 +569,136 @@ async def test_a_row_that_does_not_parse_has_a_fixed_name(db: AsyncSession) -> N
         "invalid-url",
         "invalid-url (2)",
     ]
+
+
+@pytest.mark.parametrize("scheme", ["https", "http"])
+async def test_a_cancel_mid_connection_closes_the_socket(scheme: str) -> None:
+    hung_up = asyncio.Event()
+
+    async def stall(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        await reader.read()
+        hung_up.set()
+        writer.close()
+
+    server = await asyncio.start_server(stall, "127.0.0.1", 0)
+    port = server.sockets[0].getsockname()[1]
+    transport = VettedTransport(verify=True, allowed=lambda _host: ["127.0.0.1"])
+    async with server, AsyncClient(transport=transport, timeout=30) as client:
+        with pytest.raises(TimeoutError):
+            async with asyncio.timeout(0.2):
+                await client.get(f"{scheme}://127.0.0.1:{port}/")
+        await asyncio.wait_for(hung_up.wait(), timeout=2)
+
+
+async def test_a_url_naming_many_hosts_is_not_looked_up(
+    db: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    looked_up: list[str] = []
+    real = socket.getaddrinfo
+
+    def spy(host: Any, *args: Any, **kwargs: Any) -> Any:
+        looked_up.append(host)
+        return real("192.0.2.1", *args, **kwargs)
+
+    monkeypatch.setattr(socket, "getaddrinfo", spy)
+    limit = check_core_service._PREVIEW_HOSTS_PER_URL
+
+    within = ",".join(f"h{i}.test" for i in range(limit))
+    over = ",".join(f"m{i}.test" for i in range(limit + 1))
+    allowed = await _row(db, f"postgres://u@{within}/db")
+    assert sorted(looked_up) == sorted(f"h{i}.test" for i in range(limit))
+    looked_up.clear()
+
+    row = await _row(db, f"postgres://u@{over}/db")
+
+    assert allowed["validation_status"] == "unknown"
+    assert allowed["validation_message"] == ""
+    assert looked_up == []
+    assert row["validation_status"] == "unknown"
+    assert row["validation_message"].startswith("Not checked: ")
+
+
+async def test_a_slow_tls_handshake_on_the_only_address_gets_its_answer(
+    db: AsyncSession,
+) -> None:
+    context = _self_signed()
+
+    async def slow(_r: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        await asyncio.sleep(2)
+        with contextlib.suppress(ssl.SSLError, ConnectionError):
+            await writer.start_tls(context)
+        writer.close()
+
+    server = await asyncio.start_server(slow, "127.0.0.1", 0)
+    port = server.sockets[0].getsockname()[1]
+    async with server:
+        row = await _row(db, f"https://127.0.0.1:{port}/")
+
+    assert row["validation_status"] == "warning", row
+
+
+async def test_a_slow_connect_on_the_only_address_gets_its_answer(
+    db: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    local = await _serve(_ok)
+    real = httpcore.AnyIOBackend.connect_tcp
+
+    async def slow(self: Any, host: str, *args: Any, **kwargs: Any) -> Any:
+        await asyncio.sleep(2)
+        if kwargs["timeout"] < 2:
+            raise httpcore.ConnectTimeout("no answer")
+        return await real(self, host, *args, **kwargs)
+
+    monkeypatch.setattr(httpcore.AnyIOBackend, "connect_tcp", slow)
+    async with local.server:
+        row = await _row(db, f"http://127.0.0.1:{local.port}/")
+
+    assert row["status_code"] == 200, row
+
+
+async def test_a_parse_error_never_quotes_the_url(db: AsyncSession) -> None:
+    url = "password=a?b \uff20S3CRETMARK"
+
+    row = await _row(db, url)
+
+    assert "S3CRETMARK" not in row["validation_message"]
+    assert row["validation_message"] == "Parse error: The URL could not be parsed"
+    with pytest.raises(ValueError, match="could not be parsed"):
+        bulk_display_name(urlparse(f"https://{url}"))
+
+
+async def test_a_reset_connection_is_a_failed_connection(db: AsyncSession) -> None:
+    async def reset(writer: asyncio.StreamWriter) -> None:
+        writer.get_extra_info("socket").setsockopt(
+            socket.SOL_SOCKET, socket.SO_LINGER, struct.pack("ii", 1, 0)
+        )
+        writer.transport.abort()
+
+    local = await _serve(reset)
+    async with local.server:
+        row = await _row(db, f"http://127.0.0.1:{local.port}/")
+
+    assert row["validation_message"] == "Connection failed"
+
+
+@pytest.mark.parametrize("url", ["http:foo", "https://:80/", "https://a..b/"])
+async def test_a_url_no_client_can_fetch_says_so(db: AsyncSession, url: str) -> None:
+    row = await _row(db, url)
+
+    assert row["validation_status"] == "error"
+    assert row["validation_message"] == "The URL could not be parsed"
+
+
+async def test_a_lookup_runs_in_its_callers_context() -> None:
+    marker: contextvars.ContextVar[str] = contextvars.ContextVar("marker", default="")
+    marker.set("caller")
+    seen: list[str] = []
+
+    def allowed(_host: str) -> list[str]:
+        seen.append(marker.get())
+        return []
+
+    with pytest.raises(httpcore.ConnectError):
+        await VettedBackend(allowed).connect_tcp("h.test", 80)
+
+    assert seen == ["caller"]

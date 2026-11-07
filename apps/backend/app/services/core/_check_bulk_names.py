@@ -14,10 +14,14 @@ def bulk_display_name(parsed: ParseResult) -> str:
     holds no more than the masked target shows.
 
     Raises:
-        ValueError: The port is no number. The parser's own message quotes it, and a
-            password holding a `/` can read as one, so this one says only that.
+        ValueError: The masked URL does not parse, or its port is no number. The
+            parser's own message quotes what it read, and that can be a password, so
+            this one says only that.
     """
-    masked = urlparse(mask_credentials(parsed.geturl()))
+    try:
+        masked = urlparse(mask_credentials(parsed.geturl()))
+    except ValueError:
+        raise ValueError("The URL could not be parsed") from None
     hostname = masked.hostname or "unknown"
     display_name = hostname.replace(".", "-")
     if masked.path and masked.path != "/":

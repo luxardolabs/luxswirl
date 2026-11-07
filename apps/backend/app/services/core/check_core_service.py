@@ -64,7 +64,7 @@ from app.services.core.check_dependency_core_service import (
 )
 from app.services.core.settings_core_service import SettingsCoreService
 from app.shared.logger import get_logger
-from app.shared.ssrf import SsrfBlockedError, allowed_addresses
+from app.shared.ssrf import SsrfBlockedError, allowed_addresses, extract_hosts
 from app.shared.ssrf_http import NO_ADDRESS, VettedTransport
 
 logger = get_logger("luxswirl.services.check")
@@ -72,8 +72,11 @@ logger = get_logger("luxswirl.services.check")
 _PREVIEW_PROBED_URLS = 100
 _PREVIEW_PROBES_AT_ONCE = 20
 _PREVIEW_PROBE_SECONDS = 5
-# Each of a name's addresses gets this long, so a dead first one leaves time for the next.
-_PREVIEW_CONNECT_SECONDS = 1.5
+# Each of a name's addresses but its last gets this long, to leave time for the next.
+_PREVIEW_ADDRESS_SECONDS = 1.5
+# A deadline stops waiting for a row and not its lookups, which run host by host, so a
+# URL naming more (a PostgreSQL host list) is not looked up at all.
+_PREVIEW_HOSTS_PER_URL = 8
 _PREVIEW_INVALID_NAME = "invalid-url"
 # A preview's lookups: a deadline cannot stop one waiting on a slow nameserver, so they
 # stay out of the default executor, which name lookups and other work share.
@@ -1272,11 +1275,11 @@ class CheckCoreService:
                 block_private_networks=protection.block_private_networks,
             ),
             lookups=_PREVIEW_LOOKUPS,
+            address_seconds=_PREVIEW_ADDRESS_SECONDS,
         )
-        timeout = httpx.Timeout(
-            _PREVIEW_PROBE_SECONDS, connect=_PREVIEW_CONNECT_SECONDS
-        )
-        async with httpx.AsyncClient(transport=transport, timeout=timeout) as client:
+        async with httpx.AsyncClient(
+            transport=transport, timeout=_PREVIEW_PROBE_SECONDS
+        ) as client:
 
             async def judged(url: str) -> dict[str, Any]:
                 async with turns:
@@ -1398,6 +1401,12 @@ class CheckCoreService:
         to verify_ssl=True. A cert problem is reported as its own warning so the
         operator can set verify_ssl=False deliberately.
         """
+        if len(extract_hosts(full_url)) > _PREVIEW_HOSTS_PER_URL:
+            return (
+                "unknown",
+                f"Not checked: this URL names over {_PREVIEW_HOSTS_PER_URL} hosts",
+                None,
+            )
         # swallowed-exceptions: every failure here is the probe's answer, shown
         # to the operator as the preview row's status.
         try:
@@ -1429,8 +1438,10 @@ class CheckCoreService:
             return CheckCoreService._connect_failure(e)
         except httpx.ProtocolError:
             return "error", "The target did not answer HTTP", None
-        except httpx.InvalidURL:
+        except httpx.InvalidURL, httpx.UnsupportedProtocol, UnicodeError:
             return "error", "The URL could not be parsed", None
+        except httpx.TransportError:
+            return "error", "Connection failed", None
         except Exception as e:
             return "error", f"The probe failed ({type(e).__name__})", None
 
