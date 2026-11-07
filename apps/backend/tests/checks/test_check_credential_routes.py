@@ -196,7 +196,7 @@ async def test_the_web_flow_keeps_webhooks_apart(db: AsyncSession) -> None:
     await db.flush()
     urls = [f"tcp://hooks.example.com:{port}/services/T0/B0/k" for port in (1, 2)]
     urls += [f"https://hooks.slack.com/services/T0/B0/k{i}" for i in range(3)]
-    previews = await CheckCoreService.bulk_preview_checks(urls)
+    previews = await CheckCoreService.bulk_preview_checks(db, urls)
     names = [preview["generated_name"] for preview in previews]
     assert len(set(names)) == len(names), names
 
@@ -287,8 +287,12 @@ async def test_a_failure_names_the_callers_entry_after_one_was_refused(
 
 
 @pytest.mark.integration
-async def test_a_preview_row_that_does_not_parse_masks_its_generated_name() -> None:
-    previews = await CheckCoreService.bulk_preview_checks([f"https://m:{SECRET}@[/"])
+async def test_a_preview_row_that_does_not_parse_masks_its_generated_name(
+    db: AsyncSession,
+) -> None:
+    previews = await CheckCoreService.bulk_preview_checks(
+        db, [f"https://m:{SECRET}@[/"]
+    )
 
     assert all(SECRET not in row["generated_name"] for row in previews), previews
 
