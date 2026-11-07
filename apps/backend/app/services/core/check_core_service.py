@@ -1144,8 +1144,9 @@ class CheckCoreService:
                 check_type, url, parsed = CheckCoreService._classify_bulk_url(
                     req.url.strip()
                 )
-                display_name = req.display_name or unused_name(
-                    bulk_display_name(parsed), taken, numbers
+                # A given name too: the web form posts the name its preview made.
+                display_name = unused_name(
+                    req.display_name or bulk_display_name(parsed), taken, numbers
                 )
 
                 # Build CheckCreate object
@@ -1236,6 +1237,13 @@ class CheckCoreService:
         previews = await asyncio.gather(
             *[CheckCoreService._preview_bulk_url(url) for url in urls]
         )
+        taken: set[str] = set()
+        numbers: dict[str, int] = {}
+        for preview in previews:
+            preview["generated_name"] = unused_name(
+                preview["generated_name"], taken, numbers
+            )
+            taken.add(preview["generated_name"])
         return previews
 
     @staticmethod
@@ -1245,12 +1253,16 @@ class CheckCoreService:
         The check type comes from the scheme ("http" for both http:// and
         https://); a URL with no scheme is taken as https.
         """
-        parsed = urlparse(url)
-        if parsed.scheme in ("http", "https"):
-            return "http", url, parsed
-        if not parsed.scheme:
-            full_url = f"https://{url}"
-            return "http", full_url, urlparse(full_url)
+        try:
+            parsed = urlparse(url)
+            if parsed.scheme in ("http", "https"):
+                return "http", url, parsed
+            if not parsed.scheme:
+                full_url = f"https://{url}"
+                return "http", full_url, urlparse(full_url)
+        except ValueError:
+            # The parser's own message quotes what it refused.
+            raise ValueError("The URL could not be parsed") from None
         try:
             CheckType(parsed.scheme)
         except ValueError:

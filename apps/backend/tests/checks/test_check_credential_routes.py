@@ -132,8 +132,39 @@ async def test_a_bulk_failure_does_not_quote_what_a_parser_misread(
     )
 
     assert response.status_code == 200, response.text
+    assert SECRET not in response.text
     assert SECRET.lower() not in response.text
-    assert "no check type" in response.text
+    assert "Entry 1: The URL's scheme is no check type" in response.text
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize(
+    "url",
+    [
+        f"https://m:{SECRET}\u2100@a.example.com/",
+        f"https://[{SECRET}]/",
+        f"https://m:{SECRET}@[{SECRET}]/",
+    ],
+    ids=["nfkc", "bracket-host", "bracket-userinfo"],
+)
+async def test_a_url_the_parser_refuses_is_not_quoted(
+    client: AsyncClient, db: AsyncSession, url: str
+) -> None:
+    job, job_id = await _bulk_job(db, url)
+
+    with pytest.raises(JobFailed) as failed:
+        await bulk_check_create.handle(db, job)
+    await MaintenanceJobCoreService.update_progress(db, job_id, failed.value.progress)
+    await MaintenanceJobCoreService.mark_failed(db, job_id, str(failed.value))
+    await db.flush()
+    db.expire_all()
+
+    response = await client.get(
+        f"/api/v1/admin/maintenance-jobs/{job_id}", headers=await _viewer(db)
+    )
+
+    assert response.status_code == 200, response.text
+    assert SECRET not in response.text
 
 
 @pytest.mark.integration
@@ -155,6 +186,32 @@ async def test_webhooks_on_one_host_keep_apart_names_after_masking(
     assert first.succeeded == 3
     assert len(set(names)) == 4, names
     assert all(SECRET not in (name or "") for name in names)
+
+
+@pytest.mark.integration
+async def test_the_web_flow_keeps_webhooks_apart(db: AsyncSession) -> None:
+    """The form posts the names its preview made, as given names."""
+    agent = make_agent()
+    db.add(agent)
+    await db.flush()
+    urls = [f"tcp://hooks.example.com:{port}/services/T0/B0/k" for port in (1, 2)]
+    urls += [f"https://hooks.slack.com/services/T0/B0/k{i}" for i in range(3)]
+    previews = await CheckCoreService.bulk_preview_checks(urls)
+    names = [preview["generated_name"] for preview in previews]
+    assert len(set(names)) == len(names), names
+
+    made = await CheckCoreService.bulk_create_checks(
+        db,
+        agent.id,
+        [
+            BulkCheckCreateRequest(url=url, display_name=name)
+            for url, name in [*zip(urls, names, strict=True), (urls[0], names[0])]
+        ],
+    )
+
+    stored = [r.display_name for r in made.results]
+    assert made.succeeded == len(urls) + 1
+    assert len(set(stored)) == len(stored), stored
 
 
 @pytest.mark.integration
@@ -195,6 +252,28 @@ def test_the_audit_masks_after_a_nul_is_stripped() -> None:
     stored = masked_arguments({"target": f"https://a/?pass\x00word={SECRET}"})
 
     assert SECRET not in str(stored)
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        f"Pwd=one {SECRET} three" + " pad" * 16394 + ";Server=x",
+        "password="
+        + "a" * 65000
+        + f" mysql://m:{SECRET} mid longtail"
+        + "b" * 600
+        + "@db/app",
+    ],
+    ids=["dialect-past-the-cut", "userinfo-past-the-cut"],
+)
+def test_a_string_too_long_to_mask_whole_is_kept_by_its_size(value: str) -> None:
+    assert masked_arguments({"target": value}) == {
+        "target": f"<{len(value)} characters>"
+    }
+
+
+def test_the_audit_leaves_an_empty_string_as_it_is() -> None:
+    assert masked_arguments({"token": ""}) == {"token": ""}
 
 
 def test_the_audit_cuts_a_long_argument_and_says_how_long_it_was() -> None:
