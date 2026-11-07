@@ -175,10 +175,12 @@ class JobCoreService:
 
     @staticmethod
     def read_by[D: JobDetail](job: D, role: UserRole) -> D:
-        """`job` as `role` may read it. A viewer reads its error with every
-        credential masked, and its params and result with every string masked
-        and every value under a key naming a secret hidden: an agent writes
-        both, and a scanned host's banner or a discover warning can carry one.
+        """`job` as `role` may read it. A viewer reads its error through
+        `mask_credentials`, and its params and result through `mask_mapping`,
+        as a check result's are: an agent writes both, and a scanned host's
+        banner or a discover warning can carry a credential. The masks work
+        from a list of the forms a credential takes, so a form not on it stays
+        visible.
         """
         if role != UserRole.VIEWER:
             return job
