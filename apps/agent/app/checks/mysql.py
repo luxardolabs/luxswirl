@@ -86,8 +86,9 @@ class MySQLCheck(BaseCheck):
 
         try:
             port = parsed.port or 3306
-        except ValueError as e:
-            raise CheckConfigError(f"Invalid port: {e}") from e
+        # The parser's message quotes what it read as a port: a password holding a `/`.
+        except ValueError:
+            raise CheckConfigError("Invalid port") from None
 
         return {
             "host": parsed.hostname or "localhost",

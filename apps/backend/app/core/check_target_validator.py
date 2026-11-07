@@ -10,7 +10,11 @@ Settings (Settings > Security):
 - security.block_private_networks (default False) — blocks RFC 1918, IPv6 ULA, loopback, 0.0.0.0 and CGNAT
 """
 
-from app.shared.ssrf import SsrfBlockedError, assert_target_allowed
+from app.shared.ssrf import (
+    SsrfBlockedError,
+    UnplainDatabaseUrlError,
+    assert_target_allowed,
+)
 
 
 class CheckTargetBlockedError(ValueError):
@@ -43,6 +47,8 @@ def validate_check_target(
             block_private_networks=block_private_networks,
             database=database,
         )
+    except UnplainDatabaseUrlError as e:
+        raise CheckTargetBlockedError(str(e)) from e
     except SsrfBlockedError as e:
         raise CheckTargetBlockedError(
             f"{e} Adjust SSRF protection under Settings > Security to allow it."

@@ -282,9 +282,10 @@ class PostgreSQLCheck(BaseCheck):
         parsed = urlparse(connection_string)
         try:
             return parsed.hostname or "unknown", parsed.port or 5432
-        except ValueError as e:
+        # The parser's message quotes what it read as a port: a password holding a `/`.
+        except ValueError:
             if "," not in parsed.netloc.rpartition("@")[2]:
-                raise CheckConfigError(f"Invalid port: {e}") from e
+                raise CheckConfigError("Invalid port") from None
         return ",".join(ssrf.url_hosts(connection_string)) or "unknown", None
 
     @staticmethod

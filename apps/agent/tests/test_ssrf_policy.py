@@ -25,6 +25,7 @@ from app.agent.check_manager import CheckManager
 from app.agent.credentials import AgentCredentials
 from app.agent.heartbeat import HeartbeatSender
 from app.checks import _ssrf_policy
+from app.checks.base import CheckConfigError
 from app.checks.dns import DNSCheck
 from app.checks.http import HTTPCheck
 from app.checks.mysql import MySQLCheck
@@ -486,3 +487,18 @@ def test_every_host_asyncpg_reads_is_a_host_the_policy_names() -> None:
 
     assert accepted > 1_000
     assert missed == []
+
+
+@pytest.mark.parametrize(
+    "check",
+    [
+        lambda dsn: PostgreSQLCheck._endpoint(dsn),
+        lambda dsn: MySQLCheck._parse_connection_string(None, dsn),
+    ],
+    ids=["postgres", "mysql"],
+)
+def test_a_port_error_never_shows_a_password(check: Any) -> None:
+    with pytest.raises(CheckConfigError) as refused:
+        check("postgres://u:s3cret/rest@192.0.2.10/d")
+
+    assert "s3cret" not in str(refused.value)

@@ -199,7 +199,7 @@ Test MySQL/MariaDB connectivity and execute a query. **Use for:** database avail
 
 **Fields:**
 
-- **Target / Connection String** (required): `mysql://username:password@hostname:port/database` (port defaults to 3306; add `?ssl=true` for SSL).
+- **Target / Connection String** (required): `mysql://username:password@hostname:port/database` (port defaults to 3306; add `?ssl=true` for SSL). The URL needs its `//` and holds no control character, or it is refused when saved and each time the check runs.
 - **Query** (optional, default `SELECT 1`): use read-only `SELECT`s — e.g. `SELECT COUNT(*) FROM users WHERE active = 1`, `SHOW STATUS LIKE 'Threads_connected'`, `SELECT @@read_only`.
 - **Timeout** (required, default 5s), **Retries** (required, default 2).
 
@@ -220,7 +220,7 @@ Test PostgreSQL connectivity and execute a query. Same metrics, common issues, a
 
 **Fields:**
 
-- **Target / Connection String** (required): `postgres://username:password@hostname:port/database` (or `postgresql://`; port defaults to 5432; PostgreSQL uses SSL if available).
+- **Target / Connection String** (required): `postgres://username:password@hostname:port/database` (or `postgresql://`; port defaults to 5432; PostgreSQL uses SSL if available). Write `@` in a password as `%40` and a space as `%20`. A URL a driver could read two ways is refused when saved and each time the check runs: one with no `//`, whitespace or a control character, a `service` parameter, or a host that is not a plain name or a bracketed IPv6 address.
 - **Query** (optional, default `SELECT 1`), **Timeout** (required, default 5s), **Retries** (required, default 2).
 
 Useful PostgreSQL monitoring queries:

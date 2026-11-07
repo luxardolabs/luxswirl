@@ -59,6 +59,11 @@ class SsrfBlockedError(ValueError):
     """Raised when a target resolves into a blocked IP range."""
 
 
+class UnplainDatabaseUrlError(SsrfBlockedError):
+    """Raised for a database URL a driver could read another way. No setting allows it,
+    since the agent refuses it whatever the settings are."""
+
+
 def extract_host(target: str) -> str | None:
     """Extract the hostname from a URL or ``host[:port]`` target string."""
     if "://" in target:
@@ -77,7 +82,8 @@ _POSTGRES_SCHEMES = frozenset({"postgres", "postgresql"})
 _POSTGRES_HOST_ENTRY = re.compile(
     r"(?:\[(?P<literal>[0-9A-Fa-f:.]+)\]|[\w.-]+)?(?::\d*)?"
 )
-_UNREADABLE = re.compile(r"[\s\x00-\x1f\x7f]")
+_CONTROL = re.compile(r"[\x00-\x1f\x7f]")
+_WHITESPACE = re.compile(r"\s")
 # A database URL that names no host connects to the driver's default: localhost.
 _DATABASE_SCHEMES = _POSTGRES_SCHEMES | {"mysql", "mariadb"}
 _DEFAULT_DATABASE_HOST = "localhost"
@@ -120,9 +126,11 @@ def _is_plain_postgres_host(entry: str) -> bool:
 
 def _is_plain_postgres_url(target: str) -> bool:
     parsed = urlparse(target)
-    if parsed.netloc.count("@") > 1:
+    if _WHITESPACE.search(target) or parsed.netloc.count("@") > 1:
         return False
     query = parse_qs(parsed.query)
+    if "service" in query:
+        return False
     for entry in parsed.netloc.rpartition("@")[2].split(","):
         if not (unquote(entry).startswith("/") or _is_plain_postgres_host(entry)):
             return False
@@ -145,21 +153,25 @@ def _require_plain_database_url(target: str) -> None:
     """Refuse a database URL whose hosts a driver could read another way.
 
     A driver's parser and this module's cannot be kept the same on every odd form, so
-    the odd forms are not read at all: a URL needs its `//`, holds no whitespace or
-    control character, and a PostgreSQL URL names each host plainly. A password holding
-    `@` is written `%40`. The refusal never quotes the URL, which holds the password.
+    the odd forms are not read at all: a URL has `//` after its scheme and holds no
+    control character. A PostgreSQL URL also holds no whitespace, names each host
+    plainly, has one `@` before its hosts, and names no `service`, which reads a host
+    from a file. A MySQL URL's host is read one way by both, so its password stays as
+    written. The refusal never quotes the URL, which holds the password.
 
     Raises:
-        SsrfBlockedError: `target` is not a plain database URL.
+        UnplainDatabaseUrlError: `target` is not a plain database URL.
     """
-    plain = "://" in target and _UNREADABLE.search(target) is None
+    plain = (
+        target.partition(":")[2].startswith("//") and _CONTROL.search(target) is None
+    )
     if plain and urlparse(target).scheme.lower().split("+", 1)[0] in _POSTGRES_SCHEMES:
         plain = _is_plain_postgres_url(target)
     if not plain:
-        raise SsrfBlockedError(
+        raise UnplainDatabaseUrlError(
             "This database URL is blocked: its hosts cannot be read plainly. Write it "
-            "as scheme://user:password@host:port/database, encoding any `@` in the "
-            "password as %40."
+            "as scheme://user:password@host:port/database. In a PostgreSQL password, "
+            "write `@` as %40 and a space as %20."
         )
 
 
@@ -206,7 +218,7 @@ def extract_hosts(target: str, *, database: bool = False) -> list[str]:
     which).
 
     Raises:
-        SsrfBlockedError: A driver would read it, and it is not a plain database URL.
+        UnplainDatabaseUrlError: A driver would read it, and it is not a plain URL.
     """
     if database and _reads_as_database_url(target):
         _require_plain_database_url(target)
@@ -393,9 +405,10 @@ def assert_target_allowed(
     DNS-rebinding and redirect bypasses — not just the value configured at create time.
     `database`: a database driver will read it (:func:`extract_hosts`).
     """
+    hosts = extract_hosts(target, database=database)
     if not block_cloud_metadata and not block_private_networks:
         return
-    for host in extract_hosts(target, database=database):
+    for host in hosts:
         for ip_str in resolve_host(host):
             assert_ip_allowed(
                 ip_str,

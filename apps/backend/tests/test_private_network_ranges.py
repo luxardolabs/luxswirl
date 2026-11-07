@@ -118,6 +118,11 @@ def test_a_database_url_naming_no_host_is_its_drivers_localhost(target: str) -> 
         "postgresql://u:p@db%3A1/d",
         "postgresql://u:p@/d?host=::1",
         "postgresql://u:p w@db/d",
+        "postgresql://u@/d?host=[1.2]",
+        "postgresql://u:p@db/d?service=s",
+        "mysql://u:p\x01@db/d",
+        "mysql:d?x=://",
+        "postgres:/d#://",
         "mysql:d",
         "mysql:",
         "mariadb:d",
@@ -151,6 +156,7 @@ def test_a_database_url_a_driver_could_read_two_ways_is_refused(target: str) -> 
         ("postgresql://u:p@/d?hostaddr=192.0.2.10", ["localhost", "192.0.2.10"]),
         ("mysql://u:p@db:3306/d", ["db"]),
         ("mysql://u:p@ss@db:3306/d", ["db"]),
+        ("mysql://u:a b@db:3306/d", ["db"]),
         ("mariadb://u:p@/d", ["localhost"]),
         ("192.0.2.10", ["192.0.2.10"]),
         ("db.example:5432", ["db.example"]),
@@ -158,6 +164,17 @@ def test_a_database_url_a_driver_could_read_two_ways_is_refused(target: str) -> 
 )
 def test_a_plain_database_target_names_its_hosts(target: str, hosts: list[str]) -> None:
     assert extract_hosts(target, database=True) == hosts
+
+
+@pytest.mark.unit
+def test_a_database_url_read_two_ways_is_refused_with_the_settings_off() -> None:
+    with pytest.raises(SsrfBlockedError, match="cannot be read plainly"):
+        assert_target_allowed(
+            "postgres:?host=db",
+            block_cloud_metadata=False,
+            block_private_networks=False,
+            database=True,
+        )
 
 
 @pytest.mark.unit

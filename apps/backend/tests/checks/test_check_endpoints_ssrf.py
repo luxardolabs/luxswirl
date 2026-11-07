@@ -395,3 +395,68 @@ async def test_clearing_a_connection_string_judges_the_target_left(
         await CheckCoreService.update_check(
             db, check.id, CheckUpdate(connection_string=None)
         )
+
+
+async def test_the_refusal_names_no_setting_that_would_allow_it(
+    db: AsyncSession,
+) -> None:
+    agent = make_agent()
+    db.add(agent)
+    await db.flush()
+
+    with pytest.raises(CheckTargetBlockedError) as refusal:
+        await CheckCoreService.create_check(
+            db,
+            agent.id,
+            _create("postgres", connection_string="postgres:d", query="SELECT 1"),
+        )
+
+    assert "Settings" not in str(refusal.value)
+
+
+async def _stored_with_an_unplain_url(db: AsyncSession) -> Any:
+    """A row saved before database URLs were held to their plain form."""
+    check = await _postgres_check(db)
+    check.connection_string = "postgres://u:a b@192.0.2.10/d"
+    await db.flush()
+    return check
+
+
+async def test_an_unrelated_edit_leaves_a_stored_address_alone(
+    db: AsyncSession,
+) -> None:
+    check = await _stored_with_an_unplain_url(db)
+    stored = check.connection_string
+
+    updated = await CheckCoreService.update_check(
+        db,
+        check.id,
+        CheckUpdate(
+            display_name="renamed",
+            target=check.target,
+            connection_string=stored,
+        ),
+    )
+
+    assert updated.display_name == "renamed"
+
+
+async def test_a_new_target_beside_a_stored_url_is_judged_alone(
+    db: AsyncSession,
+) -> None:
+    check = await _stored_with_an_unplain_url(db)
+
+    updated = await CheckCoreService.update_check(
+        db, check.id, CheckUpdate(target="postgres:5432")
+    )
+
+    assert updated.target == "postgres:5432"
+
+
+async def test_replacing_a_stored_url_is_judged(db: AsyncSession) -> None:
+    check = await _stored_with_an_unplain_url(db)
+
+    with pytest.raises(CheckTargetBlockedError):
+        await CheckCoreService.update_check(
+            db, check.id, CheckUpdate(connection_string="postgres://u:c d@192.0.2.10/d")
+        )

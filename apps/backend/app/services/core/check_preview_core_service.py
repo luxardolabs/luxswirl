@@ -18,7 +18,12 @@ from app.schemas.setting_schema import NetworkProtection
 from app.services.core._check_bulk_names import bulk_display_name, unused_name
 from app.services.core.check_core_service import CheckCoreService
 from app.services.core.settings_core_service import SettingsCoreService
-from app.shared.ssrf import SsrfBlockedError, allowed_addresses, extract_hosts
+from app.shared.ssrf import (
+    SsrfBlockedError,
+    UnplainDatabaseUrlError,
+    allowed_addresses,
+    extract_hosts,
+)
 from app.shared.ssrf_http import NO_ADDRESS, VettedTransport
 
 PROBED_URLS = 100
@@ -192,6 +197,8 @@ class CheckPreviewCoreService:
                 async with client.stream("GET", full_url) as response:
                     status_code = response.status_code
         except CheckTargetBlockedError as e:
+            return "error", str(e), None
+        except UnplainDatabaseUrlError as e:
             return "error", str(e), None
         except SsrfBlockedError as e:
             return (

@@ -192,13 +192,16 @@ class CheckCoreService:
         target: str | None,
         nameserver: str | None,
         connection_string: str | None,
+        *,
+        kept_connection_string: str | None = None,
     ) -> None:
         """Validate every address a check connects to against the SSRF settings.
 
         A check reaches its target, and a DNS check also its nameserver and a
         database check its connection string; each is validated. An empty one
         is skipped. A database check's driver reads its connection string, or
-        its target when it has none.
+        its target when it has none. An update judging only the target names the
+        connection string the check keeps in `kept_connection_string`.
 
         Raises:
             CheckTargetBlockedError: If any of them is blocked by SSRF protection
@@ -206,7 +209,10 @@ class CheckCoreService:
         protection = await SettingsCoreService.get_network_protection(db)
         driver_check = check_type in DATABASE_CHECK_TYPES
         for endpoint, driver_reads in (
-            (target, driver_check and not connection_string),
+            (
+                target,
+                driver_check and not (connection_string or kept_connection_string),
+            ),
             (nameserver, False),
             (connection_string, driver_check),
         ):
@@ -423,21 +429,32 @@ class CheckCoreService:
 
         update_data = data.model_dump(exclude_unset=True)
 
-        # SSRF protection: every address being changed, and any whose reading a
-        # change of type, target or connection string decides.
-        reading_changes = bool(
-            update_data.keys() & {"check_type", "target", "connection_string"}
+        # SSRF protection: every address being changed, and any whose reading a change
+        # of type or a connection string coming or going decides. One left as it is
+        # stays out of it, so a stored address is no reason to refuse another edit.
+        check_type = update_data.get("check_type", check.check_type)
+        target = update_data.get("target", check.target)
+        connection_string = update_data.get(
+            "connection_string", check.connection_string
         )
+        type_changes = check_type != check.check_type
         await CheckCoreService._validate_endpoints_ssrf(
             db,
-            update_data.get("check_type", check.check_type),
-            update_data.get("target", check.target) if reading_changes else None,
-            update_data.get("nameserver"),
+            check_type,
             (
-                update_data.get("connection_string", check.connection_string)
-                if reading_changes
+                target
+                if type_changes
+                or target != check.target
+                or bool(connection_string) != bool(check.connection_string)
                 else None
             ),
+            update_data.get("nameserver"),
+            (
+                connection_string
+                if type_changes or connection_string != check.connection_string
+                else None
+            ),
+            kept_connection_string=connection_string,
         )
 
         if "depends_on_check_id" in update_data:
