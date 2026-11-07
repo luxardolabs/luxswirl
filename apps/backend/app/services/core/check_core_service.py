@@ -1259,6 +1259,11 @@ class CheckCoreService:
         return parsed.scheme, url, parsed  # tcp, etc.
 
     @staticmethod
+    def bulk_display_name(parsed: ParseResult) -> str:
+        """The name a bulk-imported check gets when none is given."""
+        return bulk_display_name(parsed)
+
+    @staticmethod
     async def _preview_bulk_url(url_str: str) -> dict[str, Any]:
         """One bulk-import preview row: the check the URL would become and, for
         an http check, whether the target answers."""

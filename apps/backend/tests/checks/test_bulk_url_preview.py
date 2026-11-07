@@ -10,7 +10,6 @@ from __future__ import annotations
 from urllib.parse import urlparse
 
 import pytest
-from app.services.core._check_bulk_names import bulk_display_name
 from app.services.core.check_core_service import CheckCoreService
 
 
@@ -41,12 +40,12 @@ def test_classify_bulk_url(url: str, check_type: str, full_url: str) -> None:
     ],
 )
 def test_bulk_display_name(url: str, name: str) -> None:
-    assert bulk_display_name(urlparse(url)) == name
+    assert CheckCoreService.bulk_display_name(urlparse(url)) == name
 
 
 def test_bulk_display_name_is_capped_at_255() -> None:
     long_path = "a/" * 300
-    name = bulk_display_name(urlparse(f"https://h.io/{long_path}"))
+    name = CheckCoreService.bulk_display_name(urlparse(f"https://h.io/{long_path}"))
     assert len(name) == 255
     assert name.startswith("h-io-a-a")
 
