@@ -52,9 +52,9 @@ class EncryptedValueCRUD:
 
     @staticmethod
     async def check_page(
-        db: AsyncSession, after: UUID | None, limit: int
+        db: AsyncSession, *, skip: UUID | None, limit: int
     ) -> Sequence[StoredRow]:
-        """Up to ``limit`` checks after ``after`` by id, each with
+        """Up to ``limit`` checks after the id ``skip`` (the last of the page before), by id, each with
         ``CHECK_COLUMNS`` as stored."""
         stmt = select(
             Check.id,
@@ -62,21 +62,21 @@ class EncryptedValueCRUD:
             cast(Check.check_config, Text),
             cast(Check.connection_string_encrypted, Text),
         ).order_by(Check.id)
-        if after is not None:
-            stmt = stmt.where(Check.id > after)
+        if skip is not None:
+            stmt = stmt.where(Check.id > skip)
         result = await db.execute(stmt.limit(limit))
         return [StoredRow(row[0], tuple(row[1:])) for row in result.all()]
 
     @staticmethod
     async def job_page(
-        db: AsyncSession, after: UUID | None, limit: int
+        db: AsyncSession, *, skip: UUID | None, limit: int
     ) -> Sequence[StoredRow]:
-        """Up to ``limit`` maintenance jobs after ``after`` by id, each with
+        """Up to ``limit`` maintenance jobs after the id ``skip``, by id, each with
         ``MAINTENANCE_JOB_COLUMNS`` as stored, whatever their status."""
         stmt = select(MaintenanceJob.id, cast(MaintenanceJob.params, Text)).order_by(
             MaintenanceJob.id
         )
-        if after is not None:
-            stmt = stmt.where(MaintenanceJob.id > after)
+        if skip is not None:
+            stmt = stmt.where(MaintenanceJob.id > skip)
         result = await db.execute(stmt.limit(limit))
         return [StoredRow(row[0], (row[1],)) for row in result.all()]

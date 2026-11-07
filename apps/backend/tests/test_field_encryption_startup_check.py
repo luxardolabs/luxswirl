@@ -22,7 +22,6 @@ from app.core.datetime_utils import utc_now
 from app.core.exceptions import UnreadableEncryptedValuesException
 from app.models.enum_model import MaintenanceJobKind, MaintenanceJobStatus
 from app.models.maintenance_job_model import MaintenanceJob
-from app.services.core import field_encryption_core_service
 from app.services.core.field_encryption_core_service import (
     FieldEncryptionCoreService,
 )
@@ -269,16 +268,20 @@ async def test_more_than_twenty_values_are_counted_not_all_named(
 async def test_every_row_is_judged_across_page_boundaries(
     db: AsyncSession, field_key: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(field_encryption_core_service, "_PAGE", 2)
+    """More checks than one read takes: the count shows every value on every
+    page was judged, and the read ends."""
     agent_id = await _agent(db)
-    ids = [await _check(db, agent_id) for _ in range(5)]
+    db.add_all(
+        make_check(agent_id=agent_id, target=f"https://u:p@host{n}.example.com/")
+        for n in range(1001)
+    )
+    await db.flush()
     _another_key(monkeypatch)
 
     message = await _refusal(db)
 
-    assert "none of the 15 stored" in message
-    for check_id in ids:
-        assert str(check_id) in message
+    assert "none of the 1001 stored encrypted values" in message
+    assert ", and 981 more." in message
 
 
 async def test_a_migration_run_under_another_key_is_refused_before_it_writes(

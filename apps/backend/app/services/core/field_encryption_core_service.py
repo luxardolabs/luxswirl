@@ -109,12 +109,12 @@ class FieldEncryptionCoreService:
         """
         tally = _Tally()
         after: UUID | None = None
-        while page := await EncryptedValueCRUD.check_page(db, after, _PAGE):
+        while page := await EncryptedValueCRUD.check_page(db, skip=after, limit=_PAGE):
             for row in page:
                 tally.judge("checks", CHECK_COLUMNS, row)
             after = page[-1].id
         after = None
-        while page := await EncryptedValueCRUD.job_page(db, after, _PAGE):
+        while page := await EncryptedValueCRUD.job_page(db, skip=after, limit=_PAGE):
             for row in page:
                 tally.judge("maintenance_jobs", MAINTENANCE_JOB_COLUMNS, row)
             after = page[-1].id
