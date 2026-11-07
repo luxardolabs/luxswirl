@@ -316,8 +316,10 @@ Before migrations run (`alembic upgrade head`) and again before the server serve
 
 A changed key reaches the server only when its container is recreated: after editing the env file, run `docker compose up -d`. `docker compose restart` keeps the old key.
 
-- **"is not this database's key"**, or **"is most likely not this database's key: only M of the T ... decrypt"**: the key decrypts none, or at most half, of the stored values. Set `SECURITY__FIELD_ENCRYPTION_KEY` to the key the server has always used, and run `docker compose up -d`. Nothing was changed. Never remove rows on this verdict: the rows it names are the ones the right key reads.
-- **"N stored encrypted values do not decrypt (M do)"**: the key decrypts more values than it cannot. If it is the key the server has always used, the named rows were written while another key was set, and no key reads both: remove each named row.
+- **"SECURITY\_\_FIELD_ENCRYPTION_KEY is not this database's key: none of the N stored encrypted values decrypt under it"**: set `SECURITY__FIELD_ENCRYPTION_KEY` to the key the server has always used, and run `docker compose up -d`. Nothing was changed. Remove no rows.
+- **"N stored encrypted values do not decrypt under SECURITY\_\_FIELD_ENCRYPTION_KEY (M do)"**: two keys wrote this database, typically because the server once ran under the wrong key. Neither the count nor the server can tell which key is right: only you know which key the server has always used. Set that one and run `docker compose up -d`. If it still names values, each was written or edited under the other key, which still reads it: a check named for one column (for example `checks.check_config`) may hold every other column under the right key.
+
+Removing a named row is the last step, for when the other key is lost: it deletes the row, and for a check every result, artifact and alert link with it. Remove only what the key the server has always used still names:
 
 ```bash
 # A check: its results, artifacts and alert links go with it, and its agent reloads its checks.
@@ -327,6 +329,8 @@ docker compose exec timescaledb psql -U luxswirl -c "DELETE FROM maintenance_job
 ```
 
 Then run `docker compose up -d`, and recreate any check you removed.
+
+A running server whose processes hold different keys can also log `Maintenance queue stopped: this job's parameters do not decrypt`, naming a `job_id`: the job stays queued and nothing behind it starts. Start every process under the same key; the next start then judges that job as above.
 
 ### Server Crashes Randomly
 

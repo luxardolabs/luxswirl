@@ -142,64 +142,54 @@ async def test_a_value_stored_before_encryption_does_not_vouch_for_a_wrong_key(
     assert "none of the 5 stored encrypted values" in message
 
 
-async def test_a_value_another_key_wrote_is_named_alone(
+async def test_two_keys_are_named_without_choosing_one_or_removing_rows(
     db: AsyncSession, field_key: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A row written while another key was set: the right key reads the rest
-    and names that row alone. With as many values unread as read, nothing is
-    removed: removal needs the key to read more than it cannot."""
-    agent_id = await _agent(db)
-    kept = await _check(db, agent_id)
-    _another_key(monkeypatch)
-    stray = await _check(db, agent_id)
-    _use_key(monkeypatch, field_key)
-
-    message = await _refusal(db)
-
-    assert "only 3 of the 6 stored encrypted values" in message
-    assert "remove no rows" in message
-
-    also_kept = await _check(db, agent_id)
-    message = await _refusal(db)
-
-    assert message.startswith(
-        "3 stored encrypted values do not decrypt under "
-        "SECURITY__FIELD_ENCRYPTION_KEY (6 do)"
-    )
-    assert f"id={stray}" in message
-    assert f"id={kept}" not in message
-    assert f"id={also_kept}" not in message
-
-
-async def test_a_key_that_wrote_only_a_few_rows_is_not_told_to_remove_the_rest(
-    db: AsyncSession, field_key: str, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """A wrong key that wrote one row during a wrong-key window decrypts that
-    row: the rows it names are the good ones, so it is never told to remove
-    them. The right key names the one stray row with the removal repair."""
+    """Two keys wrote this database: each one names exactly what it cannot
+    read, with both counts, and neither is told it is wrong or to remove rows.
+    Which key is right is the operator's to say: a count cannot, whichever
+    key wrote more."""
     agent_id = await _agent(db)
     good = [await _check(db, agent_id) for _ in range(3)]
     wrong = Fernet.generate_key().decode()
     _use_key(monkeypatch, wrong)
     stray = await _check(db, agent_id)
 
-    message = await _refusal(db)
+    for key, decrypted, named, unnamed in (
+        (wrong, 3, good, [stray]),
+        (field_key, 9, [stray], good),
+    ):
+        _use_key(monkeypatch, key)
+        message = await _refusal(db)
 
-    assert "is most likely not this database's key" in message
-    assert "only 3 of the 12 stored encrypted values" in message
-    assert "remove no rows" in message
-    assert "remove each one" not in message
-    assert all(f"id={check_id}" in message for check_id in good)
+        assert message.startswith(
+            f"{3 * len(named)} stored encrypted values do not decrypt under "
+            f"SECURITY__FIELD_ENCRYPTION_KEY ({decrypted} do)"
+        )
+        assert "Two keys wrote this database" in message
+        assert "not this database's key" not in message
+        assert "remove" not in message.lower()
+        assert all(f"id={check_id}" in message for check_id in named)
+        assert not any(f"id={check_id}" in message for check_id in unnamed)
 
-    _use_key(monkeypatch, field_key)
-    message = await _refusal(db)
 
-    assert message.startswith(
-        "3 stored encrypted values do not decrypt under "
-        "SECURITY__FIELD_ENCRYPTION_KEY (9 do)"
+async def test_a_check_edited_under_another_key_is_named_for_that_column_alone(
+    db: AsyncSession, field_key: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An edit re-encrypts only the column it changes: the other columns stay
+    under the right key, so only the edited column is named."""
+    agent_id = await _agent(db)
+    check_id = await _check(db, agent_id)
+    other = Fernet(Fernet.generate_key())
+    await _store(
+        db, check_id, "check_config", other.encrypt(b'{"api_key": "x"}').decode()
     )
-    assert f"id={stray}" in message
-    assert "remove each one" in message
+
+    message = await _refusal(db)
+
+    assert f"checks.check_config id={check_id}" in message
+    assert f"checks.target id={check_id}" not in message
+    assert f"checks.connection_string_encrypted id={check_id}" not in message
 
 
 async def test_params_still_typed_json_before_revision_011_are_judged(

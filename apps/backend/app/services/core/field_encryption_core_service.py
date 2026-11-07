@@ -33,15 +33,17 @@ _GUIDE = (
     "(see 'Server refuses to start: encrypted values do not decrypt' in "
     "docs/guides/troubleshooting.md)"
 )
-# The key is not, or most likely not, this database's: nothing is removed.
+# The key decrypts nothing stored: it is not this database's.
 _SET_THE_KEY = (
     "Set SECURITY__FIELD_ENCRYPTION_KEY to the key this database was written "
-    f"with and start again; remove no rows under this key {_GUIDE}."
+    f"with and start again {_GUIDE}."
 )
-# The key decrypts most values: the rest were written under another key.
-_REMOVE_THE_ROWS = (
-    "If this is the key the server has always used, these rows were written "
-    f"while another key was set and no key reads both: remove each one {_GUIDE}."
+# The key decrypts some values and not others: two keys wrote this database,
+# and nothing here can tell which is the right one.
+_TWO_KEYS = (
+    "Two keys wrote this database. Start under the key the server has always "
+    "used; the values it still names were written under the other one, which "
+    f"still reads them {_GUIDE}."
 )
 
 
@@ -69,9 +71,10 @@ class _Tally:
     def refusal(self) -> str:
         """The refusal's message: the verdict, the values named, the repair.
 
-        Removing the named rows is advised only when the key decrypts more
-        values than it cannot: a key that wrote a few rows during a wrong-key
-        window decrypts those few, and the rows it names are the good ones.
+        Only a key that decrypts nothing is judged: when it decrypts some
+        values and not others, which key is right is the operator's to say
+        (a count of rows or values cannot), so the message states what each
+        key reads and advises removing nothing.
         """
         count = len(self.unreadable)
         if self.decrypted == 0:
@@ -80,19 +83,12 @@ class _Tally:
                 f"none of the {count} stored encrypted values decrypt under it"
             )
             repair = _SET_THE_KEY
-        elif self.decrypted <= count:
-            verdict = (
-                "SECURITY__FIELD_ENCRYPTION_KEY is most likely not this "
-                f"database's key: only {self.decrypted} of the "
-                f"{self.decrypted + count} stored encrypted values decrypt under it"
-            )
-            repair = _SET_THE_KEY
         else:
             verdict = (
                 f"{count} stored encrypted values do not decrypt under "
                 f"SECURITY__FIELD_ENCRYPTION_KEY ({self.decrypted} do)"
             )
-            repair = _REMOVE_THE_ROWS
+            repair = _TWO_KEYS
         named = ", ".join(self.unreadable[:_NAMED])
         if count > _NAMED:
             named += f", and {count - _NAMED} more"
