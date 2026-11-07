@@ -56,11 +56,16 @@ def assert_target_allowed(target: str, *, database: bool = False) -> None:
     driver is a database's, which reads a URL with no `//` too.
 
     Raises:
-        CheckConfigError: A host it names cannot be resolved as written.
-        SsrfBlockedError: An address a host resolves to is blocked, or a database
-            driver would read it and its hosts cannot be read plainly.
+        CheckConfigError: A host it names cannot be resolved as written, or a
+            database driver would read it and its hosts cannot be read plainly:
+            the check's settings are what is wrong.
+        SsrfBlockedError: An address a host resolves to is blocked.
     """
-    for host in ssrf.extract_hosts(target, database=database):
+    try:
+        hosts = ssrf.extract_hosts(target, database=database)
+    except ssrf.UnplainDatabaseUrlError as e:
+        raise CheckConfigError(str(e)) from None
+    for host in hosts:
         _vet_host_name(host)
     ssrf.assert_target_allowed(
         target,

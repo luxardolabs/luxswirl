@@ -219,7 +219,7 @@ async def _hosts_dialed(check: PostgreSQLCheck, monkeypatch: Any) -> list[str]:
         raise ConnectionRefusedError("test")
 
     monkeypatch.setattr(loop, "create_connection", refuse)
-    with contextlib.suppress(SsrfBlockedError):
+    with contextlib.suppress(SsrfBlockedError, CheckConfigError):
         await check.run()
     return dialed
 
@@ -371,7 +371,7 @@ async def test_mysql_with_no_slashes_is_held_to_the_private_setting(dsn: str) ->
     try:
         with pytest.MonkeyPatch.context() as patch:
             patch.setattr("app.checks.mysql.aiomysql.connect", connect)
-            with contextlib.suppress(SsrfBlockedError):
+            with contextlib.suppress(SsrfBlockedError, CheckConfigError):
                 await check.run()
     finally:
         _ssrf_policy.apply_server_policy({"block_private_networks": False})
