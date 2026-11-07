@@ -1,10 +1,19 @@
 """Credentials masked out of a value that is shown, not used.
 
-A check's target or connection string can carry a password: a database URL
-(`postgresql://monitor:pw@db/app`), an HTTP basic-auth URL, or a libpq/ODBC
-`password=` pair. Wherever such a value is displayed to someone who may not
-hold it (a viewer, a page any signed-in user loads), it goes through
-`mask_credentials`. The stored value, and what the agent runs, are unchanged.
+A check's target or connection string can carry a credential: a database URL
+(`postgresql://monitor:pw@db/app`), a query string (`?client_secret=...`), a libpq or
+ODBC pair, or a webhook's path. Wherever such a value is displayed to someone who may
+not hold it (a viewer, a page any signed-in user loads, an unauthenticated `/metrics`),
+it goes through `mask_credentials`. The stored value, and what the agent runs, are
+unchanged.
+
+It works from a list of the forms a credential takes, so a form not on the list is
+shown, as is a credential in an ordinary path segment, which cannot be told from a word.
+
+Every pattern runs on the event loop, over text a viewer can send, and must stay linear
+in time and space. So a loop that reads to the end of a token is anchored to the token's
+start, and one that nothing after it can need back is possessive, since a plain loop
+keeps a frame per character.
 """
 
 import re
@@ -14,24 +23,68 @@ _MASK = "***"
 _MAX_DEPTH = 64
 # A URL's userinfo: everything between the scheme and the last `@` of the authority.
 _USERINFO = re.compile(r"(?<=://)[^/?#]*@")
-# The keys a secret goes by, in a libpq or ODBC string or a URL's query.
-_KEYS = r"(?:ssl)?password|passwd|pwd|secret|token|access_token|api_?key"
-# A value: braced (ODBC), quoted, or bare with backslash escapes (libpq). A brace or a
-# quote left open runs to the end of the text, so it is masked to the end, and a
-# scan never fails and starts again. The loops are possessive, since nothing after
-# them can need one back, and a plain loop keeps a frame per character. This runs on
-# the event loop, over text a viewer can send, and must stay linear in time and space.
-_VALUE = (
-    r"\{[^}]*(?:\}|\Z)"
-    r"|'(?:\\[\s\S]?|[^'\\])*+(?:'|\Z)"
-    r'|"(?:\\[\s\S]?|[^"\\])*+(?:"|\Z)'
-    r"|(?:\\.|[^\s;&#])++"
+
+_KEY_CHAR = r"[\w.%\[\]-]"
+# Words that name a secret wherever they sit in a key (`clientsecret`, `AUTH_TOKEN`).
+_SECRET_ANYWHERE = (
+    r"passw|passphrase|passhash|passkey|bindpw|dbpass|userpass|adminpass|pwd|secret"
+    r"|token|credential|assertion|appid|sess(?:ion)?id|odbc_connect"
+    r"|(?:api|app|access|account|auth|client|license|private|shared|signing|subscription"
+    r"|master|session|encryption)key"
 )
-_PAIR = re.compile(rf"(?i)(?<![\w.-])({_KEYS})(\s*=\s*)({_VALUE})")
+# Words that do only as a whole word, in a key split by `_`, `-`, `.`, an encoded one of
+# those, or case (`x-api-key`, `AccountKey`, `api%2Dkey`), so `monkey` and `design` stay.
+_SECRET_WORD = (
+    r"keys?\d*|sig|signature|pw|psw|pswd|pass\d*|passcode|auth|authorization|bearer"
+    r"|jwt|hmac|session|sid|cookie|creds?"
+)
+# Keys built from those words that name a setting, not a secret.
+_SETTING = (
+    r"(?i:auth_?(?:source|mechanism|plugin|type|method)|session_?(?:timeout|length|ttl)"
+    rf"|token_?(?:type|endpoint|url))(?!{_KEY_CHAR})"
+)
+
+
+def _secret_key(ending: str) -> str:
+    """A pattern for a key naming a secret, followed by `ending`.
+
+    The lookahead and the atomic group keep a run of such words from being read again
+    from each one: a run without `ending` is passed over, and the first word found
+    settles the key, whatever follows it.
+    """
+    return (
+        rf"(?={_KEY_CHAR}++{ending})(?!{_SETTING})(?>{_KEY_CHAR}*?"
+        rf"(?:(?i:{_SECRET_ANYWHERE})"
+        r"|(?:(?<![A-Za-z0-9])|(?<=[a-z0-9])(?=[A-Z])|(?<=%[0-9A-Fa-f]{2}))"
+        rf"(?i:{_SECRET_WORD})(?![a-z0-9]))"
+        rf"{_KEY_CHAR}*+)"
+    )
+
+
+_KEY_AND_SEPARATOR = rf"(?<![\w.%\[\]-])({_secret_key(r'\s*=')})(\s*=\s*)"
+# A value: braced (ODBC, `}}` an escaped brace), quoted, or bare with backslash escapes
+# (libpq). A brace or a quote left open runs to the end of the text, so it is masked to
+# the end, and a scan never fails and starts again.
+_BRACED = r"\{(?:[^}]|\}\})*+(?:\}|\Z)"
+_QUOTED = r"'(?:\\[\s\S]?|[^'\\])*+(?:'|\Z)" r'|"(?:\\[\s\S]?|[^"\\])*+(?:"|\Z)'
+_PAIR = re.compile(rf"{_KEY_AND_SEPARATOR}({_BRACED}|{_QUOTED}|(?:\\.|[^\s;&#])++)")
 # An ODBC string (`;`-separated): a bare value runs to the `;`, spaces included.
-_ODBC_PAIR = re.compile(
-    rf"(?i)(?<![\w.-])({_KEYS})(\s*=\s*)(\{{[^}}]*(?:\}}|\Z)|[^;]*)"
+_ODBC_PAIR = re.compile(rf"{_KEY_AND_SEPARATOR}({_BRACED}|{_QUOTED}|[^;]*+)")
+# An OAuth code or an Azure Functions key; in other text, or all digits, `code=` is a status.
+_QUERY_CODE = re.compile(r"(?<=[?&])(code=)(?!\d++(?:[&#\s]|\Z))[^\s&#]*+")
+
+_PATH_CHAR = r"[^\s/?#'\"<>]"
+# A path that is itself the credential: a webhook's, by its host or a segment's name.
+_WEBHOOK_PATH = re.compile(
+    r"(?i)((?<=://)(?>[^/\s]*?(?:webhook|hooks?\.))[^/\s]*+"
+    r"|(?<=/)(?>[\w-]*?webhook[\w-]*+|hooks?))"
+    rf"/{_PATH_CHAR}[^\s?#'\"<>]*+"
 )
+_SLACK_PATH = re.compile(rf"/services/T\w++/B\w++/{_PATH_CHAR}++")
+_BOT_PATH = re.compile(r"(?i)(?<=/bot)\d++:[\w-]++")
+# Text with none of these holds no form above, and most of what a document holds is such.
+_MAY_HOLD_A_CREDENTIAL = re.compile(r"[=/@]")
+
 # A URL in free text: its scheme and host, then everything up to a space or quote.
 # The scheme is read from where its run of characters starts, so text run into it
 # still leaves the URL cut.
@@ -59,12 +112,23 @@ def mask_credentials(value: str | None) -> str | None:
     """`value` with every credential it carries replaced by `***`."""
     if not value:
         return value
+    if not _MAY_HOLD_A_CREDENTIAL.search(value):
+        return value
     masked = _USERINFO.sub(f"{_MASK}@", value)
     pair = _ODBC_PAIR if ";" in masked and "://" not in masked else _PAIR
-    return pair.sub(rf"\1\2{_MASK}", masked)
+    masked = pair.sub(rf"\1\2{_MASK}", masked)
+    masked = _QUERY_CODE.sub(rf"\1{_MASK}", masked)
+    masked = _WEBHOOK_PATH.sub(rf"\1/{_MASK}", masked)
+    masked = _SLACK_PATH.sub(f"/services/{_MASK}", masked)
+    return _BOT_PATH.sub(_MASK, masked)
 
 
-class _KeyNames:
+_SECRET_KEY_NAME = re.compile(_secret_key(r"\Z"))
+# The most of a key judged: enough for any real name, and a key can be 4 MiB.
+_KEY_LENGTH = 256
+
+
+class KeyNames:
     """One name for each key of one document, a credential in it masked.
 
     A key can be a credential: a synthetic step is named for its URL. Keys that mask
@@ -75,40 +139,56 @@ class _KeyNames:
     def __init__(self) -> None:
         self._names: dict[str, str] = {}
         self._used: set[str] = set()
+        self._numbers: dict[str, int] = {}
 
-    def of(self, key: str) -> str:
+    def of(self, key: str, shown: str | None = None) -> str:
+        """The name of `key`; `shown` is the text to name it by, when that is not `key`."""
         if key not in self._names:
-            masked = mask_credentials(key)
+            masked = mask_credentials(key if shown is None else shown)
             name = masked
-            number = 1
+            number = self._numbers.get(masked, 1)
             while name in self._used:
                 number += 1
                 name = f"{masked} ({number})"
+            self._numbers[masked] = number
             self._used.add(name)
             self._names[key] = name
         return self._names[key]
 
 
-def _masked(value: object, names: _KeyNames, depth: int) -> object:
+def names_a_secret(key: str) -> bool:
+    """Whether a key says a string under it is a secret. Each word is judged (`API Key`)."""
+    return any(_SECRET_KEY_NAME.fullmatch(word) for word in key[:_KEY_LENGTH].split())
+
+
+def _masked_items(
+    mapping: dict[str, object], names: KeyNames, depth: int, hidden: bool
+) -> dict[str, object]:
+    return {
+        names.of(key): _masked(item, names, depth, hidden or names_a_secret(key))
+        for key, item in mapping.items()
+    }
+
+
+def _masked(value: object, names: KeyNames, depth: int, hidden: bool) -> object:
     if depth > _MAX_DEPTH:
         return _MASK
     if isinstance(value, str):
-        return mask_credentials(value)
+        return _MASK if hidden else mask_credentials(value)
     if isinstance(value, dict):
-        return {
-            names.of(key): _masked(item, names, depth + 1)
-            for key, item in value.items()
-        }
+        return _masked_items(value, names, depth + 1, hidden)
     if isinstance(value, list):
-        return [_masked(item, names, depth + 1) for item in value]
+        return [_masked(item, names, depth + 1, hidden) for item in value]
     return value
 
 
 def mask_mapping(mapping: dict[str, object]) -> dict[str, object]:
-    """`mapping` (decoded JSON) with every string in its keys and values masked.
+    """`mapping` (decoded JSON) with every string in its keys and values masked, and every
+    string under a key that names a secret hidden whole, however deep. Its shape and its
+    figures stay, since a page reads them by name and a key can be a step someone named
+    `get_token`.
 
     Nesting past `_MAX_DEPTH` is replaced whole: an agent chooses it, and recursing
     to whatever depth it sent would end in a RecursionError.
     """
-    names = _KeyNames()
-    return {names.of(key): _masked(item, names, 1) for key, item in mapping.items()}
+    return _masked_items(mapping, KeyNames(), 1, False)

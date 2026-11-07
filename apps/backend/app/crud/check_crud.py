@@ -227,6 +227,16 @@ class CheckCRUD:
         return result.scalars().all()
 
     @staticmethod
+    async def display_names_for_agent(
+        db: AsyncSession, agent_id: UUID
+    ) -> Sequence[str]:
+        """The display name of each of an agent's checks."""
+        result = await db.execute(
+            select(Check.display_name).where(Check.agent_id == agent_id)
+        )
+        return result.scalars().all()
+
+    @staticmethod
     async def get_with_agent_by_ids(
         db: AsyncSession, check_ids: list[UUID]
     ) -> Sequence[Check]:

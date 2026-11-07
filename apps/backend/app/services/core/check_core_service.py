@@ -16,6 +16,7 @@ from sqlalchemy.orm import attributes
 
 from app.core.check_config import keep_type_fields, pack_config, take_config_updates
 from app.core.check_target_validator import validate_check_target
+from app.core.credential_mask import mask_credentials
 from app.core.datetime_utils import utc_now
 from app.core.error_summary import error_summary
 from app.core.exceptions import (
@@ -50,6 +51,7 @@ from app.schemas.check_schema import (
     CheckView,
 )
 from app.schemas.import_export_schema import CheckExport
+from app.services.core._check_bulk_names import bulk_display_name, unused_name
 from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.alert_core_service import AlertCoreService
 from app.services.core.check_dependency_core_service import (
@@ -1134,14 +1136,16 @@ class CheckCoreService:
         results: list[BulkCheckResult] = []
         succeeded = 0
         failed = 0
+        taken = set(await CheckCRUD.display_names_for_agent(db, agent_id))
+        numbers: dict[str, int] = {}
 
         for req in requests:
             try:
                 check_type, url, parsed = CheckCoreService._classify_bulk_url(
                     req.url.strip()
                 )
-                display_name = req.display_name or CheckCoreService._bulk_display_name(
-                    parsed
+                display_name = req.display_name or unused_name(
+                    bulk_display_name(parsed), taken, numbers
                 )
 
                 # Build CheckCreate object
@@ -1171,6 +1175,7 @@ class CheckCoreService:
                     check = await CheckCoreService.create_check(
                         db, agent_id, check_data
                     )
+                taken.add(display_name)
 
                 # Record success
                 results.append(
@@ -1246,20 +1251,12 @@ class CheckCoreService:
         if not parsed.scheme:
             full_url = f"https://{url}"
             return "http", full_url, urlparse(full_url)
+        try:
+            CheckType(parsed.scheme)
+        except ValueError:
+            # What reads as a scheme can be a user (`user:pw@db`), and the error quotes it.
+            raise ValueError("The URL's scheme is no check type") from None
         return parsed.scheme, url, parsed  # tcp, etc.
-
-    @staticmethod
-    def _bulk_display_name(parsed: ParseResult) -> str:
-        """The name a bulk-imported check gets when none is given: its host, path
-        and any non-default port, joined by hyphens, at most 255 characters."""
-        hostname = parsed.hostname or "unknown"
-        display_name = hostname.replace(".", "-")
-        if parsed.path and parsed.path != "/":
-            path_part = parsed.path.strip("/").replace("/", "-")
-            display_name = f"{display_name}-{path_part}"
-        if parsed.port and parsed.port not in (80, 443):
-            display_name = f"{display_name}-{parsed.port}"
-        return display_name[:255]
 
     @staticmethod
     async def _preview_bulk_url(url_str: str) -> dict[str, Any]:
@@ -1267,7 +1264,7 @@ class CheckCoreService:
         an http check, whether the target answers."""
         try:
             check_type, full_url, parsed = CheckCoreService._classify_bulk_url(url_str)
-            display_name = CheckCoreService._bulk_display_name(parsed)
+            display_name = bulk_display_name(parsed)
 
             validation_status = "unknown"
             validation_message = ""
@@ -1292,7 +1289,7 @@ class CheckCoreService:
         except Exception as e:
             return {
                 "url": url_str,
-                "generated_name": url_str.replace(".", "-")[:255],
+                "generated_name": mask_credentials(url_str).replace(".", "-")[:255],
                 "check_type": "http",
                 "validation_status": "error",
                 "validation_message": f"Parse error: {str(e)[:100]}",

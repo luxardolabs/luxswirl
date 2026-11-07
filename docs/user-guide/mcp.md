@@ -57,7 +57,7 @@ A missing, unknown, revoked or expired token gets `401` with a `WWW-Authenticate
 
 ## Audit log
 
-Every call is recorded, whether it succeeded, failed or was refused: the tool, the user and token, the arguments with every credential masked (a synthetic script by its size alone), the outcome, why it was refused, how long it took, and the caller's address and client name. Calls are kept 90 days.
+Every call is recorded, whether it succeeded, failed or was refused: the tool, the user and token, the arguments with every credential masked, keys included (a string over 4 KiB cut with its length noted, a synthetic script by its size alone), the outcome, why it was refused, how long it took, and the caller's address and client name. Calls are kept 90 days.
 
 | Where                                                  | Who        | What it shows                                                                                                                                                                         |
 | ------------------------------------------------------ | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
