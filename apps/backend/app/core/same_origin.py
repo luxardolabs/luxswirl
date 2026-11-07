@@ -1,4 +1,4 @@
-# luxarch:same-origin asset v7 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit same-origin`.
+# luxarch:same-origin asset v8 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit same-origin`.
 """The app refuses a cross-site POST: the one cross-site guard (FLEET-AUTH-SESSION-STANDARD §5).
 
 Emitted by ``luxarch --emit same-origin``. Drop it in at ``app/core/same_origin.py``; it is enforced
@@ -15,6 +15,16 @@ Wire it on the app, with the same ALLOWED_HOSTS the trusted-host middleware uses
     from app.core.same_origin import SameOriginMiddleware
 
     app.add_middleware(SameOriginMiddleware, allowed_hosts=settings.ALLOWED_HOSTS)
+
+An app with a websocket route, or served over plain http, also names the ports its site is publicly
+served on, per environment (``fw.auth_posts_refuse_cross_site`` reds a websocket route's guard without
+them):
+
+    app.add_middleware(
+        SameOriginMiddleware,
+        allowed_hosts=settings.ALLOWED_HOSTS,
+        own_ports=settings.PUBLIC_PORTS,  # [443], or [13000] where it is served on 13000
+    )
 
 A websocket handshake is judged by the same test and closed with 1008 before the app accepts it: a
 browser sends the visitor's cookies with a handshake from any page and always says where it came from
@@ -58,10 +68,21 @@ and ``X-Forwarded-Host $host``. A proxy that writes a fixed name there (``$serve
 ``Host``, which is ``proxy_pass``'s) makes a real POST from the sibling so named read as this rule's case.
 
 ``Host``'s port is not compared: a proxy may drop or rewrite it (``proxy_set_header Host $host``,
-``$host:$server_port``, a published port), and a real login would be refused. So a page on another port
-passes where the browser sends no ``Sec-Fetch-Site``: a websocket handshake in Chromium, and plain http to
-a host other than loopback in every browser. So does a sibling host on another port, and a page on this
-host behind a proxy that names neither it nor ``X-Forwarded-Host``.
+``$host:$server_port``, a published port), and a real login would be refused. The browser sends no
+``Sec-Fetch-Site`` on a websocket handshake in Chromium, on plain http to a host other than loopback in every
+browser, and on a redirected fetch in WebKit (TLS and loopback included), so without ``own_ports`` a page on
+another port passes there. So does a sibling host on another port, and a page on this host behind a proxy
+that names neither it nor ``X-Forwarded-Host``.
+
+``own_ports`` closes all of those: an ``Origin`` or ``Referer`` naming a served host on any other port is
+another site, on every path the guard judges, whatever a proxy did to ``Host``. Every handshake is judged:
+``cross_site_paths`` exempts plain requests only, because nothing checks a ``state`` on a socket. A missing port is the
+scheme's default (443 for https and wss, 80 for http and ws). Handing it ``None`` or an empty list refuses to
+start, so a setting that is not set cannot read as a guard. ``Sec-Fetch-Site: same-origin`` needs no port
+check: the browser compared the ports itself, so a wrong list cannot refuse this site's own form or fetch.
+It can refuse what the browser does not vouch for that way: a sibling host's page (``same-site``), a Chromium
+handshake, and everything on plain http. Listing a port does not make it trusted from another listed port of
+the same host: ``same-site`` from the request's own host name stays another site (``cross_site_paths``, above).
 
 The 403 carries a fixed set of security headers itself (``Cache-Control: no-store``,
 ``X-Content-Type-Options: nosniff``, ``X-Frame-Options: DENY``, ``Referrer-Policy: no-referrer`` and
@@ -83,13 +104,23 @@ exact paths only.
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping, Sequence
+from collections.abc import Collection, Iterable, Mapping, Sequence
 from urllib.parse import urlsplit
 
 from starlette.responses import PlainTextResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 _UNSAFE = frozenset({"POST", "PUT", "PATCH", "DELETE"})
+
+
+# `own_ports` not handed at all, which is not the same as handing it nothing
+class _NotNamed:
+    pass
+
+
+_NOT_NAMED = _NotNamed()
+# The port a URL with none is on
+_DEFAULT_PORTS = {"http": 80, "ws": 80, "https": 443, "wss": 443}
 _SCHEMES = frozenset({"http", "https"})
 _WS_SCHEMES = {
     "ws": "http",
@@ -105,11 +136,12 @@ REFUSAL_HEADERS = {
 }
 # A serialized origin, as a browser sends it: scheme, host, optional port, nothing else
 _ORIGIN = re.compile(
-    r"^(https?)://([A-Za-z0-9._-]+|\[[0-9A-Fa-f:.]+\])(?::[0-9]{1,5})?$", re.IGNORECASE
+    r"^(https?)://([A-Za-z0-9._-]+|\[[0-9A-Fa-f:.]+\])(?::([1-9][0-9]{0,4}))?$",
+    re.IGNORECASE,
 )
 # A handshake's Origin may also carry the socket's own scheme (a native client)
 _WS_ORIGIN = re.compile(
-    r"^(https?|wss?)://([A-Za-z0-9._-]+|\[[0-9A-Fa-f:.]+\])(?::[0-9]{1,5})?$",
+    r"^(https?|wss?)://([A-Za-z0-9._-]+|\[[0-9A-Fa-f:.]+\])(?::([1-9][0-9]{0,4}))?$",
     re.IGNORECASE,
 )
 # A request's own Host or X-Forwarded-Host: a name or a bracketed address, and any port
@@ -154,18 +186,31 @@ def _is_own_host(host: str, own_hosts: Sequence[str]) -> bool:
     return False
 
 
+def _off_port(scheme: str, port: int | None, own_ports: Collection[int] | None) -> bool:
+    """Whether a page's port is one the site is not served on, where the app names them."""
+    if own_ports is None:
+        return False
+    return (_DEFAULT_PORTS[scheme.lower()] if port is None else port) not in own_ports
+
+
 def _foreign_origin(
     origin: str,
     allowed_hosts: Sequence[str],
     own_scheme: str,
     websocket: bool = False,
     own_hosts: Sequence[str] = (),
+    own_ports: Collection[int] | None = None,
 ) -> bool:
     """`own_hosts` is given only for a `same-site` request: on one of them, it is another port."""
     m = (_WS_ORIGIN if websocket else _ORIGIN).match(origin.strip())
     if m is None:  # `null`, or not a serialized origin (a path, userinfo, a space)
         return True
     if _is_own_host(m.group(2), own_hosts):
+        return True
+    port = int(m.group(3)) if m.group(3) else None
+    if port is not None and port > 65535:
+        return True
+    if _off_port(m.group(1), port, own_ports):
         return True
     return not _this_site(m.group(1), m.group(2), allowed_hosts, own_scheme, websocket)
 
@@ -176,15 +221,30 @@ def _foreign_referer(
     own_scheme: str,
     websocket: bool = False,
     own_hosts: Sequence[str] = (),
+    own_ports: Collection[int] | None = None,
 ) -> bool:
     try:
         parts = urlsplit(referer.strip())
-        # `.port` raises on a port that does not parse; port 0 is no server's
-        if "@" in parts.netloc or not parts.hostname or parts.port == 0:
+        # `.port` raises on a port that does not parse; port 0 is no server's, and a browser
+        # serializes no leading zero
+        if (
+            "@" in parts.netloc
+            or not parts.hostname
+            or parts.port == 0
+            or (
+                parts.port is not None
+                and parts.netloc.rpartition(":")[2].startswith("0")
+            )
+        ):
             return True
+        port = parts.port
     except ValueError:
         return True
     if _is_own_host(parts.hostname, own_hosts):
+        return True
+    if parts.scheme.lower() in _DEFAULT_PORTS and _off_port(
+        parts.scheme, port, own_ports
+    ):
         return True
     return not _this_site(
         parts.scheme, parts.hostname, allowed_hosts, own_scheme, websocket
@@ -197,13 +257,16 @@ def is_cross_site(
     *,
     scheme: str | None = None,
     websocket: bool = False,
+    own_ports: Collection[int] | None = None,
 ) -> bool:
     """Whether a request's own headers say it came from another site. Every value of a repeated
     header is judged, whatever the case of its name (a Starlette `Headers` is read with getlist).
     The request's own scheme is `X-Forwarded-Proto`'s when set, else `scheme` (the ASGI scope's;
     https when not given). With no `Origin`, `Referer` is judged unless `Sec-Fetch-Site` says
-    same-origin. `websocket=True` judges a handshake: ws and wss count as http and https in the
-    scheme, X-Forwarded-Proto, Origin and Referer; a plain request accepts http and https only."""
+    same-origin or none (the user typed it). `websocket=True` judges a handshake: ws and wss count as http and https in the
+    scheme, X-Forwarded-Proto, Origin and Referer; a plain request accepts http and https only.
+    `own_ports`, when given, are the ports the site is served on: a page on any other is another
+    site, unless `Sec-Fetch-Site` says same-origin."""
     getlist = getattr(headers, "getlist", None)
 
     def values(name: str) -> list[str]:
@@ -231,18 +294,29 @@ def is_cross_site(
         if "same-site" in fetch_site
         else []
     )
+    # the browser compared the ports itself when it says same-origin
+    if fetch_site and all(v == "same-origin" for v in fetch_site):
+        own_ports = None
     origins = values("origin")
     if origins:
         return any(
-            _foreign_origin(o, allowed_hosts, own_scheme, websocket, own_hosts)
+            _foreign_origin(
+                o, allowed_hosts, own_scheme, websocket, own_hosts, own_ports
+            )
             for o in origins
         )
     if fetch_site and all(v in ("same-origin", "none") for v in fetch_site):
         return False
     return any(
-        _foreign_referer(r, allowed_hosts, own_scheme, websocket, own_hosts)
+        _foreign_referer(r, allowed_hosts, own_scheme, websocket, own_hosts, own_ports)
         for r in values("referer")
     )
+
+
+_OWN_PORTS_REFUSED = (
+    "own_ports takes the port numbers the site is publicly served on, as a list of ints "
+    "(not None, not empty, not a string)"
+)
 
 
 class SameOriginMiddleware:
@@ -253,6 +327,7 @@ class SameOriginMiddleware:
         app: ASGIApp,
         allowed_hosts: Sequence[str],
         cross_site_paths: Sequence[str] = (),
+        own_ports: Iterable[int] | _NotNamed = _NOT_NAMED,
     ) -> None:
         if (
             isinstance(allowed_hosts, str)
@@ -272,7 +347,25 @@ class SameOriginMiddleware:
             raise ValueError(
                 "cross_site_paths takes paths starting with `/` (a subtree ends in `/`), not `/`"
             )
+        ports: tuple[object, ...] | None = None
+        if not isinstance(own_ports, _NotNamed):
+            # None or empty is a setting nobody set, a string from the environment would be read a
+            # character at a time, and an iterator holds its numbers only once
+            if own_ports is None or isinstance(own_ports, str | bytes):
+                raise ValueError(_OWN_PORTS_REFUSED)
+            try:
+                ports = tuple(own_ports)
+            except TypeError:
+                raise ValueError(_OWN_PORTS_REFUSED) from None
+            if not ports or any(
+                isinstance(p, bool) or not isinstance(p, int) or not 0 < p < 65536
+                for p in ports
+            ):
+                raise ValueError(_OWN_PORTS_REFUSED)
         self.app = app
+        self.own_ports = (
+            None if ports is None else frozenset(p for p in ports if isinstance(p, int))
+        )
         self.allowed_hosts = tuple(allowed_hosts)
         self.cross_site_paths = frozenset(
             p for p in cross_site_paths if not p.endswith("/")
@@ -295,10 +388,11 @@ class SameOriginMiddleware:
             self.allowed_hosts,
             scheme=scope.get("scheme"),
             websocket=scope["type"] == "websocket",
+            own_ports=self.own_ports,
         )
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] == "websocket" and not self._exempt(scope["path"]):
+        if scope["type"] == "websocket":  # cross_site_paths does not exempt a handshake
             if self._cross_site(scope):
                 if "websocket.http.response" in (scope.get("extensions") or {}):
                     # v5: where the server can send an HTTP answer, the 403 with the headers
