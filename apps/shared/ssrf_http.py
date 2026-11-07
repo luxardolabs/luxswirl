@@ -12,6 +12,7 @@ and httpx reads no proxy from the environment for a client given a transport.
 
 import asyncio
 from collections.abc import Callable, Iterable
+from concurrent.futures import Executor
 from typing import Any
 
 import httpcore
@@ -19,16 +20,23 @@ import httpx
 
 AllowedAddresses = Callable[[str], list[str]]
 
+# How a `VettedBackend`'s ConnectError opens when the host has no address.
+NO_ADDRESS = "Could not resolve host"
+
 
 class VettedBackend(httpcore.AsyncNetworkBackend):
     """Opens each TCP connection on an address `allowed` returns for its host.
 
     Raises what `allowed` raises when it refuses the host (`shared.ssrf.SsrfBlockedError`)
-    and ``httpcore.ConnectError`` when the host has no address.
+    and ``httpcore.ConnectError`` when the host has no address. A lookup runs on
+    `lookups`, or on the loop's default executor.
     """
 
-    def __init__(self, allowed: AllowedAddresses) -> None:
+    def __init__(
+        self, allowed: AllowedAddresses, lookups: Executor | None = None
+    ) -> None:
         self._allowed = allowed
+        self._lookups = lookups
         self._backend = httpcore.AnyIOBackend()
 
     async def connect_tcp(
@@ -39,8 +47,10 @@ class VettedBackend(httpcore.AsyncNetworkBackend):
         local_address: str | None = None,
         socket_options: Iterable[Any] | None = None,
     ) -> httpcore.AsyncNetworkStream:
-        addresses = await asyncio.to_thread(self._allowed, host)
-        last: Exception = httpcore.ConnectError(f"Could not resolve host: {host}")
+        addresses = await asyncio.get_running_loop().run_in_executor(
+            self._lookups, self._allowed, host
+        )
+        last: Exception = httpcore.ConnectError(f"{NO_ADDRESS}: {host}")
         # Each allowed address in the resolver's order, as a client given the
         # name would: a dual-stack host with a dead IPv6 route answers on IPv4.
         for address in addresses:
@@ -75,10 +85,17 @@ class VettedTransport(httpx.AsyncHTTPTransport):
     pool with one.
     """
 
-    def __init__(self, *, verify: bool, allowed: AllowedAddresses) -> None:
+    def __init__(
+        self,
+        *,
+        verify: bool,
+        allowed: AllowedAddresses,
+        lookups: Executor | None = None,
+    ) -> None:
         super().__init__(verify=verify)
         self._verify = verify
         self._allowed = allowed
+        self._lookups = lookups
         self._pool = self._new_pool()
 
     def _new_pool(self) -> httpcore.AsyncConnectionPool:
@@ -87,5 +104,5 @@ class VettedTransport(httpx.AsyncHTTPTransport):
             max_connections=100,
             max_keepalive_connections=20,
             keepalive_expiry=5.0,
-            network_backend=VettedBackend(self._allowed),
+            network_backend=VettedBackend(self._allowed, self._lookups),
         )

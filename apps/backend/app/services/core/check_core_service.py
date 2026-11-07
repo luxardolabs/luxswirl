@@ -5,6 +5,7 @@ Check service - business logic for check operations.
 import asyncio
 import ssl
 from collections.abc import Mapping, Sequence
+from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 from typing import Any
 from urllib.parse import ParseResult, urlparse
@@ -20,7 +21,6 @@ from app.core.check_target_validator import (
     CheckTargetBlockedError,
     validate_check_target,
 )
-from app.core.credential_mask import mask_credentials
 from app.core.datetime_utils import utc_now
 from app.core.error_summary import error_summary
 from app.core.exceptions import (
@@ -65,13 +65,21 @@ from app.services.core.check_dependency_core_service import (
 from app.services.core.settings_core_service import SettingsCoreService
 from app.shared.logger import get_logger
 from app.shared.ssrf import SsrfBlockedError, allowed_addresses
-from app.shared.ssrf_http import VettedTransport
+from app.shared.ssrf_http import NO_ADDRESS, VettedTransport
 
 logger = get_logger("luxswirl.services.check")
 
 _PREVIEW_PROBED_URLS = 100
 _PREVIEW_PROBES_AT_ONCE = 20
 _PREVIEW_PROBE_SECONDS = 5
+# Each of a name's addresses gets this long, so a dead first one leaves time for the next.
+_PREVIEW_CONNECT_SECONDS = 1.5
+_PREVIEW_INVALID_NAME = "invalid-url"
+# A preview's lookups: a deadline cannot stop one waiting on a slow nameserver, so they
+# stay out of the default executor, which name lookups and other work share.
+_PREVIEW_LOOKUPS = ThreadPoolExecutor(
+    max_workers=_PREVIEW_PROBES_AT_ONCE, thread_name_prefix="bulk-preview-lookup"
+)
 
 
 class CheckCoreService:
@@ -1253,6 +1261,8 @@ class CheckCoreService:
             List of dicts with url, generated_name, check_type, validation_status, etc.
         """
         protection = await SettingsCoreService.get_network_protection(db)
+        # The probes take many seconds; none of them holds a database connection.
+        await db.commit()
         turns = asyncio.Semaphore(_PREVIEW_PROBES_AT_ONCE)
         transport = VettedTransport(
             verify=True,
@@ -1261,8 +1271,12 @@ class CheckCoreService:
                 block_cloud_metadata=protection.block_cloud_metadata,
                 block_private_networks=protection.block_private_networks,
             ),
+            lookups=_PREVIEW_LOOKUPS,
         )
-        async with httpx.AsyncClient(transport=transport, timeout=5.0) as client:
+        timeout = httpx.Timeout(
+            _PREVIEW_PROBE_SECONDS, connect=_PREVIEW_CONNECT_SECONDS
+        )
+        async with httpx.AsyncClient(transport=transport, timeout=timeout) as client:
 
             async def judged(url: str) -> dict[str, Any]:
                 async with turns:
@@ -1352,10 +1366,11 @@ class CheckCoreService:
             }
         # swallowed-exceptions: per-URL bulk preview — the failure IS the
         # result, returned as an error row the operator sees before importing.
+        # The name is fixed: a URL that does not parse is no shape a mask can read.
         except Exception as e:
             return {
                 "url": url_str,
-                "generated_name": mask_credentials(url_str).replace(".", "-")[:255],
+                "generated_name": _PREVIEW_INVALID_NAME,
                 "check_type": "http",
                 "validation_status": "error",
                 "validation_message": f"Parse error: {str(e)[:100]}",
@@ -1374,8 +1389,10 @@ class CheckCoreService:
         refuse says so. An http target is then fetched through `client`, whose
         connections open only on an allowed address, so a name that resolves
         differently the second time is held to the same settings. A redirect is
-        reported, not followed. Only the status is read: the deadline covers the
-        lookups and the response head, and the body is never fetched.
+        reported, not followed. Only the status reaches the row: the deadline covers
+        the lookups and the response head, the body is never fetched, and no failure
+        quotes what the target sent, which on a port that does not speak HTTP is that
+        service's own text.
 
         Certificates ARE verified here, because the agent's http check defaults
         to verify_ssl=True. A cert problem is reported as its own warning so the
@@ -1385,11 +1402,14 @@ class CheckCoreService:
         # to the operator as the preview row's status.
         try:
             async with asyncio.timeout(_PREVIEW_PROBE_SECONDS):
-                await asyncio.to_thread(
-                    validate_check_target,
-                    full_url,
-                    block_cloud_metadata=protection.block_cloud_metadata,
-                    block_private_networks=protection.block_private_networks,
+                await asyncio.get_running_loop().run_in_executor(
+                    _PREVIEW_LOOKUPS,
+                    partial(
+                        validate_check_target,
+                        full_url,
+                        block_cloud_metadata=protection.block_cloud_metadata,
+                        block_private_networks=protection.block_private_networks,
+                    ),
                 )
                 if check_type != "http":
                     return "unknown", "", None
@@ -1406,21 +1426,36 @@ class CheckCoreService:
         except TimeoutError, httpx.TimeoutException:
             return "error", f"Timeout ({_PREVIEW_PROBE_SECONDS}s)", None
         except httpx.ConnectError as e:
-            # httpx wraps a TLS handshake failure in ConnectError, so this has
-            # to be distinguished by the cause, not the type.
-            if isinstance(e.__cause__, ssl.SSLError):
-                return (
-                    "warning",
-                    "TLS certificate not trusted — set verify_ssl=False "
-                    "on the check to monitor it anyway",
-                    None,
-                )
-            return "error", "Connection refused", None
+            return CheckCoreService._connect_failure(e)
+        except httpx.ProtocolError:
+            return "error", "The target did not answer HTTP", None
+        except httpx.InvalidURL:
+            return "error", "The URL could not be parsed", None
         except Exception as e:
-            return "error", str(e)[:100], None
+            return "error", f"The probe failed ({type(e).__name__})", None
 
         status = "success" if 200 <= status_code < 400 else "warning"
         return status, f"HTTP {status_code}", status_code
+
+    @staticmethod
+    def _connect_failure(error: httpx.ConnectError) -> tuple[str, str, None]:
+        """A preview row's answer to a failed connection. A TLS failure lies down the
+        exception's chain: httpx and httpcore each raise from the one before."""
+        cause: BaseException | None = error
+        while cause is not None and not isinstance(cause, ssl.SSLError):
+            cause = cause.__cause__ or cause.__context__
+        if isinstance(cause, ssl.SSLCertVerificationError):
+            return (
+                "warning",
+                "TLS certificate not trusted — set verify_ssl=False "
+                "on the check to monitor it anyway",
+                None,
+            )
+        if cause is not None:
+            return "error", "TLS handshake failed", None
+        if str(error).startswith(NO_ADDRESS):
+            return "error", "Could not resolve the host", None
+        return "error", "Connection failed", None
 
     @staticmethod
     async def assign_alerts(
