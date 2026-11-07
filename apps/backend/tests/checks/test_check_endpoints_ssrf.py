@@ -241,3 +241,42 @@ async def test_the_heartbeat_response_carries_the_private_network_setting(
 
     assert resp.status_code == 200, resp.text
     assert resp.json()["block_private_networks"] is blocked
+
+
+@pytest.mark.parametrize(
+    ("check_type", "dsn"),
+    [
+        ("postgres", f"postgres:?host={METADATA_IP}&port=80"),
+        ("postgres", f"postgresql:/db?hostaddr={METADATA_IP}"),
+    ],
+)
+async def test_create_refuses_a_metadata_host_in_a_url_with_no_slashes(
+    db: AsyncSession, check_type: str, dsn: str
+) -> None:
+    agent = make_agent()
+    db.add(agent)
+    await db.flush()
+
+    with pytest.raises(CheckTargetBlockedError):
+        await CheckCoreService.create_check(
+            db,
+            agent.id,
+            _create(check_type, connection_string=dsn, query="SELECT 1"),
+        )
+
+
+@pytest.mark.parametrize("dsn", ["mysql:d", "mysql:", "mariadb:d"])
+async def test_create_holds_a_hostless_mysql_url_to_the_private_setting(
+    db: AsyncSession, dsn: str
+) -> None:
+    agent = make_agent()
+    db.add(agent)
+    await db.flush()
+    await _private_networks(db, True)
+
+    with pytest.raises(CheckTargetBlockedError):
+        await CheckCoreService.create_check(
+            db,
+            agent.id,
+            _create("mysql", connection_string=dsn, query="SELECT 1"),
+        )

@@ -97,6 +97,70 @@ def test_a_database_url_naming_no_host_is_its_drivers_localhost(target: str) -> 
 
 
 @pytest.mark.unit
+@pytest.mark.parametrize(
+    ("target", "hosts"),
+    [
+        ("postgres:?host=169.254.169.254&port=80", ["postgres", "169.254.169.254"]),
+        ("postgresql:?hostaddr=169.254.169.254", ["postgresql", "169.254.169.254"]),
+        ("postgres:/db?host=169.254.169.254", ["postgres", "169.254.169.254"]),
+        ("POSTGRES:?host=169.254.169.254", ["POSTGRES", "169.254.169.254"]),
+        (
+            "postgresql+asyncpg:?host=169.254.169.254",
+            ["postgresql+asyncpg", "169.254.169.254"],
+        ),
+        (
+            "postgres:?host=10.0.0.1,169.254.169.254",
+            ["postgres", "10.0.0.1", "169.254.169.254"],
+        ),
+        ("mysql:d", ["mysql", "localhost"]),
+        ("mysql:", ["mysql", "localhost"]),
+        ("mariadb:d", ["mariadb", "localhost"]),
+        ("postgres:", ["postgres", "localhost"]),
+    ],
+)
+def test_a_database_url_with_no_slashes_names_what_its_driver_connects_to(
+    target: str, hosts: list[str]
+) -> None:
+    assert extract_hosts(target) == hosts
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "target",
+    [
+        "postgres:?host=169.254.169.254&port=80",
+        " postgres:?host=169.254.169.254",
+        "postgres:/db?host=169.254.169.254",
+        "postgresql:?hostaddr=169.254.169.254",
+        "POSTGRES:?host=169.254.169.254",
+    ],
+)
+def test_a_metadata_host_in_a_url_with_no_slashes_is_refused(target: str) -> None:
+    with pytest.raises(SsrfBlockedError):
+        assert_target_allowed(target)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("target", ["mysql:d", "mysql:", "postgres:", "mariadb:d"])
+def test_a_hostless_url_with_no_slashes_is_its_drivers_localhost(target: str) -> None:
+    with pytest.raises(SsrfBlockedError):
+        assert_target_allowed(target, block_private_networks=True)
+    assert_target_allowed(target)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("target", ["db:5432", "pg.example:5432", "plainhost"])
+def test_a_host_and_port_reads_only_as_that(target: str) -> None:
+    assert extract_hosts(target) == [target.split(":")[0]]
+
+
+@pytest.mark.unit
+def test_a_host_named_like_a_database_scheme_is_read_both_ways() -> None:
+    """A TCP check's `postgres:5432` is that host; a PostgreSQL check's is localhost."""
+    assert extract_hosts("postgres:5432") == ["postgres", "localhost"]
+
+
+@pytest.mark.unit
 def test_a_postgres_url_on_a_unix_socket_names_no_network_host() -> None:
     assert extract_hosts("postgresql://u:p@/db?host=/var/run/postgresql") == []
 

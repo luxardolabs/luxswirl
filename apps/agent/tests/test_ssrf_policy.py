@@ -238,8 +238,10 @@ async def test_postgres_dials_a_public_host(monkeypatch: Any) -> None:
     [
         "postgresql://u:p@/db?host=169.254.169.254",
         "postgresql://u:p@192.0.2.10,169.254.169.254/db",
+        "postgres:?host=169.254.169.254&port=80",
+        "postgresql:/db?hostaddr=169.254.169.254",
     ],
-    ids=["host-param", "multi-host"],
+    ids=["host-param", "multi-host", "no-slashes", "no-slashes-hostaddr"],
 )
 async def test_postgres_never_dials_a_metadata_host_its_url_hides(
     dsn: str, monkeypatch: Any
@@ -319,3 +321,39 @@ async def test_a_mysql_url_naming_no_host_is_refused_before_it_connects() -> Non
     check = MySQLCheck(_cfg("mysql", target="mysql://root:pw@/db", query="SELECT 1"))
 
     assert await _blocked(check)
+
+
+@pytest.mark.parametrize("dsn", ["postgres:", "postgres:/db"])
+async def test_postgres_with_no_slashes_is_held_to_the_private_setting(
+    dsn: str, monkeypatch: Any
+) -> None:
+    pytest.importorskip("asyncpg")
+    _ssrf_policy.apply_server_policy({"block_private_networks": True})
+    try:
+        assert await _hosts_dialed(_postgres(dsn), monkeypatch) == []
+    finally:
+        _ssrf_policy.apply_server_policy({"block_private_networks": False})
+
+
+@pytest.mark.parametrize("dsn", ["mysql:d", "mysql:"])
+async def test_mysql_with_no_slashes_is_held_to_the_private_setting(dsn: str) -> None:
+    pytest.importorskip("aiomysql")
+    check = MySQLCheck(
+        _cfg("mysql", target="192.0.2.10", connection_string=dsn, query="SELECT 1")
+    )
+    connects: list[Any] = []
+
+    async def connect(**kwargs: Any) -> None:
+        connects.append(kwargs)
+        raise ConnectionRefusedError("test")
+
+    _ssrf_policy.apply_server_policy({"block_private_networks": True})
+    try:
+        with pytest.MonkeyPatch.context() as patch:
+            patch.setattr("app.checks.mysql.aiomysql.connect", connect)
+            with contextlib.suppress(SsrfBlockedError):
+                await check.run()
+    finally:
+        _ssrf_policy.apply_server_policy({"block_private_networks": False})
+
+    assert connects == []

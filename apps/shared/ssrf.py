@@ -85,12 +85,19 @@ def _strip_port(host: str) -> str:
     return host.rsplit(":", 1)[0] if host.count(":") == 1 else host
 
 
-def extract_hosts(target: str) -> list[str]:
-    """Every host ``target`` connects to: one for a URL or ``host[:port]``, and
-    each host a PostgreSQL URL names (a unix-socket path is not a network host)."""
-    if "://" not in target:
-        host = extract_host(target)
-        return [host] if host else []
+def _reads_as_database_url(target: str) -> bool:
+    """Whether a database driver takes `target` for its URL. A driver goes by the
+    parsed scheme, so `postgres:?host=db` is one with no `//`."""
+    try:
+        scheme = urlparse(target).scheme.lower().split("+", 1)[0]
+    except ValueError:
+        return False
+    return scheme in _DATABASE_SCHEMES
+
+
+def _url_hosts(target: str) -> list[str]:
+    """Every host the URL `target` connects to: one, or each host a PostgreSQL URL names
+    (a unix-socket path is not a network host)."""
     try:
         parsed = urlparse(target)
     except ValueError:
@@ -110,6 +117,22 @@ def extract_hosts(target: str) -> list[str]:
     if network or any(h.startswith("/") for h in hosts):
         return network
     return [_DEFAULT_DATABASE_HOST]
+
+
+def extract_hosts(target: str) -> list[str]:
+    """Every host ``target`` connects to, for a URL or ``host[:port]``.
+
+    Nothing here knows the check's type, and `postgres:5432` is a TCP check's host and
+    port and a PostgreSQL check's URL at once, so a target with a database scheme and no
+    `//` names the hosts of both readings.
+    """
+    if "://" in target:
+        return _url_hosts(target)
+    host = extract_host(target)
+    named = [host] if host else []
+    if _reads_as_database_url(target):
+        named.extend(_url_hosts(target))
+    return list(dict.fromkeys(named))
 
 
 def _embedded_ipv4(
