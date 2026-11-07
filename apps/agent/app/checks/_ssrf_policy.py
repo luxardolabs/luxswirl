@@ -57,7 +57,8 @@ def assert_target_allowed(target: str, *, database: bool = False) -> None:
 
     Raises:
         CheckConfigError: A host it names cannot be resolved as written.
-        SsrfBlockedError: An address a host resolves to is blocked.
+        SsrfBlockedError: An address a host resolves to is blocked, or a database
+            driver would read it and its hosts cannot be read plainly.
     """
     for host in ssrf.extract_hosts(target, database=database):
         _vet_host_name(host)

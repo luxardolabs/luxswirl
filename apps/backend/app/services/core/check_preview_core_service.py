@@ -167,15 +167,15 @@ class CheckPreviewCoreService:
         operator can set verify_ssl=False deliberately.
         """
         database = check_type in DATABASE_CHECK_TYPES
-        if len(extract_hosts(full_url, database=database)) > HOSTS_PER_URL:
-            return (
-                "unknown",
-                f"Not checked: this URL names over {HOSTS_PER_URL} hosts",
-                None,
-            )
         # swallowed-exceptions: every failure here is the probe's answer, shown
         # to the operator as the preview row's status.
         try:
+            if len(extract_hosts(full_url, database=database)) > HOSTS_PER_URL:
+                return (
+                    "unknown",
+                    f"Not checked: this URL names over {HOSTS_PER_URL} hosts",
+                    None,
+                )
             async with asyncio.timeout(PROBE_SECONDS):
                 await asyncio.get_running_loop().run_in_executor(
                     _LOOKUPS,

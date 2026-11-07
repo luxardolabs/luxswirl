@@ -120,11 +120,7 @@ class CheckCoreService:
 
         # SSRF protection: every address the check connects to
         await CheckCoreService._validate_endpoints_ssrf(
-            db,
-            data.target,
-            data.nameserver,
-            data.connection_string,
-            database=data.check_type in DATABASE_CHECK_TYPES,
+            db, data.check_type, data.target, data.nameserver, data.connection_string
         )
 
         await CheckDependencyCoreService.validate_dependency(
@@ -191,26 +187,35 @@ class CheckCoreService:
 
     @staticmethod
     async def _validate_endpoints_ssrf(
-        db: AsyncSession, *endpoints: str | None, database: bool
+        db: AsyncSession,
+        check_type: str,
+        target: str | None,
+        nameserver: str | None,
+        connection_string: str | None,
     ) -> None:
         """Validate every address a check connects to against the SSRF settings.
 
         A check reaches its target, and a DNS check also its nameserver and a
         database check its connection string; each is validated. An empty one
-        is skipped. `database`: the check is a database check, whose driver reads
-        a URL with no `//` too.
+        is skipped. A database check's driver reads its connection string, or
+        its target when it has none.
 
         Raises:
             CheckTargetBlockedError: If any of them is blocked by SSRF protection
         """
         protection = await SettingsCoreService.get_network_protection(db)
-        for endpoint in endpoints:
+        driver_check = check_type in DATABASE_CHECK_TYPES
+        for endpoint, driver_reads in (
+            (target, driver_check and not connection_string),
+            (nameserver, False),
+            (connection_string, driver_check),
+        ):
             if endpoint:
                 validate_check_target(
                     endpoint,
                     block_cloud_metadata=protection.block_cloud_metadata,
                     block_private_networks=protection.block_private_networks,
-                    database=database,
+                    database=driver_reads,
                 )
 
     @staticmethod
@@ -418,15 +423,21 @@ class CheckCoreService:
 
         update_data = data.model_dump(exclude_unset=True)
 
-        # SSRF protection: every address being changed
+        # SSRF protection: every address being changed, and any whose reading a
+        # change of type, target or connection string decides.
+        reading_changes = bool(
+            update_data.keys() & {"check_type", "target", "connection_string"}
+        )
         await CheckCoreService._validate_endpoints_ssrf(
             db,
-            *(
-                update_data.get(field)
-                for field in ("target", "nameserver", "connection_string")
+            update_data.get("check_type", check.check_type),
+            update_data.get("target", check.target) if reading_changes else None,
+            update_data.get("nameserver"),
+            (
+                update_data.get("connection_string", check.connection_string)
+                if reading_changes
+                else None
             ),
-            database=update_data.get("check_type", check.check_type)
-            in DATABASE_CHECK_TYPES,
         )
 
         if "depends_on_check_id" in update_data:

@@ -11,9 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import ipaddress
 import random
-import re
 import time
 from collections.abc import Iterator
 from pathlib import Path
@@ -248,6 +246,8 @@ async def test_postgres_dials_a_public_host(monkeypatch: Any) -> None:
         "postgres:?host=169.254.169.254:x:y&port=80",
         "postgresql://u:p@/db?host=169.254.169.254:x:y&port=80",
         "postgresql://a@169.254.169.254,b@192.0.2.10/db",
+        "postgres:?host=[::ffff:169.254.169.254%2525]&port=80",
+        "postgresql://u@/db?host=[fe80::1%2525]",
     ],
     ids=[
         "host-param",
@@ -257,6 +257,8 @@ async def test_postgres_dials_a_public_host(monkeypatch: Any) -> None:
         "no-slashes-colons",
         "host-param-colons",
         "userinfo-per-host",
+        "scoped-no-slashes",
+        "scoped",
     ],
 )
 async def test_postgres_never_dials_a_metadata_host_its_url_hides(
@@ -403,23 +405,17 @@ def _driver_hosts(dsn: str) -> list[str]:
     return [address[0] for address in addresses if isinstance(address, tuple)]
 
 
-def _resolvable(host: str) -> bool:
-    """Whether a resolver could take `host`: an IP literal, or a name holding nothing a
-    host name cannot. asyncpg leaves `%3A` and the like in a host, which then connects
-    to nothing."""
-    try:
-        ipaddress.ip_address(host)
-    except ValueError:
-        return bool(host) and not re.search(r"[\s\x00-\x1f:%@/?#\[\]\\]", host)
-    return True
-
-
 def test_every_host_asyncpg_reads_is_a_host_the_policy_names() -> None:
-    """The driver's own parser against the policy's, over generated URLs: an asyncpg
-    upgrade that reads a host another way fails here. Parsing only; nothing connects."""
+    """The driver's own parser against the policy's, over generated URLs: of every URL
+    the policy reads, the driver connects only to hosts it names, so an asyncpg upgrade
+    that reads a host another way fails here. Parsing only; nothing connects."""
     pieces = [
         "169.254.169.254",
         "192.0.2.10",
+        "::ffff:169.254.169.254",
+        "fe80::1",
+        "%2525",
+        "%2531",
         ":",
         ",",
         "@",
@@ -479,11 +475,13 @@ def test_every_host_asyncpg_reads_is_a_host_the_policy_names() -> None:
             hosts = _driver_hosts(dsn)
         except ValueError, IndexError:
             continue
+        try:
+            named = ssrf.extract_hosts(dsn, database=True)
+        except SsrfBlockedError:
+            continue
         accepted += 1
-        named = ssrf.extract_hosts(dsn, database=True)
-        missed.extend(
-            (dsn, host) for host in hosts if _resolvable(host) and host not in named
-        )
+        # An empty host is one no resolver takes.
+        missed.extend((dsn, host) for host in hosts if host and host not in named)
 
-    assert accepted > 10_000
+    assert accepted > 1_000
     assert missed == []

@@ -689,7 +689,13 @@ async def test_a_lookup_runs_in_its_callers_context() -> None:
 
 
 @pytest.mark.parametrize(
-    "url", [f"postgres:?host={METADATA}", f"postgres:?host={METADATA}:x:y"]
+    "url",
+    [
+        f"postgres:?host={METADATA}",
+        f"postgres:?host={METADATA}:x:y",
+        f"postgres://u@/d?host=[::ffff:{METADATA}%2525]",
+        "postgres:5432",
+    ],
 )
 async def test_a_database_url_with_no_slashes_is_judged_as_its_driver_reads_it(
     db: AsyncSession, url: str, opened: list[str]

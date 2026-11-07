@@ -250,9 +250,12 @@ async def test_the_heartbeat_response_carries_the_private_network_setting(
         ("postgres", f"postgresql:/db?hostaddr={METADATA_IP}"),
         ("postgres", f"postgres:?host={METADATA_IP}:x:y&port=80"),
         ("postgres", f"postgresql://a@{METADATA_IP},b@192.0.2.10/db"),
+        ("postgres", f"postgres://u@/d?host=[::ffff:{METADATA_IP}%2525]"),
+        ("mysql", "mysql:d"),
+        ("mysql", "mariadb:d"),
     ],
 )
-async def test_create_refuses_a_metadata_host_in_a_url_with_no_slashes(
+async def test_create_refuses_a_database_url_that_reads_two_ways(
     db: AsyncSession, check_type: str, dsn: str
 ) -> None:
     agent = make_agent()
@@ -264,23 +267,6 @@ async def test_create_refuses_a_metadata_host_in_a_url_with_no_slashes(
             db,
             agent.id,
             _create(check_type, connection_string=dsn, query="SELECT 1"),
-        )
-
-
-@pytest.mark.parametrize("dsn", ["mysql:d", "mysql:", "mariadb:d"])
-async def test_create_holds_a_hostless_mysql_url_to_the_private_setting(
-    db: AsyncSession, dsn: str
-) -> None:
-    agent = make_agent()
-    db.add(agent)
-    await db.flush()
-    await _private_networks(db, True)
-
-    with pytest.raises(CheckTargetBlockedError):
-        await CheckCoreService.create_check(
-            db,
-            agent.id,
-            _create("mysql", connection_string=dsn, query="SELECT 1"),
         )
 
 
@@ -304,7 +290,92 @@ async def test_a_tcp_check_on_a_host_named_like_a_database_is_that_host(
     assert check.target == target
 
 
+async def test_a_database_checks_target_is_a_name_beside_its_connection_string(
+    db: AsyncSession,
+) -> None:
+    agent = make_agent()
+    db.add(agent)
+    await db.flush()
+
+    check = await CheckCoreService.create_check(
+        db,
+        agent.id,
+        _create(
+            "postgres",
+            connection_string="postgres://u:p@192.0.2.10/d",
+            query="SELECT 1",
+        ).model_copy(update={"target": "postgres:5432"}),
+    )
+
+    assert check.target == "postgres:5432"
+
+
+async def test_a_database_check_with_no_connection_string_has_its_target_read(
+    db: AsyncSession,
+) -> None:
+    agent = make_agent()
+    db.add(agent)
+    await db.flush()
+
+    with pytest.raises(CheckTargetBlockedError):
+        await CheckCoreService.create_check(
+            db,
+            agent.id,
+            _create("postgres", query="SELECT 1").model_copy(
+                update={"target": f"postgres:?host={METADATA_IP}"}
+            ),
+        )
+
+
+async def _postgres_check(db: AsyncSession) -> Any:
+    agent = make_agent()
+    db.add(agent)
+    await db.flush()
+    return await CheckCoreService.create_check(
+        db,
+        agent.id,
+        _create(
+            "postgres",
+            connection_string="postgres://u:p@192.0.2.10/d",
+            query="SELECT 1",
+        ),
+    )
+
+
 async def test_an_update_judges_a_database_checks_url_as_its_driver_reads_it(
+    db: AsyncSession,
+) -> None:
+    check = await _postgres_check(db)
+
+    with pytest.raises(CheckTargetBlockedError):
+        await CheckCoreService.update_check(
+            db,
+            check.id,
+            CheckUpdate(connection_string=f"postgres:?host={METADATA_IP}"),
+        )
+
+
+@pytest.mark.parametrize(
+    ("to", "target"),
+    [("postgres", f"postgres:?host={METADATA_IP}&port=80"), ("mysql", "mysql:d")],
+)
+async def test_a_change_of_type_alone_judges_the_address_it_keeps(
+    db: AsyncSession, to: str, target: str
+) -> None:
+    agent = make_agent()
+    db.add(agent)
+    await db.flush()
+    check = await CheckCoreService.create_check(
+        db, agent.id, _create("tcp").model_copy(update={"target": target})
+    )
+
+    with pytest.raises(CheckTargetBlockedError):
+        await CheckCoreService.update_check(
+            db, check.id, CheckUpdate(check_type=to, query="SELECT 1")
+        )
+
+
+async def test_clearing_a_connection_string_judges_the_target_left(
     db: AsyncSession,
 ) -> None:
     agent = make_agent()
@@ -317,12 +388,10 @@ async def test_an_update_judges_a_database_checks_url_as_its_driver_reads_it(
             "postgres",
             connection_string="postgres://u:p@192.0.2.10/d",
             query="SELECT 1",
-        ),
+        ).model_copy(update={"target": f"postgres:?host={METADATA_IP}"}),
     )
 
     with pytest.raises(CheckTargetBlockedError):
         await CheckCoreService.update_check(
-            db,
-            check.id,
-            CheckUpdate(connection_string=f"postgres:?host={METADATA_IP}"),
+            db, check.id, CheckUpdate(connection_string=None)
         )

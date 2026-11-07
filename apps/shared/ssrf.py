@@ -17,12 +17,14 @@ the name. A name is refused only when it resolves and none of its addresses is
 allowed, so a host that also answers with its IPv6 link-local address is reached
 on its other one, and nothing resolves the name again between the check and the
 socket. The database and DNS checks hand the name to a driver that resolves it
-itself: :func:`assert_target_allowed` refuses those when ANY address is blocked.
+itself: :func:`assert_target_allowed` refuses those when ANY address is blocked, and
+a database URL whose hosts could be read two ways.
 """
 
 from __future__ import annotations
 
 import ipaddress
+import re
 import socket
 from urllib.parse import parse_qs, unquote, urlparse
 
@@ -71,6 +73,11 @@ def extract_host(target: str) -> str | None:
 # libpq/asyncpg URLs name several hosts: a comma list in the netloc, and the
 # `host` / `hostaddr` query parameters.
 _POSTGRES_SCHEMES = frozenset({"postgres", "postgresql"})
+# One entry of a PostgreSQL host list: a name or a bracketed IPv6 literal, and a port.
+_POSTGRES_HOST_ENTRY = re.compile(
+    r"(?:\[(?P<literal>[0-9A-Fa-f:.]+)\]|[\w.-]+)?(?::\d*)?"
+)
+_UNREADABLE = re.compile(r"[\s\x00-\x1f\x7f]")
 # A database URL that names no host connects to the driver's default: localhost.
 _DATABASE_SCHEMES = _POSTGRES_SCHEMES | {"mysql", "mariadb"}
 _DEFAULT_DATABASE_HOST = "localhost"
@@ -95,26 +102,79 @@ def _reads_as_database_url(target: str) -> bool:
     return scheme in _DATABASE_SCHEMES
 
 
-def _postgres_spec_hosts(spec: str) -> list[str]:
-    """The hosts one entry of a PostgreSQL host list can mean. asyncpg ends a host at its
-    first colon unless it is bracketed, and decodes it after that. Each order of the two
-    is named, and an IP literal whole, since `db::` is one and asyncpg's `db` both."""
-    text = unquote(spec).strip()
-    if text.startswith("["):
-        return [text[1 : text.find("]")] if "]" in text else text[1:]]
-    hosts = [text.partition(":")[0], unquote(spec.partition(":")[0]).strip()]
+def _is_plain_postgres_host(entry: str) -> bool:
+    """Whether one entry of a host list says one thing to any reader: a name or a
+    bracketed IPv6 literal, with no scope, and an optional port."""
+    match = _POSTGRES_HOST_ENTRY.fullmatch(entry)
+    if match is None:
+        return False
+    literal = match["literal"]
+    if literal is None:
+        return True
     try:
-        ipaddress.ip_address(text)
+        ipaddress.IPv6Address(literal)
     except ValueError:
-        return hosts
-    return [text, *hosts]
+        return False
+    return True
+
+
+def _is_plain_postgres_url(target: str) -> bool:
+    parsed = urlparse(target)
+    if parsed.netloc.count("@") > 1:
+        return False
+    query = parse_qs(parsed.query)
+    for entry in parsed.netloc.rpartition("@")[2].split(","):
+        if not (unquote(entry).startswith("/") or _is_plain_postgres_host(entry)):
+            return False
+    for value in query.get("host", []):
+        for entry in value.split(","):
+            if not (entry.startswith("/") or _is_plain_postgres_host(entry)):
+                return False
+    for value in query.get("hostaddr", []):
+        for entry in value.split(","):
+            try:
+                ipaddress.ip_address(entry)
+            except ValueError:
+                return False
+            if "%" in entry:
+                return False
+    return True
+
+
+def _require_plain_database_url(target: str) -> None:
+    """Refuse a database URL whose hosts a driver could read another way.
+
+    A driver's parser and this module's cannot be kept the same on every odd form, so
+    the odd forms are not read at all: a URL needs its `//`, holds no whitespace or
+    control character, and a PostgreSQL URL names each host plainly. A password holding
+    `@` is written `%40`. The refusal never quotes the URL, which holds the password.
+
+    Raises:
+        SsrfBlockedError: `target` is not a plain database URL.
+    """
+    plain = "://" in target and _UNREADABLE.search(target) is None
+    if plain and urlparse(target).scheme.lower().split("+", 1)[0] in _POSTGRES_SCHEMES:
+        plain = _is_plain_postgres_url(target)
+    if not plain:
+        raise SsrfBlockedError(
+            "This database URL is blocked: its hosts cannot be read plainly. Write it "
+            "as scheme://user:password@host:port/database, encoding any `@` in the "
+            "password as %40."
+        )
+
+
+def _postgres_entry_host(entry: str) -> str:
+    """The host in one entry of a PostgreSQL host list."""
+    text = unquote(entry).strip()
+    if text.startswith("["):
+        return text[1 : text.find("]")] if "]" in text else text[1:]
+    return text.partition(":")[0]
 
 
 def url_hosts(target: str) -> list[str]:
     """Every host the URL `target` connects to: one, or each host a PostgreSQL URL names
-    (a unix-socket path is not a network host). A netloc's userinfo is read to both its
-    first `@`, as asyncpg does, and its last, so a host hidden by either is named. A
-    driver may ignore `hostaddr`, so it never stands in for the default host."""
+    (a unix-socket path is not a network host). A driver may ignore `hostaddr`, so it
+    never stands in for the default host."""
     try:
         parsed = urlparse(target)
     except ValueError:
@@ -124,38 +184,37 @@ def url_hosts(target: str) -> list[str]:
         if parsed.hostname:
             return [parsed.hostname]
         return [_DEFAULT_DATABASE_HOST] if scheme in _DATABASE_SCHEMES else []
-    netloc = parsed.netloc
     query = parse_qs(parsed.query)
-    specs = [
-        *netloc.split("@", 1)[-1].split(","),
-        *netloc.rsplit("@", 1)[-1].split(","),
-        *(spec for value in query.get("host", []) for spec in value.split(",")),
+    entries = [
+        *parsed.netloc.rpartition("@")[2].split(","),
+        *(entry for value in query.get("host", []) for entry in value.split(",")),
     ]
-    named = [host for spec in specs for host in _postgres_spec_hosts(spec)]
+    named = [_postgres_entry_host(entry) for entry in entries]
     hosts = [host for host in named if host and not host.startswith("/")]
     if not hosts and not any(host.startswith("/") for host in named):
         hosts.append(_DEFAULT_DATABASE_HOST)
     for value in query.get("hostaddr", []):
-        for spec in value.split(","):
-            hosts.extend(_postgres_spec_hosts(spec))
+        hosts.extend(value.split(","))
     return list(dict.fromkeys(host for host in hosts if host))
 
 
 def extract_hosts(target: str, *, database: bool = False) -> list[str]:
     """Every host ``target`` connects to, for a URL or ``host[:port]``.
 
-    `database` says a database driver will read it. A driver goes by the parsed scheme,
-    so it takes `postgres:?host=db` for a URL with no `//`, while `postgres:5432` is a
-    TCP check's host and port: only the caller knows which. The driver's reading adds to
-    the host it also names.
+    `database` says a database driver will read it, so a target with a database scheme
+    is its URL (`postgres:5432` is a TCP check's host and port, and only the caller knows
+    which).
+
+    Raises:
+        SsrfBlockedError: A driver would read it, and it is not a plain database URL.
     """
+    if database and _reads_as_database_url(target):
+        _require_plain_database_url(target)
+        return url_hosts(target)
     if "://" in target:
         return url_hosts(target)
     host = extract_host(target)
-    named = [host] if host else []
-    if database and _reads_as_database_url(target):
-        named.extend(url_hosts(target))
-    return list(dict.fromkeys(named))
+    return [host] if host else []
 
 
 def _embedded_ipv4(
