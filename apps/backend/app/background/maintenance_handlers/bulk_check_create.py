@@ -43,7 +43,7 @@ async def handle(db: AsyncSession, job: MaintenanceJob) -> None:
     await require_owner_may_edit(db, job)
 
     agent_id = UUID(agent_id_raw) if isinstance(agent_id_raw, str) else agent_id_raw
-    requests, refused = _validated(raw_requests)
+    requests, entries, refused = _validated(raw_requests)
 
     logger.info(
         "Bulk creating checks",
@@ -95,8 +95,8 @@ async def handle(db: AsyncSession, job: MaintenanceJob) -> None:
             "failure_count": result.failed + len(refused),
             "errors": refused
             + [
-                f"Entry {number}: {r.error or 'not created'}"
-                for number, r in enumerate(result.results, start=1)
+                f"Entry {entry}: {r.error or 'not created'}"
+                for entry, r in zip(entries, result.results, strict=True)
                 if r.status == BulkCheckOutcome.FAILED
             ]
             + alert_errors,
@@ -107,15 +107,18 @@ async def handle(db: AsyncSession, job: MaintenanceJob) -> None:
 
 def _validated(
     raw_requests: list[dict[str, Any]],
-) -> tuple[list[BulkCheckCreateRequest], list[str]]:
-    """Each entry validated on its own: the requests that pass, and an error for
-    each one refused, naming its fields but never repeating what they held."""
+) -> tuple[list[BulkCheckCreateRequest], list[int], list[str]]:
+    """Each entry validated on its own: the requests that pass, the entry number of
+    each, and an error for each one refused, naming its fields but never repeating
+    what they held."""
     requests: list[BulkCheckCreateRequest] = []
+    entries: list[int] = []
     refused: list[str] = []
     for index, raw in enumerate(raw_requests):
         try:
             requests.append(BulkCheckCreateRequest.model_validate(raw))
+            entries.append(index + 1)
         except ValidationError as exc:
             fields = sorted({".".join(map(str, e["loc"])) for e in exc.errors()})
             refused.append(f"Entry {index + 1} refused: {', '.join(fields)}")
-    return requests, refused
+    return requests, entries, refused

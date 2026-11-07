@@ -29,7 +29,7 @@ from app.services.core.mcp_audit_core_service import (
     MCPAuditCoreService,
     masked_arguments,
 )
-from fixtures.factories import make_agent, make_user
+from fixtures.factories import make_agent, make_check, make_user
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -212,6 +212,78 @@ async def test_the_web_flow_keeps_webhooks_apart(db: AsyncSession) -> None:
     stored = [r.display_name for r in made.results]
     assert made.succeeded == len(urls) + 1
     assert len(set(stored)) == len(stored), stored
+
+
+@pytest.mark.integration
+async def test_a_preview_name_is_numbered_once_against_an_agents_checks(
+    db: AsyncSession,
+) -> None:
+    agent = make_agent()
+    db.add(agent)
+    await db.flush()
+    db.add(make_check(agent_id=agent.id, display_name="h"))
+    await db.flush()
+
+    made = await CheckCoreService.bulk_create_checks(
+        db,
+        agent.id,
+        [
+            BulkCheckCreateRequest(url="tcp://h:1", display_name="h"),
+            BulkCheckCreateRequest(url="tcp://h:2", display_name="h (2)"),
+        ],
+    )
+
+    assert [r.display_name for r in made.results] == ["h (2)", "h (3)"]
+
+
+@pytest.mark.integration
+async def test_a_given_name_no_check_has_is_kept_as_it_is(db: AsyncSession) -> None:
+    agent = make_agent()
+    db.add(agent)
+    await db.flush()
+
+    made = await CheckCoreService.bulk_create_checks(
+        db, agent.id, [BulkCheckCreateRequest(url="tcp://h:1", display_name="web (2)")]
+    )
+
+    assert made.results[0].display_name == "web (2)"
+
+
+@pytest.mark.integration
+async def test_a_failure_names_the_callers_entry_after_one_was_refused(
+    db: AsyncSession,
+) -> None:
+    agent = make_agent()
+    owner = make_user(role="editor")
+    db.add_all([agent, owner])
+    await db.flush()
+    job = MaintenanceJob(
+        kind=MaintenanceJobKind.BULK_CHECK_CREATE,
+        owner_id=owner.id,
+        params={
+            "agent_id": str(agent.id),
+            "requests": [
+                {"url": "x" * 600},
+                {"url": "tcp://93.184.216.34:80"},
+                {"url": "ftp://db"},
+            ],
+            "alert_ids": [],
+        },
+    )
+    db.add(job)
+    await db.flush()
+
+    job_id = job.id
+    await bulk_check_create.handle(db, job)
+    await db.flush()
+    db.expire_all()
+
+    stored = await db.get(MaintenanceJob, job_id)
+    assert stored is not None
+    assert stored.progress is not None
+    errors = stored.progress["errors"]
+    assert any(error.startswith("Entry 1 refused") for error in errors), errors
+    assert any(error.startswith("Entry 3:") for error in errors), errors
 
 
 @pytest.mark.integration

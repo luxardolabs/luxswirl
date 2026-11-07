@@ -134,6 +134,8 @@ The whole selection is judged before anything runs: an id no check has refuses i
 | ------ | ---------------------------------- | ------ | -------------------------------------------------------------------- |
 | `POST` | `/api/v1/admin/checks/bulk/create` | editor | One check per URL on an agent, in the background; `202` with the job |
 
+A name that one of the agent's checks already has takes a number (`web (2)`), a given name too, and a name left out is read from the target as a viewer reads it. A job's errors name each URL by its entry number.
+
 It takes `{"agent_id", "items": [...], "alert_ids"?}`: 1 to 10,000 items, each `{"url", "display_name"?, "interval_seconds"?, "timeout_seconds"?, "retry_attempts"?, "retry_interval_seconds"?, "expected_status"?, "http_method"?, "verify_ssl"?, "enabled"?, "tags"?, "resend_notification_after"?}`. The type of each check comes from its URL's scheme: `http://` and `https://` make an HTTP check, a URL with no scheme is taken as `https://`, and another scheme names the check type (`tcp://host:port`); a URL that names a synthetic check is that item's failure. An item field not listed is a `422`. Every check made is given each alert in `alert_ids`; an alert deleted before the job runs is reported in its `errors` instead. An unknown agent is a `404`; an agent that is not approved, or an alert that does not exist, is a `422`, and nothing is queued. Each URL is made on its own, so one the database refuses leaves the rest.
 
 ### Export and import
