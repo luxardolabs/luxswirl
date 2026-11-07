@@ -312,16 +312,16 @@ ______________________________________________________________________
 
 ### Server refuses to start: encrypted values do not decrypt
 
-At startup the server decrypts every check's target, `check_config` and connection string, and the parameters of every queued or running maintenance job. If `SECURITY__FIELD_ENCRYPTION_KEY` cannot read one of them, the server stops before it serves anything. The log line `Startup refused: stored encrypted values do not decrypt` names each value as `<table>.<column> id=<row>` (the first 20, then a count).
+Before migrations run (`alembic upgrade head`) and again before the server serves anything, every check's target, `check_config` and connection string, and every maintenance job's parameters, are decrypted with `SECURITY__FIELD_ENCRYPTION_KEY`. If the key cannot decrypt one of them, the upgrade or the server stops with nothing written. The log line `Refused: stored encrypted values do not decrypt` names each value as `<table>.<column> id=<row>` (the first 20, then a count). A value stored before encryption reads under any key and is never named.
 
-- **"is not this database's key"**: the key reads none of the stored values. Set `SECURITY__FIELD_ENCRYPTION_KEY` to the key the server has always used, and restart. Nothing was changed.
-- **"N stored encrypted values do not decrypt (M do)"**: the key reads the rest, so it is most likely the right one, and the named rows were written while another key was set. No key reads both, so remove each named row:
+- **"is not this database's key"**: the key decrypts none of the stored values. Set `SECURITY__FIELD_ENCRYPTION_KEY` to the key the server has always used, and restart. Nothing was changed. Never remove rows on this verdict.
+- **"N stored encrypted values do not decrypt (M do)"**: the key decrypts M values, so it is the key some of the data was written with. Check it is the one the server has always used. If it is, the named rows were written while another key was set, and no key reads both: remove each named row.
 
 ```bash
-# A check: its results, artifacts and alert links go with it, as when it is deleted in the UI.
-docker compose exec timescaledb psql -U luxswirl -c "DELETE FROM checks WHERE id = '<id>'"
-# A maintenance job: queue the work again afterwards.
-docker compose exec timescaledb psql -U luxswirl -c "DELETE FROM maintenance_jobs WHERE id = '<id>' AND status IN ('queued', 'running')"
+# A check: its results, artifacts and alert links go with it, and its agent reloads its checks.
+docker compose exec timescaledb psql -U luxswirl -c "WITH gone AS (DELETE FROM checks WHERE id = '<id>' RETURNING agent_id) UPDATE agents SET checks_updated_at = now() WHERE id IN (SELECT agent_id FROM gone)"
+# A maintenance job: queue the work again afterwards if it had not finished.
+docker compose exec timescaledb psql -U luxswirl -c "DELETE FROM maintenance_jobs WHERE id = '<id>'"
 ```
 
 Then restart, and recreate any check you removed.

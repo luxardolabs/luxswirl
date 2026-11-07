@@ -11,9 +11,10 @@ from app.core.logging_options import logging_options
 # The package, not base_model: importing app.models registers every table on
 # Base.metadata, which autogenerate compares against.
 from app.models import Base
+from app.services.core.field_encryption_core_service import FieldEncryptionCoreService
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
-from sqlalchemy.ext.asyncio import async_engine_from_config
+from sqlalchemy.ext.asyncio import AsyncSession, async_engine_from_config
 from sqlalchemy.sql.schema import SchemaItem
 
 config = context.config
@@ -124,6 +125,12 @@ async def run_async_migrations() -> None:
     )
 
     async with connectable.connect() as connection:
+        # A revision that rewrites an encrypted column writes under the key
+        # configured now, so a key that cannot read what is stored stops the
+        # upgrade here, before any revision runs, as it stops the server.
+        async with AsyncSession(bind=connection) as session:
+            await FieldEncryptionCoreService.require_readable_before_migrating(session)
+        await connection.rollback()
         await connection.run_sync(do_run_migrations)
 
     await connectable.dispose()

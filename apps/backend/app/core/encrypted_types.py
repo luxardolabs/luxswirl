@@ -90,16 +90,20 @@ def _configured_fernet() -> Fernet:
     return _fernet_for(key)
 
 
-def decrypts_or_is_plaintext(stored: str) -> bool:
-    """Whether the configured key reads ``stored``, an encrypted column's value
-    as stored: it decrypts, or it is not shaped as a token (a value stored
-    before encryption, read as it is). False for a token another key wrote.
-    """
+def decrypts(stored: str) -> bool:
+    """Whether the configured key decrypts ``stored``, an encrypted column's
+    value as stored."""
     try:
         _configured_fernet().decrypt(stored.encode())
     except InvalidToken:
-        return not _is_fernet_token(stored)
+        return False
     return True
+
+
+def is_token(stored: str) -> bool:
+    """Whether ``stored`` is shaped as a token some key wrote. A value that is
+    not was stored before encryption: it reads as it is, under any key."""
+    return _is_fernet_token(stored)
 
 
 def _json_container(raw: str) -> JsonContainer | None:

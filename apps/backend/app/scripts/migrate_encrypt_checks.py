@@ -9,6 +9,7 @@ import asyncio
 import os
 
 from app.models.check_model import Check
+from app.services.core.field_encryption_core_service import FieldEncryptionCoreService
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import attributes
@@ -25,6 +26,9 @@ async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit
 async def migrate_checks() -> None:
     """Load and re-save all checks to trigger encryption."""
     async with async_session() as session:
+        # Re-saving encrypts under the key configured now: refuse first if it
+        # cannot read what is already stored.
+        await FieldEncryptionCoreService.require_readable(session)
         # Load all checks
         result = await session.execute(select(Check))
         checks = result.scalars().all()

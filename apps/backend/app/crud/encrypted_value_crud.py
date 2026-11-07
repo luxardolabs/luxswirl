@@ -9,11 +9,11 @@ from collections.abc import Sequence
 from typing import NamedTuple
 from uuid import UUID
 
-from sqlalchemy import Text, select, type_coerce
+from sqlalchemy import Text, inspect, select, type_coerce
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 from app.models.check_model import Check
-from app.models.enum_model import MaintenanceJobStatus
 from app.models.maintenance_job_model import MaintenanceJob
 
 # The columns stored encrypted, by table, in the order a refusal names them.
@@ -28,7 +28,27 @@ class StoredRow(NamedTuple):
     values: tuple[str | None, ...]
 
 
+def _has_columns(session: Session) -> bool:
+    inspector = inspect(session.connection())
+    for table, columns in (
+        ("checks", CHECK_COLUMNS),
+        ("maintenance_jobs", MAINTENANCE_JOB_COLUMNS),
+    ):
+        if not inspector.has_table(table):
+            return False
+        present = {column["name"] for column in inspector.get_columns(table)}
+        if not set(columns) <= present:
+            return False
+    return True
+
+
 class EncryptedValueCRUD:
+    @staticmethod
+    async def columns_exist(db: AsyncSession) -> bool:
+        """Whether the database has every encrypted column (an empty database,
+        or one at an old revision, does not yet)."""
+        return await db.run_sync(_has_columns)
+
     @staticmethod
     async def check_page(
         db: AsyncSession, after: UUID | None, limit: int
@@ -47,24 +67,14 @@ class EncryptedValueCRUD:
         return [StoredRow(row[0], tuple(row[1:])) for row in result.all()]
 
     @staticmethod
-    async def unfinished_job_page(
+    async def job_page(
         db: AsyncSession, after: UUID | None, limit: int
     ) -> Sequence[StoredRow]:
-        """Up to ``limit`` queued or running maintenance jobs after ``after`` by
-        id, each with ``MAINTENANCE_JOB_COLUMNS`` as stored. A finished job's
-        params are never read again, so they are not judged."""
-        stmt = (
-            select(MaintenanceJob.id, type_coerce(MaintenanceJob.params, Text))
-            .where(
-                MaintenanceJob.status.in_(
-                    (
-                        MaintenanceJobStatus.QUEUED.value,
-                        MaintenanceJobStatus.RUNNING.value,
-                    )
-                )
-            )
-            .order_by(MaintenanceJob.id)
-        )
+        """Up to ``limit`` maintenance jobs after ``after`` by id, each with
+        ``MAINTENANCE_JOB_COLUMNS`` as stored, whatever their status."""
+        stmt = select(
+            MaintenanceJob.id, type_coerce(MaintenanceJob.params, Text)
+        ).order_by(MaintenanceJob.id)
         if after is not None:
             stmt = stmt.where(MaintenanceJob.id > after)
         result = await db.execute(stmt.limit(limit))
