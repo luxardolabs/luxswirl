@@ -76,13 +76,13 @@ _PAIR = re.compile(
 )
 # An ODBC string (`;`-separated): a bare value runs to the `;`, spaces included.
 _ODBC_PAIR = re.compile(
-    rf"{_KEY_AND_SEPARATOR}((?:{_BRACED})[^;]*+|(?:{_QUOTED})(?=\s*+(?:;|\Z))|[^;]*+)"
+    rf"{_KEY_AND_SEPARATOR}({_BRACED}|(?:{_QUOTED})(?=\s*+(?:;|\Z))|[^;]*+)"
 )
 # The narrow keys go first, so a value under a wider key cannot swallow one's name.
 _NAMED = r"(?i)(?<![\w.-])((?:ssl)?password|passwd|pwd|secret|token|access_token|api_?key)(\s*=\s*)"
 _NAMED_PAIR = re.compile(rf"{_NAMED}({_LIBPQ_BRACED}|{_QUOTED}|{_BARE})")
 _NAMED_ODBC_PAIR = re.compile(
-    rf"{_NAMED}((?:{_BRACED})[^;]*+|(?:{_QUOTED})(?=\s*+(?:;|\Z))|[^;]*+)"
+    rf"{_NAMED}({_BRACED}|(?:{_QUOTED})(?=\s*+(?:;|\Z))|[^;]*+)"
 )
 # An OAuth code or an Azure Functions key; in other text, or all digits, `code=` is a status.
 _QUERY_CODE = re.compile(r"(?<=[?&])(code=)(?!\d++(?:[&#\s]|\Z))[^\s&#]*+")
