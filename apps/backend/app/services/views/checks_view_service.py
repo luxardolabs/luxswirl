@@ -46,6 +46,7 @@ from app.services.core.check_core_service import CheckCoreService
 from app.services.core.check_dependency_core_service import (
     CheckDependencyCoreService,
 )
+from app.services.core.check_preview_core_service import CheckPreviewCoreService
 from app.services.core.check_transfer_core_service import CheckTransferCoreService
 from app.services.core.maintenance_job_core_service import MaintenanceJobCoreService
 from app.services.core.settings_core_service import SettingsCoreService
@@ -1119,7 +1120,7 @@ class ChecksViewService:
         url_list = [url.strip() for url in bulk_urls.split("\n") if url.strip()]
         if not url_list:
             return None
-        previews = await CheckCoreService.bulk_preview_checks(db, url_list)
+        previews = await CheckPreviewCoreService.bulk_preview_checks(db, url_list)
         return {
             "request": request,
             "alerts_page_url": build_alerts_page_url(request),
