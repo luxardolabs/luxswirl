@@ -18,7 +18,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.background.maintenance_handlers._bulk_outcome import finish
 from app.background.maintenance_handlers._job_owner import require_owner_may_edit
-from app.core.credential_mask import mask_credentials
 from app.core.exceptions import NotFoundException
 from app.models.enum_model import BulkCheckOutcome
 from app.models.maintenance_job_model import MaintenanceJob
@@ -96,8 +95,8 @@ async def handle(db: AsyncSession, job: MaintenanceJob) -> None:
             "failure_count": result.failed + len(refused),
             "errors": refused
             + [
-                f"{mask_credentials(r.url)}: {r.error or 'not created'}"
-                for r in result.results
+                f"Entry {number}: {r.error or 'not created'}"
+                for number, r in enumerate(result.results, start=1)
                 if r.status == BulkCheckOutcome.FAILED
             ]
             + alert_errors,

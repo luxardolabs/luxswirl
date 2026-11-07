@@ -41,7 +41,9 @@ _SECRET_WORD = (
 # Keys built from those words that name a setting, not a secret.
 _SETTING = (
     r"(?i:auth_?(?:source|mechanism|plugin|type|method)|session_?(?:timeout|length|ttl)"
-    rf"|token_?(?:type|endpoint|url))(?!{_KEY_CHAR})"
+    r"|token_?(?:type|endpoint|url)|allowPublicKeyRetrieval|authMechanismProperties"
+    r"|auth[_-](?:host|port|url|source|db)|(?:routing|primary|sort|partition)_?key"
+    rf"|(?<=\()sid)(?!{_KEY_CHAR})"
 )
 
 
@@ -65,11 +67,23 @@ _KEY_AND_SEPARATOR = rf"(?<![\w.%\[\]-])({_secret_key(r'\s*=')})(\s*=\s*)"
 # A value: braced (ODBC, `}}` an escaped brace), quoted, or bare with backslash escapes
 # (libpq). A brace or a quote left open runs to the end of the text, so it is masked to
 # the end, and a scan never fails and starts again.
-_BRACED = r"\{(?:[^}]|\}\})*+(?:\}|\Z)"
+_BRACED = r"\{\{[^}]*+\}\}|\{(?:[^}]|\}\})*+(?:\}|\Z)"
+_LIBPQ_BRACED = r"\{[^}]*+(?:\}|\Z)"
 _QUOTED = r"'(?:\\[\s\S]?|[^'\\])*+(?:'|\Z)" r'|"(?:\\[\s\S]?|[^"\\])*+(?:"|\Z)'
-_PAIR = re.compile(rf"{_KEY_AND_SEPARATOR}({_BRACED}|{_QUOTED}|(?:\\.|[^\s;&#])++)")
+_BARE = r"(?:\\.|[^\s;&#])++"
+_PAIR = re.compile(
+    rf"{_KEY_AND_SEPARATOR}((?:{_LIBPQ_BRACED}|{_QUOTED})(?:\\.|[^\s;&#])*+|{_BARE})"
+)
 # An ODBC string (`;`-separated): a bare value runs to the `;`, spaces included.
-_ODBC_PAIR = re.compile(rf"{_KEY_AND_SEPARATOR}({_BRACED}|{_QUOTED}|[^;]*+)")
+_ODBC_PAIR = re.compile(
+    rf"{_KEY_AND_SEPARATOR}({_BRACED}|(?:{_QUOTED})(?=\s*+(?:;|\Z))|[^;]*+)"
+)
+# The narrow keys go first, so a value under a wider key cannot swallow one's name.
+_NAMED = r"(?i)(?<![\w.-])((?:ssl)?password|passwd|pwd|secret|token|access_token|api_?key)(\s*=\s*)"
+_NAMED_PAIR = re.compile(rf"{_NAMED}({_LIBPQ_BRACED}|{_QUOTED}|{_BARE})")
+_NAMED_ODBC_PAIR = re.compile(
+    rf"{_NAMED}({_BRACED}|(?:{_QUOTED})(?=\s*+(?:;|\Z))|[^;]*+)"
+)
 # An OAuth code or an Azure Functions key; in other text, or all digits, `code=` is a status.
 _QUERY_CODE = re.compile(r"(?<=[?&])(code=)(?!\d++(?:[&#\s]|\Z))[^\s&#]*+")
 
@@ -80,8 +94,8 @@ _WEBHOOK_PATH = re.compile(
     r"|(?<=/)(?>[\w-]*?webhook[\w-]*+|hooks?))"
     rf"/{_PATH_CHAR}[^\s?#'\"<>]*+"
 )
-_SLACK_PATH = re.compile(rf"/services/T\w++/B\w++/{_PATH_CHAR}++")
-_BOT_PATH = re.compile(r"(?i)(?<=/bot)\d++:[\w-]++")
+_SLACK_PATH = re.compile(rf"/services/T[A-Z0-9]++/B[A-Z0-9]++/{_PATH_CHAR}++")
+_BOT_PATH = re.compile(r"(?i)(?<!//bot)(?<=/bot)\d++:(?!\d++(?:[/?#\s]|\Z))[\w-]++")
 # Text with none of these holds no form above, and most of what a document holds is such.
 _MAY_HOLD_A_CREDENTIAL = re.compile(r"[=/@]")
 
@@ -89,6 +103,13 @@ _MAY_HOLD_A_CREDENTIAL = re.compile(r"[=/@]")
 # The scheme is read from where its run of characters starts, so text run into it
 # still leaves the URL cut.
 _URL = re.compile(r"(?i)(?<![a-z0-9+.-])([a-z0-9+.-]+://[^/\s'\"<>?#]+)[^\s'\"<>]*")
+
+
+def _named(value: str) -> str:
+    """`value` with its userinfo and the values of the narrow keys masked."""
+    masked = _USERINFO.sub(f"{_MASK}@", value)
+    odbc = ";" in masked and "://" not in masked
+    return (_NAMED_ODBC_PAIR if odbc else _NAMED_PAIR).sub(rf"\1\2{_MASK}", masked)
 
 
 def mask_url_paths(text: str | None) -> str | None:
@@ -101,7 +122,8 @@ def mask_url_paths(text: str | None) -> str | None:
     """
     if not text:
         return text
-    return _URL.sub(r"\1/...", mask_credentials(text))
+    first = _URL.sub(r"\1/...", _named(text))
+    return _URL.sub(r"\1/...", mask_credentials(first))
 
 
 @overload
@@ -114,7 +136,7 @@ def mask_credentials(value: str | None) -> str | None:
         return value
     if not _MAY_HOLD_A_CREDENTIAL.search(value):
         return value
-    masked = _USERINFO.sub(f"{_MASK}@", value)
+    masked = _named(value)
     pair = _ODBC_PAIR if ";" in masked and "://" not in masked else _PAIR
     masked = pair.sub(rf"\1\2{_MASK}", masked)
     masked = _QUERY_CODE.sub(rf"\1{_MASK}", masked)
@@ -174,7 +196,7 @@ def _masked(value: object, names: KeyNames, depth: int, hidden: bool) -> object:
     if depth > _MAX_DEPTH:
         return _MASK
     if isinstance(value, str):
-        return _MASK if hidden else mask_credentials(value)
+        return _MASK if hidden and value else mask_credentials(value)
     if isinstance(value, dict):
         return _masked_items(value, names, depth + 1, hidden)
     if isinstance(value, list):

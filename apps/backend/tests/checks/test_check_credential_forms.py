@@ -71,6 +71,11 @@ FORMS = {
     "pw": f"https://printer.lan/status?user=admin&pw={SECRET}",
     "pswd": f"https://printer.lan/status?user=admin&pswd={SECRET}",
     "sid": f"https://a.example.com/x?sid={SECRET}",
+    "wider-key-holds-a-narrow-one": f"key=password= {SECRET}",
+    "session-holds-a-token": f"session=token ={SECRET}",
+    "quoted-odbc-tail": f"Server=db;Uid=sa;Pwd='ab'{SECRET};Database=app",
+    "quoted-odbc-spaced-tail": f'Password="ab" {SECRET};Server=db',
+    "empty-quote-tail": f"key=''{SECRET}",
     "clientkey": f"https://a.example.com/x?clientkey={SECRET}",
     "npgsql": f"Host=db;Username=m;Password='ab;{SECRET}';Database=app",
     "passhash": f"https://h/x?passhash={SECRET}",
@@ -104,6 +109,15 @@ def test_the_mask_hides_the_form(target: str) -> None:
         "10.0.0.5:8080",
         "[::1]:5432",
         "Server=db;Initial Catalog=app;Uid=sa",
+        "http://bot1:8080/health",
+        "tcp://bot01:6379",
+        "https://api.example.com/bot1:8080/x",
+        "(DESCRIPTION=(CONNECT_DATA=(SID=ORCL))(ADDRESS=(HOST=db)(PORT=1521)))",
+        "jdbc:mysql://db:3306/app?allowPublicKeyRetrieval=true&useSSL=false",
+        "mongodb://db/app?authMechanismProperties=SERVICE_NAME:mongodb",
+        "http://h/x?auth_host=db&auth_port=5000",
+        "https://h/x?routing_key=orders&primaryKey=id",
+        "https://h/services/Tomcat/Billing/health",
         "mongodb://db/app?authSource=admin&replicaSet=rs0",
         "mongodb://db/app?authMechanism=SCRAM-SHA-256",
         "https://a.example.com/x?session_timeout=30",
@@ -151,6 +165,36 @@ def test_what_is_no_credential_is_shown_whole(value: str) -> None:
 )
 def test_the_text_around_a_credential_stays(value: str, kept: str) -> None:
     assert kept in mask_credentials(value)
+
+
+@pytest.mark.parametrize(
+    ("value", "kept"),
+    [
+        ("host=db password={{pw}} port=5432", "port=5432"),
+        ("Server=db;Pwd={{pw}};Database=app;Port=1433", "Database=app;Port=1433"),
+        ("postgresql://db/app?password={{pw}}&sslmode=require", "sslmode=require"),
+    ],
+)
+def test_a_template_for_a_password_keeps_what_follows(value: str, kept: str) -> None:
+    masked = mask_credentials(value)
+
+    assert kept in masked
+    assert "pw" not in masked.replace("password", "").replace("Pwd", "")
+
+
+@pytest.mark.parametrize(
+    ("text", "cut"),
+    [
+        (f"refused key=https://ha.lan/api?x=1&webhook_id={SECRET}", "ha.lan"),
+        (f"refused auth=https://ha.lan/api#{SECRET}", "ha.lan"),
+        (f"/hooks/https://ha.lan?{SECRET}", "ha.lan"),
+        (f"/bot1:https://ha.lan/{SECRET}", "ha.lan"),
+    ],
+)
+def test_a_url_under_a_wider_key_is_still_cut(text: str, cut: str) -> None:
+    masked = mask_url_paths(text)
+
+    assert SECRET not in (masked or "")
 
 
 def test_a_url_is_cut_with_its_path_secret_gone() -> None:

@@ -10,6 +10,7 @@ than the retention are pruned by the job purge task.
 import asyncio
 import ipaddress
 import re
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 from typing import Any
 from uuid import UUID
@@ -39,12 +40,16 @@ USER_AGENT_LENGTH = 256
 # The longest argument string kept. An argument can reach 4 MiB, and what is kept is
 # masked again each time a row is opened.
 ARGUMENT_LENGTH = 4096
-# The most of one string masked, so a secret straddling the kept length is seen whole.
+# Longer than this, a string is kept by its size alone: what decides how it is masked can
+# lie past any cut, so a piece of it cannot be masked safely.
 MASKED_LENGTH = 64 * 1024
 # What a string already cut ends with, and the room it takes. A read keeps it as it is, so
 # it says the length that was sent.
 _CUT_NOTE = re.compile(r"\.\.\. <\d+ characters>\Z")
 _NOTE_ROOM = 256
+# Masking a large call takes seconds. One thread of its own keeps that off the event loop
+# and out of the default executor, which name lookups share.
+_MASKING = ThreadPoolExecutor(max_workers=1, thread_name_prefix="mcp-audit-mask")
 
 # What a synthetic script is stored as: its size alone.
 _SCRIPT_SIZE = re.compile(r"<\d+ characters>")
@@ -56,13 +61,19 @@ def masked_arguments(arguments: dict[str, Any]) -> dict[str, Any]:
     `ARGUMENT_LENGTH`, a synthetic script by its size alone.
 
     This can take seconds over 4 MiB of short strings: callers on the event loop run it
-    in a thread.
+    through `_masked_off_the_loop`.
     """
     names = KeyNames()
     return {
         names.of(key, _kept(key)): _masked(key, value, names, False)
         for key, value in arguments.items()
     }
+
+
+async def _masked_off_the_loop(arguments: dict[str, Any]) -> dict[str, Any]:
+    return await asyncio.get_running_loop().run_in_executor(
+        _MASKING, masked_arguments, arguments
+    )
 
 
 def _whole_tokens(text: str, limit: int) -> str:
@@ -82,8 +93,10 @@ def _kept(text: str) -> str:
         storable[-64:]
     ):
         return mask_credentials(storable)
-    masked = mask_credentials(_whole_tokens(storable, MASKED_LENGTH))
-    if len(storable) <= MASKED_LENGTH and len(masked) <= ARGUMENT_LENGTH:
+    if len(storable) > MASKED_LENGTH:
+        return f"<{len(storable)} characters>"
+    masked = mask_credentials(storable)
+    if len(masked) <= ARGUMENT_LENGTH:
         return masked
     return f"{_whole_tokens(masked, ARGUMENT_LENGTH)}... <{len(storable)} characters>"
 
@@ -106,7 +119,7 @@ def _masked(key: object, value: object, names: KeyNames, hidden: bool) -> object
     if isinstance(value, list):
         return [_masked(None, item, names, hidden) for item in value]
     if isinstance(value, str):
-        return "***" if hidden else _kept(value)
+        return "***" if hidden and value else _kept(value)
     return value
 
 
@@ -157,7 +170,7 @@ class MCPAuditCoreService:
             user_id=principal.user.id if principal else None,
             api_token_id=principal.token_id if principal else None,
             tool_name=storable_text(tool_name)[:TOOL_NAME_LENGTH],
-            arguments=await asyncio.to_thread(masked_arguments, arguments),
+            arguments=await _masked_off_the_loop(arguments),
             success=success,
             error_message=(_kept(error_message) if error_message else None),
             duration_ms=duration_ms,
@@ -182,8 +195,13 @@ class MCPAuditCoreService:
         rows = await MCPToolCallCRUD.list_calls(
             db, window_start(filters.days), filters, limit
         )
+        errors = [call.error_message for call, _, _ in rows]
+        kept = await asyncio.get_running_loop().run_in_executor(
+            _MASKING, lambda: [_kept(error) if error else None for error in errors]
+        )
         return [
-            _row(call, username, token_name, {}) for call, username, token_name in rows
+            _row(call, username, token_name, {}, error)
+            for (call, username, token_name), error in zip(rows, kept, strict=True)
         ]
 
     @staticmethod
@@ -193,8 +211,10 @@ class MCPAuditCoreService:
         if found is None:
             return None
         call, username, token_name = found
-        arguments = await asyncio.to_thread(masked_arguments, call.arguments or {})
-        return _row(call, username, token_name, arguments)
+        arguments = await _masked_off_the_loop(call.arguments or {})
+        error = call.error_message
+        kept = _kept(error) if error else None
+        return _row(call, username, token_name, arguments, kept)
 
     @staticmethod
     async def tool_names(
@@ -229,6 +249,7 @@ def _row(
     username: str | None,
     token_name: str | None,
     arguments: dict[str, Any],
+    error_message: str | None,
 ) -> McpCallRow:
     return McpCallRow(
         id=call.id,
@@ -240,7 +261,7 @@ def _row(
         tool_name=call.tool_name,
         success=call.success,
         denial_code=call.denial_code,
-        error_message=_kept(call.error_message) if call.error_message else None,
+        error_message=error_message,
         duration_ms=call.duration_ms,
         ip_address=str(call.ip_address) if call.ip_address is not None else None,
         user_agent=call.user_agent,
