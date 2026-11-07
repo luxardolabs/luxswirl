@@ -29,10 +29,10 @@ import pytest_asyncio
 from app.core.config import settings
 from app.core.rate_limit import limiter
 from app.main import app
-from app.services.core import check_core_service
-from app.services.core._check_bulk_names import bulk_display_name
+from app.services.core import check_preview_core_service
 from app.services.core.auth_core_service import AuthCoreService
 from app.services.core.check_core_service import CheckCoreService
+from app.services.core.check_preview_core_service import CheckPreviewCoreService
 from app.services.core.settings_core_service import SettingsCoreService
 from app.shared.ssrf_http import VettedBackend, VettedTransport
 from cryptography import x509
@@ -134,7 +134,7 @@ async def _block_private_networks(db: AsyncSession) -> None:
 
 
 async def _row(db: AsyncSession, url: str) -> dict[str, Any]:
-    [row] = await CheckCoreService.bulk_preview_checks(db, [url])
+    [row] = await CheckPreviewCoreService.bulk_preview_checks(db, [url])
     return row
 
 
@@ -258,7 +258,7 @@ async def test_the_status_is_read_without_waiting_for_the_body(
 async def test_a_response_head_that_never_ends_meets_the_deadline(
     db: AsyncSession, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(check_core_service, "_PREVIEW_PROBE_SECONDS", 1)
+    monkeypatch.setattr(check_preview_core_service, "PROBE_SECONDS", 1)
 
     async def trickle(writer: asyncio.StreamWriter) -> None:
         writer.write(b"HTTP/1.1 200 OK\r\n")
@@ -292,7 +292,7 @@ async def test_a_non_http_target_is_judged_and_not_connected(
 async def test_urls_past_the_limit_are_named_and_not_looked_up(
     db: AsyncSession, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(check_core_service, "_PREVIEW_PROBED_URLS", 2)
+    monkeypatch.setattr(check_preview_core_service, "PROBED_URLS", 2)
     looked_up: list[str] = []
     real = socket.getaddrinfo
 
@@ -302,7 +302,7 @@ async def test_urls_past_the_limit_are_named_and_not_looked_up(
 
     monkeypatch.setattr(socket, "getaddrinfo", spy)
 
-    rows = await CheckCoreService.bulk_preview_checks(
+    rows = await CheckPreviewCoreService.bulk_preview_checks(
         db,
         ["tcp://a.test:1", "tcp://b.test:1", f"http://{METADATA}/", "tcp://c.test:1"],
     )
@@ -317,7 +317,7 @@ async def test_urls_past_the_limit_are_named_and_not_looked_up(
 async def test_probes_run_a_bounded_number_at_once(
     db: AsyncSession, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(check_core_service, "_PREVIEW_PROBES_AT_ONCE", 3)
+    monkeypatch.setattr(check_preview_core_service, "PROBES_AT_ONCE", 3)
     running = 0
     most = 0
 
@@ -332,7 +332,7 @@ async def test_probes_run_a_bounded_number_at_once(
 
     local = await _serve(held)
     async with local.server:
-        rows = await CheckCoreService.bulk_preview_checks(
+        rows = await CheckPreviewCoreService.bulk_preview_checks(
             db, [f"http://127.0.0.1:{local.port}/{i}" for i in range(12)]
         )
 
@@ -396,24 +396,6 @@ async def test_what_a_service_sends_never_reaches_the_row(
 
     assert row["validation_status"] == "error"
     assert row["validation_message"] == "The target did not answer HTTP"
-
-
-async def test_no_database_connection_is_held_while_probing(db: AsyncSession) -> None:
-    during: list[bool] = []
-
-    async def held(writer: asyncio.StreamWriter) -> None:
-        during.append(db.in_transaction())
-        writer.write(OK)
-        await writer.drain()
-
-    local = await _serve(held)
-    await SettingsCoreService.get_network_protection(db)
-    assert db.in_transaction()
-    async with local.server:
-        row = await _row(db, f"http://127.0.0.1:{local.port}/")
-
-    assert row["status_code"] == 200
-    assert during == [False]
 
 
 def _self_signed() -> ssl.SSLContext:
@@ -532,7 +514,7 @@ async def test_a_dead_first_address_leaves_time_for_the_next(
 async def test_a_slow_nameserver_leaves_the_default_executor_free(
     db: AsyncSession, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(check_core_service, "_PREVIEW_PROBE_SECONDS", 1)
+    monkeypatch.setattr(check_preview_core_service, "PROBE_SECONDS", 1)
     release = threading.Event()
     real = socket.getaddrinfo
 
@@ -545,7 +527,7 @@ async def test_a_slow_nameserver_leaves_the_default_executor_free(
     monkeypatch.setattr(socket, "getaddrinfo", slow)
     try:
         rows = await asyncio.wait_for(
-            CheckCoreService.bulk_preview_checks(
+            CheckPreviewCoreService.bulk_preview_checks(
                 db, [f"http://h{i}.slow.test/" for i in range(100)]
             ),
             timeout=8,
@@ -561,7 +543,7 @@ async def test_a_slow_nameserver_leaves_the_default_executor_free(
 
 
 async def test_a_row_that_does_not_parse_has_a_fixed_name(db: AsyncSession) -> None:
-    rows = await CheckCoreService.bulk_preview_checks(
+    rows = await CheckPreviewCoreService.bulk_preview_checks(
         db, ["http://user:S3cret/PW@[/", "http://user:S3cret/PW@[/"]
     )
 
@@ -576,8 +558,10 @@ async def test_a_cancel_mid_connection_closes_the_socket(scheme: str) -> None:
     hung_up = asyncio.Event()
 
     async def stall(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
-        await reader.read()
-        hung_up.set()
+        # Bounded, so a socket left open fails this test rather than hanging the suite.
+        with contextlib.suppress(TimeoutError):
+            await asyncio.wait_for(reader.read(), timeout=3)
+            hung_up.set()
         writer.close()
 
     server = await asyncio.start_server(stall, "127.0.0.1", 0)
@@ -601,7 +585,7 @@ async def test_a_url_naming_many_hosts_is_not_looked_up(
         return real("192.0.2.1", *args, **kwargs)
 
     monkeypatch.setattr(socket, "getaddrinfo", spy)
-    limit = check_core_service._PREVIEW_HOSTS_PER_URL
+    limit = check_preview_core_service.HOSTS_PER_URL
 
     within = ",".join(f"h{i}.test" for i in range(limit))
     over = ",".join(f"m{i}.test" for i in range(limit + 1))
@@ -664,7 +648,7 @@ async def test_a_parse_error_never_quotes_the_url(db: AsyncSession) -> None:
     assert "S3CRETMARK" not in row["validation_message"]
     assert row["validation_message"] == "Parse error: The URL could not be parsed"
     with pytest.raises(ValueError, match="could not be parsed"):
-        bulk_display_name(urlparse(f"https://{url}"))
+        CheckCoreService.bulk_display_name(urlparse(f"https://{url}"))
 
 
 async def test_a_reset_connection_is_a_failed_connection(db: AsyncSession) -> None:

@@ -11,6 +11,7 @@ from urllib.parse import urlparse
 
 import pytest
 from app.services.core.check_core_service import CheckCoreService
+from app.services.core.check_preview_core_service import CheckPreviewCoreService
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -24,7 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
     ],
 )
 def test_classify_bulk_url(url: str, check_type: str, full_url: str) -> None:
-    got_type, got_url, parsed = CheckCoreService._classify_bulk_url(url)
+    got_type, got_url, parsed = CheckCoreService.classify_bulk_url(url)
     assert (got_type, got_url) == (check_type, full_url)
     assert parsed == urlparse(full_url)
 
@@ -53,7 +54,9 @@ def test_bulk_display_name_is_capped_at_255() -> None:
 
 @pytest.mark.integration
 async def test_preview_of_a_non_http_url_is_not_probed(db: AsyncSession) -> None:
-    [row] = await CheckCoreService.bulk_preview_checks(db, ["tcp://192.0.2.1:5432"])
+    [row] = await CheckPreviewCoreService.bulk_preview_checks(
+        db, ["tcp://192.0.2.1:5432"]
+    )
     assert row == {
         "url": "tcp://192.0.2.1:5432",
         "generated_name": "192-0-2-1-5432",
@@ -67,7 +70,7 @@ async def test_preview_of_a_non_http_url_is_not_probed(db: AsyncSession) -> None
 @pytest.mark.integration
 async def test_preview_of_an_unparseable_url_is_an_error_row(db: AsyncSession) -> None:
     # An out-of-range port raises when the name is built.
-    [row] = await CheckCoreService.bulk_preview_checks(db, ["tcp://host:99999"])
+    [row] = await CheckPreviewCoreService.bulk_preview_checks(db, ["tcp://host:99999"])
     assert row["validation_status"] == "error"
     assert row["validation_message"].startswith("Parse error:")
     assert row["generated_name"] == "invalid-url"
