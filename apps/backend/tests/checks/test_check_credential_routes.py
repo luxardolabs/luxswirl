@@ -21,7 +21,6 @@ from app.models.mcp_tool_call_model import MCPToolCall
 from app.schemas.api_activity_schema import ActivityFilters
 from app.schemas.api_token_schema import ApiTokenCreate
 from app.schemas.check_schema import BulkCheckCreateRequest
-from app.services.core._check_bulk_names import bulk_display_name
 from app.services.core.api_token_core_service import ApiTokenCoreService
 from app.services.core.check_core_service import CheckCoreService
 from app.services.core.maintenance_job_core_service import MaintenanceJobCoreService
@@ -101,12 +100,16 @@ async def test_a_bulk_name_holds_no_more_than_the_masked_target(
 def test_a_bulk_name_keeps_an_ordinary_path() -> None:
     parsed = urlparse("https://api.example.com:8443/v1/health")
 
-    assert bulk_display_name(parsed) == ("api-example-com-v1-health-8443")
+    assert CheckCoreService.bulk_display_name(parsed) == (
+        "api-example-com-v1-health-8443"
+    )
 
 
 def test_a_port_that_is_no_number_is_not_quoted() -> None:
     with pytest.raises(ValueError, match="no valid port") as refused:
-        bulk_display_name(urlparse(f"https://db.example.com:{SECRET}/"))
+        CheckCoreService.bulk_display_name(
+            urlparse(f"https://db.example.com:{SECRET}/")
+        )
 
     assert SECRET not in str(refused.value)
 
@@ -170,7 +173,7 @@ async def test_a_preview_row_that_does_not_parse_masks_its_generated_name() -> N
 def test_a_bulk_name_reads_its_host_and_port_from_the_masked_url(
     url: str, name: str
 ) -> None:
-    assert bulk_display_name(urlparse(url)) == name
+    assert CheckCoreService.bulk_display_name(urlparse(url)) == name
 
 
 def test_the_audit_masks_a_key() -> None:
