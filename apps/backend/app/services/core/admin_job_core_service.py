@@ -15,7 +15,7 @@ from app.core.exceptions import (
     JobNotFoundException,
     ValidationException,
 )
-from app.models.enum_model import JobStatus, JobType, ScanCheckKind
+from app.models.enum_model import JobStatus, JobType, ScanCheckKind, UserRole
 from app.schemas.admin_job_schema import (
     AdminJobChecks,
     AdminJobCreate,
@@ -48,6 +48,7 @@ class AdminJobCoreService:
     @staticmethod
     async def list_jobs(
         db: AsyncSession,
+        role: UserRole,
         *,
         page: int,
         per_page: int,
@@ -55,7 +56,8 @@ class AdminJobCoreService:
         job_type: JobType | None = None,
         agent_id: UUID | None = None,
     ) -> JobPage:
-        """One page of jobs, highest priority first, then newest."""
+        """One page of jobs, highest priority first, then newest, each as
+        `role` may read it (`JobCoreService.read_by`)."""
         jobs, total = await JobCoreService.list_jobs(
             db,
             agent_id=agent_id,
@@ -69,8 +71,11 @@ class AdminJobCoreService:
         )
         return JobPage.of(
             [
-                JobApiCoreService.to_response(
-                    job, hostnames.get(job.agent_id) if job.agent_id else None
+                JobCoreService.read_by(
+                    JobApiCoreService.to_response(
+                        job, hostnames.get(job.agent_id) if job.agent_id else None
+                    ),
+                    role,
                 )
                 for job in jobs
             ],
@@ -92,7 +97,19 @@ class AdminJobCoreService:
         ]
 
     @staticmethod
-    async def get_job(db: AsyncSession, job_id: UUID) -> JobResponse:
+    async def get_job(db: AsyncSession, role: UserRole, job_id: UUID) -> JobResponse:
+        """One job, as `role` may read it (`JobCoreService.read_by`).
+
+        Raises:
+            JobNotFoundException: If there is no such job
+        """
+        return JobCoreService.read_by(
+            await AdminJobCoreService._get_job(db, job_id), role
+        )
+
+    @staticmethod
+    async def _get_job(db: AsyncSession, job_id: UUID) -> JobResponse:
+        """One job as stored, for an editor's change to answer with."""
         job = await JobApiCoreService.get_job(db, job_id)
         if job is None:
             raise JobNotFoundException(job_id)
@@ -115,10 +132,10 @@ class AdminJobCoreService:
             JobNotFoundException: If there is no such job
             JobFinishedException: If the job has already finished
         """
-        await AdminJobCoreService.get_job(db, job_id)
+        await AdminJobCoreService._get_job(db, job_id)
         if not await JobApiCoreService.cancel_job(db, job_id):
             raise JobFinishedException(job_id)
-        return await AdminJobCoreService.get_job(db, job_id)
+        return await AdminJobCoreService._get_job(db, job_id)
 
     @staticmethod
     async def delete_job(db: AsyncSession, job_id: UUID) -> None:
@@ -134,7 +151,7 @@ class AdminJobCoreService:
             JobNotFoundException: If there is no such job
             ValidationException: If the job has no scan result to create from
         """
-        await AdminJobCoreService.get_job(db, job_id)
+        await AdminJobCoreService._get_job(db, job_id)
         defaults = await SettingsCoreService.get_check_defaults(db)
         params = BulkCheckParams(
             interval=(

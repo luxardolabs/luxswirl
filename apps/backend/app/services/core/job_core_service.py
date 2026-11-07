@@ -17,6 +17,7 @@ from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.core.credential_mask import mask_credentials, mask_mapping
 from app.core.error_summary import validation_summary
 from app.core.exceptions import (
     AgentNotFoundException,
@@ -29,6 +30,7 @@ from app.models.enum_model import (
     UNADMITTED_AGENT_STATUSES,
     JobStatus,
     JobType,
+    UserRole,
 )
 from app.models.job_model import Job
 from app.schemas.agent_schema import AgentOption
@@ -170,6 +172,23 @@ class JobCoreService:
             Job instance or None if not found
         """
         return await JobCRUD.get_by_id(db, job_id)
+
+    @staticmethod
+    def read_by[D: JobDetail](job: D, role: UserRole) -> D:
+        """`job` as `role` may read it. A viewer reads its error with every
+        credential masked, and its params and result with every string masked
+        and every value under a key naming a secret hidden: an agent writes
+        both, and a scanned host's banner or a discover warning can carry one.
+        """
+        if role != UserRole.VIEWER:
+            return job
+        return job.model_copy(
+            update={
+                "error": mask_credentials(job.error),
+                "params": mask_mapping(job.params),
+                "result": None if job.result is None else mask_mapping(job.result),
+            }
+        )
 
     @staticmethod
     async def get_job_detail(db: AsyncSession, job_id: UUID) -> JobDetail | None:

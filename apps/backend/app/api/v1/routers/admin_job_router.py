@@ -54,6 +54,7 @@ async def admin_list_agent_jobs(
     """One page of jobs, highest priority first, then newest."""
     return await AdminJobCoreService.list_jobs(
         db,
+        principal.user.role,
         page=page,
         per_page=per_page,
         status=status,
@@ -99,7 +100,7 @@ async def admin_get_agent_job(
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> JobResponse:
     """One job, with its result once it has finished."""
-    return await AdminJobCoreService.get_job(db, job_id)
+    return await AdminJobCoreService.get_job(db, principal.user.role, job_id)
 
 
 @router.post(

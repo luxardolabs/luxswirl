@@ -464,12 +464,13 @@ class JobsViewService:
         Enriches network_scan results, attaches existing-check info, and
         bundles agents + form defaults for the create-checks side panel.
         """
-        job = await JobCoreService.get_job_detail(db, job_id)
-        if not job:
+        stored = await JobCoreService.get_job_detail(db, job_id)
+        if not stored:
             raise HTTPException(
                 status_code=http_status.HTTP_404_NOT_FOUND,
                 detail=f"Job not found: {job_id}",
             )
+        job = JobCoreService.read_by(stored, current_user.role)
 
         agent = None
         if job.agent_id:

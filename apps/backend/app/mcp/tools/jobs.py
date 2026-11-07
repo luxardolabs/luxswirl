@@ -92,6 +92,7 @@ async def handle_list_jobs(arguments: dict[str, Any]) -> list[TextContent]:
     return json_response(
         await AdminJobCoreService.list_jobs(
             get_db(),
+            principal().user.role,
             page=page,
             per_page=per_page,
             status=choice(arguments.get("status"), JobStatus, "status"),
@@ -104,7 +105,9 @@ async def handle_list_jobs(arguments: dict[str, Any]) -> list[TextContent]:
 async def handle_get_job(arguments: dict[str, Any]) -> list[TextContent]:
     return json_response(
         await AdminJobCoreService.get_job(
-            get_db(), validate_uuid(arguments.get("job_id"), "job_id")
+            get_db(),
+            principal().user.role,
+            validate_uuid(arguments.get("job_id"), "job_id"),
         )
     )
 

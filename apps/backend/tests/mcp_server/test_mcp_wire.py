@@ -21,6 +21,8 @@ import pytest
 from app.core import rate_limit
 from app.mcp.server import MCPAuthMiddleware, mcp_server
 from app.models.check_model import Check
+from app.models.enum_model import JobStatus, JobType
+from app.models.job_model import Job
 from app.models.mcp_tool_call_model import MCPToolCall
 from app.schemas.api_token_schema import ApiTokenCreate
 from app.services.core.api_token_core_service import ApiTokenCoreService
@@ -334,6 +336,50 @@ async def test_a_viewer_reads_a_check_s_credentials_masked(db: AsyncSession) -> 
         )
     assert _payload(response)["id"] == str(check.id)
     assert SECRET not in response.text
+
+
+async def test_a_viewer_reads_a_job_s_error_and_result_masked(
+    db: AsyncSession,
+) -> None:
+    agent_id = await _agent(db)
+    job = Job(
+        id=uuid4(),
+        job_type=JobType.NETWORK_SCAN,
+        agent_id=agent_id,
+        params={"subnet": "192.168.7.0/24"},
+        status=JobStatus.FAILED,
+        priority=1,
+        created_by="tester",
+        error=f"connect to postgresql://monitor:{SECRET}@db.internal/app failed",
+        result={
+            "discovered_hosts": [{"ip": "192.168.7.11", "hostname": f"token={SECRET}"}]
+        },
+    )
+    db.add(job)
+    await db.flush()
+    editor = await _token(db, "editor", ["*"])
+    viewer = await _token(db, "viewer", ["*:read"])
+
+    async with wire_client() as client:
+        control = await client.post(
+            "/mcp/",
+            headers=_headers(editor),
+            json=_call("get_job", {"job_id": str(job.id)}),
+        )
+        one = await client.post(
+            "/mcp/",
+            headers=_headers(viewer),
+            json=_call("get_job", {"job_id": str(job.id)}),
+        )
+        page = await client.post(
+            "/mcp/", headers=_headers(viewer), json=_call("list_jobs")
+        )
+
+    assert SECRET in control.text
+    assert _payload(one)["id"] == str(job.id)
+    assert [item["id"] for item in _payload(page)["items"]] == [str(job.id)]
+    assert SECRET not in one.text
+    assert SECRET not in page.text
 
 
 async def test_the_audit_log_keeps_arguments_with_credentials_masked(
