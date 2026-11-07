@@ -3,9 +3,10 @@ Admin check core service - checks as the admin API serves them.
 
 Each method takes the caller's role. Writes go through CheckCoreService, which
 already refuses a synthetic check to a non-admin and every address the SSRF
-policy refuses. A viewer is shown a check with no credential in it: the
-userinfo of any URL in `target` or `connection_string` and any `password=` /
-`pwd=` value are masked, and the synthetic `script_code` is left out.
+policy refuses. A viewer is shown a check through `mask_credentials` in
+`target`, `connection_string`, a database check's `query` (SQL can carry a
+connection string, as dblink does) and the free-text `description`, and
+without the synthetic `script_code`.
 
 A bulk action is judged whole before anything runs or is enqueued: an id no
 check has is refused (422), and so is a non-admin's selection that names a
@@ -63,6 +64,8 @@ class AdminCheckCoreService:
                 update={
                     "target": mask_credentials(response.target),
                     "connection_string": mask_credentials(response.connection_string),
+                    "query": mask_credentials(response.query),
+                    "description": mask_credentials(response.description),
                     "script_code": None,
                 }
             )

@@ -164,6 +164,40 @@ async def test_a_viewer_never_sees_a_database_password_or_a_script(
     assert full["connection_string"] == DSN
 
 
+async def test_a_viewer_reads_a_query_and_a_description_masked(
+    db: AsyncSession, client: AsyncClient
+) -> None:
+    """SQL can carry a connection string (dblink), and a description is an
+    operator's free text: a viewer reads both through the credential mask."""
+    viewer = await _as(db, "viewer")
+    editor = await _as(db, "editor")
+    agent = await _agent(db)
+    query = "SELECT * FROM dblink('host=h user=u password=s3cret-pw', 'SELECT 1')"
+    description = "reads app as monitor, password=s3cret-pw"
+    pg = await _check(
+        db,
+        agent,
+        check_type="postgres",
+        target="db.internal",
+        connection_string=DSN,
+        check_config={"query": query},
+        description=description,
+    )
+
+    seen = (await client.get(f"{CHECKS}/{pg.id}", headers=viewer)).json()
+    listed = (
+        await client.get(CHECKS, params={"agent_id": str(agent.id)}, headers=viewer)
+    ).text
+    full = (await client.get(f"{CHECKS}/{pg.id}", headers=editor)).json()
+
+    assert seen["query"].startswith("SELECT * FROM dblink(")
+    assert "s3cret-pw" not in seen["query"]
+    assert "s3cret-pw" not in seen["description"]
+    assert "s3cret-pw" not in listed
+    assert full["query"] == query
+    assert full["description"] == description
+
+
 async def test_a_viewer_cannot_write(db: AsyncSession, client: AsyncClient) -> None:
     viewer = await _as(db, "viewer")
     agent = await _agent(db)
