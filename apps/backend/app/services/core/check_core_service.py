@@ -29,6 +29,7 @@ from app.crud.check_crud import CheckCRUD
 from app.models.agent_model import Agent
 from app.models.check_model import Check
 from app.models.enum_model import (
+    DATABASE_CHECK_TYPES,
     UNADMITTED_AGENT_STATUSES,
     AssignmentMode,
     BulkCheckOutcome,
@@ -119,7 +120,11 @@ class CheckCoreService:
 
         # SSRF protection: every address the check connects to
         await CheckCoreService._validate_endpoints_ssrf(
-            db, data.target, data.nameserver, data.connection_string
+            db,
+            data.target,
+            data.nameserver,
+            data.connection_string,
+            database=data.check_type in DATABASE_CHECK_TYPES,
         )
 
         await CheckDependencyCoreService.validate_dependency(
@@ -186,13 +191,14 @@ class CheckCoreService:
 
     @staticmethod
     async def _validate_endpoints_ssrf(
-        db: AsyncSession, *endpoints: str | None
+        db: AsyncSession, *endpoints: str | None, database: bool
     ) -> None:
         """Validate every address a check connects to against the SSRF settings.
 
         A check reaches its target, and a DNS check also its nameserver and a
         database check its connection string; each is validated. An empty one
-        is skipped.
+        is skipped. `database`: the check is a database check, whose driver reads
+        a URL with no `//` too.
 
         Raises:
             CheckTargetBlockedError: If any of them is blocked by SSRF protection
@@ -204,6 +210,7 @@ class CheckCoreService:
                     endpoint,
                     block_cloud_metadata=protection.block_cloud_metadata,
                     block_private_networks=protection.block_private_networks,
+                    database=database,
                 )
 
     @staticmethod
@@ -418,6 +425,8 @@ class CheckCoreService:
                 update_data.get(field)
                 for field in ("target", "nameserver", "connection_string")
             ),
+            database=update_data.get("check_type", check.check_type)
+            in DATABASE_CHECK_TYPES,
         )
 
         if "depends_on_check_id" in update_data:

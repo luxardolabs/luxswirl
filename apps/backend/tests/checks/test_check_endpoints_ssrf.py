@@ -248,6 +248,8 @@ async def test_the_heartbeat_response_carries_the_private_network_setting(
     [
         ("postgres", f"postgres:?host={METADATA_IP}&port=80"),
         ("postgres", f"postgresql:/db?hostaddr={METADATA_IP}"),
+        ("postgres", f"postgres:?host={METADATA_IP}:x:y&port=80"),
+        ("postgres", f"postgresql://a@{METADATA_IP},b@192.0.2.10/db"),
     ],
 )
 async def test_create_refuses_a_metadata_host_in_a_url_with_no_slashes(
@@ -279,4 +281,48 @@ async def test_create_holds_a_hostless_mysql_url_to_the_private_setting(
             db,
             agent.id,
             _create("mysql", connection_string=dsn, query="SELECT 1"),
+        )
+
+
+@pytest.mark.parametrize(
+    "target", ["postgres:5432", "mysql:3306", "postgres.internal:5432"]
+)
+async def test_a_tcp_check_on_a_host_named_like_a_database_is_that_host(
+    db: AsyncSession, target: str
+) -> None:
+    agent = make_agent()
+    db.add(agent)
+    await db.flush()
+    await _private_networks(db, True)
+
+    check = await CheckCoreService.create_check(
+        db,
+        agent.id,
+        _create("tcp").model_copy(update={"target": target}),
+    )
+
+    assert check.target == target
+
+
+async def test_an_update_judges_a_database_checks_url_as_its_driver_reads_it(
+    db: AsyncSession,
+) -> None:
+    agent = make_agent()
+    db.add(agent)
+    await db.flush()
+    check = await CheckCoreService.create_check(
+        db,
+        agent.id,
+        _create(
+            "postgres",
+            connection_string="postgres://u:p@192.0.2.10/d",
+            query="SELECT 1",
+        ),
+    )
+
+    with pytest.raises(CheckTargetBlockedError):
+        await CheckCoreService.update_check(
+            db,
+            check.id,
+            CheckUpdate(connection_string=f"postgres:?host={METADATA_IP}"),
         )

@@ -11,6 +11,9 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import ipaddress
+import random
+import re
 import time
 from collections.abc import Iterator
 from pathlib import Path
@@ -30,7 +33,9 @@ from app.checks.mysql import MySQLCheck
 from app.checks.ping import PingCheck
 from app.checks.postgres import PostgreSQLCheck
 from app.checks.tcp import TCPCheck
+from app.shared import ssrf
 from app.shared.ssrf import SsrfBlockedError
+from asyncpg import connect_utils
 
 pytestmark = pytest.mark.unit
 
@@ -240,8 +245,19 @@ async def test_postgres_dials_a_public_host(monkeypatch: Any) -> None:
         "postgresql://u:p@192.0.2.10,169.254.169.254/db",
         "postgres:?host=169.254.169.254&port=80",
         "postgresql:/db?hostaddr=169.254.169.254",
+        "postgres:?host=169.254.169.254:x:y&port=80",
+        "postgresql://u:p@/db?host=169.254.169.254:x:y&port=80",
+        "postgresql://a@169.254.169.254,b@192.0.2.10/db",
     ],
-    ids=["host-param", "multi-host", "no-slashes", "no-slashes-hostaddr"],
+    ids=[
+        "host-param",
+        "multi-host",
+        "no-slashes",
+        "no-slashes-hostaddr",
+        "no-slashes-colons",
+        "host-param-colons",
+        "userinfo-per-host",
+    ],
 )
 async def test_postgres_never_dials_a_metadata_host_its_url_hides(
     dsn: str, monkeypatch: Any
@@ -357,3 +373,117 @@ async def test_mysql_with_no_slashes_is_held_to_the_private_setting(dsn: str) ->
         _ssrf_policy.apply_server_policy({"block_private_networks": False})
 
     assert connects == []
+
+
+def test_an_endpoint_never_shows_a_mangled_urls_password() -> None:
+    host, port = PostgreSQLCheck._endpoint("postgres:/\t/u:s3cret@a:5432,b:5433/db")
+
+    assert "s3cret" not in host
+    assert (host, port) == ("a,b", None)
+
+
+def _driver_hosts(dsn: str) -> list[str]:
+    addresses, _ = connect_utils._parse_connect_dsn_and_args(
+        dsn=dsn,
+        host=None,
+        port=None,
+        user="u",
+        password="p",
+        passfile=None,
+        database="d",
+        ssl=None,
+        service=None,
+        servicefile=None,
+        direct_tls=None,
+        server_settings=None,
+        target_session_attrs=None,
+        krbsrvname=None,
+        gsslib=None,
+    )
+    return [address[0] for address in addresses if isinstance(address, tuple)]
+
+
+def _resolvable(host: str) -> bool:
+    """Whether a resolver could take `host`: an IP literal, or a name holding nothing a
+    host name cannot. asyncpg leaves `%3A` and the like in a host, which then connects
+    to nothing."""
+    try:
+        ipaddress.ip_address(host)
+    except ValueError:
+        return bool(host) and not re.search(r"[\s\x00-\x1f:%@/?#\[\]\\]", host)
+    return True
+
+
+def test_every_host_asyncpg_reads_is_a_host_the_policy_names() -> None:
+    """The driver's own parser against the policy's, over generated URLs: an asyncpg
+    upgrade that reads a host another way fails here. Parsing only; nothing connects."""
+    pieces = [
+        "169.254.169.254",
+        "192.0.2.10",
+        ":",
+        ",",
+        "@",
+        "/",
+        "?",
+        "&",
+        "=",
+        "#",
+        "[",
+        "]",
+        "%",
+        "%2C",
+        "%3A",
+        "%40",
+        "%2F",
+        "%20",
+        "%25",
+        "host=",
+        "hostaddr=",
+        "port=80",
+        "port=",
+        "u",
+        "p",
+        "x",
+        "y",
+        "80",
+        "5432",
+        "db",
+        "service=s",
+        "user=u",
+    ] + ["\t", "\n", " ", "\\", "+", ";", "\x01"]
+    prefixes = [
+        "postgres:",
+        "postgres:/",
+        "postgres://",
+        "postgresql:?",
+        "postgres:?host=",
+        "postgresql://u:p@/db?host=",
+        "POSTGRES:?host=",
+        "post\tgres:?host=",
+        " postgres:?host=",
+        "postgres:/\t/",
+        "postgres:\t//",
+        "postgres://u@",
+        "postgres:?port=80&host=",
+        "postgresql:///d?port=80&host=",
+        "postgres:d?host=",
+    ]
+    rnd = random.Random(508)
+    missed: list[tuple[str, str]] = []
+    accepted = 0
+    for _ in range(40_000):
+        dsn = rnd.choice(prefixes) + "".join(
+            rnd.choice(pieces) for _ in range(rnd.randint(0, 7))
+        )
+        try:
+            hosts = _driver_hosts(dsn)
+        except ValueError, IndexError:
+            continue
+        accepted += 1
+        named = ssrf.extract_hosts(dsn, database=True)
+        missed.extend(
+            (dsn, host) for host in hosts if _resolvable(host) and host not in named
+        )
+
+    assert accepted > 10_000
+    assert missed == []

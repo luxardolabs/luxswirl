@@ -686,3 +686,16 @@ async def test_a_lookup_runs_in_its_callers_context() -> None:
         await VettedBackend(allowed).connect_tcp("h.test", 80)
 
     assert seen == ["caller"]
+
+
+@pytest.mark.parametrize(
+    "url", [f"postgres:?host={METADATA}", f"postgres:?host={METADATA}:x:y"]
+)
+async def test_a_database_url_with_no_slashes_is_judged_as_its_driver_reads_it(
+    db: AsyncSession, url: str, opened: list[str]
+) -> None:
+    row = await _row(db, url)
+
+    assert opened == []
+    assert row["validation_status"] == "error"
+    assert "blocked" in row["validation_message"]

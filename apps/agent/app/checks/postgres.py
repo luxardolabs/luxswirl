@@ -89,7 +89,7 @@ class PostgreSQLCheck(BaseCheck):
         database = str(parsed.path).lstrip("/") if parsed.path else "unknown"
 
         # SSRF: block a connection host that resolves into a blocked range.
-        assert_target_allowed(connection_string)
+        assert_target_allowed(connection_string, database=True)
 
         success = False
         connection_latency_ms = None
@@ -285,7 +285,7 @@ class PostgreSQLCheck(BaseCheck):
         except ValueError as e:
             if "," not in parsed.netloc.rpartition("@")[2]:
                 raise CheckConfigError(f"Invalid port: {e}") from e
-        return ",".join(ssrf.extract_hosts(connection_string)) or "unknown", None
+        return ",".join(ssrf.url_hosts(connection_string)) or "unknown", None
 
     @staticmethod
     def _login_failure(error: Exception) -> tuple[str, str] | None:

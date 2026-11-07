@@ -95,9 +95,26 @@ def _reads_as_database_url(target: str) -> bool:
     return scheme in _DATABASE_SCHEMES
 
 
-def _url_hosts(target: str) -> list[str]:
+def _postgres_spec_hosts(spec: str) -> list[str]:
+    """The hosts one entry of a PostgreSQL host list can mean. asyncpg ends a host at its
+    first colon unless it is bracketed, and decodes it after that. Each order of the two
+    is named, and an IP literal whole, since `db::` is one and asyncpg's `db` both."""
+    text = unquote(spec).strip()
+    if text.startswith("["):
+        return [text[1 : text.find("]")] if "]" in text else text[1:]]
+    hosts = [text.partition(":")[0], unquote(spec.partition(":")[0]).strip()]
+    try:
+        ipaddress.ip_address(text)
+    except ValueError:
+        return hosts
+    return [text, *hosts]
+
+
+def url_hosts(target: str) -> list[str]:
     """Every host the URL `target` connects to: one, or each host a PostgreSQL URL names
-    (a unix-socket path is not a network host)."""
+    (a unix-socket path is not a network host). A netloc's userinfo is read to both its
+    first `@`, as asyncpg does, and its last, so a host hidden by either is named. A
+    driver may ignore `hostaddr`, so it never stands in for the default host."""
     try:
         parsed = urlparse(target)
     except ValueError:
@@ -107,31 +124,37 @@ def _url_hosts(target: str) -> list[str]:
         if parsed.hostname:
             return [parsed.hostname]
         return [_DEFAULT_DATABASE_HOST] if scheme in _DATABASE_SCHEMES else []
-    named = parsed.netloc.rpartition("@")[2].split(",")
+    netloc = parsed.netloc
     query = parse_qs(parsed.query)
-    for key in ("host", "hostaddr"):
-        for value in query.get(key, []):
-            named.extend(value.split(","))
-    hosts = [_strip_port(unquote(h).strip()) for h in named]
-    network = [h for h in hosts if h and not h.startswith("/")]
-    if network or any(h.startswith("/") for h in hosts):
-        return network
-    return [_DEFAULT_DATABASE_HOST]
+    specs = [
+        *netloc.split("@", 1)[-1].split(","),
+        *netloc.rsplit("@", 1)[-1].split(","),
+        *(spec for value in query.get("host", []) for spec in value.split(",")),
+    ]
+    named = [host for spec in specs for host in _postgres_spec_hosts(spec)]
+    hosts = [host for host in named if host and not host.startswith("/")]
+    if not hosts and not any(host.startswith("/") for host in named):
+        hosts.append(_DEFAULT_DATABASE_HOST)
+    for value in query.get("hostaddr", []):
+        for spec in value.split(","):
+            hosts.extend(_postgres_spec_hosts(spec))
+    return list(dict.fromkeys(host for host in hosts if host))
 
 
-def extract_hosts(target: str) -> list[str]:
+def extract_hosts(target: str, *, database: bool = False) -> list[str]:
     """Every host ``target`` connects to, for a URL or ``host[:port]``.
 
-    Nothing here knows the check's type, and `postgres:5432` is a TCP check's host and
-    port and a PostgreSQL check's URL at once, so a target with a database scheme and no
-    `//` names the hosts of both readings.
+    `database` says a database driver will read it. A driver goes by the parsed scheme,
+    so it takes `postgres:?host=db` for a URL with no `//`, while `postgres:5432` is a
+    TCP check's host and port: only the caller knows which. The driver's reading adds to
+    the host it also names.
     """
     if "://" in target:
-        return _url_hosts(target)
+        return url_hosts(target)
     host = extract_host(target)
     named = [host] if host else []
-    if _reads_as_database_url(target):
-        named.extend(_url_hosts(target))
+    if database and _reads_as_database_url(target):
+        named.extend(url_hosts(target))
     return list(dict.fromkeys(named))
 
 
@@ -303,15 +326,17 @@ def assert_target_allowed(
     *,
     block_cloud_metadata: bool = True,
     block_private_networks: bool = False,
+    database: bool = False,
 ) -> None:
     """Resolve ``target`` and raise :class:`SsrfBlockedError` if any resolved IP is blocked.
 
     Call this immediately before connecting (fetch time) so it also defends against
     DNS-rebinding and redirect bypasses — not just the value configured at create time.
+    `database`: a database driver will read it (:func:`extract_hosts`).
     """
     if not block_cloud_metadata and not block_private_networks:
         return
-    for host in extract_hosts(target):
+    for host in extract_hosts(target, database=database):
         for ip_str in resolve_host(host):
             assert_ip_allowed(
                 ip_str,

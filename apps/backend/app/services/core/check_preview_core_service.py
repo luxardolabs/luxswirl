@@ -13,6 +13,7 @@ from app.core.check_target_validator import (
     CheckTargetBlockedError,
     validate_check_target,
 )
+from app.models.enum_model import DATABASE_CHECK_TYPES
 from app.schemas.setting_schema import NetworkProtection
 from app.services.core._check_bulk_names import bulk_display_name, unused_name
 from app.services.core.check_core_service import CheckCoreService
@@ -165,7 +166,8 @@ class CheckPreviewCoreService:
         to verify_ssl=True. A cert problem is reported as its own warning so the
         operator can set verify_ssl=False deliberately.
         """
-        if len(extract_hosts(full_url)) > HOSTS_PER_URL:
+        database = check_type in DATABASE_CHECK_TYPES
+        if len(extract_hosts(full_url, database=database)) > HOSTS_PER_URL:
             return (
                 "unknown",
                 f"Not checked: this URL names over {HOSTS_PER_URL} hosts",
@@ -182,6 +184,7 @@ class CheckPreviewCoreService:
                         full_url,
                         block_cloud_metadata=protection.block_cloud_metadata,
                         block_private_networks=protection.block_private_networks,
+                        database=database,
                     ),
                 )
                 if check_type != "http":

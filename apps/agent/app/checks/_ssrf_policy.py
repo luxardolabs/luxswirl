@@ -50,20 +50,22 @@ def _vet_host_name(host: str) -> None:
         raise CheckConfigError(f"Invalid host name {host!r}: {e}") from e
 
 
-def assert_target_allowed(target: str) -> None:
+def assert_target_allowed(target: str, *, database: bool = False) -> None:
     """Refuse `target` if ANY address it resolves to is in a range the policy
-    blocks: for a check whose driver resolves the name itself.
+    blocks: for a check whose driver resolves the name itself. `database`: the
+    driver is a database's, which reads a URL with no `//` too.
 
     Raises:
         CheckConfigError: A host it names cannot be resolved as written.
         SsrfBlockedError: An address a host resolves to is blocked.
     """
-    for host in ssrf.extract_hosts(target):
+    for host in ssrf.extract_hosts(target, database=database):
         _vet_host_name(host)
     ssrf.assert_target_allowed(
         target,
         block_cloud_metadata=True,
         block_private_networks=block_private_networks(),
+        database=database,
     )
 
 

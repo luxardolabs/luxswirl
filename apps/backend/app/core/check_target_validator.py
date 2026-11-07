@@ -22,6 +22,7 @@ def validate_check_target(
     *,
     block_cloud_metadata: bool = True,
     block_private_networks: bool = False,
+    database: bool = False,
 ) -> None:
     """Validate a check target against SSRF rules at check create/update time.
 
@@ -33,12 +34,14 @@ def validate_check_target(
         target: The check target (URL or ``host:port``).
         block_cloud_metadata: Block cloud-metadata / link-local addresses.
         block_private_networks: Block private and internal addresses (RFC 1918, IPv6 ULA, loopback, 0.0.0.0, CGNAT).
+        database: A database driver will read it, so a URL with no `//` is its URL too.
     """
     try:
         assert_target_allowed(
             target,
             block_cloud_metadata=block_cloud_metadata,
             block_private_networks=block_private_networks,
+            database=database,
         )
     except SsrfBlockedError as e:
         raise CheckTargetBlockedError(

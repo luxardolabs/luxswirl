@@ -66,6 +66,10 @@ class CheckType(StrEnum):
     SYNTHETIC = "synthetic"
 
 
+# The check types whose target a database driver reads.
+DATABASE_CHECK_TYPES = frozenset({CheckType.MYSQL, CheckType.POSTGRES})
+
+
 class CheckHealthStatus(StrEnum):
     """Derived health of a check, used by the status dashboard filter.
 

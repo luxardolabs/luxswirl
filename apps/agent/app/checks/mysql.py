@@ -122,7 +122,7 @@ class MySQLCheck(BaseCheck):
         database = conn_params["database"]
 
         # SSRF: block a connection host that resolves into a blocked range.
-        assert_target_allowed(connection_string)
+        assert_target_allowed(connection_string, database=True)
 
         success = False
         connection_latency_ms = None
