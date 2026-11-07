@@ -1,15 +1,16 @@
 """CRUD for the stored form of every encrypted column, read without decrypting.
 
 The encrypted column types decrypt as they load, so a value the configured key
-cannot read fails the whole statement. These reads coerce each column to plain
-text instead: the caller sees the stored ciphertext and judges it row by row.
+cannot read fails the whole statement. These reads cast each column to text in
+SQL instead (a column still typed json, before revision 011, comes back as its
+text too): the caller sees the stored ciphertext and judges it row by row.
 """
 
 from collections.abc import Sequence
 from typing import NamedTuple
 from uuid import UUID
 
-from sqlalchemy import Text, inspect, select, type_coerce
+from sqlalchemy import Text, cast, inspect, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
@@ -57,9 +58,9 @@ class EncryptedValueCRUD:
         ``CHECK_COLUMNS`` as stored."""
         stmt = select(
             Check.id,
-            type_coerce(Check.target, Text),
-            type_coerce(Check.check_config, Text),
-            type_coerce(Check.connection_string_encrypted, Text),
+            cast(Check.target, Text),
+            cast(Check.check_config, Text),
+            cast(Check.connection_string_encrypted, Text),
         ).order_by(Check.id)
         if after is not None:
             stmt = stmt.where(Check.id > after)
@@ -72,9 +73,9 @@ class EncryptedValueCRUD:
     ) -> Sequence[StoredRow]:
         """Up to ``limit`` maintenance jobs after ``after`` by id, each with
         ``MAINTENANCE_JOB_COLUMNS`` as stored, whatever their status."""
-        stmt = select(
-            MaintenanceJob.id, type_coerce(MaintenanceJob.params, Text)
-        ).order_by(MaintenanceJob.id)
+        stmt = select(MaintenanceJob.id, cast(MaintenanceJob.params, Text)).order_by(
+            MaintenanceJob.id
+        )
         if after is not None:
             stmt = stmt.where(MaintenanceJob.id > after)
         result = await db.execute(stmt.limit(limit))

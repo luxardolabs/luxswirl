@@ -146,7 +146,8 @@ async def test_a_value_another_key_wrote_is_named_alone(
     db: AsyncSession, field_key: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A row written while another key was set: the right key reads the rest
-    and names that row alone."""
+    and names that row alone. With as many values unread as read, nothing is
+    removed: removal needs the key to read more than it cannot."""
     agent_id = await _agent(db)
     kept = await _check(db, agent_id)
     _another_key(monkeypatch)
@@ -155,12 +156,84 @@ async def test_a_value_another_key_wrote_is_named_alone(
 
     message = await _refusal(db)
 
+    assert "only 3 of the 6 stored encrypted values" in message
+    assert "remove no rows" in message
+
+    also_kept = await _check(db, agent_id)
+    message = await _refusal(db)
+
     assert message.startswith(
         "3 stored encrypted values do not decrypt under "
-        "SECURITY__FIELD_ENCRYPTION_KEY (3 do)"
+        "SECURITY__FIELD_ENCRYPTION_KEY (6 do)"
     )
     assert f"id={stray}" in message
     assert f"id={kept}" not in message
+    assert f"id={also_kept}" not in message
+
+
+async def test_a_key_that_wrote_only_a_few_rows_is_not_told_to_remove_the_rest(
+    db: AsyncSession, field_key: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A wrong key that wrote one row during a wrong-key window decrypts that
+    row: the rows it names are the good ones, so it is never told to remove
+    them. The right key names the one stray row with the removal repair."""
+    agent_id = await _agent(db)
+    good = [await _check(db, agent_id) for _ in range(3)]
+    wrong = Fernet.generate_key().decode()
+    _use_key(monkeypatch, wrong)
+    stray = await _check(db, agent_id)
+
+    message = await _refusal(db)
+
+    assert "is most likely not this database's key" in message
+    assert "only 3 of the 12 stored encrypted values" in message
+    assert "remove no rows" in message
+    assert "remove each one" not in message
+    assert all(f"id={check_id}" in message for check_id in good)
+
+    _use_key(monkeypatch, field_key)
+    message = await _refusal(db)
+
+    assert message.startswith(
+        "3 stored encrypted values do not decrypt under "
+        "SECURITY__FIELD_ENCRYPTION_KEY (9 do)"
+    )
+    assert f"id={stray}" in message
+    assert "remove each one" in message
+
+
+async def test_params_still_typed_json_before_revision_011_are_judged(
+    db: AsyncSession, field_key: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Revisions 000-010 leave maintenance_jobs.params typed json, and the
+    migration check runs on such a database: its values are judged as text,
+    plaintext passing under the right key and a token naming a wrong one."""
+    await db.execute(
+        text(
+            "ALTER TABLE maintenance_jobs ALTER COLUMN params TYPE json "
+            "USING params::json"
+        )
+    )
+    plain = uuid4()
+    await db.execute(
+        text(
+            "INSERT INTO maintenance_jobs "
+            "(id, kind, target_id, params, status, created_at) VALUES "
+            "(:id, 'bulk_check_delete', :target, CAST(:params AS json), 'done', now())"
+        ),
+        {"id": plain, "target": uuid4(), "params": '{"check_ids": []}'},
+    )
+
+    await FieldEncryptionCoreService.require_readable_before_migrating(db)
+
+    agent_id = await _agent(db)
+    await _check(db, agent_id)
+    _another_key(monkeypatch)
+
+    message = await _refusal(db)
+
+    assert "is not this database's key" in message
+    assert f"id={plain}" not in message
 
 
 async def test_a_value_stored_before_encryption_still_starts(

@@ -29,12 +29,19 @@ logger = get_logger("luxswirl.services.field_encryption")
 _PAGE = 1000
 _NAMED = 20
 
-_REPAIR = (
+_GUIDE = (
+    "(see 'Server refuses to start: encrypted values do not decrypt' in "
+    "docs/guides/troubleshooting.md)"
+)
+# The key is not, or most likely not, this database's: nothing is removed.
+_SET_THE_KEY = (
     "Set SECURITY__FIELD_ENCRYPTION_KEY to the key this database was written "
-    "with and start again. If the right key still names rows, they were "
-    "written while another key was set: remove each one (see 'Server refuses "
-    "to start: encrypted values do not decrypt' in "
-    "docs/guides/troubleshooting.md)."
+    f"with and start again; remove no rows under this key {_GUIDE}."
+)
+# The key decrypts most values: the rest were written under another key.
+_REMOVE_THE_ROWS = (
+    "If this is the key the server has always used, these rows were written "
+    f"while another key was set and no key reads both: remove each one {_GUIDE}."
 )
 
 
@@ -60,22 +67,36 @@ class _Tally:
                 self.unreadable.append(f"{table}.{column} id={row.id}")
 
     def refusal(self) -> str:
-        """The refusal's message: the verdict, the values named, the repair."""
+        """The refusal's message: the verdict, the values named, the repair.
+
+        Removing the named rows is advised only when the key decrypts more
+        values than it cannot: a key that wrote a few rows during a wrong-key
+        window decrypts those few, and the rows it names are the good ones.
+        """
         count = len(self.unreadable)
         if self.decrypted == 0:
             verdict = (
                 "SECURITY__FIELD_ENCRYPTION_KEY is not this database's key: "
                 f"none of the {count} stored encrypted values decrypt under it"
             )
+            repair = _SET_THE_KEY
+        elif self.decrypted <= count:
+            verdict = (
+                "SECURITY__FIELD_ENCRYPTION_KEY is most likely not this "
+                f"database's key: only {self.decrypted} of the "
+                f"{self.decrypted + count} stored encrypted values decrypt under it"
+            )
+            repair = _SET_THE_KEY
         else:
             verdict = (
                 f"{count} stored encrypted values do not decrypt under "
                 f"SECURITY__FIELD_ENCRYPTION_KEY ({self.decrypted} do)"
             )
+            repair = _REMOVE_THE_ROWS
         named = ", ".join(self.unreadable[:_NAMED])
         if count > _NAMED:
             named += f", and {count - _NAMED} more"
-        return f"{verdict}: {named}. {_REPAIR}"
+        return f"{verdict}: {named}. {repair}"
 
 
 class FieldEncryptionCoreService:

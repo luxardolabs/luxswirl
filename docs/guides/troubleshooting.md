@@ -314,8 +314,10 @@ ______________________________________________________________________
 
 Before migrations run (`alembic upgrade head`) and again before the server serves anything, every check's target, `check_config` and connection string, and every maintenance job's parameters, are decrypted with `SECURITY__FIELD_ENCRYPTION_KEY`. If the key cannot decrypt one of them, the upgrade or the server stops with nothing written. The log line `Refused: stored encrypted values do not decrypt` names each value as `<table>.<column> id=<row>` (the first 20, then a count). A value stored before encryption reads under any key and is never named.
 
-- **"is not this database's key"**: the key decrypts none of the stored values. Set `SECURITY__FIELD_ENCRYPTION_KEY` to the key the server has always used, and restart. Nothing was changed. Never remove rows on this verdict.
-- **"N stored encrypted values do not decrypt (M do)"**: the key decrypts M values, so it is the key some of the data was written with. Check it is the one the server has always used. If it is, the named rows were written while another key was set, and no key reads both: remove each named row.
+A changed key reaches the server only when its container is recreated: after editing the env file, run `docker compose up -d`. `docker compose restart` keeps the old key.
+
+- **"is not this database's key"**, or **"is most likely not this database's key: only M of the T ... decrypt"**: the key decrypts none, or at most half, of the stored values. Set `SECURITY__FIELD_ENCRYPTION_KEY` to the key the server has always used, and run `docker compose up -d`. Nothing was changed. Never remove rows on this verdict: the rows it names are the ones the right key reads.
+- **"N stored encrypted values do not decrypt (M do)"**: the key decrypts more values than it cannot. If it is the key the server has always used, the named rows were written while another key was set, and no key reads both: remove each named row.
 
 ```bash
 # A check: its results, artifacts and alert links go with it, and its agent reloads its checks.
@@ -324,7 +326,7 @@ docker compose exec timescaledb psql -U luxswirl -c "WITH gone AS (DELETE FROM c
 docker compose exec timescaledb psql -U luxswirl -c "DELETE FROM maintenance_jobs WHERE id = '<id>'"
 ```
 
-Then restart, and recreate any check you removed.
+Then run `docker compose up -d`, and recreate any check you removed.
 
 ### Server Crashes Randomly
 
