@@ -90,6 +90,18 @@ def _configured_fernet() -> Fernet:
     return _fernet_for(key)
 
 
+def decrypts_or_is_plaintext(stored: str) -> bool:
+    """Whether the configured key reads ``stored``, an encrypted column's value
+    as stored: it decrypts, or it is not shaped as a token (a value stored
+    before encryption, read as it is). False for a token another key wrote.
+    """
+    try:
+        _configured_fernet().decrypt(stored.encode())
+    except InvalidToken:
+        return not _is_fernet_token(stored)
+    return True
+
+
 def _json_container(raw: str) -> JsonContainer | None:
     """The JSON object or array in ``raw``; None for invalid JSON or a bare value."""
     try:

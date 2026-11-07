@@ -59,6 +59,7 @@ from app.notifications.providers.homeassistant import HomeAssistantNotificationP
 from app.notifications.providers.webhook import WebhookNotificationProvider
 from app.notifications.registry import NotificationRegistry
 from app.schemas.health_schema import ApiInfoResponse, HealthResponse
+from app.services.core.field_encryption_core_service import FieldEncryptionCoreService
 from app.services.core.metrics_collector_core_service import MetricsCollectorCoreService
 from app.services.core.scheduler_core_service import scheduler_service
 from app.services.core.settings_core_service import SettingsCoreService
@@ -115,6 +116,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Initialize database
     await init_db()
     logger.info("Database initialized successfully")
+
+    # Before anything reads or writes an encrypted column: a key that cannot
+    # read every stored value stops the server here, naming the rows, whatever
+    # state the rest of the data is in.
+    async with worker_session() as db:
+        await FieldEncryptionCoreService.require_readable(db)
 
     # The first admin (FLEET-ADMIN-BOOTSTRAP-STANDARD): seeded from INITIAL_ADMIN_*
     # only while the users table is empty, otherwise /setup opens behind a one-time

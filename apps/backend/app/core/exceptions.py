@@ -207,6 +207,13 @@ class DatabaseException(LuxSwirlException):
     error_code = "DATABASE_ERROR"
 
 
+class UnreadableEncryptedValuesException(DatabaseException):
+    """Stored encrypted values the configured field-encryption key cannot read:
+    the server refuses to start rather than serve or write beside them."""
+
+    error_code = "UNREADABLE_ENCRYPTED_VALUES"
+
+
 class AuthenticationException(LuxSwirlException):
     """Raised when authentication fails."""
 

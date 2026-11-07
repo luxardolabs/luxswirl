@@ -120,7 +120,7 @@ volumes:
     driver: local
 ```
 
-> `POSTGRES_PASSWORD` and `FIELD_ENCRYPTION_KEY` are read from a `.env` file (or the shell). The server refuses to start without `SECURITY__FIELD_ENCRYPTION_KEY`; see [.env File](#env-file-production-secrets) for how to generate it. Keep the field-encryption key: a new one cannot read the check credentials stored under the old one. A server that generated its own key keeps it in its data directory (`data/server/field_encryption_key` beside the compose file, or `/app/data` on its volume): set the setting from that file, never a new value. A field-encryption key other than the one the data was stored under refuses to read it.
+> `POSTGRES_PASSWORD` and `FIELD_ENCRYPTION_KEY` are read from a `.env` file (or the shell). The server refuses to start without `SECURITY__FIELD_ENCRYPTION_KEY`; see [.env File](#env-file-production-secrets) for how to generate it. Keep the field-encryption key: a new one cannot read the check credentials stored under the old one. A server that generated its own key keeps it in its data directory (`data/server/field_encryption_key` beside the compose file, or `/app/data` on its volume): set the setting from that file, never a new value. The server refuses to start under a key that cannot read every stored check credential, and names each row it cannot read (see [Troubleshooting](../guides/troubleshooting.md#server-refuses-to-start-encrypted-values-do-not-decrypt)).
 
 ### 2. Start Services
 

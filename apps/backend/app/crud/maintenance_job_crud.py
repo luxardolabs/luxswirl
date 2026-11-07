@@ -86,8 +86,9 @@ class MaintenanceJobCRUD:
     async def claim_next(db: AsyncSession) -> UUID | None:
         """Atomically claim the oldest queued row via FOR UPDATE SKIP LOCKED: its id.
 
-        Only the id is read, so a row whose params cannot be read is still
-        claimed (and failed) rather than refusing every claim. Caller is
+        Only the id is read, so the lock is taken whatever the params hold;
+        `mark_running` reads them, and a row the configured key cannot read
+        fails there, rolling the claim back so the job stays queued. Caller is
         responsible for marking running + committing in the same transaction so
         no other worker can claim the row in parallel.
         """

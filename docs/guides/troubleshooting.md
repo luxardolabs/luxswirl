@@ -310,16 +310,21 @@ docker compose exec luxswirl_server alembic upgrade head
 
 ______________________________________________________________________
 
-### Maintenance jobs stay queued: "Maintenance queue stopped"
+### Server refuses to start: encrypted values do not decrypt
 
-The log repeats `Maintenance queue stopped`, naming a `job_id`, and bulk deletes, imports and other maintenance jobs do not start. The oldest queued job's parameters do not decrypt under `SECURITY__FIELD_ENCRYPTION_KEY`. Nothing is lost: the job stays queued, and nothing behind it starts.
+At startup the server decrypts every check's target, `check_config` and connection string, and the parameters of every queued or running maintenance job. If `SECURITY__FIELD_ENCRYPTION_KEY` cannot read one of them, the server stops before it serves anything. The log line `Startup refused: stored encrypted values do not decrypt` names each value as `<table>.<column> id=<row>` (the first 20, then a count).
 
-1. Set `SECURITY__FIELD_ENCRYPTION_KEY` to the key the server has always used, and restart. Every queued job then runs.
-1. If the log still names a job, that job was queued while the wrong key was set, so the right key cannot read it. Remove that job, then queue the work again:
+- **"is not this database's key"**: the key reads none of the stored values. Set `SECURITY__FIELD_ENCRYPTION_KEY` to the key the server has always used, and restart. Nothing was changed.
+- **"N stored encrypted values do not decrypt (M do)"**: the key reads the rest, so it is most likely the right one, and the named rows were written while another key was set. No key reads both, so remove each named row:
 
 ```bash
-docker compose exec timescaledb psql -U luxswirl -c "DELETE FROM maintenance_jobs WHERE id = '<job_id>' AND status = 'queued'"
+# A check: its results, artifacts and alert links go with it, as when it is deleted in the UI.
+docker compose exec timescaledb psql -U luxswirl -c "DELETE FROM checks WHERE id = '<id>'"
+# A maintenance job: queue the work again afterwards.
+docker compose exec timescaledb psql -U luxswirl -c "DELETE FROM maintenance_jobs WHERE id = '<id>' AND status IN ('queued', 'running')"
 ```
+
+Then restart, and recreate any check you removed.
 
 ### Server Crashes Randomly
 
