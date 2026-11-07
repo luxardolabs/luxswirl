@@ -265,7 +265,8 @@ async def test_postgres_never_dials_a_metadata_host_its_url_hides(
     dsn: str, monkeypatch: Any
 ) -> None:
     pytest.importorskip("asyncpg")
-    assert "169.254.169.254" not in await _hosts_dialed(_postgres(dsn), monkeypatch)
+    dialed = await _hosts_dialed(_postgres(dsn), monkeypatch)
+    assert not [host for host in dialed if "169.254" in host or "fe80" in host]
 
 
 @pytest.mark.parametrize(
