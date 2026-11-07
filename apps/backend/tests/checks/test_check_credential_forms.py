@@ -72,6 +72,8 @@ FORMS = {
     "pswd": f"https://printer.lan/status?user=admin&pswd={SECRET}",
     "sid": f"https://a.example.com/x?sid={SECRET}",
     "wider-key-holds-a-narrow-one": f"key=password= {SECRET}",
+    "semicolon-only-in-a-value": f"Pwd={{a}}}};Password=b}} {SECRET}",
+    "odbc-brace-tail": f"Server=db;client_secret={{ab}}{SECRET};x=1",
     "session-holds-a-token": f"session=token ={SECRET}",
     "quoted-odbc-tail": f"Server=db;Uid=sa;Pwd='ab'{SECRET};Database=app",
     "quoted-odbc-spaced-tail": f'Password="ab" {SECRET};Server=db',

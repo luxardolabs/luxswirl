@@ -47,8 +47,9 @@ MASKED_LENGTH = 64 * 1024
 # it says the length that was sent.
 _CUT_NOTE = re.compile(r"\.\.\. <\d+ characters>\Z")
 _NOTE_ROOM = 256
-# Masking a large call takes seconds. One thread of its own keeps that off the event loop
-# and out of the default executor, which name lookups share.
+# Masking a large call takes seconds. Writes share one thread of their own, off the event
+# loop and out of the default executor, which name lookups share. A read waits on neither:
+# it holds a database connection while it masks what a row already bounds.
 _MASKING = ThreadPoolExecutor(max_workers=1, thread_name_prefix="mcp-audit-mask")
 
 # What a synthetic script is stored as: its size alone.
@@ -196,8 +197,8 @@ class MCPAuditCoreService:
             db, window_start(filters.days), filters, limit
         )
         errors = [call.error_message for call, _, _ in rows]
-        kept = await asyncio.get_running_loop().run_in_executor(
-            _MASKING, lambda: [_kept(error) if error else None for error in errors]
+        kept = await asyncio.to_thread(
+            lambda: [_kept(error) if error else None for error in errors]
         )
         return [
             _row(call, username, token_name, {}, error)
@@ -211,7 +212,7 @@ class MCPAuditCoreService:
         if found is None:
             return None
         call, username, token_name = found
-        arguments = await _masked_off_the_loop(call.arguments or {})
+        arguments = await asyncio.to_thread(masked_arguments, call.arguments or {})
         error = call.error_message
         kept = _kept(error) if error else None
         return _row(call, username, token_name, arguments, kept)

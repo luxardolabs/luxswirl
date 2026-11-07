@@ -76,13 +76,13 @@ _PAIR = re.compile(
 )
 # An ODBC string (`;`-separated): a bare value runs to the `;`, spaces included.
 _ODBC_PAIR = re.compile(
-    rf"{_KEY_AND_SEPARATOR}({_BRACED}|(?:{_QUOTED})(?=\s*+(?:;|\Z))|[^;]*+)"
+    rf"{_KEY_AND_SEPARATOR}((?:{_BRACED})[^;]*+|(?:{_QUOTED})(?=\s*+(?:;|\Z))|[^;]*+)"
 )
 # The narrow keys go first, so a value under a wider key cannot swallow one's name.
 _NAMED = r"(?i)(?<![\w.-])((?:ssl)?password|passwd|pwd|secret|token|access_token|api_?key)(\s*=\s*)"
 _NAMED_PAIR = re.compile(rf"{_NAMED}({_LIBPQ_BRACED}|{_QUOTED}|{_BARE})")
 _NAMED_ODBC_PAIR = re.compile(
-    rf"{_NAMED}({_BRACED}|(?:{_QUOTED})(?=\s*+(?:;|\Z))|[^;]*+)"
+    rf"{_NAMED}((?:{_BRACED})[^;]*+|(?:{_QUOTED})(?=\s*+(?:;|\Z))|[^;]*+)"
 )
 # An OAuth code or an Azure Functions key; in other text, or all digits, `code=` is a status.
 _QUERY_CODE = re.compile(r"(?<=[?&])(code=)(?!\d++(?:[&#\s]|\Z))[^\s&#]*+")
@@ -105,11 +105,14 @@ _MAY_HOLD_A_CREDENTIAL = re.compile(r"[=/@]")
 _URL = re.compile(r"(?i)(?<![a-z0-9+.-])([a-z0-9+.-]+://[^/\s'\"<>?#]+)[^\s'\"<>]*")
 
 
-def _named(value: str) -> str:
-    """`value` with its userinfo and the values of the narrow keys masked."""
+def _named(value: str) -> tuple[str, bool]:
+    """`value` with its userinfo and the values of the narrow keys masked, and whether
+    it is an ODBC string, read before they are, since a value can hold its only `;`."""
     masked = _USERINFO.sub(f"{_MASK}@", value)
     odbc = ";" in masked and "://" not in masked
-    return (_NAMED_ODBC_PAIR if odbc else _NAMED_PAIR).sub(rf"\1\2{_MASK}", masked)
+    return (_NAMED_ODBC_PAIR if odbc else _NAMED_PAIR).sub(
+        rf"\1\2{_MASK}", masked
+    ), odbc
 
 
 def mask_url_paths(text: str | None) -> str | None:
@@ -122,7 +125,7 @@ def mask_url_paths(text: str | None) -> str | None:
     """
     if not text:
         return text
-    first = _URL.sub(r"\1/...", _named(text))
+    first = _URL.sub(r"\1/...", _named(text)[0])
     return _URL.sub(r"\1/...", mask_credentials(first))
 
 
@@ -136,9 +139,8 @@ def mask_credentials(value: str | None) -> str | None:
         return value
     if not _MAY_HOLD_A_CREDENTIAL.search(value):
         return value
-    masked = _named(value)
-    pair = _ODBC_PAIR if ";" in masked and "://" not in masked else _PAIR
-    masked = pair.sub(rf"\1\2{_MASK}", masked)
+    masked, odbc = _named(value)
+    masked = (_ODBC_PAIR if odbc else _PAIR).sub(rf"\1\2{_MASK}", masked)
     masked = _QUERY_CODE.sub(rf"\1{_MASK}", masked)
     masked = _WEBHOOK_PATH.sub(rf"\1/{_MASK}", masked)
     masked = _SLACK_PATH.sub(f"/services/{_MASK}", masked)
