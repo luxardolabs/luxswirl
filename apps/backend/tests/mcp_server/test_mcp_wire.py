@@ -338,6 +338,46 @@ async def test_a_viewer_reads_a_check_s_credentials_masked(db: AsyncSession) -> 
     assert SECRET not in response.text
 
 
+async def test_a_viewer_reads_a_query_and_a_description_masked(
+    db: AsyncSession,
+) -> None:
+    agent_id = await _agent(db)
+    query = f"SELECT * FROM dblink('host=h password={SECRET}', 'SELECT 1')"
+    check = make_check(
+        agent_id=agent_id,
+        check_type="postgres",
+        target="db.internal",
+        check_config={"query": query},
+        description=f"as monitor, password={SECRET}",
+    )
+    db.add(check)
+    await db.flush()
+    editor = await _token(db, "editor", ["*"])
+    viewer = await _token(db, "viewer", ["*:read"])
+
+    async with wire_client() as client:
+        control = await client.post(
+            "/mcp/",
+            headers=_headers(editor),
+            json=_call("get_check", {"check_id": str(check.id)}),
+        )
+        one = await client.post(
+            "/mcp/",
+            headers=_headers(viewer),
+            json=_call("get_check", {"check_id": str(check.id)}),
+        )
+        page = await client.post(
+            "/mcp/",
+            headers=_headers(viewer),
+            json=_call("list_checks", {"agent_id": str(agent_id)}),
+        )
+
+    assert _payload(control)["query"] == query
+    assert _payload(one)["query"].startswith("SELECT * FROM dblink(")
+    assert SECRET not in one.text
+    assert SECRET not in page.text
+
+
 async def test_a_viewer_reads_a_job_s_error_and_result_masked(
     db: AsyncSession,
 ) -> None:
