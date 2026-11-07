@@ -113,7 +113,7 @@ Walk the pages with `page` until `has_next` is false.
 
 A create or change refuses what the web UI refuses, with the same message: an address the network protection blocks, an unknown agent (`404`), an agent awaiting approval, rejected or archived, a synthetic script the security validation refuses, a field the API does not take, a required field set to `null`, or an invalid value (`422`). A clone keeps its source's dependency unless the body sets `depends_on_check_id`, and its source's alerts, each turned on or off and with the overrides it has on the source, but never snoozed.
 
-A viewer's token reads no credential in a check: the user and password of any URL in `target` or `connection_string` read `***` (`postgresql://***@db:5432/app`), as does any `password=` value, and a synthetic check's `script_code` is left out. An editor's or an admin's token reads them as stored.
+A viewer's token reads no credential in a check: the user and password of any URL in `target` or `connection_string` read `***` (`postgresql://***@db:5432/app`), as does the value of any key that names a secret (`password`, `client_secret`, `x-api-key`, `AccountKey`, `sig`, and others) and a webhook's path, and a synthetic check's `script_code` is left out. The mask works from a list of the forms a credential takes, so a form not on the list, or a secret in an ordinary path segment, stays visible. An editor's or an admin's token reads them as stored.
 
 ### Bulk actions
 

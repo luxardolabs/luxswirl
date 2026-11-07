@@ -12,6 +12,7 @@ from uuid import UUID
 
 from sqlalchemy import ColumnElement, and_, delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import defer
 
 from app.models.api_token_model import ApiToken
 from app.models.enum_model import AuditOutcome, MCPDenialCode
@@ -94,9 +95,11 @@ class MCPToolCallCRUD:
     async def list_calls(
         db: AsyncSession, since: datetime, filters: ActivityFilters, limit: int
     ) -> Sequence[tuple[MCPToolCall, str | None, str | None]]:
-        """The newest calls matching `filters`, each with its username and token name."""
+        """The newest calls matching `filters`, each with its username and token name.
+        Their arguments stay unloaded: a row's can be megabytes, and no list shows them."""
         result = await db.execute(
             select(MCPToolCall, User.username, ApiToken.name)
+            .options(defer(MCPToolCall.arguments))
             .outerjoin(User, User.id == MCPToolCall.user_id)
             .outerjoin(ApiToken, ApiToken.id == MCPToolCall.api_token_id)
             .where(*_conditions(since, filters))
