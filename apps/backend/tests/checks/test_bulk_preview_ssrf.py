@@ -9,7 +9,12 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import datetime
+import os
 import socket
+import ssl
+import tempfile
+import threading
 import time
 from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass, field
@@ -25,6 +30,10 @@ from app.services.core import check_core_service
 from app.services.core.auth_core_service import AuthCoreService
 from app.services.core.check_core_service import CheckCoreService
 from app.services.core.settings_core_service import SettingsCoreService
+from cryptography import x509
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.x509.oid import NameOID
 from fixtures.factories import make_user
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -359,3 +368,199 @@ async def test_the_route_refuses_a_viewer(
 
     assert resp.status_code in (302, 303, 307, 401, 403), resp.status_code
     assert opened == []
+
+
+@pytest.mark.parametrize(
+    "first_line",
+    [
+        b"SSH-2.0-OpenSSH_9.6 TOPSECRET\r\n",
+        b"-NOAUTH TOPSECRET required.\r\n",
+        b"HTTP/1.1 200 OK\r\nSet-Cookie TOPSECRET=1\r\n\r\n",
+    ],
+)
+async def test_what_a_service_sends_never_reaches_the_row(
+    db: AsyncSession, first_line: bytes
+) -> None:
+    async def service(writer: asyncio.StreamWriter) -> None:
+        writer.write(first_line)
+        await writer.drain()
+
+    local = await _serve(service)
+    async with local.server:
+        row = await _row(db, f"http://127.0.0.1:{local.port}/")
+
+    assert row["validation_status"] == "error"
+    assert row["validation_message"] == "The target did not answer HTTP"
+
+
+async def test_no_database_connection_is_held_while_probing(db: AsyncSession) -> None:
+    during: list[bool] = []
+
+    async def held(writer: asyncio.StreamWriter) -> None:
+        during.append(db.in_transaction())
+        writer.write(OK)
+        await writer.drain()
+
+    local = await _serve(held)
+    await SettingsCoreService.get_network_protection(db)
+    assert db.in_transaction()
+    async with local.server:
+        row = await _row(db, f"http://127.0.0.1:{local.port}/")
+
+    assert row["status_code"] == 200
+    assert during == [False]
+
+
+def _self_signed() -> ssl.SSLContext:
+    key = ec.generate_private_key(ec.SECP256R1())
+    name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "localhost")])
+    now = datetime.datetime.now(datetime.UTC)
+    cert = (
+        x509.CertificateBuilder()
+        .subject_name(name)
+        .issuer_name(name)
+        .public_key(key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(now - datetime.timedelta(days=1))
+        .not_valid_after(now + datetime.timedelta(days=1))
+        .sign(key, hashes.SHA256())
+    )
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    context.load_cert_chain(*_pem_files(cert, key))
+    return context
+
+
+def _pem_files(cert: x509.Certificate, key: ec.EllipticCurvePrivateKey) -> list[str]:
+    paths = []
+    for data in (
+        cert.public_bytes(serialization.Encoding.PEM),
+        key.private_bytes(
+            serialization.Encoding.PEM,
+            serialization.PrivateFormat.PKCS8,
+            serialization.NoEncryption(),
+        ),
+    ):
+        descriptor, path = tempfile.mkstemp(suffix=".pem")
+        with os.fdopen(descriptor, "wb") as file:
+            file.write(data)
+        paths.append(path)
+    return paths
+
+
+async def test_a_self_signed_target_gets_the_certificate_warning(
+    db: AsyncSession,
+) -> None:
+    async def handle(_r: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        writer.close()
+
+    server = await asyncio.start_server(handle, "127.0.0.1", 0, ssl=_self_signed())
+    port = server.sockets[0].getsockname()[1]
+    async with server:
+        row = await _row(db, f"https://127.0.0.1:{port}/")
+
+    assert row["validation_status"] == "warning"
+    assert "verify_ssl=False" in row["validation_message"]
+
+
+async def test_https_to_a_port_speaking_plain_http_is_a_failed_handshake(
+    db: AsyncSession,
+) -> None:
+    async def plain(_r: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        writer.write(OK)
+        await writer.drain()
+        writer.close()
+
+    server = await asyncio.start_server(plain, "127.0.0.1", 0)
+    port = server.sockets[0].getsockname()[1]
+    async with server:
+        row = await _row(db, f"https://127.0.0.1:{port}/")
+
+    assert (row["validation_status"], row["validation_message"]) == (
+        "error",
+        "TLS handshake failed",
+    )
+
+
+async def test_a_name_with_no_address_says_so(
+    db: AsyncSession, answers: dict[str, list[list[str]]]
+) -> None:
+    answers["gone.test"] = [[]]
+
+    row = await _row(db, "http://gone.test/")
+
+    assert row["validation_message"] == "Could not resolve the host"
+
+
+async def test_a_port_that_refuses_is_a_failed_connection(db: AsyncSession) -> None:
+    server = await asyncio.start_server(lambda _r, _w: None, "127.0.0.1", 0)
+    port = server.sockets[0].getsockname()[1]
+    server.close()
+    await server.wait_closed()
+
+    row = await _row(db, f"http://127.0.0.1:{port}/")
+
+    assert row["validation_message"] == "Connection failed"
+
+
+async def test_a_dead_first_address_leaves_time_for_the_next(
+    db: AsyncSession,
+    answers: dict[str, list[list[str]]],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    local = await _serve(_ok)
+    real = httpcore.AnyIOBackend.connect_tcp
+
+    async def black_hole(self: Any, host: str, *args: Any, **kwargs: Any) -> Any:
+        if host == "203.0.113.9":
+            await asyncio.sleep(kwargs.get("timeout") or 5)
+            raise httpcore.ConnectTimeout("no answer")
+        return await real(self, host, *args, **kwargs)
+
+    monkeypatch.setattr(httpcore.AnyIOBackend, "connect_tcp", black_hole)
+    answers["dual.test"] = [["203.0.113.9", "127.0.0.1"]]
+    async with local.server:
+        row = await _row(db, f"http://dual.test:{local.port}/")
+
+    assert row["status_code"] == 200, row
+
+
+async def test_a_slow_nameserver_leaves_the_default_executor_free(
+    db: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(check_core_service, "_PREVIEW_PROBE_SECONDS", 1)
+    release = threading.Event()
+    real = socket.getaddrinfo
+
+    def slow(host: Any, *args: Any, **kwargs: Any) -> Any:
+        if str(host).endswith(".slow.test"):
+            release.wait(10)
+            raise socket.gaierror("no answer")
+        return real(host, *args, **kwargs)
+
+    monkeypatch.setattr(socket, "getaddrinfo", slow)
+    try:
+        rows = await asyncio.wait_for(
+            CheckCoreService.bulk_preview_checks(
+                db, [f"http://h{i}.slow.test/" for i in range(100)]
+            ),
+            timeout=8,
+        )
+        started = time.monotonic()
+        await asyncio.to_thread(lambda: None)
+        waited = time.monotonic() - started
+    finally:
+        release.set()
+
+    assert {row["validation_message"] for row in rows} == {"Timeout (1s)"}
+    assert waited < 0.5
+
+
+async def test_a_row_that_does_not_parse_has_a_fixed_name(db: AsyncSession) -> None:
+    rows = await CheckCoreService.bulk_preview_checks(
+        db, ["http://user:S3cret/PW@[/", "http://user:S3cret/PW@[/"]
+    )
+
+    assert [row["generated_name"] for row in rows] == [
+        "invalid-url",
+        "invalid-url (2)",
+    ]

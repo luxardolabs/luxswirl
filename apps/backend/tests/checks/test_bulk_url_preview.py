@@ -70,4 +70,4 @@ async def test_preview_of_an_unparseable_url_is_an_error_row(db: AsyncSession) -
     [row] = await CheckCoreService.bulk_preview_checks(db, ["tcp://host:99999"])
     assert row["validation_status"] == "error"
     assert row["validation_message"].startswith("Parse error:")
-    assert row["generated_name"] == "tcp://host:99999"
+    assert row["generated_name"] == "invalid-url"
