@@ -1119,7 +1119,7 @@ class ChecksViewService:
         url_list = [url.strip() for url in bulk_urls.split("\n") if url.strip()]
         if not url_list:
             return None
-        previews = await CheckCoreService.bulk_preview_checks(url_list)
+        previews = await CheckCoreService.bulk_preview_checks(db, url_list)
         return {
             "request": request,
             "alerts_page_url": build_alerts_page_url(request),

@@ -5,6 +5,7 @@ Check service - business logic for check operations.
 import asyncio
 import ssl
 from collections.abc import Mapping, Sequence
+from functools import partial
 from typing import Any
 from urllib.parse import ParseResult, urlparse
 from uuid import UUID
@@ -15,7 +16,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import attributes
 
 from app.core.check_config import keep_type_fields, pack_config, take_config_updates
-from app.core.check_target_validator import validate_check_target
+from app.core.check_target_validator import (
+    CheckTargetBlockedError,
+    validate_check_target,
+)
 from app.core.credential_mask import mask_credentials
 from app.core.datetime_utils import utc_now
 from app.core.error_summary import error_summary
@@ -51,6 +55,7 @@ from app.schemas.check_schema import (
     CheckView,
 )
 from app.schemas.import_export_schema import CheckExport
+from app.schemas.setting_schema import NetworkProtection
 from app.services.core._check_bulk_names import bulk_display_name, unused_name
 from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.alert_core_service import AlertCoreService
@@ -59,8 +64,14 @@ from app.services.core.check_dependency_core_service import (
 )
 from app.services.core.settings_core_service import SettingsCoreService
 from app.shared.logger import get_logger
+from app.shared.ssrf import SsrfBlockedError, allowed_addresses
+from app.shared.ssrf_http import VettedTransport
 
 logger = get_logger("luxswirl.services.check")
+
+_PREVIEW_PROBED_URLS = 100
+_PREVIEW_PROBES_AT_ONCE = 20
+_PREVIEW_PROBE_SECONDS = 5
 
 
 class CheckCoreService:
@@ -1223,20 +1234,49 @@ class CheckCoreService:
         )
 
     @staticmethod
-    async def bulk_preview_checks(urls: list[str]) -> list[dict[str, Any]]:
-        """
-        Preview and validate bulk check URLs.
+    async def bulk_preview_checks(
+        db: AsyncSession, urls: list[str]
+    ) -> list[dict[str, Any]]:
+        """Preview bulk check URLs: the check each becomes, held to the SSRF settings.
+
+        Each URL is judged as saving its check would judge it, and an http one is
+        then fetched once, on an address those settings allow. The first
+        `_PREVIEW_PROBED_URLS` get this, `_PREVIEW_PROBES_AT_ONCE` at a time; the
+        rest are named only, since one request would otherwise open as many
+        connections as the form holds lines.
 
         Args:
+            db: Database session, to read the SSRF settings
             urls: List of URL strings to preview
 
         Returns:
             List of dicts with url, generated_name, check_type, validation_status, etc.
         """
-        # Validate all URLs in parallel
-        previews = await asyncio.gather(
-            *[CheckCoreService._preview_bulk_url(url) for url in urls]
+        protection = await SettingsCoreService.get_network_protection(db)
+        turns = asyncio.Semaphore(_PREVIEW_PROBES_AT_ONCE)
+        transport = VettedTransport(
+            verify=True,
+            allowed=partial(
+                allowed_addresses,
+                block_cloud_metadata=protection.block_cloud_metadata,
+                block_private_networks=protection.block_private_networks,
+            ),
         )
+        async with httpx.AsyncClient(transport=transport, timeout=5.0) as client:
+
+            async def judged(url: str) -> dict[str, Any]:
+                async with turns:
+                    return await CheckCoreService._preview_bulk_url(
+                        url, protection, client
+                    )
+
+            previews = await asyncio.gather(
+                *[judged(url) for url in urls[:_PREVIEW_PROBED_URLS]],
+                *[
+                    CheckCoreService._preview_bulk_url(url, None, None)
+                    for url in urls[_PREVIEW_PROBED_URLS:]
+                ],
+            )
         taken: set[str] = set()
         numbers: dict[str, int] = {}
         for preview in previews:
@@ -1276,22 +1316,31 @@ class CheckCoreService:
         return bulk_display_name(parsed)
 
     @staticmethod
-    async def _preview_bulk_url(url_str: str) -> dict[str, Any]:
-        """One bulk-import preview row: the check the URL would become and, for
-        an http check, whether the target answers."""
+    async def _preview_bulk_url(
+        url_str: str,
+        protection: NetworkProtection | None,
+        client: httpx.AsyncClient | None,
+    ) -> dict[str, Any]:
+        """One bulk-import preview row: the check the URL would become and, given
+        the settings and a client, whether they allow it and whether an http target
+        answers. A row given neither is named only."""
         try:
             check_type, full_url, parsed = CheckCoreService._classify_bulk_url(url_str)
             display_name = bulk_display_name(parsed)
 
             validation_status = "unknown"
-            validation_message = ""
+            validation_message = (
+                f"Not checked: a preview checks the first {_PREVIEW_PROBED_URLS} URLs"
+            )
             status_code = None
-            if check_type == "http":
+            if protection and client:
                 (
                     validation_status,
                     validation_message,
                     status_code,
-                ) = await CheckCoreService._probe_http_target(full_url)
+                ) = await CheckCoreService._probe_target(
+                    check_type, full_url, protection, client
+                )
 
             return {
                 "url": full_url,
@@ -1313,23 +1362,49 @@ class CheckCoreService:
             }
 
     @staticmethod
-    async def _probe_http_target(full_url: str) -> tuple[str, str, int | None]:
-        """Fetch `full_url` once: (validation_status, validation_message, status_code).
+    async def _probe_target(
+        check_type: str,
+        full_url: str,
+        protection: NetworkProtection,
+        client: httpx.AsyncClient,
+    ) -> tuple[str, str, int | None]:
+        """A target's (validation_status, validation_message, status_code).
+
+        The target is judged as saving the check judges it, so a row the save would
+        refuse says so. An http target is then fetched through `client`, whose
+        connections open only on an allowed address, so a name that resolves
+        differently the second time is held to the same settings. A redirect is
+        reported, not followed. Only the status is read: the deadline covers the
+        lookups and the response head, and the body is never fetched.
 
         Certificates ARE verified here, because the agent's http check defaults
-        to verify_ssl=True. The preview used to pass verify=False, so a
-        self-signed target previewed as "success" and then failed on its first
-        real run — the preview was answering a different question from the check
-        it previews. A cert problem is reported as its own warning so the
+        to verify_ssl=True. A cert problem is reported as its own warning so the
         operator can set verify_ssl=False deliberately.
         """
         # swallowed-exceptions: every failure here is the probe's answer, shown
         # to the operator as the preview row's status.
         try:
-            async with httpx.AsyncClient(timeout=5.0) as client:
-                response = await client.get(full_url)
-        except httpx.TimeoutException:
-            return "error", "Timeout (5s)", None
+            async with asyncio.timeout(_PREVIEW_PROBE_SECONDS):
+                await asyncio.to_thread(
+                    validate_check_target,
+                    full_url,
+                    block_cloud_metadata=protection.block_cloud_metadata,
+                    block_private_networks=protection.block_private_networks,
+                )
+                if check_type != "http":
+                    return "unknown", "", None
+                async with client.stream("GET", full_url) as response:
+                    status_code = response.status_code
+        except CheckTargetBlockedError as e:
+            return "error", str(e), None
+        except SsrfBlockedError as e:
+            return (
+                "error",
+                f"{e} Adjust SSRF protection under Settings > Security to allow it.",
+                None,
+            )
+        except TimeoutError, httpx.TimeoutException:
+            return "error", f"Timeout ({_PREVIEW_PROBE_SECONDS}s)", None
         except httpx.ConnectError as e:
             # httpx wraps a TLS handshake failure in ConnectError, so this has
             # to be distinguished by the cause, not the type.
@@ -1344,7 +1419,6 @@ class CheckCoreService:
         except Exception as e:
             return "error", str(e)[:100], None
 
-        status_code = response.status_code
         status = "success" if 200 <= status_code < 400 else "warning"
         return status, f"HTTP {status_code}", status_code
 

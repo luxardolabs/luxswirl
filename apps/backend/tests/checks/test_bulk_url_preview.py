@@ -1,8 +1,8 @@
 """Bulk-import URL handling: the check type, target and generated name a URL
 becomes, shared by the bulk create and the bulk preview.
 
-The preview probe is exercised only for non-http schemes here, which never
-touch the network.
+The preview probe is exercised only for non-http schemes here, which open no
+connection; `test_bulk_preview_ssrf.py` holds the rest.
 """
 
 from __future__ import annotations
@@ -11,6 +11,7 @@ from urllib.parse import urlparse
 
 import pytest
 from app.services.core.check_core_service import CheckCoreService
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 @pytest.mark.parametrize(
@@ -50,11 +51,12 @@ def test_bulk_display_name_is_capped_at_255() -> None:
     assert name.startswith("h-io-a-a")
 
 
-async def test_preview_of_a_non_http_url_is_not_probed() -> None:
-    [row] = await CheckCoreService.bulk_preview_checks(["tcp://db.internal:5432"])
+@pytest.mark.integration
+async def test_preview_of_a_non_http_url_is_not_probed(db: AsyncSession) -> None:
+    [row] = await CheckCoreService.bulk_preview_checks(db, ["tcp://192.0.2.1:5432"])
     assert row == {
-        "url": "tcp://db.internal:5432",
-        "generated_name": "db-internal-5432",
+        "url": "tcp://192.0.2.1:5432",
+        "generated_name": "192-0-2-1-5432",
         "check_type": "tcp",
         "validation_status": "unknown",
         "validation_message": "",
@@ -62,9 +64,10 @@ async def test_preview_of_a_non_http_url_is_not_probed() -> None:
     }
 
 
-async def test_preview_of_an_unparseable_url_is_an_error_row() -> None:
+@pytest.mark.integration
+async def test_preview_of_an_unparseable_url_is_an_error_row(db: AsyncSession) -> None:
     # An out-of-range port raises when the name is built.
-    [row] = await CheckCoreService.bulk_preview_checks(["tcp://host:99999"])
+    [row] = await CheckCoreService.bulk_preview_checks(db, ["tcp://host:99999"])
     assert row["validation_status"] == "error"
     assert row["validation_message"].startswith("Parse error:")
     assert row["generated_name"] == "tcp://host:99999"
