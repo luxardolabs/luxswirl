@@ -5,23 +5,41 @@ Provides trusted-proxy-aware client IP extraction used by:
 - Audit logging (auth failures, agent registrations, etc.)
 
 The trust model: X-Forwarded-For is only honored when the direct TCP peer
-is in `settings.security.trusted_proxy_networks`. This prevents an attacker
-who can hit the FastAPI process directly from spoofing client IPs via the
-X-Forwarded-For header.
+is a trusted proxy: within `settings.security.trusted_proxy_networks`, or one
+of the addresses a name in `settings.security.trusted_proxy_hosts` resolves to.
+This prevents a client that can reach the FastAPI process directly, from the
+internet or from a private network beside it, from choosing its own
+rate-limit bucket via the X-Forwarded-For header.
+
+The names are resolved off the request path, by `refresh_trusted_proxy_hosts`,
+which the server runs at startup and every PROXY_HOSTS_REFRESH_SECONDS after
+(`app/background/trusted_proxy_refresh.py`), so a request never waits on DNS.
+Until a name resolves, its proxy is not trusted: its clients share the proxy's
+bucket, which is safe, not open.
 """
 
 from __future__ import annotations
 
+import asyncio
 from functools import lru_cache
 from ipaddress import ip_address, ip_network
 from typing import TYPE_CHECKING
 
 from app.core.config import settings
+from app.shared.logger import get_logger
 
 if TYPE_CHECKING:
     from ipaddress import IPv4Network, IPv6Network
 
     from fastapi import Request
+
+logger = get_logger("luxswirl.core.request_helpers")
+
+# How often the proxy names are looked up again: a restarted proxy container
+# can come back on another address.
+PROXY_HOSTS_REFRESH_SECONDS = 30.0
+
+_proxy_host_ips: frozenset[str] = frozenset()
 
 
 @lru_cache(maxsize=1)
@@ -45,21 +63,50 @@ def _parsed_trusted_networks() -> list[IPv4Network | IPv6Network]:
 
 
 def reset_trusted_networks_cache() -> None:
-    """Clear the trusted-network lru_caches so a config change takes effect.
+    """Clear the trusted-proxy caches so a config change takes effect.
 
     Public entry point for cache invalidation — used by tests (which mutate
-    the configured CIDRs between cases) and available to runtime code that
-    reconfigures ``trusted_proxy_networks`` without a restart.
+    the configured CIDRs and hosts between cases) and available to runtime code
+    that reconfigures the trusted proxies without a restart.
     """
+    global _proxy_host_ips
     _trusted_networks_cache_key.cache_clear()
     _parsed_trusted_networks.cache_clear()
+    _proxy_host_ips = frozenset()
 
 
-def _ip_in_trusted_networks(ip_str: str) -> bool:
+async def _resolve_host(host: str) -> set[str]:
+    """Every address `host` resolves to, without blocking the event loop."""
+    infos = await asyncio.get_running_loop().getaddrinfo(host, None)
+    return {str(info[4][0]) for info in infos}
+
+
+async def refresh_trusted_proxy_hosts() -> None:
+    """Resolve `trusted_proxy_hosts` and trust exactly the addresses found.
+
+    A name that does not resolve (no such proxy in this deployment) adds
+    nothing; the others still count.
+    """
+    global _proxy_host_ips
+    found: set[str] = set()
+    for host in settings.security.trusted_proxy_hosts:
+        try:
+            found |= await _resolve_host(host)
+        except OSError as exc:
+            logger.debug(
+                "Trusted proxy host did not resolve",
+                extra={"host": host, "error": type(exc).__name__},
+            )
+    _proxy_host_ips = frozenset(found)
+
+
+def _is_trusted_proxy(ip_str: str) -> bool:
     try:
         ip = ip_address(ip_str)
     except ValueError:
         return False
+    if str(ip) in _proxy_host_ips:
+        return True
     return any(ip in n for n in _parsed_trusted_networks())
 
 
@@ -68,18 +115,18 @@ def client_ip_from_request(request: Request) -> str:
 
     Logic:
     1. Read direct TCP peer (request.client.host).
-    2. If the peer is NOT in trusted_proxy_networks, return it directly —
-       any X-Forwarded-For header is ignored (could be attacker-supplied).
+    2. If the peer is NOT a trusted proxy, return it directly — any
+       X-Forwarded-For header is ignored (could be attacker-supplied).
     3. If the peer IS trusted, walk the X-Forwarded-For chain right-to-left
-       (closest proxy first) and return the first hop that is NOT in
-       trusted_proxy_networks — that's the original client.
+       (closest proxy first) and return the first hop that is NOT a trusted
+       proxy — that's the original client.
     4. If the entire chain is trusted (or empty), fall back to the direct peer.
     """
     direct = request.client.host if request.client else "unknown"
     if direct == "unknown":
         return direct
 
-    if not _ip_in_trusted_networks(direct):
+    if not _is_trusted_proxy(direct):
         # Not behind a trusted proxy — ignore XFF entirely.
         return direct
 
@@ -95,7 +142,7 @@ def client_ip_from_request(request: Request) -> str:
         except ValueError:
             # Malformed hop — keep walking.
             continue
-        if not _ip_in_trusted_networks(str(ip)):
+        if not _is_trusted_proxy(str(ip)):
             return str(ip)
 
     # Whole chain is trusted (e.g., internal traffic) — return direct peer.

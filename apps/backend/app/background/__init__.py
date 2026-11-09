@@ -13,6 +13,10 @@ from app.background.session_cleanup import (
     start_session_cleanup_task,
     stop_session_cleanup_task,
 )
+from app.background.trusted_proxy_refresh import (
+    start_trusted_proxy_refresh_task,
+    stop_trusted_proxy_refresh_task,
+)
 
 __all__ = [
     "start_job_purge_task",
@@ -21,4 +25,6 @@ __all__ = [
     "stop_session_cleanup_task",
     "start_database_maintenance_task",
     "stop_database_maintenance_task",
+    "start_trusted_proxy_refresh_task",
+    "stop_trusted_proxy_refresh_task",
 ]

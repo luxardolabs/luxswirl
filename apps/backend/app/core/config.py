@@ -212,22 +212,28 @@ class SecuritySettings(BaseSettings):
         ),
     )
 
-    # Trusted proxy CIDR ranges for X-Forwarded-For handling.
-    # When the direct TCP peer is in one of these networks, the leftmost-untrusted
-    # X-Forwarded-For hop is used as the client IP for rate-limiting + audit logs.
-    # Default covers Docker bridge / RFC 1918 / loopback. Tighten in production
-    # if you know your reverse proxy's exact CIDR.
+    # Trusted proxies for X-Forwarded-For handling. When the direct TCP peer is
+    # one of them, the rightmost untrusted X-Forwarded-For hop is used as the
+    # client IP for rate limiting and audit logs. Any other peer's header is
+    # ignored, so it cannot pick its own rate-limit bucket. The default trusts a
+    # proxy on the same host (loopback) and the shipped compose proxy by its
+    # service name, never a whole private range: a client on a private network
+    # beside the server is a client, not a proxy.
     trusted_proxy_networks: list[str] = Field(
-        default=[
-            "127.0.0.0/8",
-            "::1/128",
-            "10.0.0.0/8",
-            "172.16.0.0/12",
-            "192.168.0.0/16",
-        ],
+        default=["127.0.0.0/8", "::1/128"],
         description=(
             "CIDR ranges of trusted reverse proxies. X-Forwarded-For is honored only "
-            "when the direct TCP peer is within one of these networks."
+            "when the direct TCP peer is within one of these networks (or is a "
+            "trusted_proxy_hosts address)."
+        ),
+    )
+    trusted_proxy_hosts: list[str] = Field(
+        default=["nginx"],
+        description=(
+            "Host names of trusted reverse proxies, resolved in the background and "
+            "re-resolved every 30 seconds; X-Forwarded-For is honored from the "
+            "addresses they resolve to. The default is the shipped compose proxy's "
+            "service name; a name that does not resolve trusts nothing."
         ),
     )
 

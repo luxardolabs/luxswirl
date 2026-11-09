@@ -29,10 +29,12 @@ def _reset_helper_caches():
 
 @pytest.fixture
 def default_trusted_networks():
-    """Default config: RFC 1918 + loopback as trusted."""
+    """An operator's config trusting RFC 1918 + loopback (the walk's own cases;
+    the shipped default is in test_trusted_proxy_default.py)."""
     nets = ["127.0.0.0/8", "::1/128", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"]
     with patch("app.core.request_helpers.settings") as mock_settings:
         mock_settings.security.trusted_proxy_networks = nets
+        mock_settings.security.trusted_proxy_hosts = []
         yield
 
 

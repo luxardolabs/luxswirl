@@ -26,9 +26,11 @@ from app.background import (
     start_database_maintenance_task,
     start_job_purge_task,
     start_session_cleanup_task,
+    start_trusted_proxy_refresh_task,
     stop_database_maintenance_task,
     stop_job_purge_task,
     stop_session_cleanup_task,
+    stop_trusted_proxy_refresh_task,
 )
 from app.background.maintenance_handlers import (
     register_all as register_maintenance_handlers,
@@ -186,6 +188,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Start background tasks
     start_job_purge_task()
     start_session_cleanup_task()
+    start_trusted_proxy_refresh_task()
     start_database_maintenance_task()
     register_maintenance_handlers()
     await start_maintenance_worker()
@@ -209,6 +212,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await stop_maintenance_worker()
     await stop_job_purge_task()
     await stop_session_cleanup_task()
+    await stop_trusted_proxy_refresh_task()
     await stop_database_maintenance_task()
 
     await close_db()
