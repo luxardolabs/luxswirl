@@ -84,15 +84,18 @@ async def _resolve_host(host: str) -> set[str]:
 async def refresh_trusted_proxy_hosts() -> None:
     """Resolve `trusted_proxy_hosts` and trust exactly the addresses found.
 
-    A name that does not resolve (no such proxy in this deployment) adds
-    nothing; the others still count.
+    A name that does not resolve (no such proxy in this deployment, or no
+    valid host name at all) adds nothing; the others still count.
     """
     global _proxy_host_ips
     found: set[str] = set()
     for host in settings.security.trusted_proxy_hosts:
         try:
             found |= await _resolve_host(host)
-        except OSError as exc:
+        # A name the resolver cannot even encode (a label over 63 characters
+        # raises UnicodeError from the idna codec, a NUL ValueError) is as
+        # unresolvable as one it looks up and misses: it must not stop the rest.
+        except (OSError, ValueError) as exc:
             logger.debug(
                 "Trusted proxy host did not resolve",
                 extra={"host": host, "error": type(exc).__name__},

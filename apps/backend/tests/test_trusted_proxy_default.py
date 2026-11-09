@@ -93,14 +93,19 @@ async def test_a_proxy_host_is_trusted_at_the_address_it_resolves_to(
     )
 
 
+@pytest.mark.parametrize(
+    "bad_host",
+    ["no-such-proxy.invalid", "a" * 64 + ".example", "nul\x00host", ""],
+    ids=["nxdomain", "label-too-long", "nul", "empty"],
+)
 async def test_an_unresolvable_proxy_host_trusts_nothing(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, bad_host: str
 ) -> None:
     monkeypatch.setattr(request_helpers.settings.security, "trusted_proxy_networks", [])
     monkeypatch.setattr(
         request_helpers.settings.security,
         "trusted_proxy_hosts",
-        ["no-such-proxy.invalid", "localhost"],
+        [bad_host, "localhost"],
     )
     reset_trusted_networks_cache()
 
