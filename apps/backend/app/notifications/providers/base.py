@@ -15,6 +15,27 @@ DEFAULT_NETWORK = NetworkProtection(
     block_cloud_metadata=True, block_private_networks=False
 )
 
+# The longest URL a provider takes: what browsers and most servers accept. Every
+# reader of the provider (the list, the masking, each delivery) pays for it.
+MAX_PROVIDER_URL_LENGTH = 2048
+
+
+def provider_url(config: dict[str, Any], field: str) -> str:
+    """`config[field]` as a URL a provider can store: text of at most
+    MAX_PROVIDER_URL_LENGTH characters. The error never quotes the value.
+
+    Raises:
+        ValueError: The value is not text, or is longer.
+    """
+    url = config[field]
+    if not isinstance(url, str):
+        raise ValueError(f"{field} must be text")
+    if len(url) > MAX_PROVIDER_URL_LENGTH:
+        raise ValueError(
+            f"{field} must be at most {MAX_PROVIDER_URL_LENGTH} characters"
+        )
+    return url
+
 
 @dataclass
 class NotificationContext:

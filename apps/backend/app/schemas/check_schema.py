@@ -153,8 +153,10 @@ class CheckUpdate(BaseSchema):
 
     display_name: StorableText | None = Field(None, min_length=1, max_length=255)
     check_type: CheckType | None = None
-    target: StorableText | None = None
-    description: StorableText | None = None
+    # The create limits: past them the column refuses the value as a database
+    # error (the target is stored encrypted, which makes it longer).
+    target: StorableText | None = Field(None, min_length=1, max_length=512)
+    description: StorableText | None = Field(None, max_length=1000)
     interval_seconds: int | None = Field(None, gt=0, le=86400)
     timeout_seconds: int | None = Field(None, gt=0, le=300)
     enabled: bool | None = None

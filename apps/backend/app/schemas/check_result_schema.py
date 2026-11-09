@@ -2,14 +2,26 @@
 Pydantic schemas for CheckResult domain.
 """
 
+import json
 from datetime import datetime
 from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import Field
+from pydantic import Field, field_validator
 
 from app.models.enum_model import CheckErrorType, CheckType
 from app.schemas.base_schema import BaseSchema, StorableJson, StorableText
+
+# A result's metrics, measured as compact JSON (`metrics_size`). The agent fits
+# what it sends to this (`apps/agent/app/agent/result_limits.py`).
+MAX_METRICS_CHARS = 65535
+
+
+def metrics_size(metrics: dict[str, Any]) -> int:
+    """The characters `metrics` takes as compact JSON."""
+    return len(
+        json.dumps(metrics, separators=(",", ":"), ensure_ascii=False, default=str)
+    )
 
 
 class CheckResultBase(BaseSchema):
@@ -54,10 +66,26 @@ class CheckResultCreate(CheckResultBase):
     http_response_time_ms: float | None = Field(
         None, ge=0, description="HTTP response time"
     )
-    metrics: StorableJson | None = Field(None, description="Additional metrics")
+    metrics: StorableJson | None = Field(
+        None,
+        description=(
+            f"Additional metrics, at most {MAX_METRICS_CHARS} characters as compact JSON"
+        ),
+    )
     response_data: StorableText | None = Field(
         None, max_length=65535, description="Response body or data"
     )
+
+    @field_validator("metrics")
+    @classmethod
+    def _metrics_fit(cls, metrics: dict[str, Any] | None) -> dict[str, Any] | None:
+        """Refuse metrics past MAX_METRICS_CHARS, measured whole: every reader of
+        the result (the panel, the admin API, the masking) pays for its size."""
+        if metrics is not None and metrics_size(metrics) > MAX_METRICS_CHARS:
+            raise ValueError(
+                f"metrics must be at most {MAX_METRICS_CHARS} characters as JSON"
+            )
+        return metrics
 
     model_config = {
         "json_schema_extra": {

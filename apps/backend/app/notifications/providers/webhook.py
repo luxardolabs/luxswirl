@@ -16,6 +16,7 @@ from app.notifications.providers._vetted_http import vetted_transport
 from app.notifications.providers.base import (
     BaseNotificationProvider,
     NotificationContext,
+    provider_url,
 )
 from app.shared.logger import get_logger
 from app.shared.ssrf import SsrfBlockedError
@@ -53,7 +54,7 @@ class WebhookNotificationProvider(BaseNotificationProvider):
                 raise ValueError(f"Webhook provider missing required field: {field}")
 
         # Validate URL format (basic check)
-        url = config["post_url"]
+        url = provider_url(config, "post_url")
         if not url.startswith(("http://", "https://")):
             raise ValueError(
                 f"Invalid webhook URL: {url}. Must start with http:// or https://"

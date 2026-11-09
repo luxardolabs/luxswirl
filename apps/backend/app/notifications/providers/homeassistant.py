@@ -15,6 +15,7 @@ from app.notifications.providers._vetted_http import vetted_transport
 from app.notifications.providers.base import (
     BaseNotificationProvider,
     NotificationContext,
+    provider_url,
 )
 from app.shared.logger import get_logger
 from app.shared.ssrf import SsrfBlockedError
@@ -51,7 +52,7 @@ class HomeAssistantNotificationProvider(BaseNotificationProvider):
                 )
 
         # Validate URL format
-        url = config["post_url"]
+        url = provider_url(config, "post_url")
         # The SSRF settings judge it as a webhook's: on save (`network_targets`)
         # and on every connection (`vetted_transport`).
         if not url.startswith(("http://", "https://")):

@@ -7,12 +7,14 @@ metrics, where the result is still stored.
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import pytest
 from app.agent.reporter import Reporter
 from app.agent.result_limits import (
     MAX_ERROR_CHARS,
+    MAX_METRICS_CHARS,
     MAX_RESPONSE_DATA_CHARS,
     TRUNCATED_MARKER,
     fit_result,
@@ -81,3 +83,41 @@ async def test_the_reporter_fits_every_result_it_queues(tmp_path) -> None:
     [queued] = reporter.current_batch
     assert len(queued["error"]) == MAX_ERROR_CHARS
     assert queued["http_status_code"] is None
+
+
+def _measured(metrics: object) -> int:
+    """The metrics' size as the server measures it."""
+    return len(json.dumps(metrics, separators=(",", ":"), ensure_ascii=False))
+
+
+def test_long_strings_in_metrics_are_truncated_to_fit_the_server() -> None:
+    metrics = {"synthetic": {"errors": ["t" * 200_000], "status": "failure"}}
+
+    out = fit_result(_result(metrics=metrics))
+
+    assert _measured(out["metrics"]) <= MAX_METRICS_CHARS
+    assert out["metrics"]["synthetic"]["status"] == "failure"
+    assert out["metrics"]["synthetic"]["errors"][0].endswith(TRUNCATED_MARKER)
+
+
+def test_metrics_too_big_even_truncated_are_replaced_by_a_note() -> None:
+    metrics = {"records": [f"r{n}" * 10 for n in range(50_000)]}
+
+    out = fit_result(_result(metrics=metrics))
+
+    assert _measured(out["metrics"]) <= MAX_METRICS_CHARS
+    assert out["metrics"]["metrics_truncated"] is True
+
+
+def test_a_raw_status_survives_metrics_that_had_to_be_replaced() -> None:
+    metrics = {"records": [f"r{n}" * 10 for n in range(50_000)]}
+
+    out = fit_result(_result(http_status_code=999, metrics=metrics))
+
+    assert out["metrics"]["http_status_code_raw"] == 999
+
+
+def test_metrics_within_the_limit_are_untouched() -> None:
+    metrics = {"response": {"status_code": 200, "body": "x" * 1000}}
+
+    assert fit_result(_result(metrics=dict(metrics)))["metrics"] == metrics
