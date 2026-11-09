@@ -2454,13 +2454,13 @@
       },
       {
         "rule": "repo.emitted_assets_current",
-        "status": "FAIL",
+        "status": "PASS",
         "since": "0.208.0",
-        "violations": 3,
+        "violations": 0,
         "deferred": false,
         "inert": false,
         "inert_reason": "",
-        "fix": "re-emit the asset and re-apply it \u2014 `luxarch --emit <slug>` \u2014 KEEPING your EDIT-THIS settings (registry, app import, exemptions). A revision exists because the previous version was wrong in a way that mattered: 0.207.0's image block could not produce a valid docker tag at all, and the repos still on the older text cannot build. Presence is not currency; the marker line is how this is checked, so do not edit it.",
+        "fix": "",
         "example": ""
       },
       {
@@ -2608,13 +2608,13 @@
       },
       {
         "rule": "repo.hooks_current",
-        "status": "FAIL",
+        "status": "PASS",
         "since": "0.164.0",
-        "violations": 1,
+        "violations": 0,
         "deferred": false,
         "inert": false,
         "inert_reason": "",
-        "fix": "Re-run `luxarch --emit hooks > <scratch>/install_hooks.py`, then `python3 <scratch>/install_hooks.py`. It overwrites `.claude/hooks/` from the pinned image and merges the wiring, so this is the whole fix whatever the drift \u2014 a hand-edit, a hook the set has since gained, or a retired one still sitting there. NEVER hand-edit a hook to clear this: the next re-emit discards the edit, and the whole point of emitting them is that every repo runs the byte-identical set. If a hook is WRONG for your repo, escalate it \u2014 a local edit fixes it for one repo and leaves the other thirty broken.",
+        "fix": "",
         "example": ""
       },
       {
@@ -2993,20 +2993,20 @@
       }
     ],
     "summary": {
-      "PASS": 71,
-      "FAIL": 2,
+      "PASS": 73,
+      "FAIL": 0,
       "XFAIL": 0,
       "XPASS": 0,
       "INERT": 1
     }
   },
   "summary": {
-    "PASS": 245,
-    "FAIL": 2,
+    "PASS": 247,
+    "FAIL": 0,
     "XFAIL": 0,
     "XPASS": 0,
     "INERT": 22
   },
-  "commit": "07351ae8194340f7dbd6d667415c9cb01e5e8f45",
-  "generated_at": "2026-11-09T04:46:11Z"
+  "commit": "00f928989a2c36a9a9af4d7e2d3835cc2d88adc7",
+  "generated_at": "2026-11-09T05:18:59Z"
 }

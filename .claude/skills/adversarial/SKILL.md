@@ -3,7 +3,7 @@ name: adversarial
 description: Attack a change before calling it done — an independent agent that did not write the change tries to make it wrong (security, tenant isolation, data integrity, money, the real stack), reproduces each break as a failing test or a probe, and the author fixes every confirmed break and commits the test. Run it from /wrap-up for any change touching auth, tenancy, data writes or migrations, money, secrets or personal data, deploys, or a guard-red fix.
 ---
 
-<!-- luxarch:adversarial-skill asset v7 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit adversarial-skill`. -->
+<!-- luxarch:adversarial-skill asset v8 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit adversarial-skill`. -->
 
 # Adversarial pass
 
@@ -70,6 +70,25 @@ runs in a container on a `docker network create --internal` network holding only
 dependencies installed before it joins: a remap the script sets for itself, or a hosts entry it relies
 on, fails open, and a missed one sends its login to production. Outside that network, never use
 `curl -k` or any other certificate bypass.
+
+WHERE ATTACK SCRIPTS RUN: on a machine other agents share, as a user that can write its system paths,
+so a script's mistake lands on every session there. Every script you run:
+- starts `set -eu` (a Python script fails on an unset name by itself), so an unset variable stops it
+  before `"$ROOT/bin/gh"` becomes `/bin/gh`;
+- runs only inside `docker run --rm --network none -v <scratch dir>:/s -v <worktree>:/w:ro -w /s
+  <image> sh /s/<script>`, both paths written out, nothing else mounted: your scratch dir read-write,
+  the code under attack read-only. The image already holds what the script needs (the repo's test
+  image, or `python:3-slim` for a stdlib script); nothing is installed at run time. A stand-in tool
+  (`gh`, `docker`, `git`) lives in /s/bin, on PATH inside that container only. Two runs leave it: the
+  probe of the throwaway stack above, on its `--internal` network, and the repo's own `make test-one`
+  for your one test file, which runs its own container;
+- is a file you wrote with the file tool before the first `docker run` that mounts it (docker makes a
+  missing mount source as an empty directory owned by root);
+- is run by one plain `docker run` per step, naming that script: no `&&` chain, heredoc or pipe into a filter,
+  and its whole output read (a cut tail is a lost result);
+- has no `pytest.skip` and no bare `noqa`: a test that cannot run fails;
+- holds a bare red and a bare green control, and the report shows both results.
+A round in which nothing executed is INCONCLUSIVE, with what stopped it, never "no breaks".
 
 CONSTRAINTS: read-only on the repo except files under <scratch dir>, and one test file of your own
 in the repo's tests/ (`tests/test_adversarial_<topic>.py`) when a finding needs the repo's own test

@@ -49,7 +49,7 @@ LUXAUDIT_IMAGE   ?= $(LUXARCH_REGISTRY)/luxardolabs/luxaudit:$(LUXAUDIT_VERSION)
 # ruff/mypy config byte-identical (see .luxlint.toml); ruff runs mount-only, mypy
 # runs as an in-repo tail (needs a current mypy for PEP 758 excepts — the baked
 # lint image freezes an older one, so the tail installs a fresh mypy).
-LUXLINT_VERSION := 0.75.0
+LUXLINT_VERSION := 0.76.0
 LUXLINT_IMAGE    ?= $(LUXARCH_REGISTRY)/luxardolabs/luxlint:$(LUXLINT_VERSION)
 # The gitleaks asset reads the luxlint ref as $(LUXLINT).
 LUXLINT          = $(LUXLINT_IMAGE)
@@ -2204,7 +2204,7 @@ hooks: ## Activate the committed git hooks (hooks/) for this clone — run once 
 	git config core.hooksPath hooks
 	@echo "git hooks active (hooks/): pre-commit = identity + gitleaks(staged), pre-push = gitleaks(full history + identity), commit-msg = no internal refs."
 
-# luxarch:gitleaks asset v21 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit gitleaks`.
+# luxarch:gitleaks asset v22 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit gitleaks`.
 # ── The privacy gate: EVERY surface a commit publishes ──────────────────────────────────────────
 # Emitted by `luxarch --emit gitleaks`. Drop in verbatim.
 #
@@ -2308,6 +2308,235 @@ override gitleaks_flags = $(subst :SP:, ,$(firstword $(subst :CUT:, ,$(subst $(g
 override gitleaks_refusals = $(foreach v,MAKEFLAGS GNUMAKEFLAGS,$(if $(filter command,$(origin $(v))),$(error REFUSING: $(v) is given as a command-line variable, so the scan would run under flags it never saw: pass make's flags as flags)))$(if $(or $(findstring i,$(filter-out -%,$(firstword $(MAKEFLAGS)))),$(findstring t,$(filter-out -%,$(firstword $(MAKEFLAGS))))),$(error REFUSING: make -i or -t would let a finding pass: run the scan without it))$(if $(filter --eval=% -I% --include-dir%,$(gitleaks_flags)),$(error REFUSING: --eval or -I adds makefile text from outside, which could set the identity allowance: run the scan without it))$(if $(strip $(MAKEFILES)),$(error REFUSING: MAKEFILES ($(MAKEFILES)) reads other makefiles before this one: unset it))$(foreach v,SHELL .SHELLFLAGS,$(if $(filter environment% command,$(origin $(v))),$(error REFUSING: $(v) comes from the $(origin $(v)), so the scan would run in another shell)))$(if $(filter environment% command,$(origin MAKEFILE_LIST)),$(error REFUSING: MAKEFILE_LIST comes from the $(origin MAKEFILE_LIST), so the identity pass would read other makefiles: unset it))$(if $(findstring n,$(filter-out -% %=%,$(firstword $(MAKEFLAGS)))),,$(if $(filter command,$(origin CURDIR)),$(error REFUSING: CURDIR is on the command line, so the scan would read another repository's history and report it as this one's: use make -C <dir>)))$(if $(filter 0,$(MAKELEVEL)),$(foreach v,LUXLINT LUXLINT_IMAGE,$(if $(filter environment% command,$(origin $(v))),$(error REFUSING: $(v) comes from the $(origin $(v)), so the caller chose the image that decides this scan: set it in the makefile or Makefile.local))))
 override gitleaks_no_waiver = if [ -e "$$D/t/.gitleaksignore" ]; then mv "$$D/t/.gitleaksignore" "$$(mktemp -d "$$D/t/gitleaksignore.XXXXXXXX")/"; fi;
 unexport gitleaks_refusals gitleaks_no_waiver gitleaks_flags gitleaks_space
+# Every object a push publishes, read raw: each commit on a branch, a tag or HEAD, and every annotated
+# tag object, the tags a tag points at included (a tag of a tag shows `for-each-ref` only its outer
+# tagger and message). The identity and message passes both read this list. `$$X` names the list file
+# and `$$N` the run's nonce; each git call writes a file, so a failing one stops the pass (`set -e`).
+override gitleaks_objects = git rev-list --branches --tags HEAD > "$$X"; \
+  git for-each-ref refs/heads refs/tags --format='%(objecttype) %(objectname)' > "$$X.r"; \
+  LC_ALL=C sed -n 's/^tag //p' "$$X.r" > "$$X.n"; LC_ALL=C sort -u "$$X.n" > "$$X.t"; \
+  while [ -s "$$X.t" ]; do cat "$$X.t" >> "$$X"; \
+    git cat-file --batch="$$N %(objectname) %(objecttype)" < "$$X.t" > "$$X.r"; LC_ALL=C tr -d '\000' < "$$X.r" > "$$X.c"; \
+    LC_ALL=C awk -v n="$$N" -v mode=nested "$$GITLEAKS_OBJECTS_AWK" "$$X.c" > "$$X.n"; LC_ALL=C sort -u "$$X.n" > "$$X.t"; \
+  done; \
+  git cat-file --batch="$$N %(objectname) %(objecttype)" < "$$X" > "$$X.r"; LC_ALL=C tr -d '\000' < "$$X.r" > "$$X.c";
+
+# Reads the raw objects `git cat-file --batch` prints, each after a `<nonce> <sha> <type>` line, and
+# reads every header line a commit or tag carries, continuation lines included:
+#   mode=id      prints `<identity><TAB><where>` for each author, committer and tagger line (the date
+#                cut off), each address an unknown header holds, and each address a signature carries.
+#   mode=msg     prints each tag message, a `mergetag` header's embedded tag included, as
+#                `<nonce> tag-message/<sha>` (or `mergetag-message/<commit>-<n>`) and its lines.
+#   mode=nested  prints the object each tag of a tag points at.
+# A signature is a `gpgsig` / `gpgsig-sha256` header, or a signature block at the end of a tag message.
+# An address in one is published with the object: gpg writes the signing user ID (subpacket 28) when
+# the key is named by address, an X.509 signature carries the signer's certificate (gitsign's names
+# the signer's address), and an armor header can say anything. OpenPGP packets are parsed: the
+# signer's user ID, a User ID packet, a human-readable notation, an embedded signature and an
+# embedded key block (subpacket 38, `gpg --include-key-block`: the signer's key with every user ID)
+# are read;
+# an issuer key ID or fingerprint names a key, not an address, and is not an identity. An SSHSIG is
+# parsed and each printable string it holds is read; a certificate key and an X.509 signature are read
+# for every address-shaped printable run. A signature in a form this cannot parse is refused as
+# unreadable, never passed. awk has no bitwise operators, so bits are read with division, and powers of two come from a table
+# (busybox awk can be built without `^`).
+override define gitleaks_objects_awk
+function b64init(   s, i) {
+  s = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+  for (i = 1; i <= 64; i++) B64[substr(s, i, 1)] = i - 1
+  P2[0] = 1
+  for (i = 1; i <= 8; i++) P2[i] = P2[i - 1] * 2
+}
+function decode(text,   L, nl, k, i, c, acc, bits, cnt) {
+  cnt = 0; acc = 0; bits = 0; nl = split(text, L, "\n")
+  for (k = 1; k <= nl; k++) {
+    if (L[k] ~ /^=/) break
+    for (i = 1; i <= length(L[k]); i++) {
+      c = substr(L[k], i, 1)
+      if (c == "=") break
+      if (!(c in B64)) return -1
+      acc = acc * 64 + B64[c]; bits += 6
+      if (bits >= 8) { bits -= 8; BY[++cnt] = int(acc / P2[bits]); acc = acc % P2[bits] }
+    }
+  }
+  return cnt
+}
+function str(p, e,   s, i) {
+  s = ""
+  for (i = p; i <= e; i++) s = s sprintf("%c", BY[i])
+  return s
+}
+function num(p, w,   v, k) {
+  v = 0
+  for (k = 0; k < w; k++) v = v * 256 + BY[p + k]
+  return v
+}
+function out(s, where) {
+  gsub(/[\t\n\r]/, " ", s)
+  print s "\t" where
+}
+function emit(s, where) {
+  if (s ~ /[<>]/) out(s, where)
+  else if (s ~ /@/) out("signer <" s ">", where)
+}
+function unreadable(where) {
+  out("a signature this pass cannot read <?>", where)
+}
+function runs(p, e, where,   i, r) {
+  r = ""
+  for (i = p; i <= e + 1; i++) {
+    if (i <= e && BY[i] >= 32 && BY[i] <= 126) { r = r sprintf("%c", BY[i]); continue }
+    while (match(r, /[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+([.][A-Za-z0-9-]+)*[.][A-Za-z][A-Za-z]+/)) {
+      out("signer <" substr(r, RSTART, RLENGTH) ">", where); r = (RSTART + RLENGTH <= length(r)) ? substr(r, RSTART + RLENGTH) : ""
+    }
+    r = ""
+  }
+}
+function subs(p, e, where,   l1, len, t, nl, vl) {
+  while (p <= e) {
+    l1 = BY[p++]
+    if (l1 < 192) len = l1
+    else if (l1 < 255) { if (p > e) return 0; len = (l1 - 192) * 256 + BY[p++] + 192 }
+    else { if (p + 3 > e) return 0; len = num(p, 4); p += 4 }
+    if (len < 1 || p + len - 1 > e) return 0
+    t = BY[p] % 128
+    if (t == 28) emit(str(p + 1, p + len - 1), where)
+    else if (t == 32) { if (!sig(p + 1, p + len - 1, where)) return 0 }
+    else if (t == 38) { if (len < 3 || !pgp(p + 2, p + len - 1, where)) return 0 }
+    else if (t == 20) {
+      if (len < 9) return 0
+      nl = num(p + 5, 2); vl = num(p + 7, 2)
+      if (9 + nl + vl != len) return 0
+      if (BY[p + 1] >= 128) emit(str(p + 9 + nl, p + 8 + nl + vl), where)
+    }
+    p += len
+  }
+  return p == e + 1
+}
+function sig(p, e, where,   v, w, cnt) {
+  if (p > e) return 0
+  v = BY[p]
+  if (v == 3) return 1
+  if (v != 4 && v != 5 && v != 6) return 0
+  w = (v == 6) ? 4 : 2
+  p += 4
+  if (p + w - 1 > e) return 0
+  cnt = num(p, w); p += w
+  if (p + cnt - 1 > e || !subs(p, p + cnt - 1, where)) return 0
+  p += cnt
+  if (p + w - 1 > e) return 0
+  cnt = num(p, w); p += w
+  if (p + cnt - 1 > e || !subs(p, p + cnt - 1, where)) return 0
+  return 1
+}
+function pgp(p, e, where,   h, tag, len, l1, lt, w) {
+  while (p <= e) {
+    h = BY[p++]
+    if (h < 128) return 0
+    if (int(h / 64) % 2) {
+      tag = h % 64
+      if (p > e) return 0
+      l1 = BY[p++]
+      if (l1 < 192) len = l1
+      else if (l1 < 224) { if (p > e) return 0; len = (l1 - 192) * 256 + BY[p++] + 192 }
+      else if (l1 == 255) { if (p + 3 > e) return 0; len = num(p, 4); p += 4 }
+      else return 0
+    } else {
+      tag = int(h / 4) % 16; lt = h % 4
+      if (lt == 3) len = e - p + 1
+      else { w = (lt == 0) ? 1 : (lt == 1) ? 2 : 4; if (p + w - 1 > e) return 0; len = num(p, w); p += w }
+    }
+    if (p + len - 1 > e) return 0
+    if (tag == 2) { if (!sig(p, p + len - 1, where)) return 0 }
+    else if (tag == 13) emit(str(p, p + len - 1), where)
+    else if (tag != 4 && tag != 6 && tag != 12 && tag != 14 && tag != 17) return 0
+    p += len
+  }
+  return 1
+}
+function sshstrings(p, e, where,   len, s) {
+  while (p <= e) {
+    if (p + 3 > e) return 0
+    len = num(p, 4); p += 4
+    if (p + len - 1 > e) return 0
+    s = str(p, p + len - 1)
+    if (s ~ /^[ -~]*$/ && s ~ /@/ && s !~ /^[a-z0-9.-]+@openssh[.]com$/) emit(s, where)
+    p += len
+  }
+  return 1
+}
+function ssh(e, where,   p, i, len) {
+  if (e < 10 || str(1, 6) != "SSHSIG") return 0
+  p = 11
+  for (i = 1; i <= 5; i++) {
+    if (p + 3 > e) return 0
+    len = num(p, 4); p += 4
+    if (p + len - 1 > e) return 0
+    if (i == 1) {
+      if (len >= 4 && num(p, 4) <= len - 4 && str(p + 4, p + 3 + num(p, 4)) ~ /-cert-/) runs(p, p + len - 1, where)
+      else if (!sshstrings(p, p + len - 1, where)) return 0
+    } else if (i < 5 && str(p, p + len - 1) ~ /@/) emit(str(p, p + len - 1), where)
+    p += len
+  }
+  return p == e + 1
+}
+function armor(text, where, required,   L, nl, i, ty, body, found, ok, nb, hv) {
+  nl = split(text, L, "\n"); found = 0
+  for (i = 1; i <= nl; i++) {
+    if (L[i] !~ /^-----BEGIN (PGP SIGNATURE|PGP MESSAGE|SSH SIGNATURE|SIGNED MESSAGE)-----$/) continue
+    ty = substr(L[i], 12, length(L[i]) - 16); body = ""; ok = 0; found++
+    for (i++; i <= nl; i++) {
+      if (L[i] == "-----END " ty "-----") { ok = 1; break }
+      if (L[i] ~ "^[A-Za-z0-9+/=]+$") body = body L[i] "\n"
+      else if (L[i] ~ /@/) { hv = L[i]; sub(/^[^:]*:[ ]*/, "", hv); emit(hv, where) }
+    }
+    nb = ok ? decode(body) : -1
+    if (nb <= 0) { unreadable(where); continue }
+    if (ty ~ /^PGP/) ok = pgp(1, nb, where)
+    else if (ty == "SSH SIGNATURE") ok = ssh(nb, where)
+    else runs(1, nb, where)
+    if (!ok) unreadable(where)
+  }
+  if (required && !found) unreadable(where)
+}
+function object(text, otyp, osha, where, name, top,   L, nl, i, hn, hv, sp, body, j, target) {
+  nl = split(text, L, "\n"); i = 1
+  while (i <= nl && L[i] != "") {
+    hn = L[i]; sp = index(hn, " "); hv = (sp && sp < length(hn)) ? substr(hn, sp + 1) : ""; hn = (sp > 1) ? substr(hn, 1, sp - 1) : (sp ? "" : hn)
+    for (i++; i <= nl && L[i] ~ /^ /; i++) hv = hv "\n" (length(L[i]) > 1 ? substr(L[i], 2) : "")
+    if (mode == "nested") {
+      if (hn == "object") target = hv
+      else if (hn == "type" && hv == "tag" && top) print target
+    } else if (hn == "mergetag") {
+      object(hv, "tag", osha, "the mergetag in commit " osha, "mergetag-message/" osha "-" (++MT), 0)
+    } else if (mode != "id") {
+      continue
+    } else if (hn == "author" || hn == "committer" || hn == "tagger") {
+      sub(/ [0-9]+ [-+][0-9][0-9][0-9][0-9]$/, "", hv); out(hv, where)
+    } else if (hn == "gpgsig" || hn == "gpgsig-sha256") {
+      armor(hv, "the signature of " where, 1)
+    } else if (hn !~ /^(tree|parent|object|type|tag|encoding)$/ && hv ~ /@/) {
+      out(hn " <" hv ">", where)
+    }
+  }
+  if (otyp != "tag") return
+  body = ""
+  for (j = i + 1; j <= nl; j++) body = body L[j] "\n"
+  if (mode == "msg") printf "%s %s\n%s", n, name, body
+  else if (mode == "id") armor(body, "the signature of " where, 0)
+}
+function flush() {
+  if (typ == "commit") object(buf, typ, sha, "commit " sha, "", 1)
+  else if (typ == "tag") object(buf, typ, sha, "tag " sha, "tag-message/" sha, 1)
+  buf = ""; typ = ""
+}
+BEGIN { b64init(); buf = ""; typ = ""; sha = ""; MT = 0 }
+NF == 3 && $1 == n { flush(); sha = $2; typ = $3; next }
+{ buf = buf $0 "\n" }
+END { flush() }
+endef
+unexport gitleaks_objects gitleaks_objects_awk
+gitleaks: override export GITLEAKS_OBJECTS_AWK = $(value gitleaks_objects_awk)
 gitleaks: override export GIT_NO_REPLACE_OBJECTS := 1
 gitleaks: ## secret scan over FULL HISTORY + the commit-identity pass (the hooks cover commit/push)
 	+@$(gitleaks_refusals)true
@@ -2319,8 +2548,7 @@ gitleaks: ## secret scan over FULL HISTORY + the commit-identity pass (the hooks
 	@# prefix is the recipe's. Stated limits: under `make check`, a variable that reached the environment
 	@# of a leg is the gate's stated limit, since a bare `export` in the makefile looks the same, and a
 	@# MAKELEVEL from outside looks like a leg. `-o` and `-n` from outside never reach a recipe (the
-	@# emitted git hooks clear make's flags), an untracked Makefile.local can say `.IGNORE`, and a nested
-	@# annotated tag shows only its outer tagger and message.
+	@# emitted git hooks clear make's flags), and an untracked Makefile.local can say `.IGNORE`.
 	@# A shallow clone and a graft file each make git (and so every pass) read part of the history,
 	@# and the scanned-nothing check below agrees with them: both are refused before any pass. A
 	@# merge commit's own changes are read against its first parent (`--diff-merges=first-parent`), in
@@ -2392,9 +2620,9 @@ gitleaks: ## secret scan over FULL HISTORY + the commit-identity pass (the hooks
 	@set -e; $(GITLEAKS_HISTORY_ENV) C=$$(mktemp); D=$$(mktemp -d); trap 'rm -rf "$$C" "$$D"' EXIT INT TERM; \
 	docker run --rm -v '$(subst ','\'',$(CURDIR))':/repo $(LUXLINT) --emit-config gitleaks > "$$C"; \
 	N=$$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n'); [ $${#N} -eq 32 ]; \
-	mkdir -p "$$D/t/commit-message" "$$D/t/tag-message" "$$D/none"; \
+	mkdir -p "$$D/t/commit-message" "$$D/t/tag-message" "$$D/t/mergetag-message" "$$D/none"; \
 	git log --branches --tags HEAD --format="$$N commit-message/%H%n%B" > "$$D/raw"; \
-	git for-each-ref refs/tags --format="$$N tag-message/%(objectname)%0a%(contents)" >> "$$D/raw"; \
+	X="$$D/objs"; $(gitleaks_objects) LC_ALL=C awk -v n="$$N" -v mode=msg "$$GITLEAKS_OBJECTS_AWK" "$$X.c" >> "$$D/raw"; \
 	LC_ALL=C tr -d '\000' < "$$D/raw" > "$$D/msgs"; \
 	LC_ALL=C awk -v n="$$N" -v d="$$D/t" \
 	  '$$1 == n && NF == 2 { if (f != "") close(f); f = d "/" $$2; printf "" > f; next } \
@@ -2403,7 +2631,8 @@ gitleaks: ## secret scan over FULL HISTORY + the commit-identity pass (the hooks
 	  $(GITLEAKS_IMAGE) dir . -c /gl.toml --redact -v --ignore-gitleaks-allow \
 	  --gitleaks-ignore-path /none || { \
 	  echo "REFUSING: a commit or tag MESSAGE carries a finding (the File above names it:"; \
-	  echo "  commit-message/<sha> or tag-message/<object>). A message is published with its commit"; \
+	  echo "  commit-message/<sha>, tag-message/<object> or mergetag-message/<commit>-<n>). A message is"; \
+	  echo "  published with its commit"; \
 	  echo "  forever. Reword it (git rebase -i, or git filter-repo --message-callback for older"; \
 	  echo "  history), re-run, and ask the OWNER to approve the force-push. Never force-push unapproved."; \
 	  exit 1; }
@@ -2424,11 +2653,14 @@ gitleaks: ## secret scan over FULL HISTORY + the commit-identity pass (the hooks
 	  echo "  history git filter-repo --path-rename), re-run, and ask the OWNER to approve the force-push."; \
 	  exit 1; }
 	@# The identity pass — the half gitleaks structurally cannot do. It reads every author, committer
-	@# and tagger, and an address in a name field is refused whatever the allowance says.
+	@# and tagger, from git's formats and from the raw objects (nested tags and `mergetag` headers
+	@# included), and every address a header or a signature carries. An address in a name field, and an
+	@# identity line holding more than one `<` or `>`, is refused whatever the allowance says: the
+	@# allowance is anchored on the line's end, and git's formats read only the first `<...>`.
 	@# Walks what THIS repo publishes (branches, tags, HEAD), NOT `--all`: a remote-tracking ref caches the
 	@# remote's state, which during a scrub is by definition the un-rewritten history you are about to
 	@# force-push over — `--all` refused the verified fix, and any `git fetch` re-armed it.
-	@$(if $(filter environment% command,$(origin GIT_IDENTITY_OK)),$(error REFUSING: GIT_IDENTITY_OK comes from the $(origin GIT_IDENTITY_OK), so the caller chose which authors pass the identity pass: set it in the makefile))set -e; $(GITLEAKS_HISTORY_ENV) unset GIT_INDEX_FILE; I="$$(mktemp)"; trap 'rm -f "$$I"' EXIT INT TERM; \
+	@$(if $(filter environment% command,$(origin GIT_IDENTITY_OK)),$(error REFUSING: GIT_IDENTITY_OK comes from the $(origin GIT_IDENTITY_OK), so the caller chose which authors pass the identity pass: set it in the makefile))set -e; $(GITLEAKS_HISTORY_ENV) unset GIT_INDEX_FILE; I="$$(mktemp)"; Y="$$(mktemp -d)"; trap 'rm -rf "$$I" "$$Y"' EXIT INT TERM; \
 	for f in $(foreach f,$(MAKEFILE_LIST),'$(subst ','\'',$(f))'); do \
 	  if ! git -C "$$(dirname "$$f")" --work-tree=. ls-files --error-unmatch -- "$$(basename "$$f")" >/dev/null 2>&1 && ! grep -q "luxarch:gitleaks asset" "$$f" && grep -Eq '^[[:space:]]*((override|export)[[:space:]]+)*GIT_IDENTITY_OK[[:space:]]*[:?+!]*=' "$$f"; then \
 	    echo "REFUSING: $$f sets GIT_IDENTITY_OK and git does not track it, so this machine chose which authors pass the identity pass: set it in the committed makefile."; exit 1; \
@@ -2436,10 +2668,16 @@ gitleaks: ## secret scan over FULL HISTORY + the commit-identity pass (the hooks
 	done; \
 	git log --branches --tags HEAD --pretty='%an <%ae>%n%cn <%ce>' > "$$I"; \
 	git for-each-ref refs/tags --format='%(taggername) %(taggeremail)' | LC_ALL=C sed '/^ *$$/d' >> "$$I"; \
-	bad=$$({ LC_ALL=C grep -vE '$(GIT_IDENTITY_OK)' "$$I" || true; LC_ALL=C grep -E '^[^<]*@[^<]*<' "$$I" || true; } | LC_ALL=C sort -u); \
+	N=$$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n'); [ $${#N} -eq 32 ]; X="$$Y/objs"; $(gitleaks_objects) \
+	LC_ALL=C awk -v n="$$N" -v mode=id "$$GITLEAKS_OBJECTS_AWK" "$$X.c" > "$$Y/where"; LC_ALL=C cut -f1 "$$Y/where" >> "$$I"; \
+	bad=$$({ LC_ALL=C grep -vE '$(GIT_IDENTITY_OK)' "$$I" || true; LC_ALL=C grep -E '^[^<]*@[^<]*<' "$$I" || true; LC_ALL=C grep -vE '^[^<>]* <[^<>]*>$$' "$$I" || true; } | LC_ALL=C sort -u); \
 	if [ -n "$$bad" ]; then \
-	  echo "REFUSING: a non-fleet identity appears in commit or tag METADATA (author/committer/tagger):"; \
+	  echo "REFUSING: a non-fleet identity appears in commit or tag METADATA (author/committer/tagger/signer):"; \
 	  echo "$$bad" | LC_ALL=C sed 's/^/    /'; \
+	  echo "$$bad" > "$$Y/bad"; w=$$(LC_ALL=C awk -F '\t' 'NR == FNR { b[$$0]; next } ($$1 in b) { print "    " $$2 ": " $$1 }' "$$Y/bad" "$$Y/where" | LC_ALL=C sort -u); \
+	  if [ -n "$$w" ]; then echo "  read from the raw objects:"; echo "$$w"; \
+	    echo "  A signature carries its signer's user ID when the key is named by address: name it by"; \
+	    echo "  fingerprint (git config user.signingKey <fingerprint>) or sign as the fleet identity, then rewrite."; fi; \
 	  echo "gitleaks cannot see this — it scans diffs, not commit headers, so it reported no leaks."; \
 	  echo "An address here is attached to every affected commit forever, not to one line of one file."; \
 	  echo "Scrub per FLEET-ONBOARDING-STANDARD §2: mirror backup -> git filter-repo -> re-verify with"; \
