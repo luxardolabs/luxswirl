@@ -50,6 +50,7 @@ async def admin_list_notification_logs(
     `alert_id`, `notification_provider_id` or a `search` of alert, provider and check names."""
     return await AdminNotificationCoreService.list_logs(
         db,
+        principal.user.role,
         page=page,
         per_page=per_page,
         status=status,

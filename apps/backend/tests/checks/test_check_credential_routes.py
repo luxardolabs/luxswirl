@@ -98,12 +98,13 @@ async def test_a_bulk_name_holds_no_more_than_the_masked_target(
     assert found.json()["items"] == []
 
 
-def test_a_bulk_name_keeps_an_ordinary_path() -> None:
-    parsed = urlparse("https://api.example.com:8443/v1/health")
+def test_a_bulk_name_holds_the_host_and_port_and_no_path() -> None:
+    # A viewer reads a name as written and is shown only a target's scheme, host
+    # and port, so a name made from the target holds no more: a path can carry a
+    # credential (a webhook's token) that no list of forms can tell from a word.
+    parsed = urlparse(f"https://api.example.com:8443/hooks/{SECRET}")
 
-    assert CheckCoreService.bulk_display_name(parsed) == (
-        "api-example-com-v1-health-8443"
-    )
+    assert CheckCoreService.bulk_display_name(parsed) == "api-example-com-8443"
 
 
 def test_a_port_that_is_no_number_is_not_quoted() -> None:

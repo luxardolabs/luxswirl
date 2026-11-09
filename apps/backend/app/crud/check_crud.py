@@ -112,6 +112,7 @@ class CheckCRUD:
         enabled_only: bool = False,
         tag: str | None = None,
         search: str | None = None,
+        search_full_target: bool = False,
         skip: int = 0,
         limit: int = 50,
     ) -> tuple[Sequence[Check], int]:
@@ -123,6 +124,7 @@ class CheckCRUD:
             enabled_only=enabled_only,
             tag=tag,
             search=search,
+            search_full_target=search_full_target,
         )
         total = (
             await db.execute(select(func.count(Check.id)).where(*clauses))
@@ -146,6 +148,7 @@ class CheckCRUD:
         enabled_only: bool = False,
         tag: str | None = None,
         search: str | None = None,
+        search_full_target: bool = False,
         status: CheckHealthStatus | None = None,
         skip: int = 0,
         limit: int = 50,
@@ -165,6 +168,7 @@ class CheckCRUD:
             enabled_only=enabled_only,
             tag=tag,
             search=search,
+            search_full_target=search_full_target,
         )
         if status is not None:
             clauses.append(health_condition(current, status))
@@ -195,6 +199,7 @@ class CheckCRUD:
         enabled_only: bool,
         tag: str | None,
         search: str | None,
+        search_full_target: bool,
     ) -> list[ColumnElement[bool]]:
         """The WHERE clauses the check lists share."""
         clauses: list[ColumnElement[bool]] = []
@@ -211,6 +216,7 @@ class CheckCRUD:
                 db,
                 select(Check.id, Check.display_name, Check.target).where(*clauses),
                 search,
+                full_target=search_full_target,
             )
             clauses.append(Check.id.in_(matching))
         return clauses

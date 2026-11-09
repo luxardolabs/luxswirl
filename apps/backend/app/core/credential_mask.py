@@ -2,13 +2,15 @@
 
 A check's target or connection string can carry a credential: a database URL
 (`postgresql://monitor:pw@db/app`), a query string (`?client_secret=...`), a libpq or
-ODBC pair, or a webhook's path. Wherever such a value is displayed to someone who may
-not hold it (a viewer, a page any signed-in user loads, an unauthenticated `/metrics`),
-it goes through `mask_credentials`. The stored value, and what the agent runs, are
-unchanged.
+ODBC pair, or a webhook's path. `mask_credentials` hides them where the reader may
+read the rest: an editor's pages, an alert notification, free text (an error, a
+query, an audit row). The stored value, and what the agent runs, are unchanged.
 
 It works from a list of the forms a credential takes, so a form not on the list is
 shown, as is a credential in an ordinary path segment, which cannot be told from a word.
+So a target shown to a reader who does not hold it (a viewer, the unauthenticated
+`/metrics`) does not go through this list: `target_origin.py` cuts it to its scheme,
+host and port.
 
 Every pattern runs on the event loop, over text a viewer can send, and must stay linear
 in time and space. So a loop that reads to the end of a token is anchored to the token's

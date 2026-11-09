@@ -103,7 +103,7 @@ Public status pages support administrator-supplied custom CSS for branding (`sta
 
 - ✅ Password hashing (bcrypt)
 - ✅ Admin-API tokens stored as SHA-256 hashes only, shown once at creation
-- ✅ Check credentials kept from viewers: the check forms (which edit the stored connection string and synthetic script) are editor-only, every page that displays a check's target masks any credential in it (URL userinfo, `password=`/`pwd=`/`token=`/`api_key=` values), and so do the `/metrics` `target` label and alert notifications (email, webhook); the per-agent check export, which keeps every stored value so an import recreates the checks, is admin-only (`app/core/credential_mask.py`)
+- ✅ Check credentials kept from viewers: the check forms (which edit the stored connection string and synthetic script) are editor-only, a viewer, and the `/metrics` `target` label, read a check's target as its scheme, host and port alone (`app/core/target_origin.py`, a parser rather than a list of credential forms, which never ends), an editor's pages and alert notifications (email, webhook) mask any credential in it; the per-agent check export, which keeps every stored value so an import recreates the checks, is admin-only (`app/core/credential_mask.py`)
 - ✅ Credential encryption (Fernet AES-128)
 
 **In Transit**:

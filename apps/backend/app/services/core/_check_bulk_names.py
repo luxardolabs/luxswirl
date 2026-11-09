@@ -3,34 +3,34 @@
 import re
 from urllib.parse import ParseResult, urlparse
 
-from app.core.credential_mask import mask_credentials
+from app.core.target_origin import target_origin
 
 _NUMBERED = re.compile(r" \(\d{1,6}\)\Z")
 
 
 def bulk_display_name(parsed: ParseResult) -> str:
-    """A URL's host, path and any non-default port, joined by hyphens, at most 255
-    characters, all read from the masked URL. A viewer reads a name as written, so it
-    holds no more than the masked target shows.
+    """A URL's host and any non-default port, joined by hyphens, at most 255
+    characters, read from the URL cut to its scheme, host and port. A viewer reads a
+    name as written, so it holds no more than a viewer is shown of the target: no
+    path, query or userinfo, which is where a credential can sit.
 
     Raises:
-        ValueError: The masked URL does not parse, or its port is no number. The
-            parser's own message quotes what it read, and that can be a password, so
-            this one says only that.
+        ValueError: The URL does not parse, or its port is no number. The parser's own message quotes
+            what it read, and that can be a password, so this one says only that.
     """
+    url = parsed.geturl()
     try:
-        masked = urlparse(mask_credentials(parsed.geturl()))
+        reparsed = urlparse(url)
     except ValueError:
         raise ValueError("The URL could not be parsed") from None
-    hostname = masked.hostname or "unknown"
-    display_name = hostname.replace(".", "-")
-    if masked.path and masked.path != "/":
-        path_part = masked.path.strip("/").replace("/", "-")
-        display_name = f"{display_name}-{path_part}"
     try:
-        port = masked.port
+        port = reparsed.port
     except ValueError:
         raise ValueError("The URL has no valid port") from None
+    hostname = urlparse(target_origin(url)).hostname
+    if not hostname or hostname == "***":
+        hostname = "unknown"
+    display_name = hostname.replace(".", "-").replace(":", "-")
     if port and port not in (80, 443):
         display_name = f"{display_name}-{port}"
     return display_name[:255]

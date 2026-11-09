@@ -222,6 +222,7 @@ class CheckResultCRUD:
         search: str | None = None,
         check_ids: list[UUID] | None = None,
         *,
+        search_full_target: bool = False,
         skip: int = 0,
         limit: int = 1000,
     ) -> tuple[Sequence[Row[Check, Agent]], int]:
@@ -266,6 +267,7 @@ class CheckResultCRUD:
                 .join(Agent, Check.agent_id == Agent.id)
                 .where(*conditions),
                 search,
+                full_target=search_full_target,
             )
             conditions.append(Check.id.in_(matching))
 

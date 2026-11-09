@@ -13,7 +13,8 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.credential_mask import mask_credentials, mask_url_paths
+from app.core.credential_mask import mask_url_paths
+from app.core.target_origin import shown_target
 from app.models.enum_model import NotificationStatus, UserRole
 from app.schemas.admin_notification_schema import (
     AdminNotificationLog,
@@ -131,7 +132,7 @@ class AdminNotificationCoreService:
         return ProviderTestResult(success=success, error=mask_url_paths(error))
 
     @staticmethod
-    def _log(entry: NotificationLogEntry) -> AdminNotificationLog:
+    def _log(entry: NotificationLogEntry, role: UserRole) -> AdminNotificationLog:
         return AdminNotificationLog(
             id=entry.id,
             sent_at=entry.sent_at,
@@ -143,13 +144,14 @@ class AdminNotificationCoreService:
             check_id=entry.check_id,
             check_name=entry.display_name,
             check_type=entry.check_type,
-            check_target=mask_credentials(entry.target),
+            check_target=shown_target(entry.target, role),
             snoozed_until=entry.snoozed_until,
         )
 
     @staticmethod
     async def list_logs(
         db: AsyncSession,
+        role: UserRole,
         *,
         page: int,
         per_page: int,
@@ -170,6 +172,6 @@ class AdminNotificationCoreService:
             offset=(page - 1) * per_page,
         )
         return NotificationLogPage.of(
-            [AdminNotificationCoreService._log(e) for e in entries],
+            [AdminNotificationCoreService._log(e, role) for e in entries],
             build_pagination(page=page, per_page=per_page, total=total),
         )

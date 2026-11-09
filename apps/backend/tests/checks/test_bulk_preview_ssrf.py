@@ -646,9 +646,10 @@ async def test_a_parse_error_never_quotes_the_url(db: AsyncSession) -> None:
     row = await _row(db, url)
 
     assert "S3CRETMARK" not in row["validation_message"]
-    assert row["validation_message"] == "Parse error: The URL could not be parsed"
-    with pytest.raises(ValueError, match="could not be parsed"):
-        CheckCoreService.bulk_display_name(urlparse(f"https://{url}"))
+    assert "S3CRETMARK" not in row["generated_name"]
+    assert "S3CRETMARK" not in CheckCoreService.bulk_display_name(
+        urlparse(f"https://{url}")
+    )
 
 
 async def test_a_reset_connection_is_a_failed_connection(db: AsyncSession) -> None:

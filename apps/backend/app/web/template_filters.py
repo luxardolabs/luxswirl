@@ -9,12 +9,13 @@ from datetime import UTC, datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from jinja2 import Environment, pass_eval_context
+from jinja2 import Environment, Undefined, pass_eval_context
 from jinja2.filters import do_xmlattr
 from jinja2.nodes import EvalContext
 
-from app.core.credential_mask import mask_credentials
 from app.core.display_settings import current_display_settings
+from app.core.target_origin import shown_target
+from app.models.enum_model import UserRole
 from app.schemas.pagination_schema import paginated_url
 from app.shared.logger import get_logger
 
@@ -295,6 +296,16 @@ def strict_xmlattr(
     return do_xmlattr(eval_ctx, checked, autospace)
 
 
+def _shown_target(value: str | None, user: object) -> str | None:
+    """`value` as `user` may read it: masked for an editor or admin, cut to its
+    scheme, host and port for anyone else, a missing user included."""
+    role = None if isinstance(user, Undefined) else getattr(user, "role", None)
+    try:
+        return shown_target(value, UserRole(role))
+    except ValueError:
+        return shown_target(value, None)
+
+
 def register_filters(jinja_env: Environment) -> None:
     """
     Register all custom filters with a Jinja2 environment.
@@ -307,8 +318,9 @@ def register_filters(jinja_env: Environment) -> None:
     jinja_env.filters["format_datetime"] = format_datetime
     jinja_env.filters["humanize_number"] = humanize_number
     jinja_env.filters["timeago"] = timeago
-    # A check target shown on a page: never the password it may carry.
-    jinja_env.filters["mask_credentials"] = mask_credentials
+    # A check target shown on a page, as the signed-in user's role may read it:
+    # `{{ check.target|shown_target(current_user) }}`.
+    jinja_env.filters["shown_target"] = _shown_target
     jinja_env.globals["static_version"] = _compute_static_version()
     # paginated_url is universal (every paginated page uses the same URL
     # construction); registering as a global avoids per-template imports.

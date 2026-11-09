@@ -8,7 +8,7 @@
 </div>
 <div id="check-rows" hx-swap-oob="true">
     {% if status_rows %}
-        {% for row in status_rows %}{{ status_row_compressed(row) }}{% endfor %}
+        {% for row in status_rows %}{{ status_row_compressed(row, current_user) }}{% endfor %}
     {% else %}
         <div class="p-8 text-center text-dark-text-muted">
             <p class="text-lg">No checks found</p>

@@ -100,7 +100,8 @@ async def test_the_check_detail_panel_masks_the_target(setup: dict) -> None:
     response = await setup["viewer"].get(f"/check/{setup['pg'].id}")
     assert response.status_code == 200
     assert PASSWORD not in response.text
-    assert "postgresql://***@db.internal:5432/app" in response.text
+    assert "postgresql://db.internal:5432" in response.text
+    assert "/app" not in response.text.split("postgresql://db.internal:5432", 1)[1][:4]
 
 
 @pytest.mark.parametrize(

@@ -95,7 +95,7 @@ A check is addressed by its own id. Reads take any token; writes take an editor'
 | `POST`   | `/api/v1/admin/checks/{id}/enable`  | editor | Enable it                                                                          |
 | `POST`   | `/api/v1/admin/checks/{id}/disable` | editor | Disable it                                                                         |
 
-The list takes `page` (from 1) and `per_page` (1-200, default 50), and filters `agent_id`, `check_type`, `tag`, `search` (name, or target with its credentials masked), `enabled_only` and `status` (`up`, `down` or `unknown`).
+The list takes `page` (from 1) and `per_page` (1-200, default 50), and filters `agent_id`, `check_type`, `tag`, `search` (name, or the target as the token is shown it: an editor's with its credentials masked, a viewer's by its scheme, host and port), `enabled_only` and `status` (`up`, `down` or `unknown`).
 
 Every check the API returns carries its health, as the status dashboard shows it:
 
@@ -113,7 +113,7 @@ Walk the pages with `page` until `has_next` is false.
 
 A create or change refuses what the web UI refuses, with the same message: an address the network protection blocks, an unknown agent (`404`), an agent awaiting approval, rejected or archived, a synthetic script the security validation refuses, a field the API does not take, a required field set to `null`, or an invalid value (`422`). A clone keeps its source's dependency unless the body sets `depends_on_check_id`, and its source's alerts, each turned on or off and with the overrides it has on the source, but never snoozed.
 
-A viewer's token reads `target`, `connection_string`, a database check's `query` and the `description` with their credentials masked: the user and password of any URL read `***` (`postgresql://***@db:5432/app`), as does the value of any key that names a secret (`password`, `client_secret`, `x-api-key`, `AccountKey`, `sig`, and others) and a webhook's path. A synthetic check's `script_code` is left out. Every other field (`display_name`, `tags`, `expected_value`, `expect_value`, `json_path`, `nameserver`) reads as written, so keep credentials out of them. The mask works from a list of the forms a credential takes, so a form not on the list, or a secret in an ordinary path segment, stays visible. An editor's or an admin's token reads them as stored.
+A viewer's token reads `target` and `connection_string` as where they point and nothing more: the scheme, host and port (`https://user:pw@api.example.com:8443/v1?token=x` reads `https://api.example.com:8443`, `host=db port=5432 password=x` reads `host=db port=5432`), and `***` for a host that cannot be read with certainty. A database check's `query` and the `description` are free text, so they are read with their credentials masked: the user and password of any URL read `***`, as does the value of any key that names a secret (`password`, `client_secret`, `x-api-key`, `AccountKey`, `sig`, and others) and a webhook's path; that mask works from a list of the forms a credential takes, so a form not on it stays visible. A synthetic check's `script_code` is left out. Every other field (`display_name`, `tags`, `expected_value`, `expect_value`, `json_path`, `nameserver`) reads as written, so keep credentials out of them. An editor's or an admin's token reads them as stored.
 
 ### Bulk actions
 
@@ -292,7 +292,7 @@ A provider's `config` holds its credentials: an SMTP password, a webhook URL who
 | ------ | --------------------------------- | ---- | ----------------------------------------------- |
 | `GET`  | `/api/v1/admin/notification-logs` | any  | One page of notification attempts, newest first |
 
-Filters: `status` (`sent`, `failed`, `retrying`, `rate_limited`, `deduplicated`, `suppressed`), `alert_id`, `notification_provider_id`, and `search` over alert, provider and check names. Each row's `error_message` has every URL in it cut to its host, and its `check_target` has any credential masked, as the web UI's log page shows them to anyone signed in.
+Filters: `status` (`sent`, `failed`, `retrying`, `rate_limited`, `deduplicated`, `suppressed`), `alert_id`, `notification_provider_id`, and `search` over alert, provider and check names. Each row's `error_message` has every URL in it cut to its host, and its `check_target` is shown as the token's role reads a target: an editor's with any credential masked, a viewer's as its scheme, host and port.
 
 ## Status pages
 

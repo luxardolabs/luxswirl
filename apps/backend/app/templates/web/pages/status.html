@@ -182,7 +182,7 @@
             <div id="check-rows" class="divide-y divide-dark-bg-tertiary">
                 {% if status_rows %}
                     {% for row in status_rows %}
-                        {{ status_row_compressed(row) }}
+                        {{ status_row_compressed(row, current_user) }}
                     {% endfor %}
                 {% else %}
                     <div class="p-8 text-center text-dark-text-muted">

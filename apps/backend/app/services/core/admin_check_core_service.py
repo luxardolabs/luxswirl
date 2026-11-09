@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.credential_mask import mask_credentials
 from app.core.exceptions import ValidationException
 from app.core.synthetic_guard import SYNTHETIC, require_admin_actor
+from app.core.target_origin import target_origin
 from app.models.check_model import Check
 from app.models.enum_model import CheckHealthStatus, MaintenanceJobKind, UserRole
 from app.schemas.admin_check_schema import (
@@ -62,8 +63,8 @@ class AdminCheckCoreService:
         if role == UserRole.VIEWER:
             return response.model_copy(
                 update={
-                    "target": mask_credentials(response.target),
-                    "connection_string": mask_credentials(response.connection_string),
+                    "target": target_origin(response.target),
+                    "connection_string": target_origin(response.connection_string),
                     "query": mask_credentials(response.query),
                     "description": mask_credentials(response.description),
                     "script_code": None,
@@ -169,6 +170,7 @@ class AdminCheckCoreService:
             enabled_only=enabled_only,
             tag=tag,
             search=search,
+            search_full_target=role != UserRole.VIEWER,
             status=status,
             limit=per_page,
             offset=(page - 1) * per_page,

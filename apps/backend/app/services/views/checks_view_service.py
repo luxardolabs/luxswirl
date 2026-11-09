@@ -14,13 +14,13 @@ from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.check_target_validator import CheckTargetBlockedError
-from app.core.credential_mask import mask_credentials
 from app.core.exceptions import (
     AgentNotFoundException,
     CheckNotFoundException,
     ValidationException,
 )
 from app.core.synthetic_security import SyntheticSecurityError
+from app.core.target_origin import shown_target
 from app.models.enum_model import (
     CheckType,
     HttpMethod,
@@ -205,7 +205,7 @@ class ChecksViewService:
             if tag_lc and (not c.tags or tag_lc not in [t.lower() for t in c.tags]):
                 continue
             if search_lc:
-                hay = f"{c.display_name} {mask_credentials(c.target)}".lower()
+                hay = f"{c.display_name} {shown_target(c.target, current_user.role)}".lower()
                 if search_lc not in hay:
                     continue
             filtered.append(c)

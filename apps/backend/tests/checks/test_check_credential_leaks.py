@@ -96,7 +96,7 @@ async def test_the_metrics_labels_carry_no_password(setup: dict) -> None:
 
     assert scraped.status_code == 200
     assert PASSWORD not in scraped.text
-    assert 'target="postgresql://***@db.internal:5432/app"' in scraped.text
+    assert 'target="postgresql://db.internal:5432"' in scraped.text
 
 
 def test_an_alert_notification_carries_no_password(setup: dict) -> None:

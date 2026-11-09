@@ -35,9 +35,9 @@ def test_classify_bulk_url(url: str, check_type: str, full_url: str) -> None:
     [
         ("https://example.com", "example-com"),
         ("https://example.com/", "example-com"),
-        ("https://api.example.com/v1/health/", "api-example-com-v1-health"),
-        ("https://example.com:8443/x", "example-com-x-8443"),
-        ("https://example.com:443/x", "example-com-x"),
+        ("https://api.example.com/v1/health/", "api-example-com"),
+        ("https://example.com:8443/x", "example-com-8443"),
+        ("https://example.com:443/x", "example-com"),
         ("http://example.com:80", "example-com"),
     ],
 )
@@ -46,10 +46,10 @@ def test_bulk_display_name(url: str, name: str) -> None:
 
 
 def test_bulk_display_name_is_capped_at_255() -> None:
-    long_path = "a/" * 300
-    name = CheckCoreService.bulk_display_name(urlparse(f"https://h.io/{long_path}"))
+    host = f"{'a' * 250}.io"
+    name = CheckCoreService.bulk_display_name(urlparse(f"https://{host}:8443/x"))
     assert len(name) == 255
-    assert name.startswith("h-io-a-a")
+    assert name.startswith("a" * 250)
 
 
 @pytest.mark.integration
