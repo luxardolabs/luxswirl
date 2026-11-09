@@ -117,6 +117,13 @@ async def test_a_loopback_listener_gets_no_connection(db: AsyncSession) -> None:
         "http://240.0.0.1/",
         "http://192.0.0.8/",
         "http://[100::1]/",
+        # An IPv6 form that is global itself but carries a non-global IPv4 address,
+        # and IPv6 site-local.
+        "http://[64:ff9b::c612:1]/",  # NAT64 of 198.18.0.1
+        "http://[64:ff9b::f000:1]/",  # NAT64 of 240.0.0.1
+        "http://[::ffff:0:c612:1]/",  # SIIT of 198.18.0.1
+        "http://[::c612:1]/",  # IPv4-compatible 198.18.0.1
+        "http://[fec0::1]/",
     ],
 )
 async def test_a_private_address_gets_no_connection(

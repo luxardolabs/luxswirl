@@ -31,6 +31,7 @@ from app.shared.ssrf import (
     UnallowableTargetError,
     allowed_addresses,
     blocked_range,
+    carried_ipv4,
     extract_hosts,
 )
 from app.shared.ssrf_http import NO_ADDRESS, VettedTransport
@@ -58,6 +59,10 @@ _LOOKUPS = ThreadPoolExecutor(
 )
 
 
+# IPv6 site-local (RFC 3879 deprecated it; no network routes it).
+_SITE_LOCAL = ipaddress.IPv6Network("fec0::/10")
+
+
 class PrivateTargetError(Exception):
     """A preview's name resolves only to addresses off the public internet."""
 
@@ -67,12 +72,17 @@ def _probed_from_server(ip: str) -> bool:
     address (benchmarking, reserved and other special-purpose ranges are not), outside
     every range either SSRF setting names."""
     try:
-        is_global = ipaddress.ip_address(ip).is_global
+        address = ipaddress.ip_address(ip)
     except ValueError:
         return False
+    # Every address it reaches must be global: an IPv6 form that is global itself can
+    # carry an IPv4 one that is not (NAT64 of 198.18.0.1), and IPv6 site-local is
+    # never routed though Python counts it global.
+    reached = [address, *carried_ipv4(address)]
+    if address in _SITE_LOCAL or not all(each.is_global for each in reached):
+        return False
     return (
-        is_global
-        and blocked_range(ip, block_cloud_metadata=True, block_private_networks=True)
+        blocked_range(ip, block_cloud_metadata=True, block_private_networks=True)
         is None
     )
 

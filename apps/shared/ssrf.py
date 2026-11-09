@@ -337,7 +337,7 @@ _IPV4_CARRIERS: tuple[tuple[ipaddress.IPv6Network, tuple[_Reader, ...]], ...] = 
 )
 
 
-def _carried_ipv4(
+def carried_ipv4(
     ip: ipaddress.IPv4Address | ipaddress.IPv6Address,
 ) -> list[ipaddress.IPv4Address]:
     """Every IPv4 address an IPv6 one carries (:data:`_IPV4_CARRIERS`)."""
@@ -416,7 +416,7 @@ def blocked_range(
         ip = ipaddress.ip_address(ip_str)
     except ValueError:
         return None
-    candidates = [ip, *_carried_ipv4(ip)]
+    candidates = [ip, *carried_ipv4(ip)]
     ranges: list[tuple[list[ipaddress.IPv4Network | ipaddress.IPv6Network], str]] = []
     if block_cloud_metadata:
         ranges.append((CLOUD_METADATA_NETWORKS, "cloud metadata / link-local"))
