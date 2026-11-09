@@ -199,7 +199,7 @@ Test MySQL/MariaDB connectivity and execute a query. **Use for:** database avail
 
 **Fields:**
 
-- **Target / Connection String** (required): `mysql://username:password@hostname:port/database` (port defaults to 3306; add `?ssl=true` for SSL). The URL needs its `//` and holds no control character, or it is refused when saved and each time the check runs.
+- **Target / Connection String** (required): `mysql://username:password@hostname:port/database` (port defaults to 3306). Add `?ssl=true` for TLS: the server's certificate is verified against the agent's CA store and the host name, and a server that offers no TLS is refused before the login is sent (`?ssl=false`, or no `ssl`, connects in plain text). The user name and password are used exactly as written, with no percent-decoding (`%40` stays `%40`), so a password holding `/`, `?` or `#` cannot be written in this URL. The URL needs its `//` and holds no control character, or it is refused when saved and each time the check runs.
 - **Query** (optional, default `SELECT 1`): use read-only `SELECT`s — e.g. `SELECT COUNT(*) FROM users WHERE active = 1`, `SHOW STATUS LIKE 'Threads_connected'`, `SELECT @@read_only`.
 - **Timeout** (required, default 5s), **Retries** (required, default 2).
 

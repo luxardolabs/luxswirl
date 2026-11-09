@@ -9,13 +9,15 @@ from typing import Any
 import httpx
 from fastapi.encoders import jsonable_encoder
 
-from app.core.check_target_validator import validate_check_target
+from app.core.check_target_validator import blocked_target_error
 from app.core.credential_mask import mask_url_paths
+from app.notifications.providers._vetted_http import vetted_transport
 from app.notifications.providers.base import (
     BaseNotificationProvider,
     NotificationContext,
 )
 from app.shared.logger import get_logger
+from app.shared.ssrf import SsrfBlockedError
 
 logger = get_logger("luxswirl.notifications.homeassistant")
 
@@ -50,10 +52,8 @@ class HomeAssistantNotificationProvider(BaseNotificationProvider):
 
         # Validate URL format
         url = config["post_url"]
-        # The same network policy as a webhook and a check target: a private
-        # address is fine, a cloud metadata endpoint is not. Raises
-        # CheckTargetBlockedError (a ValueError).
-        validate_check_target(url, block_cloud_metadata=True)
+        # The SSRF settings judge it as a webhook's: on save (`network_targets`)
+        # and on every connection (`vetted_transport`).
         if not url.startswith(("http://", "https://")):
             raise ValueError(
                 f"Invalid Home Assistant URL: {url}. Must start with http:// or https://"
@@ -67,6 +67,10 @@ class HomeAssistantNotificationProvider(BaseNotificationProvider):
                 extra={"url": mask_url_paths(url)},
             )
 
+    def network_targets(self) -> list[str]:
+        """The webhook URL, which the SSRF settings judge when it is saved."""
+        return [self.config["post_url"]]
+
     async def send(self, context: NotificationContext) -> bool:
         """
         Send notification to Home Assistant.
@@ -78,29 +82,34 @@ class HomeAssistantNotificationProvider(BaseNotificationProvider):
             True if notification was sent successfully
 
         Raises:
+            CheckTargetBlockedError: The SSRF settings refuse every address of its host.
             Exception: If notification fails to send
         """
         # Build request
         url = self.config["post_url"]
-        # Re-validate at send time: defends against DNS rebinding between config and send.
-        validate_check_target(url, block_cloud_metadata=True)
         timeout = self.config.get("timeout", 10)
         verify_ssl = self.config.get("verify_ssl", True)
 
         # Build Home Assistant-friendly payload (encode UUID/datetime at the wire boundary)
         payload = jsonable_encoder(self._build_ha_payload(context))
 
-        # Send to Home Assistant
-        async with httpx.AsyncClient(verify=verify_ssl, timeout=timeout) as client:
-            response = await client.post(
-                url,
-                json=payload,
-                headers={
-                    "Content-Type": "application/json",
-                    "User-Agent": "LuxSwirl-Monitor/1.0",
-                },
-            )
-            response.raise_for_status()
+        # Send to Home Assistant, on an address the SSRF settings allow
+        transport = vetted_transport(verify=verify_ssl, network=self.network)
+        try:
+            async with httpx.AsyncClient(
+                transport=transport, timeout=timeout
+            ) as client:
+                response = await client.post(
+                    url,
+                    json=payload,
+                    headers={
+                        "Content-Type": "application/json",
+                        "User-Agent": "LuxSwirl-Monitor/1.0",
+                    },
+                )
+                response.raise_for_status()
+        except SsrfBlockedError as e:
+            raise blocked_target_error(e) from e
 
         logger.info(
             "Home Assistant notification sent successfully",

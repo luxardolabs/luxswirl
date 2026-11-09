@@ -514,6 +514,8 @@ docker-compose up agent -e LUXSWIRL_DISABLE_CREDENTIAL_ENCRYPTION=true
 - Restrict query permissions (SELECT only)
 - Consider credential vault integration for production (planned v1.1)
 - Connection strings are scrubbed from logs automatically
+- A MySQL URL's `?ssl=true` asks for verified TLS (`apps/agent/app/checks/mysql.py`): a server whose handshake offers none is refused before the login is sent
+- SSRF (`apps/shared/ssrf.py`): every IPv6 form carrying an IPv4 address is judged as that address; a PostgreSQL unix socket counts as private; an address naming over `MAX_TARGET_HOSTS` (16) hosts is refused; saving a check or provider resolves in a thread. Webhook and Home Assistant providers post through `app/notifications/providers/_vetted_http.py` (metadata always refused, private networks per the setting), and the bulk preview never probes a non-public address and is limited per session (`BULK_PREVIEW_RATE_LIMIT`)
 
 **Synthetic checks:** Execute arbitrary Python code via `exec()`. Security notes:
 

@@ -1,4 +1,10 @@
-"""The bulk-import preview: the check each URL would become, held to the SSRF settings."""
+"""The bulk-import preview: the check each URL would become, held to the SSRF settings.
+
+The preview probes from the server, which is not where the check runs: an address
+outside the public internet (a private network, loopback, link-local) is the server's
+own network, so the preview never connects there, whatever the settings allow. Such a
+row says the agent will test it.
+"""
 
 import asyncio
 import ssl
@@ -13,6 +19,7 @@ from app.core.check_target_validator import (
     CheckTargetBlockedError,
     validate_check_target,
 )
+from app.core.exceptions import ValidationException
 from app.models.enum_model import DATABASE_CHECK_TYPES
 from app.schemas.setting_schema import NetworkProtection
 from app.services.core._check_bulk_names import bulk_display_name, unused_name
@@ -20,12 +27,16 @@ from app.services.core.check_core_service import CheckCoreService
 from app.services.core.settings_core_service import SettingsCoreService
 from app.shared.ssrf import (
     SsrfBlockedError,
-    UnplainDatabaseUrlError,
+    UnallowableTargetError,
     allowed_addresses,
+    blocked_range,
     extract_hosts,
 )
 from app.shared.ssrf_http import NO_ADDRESS, VettedTransport
 
+# The most lines one preview reads: the import's own cap. A form over it is refused
+# before any row is named.
+PREVIEW_MAX_URLS = 10_000
 PROBED_URLS = 100
 PROBES_AT_ONCE = 20
 PROBE_SECONDS = 5
@@ -35,11 +46,46 @@ ADDRESS_SECONDS = 1.5
 # URL naming more (a PostgreSQL host list) is not looked up at all.
 HOSTS_PER_URL = 8
 INVALID_NAME = "invalid-url"
+NOT_PROBED_PRIVATE = (
+    "Not checked from the server: this address is on a private network. The agent "
+    "tests it from its own network."
+)
 # A preview's lookups: a deadline cannot stop one waiting on a slow nameserver, so they
 # stay out of the default executor, which name lookups and other work share.
 _LOOKUPS = ThreadPoolExecutor(
     max_workers=PROBES_AT_ONCE, thread_name_prefix="bulk-preview-lookup"
 )
+
+
+class PrivateTargetError(Exception):
+    """A preview's name resolves only to addresses off the public internet."""
+
+
+def _probed_from_server(ip: str) -> bool:
+    """Whether the preview may connect to `ip` from the server: a public address,
+    outside every range either SSRF setting names."""
+    return (
+        blocked_range(ip, block_cloud_metadata=True, block_private_networks=True)
+        is None
+    )
+
+
+def _public_addresses(host: str, protection: NetworkProtection) -> list[str]:
+    """The addresses of `host` the settings allow and the server may probe.
+
+    Raises:
+        SsrfBlockedError: The settings refuse every address.
+        PrivateTargetError: Every address left is off the public internet.
+    """
+    allowed = allowed_addresses(
+        host,
+        block_cloud_metadata=protection.block_cloud_metadata,
+        block_private_networks=protection.block_private_networks,
+    )
+    public = [ip for ip in allowed if _probed_from_server(ip)]
+    if allowed and not public:
+        raise PrivateTargetError
+    return public
 
 
 class CheckPreviewCoreService:
@@ -63,16 +109,20 @@ class CheckPreviewCoreService:
 
         Returns:
             List of dicts with url, generated_name, check_type, validation_status, etc.
+
+        Raises:
+            ValidationException: `urls` holds more than `PREVIEW_MAX_URLS`.
         """
+        if len(urls) > PREVIEW_MAX_URLS:
+            raise ValidationException(
+                f"A preview reads at most {PREVIEW_MAX_URLS:,} URLs; this form holds "
+                f"{len(urls):,}."
+            )
         protection = await SettingsCoreService.get_network_protection(db)
         turns = asyncio.Semaphore(PROBES_AT_ONCE)
         transport = VettedTransport(
             verify=True,
-            allowed=partial(
-                allowed_addresses,
-                block_cloud_metadata=protection.block_cloud_metadata,
-                block_private_networks=protection.block_private_networks,
-            ),
+            allowed=partial(_public_addresses, protection=protection),
             lookups=_LOOKUPS,
             address_seconds=ADDRESS_SECONDS,
         )
@@ -161,7 +211,8 @@ class CheckPreviewCoreService:
         The target is judged as saving the check judges it, so a row the save would
         refuse says so. An http target is then fetched through `client`, whose
         connections open only on an allowed address, so a name that resolves
-        differently the second time is held to the same settings. A redirect is
+        differently the second time is held to the same settings, and only on a
+        public one: an address on a private network is not probed. A redirect is
         reported, not followed. Only the status reaches the row: the deadline covers
         the lookups and the response head, the body is never fetched, and no failure
         quotes what the target sent, which on a port that does not speak HTTP is that
@@ -196,9 +247,11 @@ class CheckPreviewCoreService:
                     return "unknown", "", None
                 async with client.stream("GET", full_url) as response:
                     status_code = response.status_code
+        except PrivateTargetError:
+            return "unknown", NOT_PROBED_PRIVATE, None
         except CheckTargetBlockedError as e:
             return "error", str(e), None
-        except UnplainDatabaseUrlError as e:
+        except UnallowableTargetError as e:
             return "error", str(e), None
         except SsrfBlockedError as e:
             return (

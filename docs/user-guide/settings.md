@@ -385,8 +385,8 @@ New checks inherit these; existing checks are unchanged and users can override p
 
 #### Network Protection (SSRF)
 
-- **Block Cloud Metadata Endpoints** (`security.block_cloud_metadata`, bool) — Default **true**. Blocks checks targeting cloud metadata / link-local addresses (169.254.x.x, fe80::/10, AWS's fd00:ec2::254 and Alibaba Cloud's 100.100.100.200).
-- **Block Private Network Targets** (`security.block_private_networks`, bool) — Default **false**. Blocks private and internal addresses: RFC 1918 (10.x, 172.16-31.x, 192.168.x), IPv6 unique-local, loopback (127.x, ::1), 0.0.0.0 and CGNAT (100.64.x); disabled by default so self-hosted users can monitor internal services.
+- **Block Cloud Metadata Endpoints** (`security.block_cloud_metadata`, bool) — Default **true**. Blocks checks targeting cloud metadata / link-local addresses (169.254.x.x, fe80::/10, AWS's fd00:ec2::254, Alibaba Cloud's 100.100.100.200, Oracle Cloud's 192.0.0.192 and Azure's 168.63.129.16), and the IPv6 forms that carry them. Webhook and Home Assistant notifications refuse this range whatever the setting.
+- **Block Private Network Targets** (`security.block_private_networks`, bool) — Default **false**. Blocks private and internal addresses: RFC 1918 (10.x, 172.16-31.x, 192.168.x), IPv6 unique-local, loopback (127.x, ::1), 0.0.0.0, CGNAT (100.64.x) and local-use NAT64 (64:ff9b:1::/48), and a PostgreSQL check's unix socket; disabled by default so self-hosted users can monitor internal services. It also covers webhook and Home Assistant notifications: with it on, a provider whose URL is on a private network is refused when saved and each time it sends.
 
 **How SSRF protection works:** when a check is created or updated, every address it connects to (its target, a DNS check's nameserver, a database check's connection string) is resolved to IP(s), and each IP is checked against the blocked ranges; a blocked address is rejected with a clear error. The agent checks again immediately before each connection, so an existing check that now resolves into a blocked range fails at run time. A ping, TCP or HTTP/JSON check whose host resolves to both an allowed and a blocked address (a Pi-hole answering with its IPv6 link-local address, say) connects on the allowed one; a DNS or database check is refused when any of its addresses is blocked.
 
@@ -573,7 +573,7 @@ Rate limits are expressed as `count/period` strings (e.g. login `10/15minutes`, 
 
 ### Network Protection (SSRF)
 
-Cloud-metadata blocking is on by default; private-network blocking is off by default so self-hosted users can monitor internal services. Enable **Block Private Networks** in cloud/enterprise environments to keep checks from reaching internal services. A change applies to check creation and updates immediately, and reaches every agent with its next heartbeat.
+Cloud-metadata blocking is on by default; private-network blocking is off by default so self-hosted users can monitor internal services. Enable **Block Private Networks** in cloud/enterprise environments to keep checks and notifications from reaching internal services. A change applies to check and provider creation and updates, and to every notification sent, immediately, and reaches every agent with its next heartbeat.
 
 ______________________________________________________________________
 

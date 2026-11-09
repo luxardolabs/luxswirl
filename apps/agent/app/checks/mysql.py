@@ -1,7 +1,13 @@
 """
 MySQL/MariaDB Check Module - Implements MySQL/MariaDB database health checks.
+
+`?ssl=true` on the connection string asks for TLS: the certificate is verified
+against the system's CA store and the host name, and a server whose handshake offers
+no TLS is refused before the login is sent (aiomysql alone would go on in plain
+text). The user name and password are used as written, with no percent-decoding.
 """
 
+import ssl
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
@@ -18,6 +24,65 @@ except ImportError:
 
 
 logger = get_logger("luxswirl.agent.checks.mysql")
+
+# CLIENT_SSL: the capability flag a server's handshake sets when it speaks TLS.
+_CLIENT_SSL = 0x800
+_TLS_ON = frozenset({"true", "1", "yes", "required"})
+_TLS_OFF = frozenset({"false", "0", "no"})
+
+
+class MySQLTlsUnavailableError(Exception):
+    """The connection string asks for TLS and the server's handshake offers none."""
+
+
+def tls_context(value: str | int | None) -> ssl.SSLContext | None:
+    """The TLS context `?ssl=` asks for: a verifying one for true, none for false or
+    when it is absent.
+
+    Raises:
+        CheckConfigError: The value is neither.
+    """
+    if value is None or str(value).lower() in _TLS_OFF:
+        return None
+    if str(value).lower() in _TLS_ON:
+        return ssl.create_default_context()
+    raise CheckConfigError("Invalid ssl value: write ssl=true or ssl=false")
+
+
+async def connect_mysql(*, tls: ssl.SSLContext | None, **params: Any) -> Any:
+    """Open a MySQL connection, over TLS when `tls` is given.
+
+    With TLS, the server's handshake must offer it before anything is sent back:
+    aiomysql itself would go on in plain text, login included.
+
+    Raises:
+        MySQLTlsUnavailableError: TLS was asked for and the server offers none.
+    """
+    if tls is None:
+        return await aiomysql.connect(**params)
+    conn = aiomysql.Connection(ssl=tls, **params)
+    authenticate = conn._request_authentication
+
+    async def tls_first() -> None:
+        if not conn.server_capabilities & _CLIENT_SSL:
+            raise MySQLTlsUnavailableError
+        await authenticate()
+
+    conn._request_authentication = tls_first
+    await conn._connect()
+    return conn
+
+
+def _tls_failure(error: BaseException) -> str | None:
+    """What a connection that failed in its TLS handshake says, or None."""
+    cause: BaseException | None = error
+    while cause is not None and not isinstance(cause, ssl.SSLError):
+        cause = cause.__cause__ or cause.__context__
+    if isinstance(cause, ssl.SSLCertVerificationError):
+        return f"TLS certificate not trusted: {cause.verify_message}"
+    if cause is not None:
+        return "TLS handshake failed"
+    return None
 
 
 class MySQLCheck(BaseCheck):
@@ -118,6 +183,7 @@ class MySQLCheck(BaseCheck):
         if not isinstance(connection_string, str):
             raise ValueError("Connection string must be provided")
         conn_params = self._parse_connection_string(connection_string)
+        tls = tls_context(conn_params["ssl"])
         host = conn_params["host"]
         port = conn_params["port"]
         database = conn_params["database"]
@@ -146,7 +212,8 @@ class MySQLCheck(BaseCheck):
                 start_time = self.start_timer()
 
                 # Establish connection
-                conn = await aiomysql.connect(
+                conn = await connect_mysql(
+                    tls=tls,
                     host=conn_params["host"],
                     port=conn_params["port"],
                     user=conn_params["user"],
@@ -185,11 +252,23 @@ class MySQLCheck(BaseCheck):
                 success = True
                 break
 
+            except MySQLTlsUnavailableError:
+                error = (
+                    "The server offers no TLS and the connection string asks for it "
+                    "(ssl=true): the login was not sent"
+                )
+                error_type = "connection_error"
+                continue
+
             except aiomysql.OperationalError as e:
                 # Connection or operational errors
                 error_code = e.args[0] if e.args else None
+                tls_failure = _tls_failure(e)
 
-                if error_code == 1045:
+                if tls_failure is not None:
+                    error = tls_failure
+                    error_type = "connection_error"
+                elif error_code == 1045:
                     error = "Authentication failed - invalid username or password"
                     error_type = "authentication_error"
                 elif error_code == 1049:

@@ -225,6 +225,7 @@ def _answering(status: int) -> types.SimpleNamespace:
 
     def make_client(**kwargs):
         kwargs.pop("verify", None)
+        kwargs.pop("transport", None)  # the vetted transport: a mock answers instead
         return httpx.AsyncClient(transport=transport, **kwargs)
 
     return types.SimpleNamespace(

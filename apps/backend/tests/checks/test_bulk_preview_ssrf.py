@@ -1,5 +1,6 @@
 """The bulk preview fetches from the server, so it is held to the SSRF settings: a
-blocked address gets no connection, a name is pinned to the address it was vetted on,
+blocked address gets no connection (and a private one none either, with 127.0.0.1
+standing in for a public host here), a name is pinned to the address it was vetted on,
 a redirect is reported and not followed, and one request's cost is bounded.
 
 Every connection here goes to a local server or is refused before it opens.
@@ -79,6 +80,18 @@ async def _serve(
 async def _ok(writer: asyncio.StreamWriter) -> None:
     writer.write(OK)
     await writer.drain()
+
+
+@pytest.fixture(autouse=True)
+def loopback_stands_in_for_a_public_host(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The preview never probes a private address (test_bulk_preview_private.py), so
+    the local servers here stand in for public hosts: 127.0.0.1 is probed as one."""
+    real = check_preview_core_service._probed_from_server
+    monkeypatch.setattr(
+        check_preview_core_service,
+        "_probed_from_server",
+        lambda ip: ip == "127.0.0.1" or real(ip),
+    )
 
 
 @pytest.fixture

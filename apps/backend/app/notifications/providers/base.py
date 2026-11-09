@@ -7,6 +7,14 @@ from dataclasses import dataclass
 from typing import Any, ClassVar
 from uuid import UUID
 
+from app.schemas.setting_schema import NetworkProtection
+
+# A provider built without the stored settings: the cloud-metadata range blocked,
+# private networks allowed, as both settings ship.
+DEFAULT_NETWORK = NetworkProtection(
+    block_cloud_metadata=True, block_private_networks=False
+)
+
 
 @dataclass
 class NotificationContext:
@@ -62,18 +70,27 @@ class BaseNotificationProvider(ABC):
     # Provider type identifier (must be unique)
     provider_type: ClassVar[str] = ""
 
-    def __init__(self, config: dict[str, Any]):
+    def __init__(
+        self, config: dict[str, Any], network: NetworkProtection | None = None
+    ):
         """
         Initialize the notification provider with configuration.
 
         Args:
             config: Provider-specific configuration dictionary
+            network: The SSRF settings its connections are held to
 
         Raises:
             ValueError: If configuration is invalid
         """
         self.validate_config(config)
         self.config = config
+        self.network = network or DEFAULT_NETWORK
+
+    def network_targets(self) -> list[str]:
+        """The operator-given URLs this provider connects to, which the SSRF settings
+        judge when it is saved. A provider that opens no such connection names none."""
+        return []
 
     @abstractmethod
     def validate_config(self, config: dict[str, Any]) -> None:

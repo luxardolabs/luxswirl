@@ -5,6 +5,7 @@ Notification Provider Registry - Auto-discovery and registration of providers.
 from typing import Any
 
 from app.notifications.providers.base import BaseNotificationProvider
+from app.schemas.setting_schema import NetworkProtection
 from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.notifications.registry")
@@ -122,6 +123,7 @@ class NotificationRegistry:
         cls,
         provider_type: str,
         config: dict[str, Any],
+        network: NetworkProtection | None = None,
     ) -> BaseNotificationProvider:
         """
         Create a provider instance from configuration.
@@ -129,6 +131,7 @@ class NotificationRegistry:
         Args:
             provider_type: The provider type
             config: Provider configuration
+            network: The SSRF settings its connections are held to
 
         Returns:
             Initialized provider instance
@@ -143,7 +146,7 @@ class NotificationRegistry:
                 f"Unknown provider type: {provider_type}. Available: {available}"
             )
 
-        return provider_class(config)
+        return provider_class(config, network)
 
     @classmethod
     def is_registered(cls, provider_type: str) -> bool:

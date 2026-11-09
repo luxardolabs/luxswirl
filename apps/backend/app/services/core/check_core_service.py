@@ -2,6 +2,7 @@
 Check service - business logic for check operations.
 """
 
+import asyncio
 from collections.abc import Mapping, Sequence
 from typing import Any
 from urllib.parse import ParseResult, urlparse
@@ -201,7 +202,9 @@ class CheckCoreService:
         database check its connection string; each is validated. An empty one
         is skipped. A database check's driver reads its connection string, or
         its target when it has none. An update judging only the target names the
-        connection string the check keeps in `kept_connection_string`.
+        connection string the check keeps in `kept_connection_string`. The
+        lookups run in a thread, and an address naming more than
+        `shared.ssrf.MAX_TARGET_HOSTS` hosts is refused before any.
 
         Raises:
             CheckTargetBlockedError: If any of them is blocked by SSRF protection
@@ -217,7 +220,9 @@ class CheckCoreService:
             (connection_string, driver_check),
         ):
             if endpoint:
-                validate_check_target(
+                # Its lookups block, one host after another: off the event loop.
+                await asyncio.to_thread(
+                    validate_check_target,
                     endpoint,
                     block_cloud_metadata=protection.block_cloud_metadata,
                     block_private_networks=protection.block_private_networks,

@@ -16,7 +16,10 @@ import aiosmtplib
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.check_target_validator import CheckTargetBlockedError
+from app.core.check_target_validator import (
+    CheckTargetBlockedError,
+    validate_check_target,
+)
 from app.core.datetime_utils import utc_now
 from app.core.exceptions import NotFoundException, ValidationException
 from app.core.http_header import HeaderRefusedError
@@ -32,6 +35,8 @@ from app.schemas.notification_provider_schema import (
     NotificationProviderInDB,
     NotificationProviderUpdate,
 )
+from app.schemas.setting_schema import NetworkProtection
+from app.services.core.settings_core_service import SettingsCoreService
 from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.services.notification")
@@ -159,6 +164,35 @@ class NotificationCoreService:
         return [NotificationProviderInDB.model_validate(p) for p in providers], total
 
     @staticmethod
+    async def _validate_config(
+        db: AsyncSession, provider_type: str, config: dict[str, Any]
+    ) -> None:
+        """Hold a provider's configuration to its type's rules and its URLs to the SSRF
+        settings, as a send would: the cloud-metadata range always, private networks
+        when `security.block_private_networks` is on. The lookups run in a thread.
+
+        Raises:
+            ValidationException: The type is unknown or the configuration is refused.
+        """
+        provider_class = NotificationRegistry.get(provider_type)
+        if provider_class is None:
+            raise ValidationException(f"Unknown provider type: {provider_type}")
+        network = await SettingsCoreService.get_network_protection(db)
+        try:
+            instance = provider_class(config, network)
+            for url in instance.network_targets():
+                await asyncio.to_thread(
+                    validate_check_target,
+                    url,
+                    block_cloud_metadata=True,
+                    block_private_networks=network.block_private_networks,
+                )
+        except Exception as e:
+            raise ValidationException(
+                f"Invalid provider configuration: {str(e)}"
+            ) from e
+
+    @staticmethod
     async def create_provider(
         db: AsyncSession,
         data: NotificationProviderCreate,
@@ -183,20 +217,9 @@ class NotificationCoreService:
                 f"Invalid provider type: {data.provider_type}. Available: {available}"
             )
 
-        # Validate configuration by creating provider instance
-        try:
-            provider_class = NotificationRegistry.get(data.provider_type)
-            if provider_class is None:
-                raise ValidationException(
-                    f"Unknown provider type: {data.provider_type}"
-                )
-            provider_class(data.config)  # Validate config by instantiating
-        except ValidationException:
-            raise  # Re-raise validation exceptions as-is
-        except Exception as e:
-            raise ValidationException(
-                f"Invalid provider configuration: {str(e)}"
-            ) from e
+        await NotificationCoreService._validate_config(
+            db, data.provider_type, data.config
+        )
 
         # Create database record
         provider = NotificationProvider(
@@ -250,20 +273,9 @@ class NotificationCoreService:
             provider.friendly_name = data.friendly_name
 
         if data.config is not None:
-            # Validate new configuration
-            try:
-                provider_class = NotificationRegistry.get(provider.provider_type)
-                if provider_class is None:
-                    raise ValidationException(
-                        f"Unknown provider type: {provider.provider_type}"
-                    )
-                provider_class(data.config)  # Validate config by instantiating
-            except ValidationException:
-                raise  # Re-raise validation exceptions as-is
-            except Exception as e:
-                raise ValidationException(
-                    f"Invalid provider configuration: {str(e)}"
-                ) from e
+            await NotificationCoreService._validate_config(
+                db, provider.provider_type, data.config
+            )
 
             provider.config = data.config
 
@@ -364,6 +376,7 @@ class NotificationCoreService:
             provider_instance = NotificationRegistry.create_provider(
                 provider.provider_type,
                 provider.config,
+                await SettingsCoreService.get_network_protection(db),
             )
             success = await provider_instance.send(context)
 
@@ -487,10 +500,11 @@ class NotificationCoreService:
                 continue
             deliverable.append(provider)
 
-        # 2. Deliver in parallel (no database work).
+        # 2. Deliver in parallel (no database work), under the SSRF settings.
+        network = await SettingsCoreService.get_network_protection(db)
         delivered = await asyncio.gather(
             *(
-                NotificationCoreService._deliver(provider, context)
+                NotificationCoreService._deliver(provider, context, network)
                 for provider in deliverable
             )
         )
@@ -539,13 +553,17 @@ class NotificationCoreService:
 
     @staticmethod
     async def _deliver(
-        provider: NotificationProvider, context: NotificationContext
+        provider: NotificationProvider,
+        context: NotificationContext,
+        network: NetworkProtection,
     ) -> tuple[NotificationStatus, str | None]:
-        """One provider's delivery attempt: its status and error, never raised."""
+        """One provider's delivery attempt under the SSRF settings `network`: its
+        status and error, never raised."""
         try:
             provider_instance = NotificationRegistry.create_provider(
                 provider.provider_type,
                 provider.config,
+                network,
             )
             if await provider_instance.send(context):
                 return NotificationStatus.SENT, None

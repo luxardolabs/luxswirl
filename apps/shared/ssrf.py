@@ -18,7 +18,12 @@ allowed, so a host that also answers with its IPv6 link-local address is reached
 on its other one, and nothing resolves the name again between the check and the
 socket. The database and DNS checks hand the name to a driver that resolves it
 itself: :func:`assert_target_allowed` refuses those when ANY address is blocked, and
-a database URL whose hosts could be read two ways.
+a database URL whose hosts could be read two ways, or that names more than
+`MAX_TARGET_HOSTS` hosts. A unix socket a PostgreSQL URL names is this host's own,
+so it is refused with private networks.
+
+An IPv6 address that carries an IPv4 one (:data:`_IPV4_CARRIERS`) is judged as
+that IPv4 address too: a translator on the network takes it there.
 """
 
 from __future__ import annotations
@@ -26,6 +31,7 @@ from __future__ import annotations
 import ipaddress
 import re
 import socket
+from collections.abc import Callable
 from urllib.parse import parse_qs, unquote, urlparse
 
 from .logger import get_logger
@@ -38,6 +44,8 @@ CLOUD_METADATA_NETWORKS = [
     ipaddress.ip_network("fe80::/10"),  # IPv6 link-local
     ipaddress.ip_network("fd00:ec2::254/128"),  # AWS IMDS over IPv6
     ipaddress.ip_network("100.100.100.200/32"),  # Alibaba Cloud metadata
+    ipaddress.ip_network("192.0.0.192/32"),  # Oracle Cloud (Classic) metadata
+    ipaddress.ip_network("168.63.129.16/32"),  # Azure WireServer (VM agent channel)
 ]
 
 # Private and internal networks — where most self-hosted targets live, and the
@@ -52,16 +60,30 @@ PRIVATE_NETWORKS = [
     ipaddress.ip_network("0.0.0.0/8"),  # unspecified / "this host"
     ipaddress.ip_network("::/128"),  # IPv6 unspecified
     ipaddress.ip_network("100.64.0.0/10"),  # CGNAT shared address space
+    # Local-use NAT64 (RFC 8215): the local network's own translation, whose
+    # IPv4 address no reader can be sure of.
+    ipaddress.ip_network("64:ff9b:1::/48"),
 ]
+
+# The most hosts one address may name: each is looked up in turn.
+MAX_TARGET_HOSTS = 16
 
 
 class SsrfBlockedError(ValueError):
     """Raised when a target resolves into a blocked IP range."""
 
 
-class UnplainDatabaseUrlError(SsrfBlockedError):
-    """Raised for a database URL a driver could read another way. No setting allows it,
-    since the agent refuses it whatever the settings are."""
+class UnallowableTargetError(SsrfBlockedError):
+    """Raised for a target no setting allows, since the agent refuses it whatever the
+    settings are. Its text never quotes the target, which can hold a password."""
+
+
+class UnplainDatabaseUrlError(UnallowableTargetError):
+    """Raised for a database URL a driver could read another way."""
+
+
+class TooManyHostsError(UnallowableTargetError):
+    """Raised for an address naming more than `MAX_TARGET_HOSTS` hosts."""
 
 
 def extract_host(target: str) -> str | None:
@@ -87,9 +109,6 @@ _WHITESPACE = re.compile(r"\s")
 # A database URL that names no host connects to the driver's default: localhost.
 _DATABASE_SCHEMES = _POSTGRES_SCHEMES | {"mysql", "mariadb"}
 _DEFAULT_DATABASE_HOST = "localhost"
-
-# IPv6 forms that carry an IPv4 address a socket reaches (RFC 6052 NAT64).
-_NAT64 = ipaddress.ip_network("64:ff9b::/96")
 
 
 def _strip_port(host: str) -> str:
@@ -210,6 +229,27 @@ def url_hosts(target: str) -> list[str]:
     return list(dict.fromkeys(host for host in hosts if host))
 
 
+def unix_socket_paths(target: str) -> list[str]:
+    """The unix-socket paths a PostgreSQL URL `target` names: each entry of its host
+    list or `host` parameter that is a path. A driver connects to this host there."""
+    try:
+        parsed = urlparse(target)
+    except ValueError:
+        return []
+    if parsed.scheme.lower().split("+", 1)[0] not in _POSTGRES_SCHEMES:
+        return []
+    entries = [
+        *parsed.netloc.rpartition("@")[2].split(","),
+        *(
+            entry
+            for value in parse_qs(parsed.query).get("host", [])
+            for entry in value.split(",")
+        ),
+    ]
+    named = (_postgres_entry_host(entry) for entry in entries)
+    return [host for host in named if host.startswith("/")]
+
+
 def extract_hosts(target: str, *, database: bool = False) -> list[str]:
     """Every host ``target`` connects to, for a URL or ``host[:port]``.
 
@@ -219,37 +259,95 @@ def extract_hosts(target: str, *, database: bool = False) -> list[str]:
 
     Raises:
         UnplainDatabaseUrlError: A driver would read it, and it is not a plain URL.
+        TooManyHostsError: It names more than `MAX_TARGET_HOSTS` hosts.
     """
     if database and _reads_as_database_url(target):
         _require_plain_database_url(target)
-        return url_hosts(target)
-    if "://" in target:
-        return url_hosts(target)
-    host = extract_host(target)
-    return [host] if host else []
+        hosts = url_hosts(target)
+    elif "://" in target:
+        hosts = url_hosts(target)
+    else:
+        host = extract_host(target)
+        hosts = [host] if host else []
+    if len(hosts) > MAX_TARGET_HOSTS:
+        raise TooManyHostsError(
+            f"This address names {len(hosts)} hosts: at most {MAX_TARGET_HOSTS} "
+            "are allowed."
+        )
+    return hosts
 
 
-def _embedded_ipv4(
-    ip: ipaddress.IPv4Address | ipaddress.IPv6Address,
-) -> ipaddress.IPv4Address | None:
-    """The IPv4 address an IPv6 one carries (mapped, 6to4, NAT64), if any."""
-    if not isinstance(ip, ipaddress.IPv6Address):
-        return None
-    if ip.ipv4_mapped is not None:
-        return ip.ipv4_mapped
-    if ip.sixtofour is not None:
-        return ip.sixtofour
-    if ip in _NAT64:
-        return ipaddress.IPv4Address(int(ip) & 0xFFFFFFFF)
-    return None
+# How an IPv6 address carries an IPv4 one: a reader takes the IPv4 address from the
+# IPv6 address's integer, its bits in order.
+_Reader = Callable[[int], int]
 
 
-# IPv6 prefixes whose addresses carry an IPv4 one (as _embedded_ipv4 reads it).
-_IPV4_CARRIERS = (
-    ipaddress.ip_network("::ffff:0:0/96"),  # IPv4-mapped
-    ipaddress.ip_network("2002::/16"),  # 6to4
-    _NAT64,
+def _bits(shift: int, width: int) -> _Reader:
+    """The `width` bits that end `shift` bits from the address's low end."""
+
+    def read(value: int) -> int:
+        return (value >> shift) & ((1 << width) - 1)
+
+    return read
+
+
+def _split(high: _Reader, high_width: int, low: _Reader) -> _Reader:
+    """Two runs of bits read as one (RFC 6052 skips bits 64-71 between them)."""
+
+    def read(value: int) -> int:
+        return (high(value) << (32 - high_width)) | low(value)
+
+    return read
+
+
+def _inverted(reader: _Reader) -> _Reader:
+    def read(value: int) -> int:
+        return ~reader(value) & 0xFFFFFFFF
+
+    return read
+
+
+_LOW32 = _bits(0, 32)
+
+# IPv6 prefixes whose addresses carry an IPv4 one a socket can reach through a
+# translator, and each way of reading it. A reader takes its bits in address order,
+# so over a CIDR block its readings run from its reading of the block's first
+# address to its reading of the last (the other way round for an inverted one).
+_IPV4_CARRIERS: tuple[tuple[ipaddress.IPv6Network, tuple[_Reader, ...]], ...] = (
+    (ipaddress.IPv6Network("::ffff:0:0/96"), (_LOW32,)),  # IPv4-mapped
+    (ipaddress.IPv6Network("::/96"), (_LOW32,)),  # IPv4-compatible (deprecated)
+    (ipaddress.IPv6Network("::ffff:0:0:0/96"), (_LOW32,)),  # SIIT IPv4-translated
+    (ipaddress.IPv6Network("2002::/16"), (_bits(80, 32),)),  # 6to4
+    (ipaddress.IPv6Network("64:ff9b::/96"), (_LOW32,)),  # NAT64 (RFC 6052)
+    # Local-use NAT64 (RFC 8215), under each operator prefix length RFC 6052 allows:
+    # /48, /56, /64 and /96.
+    (
+        ipaddress.IPv6Network("64:ff9b:1::/48"),
+        (
+            _split(_bits(64, 16), 16, _bits(40, 16)),
+            _split(_bits(64, 8), 8, _bits(32, 24)),
+            _bits(24, 32),
+            _LOW32,
+        ),
+    ),
+    # Teredo: its server, and its client (stored inverted).
+    (ipaddress.IPv6Network("2001::/32"), (_bits(64, 32), _inverted(_LOW32))),
 )
+
+
+def _carried_ipv4(
+    ip: ipaddress.IPv4Address | ipaddress.IPv6Address,
+) -> list[ipaddress.IPv4Address]:
+    """Every IPv4 address an IPv6 one carries (:data:`_IPV4_CARRIERS`)."""
+    if not isinstance(ip, ipaddress.IPv6Address):
+        return []
+    value = int(ip)
+    return [
+        ipaddress.IPv4Address(read(value))
+        for carrier, readers in _IPV4_CARRIERS
+        if ip in carrier
+        for read in readers
+    ]
 
 
 def network_cloud_metadata_overlap(
@@ -258,33 +356,29 @@ def network_cloud_metadata_overlap(
     """The cloud-metadata range `network` reaches, or None.
 
     Directly, or through the part of an IPv6 network that carries IPv4
-    addresses (mapped, 6to4, NAT64): the addresses of such a part carry one
-    contiguous IPv4 range, read from its first and last address.
+    addresses (:data:`_IPV4_CARRIERS`): over such a part, each way of reading
+    the IPv4 address gives one contiguous range, read from its first and last
+    address.
     """
     for blocked in CLOUD_METADATA_NETWORKS:
         if network.version == blocked.version and network.overlaps(blocked):
             return blocked
     if not isinstance(network, ipaddress.IPv6Network):
         return None
-    for carrier in _IPV4_CARRIERS:
+    for carrier, readers in _IPV4_CARRIERS:
         if not network.overlaps(carrier):
             continue
-        first = ipaddress.IPv6Address(
-            max(int(network.network_address), int(carrier.network_address))
-        )
-        last = ipaddress.IPv6Address(
-            min(int(network.broadcast_address), int(carrier.broadcast_address))
-        )
-        low, high = _embedded_ipv4(first), _embedded_ipv4(last)
-        if low is None or high is None:
-            continue
-        for blocked in CLOUD_METADATA_NETWORKS:
-            if (
-                blocked.version == 4
-                and int(low) <= int(blocked.broadcast_address)
-                and int(high) >= int(blocked.network_address)
-            ):
-                return blocked
+        first = max(int(network.network_address), int(carrier.network_address))
+        last = min(int(network.broadcast_address), int(carrier.broadcast_address))
+        for read in readers:
+            low, high = sorted((read(first), read(last)))
+            for blocked in CLOUD_METADATA_NETWORKS:
+                if (
+                    blocked.version == 4
+                    and low <= int(blocked.broadcast_address)
+                    and high >= int(blocked.network_address)
+                ):
+                    return blocked
     return None
 
 
@@ -320,8 +414,7 @@ def blocked_range(
         ip = ipaddress.ip_address(ip_str)
     except ValueError:
         return None
-    embedded = _embedded_ipv4(ip)
-    candidates = [ip] if embedded is None else [ip, embedded]
+    candidates = [ip, *_carried_ipv4(ip)]
     ranges: list[tuple[list[ipaddress.IPv4Network | ipaddress.IPv6Network], str]] = []
     if block_cloud_metadata:
         ranges.append((CLOUD_METADATA_NETWORKS, "cloud metadata / link-local"))
@@ -353,11 +446,13 @@ def assert_ip_allowed(
     if blocked is None:
         return
     matched, label = blocked
+    # Without its scope: the text after `%` is the submitter's own, never an address.
+    address = ip_str.partition("%")[0]
     logger.warning(
         "SSRF protection: blocked IP",
-        extra={"resolved_ip": ip_str, "range": str(matched)},
+        extra={"resolved_ip": address, "range": str(matched)},
     )
-    raise SsrfBlockedError(f"{ip_str} is in the blocked {label} range ({matched}).")
+    raise SsrfBlockedError(f"{address} is in the blocked {label} range ({matched}).")
 
 
 def allowed_addresses(
@@ -408,6 +503,12 @@ def assert_target_allowed(
     hosts = extract_hosts(target, database=database)
     if not block_cloud_metadata and not block_private_networks:
         return
+    if block_private_networks and database and unix_socket_paths(target):
+        logger.warning("SSRF protection: blocked a unix socket")
+        raise SsrfBlockedError(
+            "A unix socket is in the blocked private network range: it reaches this "
+            "host's own services."
+        )
     for host in hosts:
         for ip_str in resolve_host(host):
             assert_ip_allowed(

@@ -12,13 +12,23 @@ Settings (Settings > Security):
 
 from app.shared.ssrf import (
     SsrfBlockedError,
-    UnplainDatabaseUrlError,
+    UnallowableTargetError,
     assert_target_allowed,
 )
 
 
 class CheckTargetBlockedError(ValueError):
     """Raised when a check target is blocked by SSRF protection."""
+
+
+def blocked_target_error(error: SsrfBlockedError) -> CheckTargetBlockedError:
+    """The server's refusal for `error`: a target a setting refuses names where the
+    setting is, and one no setting allows says only why."""
+    if isinstance(error, UnallowableTargetError):
+        return CheckTargetBlockedError(str(error))
+    return CheckTargetBlockedError(
+        f"{error} Adjust SSRF protection under Settings > Security to allow it."
+    )
 
 
 def validate_check_target(
@@ -47,9 +57,5 @@ def validate_check_target(
             block_private_networks=block_private_networks,
             database=database,
         )
-    except UnplainDatabaseUrlError as e:
-        raise CheckTargetBlockedError(str(e)) from e
     except SsrfBlockedError as e:
-        raise CheckTargetBlockedError(
-            f"{e} Adjust SSRF protection under Settings > Security to allow it."
-        ) from e
+        raise blocked_target_error(e) from e

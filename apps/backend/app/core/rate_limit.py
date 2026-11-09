@@ -42,6 +42,26 @@ def api_token_rate_limit_key(request: Request) -> str:
     return "api-token:" + digest.hexdigest()
 
 
+def web_session_rate_limit_key(request: Request) -> str:
+    """slowapi key function for a signed-in web route: the caller's session, by a
+    digest of its cookie.
+
+    The route's dependency has already authenticated the session when the limit is
+    checked, so every bucket is one signed-in session, and many users behind one
+    address do not share it. Neither the cookie nor the hash the database stores
+    reaches the limiter's storage or its log lines.
+    """
+    token = request.cookies.get(settings.security.session_cookie_name, "")
+    digest = hashlib.sha256(b"rate-limit:web-session:" + token.encode("utf-8"))
+    return "web-session:" + digest.hexdigest()
+
+
+# One editor's bulk previews: each probes up to PROBES_AT_ONCE addresses at once, so
+# stacked previews are bounded here. The form waits 500 ms after each edit and drops
+# the request still in flight, so typing stays well under it.
+BULK_PREVIEW_RATE_LIMIT = "30/minute"
+
+
 # Global limiter — imported by routers that need @limiter.limit(...) decorators.
 # One count per limited function, not per concrete path: a path parameter the
 # caller picks (`/users/{user_id}/reset-password`) would otherwise open a fresh

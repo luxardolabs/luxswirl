@@ -83,11 +83,13 @@ Sends an HTTP POST with the full check/alert context — the bridge to Slack, Di
 
 | Field                   | Required | Default | Notes                                                                         |
 | ----------------------- | -------- | ------- | ----------------------------------------------------------------------------- |
-| **Post URL**            | Yes      | —       | Must start with `http://` or `https://`                                       |
+| **Post URL**            | Yes      | —       | Must start with `http://` or `https://`; held to Network Protection (below)   |
 | **Request Body Preset** | No       | `json`  | `json` (`application/json`) or `form` (`application/x-www-form-urlencoded`)   |
 | **Additional Headers**  | No       | —       | JSON object of header key/values, e.g. `{"Authorization": "Bearer token123"}` |
 | **Timeout (seconds)**   | No       | 10      | Range 1–60                                                                    |
 | **Verify SSL**          | No       | true    | Set false only for testing with self-signed certs                             |
+
+The Post URL is held to Settings > Security > Network Protection when the provider is saved and on every send: a cloud-metadata address is always refused, and a private one (a LAN host, `localhost`) is refused when **Block Private Network Targets** is on. Each send connects to the address its own lookup allowed, never one a later lookup returns, and never through a proxy set in the server's environment. A refused send is logged and stored as `CheckTargetBlockedError` with the address and range.
 
 Each header name must be an HTTP token (letters, digits and `` !#$%&'*+-.^_`|~ ``), and each value text of printable ASCII, spaces and tabs, with no space at either end. A value holding a line break (CR or LF), another control character or a non-ASCII character is refused when the provider is saved, as a 422 naming the header, never its value (a NUL is refused anywhere in a config); a token pasted with a trailing newline is the usual cause. A stored provider whose header cannot be sent fails each delivery and test before any connection is made, its logged error naming the header.
 

@@ -11,6 +11,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import CheckNotFoundException
 from app.core.query_params import CheckTypeFilter
+from app.core.rate_limit import (
+    BULK_PREVIEW_RATE_LIMIT,
+    limiter,
+    web_session_rate_limit_key,
+)
 from app.db import get_db
 from app.services.views.checks_view_service import ChecksViewService
 from app.services.views.status_view_service import StatusViewService
@@ -401,6 +406,7 @@ async def bulk_modify(
     include_in_schema=False,
     name="checks.bulk_preview",
 )
+@limiter.limit(BULK_PREVIEW_RATE_LIMIT, key_func=web_session_rate_limit_key)
 async def bulk_check_preview(
     request: Request,
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],

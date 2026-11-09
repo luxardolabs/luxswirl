@@ -63,7 +63,7 @@ def assert_target_allowed(target: str, *, database: bool = False) -> None:
     """
     try:
         hosts = ssrf.extract_hosts(target, database=database)
-    except ssrf.UnplainDatabaseUrlError as e:
+    except ssrf.UnallowableTargetError as e:
         raise CheckConfigError(str(e)) from None
     for host in hosts:
         _vet_host_name(host)

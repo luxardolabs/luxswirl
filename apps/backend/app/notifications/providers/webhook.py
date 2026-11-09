@@ -9,14 +9,16 @@ from typing import Any
 import httpx
 from fastapi.encoders import jsonable_encoder
 
-from app.core.check_target_validator import validate_check_target
+from app.core.check_target_validator import blocked_target_error
 from app.core.credential_mask import mask_url_paths
 from app.core.http_header import sendable_headers
+from app.notifications.providers._vetted_http import vetted_transport
 from app.notifications.providers.base import (
     BaseNotificationProvider,
     NotificationContext,
 )
 from app.shared.logger import get_logger
+from app.shared.ssrf import SsrfBlockedError
 
 logger = get_logger("luxswirl.notifications.webhook")
 
@@ -57,11 +59,9 @@ class WebhookNotificationProvider(BaseNotificationProvider):
                 f"Invalid webhook URL: {url}. Must start with http:// or https://"
             )
 
-        # SSRF protection: a webhook URL must not reach cloud-metadata / link-local
-        # endpoints (e.g. 169.254.169.254). Private networks are allowed by default —
-        # internal alerting endpoints are a legitimate self-hosted use case, matching
-        # the check-target policy. Raises CheckTargetBlockedError (a ValueError).
-        validate_check_target(url, block_cloud_metadata=True)
+        # SSRF protection is judged where the stored settings are: on save
+        # (`network_targets`, off the event loop) and on every connection
+        # (`vetted_transport`). Nothing here resolves the name.
 
         # Validate request body preset
         preset = config.get("request_body_preset", "json")
@@ -72,6 +72,10 @@ class WebhookNotificationProvider(BaseNotificationProvider):
 
         if "additional_headers" in config:
             sendable_headers("additional_headers", config["additional_headers"])
+
+    def network_targets(self) -> list[str]:
+        """The webhook URL, which the SSRF settings judge when it is saved."""
+        return [self.config["post_url"]]
 
     async def send(self, context: NotificationContext) -> bool:
         """
@@ -84,12 +88,11 @@ class WebhookNotificationProvider(BaseNotificationProvider):
             True if webhook was sent successfully (2xx status code)
 
         Raises:
+            CheckTargetBlockedError: The SSRF settings refuse every address of its host.
             Exception: If webhook fails to send
         """
         # Build request data
         url = self.config["post_url"]
-        # Re-validate at send time: defends against DNS rebinding between config and send.
-        validate_check_target(url, block_cloud_metadata=True)
         preset = self.config.get("request_body_preset", "json")
         timeout = self.config.get("timeout", 10)
         verify_ssl = self.config.get("verify_ssl", True)
@@ -109,14 +112,20 @@ class WebhookNotificationProvider(BaseNotificationProvider):
                 )
             )
 
-        # Send request
-        async with httpx.AsyncClient(verify=verify_ssl, timeout=timeout) as client:
-            if preset == "json":
-                response = await client.post(url, json=payload, headers=headers)
-            else:  # form
-                response = await client.post(url, data=payload, headers=headers)
+        # Send request, on an address the SSRF settings allow (DNS rebinding included)
+        transport = vetted_transport(verify=verify_ssl, network=self.network)
+        try:
+            async with httpx.AsyncClient(
+                transport=transport, timeout=timeout
+            ) as client:
+                if preset == "json":
+                    response = await client.post(url, json=payload, headers=headers)
+                else:  # form
+                    response = await client.post(url, data=payload, headers=headers)
 
-            response.raise_for_status()
+                response.raise_for_status()
+        except SsrfBlockedError as e:
+            raise blocked_target_error(e) from e
 
         logger.info(
             "Webhook notification sent successfully",

@@ -146,6 +146,7 @@ async def test_ha_test_route_posts_to_metadata(
 
     def make_client(**kwargs):
         kwargs.pop("verify", None)
+        kwargs.pop("transport", None)  # the vetted transport: a mock answers instead
         return httpx.AsyncClient(transport=transport, **kwargs)
 
     monkeypatch.setattr(
