@@ -19,10 +19,8 @@ The value names what was refused, where the agent acts on it:
   heartbeat in any other format from a pending or rejected agent with no key):
   the agent needs a new LUXSWIRL_AUTH_KEY.
 
-The one 403 on an agent route left unmarked is the same-origin guard's
-refusal of a cross-site browser request, which an agent never sends.
 - `refused`: any other refusal (an agent that is not active, a job or check
-  that is not its own).
+  that is not its own, the same-origin guard's 403 to a cross-site request).
 """
 
 REFUSAL_HEADER = "X-LuxSwirl-Refused"

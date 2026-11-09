@@ -38,6 +38,7 @@ from app.background.maintenance_worker import (
     stop_maintenance_worker,
 )
 from app.cli import bootstrap_on_startup
+from app.core.agent_refusals import AgentRefusalMarkMiddleware
 from app.core.config import settings
 from app.core.display_settings import update_display_settings
 from app.core.exceptions import LuxSwirlException, value_error_message
@@ -285,6 +286,9 @@ app.add_middleware(
     SameOriginMiddleware,
     allowed_hosts=settings.same_origin_hosts,
 )
+# Just outside the guard: its 403 on an agent-protocol path carries the refusal mark
+# the agent believes (app/core/agent_refusals.py), as every route's refusal does.
+app.add_middleware(AgentRefusalMarkMiddleware)
 
 # Trusted hosts: added last, so it is the outermost layer and a forged Host is refused with
 # 400 before any other middleware or route sees the request (FLEET-BUILD-DEPLOY-STANDARD).

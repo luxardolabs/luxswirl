@@ -11,6 +11,11 @@ Its handler, which resolves the route's dependencies too, marks each 401 and
 (the site that knows what it refused: the recovery secret, the agent's key,
 the registration key), else `refused`. A new agent route is marked by being
 on one of these routers, which a test holds for every `/api/v1/agent` route.
+
+The cross-site guard (`app/core/same_origin.py`, an emitted asset) answers a
+browser's cross-site POST before any route runs, so no route marks that 403.
+`AgentRefusalMarkMiddleware`, added just outside the guard, marks every 401 and
+403 the app answers on an agent-protocol path that does not carry the mark yet.
 """
 
 from collections.abc import Callable, Coroutine, Mapping
@@ -18,6 +23,7 @@ from typing import Any
 
 from fastapi import Request, Response
 from starlette.exceptions import HTTPException
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app.core.exceptions import LuxSwirlException
 from app.core.openapi_operations import HandlerNamedRoute
@@ -53,3 +59,41 @@ class AgentProtocolRoute(HandlerNamedRoute):
             return response
 
         return marking_handler
+
+
+# Where the agent protocol is served (app/api/v1/__init__.py).
+AGENT_PROTOCOL_PATH = "/api/v1/agent"
+_HEADER = REFUSAL_HEADER.lower().encode("latin-1")
+
+
+def _on_agent_path(path: str) -> bool:
+    return path == AGENT_PROTOCOL_PATH or path.startswith(f"{AGENT_PROTOCOL_PATH}/")
+
+
+class AgentRefusalMarkMiddleware:
+    """Marks each unmarked 401 and 403 the app answers on an agent-protocol path.
+
+    The routes mark their own refusals (`AgentProtocolRoute`); this covers what
+    answers before them, the cross-site guard. A value already set is kept.
+    """
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http" or not _on_agent_path(scope["path"]):
+            await self.app(scope, receive, send)
+            return
+
+        async def marking_send(message: Message) -> None:
+            if (
+                message["type"] == "http.response.start"
+                and message["status"] in REFUSAL_STATUSES
+            ):
+                headers = list(message.get("headers", []))
+                if all(name.lower() != _HEADER for name, _ in headers):
+                    headers.append((_HEADER, REFUSED.encode("latin-1")))
+                    message = {**message, "headers": headers}
+            await send(message)
+
+        await self.app(scope, receive, marking_send)
