@@ -905,8 +905,14 @@ class CheckResultCRUD:
         if not check_ids or not windows_hours:
             return counts
         now = utc_now()
+        earliest_start = now - timedelta(hours=max(windows_hours))
+        # An aggregate older than every window holds nothing they read.
         watermark = (
-            await db.execute(select(func.max(_HOURLY.c.bucket)))
+            await db.execute(
+                select(func.max(_HOURLY.c.bucket)).where(
+                    _HOURLY.c.bucket >= earliest_start
+                )
+            )
         ).scalar_one_or_none()
         # Trust only hours the hourly policy (end_offset 1 hour, run every hour)
         # has refreshed after they ended: a refresh by hand can materialize an
@@ -950,7 +956,13 @@ class CheckResultCRUD:
                     )
                 ),
             )
-            .where(CheckResult.check_id.in_(check_ids), or_(*raw_ranges.values()))
+            # The plain lower bound lets TimescaleDB skip every older chunk; the
+            # ranges inside the OR alone do not.
+            .where(
+                CheckResult.check_id.in_(check_ids),
+                CheckResult.timestamp >= earliest_start,
+                or_(*raw_ranges.values()),
+            )
             .group_by(CheckResult.check_id)
         )
         for row in raw.mappings():
