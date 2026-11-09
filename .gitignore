@@ -6,6 +6,10 @@
 # any leftover api_token file (the server neither writes nor reads one).
 data/
 *_credentials.json
+# An agent's runtime store (checks cache, pending reports): its encrypted
+# check configs can hold credentials, and its key is not secret.
+reports/
+checks_cache.json
 secret_key
 api_token
 
