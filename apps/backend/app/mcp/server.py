@@ -17,6 +17,12 @@ Ported from LuxWX's app/mcp/server.py (itself LuxPM's), with these adaptations:
 5. The SDK's own input validation is off: the gate runs first on every call, a
    refused call is answered FORBIDDEN before any schema of the tool is disclosed, and
    every call is audited. The handlers validate their own arguments.
+6. A request body is read whole, up to `MCP_MAX_BODY`, before the transport sees it
+   (the SDK reads up to 4 MiB, and the audit masks all of it on one thread), and a
+   token has at most `MCP_TOKEN_IN_FLIGHT` requests in flight: one caller's large
+   calls cannot queue without limit behind the audit. A call cancelled before its
+   audit row is written (the server stopping) still writes one, shielded, with its
+   arguments counted rather than kept.
 
 TRANSACTION OWNERSHIP: no session is held across a request. Authentication stamps
 the token's `last_used_at` in its own short transaction; `call_tool` owns each call's
@@ -26,15 +32,18 @@ never commit. The streamable-HTTP GET (a server-to-client event stream) and DELE
 """
 
 import time
+from collections import Counter
 from typing import Any
+from uuid import UUID
 
+import anyio
 from mcp.server import Server
 from mcp.server.fastmcp.server import StreamableHTTPASGIApp
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 from mcp.types import CallToolResult, TextContent, Tool
 from starlette.requests import Request
 from starlette.responses import JSONResponse
-from starlette.types import ASGIApp, Receive, Scope, Send
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app.core import rate_limit
 from app.core.exceptions import LuxSwirlException
@@ -61,6 +70,15 @@ logger = get_logger("luxswirl.mcp.server")
 # What an agent reads when a tool fails in a way it cannot correct: the error's own
 # text stays in the server log.
 _INTERNAL_ERROR = "Error: the tool failed; the server log has the details"
+
+# The largest request body read. No tool's arguments come near it: a check's longest
+# bounded field is its 5,000-character query, and a synthetic script of a megabyte is
+# no script anyone writes.
+MCP_MAX_BODY = 1024 * 1024
+# The most requests one token may have in flight at once; a request over it is 429.
+MCP_TOKEN_IN_FLIGHT = 4
+# Each token's requests in flight, in this process.
+_in_flight: Counter[UUID] = Counter()
 
 mcp_server = Server("luxswirl")
 
@@ -179,13 +197,19 @@ async def _audit(
     start: float,
 ) -> None:
     """Record the call, in a transaction of its own. Best-effort: an audit failure is
-    logged and never replaces the tool's answer or touches its change."""
+    logged and never replaces the tool's answer or touches its change.
+
+    Cancelled before the row is written (the server stopping while the row waits for
+    the masking thread), the row is still written, shielded from the cancellation,
+    with the arguments counted, not kept: a committed change is never left unaudited.
+    """
+    ip_address, user_agent = get_origin()
+    principal = get_principal()
     try:
-        ip_address, user_agent = get_origin()
         async with worker_session() as audit_db:
             await MCPAuditCoreService.log_call(
                 audit_db,
-                principal=get_principal(),
+                principal=principal,
                 tool_name=tool_name,
                 arguments=arguments,
                 success=success,
@@ -195,8 +219,59 @@ async def _audit(
                 ip_address=ip_address,
                 user_agent=user_agent,
             )
+    except anyio.get_cancelled_exc_class():
+        with anyio.CancelScope(shield=True):
+            try:
+                async with worker_session() as audit_db:
+                    await MCPAuditCoreService.log_interrupted_call(
+                        audit_db,
+                        principal=principal,
+                        tool_name=tool_name,
+                        argument_count=len(arguments),
+                        success=success,
+                        error_message=error_message,
+                        duration_ms=int((time.monotonic() - start) * 1000),
+                        denial_code=denial_code,
+                        ip_address=ip_address,
+                        user_agent=user_agent,
+                    )
+            except Exception:
+                logger.exception(
+                    "Failed to log an interrupted MCP tool call",
+                    extra={"tool": tool_name},
+                )
+        raise
     except Exception:
         logger.exception("Failed to log MCP tool call", extra={"tool": tool_name})
+
+
+async def _read_body(receive: Receive) -> tuple[list[Message], bool]:
+    """The request's messages, read until its body ends or passes `MCP_MAX_BODY`;
+    whether it stayed within the limit."""
+    messages: list[Message] = []
+    size = 0
+    while True:
+        message = await receive()
+        messages.append(message)
+        if message["type"] != "http.request":
+            return messages, True  # a disconnect: the transport sees it as sent
+        size += len(message.get("body", b""))
+        if size > MCP_MAX_BODY:
+            return messages, False
+        if not message.get("more_body", False):
+            return messages, True
+
+
+def _replaying(messages: list[Message], receive: Receive) -> Receive:
+    """A receive that hands out `messages` first, then the connection's own."""
+    pending = list(messages)
+
+    async def replay() -> Message:
+        if pending:
+            return pending.pop(0)
+        return await receive()
+
+    return replay
 
 
 # The failed-credential limiter's name for this surface.
@@ -308,11 +383,46 @@ class MCPAuthMiddleware:
             await response(scope, receive, send)
             return
 
+        # A body is refused by its declared length before any of it is read, and by
+        # what arrives past the limit when it declares none or lies.
+        declared = request.headers.get("content-length", "")
+        within = not (declared.isdigit() and int(declared) > MCP_MAX_BODY)
+        messages: list[Message] = []
+        if within:
+            messages, within = await _read_body(receive)
+        if not within:
+            response = JSONResponse(
+                {"error": f"Request body larger than {MCP_MAX_BODY} bytes"},
+                status_code=413,
+            )
+            await response(scope, receive, send)
+            return
+
+        token_id = principal.token_id
+        if _in_flight[token_id] >= MCP_TOKEN_IN_FLIGHT:
+            logger.info(
+                "MCP request refused: token has too many requests in flight",
+                extra={"token_id": str(token_id)},
+            )
+            response = JSONResponse(
+                {"error": "Too many requests in flight for this API token"},
+                status_code=429,
+                headers={"Retry-After": "1"},
+            )
+            await response(scope, receive, send)
+            return
+
         set_principal(principal)
         # The proxy-aware resolver the rate limiter uses: X-Forwarded-For is only
         # honored when the peer is a trusted proxy, so a caller cannot forge it.
         set_origin(client_ip, request.headers.get("user-agent"))
-        await self.app(scope, receive, send)
+        _in_flight[token_id] += 1
+        try:
+            await self.app(scope, _replaying(messages, receive), send)
+        finally:
+            _in_flight[token_id] -= 1
+            if _in_flight[token_id] <= 0:
+                del _in_flight[token_id]
 
     @staticmethod
     def _extract_token(request: Request) -> str | None:

@@ -52,6 +52,10 @@ A refused call comes back as a tool error whose text starts `FORBIDDEN:` and nam
 | --------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | Calls per token | The admin API's per-token limit (`security.admin_api_rate_limit`, 300 a minute by default); then `429` with `Retry-After` |
 | Failed tokens   | 10 refused tokens a minute per client address; then `429` until the minute is out. A valid token is never counted         |
+| Request size    | 1 MiB a request body, whatever length it declares; a larger one gets `413` and runs no tool                               |
+| Calls in flight | 4 requests at once per token; a fifth gets `429` with `Retry-After: 1`                                                    |
+
+If the server stops while a call's audit row is still waiting to be written, the row is written anyway, with its arguments counted (`arguments_not_kept`) rather than kept.
 
 A missing, unknown, revoked or expired token gets `401` with a `WWW-Authenticate: Bearer` challenge; the answer is the same for each, so it does not tell which.
 

@@ -52,6 +52,9 @@ _NOTE_ROOM = 256
 # it holds a database connection while it masks what a row already bounds.
 _MASKING = ThreadPoolExecutor(max_workers=1, thread_name_prefix="mcp-audit-mask")
 
+# The one key of the arguments an interrupted call's row keeps (`log_interrupted_call`).
+INTERRUPTED_KEY = "arguments_not_kept"
+
 # What a synthetic script is stored as: its size alone.
 _SCRIPT_SIZE = re.compile(r"<\d+ characters>")
 
@@ -172,6 +175,41 @@ class MCPAuditCoreService:
             api_token_id=principal.token_id if principal else None,
             tool_name=storable_text(tool_name)[:TOOL_NAME_LENGTH],
             arguments=await _masked_off_the_loop(arguments),
+            success=success,
+            error_message=(_kept(error_message) if error_message else None),
+            duration_ms=duration_ms,
+            ip_address=storable_address(ip_address),
+            user_agent=storable_user_agent(user_agent),
+            denial_code=denial_code,
+        )
+
+    @staticmethod
+    async def log_interrupted_call(
+        db: AsyncSession,
+        *,
+        principal: ApiPrincipal | None,
+        tool_name: str,
+        argument_count: int,
+        success: bool,
+        error_message: str | None,
+        duration_ms: int,
+        denial_code: MCPDenialCode | None,
+        ip_address: str | None,
+        user_agent: str | None,
+    ) -> None:
+        """Append the audit row of a call cancelled before its arguments were masked
+        (the server stopping): its arguments are counted, never kept unmasked."""
+        await MCPToolCallCRUD.log_call(
+            db,
+            user_id=principal.user.id if principal else None,
+            api_token_id=principal.token_id if principal else None,
+            tool_name=storable_text(tool_name)[:TOOL_NAME_LENGTH],
+            arguments={
+                INTERRUPTED_KEY: (
+                    f"{argument_count} argument(s), not kept: the server stopped "
+                    "before they were masked"
+                )
+            },
             success=success,
             error_message=(_kept(error_message) if error_message else None),
             duration_ms=duration_ms,
