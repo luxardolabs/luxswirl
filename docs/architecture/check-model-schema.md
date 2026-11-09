@@ -75,7 +75,7 @@ Three columns use the transparent field-encryption types from `apps/backend/app/
 - `target` and `connection_string_encrypted` use `EncryptedString` (backed by a SQL `String`).
 - `check_config` uses `EncryptedJSON` (backed by SQL `Text`; the whole JSON object is encrypted as one blob, so no field-level SQL querying is possible).
 
-Both use Fernet (AES-128-CBC + HMAC) with the key from `SECURITY__FIELD_ENCRYPTION_KEY`. Encryption/decryption is automatic on write/read. The key is a required setting, so nothing is written in the clear; a value stored as plaintext before encryption still reads as-is.
+Both use Fernet (AES-128-CBC + HMAC) with the key from `SECURITY__FIELD_ENCRYPTION_KEY`. Encryption/decryption is automatic on write/read. The key is a required setting, so nothing is written in the clear; a value stored as plaintext before encryption still reads as-is, and the upgrade to revision `3f9c7a1b5e82` (`018_encrypt_plaintext_values.py`) encrypts every such value in place (checks' target, `check_config` and connection string, maintenance jobs' params), naming any whose token would not fit its column.
 
 ## Derived `@property` accessors
 
