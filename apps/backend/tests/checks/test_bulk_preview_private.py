@@ -124,6 +124,19 @@ async def test_a_loopback_listener_gets_no_connection(db: AsyncSession) -> None:
         "http://[::ffff:0:c612:1]/",  # SIIT of 198.18.0.1
         "http://[::c612:1]/",  # IPv4-compatible 198.18.0.1
         "http://[fec0::1]/",
+        # Counted global, but answered by the network the server sits on: PCP and
+        # TURN anycast, SRv6 SIDs; and multicast, and a never-routed dummy prefix.
+        "http://192.0.0.9/",
+        "http://192.0.0.10/",
+        "http://[64:ff9b::c000:9]/",
+        "http://[::ffff:0:c000:9]/",
+        "http://[5f00::1]/",
+        "http://224.0.0.1/",
+        "http://239.255.255.250/",
+        "http://[ff02::1]/",
+        "http://[ff05::1:3]/",
+        "http://[64:ff9b::e000:1]/",
+        "http://[100:0:0:1::1]/",
     ],
 )
 async def test_a_private_address_gets_no_connection(

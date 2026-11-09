@@ -59,8 +59,26 @@ _LOOKUPS = ThreadPoolExecutor(
 )
 
 
-# IPv6 site-local (RFC 3879 deprecated it; no network routes it).
-_SITE_LOCAL = ipaddress.IPv6Network("fec0::/10")
+# Addresses Python counts global that the server's own network answers, or nothing
+# routes: IPv6 site-local, PCP and TURN anycast (the nearest gateway answers), SRv6
+# SIDs, the IPv6 dummy prefix.
+_NOT_INTERNET = (
+    ipaddress.ip_network("fec0::/10"),
+    ipaddress.ip_network("192.0.0.9/32"),
+    ipaddress.ip_network("192.0.0.10/32"),
+    ipaddress.ip_network("5f00::/16"),
+    ipaddress.ip_network("100:0:0:1::/64"),
+)
+
+
+def _ordinary_internet(address: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    """Whether `address` is one host on the public internet: global, unicast, and in
+    no range the server's own network answers."""
+    return (
+        address.is_global
+        and not address.is_multicast
+        and not any(address in network for network in _NOT_INTERNET)
+    )
 
 
 class PrivateTargetError(Exception):
@@ -75,11 +93,9 @@ def _probed_from_server(ip: str) -> bool:
         address = ipaddress.ip_address(ip)
     except ValueError:
         return False
-    # Every address it reaches must be global: an IPv6 form that is global itself can
-    # carry an IPv4 one that is not (NAT64 of 198.18.0.1), and IPv6 site-local is
-    # never routed though Python counts it global.
-    reached = [address, *carried_ipv4(address)]
-    if address in _SITE_LOCAL or not all(each.is_global for each in reached):
+    # Every address it reaches must be ordinary internet: an IPv6 form that is global
+    # itself can carry an IPv4 one that is not (NAT64 of 198.18.0.1).
+    if not all(_ordinary_internet(each) for each in [address, *carried_ipv4(address)]):
         return False
     return (
         blocked_range(ip, block_cloud_metadata=True, block_private_networks=True)
