@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import AsyncIterator
+from urllib.parse import urlparse
 
 import pytest
 import pytest_asyncio
@@ -22,6 +23,7 @@ from app.models.enum_model import UserRole
 from app.schemas.api_token_schema import ApiTokenCreate
 from app.services.core.api_token_core_service import ApiTokenCoreService
 from app.services.core.auth_core_service import AuthCoreService
+from app.services.core.check_core_service import CheckCoreService
 from app.services.core.metrics_collector_core_service import MetricsCollectorCoreService
 from fixtures.factories import make_agent, make_check, make_check_result, make_user
 from httpx import ASGITransport, AsyncClient
@@ -75,6 +77,26 @@ HOSTILE = [
     f"https://a.io:{SECRET}/x",
     f"[::1]:{SECRET}",
     f"{SECRET}=x",
+    # Found by the first attack on this parser: a userinfo split by two of the
+    # authority's end characters, a token as the user name, a host key's text in an
+    # unquoted ODBC or escaped libpq value, a query read as pairs, an IPv6 zone.
+    f"https://{SECRET}:1234//x@db.example.com/",
+    f"https://{SECRET}:1234/a/b@db",
+    f"https://{SECRET}:1234?a&b@db",
+    f"https://{SECRET}:1234#/x@db",
+    f"https://{SECRET}:1234;;@db",
+    f"https://{SECRET}:1234 &@db",
+    f"postgresql://{SECRET}:5432/x/y@db/app",
+    f"https://{SECRET}#/@github.com/x",
+    f"https://{SECRET}/?x@github.com/x",
+    f"Driver={{ODBC}};Server=db;Uid=u;Pwd=hunter2 host={SECRET};",
+    f"Server=db;Pwd=a server={SECRET}",
+    f"host=db password=abc\\ host={SECRET}",
+    f"host=db password=ab;host={SECRET}",
+    f"api.example.com/cb?token=abc;server={SECRET}",
+    f"api.example.com/cb?a=1 host={SECRET}",
+    f"http://[::1%password={SECRET}]:80/",
+    f"http://[fe80::1%{SECRET}]/",
 ]
 
 
@@ -91,10 +113,15 @@ def test_no_form_of_credential_survives(target: str) -> None:
             "https://api.example.com:8443",
         ),
         ("HTTPS://API.Example.com/", "https://api.example.com"),
+        # An `@` after the host cannot be told from a userinfo split early, so the
+        # host is hidden rather than guessed.
         (
             "https://grafana.internal:3000/login?email=ops@example.com",
-            "https://grafana.internal:3000",
+            "https://***",
         ),
+        ("Server=db;Port=1433;Pwd=x", "host=db port=1433"),
+        ("host=db port=5432 password='p w'", "host=db port=5432"),
+        ("api.example.com/cb?token=abc", "api.example.com"),
         (
             "postgresql://monitor:pw@db.internal:5432/app",
             "postgresql://db.internal:5432",
@@ -129,6 +156,22 @@ def test_an_editor_reads_the_path_masked_and_a_viewer_the_origin() -> None:
         assert "pw" not in shown
     for maybe_role in (UserRole.VIEWER, None):
         assert shown_target(target, maybe_role) == "https://api.example.com"
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://monitor:4321#zz@db.example.com/",
+        "https://monitor:4321/zz@db.example.com/",
+        "https://monitor:4321?zz@db.example.com/",
+        f"http://[::1%{SECRET}]:8080/",
+    ],
+)
+def test_a_bulk_name_takes_nothing_the_origin_hides(url: str) -> None:
+    name = CheckCoreService.bulk_display_name(urlparse(url))
+
+    assert "4321" not in name
+    assert SECRET.casefold() not in name.casefold()
 
 
 @pytest.mark.parametrize(

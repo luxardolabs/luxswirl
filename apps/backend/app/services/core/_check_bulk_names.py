@@ -15,8 +15,9 @@ def bulk_display_name(parsed: ParseResult) -> str:
     path, query or userinfo, which is where a credential can sit.
 
     Raises:
-        ValueError: The URL does not parse, or its port is no number. The parser's own message quotes
-            what it read, and that can be a password, so this one says only that.
+        ValueError: The URL does not parse, or its port is no number. The parser's
+            own message quotes what it read, and that can be a password, so this
+            one says only that.
     """
     url = parsed.geturl()
     try:
@@ -24,10 +25,13 @@ def bulk_display_name(parsed: ParseResult) -> str:
     except ValueError:
         raise ValueError("The URL could not be parsed") from None
     try:
-        port = reparsed.port
+        _ = reparsed.port
     except ValueError:
         raise ValueError("The URL has no valid port") from None
-    hostname = urlparse(target_origin(url)).hostname
+    # The port is read from the origin too: where the origin hides the host, the
+    # URL's own port can be the first digits of a password.
+    origin = urlparse(target_origin(url))
+    hostname, port = origin.hostname, origin.port
     if not hostname or hostname == "***":
         hostname = "unknown"
     display_name = hostname.replace(".", "-").replace(":", "-")

@@ -252,15 +252,20 @@ def bulk_check_response(
 
 
 async def render_log_row(
-    request: Request, db: AsyncSession, log_id: UUID, message: str
+    request: Request,
+    db: AsyncSession,
+    current_user: AuthedUser,
+    log_id: UUID,
+    message: str,
 ) -> HTMLResponse:
-    """Re-render a single notification log row partial with an HX-Trigger toast."""
+    """Re-render a single notification log row partial with an HX-Trigger toast,
+    its check's target as `current_user` may read it."""
     log = await NotificationLogsViewService.get_log_row_by_id(db, request, log_id)
     if log is None:
         raise HTTPException(status_code=404, detail="Notification log not found")
     return templates.TemplateResponse(
         request,
         "partials/notification_logs/log_row.html",
-        {"request": request, "log": log},
+        {"request": request, "log": log, "current_user": current_user},
         headers={"HX-Trigger": hx_toast_trigger(message)},
     )

@@ -9,8 +9,9 @@ the list at all. It is parsed, and only the parts that cannot carry a secret are
 `https://api.example.com:8443`.
 
 The parse fails closed. When the text cannot be read as a host and a port with
-certainty (a password holding `/`, `?`, `#` or a space splits the authority early, so
-what follows the split could be the rest of it), the host is shown as `***`.
+certainty, the host is shown as `***`: an `@` anywhere after where the authority
+seems to end (a userinfo holding `/`, `?`, `#`, `;` or a space splits it early, and
+the real host follows that `@`), an IPv6 zone, a port that is no number.
 
 Forms read:
 - A URL, `scheme://[userinfo@]host[:port][/path][?query]`, JDBC's
@@ -38,13 +39,18 @@ _PORT = re.compile(r"[0-9]{1,5}")
 
 # Where an authority ends: a path, query, fragment, SQL Server's `;` pairs, a space.
 _AUTHORITY_END = frozenset("/?#;\\ \t\r\n\f\v")
-# Where the run after the authority stops being able to hold the rest of a userinfo.
-_SEGMENT_END = frozenset("/?#&=;")
+# A key=value string's first key: a word, so `host/x?a=b` is not read as pairs.
+_FIRST_KEY = re.compile(r"[;\s]*[A-Za-z][A-Za-z0-9 _]*\s*=")
 
-# The keys of a key=value connection string that say where it connects.
-_HOST_KEYS = frozenset(
-    {"host", "hostaddr", "server", "data source", "datasource", "address", "addr"}
+# The keys that say where a connection string connects, by dialect. An ODBC or ADO
+# string (`;`-separated, a value runs to the next `;`) names its host `Server`; a
+# libpq one (space-separated, a value runs to the next unescaped space) `host`. A key
+# of the other dialect is not read, so a password that holds the text of one is not
+# read as a host.
+_ODBC_HOST_KEYS = frozenset(
+    {"server", "data source", "datasource", "address", "addr", "network address"}
 )
+_LIBPQ_HOST_KEYS = frozenset({"host", "hostaddr"})
 _PORT_KEYS = frozenset({"port"})
 
 
@@ -57,7 +63,10 @@ def _first_index(text: str, stops: frozenset[str], start: int = 0) -> int:
 
 
 def _host(text: str) -> str | None:
-    """`text` as a host name or IP address, lower-cased, or None."""
+    """`text` as a host name or IP address, lower-cased, or None. An IPv6 zone
+    (`%eth0`) takes any text, so an address with one is not read."""
+    if "%" in text:
+        return None
     if text.startswith("[") and text.endswith("]"):
         try:
             return f"[{ipaddress.IPv6Address(text[1:-1]).compressed}]"
@@ -106,11 +115,11 @@ def _authority(rest: str) -> str | None:
     target), its userinfo dropped; None when they cannot be read with certainty."""
     end = _first_index(rest, _AUTHORITY_END)
     authority, after = rest[:end], rest[end:]
-    # A password holding one of the authority's end characters splits it early, and
-    # what follows the split, up to the path or a query value, could be the rest of
-    # it: an `@` there means the host was never reached.
-    segment = after[: _first_index(after, _SEGMENT_END, 1)]
-    if "@" in segment:
+    # A userinfo holding one of the authority's end characters splits it early, and
+    # the real host follows an `@` somewhere after the split. Nothing tells that `@`
+    # from one in a query value (`?email=ops@example.com`), so any `@` after the
+    # split means the host is not known.
+    if "@" in after:
         return None
     if "@" in authority:
         authority = authority.rpartition("@")[2]
@@ -137,9 +146,11 @@ def _quoted_end(text: str, start: int, close: str) -> int:
     return len(text)
 
 
-def _key_values(text: str) -> list[tuple[str, str]]:
-    """The (key, value) pairs of a libpq, ODBC or ADO connection string, a quoted or
-    braced value read whole, so a `host=` inside a password is not read as a key."""
+def _key_values(text: str, odbc: bool) -> list[tuple[str, str]]:
+    """The (key, value) pairs of a libpq, ODBC or ADO connection string, read as its
+    driver reads them: a quoted or braced value whole; an unquoted one to the next
+    `;` (ODBC, `odbc`) or to the next space no backslash escapes (libpq). So a
+    `host=` inside a password is not read as a key."""
     pairs: list[tuple[str, str]] = []
     index = 0
     while index < len(text):
@@ -158,8 +169,12 @@ def _key_values(text: str) -> list[tuple[str, str]]:
             value = text[start + 1 : end - 1]
         else:
             end = start
-            while end < len(text) and text[end] != ";" and not text[end].isspace():
-                end += 1
+            while end < len(text):
+                char = text[end]
+                if (char == ";") if odbc else char.isspace():
+                    break
+                end += 2 if (char == "\\" and not odbc) else 1
+            end = min(end, len(text))
             value = text[start:end]
         pairs.append((key, value))
         index = end
@@ -168,10 +183,12 @@ def _key_values(text: str) -> list[tuple[str, str]]:
 
 def _pairs(value: str) -> str:
     """A key=value connection string cut to its host and port keys."""
+    odbc = ";" in value
+    host_keys = _ODBC_HOST_KEYS if odbc else _LIBPQ_HOST_KEYS
     hosts: list[str] = []
     ports: list[str] = []
-    for name, text in _key_values(value):
-        if name in _HOST_KEYS:
+    for name, text in _key_values(value, odbc):
+        if name in host_keys:
             hosts.append(text)
         elif name in _PORT_KEYS:
             ports.append(text)
@@ -211,7 +228,7 @@ def target_origin(value: str | None) -> str | None:
             return _HIDDEN
         host = _authority(text[scheme_end + 3 :])
         return f"{scheme.lower()}://{host or _HIDDEN}"
-    if "=" in text:
+    if _FIRST_KEY.match(text):
         return _pairs(text)
     return _authority(text) or _HIDDEN
 

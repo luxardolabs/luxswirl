@@ -222,7 +222,7 @@ async def snooze_alert_check(
     message = await AlertsViewService.snooze_alert_check(
         db, alert_id, check_id, current_user
     )
-    return await render_log_row(request, db, log_id, message)
+    return await render_log_row(request, db, current_user, log_id, message)
 
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
@@ -243,7 +243,7 @@ async def unsnooze_alert_check(
     message = await AlertsViewService.unsnooze_alert_check(
         db, alert_id, check_id, current_user
     )
-    return await render_log_row(request, db, log_id, message)
+    return await render_log_row(request, db, current_user, log_id, message)
 
 
 # route-smoke: requested by the route-table sweep (tests/route_smoke)
