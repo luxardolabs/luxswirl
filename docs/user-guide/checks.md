@@ -285,7 +285,7 @@ return {
 }
 ```
 
-**Succeeds** when the script runs without exception, returns `status == "success"`, and finishes within the timeout. **Reports** script execution time, captured browser console errors and failed HTTP requests, the returned steps, a final-state **screenshot** (PNG) and a Playwright **trace** (both stored in the DB and viewable in the check detail panel — the trace opens in the Playwright Trace Viewer), and any custom fields. **Common issues:** timeout, element/selector not found, script syntax/runtime error, browser crash (OOM).
+**Succeeds** when the script runs without exception, returns `status == "success"`, and finishes within the timeout. **Reports** script execution time, captured browser console errors and failed HTTP requests, the returned steps, a final-state **screenshot** (PNG) and a Playwright **trace** (both stored in the DB and viewable in the check detail panel by an editor or an admin — the trace opens in the Playwright Trace Viewer; a viewer is not shown them, since they record the pages the script drove, login forms included, and cannot be masked), and any custom fields. **Common issues:** timeout, element/selector not found, script syntax/runtime error, browser crash (OOM).
 
 **Example — verify a login flow:**
 

@@ -52,7 +52,7 @@ def _arguments_a_shell_gives_playwright(command: str, cwd: Path) -> list[str]:
 
 @pytest_asyncio.fixture
 async def client(db: AsyncSession) -> AsyncIterator[AsyncClient]:
-    user = make_user(role="viewer")
+    user = make_user(role="editor")
     db.add(user)
     await db.flush()
     _, token = await AuthCoreService().create_session(db, user.id)

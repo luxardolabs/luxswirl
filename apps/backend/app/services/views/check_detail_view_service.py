@@ -500,9 +500,12 @@ class CheckDetailViewService:
             round((stats.successful / stats.total) * 100, 2) if stats.total else None
         )
 
-        # Fetch artifacts for synthetic checks (linked via check_result_id foreign key)
+        # Fetch artifacts for synthetic checks (linked via check_result_id foreign key).
+        # Not for a viewer: a screenshot or trace records the pages a check drove,
+        # login forms included, and its bytes cannot be masked, so the artifact
+        # routes are an editor's and a viewer is not linked to them.
         artifacts = []
-        if check.check_type == "synthetic":
+        if check.check_type == "synthetic" and not masked:
             # Get most recent result
             latest_check_result = (
                 await CheckResultCoreService.get_latest_result_for_check(db, check_id)

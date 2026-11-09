@@ -1,5 +1,8 @@
 """
 Artifacts router — web UI for viewing check artifacts.
+
+Editors and admins only: a screenshot or a Playwright trace records the pages a
+check drove, login forms included, and bytes cannot be masked for a viewer.
 """
 
 from typing import Annotated
@@ -12,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db import get_db
 from app.services.views.artifacts_view_service import ArtifactsViewService
 from app.shared.logger import get_logger
-from app.web.deps import CurrentUserWeb
+from app.web.deps import EditorUserWeb
 from app.web.templates import templates
 
 logger = get_logger("luxswirl.web.routers.artifacts")
@@ -29,10 +32,10 @@ router = APIRouter(tags=["Web UI - Artifacts"])
 )
 async def view_artifact(
     artifact_id: Annotated[UUID, Path(description="Artifact UUID")],
-    current_user: CurrentUserWeb,
+    current_user: EditorUserWeb,
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> Response:
-    """View/download artifact binary data from web UI."""
+    """View/download artifact binary data from web UI (editors and admins)."""
     return await ArtifactsViewService.build_artifact_download_response(db, artifact_id)
 
 
@@ -46,10 +49,10 @@ async def view_artifact(
 async def trace_viewer(
     request: Request,
     artifact_id: Annotated[UUID, Path(description="Artifact UUID")],
-    current_user: CurrentUserWeb,
+    current_user: EditorUserWeb,
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> Response:
-    """Serve the Playwright trace viewer page."""
+    """Serve the Playwright trace viewer page (editors and admins)."""
     context, error = await ArtifactsViewService.build_trace_viewer_context(
         db, artifact_id, request, current_user
     )
