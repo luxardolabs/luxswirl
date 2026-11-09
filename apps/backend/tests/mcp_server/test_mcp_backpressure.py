@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import threading
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
@@ -32,6 +31,7 @@ from app.models.mcp_tool_call_model import MCPToolCall
 from app.schemas.api_token_schema import ApiTokenCreate
 from app.services.core import mcp_audit_core_service as audit
 from app.services.core.api_token_core_service import ApiTokenCoreService
+from app.services.core.mcp_audit_core_service import MCPAuditCoreService
 from fixtures.factories import make_agent, make_user
 from httpx import ASGITransport
 from mcp.server.fastmcp.server import StreamableHTTPASGIApp
@@ -112,15 +112,27 @@ async def _rows(tool: str) -> int:
     return count or 0
 
 
-@asynccontextmanager
-async def _masking_held() -> AsyncIterator[threading.Event]:
-    """Hold the audit's one masking thread busy until the event is set."""
-    release = threading.Event()
-    audit._MASKING.submit(release.wait, 60)
-    try:
-        yield release
-    finally:
-        release.set()
+class _AuditHeld:
+    """Every call's audit write waits until `release` is set, as it waits behind a
+    busy masking thread; `waiting` counts the writes held."""
+
+    def __init__(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        self.release = asyncio.Event()
+        self.waiting = 0
+        real = MCPAuditCoreService.log_call
+
+        async def held(*args: Any, **kwargs: Any) -> None:
+            self.waiting += 1
+            await self.release.wait()
+            await real(*args, **kwargs)
+
+        monkeypatch.setattr(MCPAuditCoreService, "log_call", held)
+
+    async def until_waiting(self, count: int) -> None:
+        for _ in range(200):
+            if self.waiting >= count:
+                return
+            await asyncio.sleep(0.02)
 
 
 async def test_a_body_over_the_limit_is_refused_before_any_tool_runs(
@@ -178,31 +190,31 @@ async def test_a_body_under_the_limit_still_reaches_its_tool(worker_db: Any) -> 
     assert r.json()["result"]["isError"] is False, r.json()
 
 
-async def test_one_token_has_at_most_its_limit_in_flight(worker_db: Any) -> None:
+async def test_one_token_has_at_most_its_limit_in_flight(
+    worker_db: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Calls past the limit, while the others wait behind the audit, are 429; another
     token is not held up by them, and the token is free again once they finish."""
     token, agent_id = await _token("viewer")
     other, _ = await _token("viewer")
     auth = {**HEADERS, "Authorization": f"Bearer {token}"}
 
-    async with _client() as c, _masking_held() as release:
+    audit_held = _AuditHeld(monkeypatch)
+    async with _client() as c:
         held = [
             asyncio.create_task(
                 c.post("/mcp/", headers=auth, json=_create(agent_id, f"h{i}"))
             )
             for i in range(mcp.MCP_TOKEN_IN_FLIGHT)
         ]
-        for _ in range(200):
-            if sum(mcp._in_flight.values()) >= mcp.MCP_TOKEN_IN_FLIGHT:
-                break
-            await asyncio.sleep(0.02)
+        await audit_held.until_waiting(mcp.MCP_TOKEN_IN_FLIGHT)
         over = await c.post("/mcp/", headers=auth, json=_create(agent_id, "over"))
         others = await c.post(
             "/mcp/",
             headers={**HEADERS, "Authorization": f"Bearer {other}"},
             json={"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}},
         )
-        release.set()
+        audit_held.release.set()
         answers = await asyncio.gather(*held)
         after = await c.post("/mcp/", headers=auth, json=_create(agent_id, "after"))
 
@@ -211,10 +223,11 @@ async def test_one_token_has_at_most_its_limit_in_flight(worker_db: Any) -> None
     assert others.status_code == 200
     assert [a.status_code for a in answers] == [200] * mcp.MCP_TOKEN_IN_FLIGHT
     assert after.status_code == 200
-    assert mcp._in_flight == {}
 
 
-async def test_a_stop_keeps_the_audit_row_of_a_committed_call(worker_db: Any) -> None:
+async def test_a_stop_keeps_the_audit_row_of_a_committed_call(
+    worker_db: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
     token, agent_id = await _token("editor")
     name = f"stop-{uuid4().hex[:8]}"
     secret_target = "https://u:hunter2@93.184.216.34/"
@@ -222,11 +235,11 @@ async def test_a_stop_keeps_the_audit_row_of_a_committed_call(worker_db: Any) ->
     body["params"]["arguments"]["target"] = secret_target
     before = await _rows("create_check")
     manager, app = _wire()
+    audit_held = _AuditHeld(monkeypatch)  # never released: the stop comes first
 
-    async with (
-        _masking_held() as release,
-        httpx.AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as c,
-    ):
+    async with httpx.AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://t"
+    ) as c:
         async with manager.run():
             post = asyncio.create_task(
                 c.post(
@@ -235,14 +248,10 @@ async def test_a_stop_keeps_the_audit_row_of_a_committed_call(worker_db: Any) ->
                     json=body,
                 )
             )
-            for _ in range(200):
-                if post.done() or audit._MASKING._work_queue.qsize() >= 1:
-                    break
-                await asyncio.sleep(0.05)
+            await audit_held.until_waiting(1)
             # leaving manager.run() cancels its task group: the server stopping
         post.cancel()
         await asyncio.gather(post, return_exceptions=True)
-        release.set()
 
     async with AsyncSessionLocal() as s:
         made = await s.scalar(

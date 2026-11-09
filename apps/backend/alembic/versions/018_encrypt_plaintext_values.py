@@ -148,7 +148,10 @@ def migrate(connection: Connection) -> None:
         for row in rows:
             row_id = row[0]
             values: dict[str, str] = {}
-            for (column, limit), stored in zip(columns.items(), row[1:], strict=True):
+            stored_values: tuple[object, ...] = tuple(row[1:])
+            for (column, limit), stored in zip(
+                columns.items(), stored_values, strict=True
+            ):
                 if not isinstance(stored, str) or _is_token(stored):
                     continue
                 if _decrypts(fernet, stored):
