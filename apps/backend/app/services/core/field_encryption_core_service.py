@@ -7,20 +7,38 @@ and a migration run under it would rewrite values under it. So before either
 writes anything, every stored encrypted value (each check's columns, each
 maintenance job's params) is decrypted, and one that does not decrypt stops
 it with its table, column and row named.
+
+When two keys wrote the database, `reencrypt_from` is the repair: given the
+other key, it re-encrypts every value that key wrote under the configured one
+(and encrypts any value still stored in plaintext), refusing, with nothing
+written, while some value decrypts under neither.
 """
 
+from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.encrypted_types import decrypts, is_token
-from app.core.exceptions import UnreadableEncryptedValuesException
+from app.core.config import settings
+from app.core.encrypted_types import (
+    decrypt_with,
+    decrypts,
+    encrypt_for_storage,
+    fernet_key_error,
+    is_token,
+)
+from app.core.exceptions import (
+    UnreadableEncryptedValuesException,
+    ValidationException,
+)
 from app.crud.encrypted_value_crud import (
     CHECK_COLUMNS,
+    COLUMN_LIMITS,
     MAINTENANCE_JOB_COLUMNS,
     EncryptedValueCRUD,
     StoredRow,
 )
+from app.schemas.field_encryption_schema import ReencryptionReport
 from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.services.field_encryption")
@@ -43,8 +61,16 @@ _SET_THE_KEY = (
 _TWO_KEYS = (
     "Two keys wrote this database. Start under the key the server has always "
     "used; the values it still names were written under the other one, which "
-    f"still reads them {_GUIDE}."
+    "still reads them: re-encrypt them with `python -m app.scripts.reencrypt_fields` "
+    f"{_GUIDE}."
 )
+
+
+def _named(names: list[str]) -> str:
+    shown = ", ".join(names[:_NAMED])
+    if len(names) > _NAMED:
+        shown += f", and {len(names) - _NAMED} more"
+    return shown
 
 
 class _Tally:
@@ -89,10 +115,26 @@ class _Tally:
                 f"SECURITY__FIELD_ENCRYPTION_KEY ({self.decrypted} do)"
             )
             repair = _TWO_KEYS
-        named = ", ".join(self.unreadable[:_NAMED])
-        if count > _NAMED:
-            named += f", and {count - _NAMED} more"
-        return f"{verdict}: {named}. {repair}"
+        return f"{verdict}: {_named(self.unreadable)}. {repair}"
+
+
+_Page = Callable[..., Awaitable[Sequence[StoredRow]]]
+
+
+async def _stored_rows(
+    db: AsyncSession,
+) -> AsyncIterator[tuple[str, tuple[str, ...], StoredRow]]:
+    """Every row holding encrypted columns, as (table, its columns, the row)."""
+    tables: tuple[tuple[str, tuple[str, ...], _Page], ...] = (
+        ("checks", CHECK_COLUMNS, EncryptedValueCRUD.check_page),
+        ("maintenance_jobs", MAINTENANCE_JOB_COLUMNS, EncryptedValueCRUD.job_page),
+    )
+    for table, columns, read_page in tables:
+        after: UUID | None = None
+        while page := await read_page(db, skip=after, limit=_PAGE):
+            for row in page:
+                yield table, columns, row
+            after = page[-1].id
 
 
 class FieldEncryptionCoreService:
@@ -108,16 +150,8 @@ class FieldEncryptionCoreService:
                 this database's key).
         """
         tally = _Tally()
-        after: UUID | None = None
-        while page := await EncryptedValueCRUD.check_page(db, skip=after, limit=_PAGE):
-            for row in page:
-                tally.judge("checks", CHECK_COLUMNS, row)
-            after = page[-1].id
-        after = None
-        while page := await EncryptedValueCRUD.job_page(db, skip=after, limit=_PAGE):
-            for row in page:
-                tally.judge("maintenance_jobs", MAINTENANCE_JOB_COLUMNS, row)
-            after = page[-1].id
+        async for table, columns, row in _stored_rows(db):
+            tally.judge(table, columns, row)
 
         if not tally.unreadable:
             return
@@ -139,3 +173,91 @@ class FieldEncryptionCoreService:
         """
         if await EncryptedValueCRUD.columns_exist(db):
             await FieldEncryptionCoreService.require_readable(db)
+
+    @staticmethod
+    async def reencrypt_from(db: AsyncSession, other_key: str) -> ReencryptionReport:
+        """Re-encrypt under the configured key every stored value ``other_key``
+        wrote, and encrypt every value stored in plaintext.
+
+        Every value is judged before anything is written: one that decrypts
+        under neither key refuses the run, and nothing changes. A value the
+        configured key decrypts is left byte for byte, so a second run writes
+        nothing. A plaintext value whose token would not fit its column is left
+        and named.
+
+        Raises:
+            ValidationException: ``other_key`` is not a Fernet key, or is the
+                configured key.
+            UnreadableEncryptedValuesException: Some stored value decrypts
+                under neither key; the message names up to 20 of them.
+        """
+        other_key = other_key.strip()
+        refused = fernet_key_error(other_key)
+        if refused is not None:
+            raise ValidationException(f"The other key is refused: {refused}")
+        if other_key == settings.security.field_encryption_key.strip():
+            raise ValidationException(
+                "The other key is SECURITY__FIELD_ENCRYPTION_KEY itself: give "
+                "the key the named values were written under"
+            )
+
+        already = 0
+        reencrypted: list[str] = []
+        encrypted: list[str] = []
+        too_long: list[str] = []
+        unreadable: list[str] = []
+        writes: list[tuple[str, UUID, dict[str, str]]] = []
+        async for table, columns, row in _stored_rows(db):
+            values: dict[str, str] = {}
+            for column, stored in zip(columns, row.values, strict=True):
+                if stored is None:
+                    continue
+                name = f"{table}.{column} id={row.id}"
+                if decrypts(stored):
+                    already += 1
+                    continue
+                if is_token(stored):
+                    plaintext = decrypt_with(other_key, stored)
+                    if plaintext is None:
+                        unreadable.append(name)
+                        continue
+                    outcome = reencrypted
+                else:
+                    plaintext = stored
+                    outcome = encrypted
+                token = encrypt_for_storage(plaintext)
+                limit = COLUMN_LIMITS[table][column]
+                if limit is not None and len(token) > limit:
+                    too_long.append(name)
+                    continue
+                values[column] = token
+                outcome.append(name)
+            if values:
+                writes.append((table, row.id, values))
+
+        if unreadable:
+            message = (
+                f"{len(unreadable)} stored encrypted values decrypt under neither "
+                f"SECURITY__FIELD_ENCRYPTION_KEY nor the other key: "
+                f"{_named(unreadable)}. Nothing was changed {_GUIDE}."
+            )
+            logger.error("Re-encryption refused", extra={"detail": message})
+            raise UnreadableEncryptedValuesException(message)
+
+        for table, row_id, values in writes:
+            await EncryptedValueCRUD.write_stored(db, table, row_id, values)
+        logger.warning(
+            "Re-encrypted stored values under the configured key",
+            extra={
+                "reencrypted": len(reencrypted),
+                "encrypted": len(encrypted),
+                "left_too_long": len(too_long),
+                "already_readable": already,
+            },
+        )
+        return ReencryptionReport(
+            already_readable=already,
+            reencrypted=reencrypted,
+            encrypted=encrypted,
+            left_too_long=too_long,
+        )

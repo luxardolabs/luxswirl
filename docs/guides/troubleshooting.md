@@ -319,7 +319,18 @@ A changed key reaches the server only when its container is recreated: after edi
 - **"SECURITY\_\_FIELD_ENCRYPTION_KEY is not this database's key: none of the N stored encrypted values decrypt under it"**: set `SECURITY__FIELD_ENCRYPTION_KEY` to the key the server has always used, and run `docker compose up -d`. Nothing was changed. Remove no rows.
 - **"N stored encrypted values do not decrypt under SECURITY\_\_FIELD_ENCRYPTION_KEY (M do)"**: two keys wrote this database, typically because the server once ran under the wrong key. Neither the count nor the server can tell which key is right: only you know which key the server has always used. Set that one and run `docker compose up -d`. If it still names values, each was written or edited under the other key, which still reads it: a check named for one column (for example `checks.check_config`) may hold every other column under the right key.
 
-Removing a named row is the last step, for when the other key is lost: it deletes the row, and for a check every result, artifact and alert link with it. Remove only what the key the server has always used still names:
+#### Re-encrypt the values the other key wrote
+
+With the right key set in the env file and the other key in a file of its own, re-encrypt what the other key wrote. The command runs without the server, takes the other key on standard input (never as an argument, which `ps` and the shell history would show), and judges every stored value before writing any:
+
+```bash
+docker compose run --rm --no-deps -T luxswirl_server python -m app.scripts.reencrypt_fields < other-key.txt
+docker compose up -d
+```
+
+Each value the other key wrote is re-encrypted under `SECURITY__FIELD_ENCRYPTION_KEY` and named in the output, and any value still stored in plaintext is encrypted; values the configured key already reads are left as they are, so running it again changes nothing. A value neither key decrypts refuses the run with nothing changed, naming each one as `<table>.<column> id=<row>`: that is a third key, or a lost one. Delete `other-key.txt` afterwards.
+
+Removing a named row is the last step, for when no key you have reads it: it deletes the row, and for a check every result, artifact and alert link with it. Remove only what the key the server has always used still names:
 
 ```bash
 # A check: its results, artifacts and alert links go with it, and its agent reloads its checks.

@@ -106,6 +106,33 @@ def is_token(stored: str) -> bool:
     return _is_fernet_token(stored)
 
 
+def fernet_key_error(key: str) -> str | None:
+    """Why ``key`` is not a Fernet key (32 url-safe base64 bytes); None when it is."""
+    try:
+        Fernet(key.encode())
+    except ValueError, binascii.Error:
+        return "it is not a Fernet key (32 url-safe base64-encoded bytes)"
+    return None
+
+
+def decrypt_with(key: str, stored: str) -> str | None:
+    """The plaintext ``key`` reads from ``stored`` (an encrypted column's value as
+    stored); None when ``key`` does not decrypt it."""
+    try:
+        return _fernet_for(key).decrypt(stored.encode()).decode()
+    except InvalidToken:
+        return None
+
+
+def encrypt_for_storage(plaintext: str) -> str:
+    """``plaintext`` encrypted under the configured key, as an encrypted column stores it.
+
+    Raises:
+        DatabaseException: No key is configured.
+    """
+    return _configured_fernet().encrypt(plaintext.encode()).decode()
+
+
 def _json_container(raw: str) -> JsonContainer | None:
     """The JSON object or array in ``raw``; None for invalid JSON or a bare value."""
     try:

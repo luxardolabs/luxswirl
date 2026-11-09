@@ -166,6 +166,7 @@ async def test_two_keys_are_named_without_choosing_one_or_removing_rows(
             f"SECURITY__FIELD_ENCRYPTION_KEY ({decrypted} do)"
         )
         assert "Two keys wrote this database" in message
+        assert "app.scripts.reencrypt_fields" in message
         assert "not this database's key" not in message
         assert "remove" not in message.lower()
         assert all(f"id={check_id}" in message for check_id in named)
