@@ -1,4 +1,4 @@
-# luxarch:admin-bootstrap asset v7 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit admin-bootstrap`.
+# luxarch:admin-bootstrap asset v8 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit admin-bootstrap`.
 """How the first admin comes to exist, and how a locked-out owner gets back in.
 
 `luxarch --emit admin-bootstrap`. Drop this in at `app/services/core/admin_bootstrap_core_service.py`.
@@ -24,6 +24,14 @@ Wiring, four lines in code you own:
   and the login page to `login_page_redirect(...)` while there are no users;
 - the app's authentication redirects every request to `forced_change_redirect(...)` when it returns a
   path (v3), so a seeded or reset account reaches only the change form and logout.
+
+The login handler is yours, and it owes the recovery reset the same row lock a change takes. A
+sign-in that verifies a password on an unlocked read and then writes the row (a rehash on success,
+a cleared failure count) or issues a session undoes a reset that landed meanwhile: the stolen
+password works again, or the intruder's new session postdates the reset's cut-off. So, in the
+request's transaction: count a failed attempt you commit on its own first, then read the user
+through `admin_bootstrap_crud.get_by_login_for_update`, verify against that row, and only then write
+the row and issue the session. A reset arriving meanwhile waits for the sign-in and ends its session.
 
 ## What runs, in order
 
@@ -71,6 +79,10 @@ local user planted it in a shared temp directory before first boot) holds the pa
 refuses every token and the log says `admin_setup_token_unavailable`, with the path and what to
 do: remove a file that is not this process's own, or move `SETUP_TOKEN_FILE` off a filesystem
 without hard links.
+
+Every password set (a recovery reset, a change) reads the user's row through the crud's
+`get_by_login_for_update`, which locks it until the caller's transaction ends, so two sets never
+interleave; hashing and checking a password run on a worker thread, off the event loop.
 
 v5: a change's current-password check runs under a lockout (`current_password_attempt` before the
 comparison, `current_password_verified` after a match; EDIT THIS points both at the login's own
@@ -136,10 +148,14 @@ async def password_policy_problem(db: AsyncSession, password: str) -> str:
 # own count in this process (CHANGE_ATTEMPTS checks per CHANGE_WINDOW_SECONDS), keyed on the stored
 # hash, so a recovery reset (a new hash) starts a fresh count. Point both at the counter your
 # login's lockout keeps for that user, so the two share one threshold and every worker sees it.
-# A count written through `db` is in the request's transaction, and a wrong guess raises: if that
-# reaches `get_db`, the rollback takes the count with it and the account never locks. So either
-# count in a transaction of your own that commits here, as a login's lockout does to survive its
-# own raised error, or catch the refusal in the view, inside the request, and test that it locks.
+# `current_password_attempt` runs BEFORE the change locks the user's row. A count written through
+# `db` is in the request's transaction, and a wrong guess raises: if that reaches `get_db`, the
+# rollback takes the count with it and the account never locks. So either count in a transaction of
+# your own that commits here, as a login's lockout does to survive its own raised error, or catch
+# the refusal in the view, inside the request, and test that it locks.
+# `current_password_verified` runs AFTER the lock, while the change holds the row (and on SQLite the
+# database's write lock): clear the count through `db`, in the request's transaction. A transaction
+# of its own would wait on this one, which is waiting on it.
 CHANGE_ATTEMPTS = 5
 CHANGE_WINDOW_SECONDS = 900.0
 
@@ -287,7 +303,18 @@ async def _password_problem(db: AsyncSession, password: str) -> str:
     return await password_policy_problem(db, password)
 
 
-def _hash(password: str) -> str:
+async def _hash(password: str) -> str:
+    """`_hash_blocking` on a worker thread: a hash takes tens of milliseconds, and on the event loop
+    every other request waits them out."""
+    return await asyncio.to_thread(_hash_blocking, password)
+
+
+async def _verified(password: str, stored: str) -> bool:
+    """`_verified_blocking` on a worker thread, for the same reason as `_hash`."""
+    return await asyncio.to_thread(_verified_blocking, password, stored)
+
+
+def _hash_blocking(password: str) -> str:
     """The hash, or PasswordPolicyError when the hasher refuses the password (length, encoding)."""
     try:
         hashed: str = get_password_hash(password)
@@ -302,7 +329,7 @@ def _hash(password: str) -> str:
     return hashed
 
 
-def _verified(password: str, stored: str) -> bool:
+def _verified_blocking(password: str, stored: str) -> bool:
     """Whether `password` is the one `stored` hashes. One the hasher refuses to check (bcrypt past
     72 bytes raises ValueError) is not: every stored hash came from a password it accepted. The
     refusal is logged, because a hasher that cannot load (a passlib backend that does not match
@@ -439,7 +466,7 @@ class AdminBootstrapCoreService:
         password_hash = ""
         if not problem:
             try:
-                password_hash = _hash(password)
+                password_hash = await _hash(password)
             except PasswordPolicyError as exc:
                 problem = str(exc)
         if problem:
@@ -487,7 +514,7 @@ class AdminBootstrapCoreService:
             raise PasswordPolicyError(problem)
         # The admin chose this password, so no forced change follows.
         await admin_bootstrap_crud.add_admin(
-            db, login, _hash(password), must_change_password=False
+            db, login, await _hash(password), must_change_password=False
         )
         # The token goes only once the admin row has landed: a failed transaction leaves it working
         # (v2 deleted it first, so a retry got 403 until a restart), a landed one leaves no token from
@@ -499,9 +526,10 @@ class AdminBootstrapCoreService:
         """Give `login` a random temporary password, returned once, that must be changed at the next
         sign-in. The recovery CLI calls this; so may an admin's reset-another-user route, with a
         login someone typed: one the driver cannot bind (a lone surrogate, NUL on PostgreSQL) is
-        nobody, never a query that fails inside the driver."""
+        nobody, never a query that fails inside the driver. The user's row is locked from its read to
+        the end of the caller's transaction, so a change running meanwhile cannot overwrite it."""
         user = (
-            await admin_bootstrap_crud.get_by_login(db, login)
+            await admin_bootstrap_crud.get_by_login_for_update(db, login)
             if _bindable(db, login)
             else None
         )
@@ -509,7 +537,7 @@ class AdminBootstrapCoreService:
             raise UnknownUserError(login)
         temporary = secrets.token_urlsafe(15)
         await admin_bootstrap_crud.set_password(
-            db, user, _hash(temporary), must_change_password=True
+            db, user, await _hash(temporary), must_change_password=True
         )
         logger.warning("password_reset_to_temporary", extra={"login": login})
         return temporary
@@ -533,8 +561,12 @@ class AdminBootstrapCoreService:
         lockout's EDIT THIS). `password_policy_problem` runs before the lockout, so a policy comparing
         against this user's own history would answer guesses unthrottled: never compare it there.
 
-        A login the driver cannot bind (a lone surrogate, NUL on PostgreSQL), which no row holds,
-        is nobody; every other login, NUL included where the database stores it, is looked up."""
+        The lockout counts first, on an unlocked read of the row. Then the row is read again, locked
+        to the end of the caller's transaction, and the current password is compared with that
+        committed hash: a recovery reset or another change that landed meanwhile is seen, one that
+        comes later waits, and nothing this change writes overwrites a set it never saw. A login
+        the driver cannot bind (a lone surrogate, NUL on PostgreSQL), which no row holds, is nobody;
+        every other login, NUL included where the database stores it, is looked up."""
         user = (
             await admin_bootstrap_crud.get_by_login(db, login)
             if _bindable(db, login)
@@ -547,14 +579,23 @@ class AdminBootstrapCoreService:
             problem = "the new password is the current one"
         if problem:
             raise PasswordPolicyError(problem)
-        new_hash = _hash(new_password)
+        new_hash = await _hash(new_password)
         stored = admin_bootstrap_crud.password_hash_of(user)
-        # counted before the comparison, so a locked login is refused without one
+        # counted before the comparison, so a locked login is refused without one, and before the
+        # row lock, so a count committed in a transaction of its own is not waiting on this one
         locked = await current_password_attempt(db, login, stored)
         if locked:
             logger.warning("password_change_locked", extra={"login": login})
             raise CurrentPasswordLockedError(locked)
-        if not _encodable(current_password) or not _verified(current_password, stored):
+        # the row again, locked: the current password is compared with the hash that is committed
+        # now, and no set can land between that comparison and this change's write
+        user = await admin_bootstrap_crud.get_by_login_for_update(db, login)
+        if user is None:
+            raise UnknownUserError(login)
+        committed = admin_bootstrap_crud.password_hash_of(user)
+        if not _encodable(current_password) or not await _verified(
+            current_password, committed
+        ):
             raise CurrentPasswordError
         await admin_bootstrap_crud.set_password(
             db, user, new_hash, must_change_password=False

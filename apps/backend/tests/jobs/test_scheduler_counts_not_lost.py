@@ -164,11 +164,15 @@ async def _due(maker, **overrides: Any) -> None:
 async def test_a_scheduled_success_moves_the_next_run_on(worker_db) -> None:
     await _due(worker_db)
     token = await _lease(worker_db)
+    # Taken before the run: an interval schedule is aligned to the clock, so a run
+    # ending just before a boundary is next due at that boundary, which can have
+    # passed by the time this reads it.
+    ran_at = datetime.now(UTC)
 
     await _service(worker_db, fails=False)._execute_job(KEY, token)
 
     stored = await _stored(worker_db)
-    assert stored.next_run_at > datetime.now(UTC)
+    assert stored.next_run_at > ran_at
     assert stored.lease_token is None
 
 

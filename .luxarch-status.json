@@ -1,6 +1,6 @@
 {
   "guard": "luxarch",
-  "guard_version": "0.355.0",
+  "guard_version": "0.356.0",
   "repo": "/repo",
   "targets": [
     {
@@ -1647,6 +1647,17 @@
           "example": ""
         },
         {
+          "rule": "fw.first_party_imports_app_prefixed",
+          "status": "PASS",
+          "since": "0.356.0",
+          "violations": 0,
+          "deferred": false,
+          "inert": false,
+          "inert_reason": "",
+          "fix": "",
+          "example": ""
+        },
+        {
           "rule": "fw.file_size",
           "status": "PASS",
           "since": "0.235.0",
@@ -1890,12 +1901,23 @@
         },
         {
           "rule": "fw.stylesheet_compiled",
-          "status": "INERT",
+          "status": "PASS",
           "since": "0.344.0",
           "violations": 0,
           "deferred": false,
+          "inert": false,
+          "inert_reason": "",
+          "fix": "",
+          "example": ""
+        },
+        {
+          "rule": "fw.api_only_has_no_web_surface",
+          "status": "INERT",
+          "since": "0.356.0",
+          "violations": 0,
+          "deferred": false,
           "inert": true,
-          "inert_reason": "1 stylesheet(s) could not be judged (an href opening with Jinja, a computed, relative or unmounted path, a file in neither the tree nor a build output, or a `<style>` block of Jinja): apps/backend/app/templates/web/layouts/public_status.html:32 <style> holding Jinja. NOT a clearance.",
+          "inert_reason": "target does not declare api_only = true \u2014 no attestation to check",
           "fix": "",
           "example": ""
         },
@@ -2044,7 +2066,7 @@
         }
       ],
       "summary": {
-        "PASS": 167,
+        "PASS": 169,
         "FAIL": 0,
         "XFAIL": 0,
         "XPASS": 0,
@@ -3001,12 +3023,12 @@
     }
   },
   "summary": {
-    "PASS": 247,
+    "PASS": 249,
     "FAIL": 0,
     "XFAIL": 0,
     "XPASS": 0,
     "INERT": 22
   },
-  "commit": "00f928989a2c36a9a9af4d7e2d3835cc2d88adc7",
-  "generated_at": "2026-11-09T05:18:59Z"
+  "commit": "f215b0cbcc0df557d842ca1d5672a3fe6406d7a8",
+  "generated_at": "2026-11-09T15:55:44Z"
 }

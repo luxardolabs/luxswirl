@@ -39,7 +39,7 @@ DEV_WAIT_TIMEOUT      ?= 180
 # Makefile.local (gitignored): copy Makefile.local.example -> Makefile.local and set it.
 # Contributors don't need it — lint/test and the import-linter contracts run without it.
 LUXARCH_REGISTRY ?=
-LUXARCH_VERSION := 0.355.0
+LUXARCH_VERSION := 0.356.0
 LUXARCH_IMAGE    ?= $(LUXARCH_REGISTRY)/luxardolabs/luxarch:$(LUXARCH_VERSION)
 # Dependency-CVE guard (luxaudit) — same private registry as luxarch, mount-only.
 # Scans the pinned poetry.locks against the live advisory feed (see .luxaudit.toml).
@@ -2204,7 +2204,7 @@ hooks: ## Activate the committed git hooks (hooks/) for this clone — run once 
 	git config core.hooksPath hooks
 	@echo "git hooks active (hooks/): pre-commit = identity + gitleaks(staged), pre-push = gitleaks(full history + identity), commit-msg = no internal refs."
 
-# luxarch:gitleaks asset v22 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit gitleaks`.
+# luxarch:gitleaks asset v23 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit gitleaks`.
 # ── The privacy gate: EVERY surface a commit publishes ──────────────────────────────────────────
 # Emitted by `luxarch --emit gitleaks`. Drop in verbatim.
 #
@@ -2308,6 +2308,54 @@ override gitleaks_flags = $(subst :SP:, ,$(firstword $(subst :CUT:, ,$(subst $(g
 override gitleaks_refusals = $(foreach v,MAKEFLAGS GNUMAKEFLAGS,$(if $(filter command,$(origin $(v))),$(error REFUSING: $(v) is given as a command-line variable, so the scan would run under flags it never saw: pass make's flags as flags)))$(if $(or $(findstring i,$(filter-out -%,$(firstword $(MAKEFLAGS)))),$(findstring t,$(filter-out -%,$(firstword $(MAKEFLAGS))))),$(error REFUSING: make -i or -t would let a finding pass: run the scan without it))$(if $(filter --eval=% -I% --include-dir%,$(gitleaks_flags)),$(error REFUSING: --eval or -I adds makefile text from outside, which could set the identity allowance: run the scan without it))$(if $(strip $(MAKEFILES)),$(error REFUSING: MAKEFILES ($(MAKEFILES)) reads other makefiles before this one: unset it))$(foreach v,SHELL .SHELLFLAGS,$(if $(filter environment% command,$(origin $(v))),$(error REFUSING: $(v) comes from the $(origin $(v)), so the scan would run in another shell)))$(if $(filter environment% command,$(origin MAKEFILE_LIST)),$(error REFUSING: MAKEFILE_LIST comes from the $(origin MAKEFILE_LIST), so the identity pass would read other makefiles: unset it))$(if $(findstring n,$(filter-out -% %=%,$(firstword $(MAKEFLAGS)))),,$(if $(filter command,$(origin CURDIR)),$(error REFUSING: CURDIR is on the command line, so the scan would read another repository's history and report it as this one's: use make -C <dir>)))$(if $(filter 0,$(MAKELEVEL)),$(foreach v,LUXLINT LUXLINT_IMAGE,$(if $(filter environment% command,$(origin $(v))),$(error REFUSING: $(v) comes from the $(origin $(v)), so the caller chose the image that decides this scan: set it in the makefile or Makefile.local))))
 override gitleaks_no_waiver = if [ -e "$$D/t/.gitleaksignore" ]; then mv "$$D/t/.gitleaksignore" "$$(mktemp -d "$$D/t/gitleaksignore.XXXXXXXX")/"; fi;
 unexport gitleaks_refusals gitleaks_no_waiver gitleaks_flags gitleaks_space
+# The builds this makefile's image block declares, one `<context><TAB><Dockerfile>` line each, for
+# the working-tree pass: each image of IMAGES (or the one image) by the build core's `img_context` and
+# `img_dockerfile`, the mirror when MIRROR_VERSION is set, and each `--build-context <name>=<dir>` in
+# BUILD_ARGS (a named context reads its own `.dockerignore`, so its Dockerfile field is empty).
+override gitleaks_q = '$(subst ','\'',$(1))'
+override gitleaks_pair = printf '%s\t%s\n' $(call gitleaks_q,$(call img_context,$(1))) $(call gitleaks_q,$(call img_dockerfile,$(1)));
+override gitleaks_named = $(patsubst --build-context=%,%,$(filter --build-context=%,$(BUILD_ARGS))) $(patsubst --build-context:NEXT:%,%,$(filter --build-context:NEXT:%,$(join $(BUILD_ARGS),$(addprefix :NEXT:,$(wordlist 2,$(words $(BUILD_ARGS)),$(BUILD_ARGS))))))
+override gitleaks_declared = $(if $(value img_context),$(if $(IMAGE_LIST),$(foreach n,$(IMAGE_LIST),$(call gitleaks_pair,$(n))),$(call gitleaks_pair,))$(if $(strip $(MIRROR_VERSION)),$(call gitleaks_pair,MIRROR)))$(foreach x,$(strip $(gitleaks_named)),printf '%s\t\n' $(call gitleaks_q,$(patsubst $(firstword $(subst =, ,$(x)))=%,%,$(x)));)
+unexport gitleaks_q gitleaks_pair gitleaks_named gitleaks_declared
+# The working-tree pass's file work, in one process (python3 in the luxlint image, no network): `farm`
+# lays out a link for each path in `cand` (a `dir/` entry: every file under it) for BuildKit to judge,
+# and `copy` copies each path in `sent` out of the checkout, a link as a link and a file with its NUL
+# bytes stripped. Paths are bytes end to end.
+override define gitleaks_stage_py
+import os, sys
+mode, w, d = sys.argv[1], os.fsencode(sys.argv[2]), os.fsencode(sys.argv[3])
+def names(f):
+    with open(os.path.join(d, f), "rb") as h:
+        return [n for n in h.read().split(b"\n") if n]
+def entry(p):
+    return os.path.islink(p) or os.path.isfile(p)
+if mode == "farm":
+    for p in names(b"cand"):
+        src, got = os.path.join(w, p.rstrip(b"/")), []
+        if p.endswith(b"/"):
+            for here, dirs, files in os.walk(src):
+                got += [os.path.relpath(os.path.join(here, n), w) for n in files + dirs if entry(os.path.join(here, n))]
+        elif entry(src):
+            got.append(p)
+        for q in got:
+            dst = os.path.join(d, b"s", q)
+            os.makedirs(os.path.dirname(dst), exist_ok=True)
+            if not os.path.lexists(dst):
+                os.symlink(b"-", dst)
+else:
+    for p in names(b"sent"):
+        src, dst = os.path.join(w, p), os.path.join(d, b"t", p)
+        if not entry(src):
+            continue
+        os.makedirs(os.path.dirname(dst), exist_ok=True)
+        if os.path.islink(src):
+            os.symlink(os.readlink(src), dst)
+            continue
+        with open(src, "rb") as i, open(dst, "wb") as o:
+            for chunk in iter(lambda: i.read(1 << 20), b""):
+                o.write(chunk.replace(b"\0", b""))
+endef
+unexport gitleaks_stage_py
 # Every object a push publishes, read raw: each commit on a branch, a tag or HEAD, and every annotated
 # tag object, the tags a tag points at included (a tag of a tag shows `for-each-ref` only its outer
 # tagger and message). The identity and message passes both read this list. `$$X` names the list file
@@ -2538,7 +2586,8 @@ endef
 unexport gitleaks_objects gitleaks_objects_awk
 gitleaks: override export GITLEAKS_OBJECTS_AWK = $(value gitleaks_objects_awk)
 gitleaks: override export GIT_NO_REPLACE_OBJECTS := 1
-gitleaks: ## secret scan over FULL HISTORY + the commit-identity pass (the hooks cover commit/push)
+gitleaks: override export GITLEAKS_STAGE_PY = $(value gitleaks_stage_py)
+gitleaks: ## secret scan over FULL HISTORY, what an image build sends, + the commit-identity pass (the hooks cover commit/push)
 	+@$(gitleaks_refusals)true
 	@# A caller cannot change what this scan reads or how its failures count: make's -i and -t, in any
 	@# spelling, makefile text from --eval, -I or MAKEFILES (each could set the identity allowance), a
@@ -2651,6 +2700,87 @@ gitleaks: ## secret scan over FULL HISTORY + the commit-identity pass (the hooks
 	  echo "REFUSING: a file PATH or a branch/tag NAME carries a finding (File: paths or ref-names above)."; \
 	  echo "  A name is published with the history it is in. Rename it (git mv; git branch -m; for older"; \
 	  echo "  history git filter-repo --path-rename), re-run, and ask the OWNER to approve the force-push."; \
+	  exit 1; }
+	@# v23: what an image build SENDS. The passes above read history, and a file git does not hold (one
+	@# that is untracked, or gitignored and not dockerignored) still reaches the builder, where `COPY . .`
+	@# puts it in the image. History holds every tracked file as HEAD has it, so what is left to read is
+	@# each file git lists as untracked (gitignored included), changed against HEAD, marked
+	@# assume-unchanged or skip-worktree, under a clean/smudge `filter` attribute (git-crypt, LFS: HEAD
+	@# holds the cleaned bytes, the build sends the checkout's), or inside a submodule or a nested
+	@# repository. BuildKit decides
+	@# which of those each build sends, by its own ignore matcher: the paths are laid out as links and
+	@# built as the context (`FROM scratch`, `COPY . /`, exported with `--output type=local`) under the
+	@# ignore file BuildKit reads for that build, `<Dockerfile>.dockerignore` beside its Dockerfile, else
+	@# the context's `.dockerignore`. The builds are the ones the image block declares
+	@# (`gitleaks_declared` above), and each other Dockerfile git holds or would add (`Dockerfile`,
+	@# `Dockerfile.*`, `*.Dockerfile`, `*.dockerfile`, `Containerfile`, `*.Containerfile`; tracked, or
+	@# untracked and not gitignored) at its
+	@# own directory, the context a build of that directory gives it. A context outside the checkout is
+	@# refused. With no Dockerfile and no declared build, the untracked files git would add and the
+	@# files changed against HEAD (staged included) are read instead: one commit puts them in history. What is sent is copied out and scanned by path, NULs stripped as the binary
+	@# pass does. git reads this checkout as the work tree, whatever `core.worktree` the repository
+	@# sets. Stated limits: a build the image block does not declare (a
+	@# hand-written build (`-f docker/Dockerfile .`), a compose `build.context: .` for a nested
+	@# Dockerfile) is judged at its
+	@# Dockerfile's directory, a gitignored Dockerfile is not found, and the pass needs `docker buildx`
+	@# wherever there is a Dockerfile. The host tools it runs (`cut`, `sort -u`, `dirname --`, `find
+	@# -print0`, `tr`, `sed`) are POSIX (`-print0` since POSIX.1-2024), and macOS ships each of them.
+	@set -e; $(GITLEAKS_HISTORY_ENV) unset GIT_INDEX_FILE; C=$$(mktemp); D=$$(mktemp -d); trap 'rm -rf "$$C" "$$D"' EXIT INT TERM; \
+	docker run --rm -v '$(subst ','\'',$(CURDIR))':/repo $(LUXLINT) --emit-config gitleaks > "$$C"; \
+	mkdir "$$D/t" "$$D/s" "$$D/none" "$$D/df"; : > "$$D/seen"; : > "$$D/sent"; T=$$(printf '\t'); \
+	W='$(subst ','\'',$(CURDIR))'; A=$$(git -C "$$W" rev-parse --absolute-git-dir); \
+	g() { git -C "$$W" --git-dir="$$A" --work-tree="$$W" -c core.quotePath=false "$$@"; }; \
+	g ls-files -co --exclude-standard -z > "$$D/names"; \
+	g ls-files -o -z > "$$D/c0"; \
+	if git --git-dir="$$A" rev-parse -q --verify 'HEAD^{tree}' > /dev/null; then g diff --name-only --no-renames --no-ext-diff -z HEAD >> "$$D/c0"; else g ls-files -c -z >> "$$D/c0"; fi; \
+	g ls-files -v -z >> "$$D/c1"; g ls-files -s -z >> "$$D/c2"; g ls-files -z | g check-attr -z --stdin filter > "$$D/c3"; \
+	nl=$$(cat "$$D/names" "$$D/c0" "$$D/c1" "$$D/c2" "$$D/c3" | LC_ALL=C tr -cd '\n' | wc -c); \
+	[ "$$nl" -eq 0 ] || { echo "REFUSING: a path in the working tree holds a newline, which this scan cannot name: rename it."; exit 1; }; \
+	{ LC_ALL=C tr '\000' '\n' < "$$D/c0"; \
+	  LC_ALL=C tr '\000' '\n' < "$$D/c1" | { LC_ALL=C grep -E '^([a-z]|S) ' || true; } | LC_ALL=C cut -c 3-; \
+	  LC_ALL=C tr '\000' '\n' < "$$D/c2" | LC_ALL=C sed -n "s|^160000 [0-9a-f]* [0-9]*$$T\(.*\)|\1/|p"; \
+	  LC_ALL=C tr '\000' '\n' < "$$D/c3" | paste - - - | LC_ALL=C sed -n -e "/$${T}filter$${T}unspecified$$/d" -e "/$${T}filter$${T}unset$$/d" -e "s/$${T}filter$${T}[^$$T]*$$//p"; } | LC_ALL=C sort -u > "$$D/cand"; \
+	LC_ALL=C tr '\000' '\n' < "$$D/names" \
+	  | { LC_ALL=C grep -E '(^|/)(Dockerfile([._-][^/]+)?|dockerfile|[^/]+[._-][Dd]ockerfile|Containerfile([._-][^/]+)?|[^/]+[.]Containerfile)$$' || true; } \
+	  | { LC_ALL=C grep -v '[.]dockerignore$$' || true; } > "$$D/dockerfiles"; \
+	stage() { docker run --rm --network none -u "$$(id -u):$$(id -g)" -v "$$W":/w:ro -v "$$D":/d --entrypoint python3 $(LUXLINT) -c "$$GITLEAKS_STAGE_PY" "$$1" /w /d; }; \
+	{ $(gitleaks_declared) :; } > "$$D/builds"; \
+	if [ -s "$$D/dockerfiles" ] || [ -s "$$D/builds" ]; then \
+	  docker buildx version > /dev/null 2>&1 || { echo "REFUSING: this repository has a Dockerfile or declares a build, and docker buildx is not installed, so what an image build sends cannot be staged for the scan: install it."; exit 1; }; \
+	  stage farm; printf 'FROM scratch\nCOPY . /\n' > "$$D/df/Dockerfile"; \
+	  LC_ALL=C cut -f 2 "$$D/builds" | LC_ALL=C sed 's|^\(\./\)*||' > "$$D/used"; \
+	  while IFS= read -r f; do \
+	    LC_ALL=C grep -qxF -- "$$f" "$$D/used" || printf '%s\t%s\n' "$$(dirname -- "$$f")" "$$f" >> "$$D/builds"; \
+	  done < "$$D/dockerfiles"; \
+	  while IFS="$$T" read -r c f; do \
+	    case "$$c" in -|*://*|git@*) continue ;; esac; \
+	    c=$$(printf '%s\n' "$$c" | LC_ALL=C sed 's|^\(\./\)*||; s|/*$$||'); \
+	    case "$$c" in "$$W") c=. ;; "$$W"/*) c=$${c#"$$W"/} ;; "") c=. ;; esac; \
+	    case "$$c" in /*|..|../*|*/../*|*/..) echo "REFUSING: the build context $$c is outside this checkout, so this scan cannot read what it sends: build from inside the repository."; exit 1 ;; esac; \
+	    if [ -n "$$f" ] && [ -f "$$f.dockerignore" ]; then i="$$f.dockerignore"; elif [ -f "./$$c/.dockerignore" ]; then i="./$$c/.dockerignore"; else i=; fi; \
+	    ! LC_ALL=C grep -qxF -- "$$c$$T$$i" "$$D/seen" || continue; printf '%s\t%s\n' "$$c" "$$i" >> "$$D/seen"; \
+	    if [ -n "$$i" ]; then cp -- "$$i" "$$D/df/Dockerfile.dockerignore"; else : > "$$D/df/Dockerfile.dockerignore"; fi; \
+	    rm -rf "$$D/x"; mkdir -p "$$D/x" "$$D/s/$$c"; \
+	    docker buildx build -q --provenance=false --sbom=false --output "type=local,dest=$$D/x" -f "$$D/df/Dockerfile" "$$D/s/$$c" > /dev/null \
+	      || { echo "REFUSING: BuildKit could not judge the context $$c (ignore file: $${i:-none}), so what it sends cannot be scanned: see its error above."; exit 1; }; \
+	    (cd "$$D/x" && find . \( -type l -o -type f \) -print0) | LC_ALL=C tr '\000' '\n' \
+	      | if [ "$$c" = . ]; then LC_ALL=C sed 's|^[.]/||'; else LC_ALL=C sed "s|^[.]/|$$(printf '%s' "$$c" | LC_ALL=C sed 's/[|&\\]/\\&/g')/|"; fi >> "$$D/sent"; \
+	  done < "$$D/builds"; \
+	  what="a file an image build would send"; fix="remove it from the working tree, or exclude it in the ignore file that build reads (.dockerignore, or <Dockerfile>.dockerignore beside the Dockerfile)"; \
+	else \
+	  { g ls-files -o --exclude-standard -z; \
+	    if git --git-dir="$$A" rev-parse -q --verify 'HEAD^{tree}' > /dev/null; then g diff --name-only --no-renames --no-ext-diff -z HEAD; else g ls-files -c -z; fi; } \
+	    | LC_ALL=C tr '\000' '\n' > "$$D/sent"; \
+	  what="an untracked file git would add"; fix="remove it from the working tree, or gitignore it"; \
+	fi; \
+	LC_ALL=C sort -u "$$D/sent" > "$$D/n"; mv -f "$$D/n" "$$D/sent"; \
+	[ ! -s "$$D/sent" ] || stage copy; \
+	$(gitleaks_no_waiver) \
+	docker run --rm -v "$$D/t":/scan:ro -w /scan -v "$$D/none":/none:ro -v "$$C":/gl.toml:ro \
+	  $(GITLEAKS_IMAGE) dir . -c /gl.toml --redact -v --ignore-gitleaks-allow \
+	  --gitleaks-ignore-path /none || { \
+	  echo "REFUSING: $$what carries a finding (the File above is its path in the repository)."; \
+	  echo "  History does not hold it, so the passes above never read it. To fix: $$fix."; \
 	  exit 1; }
 	@# The identity pass — the half gitleaks structurally cannot do. It reads every author, committer
 	@# and tagger, from git's formats and from the raw objects (nested tags and `mergetag` headers
