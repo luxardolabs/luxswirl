@@ -413,8 +413,8 @@
             <!-- Filled area under line -->
             <defs>
                 <linearGradient id="gradient-{{ type }}-{{ color }}" x1="0%" y1="0%" x2="0%" y2="100%">
-                    <stop offset="0%" style="stop-color:{{ gradient_start }};stop-opacity:0.3" />
-                    <stop offset="100%" style="stop-color:{{ gradient_end }};stop-opacity:0.05" />
+                    <stop offset="0%" stop-color="{{ gradient_start }}" stop-opacity="0.3" />
+                    <stop offset="100%" stop-color="{{ gradient_end }}" stop-opacity="0.05" />
                 </linearGradient>
             </defs>
 
@@ -462,8 +462,7 @@
                     cy="{{ point.split(',')[1] }}"
                     r="8"
                     fill="transparent"
-                    class="sparkline-hover-zone"
-                    style="cursor: pointer;"
+                    class="sparkline-hover-zone cursor-pointer"
                 >
                     {% if point_value is not none %}
                     <title>Value: {{ "%.1f"|format(point_value) if point_value is number else point_value }}</title>

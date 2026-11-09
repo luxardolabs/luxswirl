@@ -81,7 +81,7 @@ Synthetic checks execute arbitrary Python code. Administrators can run any code 
 
 **Status**: ✅ NOT SUPPORTED
 
-Public status pages take no custom CSS. A page's stored `config` is never written into the page as CSS or markup, so a value in it (an old row, an import, a direct database write) cannot add a `<style>` or close one.
+Public status pages take no custom CSS. A page's stored `config` is never written into the page as CSS or markup, so a value in it (an old row, an import, a direct database write) cannot add a `<style>` or close one, and the page's CSP refuses inline style as well (§5).
 
 ### 3. Data Protection
 
@@ -115,7 +115,7 @@ This is the same model used across Luxardo Labs FastAPI portals. Token-based CSR
 
 **Status**: ⚠️ BY DESIGN
 
-The CSP `script-src` is `'self' 'unsafe-eval'`: scripts load only from the app's own files, and an inline `<script>` or `on*=` handler is refused, so an injected one does not run. `'unsafe-eval'` remains because Alpine.js (standard build) and htmx `hx-on` evaluate expressions written in template attributes, so a template injection that reaches one of those attributes can still execute script. `style-src` keeps `'unsafe-inline'` for the `style="--var: …"` custom properties that carry data values into CSS. The primary XSS defense remains Jinja2 auto-escaping and not rendering untrusted HTML.
+The CSP `script-src` is `'self' 'unsafe-eval'`: scripts load only from the app's own files, and an inline `<script>` or `on*=` handler is refused, so an injected one does not run. `'unsafe-eval'` remains because Alpine.js (standard build) and htmx `hx-on` evaluate expressions written in template attributes, so a template injection that reaches one of those attributes can still execute script. `style-src` is `'self'`: a `<style>` block or `style=` attribute in the page is not applied, so injected markup cannot restyle it, and no template carries one (scripts still set styles through the CSSOM). The primary XSS defense remains Jinja2 auto-escaping and not rendering untrusted HTML.
 
 ### 6. Network Protection (SSRF)
 

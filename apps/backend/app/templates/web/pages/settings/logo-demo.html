@@ -4,182 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LuxSwirl Logo Animation v0.2 - Broadway Light Patterns</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Courier New', monospace;
-            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 100%);
-            min-height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            overflow-x: hidden;
-            color: #ffffff;
-            padding: 2rem;
-        }
-
-        .container {
-            display: flex;
-            gap: 2rem;
-            max-width: 1400px;
-            width: 100%;
-        }
-
-        .canvas-section {
-            flex-shrink: 0;
-        }
-
-        h1 {
-            font-size: 2rem;
-            margin-bottom: 1rem;
-            color: #ff3300;
-            text-shadow: 0 0 20px rgba(255, 51, 0, 0.5);
-            letter-spacing: 0.1em;
-            text-align: center;
-        }
-
-        #canvas-container {
-            width: 600px;
-            height: 600px;
-            margin-bottom: 1rem;
-            transition: filter 0.3s ease;
-        }
-
-        .controls-section {
-            flex: 1;
-            overflow-y: auto;
-            max-height: 90vh;
-        }
-
-        .controls {
-            background: rgba(255, 255, 255, 0.05);
-            padding: 1.5rem;
-            border-radius: 10px;
-            border: 1px solid rgba(255, 51, 0, 0.3);
-            backdrop-filter: blur(10px);
-        }
-
-        .control-group {
-            margin-bottom: 1.5rem;
-        }
-
-        .control-group h3 {
-            color: #ff6633;
-            font-size: 0.9rem;
-            margin-bottom: 0.75rem;
-            text-transform: uppercase;
-            letter-spacing: 0.1em;
-            border-bottom: 1px solid rgba(255, 51, 0, 0.2);
-            padding-bottom: 0.5rem;
-        }
-
-        .control-item {
-            margin-bottom: 1rem;
-        }
-
-        .control-item label {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 0.25rem;
-            font-size: 0.85rem;
-            color: #aaaaaa;
-        }
-
-        .control-item .value {
-            color: #ff6633;
-            font-weight: bold;
-        }
-
-        input[type="range"] {
-            width: 100%;
-            height: 6px;
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 3px;
-            outline: none;
-            -webkit-appearance: none;
-        }
-
-        input[type="range"]::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            appearance: none;
-            width: 16px;
-            height: 16px;
-            background: #ff3300;
-            cursor: pointer;
-            border-radius: 50%;
-            box-shadow: 0 0 10px rgba(255, 51, 0, 0.5);
-        }
-
-        input[type="range"]::-moz-range-thumb {
-            width: 16px;
-            height: 16px;
-            background: #ff3300;
-            cursor: pointer;
-            border-radius: 50%;
-            box-shadow: 0 0 10px rgba(255, 51, 0, 0.5);
-            border: none;
-        }
-
-        input[type="color"] {
-            width: 100%;
-            height: 40px;
-            background: transparent;
-            border: 1px solid rgba(255, 51, 0, 0.3);
-            border-radius: 5px;
-            cursor: pointer;
-        }
-
-        input[type="checkbox"] {
-            width: 20px;
-            height: 20px;
-            cursor: pointer;
-            accent-color: #ff3300;
-        }
-
-        .checkbox-group {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .back-link {
-            position: fixed;
-            top: 20px;
-            left: 20px;
-            padding: 10px 20px;
-            background: rgba(255, 51, 0, 0.2);
-            border: 1px solid rgba(255, 51, 0, 0.5);
-            border-radius: 5px;
-            color: #ff6633;
-            text-decoration: none;
-            font-size: 0.9rem;
-            transition: all 0.3s ease;
-            z-index: 1000;
-        }
-
-        .back-link:hover {
-            background: rgba(255, 51, 0, 0.3);
-            color: #ff9966;
-        }
-
-        .info {
-            margin-top: 1rem;
-            padding: 1rem;
-            background: rgba(255, 255, 255, 0.03);
-            border-radius: 5px;
-            font-size: 0.8rem;
-            color: #888;
-        }
-
-        .info code {
-            color: #ff6633;
-        }
-    </style>
+    <link rel="stylesheet" href="/static/css/logo-demo.css?v={{ static_version }}">
 </head>
 <body>
     <a href="/" class="back-link">← Back to Dashboard</a>
@@ -192,24 +17,24 @@
 
         <div class="controls-section">
             <div class="controls">
-                <h2 style="color: #ff3300; margin-bottom: 1rem; font-size: 1.2rem;">Animation Controls</h2>
+                <h2 class="controls-title">Animation Controls</h2>
 
                 <!-- Preset System -->
-                <div class="control-group" style="background: rgba(255, 51, 0, 0.1); padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem;">
+                <div class="control-group preset-group">
                     <h3>Presets</h3>
 
-                    <div style="display: flex; gap: 0.5rem; margin-bottom: 0.75rem; flex-wrap: wrap;">
-                        <button id="preset-default" class="btn" style="flex: 1; min-width: 100px; padding: 0.5rem; background: rgba(255, 51, 0, 0.3); border: 1px solid rgba(255, 51, 0, 0.5); color: #ff6633; border-radius: 5px; cursor: pointer; font-size: 0.85rem;">Default</button>
-                        <button id="preset-minimal" class="btn" style="flex: 1; min-width: 100px; padding: 0.5rem; background: rgba(255, 51, 0, 0.3); border: 1px solid rgba(255, 51, 0, 0.5); color: #ff6633; border-radius: 5px; cursor: pointer; font-size: 0.85rem;">Minimal</button>
-                        <button id="preset-intense" class="btn" style="flex: 1; min-width: 100px; padding: 0.5rem; background: rgba(255, 51, 0, 0.3); border: 1px solid rgba(255, 51, 0, 0.5); color: #ff6633; border-radius: 5px; cursor: pointer; font-size: 0.85rem;">Intense</button>
+                    <div class="button-row wrap">
+                        <button id="preset-default" class="btn demo-button preset">Default</button>
+                        <button id="preset-minimal" class="btn demo-button preset">Minimal</button>
+                        <button id="preset-intense" class="btn demo-button preset">Intense</button>
                     </div>
 
-                    <div style="display: flex; gap: 0.5rem; margin-bottom: 0.75rem;">
-                        <button id="export-config" style="flex: 1; padding: 0.5rem; background: rgba(34, 197, 94, 0.3); border: 1px solid rgba(34, 197, 94, 0.5); color: #4ade80; border-radius: 5px; cursor: pointer; font-size: 0.85rem;">📋 Export Config</button>
-                        <button id="import-config" style="flex: 1; padding: 0.5rem; background: rgba(59, 130, 246, 0.3); border: 1px solid rgba(59, 130, 246, 0.5); color: #60a5fa; border-radius: 5px; cursor: pointer; font-size: 0.85rem;">📥 Import Config</button>
+                    <div class="button-row">
+                        <button id="export-config" class="demo-button export">📋 Export Config</button>
+                        <button id="import-config" class="demo-button import">📥 Import Config</button>
                     </div>
 
-                    <textarea id="config-textarea" style="width: 100%; height: 60px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,51,0,0.3); border-radius: 5px; color: #aaa; padding: 0.5rem; font-family: 'Courier New', monospace; font-size: 0.75rem; resize: vertical; display: none;" placeholder="Paste config JSON here..."></textarea>
+                    <textarea id="config-textarea" placeholder="Paste config JSON here..."></textarea>
                 </div>
 
                 <!-- Sphere Controls -->
@@ -441,7 +266,7 @@
                         <label for="lightPattern">
                             <span>Pattern Type</span>
                         </label>
-                        <select id="lightPattern" class="input text-sm py-2 px-3" style="width: 100%; background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,51,0,0.3); border-radius: 5px;">
+                        <select id="lightPattern" class="input text-sm py-2 px-3 demo-select">
                             <option value="wave">Wave</option>
                             <option value="chase">Chase (Broadway)</option>
                             <option value="sparkle">Sparkle</option>
@@ -470,7 +295,7 @@
                         <label for="fadeCurve">
                             <span>Fade Curve</span>
                         </label>
-                        <select id="fadeCurve" class="input text-sm py-2 px-3" style="width: 100%; background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,51,0,0.3); border-radius: 5px;">
+                        <select id="fadeCurve" class="input text-sm py-2 px-3 demo-select">
                             <option value="linear" selected>Linear (Default)</option>
                             <option value="sqrt">Square Root (Slow start)</option>
                             <option value="squared">Squared (Fast start)</option>

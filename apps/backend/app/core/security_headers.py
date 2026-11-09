@@ -58,7 +58,10 @@ def add_security_headers(path: str, response: Response) -> Response:
         # Scripts: our files only, no inline <script> or on*= handler.
         # 'unsafe-eval' is for Alpine.js (standard build) and htmx hx-on.
         "script-src 'self' 'unsafe-eval'",
-        "style-src 'self' 'unsafe-inline'",  # Styles: our domain + inline
+        # Styles: our files only, no <style> block or style= attribute, so
+        # injected markup cannot restyle a page (hide a warning, overlay a form).
+        # Script may still set a style through the CSSOM (el.style.x = ...).
+        "style-src 'self'",
         "img-src 'self' data: https:",  # Images: our domain + data URIs + any HTTPS
         "font-src 'self' data:",  # Fonts: our domain + data URIs
         "connect-src 'self'",  # AJAX/fetch/WebSocket: only our domain

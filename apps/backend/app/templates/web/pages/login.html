@@ -13,39 +13,8 @@
     <!-- Fonts -->
     <link rel="stylesheet" href="/static/fonts/inter.css?v={{ static_version }}">
 
-    <style>
-        /* Hide controls but keep in DOM for future Easter egg */
-        #logo-controls {
-            display: none;
-        }
-
-        /* Full viewport background logo */
-        #logo-background {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: 0;
-            overflow: hidden;
-        }
-
-        #canvas-container {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, calc(-50% - 200px));
-        }
-
-        /* Login content overlay */
-        #login-content {
-            position: relative;
-            z-index: 10;
-            margin-top: 250px;
-        }
-    </style>
 </head>
-<body class="font-sans antialiased bg-dark-bg-primary">
+<body class="font-sans antialiased bg-dark-bg-primary logo-backdrop-page">
     <!-- Full-screen animated logo background -->
     <div id="logo-background">
         <div id="canvas-container"></div>

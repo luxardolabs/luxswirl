@@ -33,8 +33,7 @@
 {% macro status_row_compressed(row, user) %}
 <div
     id="check-{{ row.check_id }}"
-    class="p-4 hover:bg-dark-bg-secondary cursor-pointer transition-colors duration-200 check-row border-l-4"
-    style="border-left-color: transparent;"
+    class="p-4 hover:bg-dark-bg-secondary cursor-pointer transition-colors duration-200 check-row border-l-4 border-l-transparent"
     hx-get="{{ row.detail_url }}"
     hx-target="#check-detail-panel"
     hx-swap="innerHTML"
@@ -54,7 +53,7 @@
         </h3>
 
         <!-- 15-minute status bar -->
-        <div class="min-w-0" style="width: 200px;">
+        <div class="min-w-0 w-[200px]">
             <div class="flex gap-1.5 h-8 rounded-xl p-2 bg-gradient-to-b from-dark-bg-primary to-dark-bg-tertiary shadow-inner">
                 {% if row.minute_bars %}
                     {% for bar in row.minute_bars %}

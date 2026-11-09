@@ -253,3 +253,89 @@
     @apply bg-slate-600;
   }
 }
+
+/* Rules that lived in template style blocks and style= attributes. The CSP's
+   style-src is 'self', so a page carries none of its own (the templates are
+   scanned for them in tests/test_content_security_policy.py). */
+
+/* Sidebar collapsed: labels hidden (partials/sidebar.html) */
+.sidebar-collapsed .sidebar-text {
+  display: none;
+}
+
+/* Agent card sparklines (macros/agents.html) */
+.sparkline-dot {
+  transition: r 0.2s ease;
+}
+
+/* Check detail latency chart (macros/charts.html) */
+.latency-chart-dot {
+  transition: r 0.2s ease;
+}
+
+.latency-chart-reveal {
+  animation: expandUp 0.6s ease-out forwards;
+}
+
+.latency-line-path {
+  animation: drawLine 1.2s ease-out forwards;
+}
+
+/* Hidden until latency-chart.js shows it (its inline display wins over this) */
+.latency-tooltip {
+  display: none;
+  pointer-events: none;
+  filter: drop-shadow(0 10px 20px rgba(0, 0, 0, 0.5));
+}
+
+@keyframes drawLine {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes expandUp {
+  from {
+    clip-path: inset(100% 0 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+/* Sign-in and first-admin pages: the animated logo behind the form */
+.logo-backdrop-page #logo-controls {
+  display: none;
+}
+
+.logo-backdrop-page #logo-background {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.logo-backdrop-page #canvas-container {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, calc(-50% - 200px));
+}
+
+.logo-backdrop-page #login-content {
+  position: relative;
+  z-index: 10;
+  margin-top: 250px;
+}
+
+/* The emitted first-admin form (partials/admin_setup_form.html), in the glass card's style */
+.admin-setup-form { display: flex; flex-direction: column; gap: 0.5rem; }
+.admin-setup-form h1 { display: none; }
+.admin-setup-form p { font-size: 0.875rem; color: var(--tw-prose-body, #94a3b8); margin-bottom: 0.5rem; }
+.admin-setup-form label { font-size: 0.875rem; font-weight: 500; color: #e2e8f0; margin-top: 0.5rem; }
+.admin-setup-form input { width: 100%; padding: 0.5rem 1rem; border-radius: 0.5rem; border: 1px solid rgba(148, 163, 184, 0.3); background: rgba(15, 23, 42, 0.6); color: #e2e8f0; }
+.admin-setup-form button { margin-top: 1rem; width: 100%; padding: 0.625rem 1rem; border-radius: 0.5rem; background: #0284c7; color: #fff; font-weight: 600; }
+.admin-setup-form .admin-setup-error { padding: 0.75rem 1rem; border-radius: 0.5rem; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); color: #f87171; }

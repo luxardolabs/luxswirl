@@ -17,7 +17,8 @@
 
     <link rel="stylesheet" href="/static/fonts/inter.css?v={{ static_version }}">
 
-    <!-- HTMX -->
+    <!-- HTMX: its indicator rules are in app.css, since the CSP refuses the style block it would add -->
+    <meta name="htmx-config" content='{"includeIndicatorStyles": false}'>
     <script src="/static/js/vendor/htmx.min.js?v={{ static_version }}"></script>
 
     <!-- Idiomorph (for smooth HTMX morphing) -->

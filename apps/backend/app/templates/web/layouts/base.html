@@ -13,7 +13,8 @@
     <!-- Fonts - Self-hosted -->
     <link rel="stylesheet" href="/static/fonts/inter.css?v={{ static_version }}">
 
-    <!-- HTMX - Self-hosted -->
+    <!-- HTMX - Self-hosted. Its indicator rules are in app.css, since the CSP refuses the style block it would add -->
+    <meta name="htmx-config" content='{"includeIndicatorStyles": false}'>
     <script src="/static/js/vendor/htmx.min.js?v={{ static_version }}"></script>
 
     <!-- Alpine.js - Self-hosted (powers panel transitions) -->

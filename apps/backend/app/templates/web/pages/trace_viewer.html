@@ -6,10 +6,6 @@
     <title>Trace Viewer - {{ filename }}</title>
     <link rel="stylesheet" href="/static/css/app.css?v={{ static_version }}">
     {% from 'macros/buttons.html' import btn_external, btn_download, btn_copy %}
-    <style>
-        body { margin: 0; padding: 0; }
-        #trace-frame { width: 100%; height: 100vh; border: none; }
-    </style>
 </head>
 <body class="bg-dark-bg-primary">
     <div id="container" class="flex items-center justify-center min-h-screen p-8">
@@ -69,7 +65,7 @@
         </div>
     </div>
 
-    <iframe id="trace-frame" class="hidden"></iframe>
+    <iframe id="trace-frame" class="hidden w-full h-screen border-0"></iframe>
 
     {# Server values reach the module as data-* attributes; the post-open panel
        is rendered here rather than built as a JS template literal, so its icon
