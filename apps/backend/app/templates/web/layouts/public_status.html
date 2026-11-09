@@ -27,15 +27,6 @@
     <script src="/static/js/vendor/chart.umd.js?v={{ static_version }}"></script>
 
     {% block head %}{% endblock %}
-
-    <!-- Custom styles for public page -->
-    <style>
-        {# undefined-guards: config is a JSONB blob whose branding/custom_css keys are optional per page #}
-        {% if status_page and status_page.config and status_page.config.get('custom_css') %}
-        /* Custom CSS from status page config */
-        {{ status_page.config.custom_css | safe }}
-        {% endif %}
-    </style>
 </head>
 <body class="font-sans antialiased bg-dark-bg-primary text-dark-text-primary min-h-screen">
     <!-- Main content -->
@@ -47,7 +38,7 @@
     <footer class="px-4 sm:px-6 lg:px-8 py-8 mt-12 border-t border-dark-border">
         <div class="flex items-center justify-between text-sm text-dark-text-muted">
             <div>
-                {# undefined-guards: config is a JSONB blob whose branding/custom_css keys are optional per page #}
+                {# undefined-guards: config is a JSONB blob whose branding keys are optional per page #}
                 {% if status_page and status_page.config and status_page.config.get('branding', {}).get('show_powered_by', True) %}
                 <p>Powered by <span class="font-semibold text-dark-text-secondary">LuxSwirl</span></p>
                 {% endif %}

@@ -3,7 +3,7 @@
 {% block content %}
 <!-- Header / Branding -->
 <div class="mb-8">
-    {# undefined-guards: config is a JSONB blob whose branding/custom_css keys are optional per page #}
+    {# undefined-guards: config is a JSONB blob whose branding keys are optional per page #}
     {% if status_page.config and status_page.config.get('branding', {}).get('logo_url') %}
     <div class="mb-4">
         <img src="{{ status_page.config.branding.logo_url }}" alt="{{ status_page.name }}" class="h-12">

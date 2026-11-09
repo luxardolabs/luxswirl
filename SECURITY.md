@@ -79,23 +79,9 @@ Synthetic checks execute arbitrary Python code. Administrators can run any code 
 
 ### 2. Status Page Custom CSS
 
-**Risk**: MEDIUM\
-**Status**: ⚠️ BY DESIGN
+**Status**: ✅ NOT SUPPORTED
 
-Public status pages support administrator-supplied custom CSS for branding (`status_page.config.custom_css`). This CSS is rendered into a `<style>` block on the public status page without server-side sanitization. A malicious or compromised admin could inject markup that breaks out of the style block and executes script in visitors' browsers.
-
-**Trust model**: same as synthetic checks. Anyone with the admin role can already run arbitrary code via synthetic checks; custom CSS is no different in scope. The audience is self-hosted single-organization deployments where the admin and operator are the same trust principal.
-
-**Mitigations**:
-
-- Admin role required to modify status page config
-- Status pages must be explicitly published before being publicly visible
-- All admin actions logged
-
-**Recommendations**:
-
-- Vet admin accounts carefully (same advice as synthetic checks)
-- Treat custom CSS like custom JavaScript — review before deployment
+Public status pages take no custom CSS. A page's stored `config` is never written into the page as CSS or markup, so a value in it (an old row, an import, a direct database write) cannot add a `<style>` or close one.
 
 ### 3. Data Protection
 
