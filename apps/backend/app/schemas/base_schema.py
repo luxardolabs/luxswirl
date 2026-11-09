@@ -116,9 +116,9 @@ StorableText = Annotated[str, AfterValidator(refuse_unstorable_text)]
 """Text an input sets that may hold any character a column can store: a
 password, a script, a URL. Text a person reads is PlainText or NoteText."""
 
-# The characters each encrypted check column holds (`EncryptedString(1000)` on
-# `checks.target` and `checks.connection_string_encrypted`): the Fernet token,
-# not the plaintext.
+# The characters the encrypted target column holds (`EncryptedString(1000)` on
+# `checks.target`): the Fernet token, not the plaintext. A connection string is
+# not held to it: it is stored in `check_config`, an unbounded encrypted Text.
 ENCRYPTED_COLUMN_CHARS = 1000
 
 

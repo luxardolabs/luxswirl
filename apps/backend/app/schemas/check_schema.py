@@ -44,7 +44,7 @@ class CheckBase(BaseSchema):
     )
     # CheckType IS the validation — bad value is a 422, no hand-maintained list.
     check_type: CheckType = Field(..., description="Type of check")
-    target: EncryptedText = Field(
+    target: StorableText = Field(
         ..., min_length=1, max_length=512, description="Check target"
     )
     description: StorableText | None = Field(
@@ -54,6 +54,11 @@ class CheckBase(BaseSchema):
 
 class CheckCreate(CheckBase):
     """Schema for creating a new check."""
+
+    # What is written must fit the encrypted column; a stored row is read as it is.
+    target: EncryptedText = Field(
+        ..., min_length=1, max_length=512, description="Check target"
+    )
 
     interval_seconds: int | None = Field(
         None, gt=0, le=86400, description="Check interval in seconds"
@@ -121,7 +126,7 @@ class CheckCreate(CheckBase):
     expect_value: StorableText | None = Field(
         None, max_length=500, description="Expected DNS value"
     )
-    connection_string: EncryptedText | None = Field(
+    connection_string: StorableText | None = Field(
         None, max_length=1000, description="Database connection string"
     )
     query: StorableText | None = Field(None, max_length=5000, description="SQL query")
@@ -183,7 +188,7 @@ class CheckUpdate(BaseSchema):
     nameserver: StorableText | None = Field(None, max_length=255)
     port: int | None = Field(None, ge=1, le=65535)
     expect_value: StorableText | None = Field(None, max_length=500)
-    connection_string: EncryptedText | None = Field(None, max_length=1000)
+    connection_string: StorableText | None = Field(None, max_length=1000)
     query: StorableText | None = Field(None, max_length=5000)
     depends_on_check_id: UUID | None = Field(
         None,

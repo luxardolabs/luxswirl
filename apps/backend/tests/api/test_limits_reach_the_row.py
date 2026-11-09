@@ -133,12 +133,41 @@ async def test_a_multibyte_target_the_column_cannot_hold_is_refused(
     assert resp.status_code == 422, f"{resp.status_code} {resp.text[:300]}"
 
 
+async def test_a_long_connection_string_is_not_held_to_the_target_column(
+    client: AsyncClient, db: AsyncSession, approved: tuple[UUID, str]
+) -> None:
+    """A connection string is stored in check_config (unbounded encrypted text),
+    so the 1,000-character limit it always had still holds, and an export of a
+    check that has one still works."""
+    agent_id, _ = approved
+    headers = await _admin(db)
+    dsn = "postgresql://monitor:" + "p" * 750 + "@db.internal:5432/app"
+
+    created = await client.post(
+        "/api/v1/admin/checks",
+        json={
+            "agent_id": str(agent_id),
+            "display_name": "long dsn",
+            "check_type": "postgres",
+            "target": "db.internal",
+            "connection_string": dsn,
+            "query": "SELECT 1",
+        },
+        headers=headers,
+    )
+    exported = await client.get(
+        f"/api/v1/admin/agents/{agent_id}/checks/export", headers=headers
+    )
+
+    assert created.status_code == 201, created.text[:300]
+    assert exported.status_code == 200, exported.text[:300]
+
+
 @pytest.mark.unit
 def test_the_column_limit_is_the_models() -> None:
-    for column in ("target", "connection_string_encrypted"):
-        column_type = Check.__table__.c[column].type
-        assert isinstance(column_type, EncryptedString)
-        assert column_type.impl.length == ENCRYPTED_COLUMN_CHARS, column
+    column_type = Check.__table__.c["target"].type
+    assert isinstance(column_type, EncryptedString)
+    assert column_type.impl.length == ENCRYPTED_COLUMN_CHARS
 
 
 @pytest.mark.unit

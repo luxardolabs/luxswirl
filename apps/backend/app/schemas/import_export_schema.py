@@ -68,7 +68,7 @@ class CheckExport(BaseModel):
     expect_value: StorableText | None = Field(
         default=None, description="Expected DNS answer"
     )
-    connection_string: EncryptedText | None = Field(
+    connection_string: StorableText | None = Field(
         default=None, description="Database connection string (mysql, postgres)"
     )
     query: StorableText | None = Field(
