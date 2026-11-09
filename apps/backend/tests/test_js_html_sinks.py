@@ -51,8 +51,6 @@ _KNOWN_VALUES = {
     ("alerts-form.js", "help"),
     ("app.js", "icon"),
     ("app.js", "textColor"),
-    ("confirm-double-click.js", "btn._confirmOrigHtml"),
-    ("confirm-double-click.js", "label"),
     ("registration-keys.js", "originalHTML"),
     ("settings.js", "originalHTML"),
     ("tag-pill.js", "REMOVE_ICON"),
@@ -111,3 +109,24 @@ def test_a_file_loaded_as_a_classic_script_has_no_import() -> None:
     for name in sorted(classic):
         source = (_JS / name).read_text()
         assert not re.search(r"^\s*import\s", source, re.M), name
+
+
+def test_every_first_party_module_is_loaded_by_something() -> None:
+    """A module nothing loads still ships and still reads as live: an HTML sink
+    in it is a sink waiting for the template that wires it back up."""
+    loaders = [p.read_text() for p in _TEMPLATES.rglob("*.html")]
+    loaders += [p.read_text() for p in _APP.rglob("*.py")]
+    sources = {p: p.read_text() for p in _first_party()}
+
+    unloaded = [
+        path.name
+        for path in sources
+        if not any(path.name in text for text in loaders)
+        and not any(
+            f"/{path.name}'" in text or f"./{path.name}'" in text
+            for other, text in sources.items()
+            if other != path
+        )
+    ]
+
+    assert unloaded == []

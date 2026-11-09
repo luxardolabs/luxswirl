@@ -201,17 +201,11 @@ ______________________________________________________________________
 Red delete buttons use a special double-click pattern with visual feedback:
 
 ```html
-<!-- Delete button (idle state) -->
-<button
-    onclick="handleDeleteClick(event, this, '/checks/123', 'check-123')"
-    data-resource-id="123"
-    class="p-1.5 bg-red-600/20 hover:bg-red-600/30 text-red-300 rounded border border-red-600/30 transition-colors"
-    title="Click twice to delete">
-    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-    </svg>
-</button>
+{# A red icon button: armed (pulsing) on the first click, sent on the second #}
+{{ delete_icon_button(delete_url=key.urls.delete, target_id='key-' ~ key.id) }}
+
+{# Any confirmed action, any colour #}
+{{ confirm_action_btn(icon_svg=reset_svg, color='orange', title='Reset', hx_post=item.urls.reset, hx_target='#row-' ~ item.id, hx_swap='outerHTML') }}
 ```
 
 **Delete Button States:**
@@ -219,18 +213,18 @@ Red delete buttons use a special double-click pattern with visual feedback:
 - **Idle**: `bg-red-600/20 hover:bg-red-600/30` - Normal appearance
 - **First Click (Waiting)**: `bg-red-600/50 hover:bg-red-600/60 scale-110 animate-pulse shadow-lg shadow-red-500/50` - **Pulsing with glowing halo**
 - **Second Click (Executing)**: `opacity-50 cursor-not-allowed` - Disabled loading state
-- **Timeout**: Reverts to idle after 2 seconds if no second click
+- **Timeout**: Reverts to idle after 3 seconds (the macro's `timeout`) if no second click
 
 **Key Features:**
 
 - NO browser `confirm()` dialogs
 - Visual feedback via pulsing glow with "light leak" shadow halo on first click
-- 2-second timeout window for confirmation
+- 3-second timeout window for confirmation
 - Smooth animations and state transitions
 - Glowing shadow creates dramatic attention-grabbing effect
 - Consistent with double-click pattern (Section 11)
 
-**Implementation:** See `app/web/static/js/confirm-double-click.js`
+**Implementation:** the `confirm_action_btn` macro in `apps/backend/app/templates/web/macros/buttons.html` (Alpine state on the button; `sendConfirmedAction` sends the request on the second click)
 
 **Example (Network Scan Jobs):**
 
@@ -432,81 +426,20 @@ ______________________________________________________________________
 
 ## 11. DOUBLE-CLICK DELETE CONFIRMATION
 
-**Standard Pattern:** Click counter with 2-second timeout and pulsing glow feedback
+**Standard Pattern:** Click counter with 3-second timeout and pulsing glow feedback
 
 **Purpose:** Replace browser `confirm()` dialogs with smooth, visual UX
 
-**Implementation Pattern:**
-
-```javascript
-// Track click state per button
-const deleteClickState = new Map();
-
-function handleDeleteClick(event, button, deleteUrl, targetId = null) {
-    event.preventDefault();
-    event.stopPropagation();
-
-    const buttonId = button.dataset.resourceId || deleteUrl;
-    let state = deleteClickState.get(buttonId);
-
-    if (!state) {
-        state = { count: 0, timer: null, originalClasses: button.className };
-        deleteClickState.set(buttonId, state);
-    }
-
-    state.count++;
-
-    if (state.count === 1) {
-        // First click - show pulsing glow feedback
-        clearTimeout(state.timer);
-
-        button.classList.remove('bg-red-600/20', 'hover:bg-red-600/30');
-        button.classList.add('bg-red-600/50', 'hover:bg-red-600/60', 'scale-110', 'animate-pulse', 'shadow-lg', 'shadow-red-500/50');
-        button.title = 'Click again to confirm delete';
-
-        // Reset after 2 seconds if no second click
-        state.timer = setTimeout(() => {
-            button.className = state.originalClasses;
-            button.title = 'Delete';
-            state.count = 0;
-        }, 2000);
-
-    } else if (state.count === 2) {
-        // Second click - execute delete
-        clearTimeout(state.timer);
-
-        button.disabled = true;
-        button.classList.remove('bg-red-600/50', 'hover:bg-red-600/60', 'scale-110', 'animate-pulse', 'shadow-lg', 'shadow-red-500/50');
-        button.classList.add('opacity-50', 'cursor-not-allowed');
-        button.title = 'Deleting...';
-
-        // Execute delete via fetch
-        fetch(deleteUrl, { method: 'DELETE' })
-            .then(response => {
-                if (response.ok && targetId) {
-                    const target = document.getElementById(targetId);
-                    if (target) {
-                        target.style.transition = 'opacity 300ms';
-                        target.style.opacity = '0';
-                        setTimeout(() => target.remove(), 300);
-                    }
-                }
-            });
-
-        state.count = 0;
-        deleteClickState.delete(buttonId);
-    }
-}
-```
+**Implementation Pattern:** the `confirm_action_btn` macro (`apps/backend/app/templates/web/macros/buttons.html`) keeps the armed state in Alpine (`x-data="{ confirm: false }"`): the first click arms it and starts the timeout, the second calls `sendConfirmedAction` (`apps/backend/app/static/js/app.js`), which sends the request the button's `data-ajax-*` attributes describe. `delete_icon_button` is the red delete form of it. No handler is written inline: the CSP refuses `on*=` attributes.
 
 **Key Features:**
 
-- **2-second timeout** (not 300ms) - gives user time to see feedback
+- **3-second timeout** (`timeout=3000`) (not 300ms) - gives user time to see feedback
 - **Pulsing glow feedback** on first click (`animate-pulse` + `scale-110` + brighter red + `shadow-lg shadow-red-500/50`)
 - **"Light leak" effect** - Glowing red halo around button creates dramatic visual attention
 - Visual state progression: Idle → Pulsing with glow (waiting) → Loading (executing)
 - No browser dialogs - smooth in-app experience
-- Per-button state tracking (Map-based)
+- Per-button state in Alpine
 - Automatic cleanup on completion
 
 **Visual Feedback States:**
@@ -530,14 +463,10 @@ function handleDeleteClick(event, button, deleteUrl, targetId = null) {
 <form onsubmit="return confirm('Are you sure?')">
 
 <!-- NEW - Double-click pattern with pulsing glow -->
-<button onclick="handleDeleteClick(event, this, '/resource/123', 'resource-123')"
-        data-resource-id="123"
-        class="p-1.5 bg-red-600/20 hover:bg-red-600/30 text-red-300 rounded border border-red-600/30 transition-colors">
-    <svg class="w-3.5 h-3.5">...</svg>
-</button>
+{{ delete_icon_button(delete_url=item.urls.delete, target_id='item-' ~ item.id) }}
 ```
 
-**Reference Implementation:** `app/web/static/js/confirm-double-click.js` (ES6 module)
+**Reference Implementation:** the `confirm_action_btn` macro in `apps/backend/app/templates/web/macros/buttons.html`
 
 ______________________________________________________________________
 
