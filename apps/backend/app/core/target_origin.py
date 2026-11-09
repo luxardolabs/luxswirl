@@ -33,14 +33,53 @@ from app.models.enum_model import UserRole
 
 _HIDDEN = "***"
 
-_SCHEME = re.compile(r"[A-Za-z][A-Za-z0-9+.-]*(?::[A-Za-z][A-Za-z0-9+.-]*)?")
+# The schemes a target is shown with. Any other is no scheme a check uses and can be
+# text a secret was typed into (`jdbc:SECRET://`, `admin:SECRET://x@db`), so the
+# whole target is hidden. A SQLAlchemy driver (`postgresql+asyncpg`) is shown only
+# when it is a known one, and JDBC's prefix only before a known scheme.
+_SCHEMES = frozenset(
+    {
+        "http", "https", "ws", "wss", "tcp", "udp", "ping", "icmp", "dns",
+        "postgres", "postgresql", "mysql", "mariadb", "mssql", "sqlserver",
+        "oracle", "mongodb", "redis", "rediss", "amqp", "amqps", "mqtt", "mqtts",
+        "ftp", "ftps", "sftp", "ssh", "smtp", "smtps", "imap", "imaps", "ldap",
+        "ldaps", "grpc", "grpcs",
+    }
+)  # fmt: skip
+_DRIVERS = frozenset(
+    {
+        "asyncpg", "psycopg", "psycopg2", "pg8000", "pymysql", "aiomysql",
+        "mysqldb", "mysqlconnector", "pyodbc", "aioodbc", "srv",
+    }
+)  # fmt: skip
 _HOST_NAME = re.compile(r"[A-Za-z0-9_](?:[A-Za-z0-9_.-]{0,252})")
 _PORT = re.compile(r"[0-9]{1,5}")
 
 # Where an authority ends: a path, query, fragment, SQL Server's `;` pairs, a space.
 _AUTHORITY_END = frozenset("/?#;\\ \t\r\n\f\v")
-# A key=value string's first key: a word, so `host/x?a=b` is not read as pairs.
-_FIRST_KEY = re.compile(r"[;\s]*[A-Za-z][A-Za-z0-9 _]*\s*=")
+# The whitespace libpq and the ODBC drivers read: C's isspace, ASCII only. Python's
+# `str.isspace` takes more (NBSP, U+3000, U+0085), which a driver reads as text.
+_SPACE = frozenset(" \t\n\r\f\v")
+# A key=value string's first key: a word, so `host/x?a=b` is not read as pairs. Each
+# run is possessive, so no input makes it backtrack.
+_FIRST_KEY = re.compile(r"[; \t\n\r\f\v]*+([A-Za-z][A-Za-z0-9_ \t]*+)=")
+
+# Every keyword libpq reads. A string that starts with one is libpq's, whatever `;`
+# its values hold; any other with a `;` is ODBC's or ADO's.
+_LIBPQ_KEYWORDS = frozenset(
+    {
+        "host", "hostaddr", "port", "dbname", "user", "password", "passfile",
+        "require_auth", "channel_binding", "connect_timeout", "client_encoding",
+        "options", "application_name", "fallback_application_name", "keepalives",
+        "keepalives_idle", "keepalives_interval", "keepalives_count",
+        "tcp_user_timeout", "replication", "gssencmode", "sslmode", "requiressl",
+        "sslnegotiation", "sslcompression", "sslcert", "sslkey", "sslpassword",
+        "sslcertmode", "sslrootcert", "sslcrl", "sslcrldir", "sslsni",
+        "requirepeer", "ssl_min_protocol_version", "ssl_max_protocol_version",
+        "krbsrvname", "gsslib", "gssdelegation", "service",
+        "target_session_attrs", "load_balance_hosts",
+    }
+)  # fmt: skip
 
 # The keys that say where a connection string connects, by dialect. An ODBC or ADO
 # string (`;`-separated, a value runs to the next `;`) names its host `Server`; a
@@ -146,32 +185,44 @@ def _quoted_end(text: str, start: int, close: str) -> int:
     return len(text)
 
 
-def _key_values(text: str, odbc: bool) -> list[tuple[str, str]]:
+def _key_values(text: str, odbc: bool) -> list[tuple[str, str]] | None:
     """The (key, value) pairs of a libpq, ODBC or ADO connection string, read as its
-    driver reads them: a quoted or braced value whole; an unquoted one to the next
-    `;` (ODBC, `odbc`) or to the next space no backslash escapes (libpq). So a
-    `host=` inside a password is not read as a key."""
+    driver reads them, or None when it is not well formed.
+
+    A quoted value (libpq `'...'`; ODBC `{...}`, `"..."`, `'...'`) is read whole and
+    must be followed by a separator; an unquoted one runs to the next `;` (ODBC,
+    `odbc`) or to the next ASCII space no backslash escapes (libpq). So a `host=`
+    inside a password is never read as a key.
+    """
+    separators = frozenset(";") | _SPACE if odbc else _SPACE
+    quotes = ("{", '"', "'") if odbc else ("'",)
     pairs: list[tuple[str, str]] = []
     index = 0
     while index < len(text):
-        while index < len(text) and (text[index] in ";" or text[index].isspace()):
+        while index < len(text) and text[index] in separators:
             index += 1
+        if index >= len(text):
+            break
         equals = text.find("=", index)
         if equals < 0:
-            break
+            return None
         key = " ".join(text[index:equals].split()).lower()
         start = equals + 1
-        while start < len(text) and text[start] in " \t":
+        while start < len(text) and text[start] in _SPACE:
             start += 1
         opening = text[start : start + 1]
-        if opening in ("'", '"', "{"):
+        if opening in quotes:
             end = _quoted_end(text, start, "}" if opening == "{" else opening)
             value = text[start + 1 : end - 1]
+            # A driver reads nothing between a closing quote and the separator: text
+            # there is a string it would refuse, and may be a value's own tail.
+            if end < len(text) and text[end] not in separators:
+                return None
         else:
             end = start
             while end < len(text):
                 char = text[end]
-                if (char == ";") if odbc else char.isspace():
+                if (char == ";") if odbc else (char in _SPACE):
                     break
                 end += 2 if (char == "\\" and not odbc) else 1
             end = min(end, len(text))
@@ -181,13 +232,19 @@ def _key_values(text: str, odbc: bool) -> list[tuple[str, str]]:
     return pairs
 
 
-def _pairs(value: str) -> str:
-    """A key=value connection string cut to its host and port keys."""
-    odbc = ";" in value
+def _pairs(value: str, first_key: str) -> str:
+    """A key=value connection string cut to its host and port keys. Its dialect is
+    read from `first_key`: libpq's when libpq reads that keyword, so a `;` inside a
+    libpq password does not make the string ODBC's."""
+    first = " ".join(first_key.split()).lower()
+    odbc = first not in _LIBPQ_KEYWORDS and ";" in value
     host_keys = _ODBC_HOST_KEYS if odbc else _LIBPQ_HOST_KEYS
+    pairs = _key_values(value, odbc)
+    if pairs is None:
+        return _HIDDEN
     hosts: list[str] = []
     ports: list[str] = []
-    for name, text in _key_values(value, odbc):
+    for name, text in pairs:
         if name in host_keys:
             hosts.append(text)
         elif name in _PORT_KEYS:
@@ -223,14 +280,26 @@ def target_origin(value: str | None) -> str | None:
     text = value.strip()
     scheme_end = text.find("://")
     if scheme_end >= 0:
-        scheme = text[:scheme_end]
-        if not _SCHEME.fullmatch(scheme):
+        scheme = _known_scheme(text[:scheme_end])
+        if scheme is None:
             return _HIDDEN
         host = _authority(text[scheme_end + 3 :])
-        return f"{scheme.lower()}://{host or _HIDDEN}"
-    if _FIRST_KEY.match(text):
-        return _pairs(text)
+        return f"{scheme}://{host or _HIDDEN}"
+    first_key = _FIRST_KEY.match(text)
+    if first_key:
+        return _pairs(text, first_key.group(1))
     return _authority(text) or _HIDDEN
+
+
+def _known_scheme(text: str) -> str | None:
+    """`text`, lower-cased, when it is a scheme a check uses (with a known driver,
+    and JDBC's prefix), else None."""
+    scheme = text.lower()
+    base = scheme.removeprefix("jdbc:")
+    name, plus, driver = base.partition("+")
+    if name not in _SCHEMES or (plus and driver not in _DRIVERS):
+        return None
+    return scheme
 
 
 _HOLDERS = frozenset({UserRole.ADMIN, UserRole.EDITOR})

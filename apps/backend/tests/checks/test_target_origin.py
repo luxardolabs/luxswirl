@@ -97,6 +97,25 @@ HOSTILE = [
     f"api.example.com/cb?a=1 host={SECRET}",
     f"http://[::1%password={SECRET}]:80/",
     f"http://[fe80::1%{SECRET}]/",
+    # Found by the second attack: a `;` in a libpq password read as ODBC's, Unicode
+    # and line-break whitespace libpq reads as text, a secret in the scheme, text
+    # after a closing brace, a separator libpq does not read.
+    f"host=db.internal password=pw;server={SECRET}",
+    f"host=db password=x;Address={SECRET};",
+    f"host=db password=x;addr={SECRET}",
+    f"host=db password=x host={SECRET}",
+    f"host=db password=x　host={SECRET}",
+    f"host=db password=x\x85host={SECRET}",
+    f"host=db password=x\x1chost={SECRET}",
+    f"host=db password=\nhost={SECRET}",
+    f"host=db password=\rhost={SECRET}",
+    f"host=db password=\vhost={SECRET}",
+    f"host=db password=x ;host={SECRET}",
+    f"jdbc:{SECRET}://db:5432",
+    f"admin:{SECRET}://x@db",
+    f"{SECRET}://db",
+    f"mysql+{SECRET}://db:3306",
+    f"server=db;password={{x}}server={SECRET};",
 ]
 
 
@@ -122,6 +141,13 @@ def test_no_form_of_credential_survives(target: str) -> None:
         ("Server=db;Port=1433;Pwd=x", "host=db port=1433"),
         ("host=db port=5432 password='p w'", "host=db port=5432"),
         ("api.example.com/cb?token=abc", "api.example.com"),
+        ("host=db password=pw;x port=5432", "host=db port=5432"),
+        ("postgresql+asyncpg://u:p@db:5432/app", "postgresql+asyncpg://db:5432"),
+        ("jdbc:sqlserver://db:1433", "jdbc:sqlserver://db:1433"),
+        (
+            "mongodb+srv://u:p@cluster.example.net/x",
+            "mongodb+srv://cluster.example.net",
+        ),
         (
             "postgresql://monitor:pw@db.internal:5432/app",
             "postgresql://db.internal:5432",
@@ -184,6 +210,9 @@ def test_a_bulk_name_takes_nothing_the_origin_hides(url: str) -> None:
         "host={" + "}" * (4 << 20),
         "x=" * (2 << 20),
         "https://h/" + "/@" * (2 << 20),
+        "a" + " " * (1 << 20) + "!",
+        "a" + "\t" * (1 << 20) + "!",
+        "host=x " + "a " * (1 << 20),
     ],
 )
 def test_reading_a_long_value_takes_no_time(hostile: str) -> None:
@@ -250,7 +279,7 @@ async def test_the_admin_api_shows_a_viewer_the_origin_and_an_editor_the_path(
 
     assert viewer.status_code == editor.status_code == 200
     assert viewer.json()["target"] == "https://api.example.com"
-    assert SECRET not in viewer.text
+    assert SECRET.casefold() not in viewer.text.casefold()
     assert "/v1/health" in editor.json()["target"]
 
 
@@ -262,7 +291,7 @@ async def test_the_web_shows_a_viewer_the_origin(stack: dict, page: str) -> None
 
     assert viewer.status_code == editor.status_code == 200
     assert "the-check" in viewer.text
-    assert SECRET not in viewer.text
+    assert SECRET.casefold() not in viewer.text.casefold()
     assert "/v1/health" not in viewer.text
     assert "api.example.com/v1/health" in editor.text
 
@@ -305,5 +334,5 @@ async def test_the_metrics_label_is_the_origin(stack: dict) -> None:
     scraped = await stack["api"].get("/metrics")
 
     assert scraped.status_code == 200
-    assert SECRET not in scraped.text
+    assert SECRET.casefold() not in scraped.text.casefold()
     assert 'target="https://api.example.com"' in scraped.text
