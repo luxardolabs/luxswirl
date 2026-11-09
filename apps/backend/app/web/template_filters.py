@@ -300,10 +300,9 @@ def _shown_target(value: str | None, user: object) -> str | None:
     """`value` as `user` may read it: masked for an editor or admin, cut to its
     scheme, host and port for anyone else, a missing user included."""
     role = None if isinstance(user, Undefined) else getattr(user, "role", None)
-    try:
+    if isinstance(role, str) and role in UserRole._value2member_map_:
         return shown_target(value, UserRole(role))
-    except ValueError:
-        return shown_target(value, None)
+    return shown_target(value, None)
 
 
 def register_filters(jinja_env: Environment) -> None:
