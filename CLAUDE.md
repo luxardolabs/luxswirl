@@ -547,7 +547,7 @@ See `docs/architecture/database.md` and `docs/architecture/overview.md` for deta
 - SQLAlchemy 2.0 with `Mapped` and `mapped_column`
 - Async throughout with AsyncSession
 - TimescaleDB hypertable partitioned by timestamp (1-day chunks)
-- Continuous aggregate view `check_results_5min` for dashboard queries
+- Continuous aggregates `check_results_5min`, `check_results_hourly` and `check_results_daily` (`init_timescale`, materialized only). Uptime windows (status pages' 24 h / 7 d / 30 d / 90 d, the dashboard's and admin API's 24 h rates) are counted by `CheckResultCRUD.get_uptime_counts_bulk`: whole hours from `check_results_hourly` up to two hours ago, the edges from raw results, so a 90-day window does not scan raw results
 - Automatic 90-day retention policy (configurable)
 - Optimized indexes for common query patterns
 - Relationships with lazy loading strategies

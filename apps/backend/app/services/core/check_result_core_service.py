@@ -2,6 +2,7 @@
 CheckResult service - business logic for check result operations and analytics.
 """
 
+from collections.abc import Sequence
 from datetime import datetime
 from typing import Any
 from uuid import UUID
@@ -14,7 +15,12 @@ from uuid_extensions import uuid7
 from app.core.datetime_utils import utc_now
 from app.core.exceptions import AgentNotFoundException
 from app.core.ssl_expiry import ssl_expiry_fields
-from app.crud.check_result_crud import AggregateRow, CheckResultCRUD
+from app.crud.check_result_crud import (
+    AggregateRow,
+    CheckResultCRUD,
+    ResultCounts,
+    UptimeCounts,
+)
 from app.models.check_result_model import CheckResult
 from app.schemas.agent_schema import AgentOption
 from app.schemas.check_artifact_schema import CheckArtifactResponse
@@ -415,7 +421,7 @@ class CheckResultCoreService:
     async def get_24h_stats_batch(
         db: AsyncSession,
         check_ids: list[UUID],
-    ) -> dict[UUID, AggregateRow]:
+    ) -> dict[UUID, ResultCounts]:
         """Batch query 24h stats for checks. Delegates to CRUD."""
         return await CheckResultCRUD.get_24h_stats_batch(db, check_ids)
 
@@ -565,13 +571,15 @@ class CheckResultCoreService:
         return await CheckResultCRUD.get_check_result_by_id(db, check_result_id)
 
     @staticmethod
-    async def get_uptime_stats_bulk(
+    async def get_uptime_counts_bulk(
         db: AsyncSession,
-        check_ids: list[UUID],
-        hours: int = 168,
-    ) -> list[AggregateRow]:
-        """Bulk uptime stats. Delegates to CRUD."""
-        return await CheckResultCRUD.get_uptime_stats_bulk(db, check_ids, hours)
+        check_ids: Sequence[UUID],
+        windows_hours: Sequence[int],
+    ) -> UptimeCounts:
+        """Each check's (results, successful) in each window. Delegates to CRUD."""
+        return await CheckResultCRUD.get_uptime_counts_bulk(
+            db, check_ids, windows_hours
+        )
 
     @staticmethod
     async def get_last_failure_timestamps_bulk(

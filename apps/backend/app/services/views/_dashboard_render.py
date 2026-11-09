@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.datetime_utils import utc_now
 from app.core.sparkline import sparkline_path
-from app.schemas.check_result_schema import StatusBarResult
+from app.schemas.check_result_schema import CheckUptime, StatusBarResult
 from app.schemas.check_schema import DashboardCheck
 from app.schemas.status_page_schema import StatusPageInDB
 from app.services.core.agent_core_service import AgentCoreService
@@ -23,6 +23,9 @@ if TYPE_CHECKING:
     pass
 
 logger = get_logger("luxswirl.web.services.dashboard")
+
+# The uptime windows a status page shows: 24 hours, 7, 30 and 90 days.
+UPTIME_WINDOWS_HOURS = (24, 168, 720, 2160)
 
 
 def mark_check_runs(rendered_items: list[dict[str, Any]]) -> None:
@@ -390,64 +393,48 @@ class DashboardRender:
     async def calculate_checks_uptime_bulk(
         db: AsyncSession,
         check_ids: list[UUID],
-        hours: int = 168,
-    ) -> dict[UUID, dict[str, Any]]:
-        """
-        Calculate uptime percentage for multiple checks in a single query.
-        Also returns last failure timestamp for display.
+        windows_hours: tuple[int, ...] = UPTIME_WINDOWS_HOURS,
+    ) -> dict[UUID, CheckUptime]:
+        """Each check's uptime percentage in every window of `windows_hours`, and
+        its last failure in the shortest of them.
 
-        TODO: Add caching here (15-30 second cache recommended for public pages)
-              to avoid recalculating on every page load. Consider using
-              functools.lru_cache with time-based expiration or a proper
-              cache backend like Redis for multi-instance deployments.
-
-        Args:
-            db: Database session
-            check_ids: List of check UUIDs
-            hours: Hours to look back
+        One count query for all the windows (`get_uptime_counts_bulk`: hourly
+        aggregate plus raw edges), and one raw query for the last failures, of the
+        checks under 100 % in the shortest window only.
 
         Returns:
-            Dictionary mapping check_id to dict with 'uptime' and 'last_failure_at'
-            keys; 'uptime' is None for a check with no results in the window.
+            For each check: `uptime` per window (None with no results in it) and
+            `last_failure_at` (None with no failure in the shortest window).
         """
         if not check_ids:
             return {}
-
-        # Get bulk stats via core service
-        rows = await CheckResultCoreService.get_uptime_stats_bulk(db, check_ids, hours)
-
-        # Build uptime map
-        uptime_map: dict[UUID, dict[str, Any]] = {
-            check_id: {"uptime": None, "last_failure_at": None}
-            for check_id in check_ids
-        }
-        for row in rows:
-            total = row.total or 0
-            if total:
-                successful = int(row.successful or 0)
-                uptime_map[row.check_id]["uptime"] = round(
-                    (successful / total) * 100, 2
-                )
-
-        # Get last failure timestamp for checks with uptime < 100%
-        failed_check_ids = [
-            cid
-            for cid, data in uptime_map.items()
-            if data["uptime"] is not None and data["uptime"] < 100.0
-        ]
-        if failed_check_ids:
-            # Get last failure timestamps via core service
-            failure_rows = (
-                await CheckResultCoreService.get_last_failure_timestamps_bulk(
-                    db, failed_check_ids, hours
-                )
+        counts = await CheckResultCoreService.get_uptime_counts_bulk(
+            db, check_ids, windows_hours
+        )
+        summaries = {
+            check_id: CheckUptime(
+                uptime={
+                    hours: round(ok / total * 100, 2) if total else None
+                    for hours, (total, ok) in per_window.items()
+                }
             )
-
-            for row in failure_rows:
-                if row.check_id in uptime_map:
-                    uptime_map[row.check_id]["last_failure_at"] = row.last_failure_at
-
-        return uptime_map
+            for check_id, per_window in counts.items()
+        }
+        shortest = min(windows_hours)
+        failed = [
+            check_id
+            for check_id, summary in summaries.items()
+            if (pct := summary.uptime[shortest]) is not None and pct < 100.0
+        ]
+        if failed:
+            rows = await CheckResultCoreService.get_last_failure_timestamps_bulk(
+                db, failed, shortest
+            )
+            for row in rows:
+                summaries[row.check_id] = summaries[row.check_id].model_copy(
+                    update={"last_failure_at": row.last_failure_at}
+                )
+        return summaries
 
     @staticmethod
     def _get_bucket_size(minutes: int) -> int:
@@ -803,19 +790,11 @@ class DashboardRender:
         ]
 
         if all_check_ids_uuid:
-            # Bulk uptime calculations (4 queries)
-            uptime_24h_map = await DashboardRender.calculate_checks_uptime_bulk(
-                db, all_check_ids_uuid, hours=24
+            # Every uptime window and the last failure, in at most 4 queries.
+            uptime_map = await DashboardRender.calculate_checks_uptime_bulk(
+                db, all_check_ids_uuid
             )
-            uptime_7d_map = await DashboardRender.calculate_checks_uptime_bulk(
-                db, all_check_ids_uuid, hours=168
-            )
-            uptime_30d_map = await DashboardRender.calculate_checks_uptime_bulk(
-                db, all_check_ids_uuid, hours=720
-            )
-            uptime_90d_map = await DashboardRender.calculate_checks_uptime_bulk(
-                db, all_check_ids_uuid, hours=2160
-            )
+            no_results = CheckUptime(uptime=dict.fromkeys(UPTIME_WINDOWS_HOURS))
 
             # Bulk status bars (1 query)
             bars_map = await DashboardRender.generate_status_bars_bulk(
@@ -831,29 +810,18 @@ class DashboardRender:
                     else check_id_str
                 )
 
-                uptime_24h_data = uptime_24h_map.get(
-                    check_id_uuid, {"uptime": None, "last_failure_at": None}
-                )
-                uptime_7d_data = uptime_7d_map.get(
-                    check_id_uuid, {"uptime": None, "last_failure_at": None}
-                )
-                uptime_30d_data = uptime_30d_map.get(
-                    check_id_uuid, {"uptime": None, "last_failure_at": None}
-                )
-                uptime_90d_data = uptime_90d_map.get(
-                    check_id_uuid, {"uptime": None, "last_failure_at": None}
-                )
+                summary = uptime_map.get(check_id_uuid, no_results)
 
                 bars = bars_map.get(check_id_uuid, [])
                 # replace(), not setattr: DashboardCheck is frozen, so the stats
                 # produce a NEW row rather than being written onto the old one.
                 check_map[check_id_str] = replace(
                     check,
-                    uptime_24h=uptime_24h_data["uptime"],
-                    uptime_7d=uptime_7d_data["uptime"],
-                    uptime_30d=uptime_30d_data["uptime"],
-                    uptime_90d=uptime_90d_data["uptime"],
-                    last_failure_at=uptime_24h_data["last_failure_at"],
+                    uptime_24h=summary.uptime[24],
+                    uptime_7d=summary.uptime[168],
+                    uptime_30d=summary.uptime[720],
+                    uptime_90d=summary.uptime[2160],
+                    last_failure_at=summary.last_failure_at,
                     minute_bars=bars,
                     # The card renders this path; it is not the template's to compute.
                     sparkline_path=sparkline_path(bars),

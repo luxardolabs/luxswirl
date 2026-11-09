@@ -5,24 +5,28 @@ CheckResult CRUD - database queries for check result operations.
 import math
 from collections.abc import Sequence
 from datetime import datetime, timedelta
-from typing import Any
+from typing import Any, NamedTuple
 from uuid import UUID
 
 from sqlalchemy import (
     DateTime,
+    Float,
     Integer,
     Row,
     and_,
     cast,
+    column,
     desc,
     func,
     literal,
     or_,
     select,
+    table,
     text,
     true,
 )
 from sqlalchemy.dialects.postgresql import ARRAY
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer, selectinload
@@ -62,6 +66,37 @@ def _in_use() -> ColumnElement[bool]:
 # A row of labelled aggregates (count/sum/avg/percentile over results): SQLAlchemy
 # 2.1 cannot type `func.*` columns, so the row is typed by its arity only.
 type AggregateRow = Row[*tuple[Any, ...]]
+
+
+class ResultCounts(NamedTuple):
+    """How many results a check reported in a window, and how many succeeded."""
+
+    total: int
+    successful: int
+
+
+# Per check, per window (hours back from now).
+type UptimeCounts = dict[UUID, dict[int, ResultCounts]]
+
+# The hourly continuous aggregate `init_timescale` creates (app/db/database.py): a
+# row per check and hour, materialized only, refreshed every hour up to an hour ago.
+_HOURLY = table(
+    "check_results_hourly",
+    column("check_id", PG_UUID(as_uuid=True)),
+    column("bucket", DateTime(timezone=True)),
+    column("check_count", Integer),
+    column("success_rate", Float),
+)
+_HOUR = timedelta(hours=1)
+# How old an hour must be before its aggregate row is read: the policy's one-hour
+# end offset plus up to an hour between runs.
+_SETTLED = timedelta(hours=2)
+
+
+def _next_hour(moment: datetime) -> datetime:
+    """`moment` rounded up to the hour (itself when it is on one)."""
+    floor = moment.replace(minute=0, second=0, microsecond=0)
+    return floor if floor == moment else floor + _HOUR
 
 
 class CheckResultCRUD:
@@ -468,33 +503,15 @@ class CheckResultCRUD:
     @staticmethod
     async def get_24h_stats_batch(
         db: AsyncSession, check_ids: list[UUID]
-    ) -> dict[UUID, AggregateRow]:
-        """
-        Batch query 24h success stats for multiple checks.
-
-        Returns:
-            Map of check_id to stats row (total, successful)
-        """
-        if not check_ids:
-            return {}
-
-        cutoff = utc_now() - timedelta(hours=24)
-        query = (
-            select(
-                CheckResult.check_id,
-                func.count(CheckResult.id).label("total"),
-                func.sum(func.cast(CheckResult.success, Integer)).label("successful"),
-            )
-            .where(
-                and_(
-                    CheckResult.check_id.in_(check_ids),
-                    CheckResult.timestamp >= cutoff,
-                )
-            )
-            .group_by(CheckResult.check_id)
-        )
-        result = await db.execute(query)
-        return {row.check_id: row for row in result.all()}
+    ) -> dict[UUID, ResultCounts]:
+        """Each check's results and successes in the last 24 hours, for the checks
+        that reported any, read as `get_uptime_counts_bulk` reads a window."""
+        counts = await CheckResultCRUD.get_uptime_counts_bulk(db, check_ids, (24,))
+        return {
+            check_id: per_window[24]
+            for check_id, per_window in counts.items()
+            if per_window[24].total
+        }
 
     @staticmethod
     async def get_minute_bars_results(
@@ -867,35 +884,124 @@ class CheckResultCRUD:
     # ------------------------------------------------------------------
 
     @staticmethod
-    async def get_uptime_stats_bulk(
-        db: AsyncSession, check_ids: list[UUID], hours: int = 168
-    ) -> list[AggregateRow]:
-        """
-        Get uptime stats for multiple checks in a single query.
+    async def get_uptime_counts_bulk(
+        db: AsyncSession, check_ids: Sequence[UUID], windows_hours: Sequence[int]
+    ) -> UptimeCounts:
+        """Each check's (results, successful) in each window, `windows_hours` hours
+        back from now, in two queries whatever the number of checks and windows.
 
-        Returns:
-            List of rows with check_id, total, successful
+        Whole hours are read from `check_results_hourly`, and only the edges from
+        raw results: the part-hour at a window's start, and everything after the
+        aggregate's last settled hour (two to three hours). Counting a
+        90-day window of raw results passed the statement timeout; the counts are
+        the same. A result written into an hour after it was materialized is
+        counted at the aggregate's next refresh. With no aggregate rows yet (a new
+        install), every window is read raw.
         """
-        if not check_ids:
-            return []
+        counts: UptimeCounts = {
+            check_id: dict.fromkeys(windows_hours, ResultCounts(0, 0))
+            for check_id in check_ids
+        }
+        if not check_ids or not windows_hours:
+            return counts
+        now = utc_now()
+        watermark = (
+            await db.execute(select(func.max(_HOURLY.c.bucket)))
+        ).scalar_one_or_none()
+        # Trust only hours the hourly policy (end_offset 1 hour, run every hour)
+        # has refreshed after they ended: a refresh by hand can materialize an
+        # hour still in progress, which the policy refreshes again only once it is
+        # an hour old. Raw results cover everything newer.
+        rolled_to = (
+            min(
+                watermark + _HOUR,
+                (now - _SETTLED).replace(minute=0, second=0, microsecond=0),
+            )
+            if watermark is not None
+            else None
+        )
 
-        cutoff = utc_now() - timedelta(hours=hours)
-        query = (
+        stamp = CheckResult.timestamp
+        raw_ranges: dict[int, ColumnElement[bool]] = {}
+        hour_ranges: dict[int, tuple[datetime, datetime]] = {}
+        for hours in windows_hours:
+            start = now - timedelta(hours=hours)
+            whole_from = _next_hour(start)
+            if rolled_to is not None and rolled_to > whole_from:
+                hour_ranges[hours] = (whole_from, rolled_to)
+                raw_ranges[hours] = or_(
+                    and_(stamp >= start, stamp < whole_from), stamp >= rolled_to
+                )
+            else:
+                raw_ranges[hours] = stamp >= start
+
+        succeeded = cast(CheckResult.success, Integer)
+        raw = await db.execute(
             select(
                 CheckResult.check_id,
-                func.count(CheckResult.id).label("total"),
-                func.sum(func.cast(CheckResult.success, Integer)).label("successful"),
+                *(
+                    labelled
+                    for hours, in_window in raw_ranges.items()
+                    for labelled in (
+                        func.count().filter(in_window).label(f"n{hours}"),
+                        func.coalesce(func.sum(succeeded).filter(in_window), 0).label(
+                            f"ok{hours}"
+                        ),
+                    )
+                ),
             )
-            .where(
-                and_(
-                    CheckResult.check_id.in_(check_ids),
-                    CheckResult.timestamp >= cutoff,
-                )
-            )
+            .where(CheckResult.check_id.in_(check_ids), or_(*raw_ranges.values()))
             .group_by(CheckResult.check_id)
         )
-        result = await db.execute(query)
-        return list(result.all())
+        for row in raw.mappings():
+            for hours in windows_hours:
+                counts[row["check_id"]][hours] = ResultCounts(
+                    int(row[f"n{hours}"]), int(row[f"ok{hours}"])
+                )
+
+        if hour_ranges:
+            bucket = _HOURLY.c.bucket
+            # success_rate is SUM(success)/COUNT(*)*100 as a float: back to a count.
+            ok_in_hour = func.round(
+                _HOURLY.c.check_count * _HOURLY.c.success_rate / 100
+            )
+            earliest = min(whole_from for whole_from, _ in hour_ranges.values())
+            hourly = await db.execute(
+                select(
+                    _HOURLY.c.check_id,
+                    *(
+                        labelled
+                        for hours, (whole_from, until) in hour_ranges.items()
+                        for labelled in (
+                            func.coalesce(
+                                func.sum(_HOURLY.c.check_count).filter(
+                                    bucket >= whole_from, bucket < until
+                                ),
+                                0,
+                            ).label(f"n{hours}"),
+                            func.coalesce(
+                                func.sum(ok_in_hour).filter(
+                                    bucket >= whole_from, bucket < until
+                                ),
+                                0,
+                            ).label(f"ok{hours}"),
+                        )
+                    ),
+                )
+                .where(
+                    _HOURLY.c.check_id.in_(check_ids),
+                    bucket >= earliest,
+                    bucket < rolled_to,
+                )
+                .group_by(_HOURLY.c.check_id)
+            )
+            for row in hourly.mappings():
+                for hours in hour_ranges:
+                    total, ok = counts[row["check_id"]][hours]
+                    counts[row["check_id"]][hours] = ResultCounts(
+                        total + int(row[f"n{hours}"]), ok + int(row[f"ok{hours}"])
+                    )
+        return counts
 
     @staticmethod
     async def get_last_failure_timestamps_bulk(

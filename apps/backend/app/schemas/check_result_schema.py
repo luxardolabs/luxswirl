@@ -131,6 +131,14 @@ class StatusBarResult(BaseSchema):
     http_status_code: int | None
 
 
+class CheckUptime(BaseSchema):
+    """A check's uptime percentage per window (hours back from now; None with no
+    results in it), and its last failure in the shortest window."""
+
+    uptime: dict[int, float | None]
+    last_failure_at: datetime | None = None
+
+
 class AgentReportRequest(BaseSchema):
     """An agent report whose every result has passed validation.
 
