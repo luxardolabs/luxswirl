@@ -167,22 +167,24 @@ def _authority(rest: str) -> str | None:
     return _host_and_port(authority)
 
 
-def _quoted_end(text: str, start: int, close: str) -> int:
-    """The index after the value quoted from `start` (its opening quote) to `close`:
-    a doubled `close` (ODBC's `}}`, SQL's `''`) or a backslash (libpq) escapes it."""
+def _quoted_end(text: str, start: int, close: str, odbc: bool) -> int | None:
+    """The index after the value quoted from `start` (its opening quote) to `close`,
+    or None when the quote is never closed. In libpq a backslash escapes the next
+    character; in ODBC and ADO a backslash is text and a doubled `close` (`}}`,
+    `''`, `""`) escapes it."""
     index = start + 1
     while index < len(text):
         char = text[index]
-        if char == "\\" and close == "'":
+        if char == "\\" and not odbc:
             index += 2
             continue
         if char == close:
-            if text[index + 1 : index + 2] == close:
+            if odbc and text[index + 1 : index + 2] == close:
                 index += 2
                 continue
             return index + 1
         index += 1
-    return len(text)
+    return None
 
 
 def _key_values(text: str, odbc: bool) -> list[tuple[str, str]] | None:
@@ -206,13 +208,16 @@ def _key_values(text: str, odbc: bool) -> list[tuple[str, str]] | None:
         equals = text.find("=", index)
         if equals < 0:
             return None
-        key = " ".join(text[index:equals].split()).lower()
+        key = _key_name(text[index:equals])
         start = equals + 1
         while start < len(text) and text[start] in _SPACE:
             start += 1
         opening = text[start : start + 1]
         if opening in quotes:
-            end = _quoted_end(text, start, "}" if opening == "{" else opening)
+            closed = _quoted_end(text, start, "}" if opening == "{" else opening, odbc)
+            if closed is None:
+                return None
+            end = closed
             value = text[start + 1 : end - 1]
             # A driver reads nothing between a closing quote and the separator: text
             # there is a string it would refuse, and may be a value's own tail.
@@ -232,12 +237,32 @@ def _key_values(text: str, odbc: bool) -> list[tuple[str, str]] | None:
     return pairs
 
 
+def _key_name(text: str) -> str:
+    """A key as a driver compares it: lower-cased, its ASCII whitespace collapsed.
+    Other whitespace is part of the key, so `Data　Source` is no host key."""
+    spaced = "".join(" " if char in _SPACE else char for char in text)
+    return " ".join(part for part in spaced.split(" ") if part).lower()
+
+
 def _pairs(value: str, first_key: str) -> str:
-    """A key=value connection string cut to its host and port keys. Its dialect is
-    read from `first_key`: libpq's when libpq reads that keyword, so a `;` inside a
-    libpq password does not make the string ODBC's."""
-    first = " ".join(first_key.split()).lower()
-    odbc = first not in _LIBPQ_KEYWORDS and ";" in value
+    """A key=value connection string cut to its host and port keys.
+
+    Its dialect is libpq's when it holds no `;`, ODBC's or ADO's when it holds one
+    and starts with a key libpq does not read. One that starts with a libpq keyword
+    and holds a `;` is either: a libpq password with a `;` in it, or an ADO string
+    (Npgsql, MySqlConnector: `Host=db;Password=a b`) whose password holds a space.
+    Each dialect reads the other's value tail as pairs, so it is hidden.
+    """
+    odbc = ";" in value
+    if odbc:
+        if _key_name(first_key) in _LIBPQ_KEYWORDS:
+            return _HIDDEN
+        # Read the libpq way too: an ODBC string whose value holds a space and
+        # `host=` (`foo=1 host=db password=x;server=SECRET`) is read by each dialect
+        # differently, and is hidden.
+        as_libpq = _key_values(value, odbc=False) or []
+        if any(name in _LIBPQ_HOST_KEYS | _PORT_KEYS for name, _ in as_libpq):
+            return _HIDDEN
     host_keys = _ODBC_HOST_KEYS if odbc else _LIBPQ_HOST_KEYS
     pairs = _key_values(value, odbc)
     if pairs is None:

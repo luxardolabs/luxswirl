@@ -116,6 +116,18 @@ HOSTILE = [
     f"{SECRET}://db",
     f"mysql+{SECRET}://db:3306",
     f"server=db;password={{x}}server={SECRET};",
+    # Found by the third attack: an ADO string that starts with a key libpq reads
+    # too, a backslash read as an escape in ADO, an unclosed quote, keys spaced with
+    # Unicode whitespace, an ODBC value holding a libpq host key.
+    f"Host=db;Port=5432;Password=pw host={SECRET}",
+    f"User=sa;Password=abc host={SECRET}",
+    f"Host=db;Username=u;Password=a hostaddr={SECRET}",
+    f"Server=db;Uid='a\\';Password='; Server={SECRET};x='",
+    f"Server=db;Pwd='x; Server={SECRET}",
+    f"Server=db;Pwd=x;Data　Source={SECRET}",
+    f"Server=db;Pwd=x;\u0085Server\u0085={SECRET}",
+    f"foo=1 host=db password=x;server={SECRET}",
+    f"Server=db;Pwd=abc host={SECRET}",
 ]
 
 
@@ -141,7 +153,9 @@ def test_no_form_of_credential_survives(target: str) -> None:
         ("Server=db;Port=1433;Pwd=x", "host=db port=1433"),
         ("host=db port=5432 password='p w'", "host=db port=5432"),
         ("api.example.com/cb?token=abc", "api.example.com"),
-        ("host=db password=pw;x port=5432", "host=db port=5432"),
+        # A libpq keyword first and a `;`: libpq's or ADO's, read differently.
+        ("host=db password=pw;x port=5432", "***"),
+        ("Host=db;Password=x port=4242", "***"),
         ("postgresql+asyncpg://u:p@db:5432/app", "postgresql+asyncpg://db:5432"),
         ("jdbc:sqlserver://db:1433", "jdbc:sqlserver://db:1433"),
         (

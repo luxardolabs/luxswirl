@@ -65,6 +65,8 @@ class AdminCheckCoreService:
                 update={
                     "target": target_origin(response.target),
                     "connection_string": target_origin(response.connection_string),
+                    # A DNS-over-HTTPS nameserver is a URL and can carry a token.
+                    "nameserver": target_origin(response.nameserver),
                     "query": mask_credentials(response.query),
                     "description": mask_credentials(response.description),
                     "script_code": None,
