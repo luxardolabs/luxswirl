@@ -13,6 +13,7 @@ from uuid import UUID
 
 from sqlalchemy import (
     ColumnElement,
+    String,
     Text,
     Uuid,
     cast,
@@ -83,7 +84,28 @@ def _has_columns(session: Session) -> bool:
     return True
 
 
+def _text_columns(session: Session) -> frozenset[tuple[str, str]]:
+    inspector = inspect(session.connection())
+    found: set[tuple[str, str]] = set()
+    for table_name, columns in (
+        ("checks", CHECK_COLUMNS),
+        ("maintenance_jobs", MAINTENANCE_JOB_COLUMNS),
+    ):
+        if not inspector.has_table(table_name):
+            continue
+        for described in inspector.get_columns(table_name):
+            if described["name"] in columns and isinstance(described["type"], String):
+                found.add((table_name, described["name"]))
+    return frozenset(found)
+
+
 class EncryptedValueCRUD:
+    @staticmethod
+    async def text_columns(db: AsyncSession) -> frozenset[tuple[str, str]]:
+        """The encrypted columns, as (table, column), stored as text in the database
+        now (before revision 011, maintenance_jobs.params is still json)."""
+        return await db.run_sync(_text_columns)
+
     @staticmethod
     async def columns_exist(db: AsyncSession) -> bool:
         """Whether the database has every encrypted column (an empty database,

@@ -238,3 +238,51 @@ def test_no_key_on_standard_input_is_refused(
 ) -> None:
     assert reencrypt_fields.main(io.StringIO("\n")) == 1
     assert "no key on standard input" in capsys.readouterr().err
+
+
+def _wrapped(token: str) -> str:
+    return "\n".join(token[i : i + 76] for i in range(0, len(token), 76))
+
+
+async def test_a_wrapped_token_either_key_reads_is_judged_by_its_key(
+    db: AsyncSession, field_key: str
+) -> None:
+    """A token stored line-wrapped or quoted still decrypts (Fernet skips what is
+    not base64): one under the configured key is left, one under the other key is
+    re-encrypted, and neither is taken for plaintext and encrypted a second time."""
+    other = Fernet.generate_key().decode()
+    ours = _wrapped(_token(field_key, "https://ours.test/x"))
+    theirs = json.dumps(_token(other, '{"password": "hunter2"}'))
+    check_id = await _check(db, target=ours, check_config=theirs)
+
+    report = await FieldEncryptionCoreService.reencrypt_from(db, other)
+    db.expire_all()
+
+    assert report.encrypted == []
+    assert report.reencrypted == [f"checks.check_config id={check_id}"]
+    assert (await _raw(db, check_id))[0] == ours
+    check = (await db.scalars(select(Check).where(Check.id == check_id))).one()
+    assert check.target == "https://ours.test/x"
+    assert check.check_config == {"password": "hunter2"}
+
+
+async def test_a_column_not_yet_text_is_left_for_its_migration(
+    db: AsyncSession, field_key: str
+) -> None:
+    """Before revision 011 maintenance_jobs.params is json, and the startup refusal
+    still sends the operator here: the repair leaves that column to 011 (which
+    encrypts it) rather than write a token into json, and repairs the rest."""
+    other = Fernet.generate_key().decode()
+    check_id = await _check(db, target=_token(other, "https://t"))
+    await _job(db, '{"check_ids": []}')
+    await db.execute(
+        text(
+            "ALTER TABLE maintenance_jobs ALTER COLUMN params TYPE json "
+            "USING params::json"
+        )
+    )
+
+    report = await FieldEncryptionCoreService.reencrypt_from(db, other)
+
+    assert report.reencrypted == [f"checks.target id={check_id}"]
+    assert report.encrypted == []

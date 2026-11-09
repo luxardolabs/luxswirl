@@ -9,6 +9,9 @@ server's key (SECURITY__FIELD_ENCRYPTION_KEY), the stored text exactly as it is,
 so it reads back as it read before: a config that read as nothing (invalid or
 bare JSON) still does.
 
+- A value the server's key decrypts is never touched, though it is stored
+  line-wrapped or quoted (Fernet's decoder skips what is not base64, so the
+  column reads it as its plaintext already).
 - A value shaped as a token is never touched, whichever key wrote it. Before
   migrations run, alembic/env.py refuses a token the server's key cannot
   decrypt, so at this point every token is the server's.
@@ -38,7 +41,7 @@ import re
 import sqlalchemy as sa
 from alembic import op
 from app.core.config import settings
-from cryptography.fernet import Fernet
+from cryptography.fernet import Fernet, InvalidToken
 from sqlalchemy.engine import Connection
 
 revision = "3f9c7a1b5e82"
@@ -75,6 +78,14 @@ def _is_token(value: str) -> bool:
     except ValueError, binascii.Error:
         return False
     return len(raw) >= _TOKEN_MIN_BYTES and raw[0] == _TOKEN_VERSION
+
+
+def _decrypts(fernet: Fernet, value: str) -> bool:
+    try:
+        fernet.decrypt(value.encode())
+    except InvalidToken:
+        return False
+    return True
 
 
 def _table(name: str, columns: dict[str, int | None]) -> sa.TableClause:
@@ -139,6 +150,10 @@ def migrate(connection: Connection) -> None:
             values: dict[str, str] = {}
             for (column, limit), stored in zip(columns.items(), row[1:], strict=True):
                 if not isinstance(stored, str) or _is_token(stored):
+                    continue
+                if _decrypts(fernet, stored):
+                    # A token stored wrapped or quoted: Fernet skips what is not
+                    # base64, so it reads as its plaintext already.
                     continue
                 token = fernet.encrypt(stored.encode()).decode()
                 if limit is not None and len(token) > limit:

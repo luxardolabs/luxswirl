@@ -230,3 +230,35 @@ async def test_without_a_key_a_plaintext_value_fails_the_upgrade(
 
     with pytest.raises(RuntimeError, match="SECURITY__FIELD_ENCRYPTION_KEY"):
         await _migrate(db)
+
+
+def _wrapped(token: str) -> str:
+    """A token as a tool that wraps base64 at 76 columns would store it."""
+    return "\n".join(token[i : i + 76] for i in range(0, len(token), 76))
+
+
+async def test_a_value_the_key_already_decrypts_is_never_encrypted_again(
+    db: AsyncSession, field_key: str
+) -> None:
+    """Fernet's decoder skips any character outside base64, so a token stored
+    line-wrapped or JSON-quoted decrypts under the server's key and reads as its
+    plaintext, though it is not shaped as a token. It is left as stored."""
+    fernet = Fernet(field_key.encode())
+    target = fernet.encrypt(b"https://admin:hunter2@example.com/").decode()
+    config = fernet.encrypt(json.dumps({"password": "hunter2"}).encode()).decode()
+    stored = {"target": _wrapped(target), "check_config": json.dumps(config)}
+    check_id = await _check(db, **stored)
+    before = (await db.scalars(select(Check).where(Check.id == check_id))).one()
+    seen = (before.target, before.check_config)
+    db.expire_all()
+    assert seen == ("https://admin:hunter2@example.com/", {"password": "hunter2"})
+
+    await _migrate(db)
+
+    raw = await _raw_check(db, check_id)
+    assert (raw["target"], raw["check_config"]) == (
+        stored["target"],
+        stored["check_config"],
+    )
+    after = (await db.scalars(select(Check).where(Check.id == check_id))).one()
+    assert (after.target, after.check_config) == seen

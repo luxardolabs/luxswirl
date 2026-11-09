@@ -207,21 +207,27 @@ class FieldEncryptionCoreService:
         too_long: list[str] = []
         unreadable: list[str] = []
         writes: list[tuple[str, UUID, dict[str, str]]] = []
+        text_columns = await EncryptedValueCRUD.text_columns(db)
         async for table, columns, row in _stored_rows(db):
             values: dict[str, str] = {}
             for column, stored in zip(columns, row.values, strict=True):
                 if stored is None:
                     continue
                 name = f"{table}.{column} id={row.id}"
+                if (table, column) not in text_columns:
+                    continue  # not yet text: the revision that makes it text encrypts it
                 if decrypts(stored):
                     already += 1
                     continue
-                if is_token(stored):
-                    plaintext = decrypt_with(other_key, stored)
-                    if plaintext is None:
-                        unreadable.append(name)
-                        continue
+                # Tried before the token shape: Fernet skips what is not base64, so a
+                # token stored wrapped or quoted still decrypts, and is no plaintext.
+                other_plaintext = decrypt_with(other_key, stored)
+                if other_plaintext is not None:
+                    plaintext = other_plaintext
                     outcome = reencrypted
+                elif is_token(stored):
+                    unreadable.append(name)
+                    continue
                 else:
                     plaintext = stored
                     outcome = encrypted
