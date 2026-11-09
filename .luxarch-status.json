@@ -1,6 +1,6 @@
 {
   "guard": "luxarch",
-  "guard_version": "0.354.0",
+  "guard_version": "0.355.0",
   "repo": "/repo",
   "targets": [
     {
@@ -1549,13 +1549,13 @@
         },
         {
           "rule": "fw.credential_routes_limited",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.215.0",
-          "violations": 8,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
-          "fix": "attach a per-route limit keyed on the real client \u2014 `@limiter.limit(...)` with a trusted-proxy-aware key function, on a `Limiter(..., key_style=\"endpoint\")` wherever the route's path takes a parameter (slowapi's default counts per concrete path). A credential checked in a dependency is limited on that dependency. ON PYTHON 3.14+ THAT DECORATOR ALSO NEEDS THE SANCTIONED SLOWAPI CARVE-OUT, or your suite stops COLLECTING: slowapi 0.1.10 calls the deprecated `asyncio.iscoroutinefunction` inside `Limiter.limit`, so under the canonical `filterwarnings = error` the warning is raised at DECORATION time \u2014 at import of any module holding a limited route, before a single test runs. Take the row from `--doc FLEET-RATE-LIMIT-STANDARD` \u00a74 verbatim; do NOT reach for the broad `ignore::DeprecationWarning:slowapi.extension`, which \u00a74 measured as harmful. `--doc FLEET-RATE-LIMIT-STANDARD` \u00a73: a login endpoint cannot key on the authenticated identity, because the credential is what is being verified, so per-route plus per-IP is the honest fallback. An unlimited credential route takes unlimited guessing against every account from one address. If this route genuinely needs no limit, or your limiter has a name this rule does not recognise, put it in `[allowlist].credential_route_limited = [{ function, evidence }]` \u2014 or escalate, so the recognised set grows for the whole fleet rather than one repo carrying a waiver.",
+          "fix": "",
           "example": ""
         },
         {
@@ -2044,8 +2044,8 @@
         }
       ],
       "summary": {
-        "PASS": 166,
-        "FAIL": 1,
+        "PASS": 167,
+        "FAIL": 0,
         "XFAIL": 0,
         "XPASS": 0,
         "INERT": 18
@@ -2454,13 +2454,13 @@
       },
       {
         "rule": "repo.emitted_assets_current",
-        "status": "PASS",
+        "status": "FAIL",
         "since": "0.208.0",
-        "violations": 0,
+        "violations": 3,
         "deferred": false,
         "inert": false,
         "inert_reason": "",
-        "fix": "",
+        "fix": "re-emit the asset and re-apply it \u2014 `luxarch --emit <slug>` \u2014 KEEPING your EDIT-THIS settings (registry, app import, exemptions). A revision exists because the previous version was wrong in a way that mattered: 0.207.0's image block could not produce a valid docker tag at all, and the repos still on the older text cannot build. Presence is not currency; the marker line is how this is checked, so do not edit it.",
         "example": ""
       },
       {
@@ -2608,13 +2608,13 @@
       },
       {
         "rule": "repo.hooks_current",
-        "status": "PASS",
+        "status": "FAIL",
         "since": "0.164.0",
-        "violations": 0,
+        "violations": 1,
         "deferred": false,
         "inert": false,
         "inert_reason": "",
-        "fix": "",
+        "fix": "Re-run `luxarch --emit hooks > <scratch>/install_hooks.py`, then `python3 <scratch>/install_hooks.py`. It overwrites `.claude/hooks/` from the pinned image and merges the wiring, so this is the whole fix whatever the drift \u2014 a hand-edit, a hook the set has since gained, or a retired one still sitting there. NEVER hand-edit a hook to clear this: the next re-emit discards the edit, and the whole point of emitting them is that every repo runs the byte-identical set. If a hook is WRONG for your repo, escalate it \u2014 a local edit fixes it for one repo and leaves the other thirty broken.",
         "example": ""
       },
       {
@@ -2993,20 +2993,20 @@
       }
     ],
     "summary": {
-      "PASS": 73,
-      "FAIL": 0,
+      "PASS": 71,
+      "FAIL": 2,
       "XFAIL": 0,
       "XPASS": 0,
       "INERT": 1
     }
   },
   "summary": {
-    "PASS": 246,
-    "FAIL": 1,
+    "PASS": 245,
+    "FAIL": 2,
     "XFAIL": 0,
     "XPASS": 0,
     "INERT": 22
   },
-  "commit": "fa842b2e6a0ba8df9b78375261006530e851a88f",
-  "generated_at": "2026-11-09T04:21:04Z"
+  "commit": "07351ae8194340f7dbd6d667415c9cb01e5e8f45",
+  "generated_at": "2026-11-09T04:46:11Z"
 }
