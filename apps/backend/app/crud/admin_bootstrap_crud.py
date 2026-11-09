@@ -30,6 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 # isort: split
 # --- EDIT THIS: your user model. The fleet home is app/models/user_model.py, class User.
 from sqlalchemy import update
+from sqlalchemy.orm.attributes import flag_modified
 
 from app.core.datetime_utils import utc_now
 from app.models.api_token_model import ApiToken
@@ -73,6 +74,12 @@ def _store_password(
     user.failed_login_attempts = 0
     user.locked_until = None
     user.password_changed_at = utc_now()
+    # Both are written whatever the read said. `user` was read without a lock, and
+    # a sign-in locking the account in between commits a lock that read never saw:
+    # a flush of only the changed columns would leave `locked_until` standing. The
+    # UPDATE waits on that sign-in's row lock (`_end_sessions`) and then clears it.
+    flag_modified(user, "failed_login_attempts")
+    flag_modified(user, "locked_until")
 
 
 # --- EDIT THIS: end every session this user holds (FLEET-AUTH-SESSION-STANDARD §2.1 and §2.5). The

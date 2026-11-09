@@ -346,7 +346,11 @@ class UserCoreService:
         Raises:
             UserNotFoundException: No user has the id.
         """
-        user = await self.get_user_by_id(db, user_id)
+        # Read fresh and row-locked: a sign-in that is locking the account holds
+        # the row, so this waits for its commit and clears the lock it wrote. A
+        # plain read saw `locked_until` as None, and the flush, writing only what
+        # changed from that read, left the lock standing.
+        user = await UserCRUD.get_by_id_for_update(db, user_id)
         if not user:
             raise UserNotFoundException(user_id)
 

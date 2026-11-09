@@ -167,9 +167,10 @@ class UserCRUD:
     @staticmethod
     async def get_by_id_for_update(db: AsyncSession, user_id: UUID) -> User | None:
         """The user, re-read and row-locked until the transaction ends, for a
-        password change: a sign-in for the account (which locks the same row)
-        waits for the change to commit and then checks the new hash, so it
-        cannot open a session the change's session purge misses."""
+        password change or an unlock: a sign-in for the account (which locks the
+        same row) waits for the change to commit and then checks the new hash, so
+        it cannot open a session the change's session purge misses; and a change
+        that waited on a locking sign-in reads the lock that sign-in wrote."""
         result = await db.execute(
             select(User)
             .where(User.id == user_id)
