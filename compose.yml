@@ -18,6 +18,38 @@
 
 name: luxswirl
 
+# ── the agent's environment: an explicit list, never the server's env_file ──
+# Synthetic checks run admin-written Python inside the agent, so the agent must
+# hold none of the server's secrets (SECURITY__FIELD_ENCRYPTION_KEY, SECRET_KEY,
+# DATABASE__URL, ...). It reads only the variables below; add one here, in
+# .env.<env>, to give it to the agent. Each is read from .env.<env> by
+# interpolation and nothing else from that file reaches the container.
+x-agent-environment: &agent-environment
+  LUXSWIRL_AGENT_ID: ${LUXSWIRL_AGENT_ID:-docker-agent}
+  LOG__LEVEL: ${LOG__LEVEL:-INFO}
+  LOG_FORMAT: ${LOG_FORMAT:-json}
+  LOG_MODULE_LEVELS: ${LOG_MODULE_LEVELS:-}
+  # Testing only (SECURITY.md): "true" lets the agent use plain HTTP to a public
+  # server, or store its credentials unencrypted. Unset, both stay off.
+  LUXSWIRL_ALLOW_INSECURE_HTTP: ${LUXSWIRL_ALLOW_INSECURE_HTTP:-}
+  LUXSWIRL_DISABLE_CREDENTIAL_ENCRYPTION: ${LUXSWIRL_DISABLE_CREDENTIAL_ENCRYPTION:-}
+
+# ── the agent's container hardening (SECURITY.md, "Recommended deployment
+# hardening"). It limits what a synthetic check's script can do to the node:
+# no Linux capabilities (ping uses an unprivileged ICMP socket, which needs
+# none), no privilege gain through setuid binaries, an immutable image
+# filesystem with only /tmp, the log directory, the reports store and the data
+# volume writable, and a memory and process ceiling, tunable per node.
+x-agent-hardening: &agent-hardening
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  read_only: true
+  tmpfs:
+    - /tmp
+    - /app/logs:uid=1000,gid=1000,mode=0700
+  mem_limit: ${AGENT_MEM_LIMIT:-1g}
+  pids_limit: ${AGENT_PIDS_LIMIT:-1024}
+
 services:
   timescaledb:
     image: timescale/timescaledb:latest-pg16
@@ -88,16 +120,19 @@ services:
     # environment file already does, and a conditional flag cannot live in a
     # command list without passing an empty argument.
     command: ["python", "-m", "app.main"]
+    <<: *agent-hardening
     volumes:
       - ./data/${DATA_DIR:-.}/agent:/app/data
+      # The pending-report store and checks cache: a volume, so the offline
+      # queue outlives a recreated container (and the root filesystem is read-only).
+      - luxswirl_agent_reports:/app/reports
+    # No env_file: see x-agent-environment above.
     environment:
-      - LUXSWIRL_AGENT_ID=${LUXSWIRL_AGENT_ID:-docker-agent}
+      <<: *agent-environment
       # Required: generate via Settings → Registration Keys in the server UI
       # after first login, then set this value in .env.<env>.
-      - LUXSWIRL_AUTH_KEY=${LUXSWIRL_AUTH_KEY:?must be set — generate via server UI after first admin login}
-      - LUXSWIRL_SERVER_URL=http://luxswirl_server${STACK_SUFFIX:-}:9000
-    env_file:
-      - .env.${ENV:?set ENV in .env.<env> — it names the file to load}
+      LUXSWIRL_AUTH_KEY: ${LUXSWIRL_AUTH_KEY:?must be set — generate via server UI after first admin login}
+      LUXSWIRL_SERVER_URL: http://luxswirl_server${STACK_SUFFIX:-}:9000
     restart: unless-stopped
     oom_score_adj: -500
     networks:
@@ -138,18 +173,22 @@ services:
     container_name: luxswirl_agent
     hostname: luxswirl_agent
     command: ["python", "-m", "app.main"]
+    # On the host network the node's own net.ipv4.ping_group_range decides
+    # whether ping works without capabilities (SECURITY.md).
+    <<: *agent-hardening
     volumes:
       - ./data/agent:/app/data:rw
-    env_file:
-      - .env.${ENV:?set ENV in .env.<env> — it names the file to load}
+      - luxswirl_agent_reports:/app/reports
+    # No env_file: see x-agent-environment above.
     environment:
-      - LUXSWIRL_AUTH_KEY=${LUXSWIRL_AUTH_KEY:?must be set — generate via server UI}
+      <<: *agent-environment
+      LUXSWIRL_AUTH_KEY: ${LUXSWIRL_AUTH_KEY:?must be set — generate via server UI}
       # The remote server's address, from this node's .env.<env>. It cannot be
       # a required `:?` variable: compose interpolates every service in the
       # file, so a required value here would break `up` for the dev, prod and
       # test invocations that never start this profile. Left unset, it reaches
       # the agent empty and the agent refuses to start, naming the variable.
-      - LUXSWIRL_SERVER_URL=${LUXSWIRL_SERVER_URL:-}
+      LUXSWIRL_SERVER_URL: ${LUXSWIRL_SERVER_URL:-}
     network_mode: host
     restart: always
     oom_score_adj: -500
@@ -262,6 +301,8 @@ volumes:
     # ${VOLUME_PREFIX} gives the sandbox its own database; `down -v` there
     # removes only that volume and leaves dev's untouched.
     name: luxswirl_${VOLUME_PREFIX:-}db_data
+  luxswirl_agent_reports:
+    name: luxswirl_${VOLUME_PREFIX:-}agent_reports
 
 networks:
   luxswirl-network:

@@ -187,6 +187,7 @@ Available check types (in `apps/agent/app/checks/`):
 - **AST Validation**: Scripts validated to block obvious attacks (eval, exec, os, subprocess, etc.)
 - **Security Audit Logging**: All operations logged with `SECURITY AUDIT` prefix
 - **UI Warning Banner**: Prominent security warning displayed when creating/editing
+- **Container containment**: `compose.yml` runs both agent services with `cap_drop: [ALL]`, `no-new-privileges`, a read-only root (tmpfs `/tmp` and `/app/logs`, volumes `/app/data` and `/app/reports`), `mem_limit`/`pids_limit` (`AGENT_MEM_LIMIT`, `AGENT_PIDS_LIMIT`), and an explicit `environment:` list (`x-agent-environment`) with no `env_file`, so no server secret (`SECURITY__FIELD_ENCRYPTION_KEY`, `SECRET_KEY`, `DATABASE__URL`) reaches a script. SECURITY.md, "Recommended deployment hardening"
 - **Trusted Environments Only**: Designed for self-hosted, single-organization deployments
 - **NOT Multi-Tenant Safe**: v1.0 requires Kubernetes pod isolation for managed SaaS
 - See `SECURITY.md` for complete security model and threat analysis

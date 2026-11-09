@@ -26,6 +26,16 @@ services:
     network_mode: host  # Recommended for stability
     restart: unless-stopped
 
+    # Container hardening: see SECURITY.md, "Recommended deployment hardening"
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /app/logs:uid=1000,gid=1000,mode=0700
+    mem_limit: 1g
+    pids_limit: 1024
+
     environment:
       # Required: the server's address, with no path
       # (HTTPS for external servers, HTTP allowed for internal)
@@ -39,17 +49,21 @@ services:
       # LUXSWIRL_AGENT_ID: "prod-web-01"
 
       # Optional: logging level
-      # LOG_LEVEL: "INFO"
+      # LOG__LEVEL: "INFO"
 
     volumes:
       # Persistent credential storage
       - agent_data:/app/data
+      # Pending reports and the checks cache (survive a recreated container)
+      - agent_reports:/app/reports
 
       # Optional: Docker socket for container checks
       # - /var/run/docker.sock:/var/run/docker.sock:ro
 
 volumes:
   agent_data:
+    driver: local
+  agent_reports:
     driver: local
 ```
 
@@ -229,17 +243,19 @@ volumes:
 | `LUXSWIRL_SERVER_URL`                    | **Yes**  | `http://luxswirl_server:9000` | The server's address, with no path (HTTPS for external servers) |
 | `LUXSWIRL_AUTH_KEY`                      | **Yes**  | -                             | Registration key from server (agent will not start without it)  |
 | `LUXSWIRL_AGENT_ID`                      | No       | `<hostname>-agent`            | Agent id / display name                                         |
-| `LOG_LEVEL`                              | No       | `DEBUG`                       | Logging level (`DEBUG`, `INFO`, `WARNING`, `ERROR`)             |
+| `LOG__LEVEL`                             | No       | `INFO`                        | Logging level (`DEBUG`, `INFO`, `WARNING`, `ERROR`)             |
+| `LOG_FORMAT`                             | No       | `json`                        | `text` for plain log lines                                      |
 | `LUXSWIRL_DISABLE_CREDENTIAL_ENCRYPTION` | No       | `false`                       | Disable credential encryption (testing only)                    |
 | `LUXSWIRL_ALLOW_INSECURE_HTTP`           | No       | `false`                       | Allow HTTP for external servers (testing only)                  |
 
 ### Volume Mounts
 
-| Path                   | Purpose                       | Required |
-| ---------------------- | ----------------------------- | -------- |
-| `/app/data`            | Persistent credential storage | **Yes**  |
-| `/var/run/docker.sock` | Docker container monitoring   | Optional |
-| Custom config files    | Future use                    | Optional |
+| Path                   | Purpose                       | Required                       |
+| ---------------------- | ----------------------------- | ------------------------------ |
+| `/app/data`            | Persistent credential storage | **Yes**                        |
+| `/app/reports`         | Pending reports, checks cache | **Yes** with `read_only: true` |
+| `/var/run/docker.sock` | Docker container monitoring   | Optional                       |
+| Custom config files    | Future use                    | Optional                       |
 
 ### Networking Requirements
 
@@ -603,33 +619,20 @@ volumes:
 
 ### 7. Keep the Registration Key out of the Image
 
-Pass `LUXSWIRL_AUTH_KEY` via an environment file or your orchestrator's secret store rather than hard-coding it in the compose file:
+Pass `LUXSWIRL_AUTH_KEY` from an environment file you do not commit, or from your orchestrator's secret store, rather than writing it into the compose file. Name each variable the agent gets in `environment:`, read by interpolation, and never load a server's environment file into the agent (`env_file:`): that file holds the server's field-encryption key, session secret and database password, and a synthetic check's script can read its own process environment.
 
 ```yaml
-# Read LUXSWIRL_AUTH_KEY (and others) from a .env file kept out of git.
+# docker compose --env-file .env.agent up -d   (.env.agent holds only agent values)
 services:
   luxswirl_agent:
-    env_file:
-      - .env
+    environment:
+      LUXSWIRL_SERVER_URL: ${LUXSWIRL_SERVER_URL}
+      LUXSWIRL_AUTH_KEY: ${LUXSWIRL_AUTH_KEY}
 ```
 
-### 8. Resource Limits
+### 8. Container Hardening and Resource Limits
 
-```yaml
-services:
-  luxswirl_agent:
-    image: ghcr.io/luxardolabs/luxswirl-agent:2026.09.0
-    container_name: luxswirl_agent
-
-    deploy:
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 256M
-        reservations:
-          cpus: '0.1'
-          memory: 64M
-```
+Run the agent with no capabilities, a read-only root filesystem and a memory and process ceiling, as the Quick Start file does. [SECURITY.md, "Recommended deployment hardening"](../../SECURITY.md#recommended-deployment-hardening) explains each setting. Playwright and Chromium need up to about 1 GB; raise `mem_limit` and `pids_limit` for an agent with many concurrent or synthetic checks.
 
 ## Advanced Configuration
 

@@ -67,6 +67,7 @@ Synthetic checks execute arbitrary Python code. Administrators can run any code 
 - AST validation (blocks obvious attacks) — hardening, **not** the access control.
 - Audit logging
 - UI warning banner
+- Containment on the agent host: the shipped `compose.yml` runs the agent with no Linux capabilities, a read-only root filesystem and memory and process limits, and gives it none of the server's secrets. See [Recommended deployment hardening](#recommended-deployment-hardening).
 
 **Authorization model**: Synthetic checks are created and edited only through the web UI, which enforces the user's RBAC role (`viewer`/`editor`/`admin`). The JSON API's agent protocol (`/api/v1/agent`) offers no route that creates or edits checks.
 
@@ -160,11 +161,48 @@ ______________________________________________________________________
 
 ### For Deployments
 
+- ✅ Run the agent with the [recommended hardening](#recommended-deployment-hardening)
+- ✅ Give the agent only its own variables, never the server's environment file
 - ✅ Use Docker secrets for credentials
 - ✅ Restrict database to localhost
 - ✅ Enable PostgreSQL SSL (if remote database)
 - ✅ Regular backups
 - ✅ Keep LuxSwirl updated
+
+### Recommended deployment hardening
+
+A synthetic check runs an admin's Python in the agent container. The trust model above accepts that; these settings limit what such a script, or any compromise of the agent, can reach on the host. The shipped `compose.yml` applies all of them to both agent services (`luxswirl_agent` and the `standalone-agent` profile), and an agent compose file of your own should carry the same block:
+
+```yaml
+services:
+  luxswirl_agent:
+    image: ghcr.io/luxardolabs/luxswirl-agent:2026.09.0
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /app/logs:uid=1000,gid=1000,mode=0700
+    mem_limit: 1g
+    pids_limit: 1024
+    volumes:
+      - agent_data:/app/data
+      - agent_reports:/app/reports
+    environment:
+      LUXSWIRL_SERVER_URL: "https://luxswirl.example.com:9000"
+      LUXSWIRL_AUTH_KEY: "${LUXSWIRL_AUTH_KEY}"
+```
+
+| Setting                                | What it does                                                                                                                                                                                                                                                                                                                                                        |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `cap_drop: [ALL]`                      | The agent holds no Linux capabilities. It needs none: Chromium runs with `--no-sandbox`, and `ping` uses an unprivileged ICMP socket. Docker allows that on a bridge network (`net.ipv4.ping_group_range`); with `network_mode: host` the host's own value applies, so check it covers the agent's group (`sysctl net.ipv4.ping_group_range`, e.g. `0 2147483647`). |
+| `no-new-privileges:true`               | No process in the container gains privileges through a setuid or file-capability binary.                                                                                                                                                                                                                                                                            |
+| `read_only: true` + `tmpfs`            | The image filesystem is immutable, so nothing can persist a change to the agent's code. Writable: `/tmp` (Chromium's profile, sockets and traces), `/app/logs`, and the two volumes.                                                                                                                                                                                |
+| `/app/data` and `/app/reports` volumes | `/app/data` holds the agent's encrypted credentials and liveness stamp; `/app/reports` holds the pending-report store and the checks cache, so the offline queue outlives a recreated container.                                                                                                                                                                    |
+| `mem_limit`, `pids_limit`              | A runaway script cannot exhaust the host's memory or fork without bound. Raise them for a large agent (many concurrent checks, long synthetic traces); the shipped file reads `AGENT_MEM_LIMIT` and `AGENT_PIDS_LIMIT` from `.env.<env>`.                                                                                                                           |
+| `environment:` list, no `env_file`     | The agent receives only the variables it reads. Never hand it the server's environment file: that file holds `SECURITY__FIELD_ENCRYPTION_KEY`, `SECRET_KEY` and the database password, which a synthetic script could read from its own process environment.                                                                                                        |
+
+The agent's credential and checks-cache encryption keys derive from the hostname and machine-id, which are not secret: the volumes are protected by the host's file permissions, not by that encryption.
 
 ______________________________________________________________________
 
