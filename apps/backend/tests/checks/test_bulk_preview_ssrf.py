@@ -1,6 +1,6 @@
 """The bulk preview fetches from the server, so it is held to the SSRF settings: a
-blocked address gets no connection (and a private one none either, with 127.0.0.1
-standing in for a public host here), a name is pinned to the address it was vetted on,
+blocked address gets no connection (and a private one none either, so a local
+server here answers for a public address), a name is pinned to the address it was vetted on,
 a redirect is reported and not followed, and one request's cost is bounded.
 
 Every connection here goes to a local server or is refused before it opens.
@@ -33,7 +33,10 @@ from app.main import app
 from app.services.core import check_preview_core_service
 from app.services.core.auth_core_service import AuthCoreService
 from app.services.core.check_core_service import CheckCoreService
-from app.services.core.check_preview_core_service import CheckPreviewCoreService
+from app.services.core.check_preview_core_service import (
+    NOT_PROBED_PRIVATE,
+    CheckPreviewCoreService,
+)
 from app.services.core.settings_core_service import SettingsCoreService
 from app.shared.ssrf_http import VettedBackend, VettedTransport
 from cryptography import x509
@@ -47,6 +50,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 pytestmark = pytest.mark.integration
 
 METADATA = "169.254.169.254"
+# A public (documentation) address the local servers answer for.
+PUBLIC = "192.0.2.80"
 OK = b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
 
 
@@ -83,15 +88,18 @@ async def _ok(writer: asyncio.StreamWriter) -> None:
 
 
 @pytest.fixture(autouse=True)
-def loopback_stands_in_for_a_public_host(monkeypatch: pytest.MonkeyPatch) -> None:
+def public_address_reaches_the_local_server(monkeypatch: pytest.MonkeyPatch) -> None:
     """The preview never probes a private address (test_bulk_preview_private.py), so
-    the local servers here stand in for public hosts: 127.0.0.1 is probed as one."""
-    real = check_preview_core_service._probed_from_server
-    monkeypatch.setattr(
-        check_preview_core_service,
-        "_probed_from_server",
-        lambda ip: ip == "127.0.0.1" or real(ip),
-    )
+    the local servers here answer for PUBLIC: a socket opened on it lands on
+    127.0.0.1. Only the network, the app's boundary, is faked."""
+    real = httpcore.AnyIOBackend.connect_tcp
+
+    async def redirect(self: Any, host: str, *args: Any, **kwargs: Any) -> Any:
+        return await real(
+            self, "127.0.0.1" if host == PUBLIC else host, *args, **kwargs
+        )
+
+    monkeypatch.setattr(httpcore.AnyIOBackend, "connect_tcp", redirect)
 
 
 @pytest.fixture
@@ -183,11 +191,12 @@ async def test_a_private_address_follows_the_setting(
         await _block_private_networks(db)
         refused = await _row(db, url)
 
-    assert (allowed["validation_status"], allowed["status_code"]) == ("success", 200)
+    assert allowed["validation_status"] == "unknown"
+    assert allowed["validation_message"] == NOT_PROBED_PRIVATE
     assert refused["validation_status"] == "error"
     assert "blocked" in refused["validation_message"]
-    assert len(local.requests) == 1
-    assert opened == ["127.0.0.1"]
+    assert local.requests == []
+    assert opened == []
 
 
 async def test_a_name_that_rebinds_after_the_check_gets_no_connection(
@@ -206,12 +215,12 @@ async def test_a_name_is_dialed_on_its_vetted_address_and_keeps_its_host_header(
     db: AsyncSession, answers: dict[str, list[list[str]]], opened: list[str]
 ) -> None:
     local = await _serve(_ok)
-    answers["pi.hole"] = [["127.0.0.1"]]
+    answers["pi.hole"] = [[PUBLIC]]
     async with local.server:
         row = await _row(db, f"http://pi.hole:{local.port}/")
 
     assert row["status_code"] == 200
-    assert opened == ["127.0.0.1"]
+    assert opened == [PUBLIC]
     assert f"host: pi.hole:{local.port}".encode() in local.requests[0].lower()
 
 
@@ -240,10 +249,10 @@ async def test_a_redirect_is_reported_and_not_followed(
 
     local = await _serve(redirect)
     async with local.server:
-        row = await _row(db, f"http://127.0.0.1:{local.port}/")
+        row = await _row(db, f"http://{PUBLIC}:{local.port}/")
 
     assert row["status_code"] == 302
-    assert opened == ["127.0.0.1"]
+    assert opened == [PUBLIC]
 
 
 async def test_the_status_is_read_without_waiting_for_the_body(
@@ -260,7 +269,7 @@ async def test_the_status_is_read_without_waiting_for_the_body(
     started = time.monotonic()
     async with local.server:
         row = await asyncio.wait_for(
-            _row(db, f"http://127.0.0.1:{local.port}/"), timeout=4
+            _row(db, f"http://{PUBLIC}:{local.port}/"), timeout=4
         )
         elapsed = time.monotonic() - started
 
@@ -283,7 +292,7 @@ async def test_a_response_head_that_never_ends_meets_the_deadline(
     local = await _serve(trickle)
     async with local.server:
         row = await asyncio.wait_for(
-            _row(db, f"http://127.0.0.1:{local.port}/"), timeout=4
+            _row(db, f"http://{PUBLIC}:{local.port}/"), timeout=4
         )
 
     assert row["validation_status"] == "error"
@@ -346,7 +355,7 @@ async def test_probes_run_a_bounded_number_at_once(
     local = await _serve(held)
     async with local.server:
         rows = await CheckPreviewCoreService.bulk_preview_checks(
-            db, [f"http://127.0.0.1:{local.port}/{i}" for i in range(12)]
+            db, [f"http://{PUBLIC}:{local.port}/{i}" for i in range(12)]
         )
 
     assert [row["status_code"] for row in rows] == [200] * 12
@@ -405,7 +414,7 @@ async def test_what_a_service_sends_never_reaches_the_row(
 
     local = await _serve(service)
     async with local.server:
-        row = await _row(db, f"http://127.0.0.1:{local.port}/")
+        row = await _row(db, f"http://{PUBLIC}:{local.port}/")
 
     assert row["validation_status"] == "error"
     assert row["validation_message"] == "The target did not answer HTTP"
@@ -456,7 +465,7 @@ async def test_a_self_signed_target_gets_the_certificate_warning(
     server = await asyncio.start_server(handle, "127.0.0.1", 0, ssl=_self_signed())
     port = server.sockets[0].getsockname()[1]
     async with server:
-        row = await _row(db, f"https://127.0.0.1:{port}/")
+        row = await _row(db, f"https://{PUBLIC}:{port}/")
 
     assert row["validation_status"] == "warning"
     assert "verify_ssl=False" in row["validation_message"]
@@ -473,7 +482,7 @@ async def test_https_to_a_port_speaking_plain_http_is_a_failed_handshake(
     server = await asyncio.start_server(plain, "127.0.0.1", 0)
     port = server.sockets[0].getsockname()[1]
     async with server:
-        row = await _row(db, f"https://127.0.0.1:{port}/")
+        row = await _row(db, f"https://{PUBLIC}:{port}/")
 
     assert (row["validation_status"], row["validation_message"]) == (
         "error",
@@ -497,7 +506,7 @@ async def test_a_port_that_refuses_is_a_failed_connection(db: AsyncSession) -> N
     server.close()
     await server.wait_closed()
 
-    row = await _row(db, f"http://127.0.0.1:{port}/")
+    row = await _row(db, f"http://{PUBLIC}:{port}/")
 
     assert row["validation_message"] == "Connection failed"
 
@@ -517,7 +526,7 @@ async def test_a_dead_first_address_leaves_time_for_the_next(
         return await real(self, host, *args, **kwargs)
 
     monkeypatch.setattr(httpcore.AnyIOBackend, "connect_tcp", black_hole)
-    answers["dual.test"] = [["203.0.113.9", "127.0.0.1"]]
+    answers["dual.test"] = [["203.0.113.9", PUBLIC]]
     async with local.server:
         row = await _row(db, f"http://dual.test:{local.port}/")
 
@@ -629,7 +638,7 @@ async def test_a_slow_tls_handshake_on_the_only_address_gets_its_answer(
     server = await asyncio.start_server(slow, "127.0.0.1", 0)
     port = server.sockets[0].getsockname()[1]
     async with server:
-        row = await _row(db, f"https://127.0.0.1:{port}/")
+        row = await _row(db, f"https://{PUBLIC}:{port}/")
 
     assert row["validation_status"] == "warning", row
 
@@ -648,7 +657,7 @@ async def test_a_slow_connect_on_the_only_address_gets_its_answer(
 
     monkeypatch.setattr(httpcore.AnyIOBackend, "connect_tcp", slow)
     async with local.server:
-        row = await _row(db, f"http://127.0.0.1:{local.port}/")
+        row = await _row(db, f"http://{PUBLIC}:{local.port}/")
 
     assert row["status_code"] == 200, row
 
@@ -674,7 +683,7 @@ async def test_a_reset_connection_is_a_failed_connection(db: AsyncSession) -> No
 
     local = await _serve(reset)
     async with local.server:
-        row = await _row(db, f"http://127.0.0.1:{local.port}/")
+        row = await _row(db, f"http://{PUBLIC}:{local.port}/")
 
     assert row["validation_message"] == "Connection failed"
 

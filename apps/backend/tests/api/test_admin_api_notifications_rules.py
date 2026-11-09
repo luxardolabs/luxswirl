@@ -11,16 +11,14 @@
 from __future__ import annotations
 
 import asyncio
-import types
 from collections.abc import AsyncIterator
 
-import httpx
+import httpcore
 import pytest
 import pytest_asyncio
 from app.core.config import settings
 from app.core.rate_limit import limiter
 from app.main import app
-from app.notifications.providers import homeassistant as ha_mod
 from app.notifications.providers.base import NotificationContext
 from app.schemas.api_token_schema import ApiTokenCreate
 from app.services.core.api_token_core_service import ApiTokenCoreService
@@ -135,27 +133,16 @@ async def test_metadata_url_refused(
 async def test_ha_test_route_posts_to_metadata(
     db: AsyncSession, client: AsyncClient, monkeypatch
 ) -> None:
+    """A stored provider whose URL is the metadata address opens no socket: the
+    vetted transport refuses it, and only the network is faked here."""
     editor = await _as(db, "editor")
-    seen: list[str] = []
+    opened: list[str] = []
 
-    def handler(request: httpx.Request) -> httpx.Response:
-        seen.append(str(request.url))
-        return httpx.Response(200)
+    async def no_network(self, host: str, *args, **kwargs):
+        opened.append(host)
+        raise httpcore.ConnectError("no network in this test")
 
-    transport = httpx.MockTransport(handler)
-
-    def make_client(**kwargs):
-        kwargs.pop("verify", None)
-        kwargs.pop("transport", None)  # the vetted transport: a mock answers instead
-        return httpx.AsyncClient(transport=transport, **kwargs)
-
-    monkeypatch.setattr(
-        ha_mod,
-        "httpx",
-        types.SimpleNamespace(
-            AsyncClient=make_client, HTTPStatusError=httpx.HTTPStatusError
-        ),
-    )
+    monkeypatch.setattr(httpcore.AnyIOBackend, "connect_tcp", no_network)
     provider = make_notification_provider(
         provider_type="homeassistant",
         config={"post_url": "http://169.254.169.254/api/webhook/x"},
@@ -164,7 +151,8 @@ async def test_ha_test_route_posts_to_metadata(
     await db.flush()
     resp = await client.post(f"{PROVIDERS}/{provider.id}/test", headers=editor)
     assert resp.status_code == 200, resp.text
-    assert seen == [], f"request reached {seen}; response {resp.json()}"
+    assert opened == [], f"a socket opened on {opened}; response {resp.json()}"
+    assert "blocked cloud metadata" in resp.text
 
 
 # ── 4. a header value echoed into the viewer-readable log ───────────────────
