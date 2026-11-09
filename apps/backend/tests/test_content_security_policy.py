@@ -32,10 +32,15 @@ _UNUSED_VENDORED = WEB_TEMPLATES / "icons" / "weather"
 # An HTML event-handler attribute (onclick=, onchange=, onsubmit=, ...).
 _HANDLER = re.compile(r"""(?<![\w:-])on[a-z]+\s*=\s*["']""", re.IGNORECASE)
 _JS_URL = re.compile(r"""(?:href|src|action)\s*=\s*["']\s*javascript:""", re.I)
-# A style attribute or a style element in markup. Jinja is stripped first, so a
-# macro's `style='primary'` argument is not markup.
-_INLINE_STYLE = re.compile(r"""(?<![\w:.-])style\s*=|<style[\s>]""", re.IGNORECASE)
+# A style attribute (Alpine's `:style` / `x-bind:style` too, which a string value
+# sets with setAttribute) or a style element in markup. Jinja is stripped first,
+# so a macro's `style='primary'` argument is not markup.
+_INLINE_STYLE = re.compile(r"""(?<![\w.-])style\s*=|<style[\s>]""", re.IGNORECASE)
 _JINJA = re.compile(r"\{\{.*?\}\}|\{%.*?%\}|\{#.*?#\}", re.DOTALL)
+# Inside a Jinja expression, markup arrives as a string literal: `'style="…"'`
+# through `| safe` or `extra_attrs`, or a `'style'` key through `| xmlattr`.
+_LITERAL = re.compile(r"""'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*\"""", re.DOTALL)
+_STYLE_KEY = re.compile(r"""\s*:""")
 
 
 @pytest_asyncio.fixture
@@ -56,6 +61,28 @@ def _sources(policy: str, name: str) -> list[str]:
 
 def _markup(text: str) -> str:
     return _JINJA.sub("", text)
+
+
+def _jinja_styles(text: str) -> list[str]:
+    """Each string literal in a Jinja expression that writes a style: one holding
+    a style attribute or element, or a `'style'` mapping key."""
+    found = []
+    for expression in _JINJA.finditer(text):
+        source = expression.group(0)
+        for literal in _LITERAL.finditer(source):
+            body = literal.group(0)[1:-1]
+            if (
+                _INLINE_STYLE.search(body)
+                or body.lower() == "style"
+                and _STYLE_KEY.match(source, literal.end())
+            ):
+                found.append(literal.group(0))
+    return found
+
+
+def _inline_styles(text: str) -> list[str]:
+    markup = [m.group(0) for m in _INLINE_STYLE.finditer(_markup(text))]
+    return markup + _jinja_styles(text)
 
 
 def _web_templates() -> list[Path]:
@@ -97,9 +124,9 @@ def test_no_template_carries_an_inline_handler_or_a_javascript_url() -> None:
 @pytest.mark.unit
 def test_no_web_template_carries_an_inline_style() -> None:
     found = [
-        f"{path.relative_to(TEMPLATES)}: {match.group(0)}"
+        f"{path.relative_to(TEMPLATES)}: {style}"
         for path in _web_templates()
-        for match in _INLINE_STYLE.finditer(_markup(path.read_text()))
+        for style in _inline_styles(path.read_text())
     ]
 
     assert found == []
@@ -129,12 +156,21 @@ def test_htmx_is_told_not_to_inject_its_indicator_style(layout: str) -> None:
         ("{% macro text_btn(label, style='primary') %}", False),
         ('<stop offset="0" stop-color="red"/>', False),
         ('<div class="x" data-style="y">', False),
+        # Alpine sets a string binding with setAttribute('style', ...).
+        ("""<div :style="'width: 40%'">""", True),
+        ("""<div x-bind:style="'display: none'">""", True),
+        # Markup a Jinja expression writes.
+        ("""<div {{ 'style="color:red"' | safe }}>""", True),
+        ("""<div {{ {'style': 'color:red'} | xmlattr }}>""", True),
+        ("""{{ text_btn(svg, 'Go', extra_attrs='style="x"') }}""", True),
+        ("""{{ text_btn(svg, 'Go', attrs={"style": "x"}) }}""", True),
+        ("""{% if style == 'primary' %}""", False),
     ],
 )
 def test_the_scan_tells_inline_style_from_a_macro_argument(
     text: str, flagged: bool
 ) -> None:
-    assert bool(_INLINE_STYLE.search(_markup(text))) is flagged
+    assert bool(_inline_styles(text)) is flagged
 
 
 @pytest.mark.unit
