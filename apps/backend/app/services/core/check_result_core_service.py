@@ -2,7 +2,6 @@
 CheckResult service - business logic for check result operations and analytics.
 """
 
-import json
 from datetime import datetime
 from typing import Any
 from uuid import UUID
@@ -25,6 +24,7 @@ from app.schemas.check_result_schema import (
     CheckResultCreate,
     RecentCheckResult,
     StatusBarResult,
+    metrics_json,
 )
 from app.schemas.check_schema import CheckStatusInfo
 from app.services.core.agent_assignment_core_service import AgentAssignmentCoreService
@@ -235,10 +235,11 @@ class CheckResultCoreService:
                     )
                     metrics_dict["response"]["ssl_certificate"] = computed_cert
 
-                # Convert metrics to JSON if present
-                metrics_json = None
+                # Convert metrics to JSON if present: the form the schema's
+                # metrics limit measured.
+                stored_metrics = None
                 if metrics_dict:
-                    metrics_json = json.dumps(metrics_dict)
+                    stored_metrics = metrics_json(metrics_dict)
 
                 # Use agent's UUID if provided, otherwise generate one (fallback)
                 result_id = None
@@ -283,7 +284,7 @@ class CheckResultCoreService:
                             if hasattr(check_data, "http_response_time_ms")
                             else None
                         ),
-                        "metrics": metrics_json,
+                        "metrics": stored_metrics,
                         "response_data": (
                             check_data.response_data
                             if hasattr(check_data, "response_data")

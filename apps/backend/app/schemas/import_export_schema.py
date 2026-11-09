@@ -11,7 +11,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.models.enum_model import CheckType
-from app.schemas.base_schema import StorableText, TagList
+from app.schemas.base_schema import EncryptedText, StorableText, TagList
 from app.schemas.check_schema import DnsRecordTypeField, HttpMethodField
 
 # The settings an entry may leave out, kept as they are when it does: an export
@@ -42,12 +42,12 @@ class CheckExport(BaseModel):
 
     name: StorableText
     check_type: CheckType
-    target: StorableText
+    target: EncryptedText
     interval: int = Field(default=60, description="Interval in seconds")
     timeout: int = Field(default=5, description="Timeout in seconds")
     retry_attempts: int = Field(default=2, description="Number of retry attempts")
     enabled: bool = Field(default=True, description="Whether check is enabled")
-    description: StorableText | None = None
+    description: StorableText | None = Field(default=None, max_length=1000)
     http_method: HttpMethodField = None
     expected_status: int | None = None
     json_path: StorableText | None = None
@@ -68,7 +68,7 @@ class CheckExport(BaseModel):
     expect_value: StorableText | None = Field(
         default=None, description="Expected DNS answer"
     )
-    connection_string: StorableText | None = Field(
+    connection_string: EncryptedText | None = Field(
         default=None, description="Database connection string (mysql, postgres)"
     )
     query: StorableText | None = Field(

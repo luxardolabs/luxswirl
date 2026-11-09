@@ -12,16 +12,20 @@ from pydantic import Field, field_validator
 from app.models.enum_model import CheckErrorType, CheckType
 from app.schemas.base_schema import BaseSchema, StorableJson, StorableText
 
-# A result's metrics, measured as compact JSON (`metrics_size`). The agent fits
-# what it sends to this (`apps/agent/app/agent/result_limits.py`).
+# A result's metrics, measured as the JSON text that is stored (`metrics_json`).
+# The agent fits what it sends to this (`apps/agent/app/agent/result_limits.py`).
 MAX_METRICS_CHARS = 65535
 
 
+def metrics_json(metrics: dict[str, Any]) -> str:
+    """`metrics` as the result row stores it: compact JSON, characters as they are
+    (an escaped emoji would take 12 characters), so the limit measures the row."""
+    return json.dumps(metrics, separators=(",", ":"), ensure_ascii=False, default=str)
+
+
 def metrics_size(metrics: dict[str, Any]) -> int:
-    """The characters `metrics` takes as compact JSON."""
-    return len(
-        json.dumps(metrics, separators=(",", ":"), ensure_ascii=False, default=str)
-    )
+    """The characters `metrics` takes stored."""
+    return len(metrics_json(metrics))
 
 
 class CheckResultBase(BaseSchema):

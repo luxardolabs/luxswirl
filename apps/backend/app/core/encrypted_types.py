@@ -133,6 +133,19 @@ def encrypt_for_storage(plaintext: str) -> str:
     return _configured_fernet().encrypt(plaintext.encode()).decode()
 
 
+def encrypted_length(plaintext: str) -> int:
+    """The characters the Fernet token for ``plaintext`` takes in its column.
+
+    A token is version (1) + timestamp (8) + IV (16) + the UTF-8 bytes padded to
+    the next 16-byte block + HMAC (32), base64 encoded with padding. So a column
+    holding N characters stores fewer plaintext BYTES than N, and a character
+    limit alone lets a non-ASCII value reach the column too long.
+    """
+    padded = 16 * (len(plaintext.encode()) // 16 + 1)
+    token_bytes = 1 + 8 + 16 + padded + 32
+    return 4 * -(-token_bytes // 3)
+
+
 def _json_container(raw: str) -> JsonContainer | None:
     """The JSON object or array in ``raw``; None for invalid JSON or a bare value."""
     try:

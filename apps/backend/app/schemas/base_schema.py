@@ -18,6 +18,7 @@ from pydantic import (
 )
 
 from app.core.datetime_utils import utc_now
+from app.core.encrypted_types import encrypted_length
 from app.core.storable_text import storable_text
 
 # Control (C0, DEL, C1), format (bidi overrides, zero-width), and line and
@@ -114,6 +115,30 @@ def storable_json[T](value: T) -> T:
 StorableText = Annotated[str, AfterValidator(refuse_unstorable_text)]
 """Text an input sets that may hold any character a column can store: a
 password, a script, a URL. Text a person reads is PlainText or NoteText."""
+
+# The characters each encrypted check column holds (`EncryptedString(1000)` on
+# `checks.target` and `checks.connection_string_encrypted`): the Fernet token,
+# not the plaintext.
+ENCRYPTED_COLUMN_CHARS = 1000
+
+
+def fits_encrypted_column(value: str) -> str:
+    """Refuse a value whose encrypted form the column cannot hold (a character
+    limit lets a non-ASCII value through: 400 Cyrillic letters are 800 bytes)."""
+    if encrypted_length(value) > ENCRYPTED_COLUMN_CHARS:
+        raise ValueError(
+            "is too long to store encrypted: at most 687 bytes as UTF-8 "
+            "(687 ASCII characters, fewer of other scripts)"
+        )
+    return value
+
+
+EncryptedText = Annotated[
+    str,
+    AfterValidator(refuse_unstorable_text),
+    AfterValidator(fits_encrypted_column),
+]
+"""StorableText that is stored encrypted: its token must fit the column."""
 
 PlainText = Annotated[str, AfterValidator(refuse_control_chars)]
 """Free text an input sets on one line: a name, a hostname, a version."""

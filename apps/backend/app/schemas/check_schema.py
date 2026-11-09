@@ -20,6 +20,7 @@ from app.models.enum_model import (
 from app.schemas.agent_schema import AgentOption
 from app.schemas.base_schema import (
     BaseSchema,
+    EncryptedText,
     StorableJson,
     StorableText,
     TagList,
@@ -43,7 +44,7 @@ class CheckBase(BaseSchema):
     )
     # CheckType IS the validation — bad value is a 422, no hand-maintained list.
     check_type: CheckType = Field(..., description="Type of check")
-    target: StorableText = Field(
+    target: EncryptedText = Field(
         ..., min_length=1, max_length=512, description="Check target"
     )
     description: StorableText | None = Field(
@@ -120,7 +121,7 @@ class CheckCreate(CheckBase):
     expect_value: StorableText | None = Field(
         None, max_length=500, description="Expected DNS value"
     )
-    connection_string: StorableText | None = Field(
+    connection_string: EncryptedText | None = Field(
         None, max_length=1000, description="Database connection string"
     )
     query: StorableText | None = Field(None, max_length=5000, description="SQL query")
@@ -155,7 +156,7 @@ class CheckUpdate(BaseSchema):
     check_type: CheckType | None = None
     # The create limits: past them the column refuses the value as a database
     # error (the target is stored encrypted, which makes it longer).
-    target: StorableText | None = Field(None, min_length=1, max_length=512)
+    target: EncryptedText | None = Field(None, min_length=1, max_length=512)
     description: StorableText | None = Field(None, max_length=1000)
     interval_seconds: int | None = Field(None, gt=0, le=86400)
     timeout_seconds: int | None = Field(None, gt=0, le=300)
@@ -182,7 +183,7 @@ class CheckUpdate(BaseSchema):
     nameserver: StorableText | None = Field(None, max_length=255)
     port: int | None = Field(None, ge=1, le=65535)
     expect_value: StorableText | None = Field(None, max_length=500)
-    connection_string: StorableText | None = Field(None, max_length=1000)
+    connection_string: EncryptedText | None = Field(None, max_length=1000)
     query: StorableText | None = Field(None, max_length=5000)
     depends_on_check_id: UUID | None = Field(
         None,
@@ -313,7 +314,7 @@ class CheckListResponse(BaseSchema):
 class BulkCheckCreateRequest(BaseSchema):
     """Schema for bulk check creation request (single item)."""
 
-    url: StorableText = Field(
+    url: EncryptedText = Field(
         ..., min_length=1, max_length=512, description="URL or target to check"
     )
     display_name: StorableText | None = Field(
