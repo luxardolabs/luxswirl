@@ -46,6 +46,8 @@ CLOUD_METADATA_NETWORKS = [
     ipaddress.ip_network("100.100.100.200/32"),  # Alibaba Cloud metadata
     ipaddress.ip_network("192.0.0.192/32"),  # Oracle Cloud (Classic) metadata
     ipaddress.ip_network("168.63.129.16/32"),  # Azure WireServer (VM agent channel)
+    ipaddress.ip_network("fd20:ce::254/128"),  # Google Compute Engine metadata, IPv6
+    ipaddress.ip_network("fd00:a9fe:a9fe::1/128"),  # Akamai / Linode Metadata API, IPv6
 ]
 
 # Private and internal networks — where most self-hosted targets live, and the

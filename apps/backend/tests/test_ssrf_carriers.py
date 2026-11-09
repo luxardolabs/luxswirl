@@ -88,9 +88,11 @@ def test_the_local_use_nat64_prefix_is_private() -> None:
         "168.63.129.16",  # Azure's WireServer: the VM agent's platform channel
         "::ffff:168.63.129.16",
         "::ffff:0:192.0.0.192",
+        "fd20:ce::254",  # Google Compute Engine's metadata server over IPv6
+        "fd00:a9fe:a9fe::1",  # Akamai / Linode's Metadata API over IPv6
     ],
 )
-def test_the_oracle_and_azure_metadata_addresses_are_refused(ip: str) -> None:
+def test_each_cloud_providers_metadata_address_is_refused(ip: str) -> None:
     with pytest.raises(SsrfBlockedError, match="cloud metadata"):
         assert_ip_allowed(ip)
 
@@ -117,6 +119,8 @@ def test_the_metadata_addresses_neighbours_are_allowed(ip: str) -> None:
         "64:ff9b:1::/48",
         "192.0.0.192/32",
         "168.63.129.0/24",
+        "fd20:ce::200/120",  # its ::254 is hex: ::200-::2ff
+        "fd00:a9fe:a9fe::/120",
     ],
 )
 def test_a_network_carrying_a_metadata_address_overlaps_it(network: str) -> None:

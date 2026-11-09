@@ -7,6 +7,7 @@ row says the agent will test it.
 """
 
 import asyncio
+import ipaddress
 import ssl
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
@@ -62,10 +63,16 @@ class PrivateTargetError(Exception):
 
 
 def _probed_from_server(ip: str) -> bool:
-    """Whether the preview may connect to `ip` from the server: a public address,
-    outside every range either SSRF setting names."""
+    """Whether the preview may connect to `ip` from the server: a globally routable
+    address (benchmarking, reserved and other special-purpose ranges are not), outside
+    every range either SSRF setting names."""
+    try:
+        is_global = ipaddress.ip_address(ip).is_global
+    except ValueError:
+        return False
     return (
-        blocked_range(ip, block_cloud_metadata=True, block_private_networks=True)
+        is_global
+        and blocked_range(ip, block_cloud_metadata=True, block_private_networks=True)
         is None
     )
 

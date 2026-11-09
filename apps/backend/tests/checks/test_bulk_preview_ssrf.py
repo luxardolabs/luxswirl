@@ -50,8 +50,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 pytestmark = pytest.mark.integration
 
 METADATA = "169.254.169.254"
-# A public (documentation) address the local servers answer for.
-PUBLIC = "192.0.2.80"
+# A global address the local servers answer for: no socket here reaches it.
+PUBLIC = "1.2.3.4"
 OK = b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
 
 
@@ -520,13 +520,13 @@ async def test_a_dead_first_address_leaves_time_for_the_next(
     real = httpcore.AnyIOBackend.connect_tcp
 
     async def black_hole(self: Any, host: str, *args: Any, **kwargs: Any) -> Any:
-        if host == "203.0.113.9":
+        if host == "1.2.3.5":
             await asyncio.sleep(kwargs.get("timeout") or 5)
             raise httpcore.ConnectTimeout("no answer")
         return await real(self, host, *args, **kwargs)
 
     monkeypatch.setattr(httpcore.AnyIOBackend, "connect_tcp", black_hole)
-    answers["dual.test"] = [["203.0.113.9", PUBLIC]]
+    answers["dual.test"] = [["1.2.3.5", PUBLIC]]
     async with local.server:
         row = await _row(db, f"http://dual.test:{local.port}/")
 

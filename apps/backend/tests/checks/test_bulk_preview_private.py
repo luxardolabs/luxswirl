@@ -111,6 +111,12 @@ async def test_a_loopback_listener_gets_no_connection(db: AsyncSession) -> None:
         "http://[::ffff:10.0.0.5]/",
         "http://localhost:9000/",
         "https://db.internal/",
+        # Not global, though in neither setting's list: benchmarking, reserved,
+        # IETF protocol assignments, IPv6 discard.
+        "http://198.18.0.1/",
+        "http://240.0.0.1/",
+        "http://192.0.0.8/",
+        "http://[100::1]/",
     ],
 )
 async def test_a_private_address_gets_no_connection(
@@ -143,11 +149,11 @@ async def test_link_local_gets_no_connection_with_metadata_blocking_off(
 async def test_a_name_with_a_public_and_a_private_address_is_probed_on_the_public(
     db: AsyncSession, answers: dict[str, list[str]], opened: list[str]
 ) -> None:
-    answers["dual.test"] = ["10.0.0.5", "192.0.2.10"]
+    answers["dual.test"] = ["10.0.0.5", "1.2.3.4"]
 
     await _row(db, "http://dual.test/")
 
-    assert opened == ["192.0.2.10"]
+    assert opened == ["1.2.3.4"]
 
 
 async def test_private_networks_blocked_still_says_blocked(
