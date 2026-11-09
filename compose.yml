@@ -47,8 +47,8 @@ x-agent-hardening: &agent-hardening
   tmpfs:
     - /tmp
     - /app/logs:uid=1000,gid=1000,mode=0700
-  mem_limit: ${AGENT_MEM_LIMIT:-1g}
-  pids_limit: ${AGENT_PIDS_LIMIT:-1024}
+  mem_limit: ${AGENT_MEM_LIMIT:-4g}
+  pids_limit: ${AGENT_PIDS_LIMIT:-4096}
 
 services:
   timescaledb:

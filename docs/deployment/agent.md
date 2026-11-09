@@ -33,8 +33,8 @@ services:
     tmpfs:
       - /tmp
       - /app/logs:uid=1000,gid=1000,mode=0700
-    mem_limit: 1g
-    pids_limit: 1024
+    mem_limit: 4g
+    pids_limit: 4096
 
     environment:
       # Required: the server's address, with no path
@@ -632,7 +632,7 @@ services:
 
 ### 8. Container Hardening and Resource Limits
 
-Run the agent with no capabilities, a read-only root filesystem and a memory and process ceiling, as the Quick Start file does. [SECURITY.md, "Recommended deployment hardening"](../../SECURITY.md#recommended-deployment-hardening) explains each setting. Playwright and Chromium need up to about 1 GB; raise `mem_limit` and `pids_limit` for an agent with many concurrent or synthetic checks.
+Run the agent with no capabilities, a read-only root filesystem and a memory and process ceiling, as the Quick Start file does. [SECURITY.md, "Recommended deployment hardening"](../../SECURITY.md#recommended-deployment-hardening) explains each setting. Each synthetic check running at once takes about 200 MB and 80 processes (Chromium), so `4g` and `4096` hold about 15; 200 concurrent pings need about 110 MB. Raise both for an agent that runs more synthetic checks at once: past the memory limit, Chromium is OOM-killed and those checks fail.
 
 ## Advanced Configuration
 

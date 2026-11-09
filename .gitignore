@@ -8,7 +8,8 @@ data/
 *_credentials.json
 # An agent's runtime store (checks cache, pending reports): its encrypted
 # check configs can hold credentials, and its key is not secret.
-reports/
+/reports/
+apps/*/reports/
 checks_cache.json
 secret_key
 api_token
