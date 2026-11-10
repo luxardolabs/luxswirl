@@ -7,7 +7,7 @@ import contextlib
 import socket
 from typing import Any
 
-from app.checks._lookups import run_blocking
+from app.checks._lookups import LookupTimeoutError, run_blocking
 from app.checks._ssrf_policy import assert_ip_allowed, ip_allowed
 from app.checks.base import BaseCheck
 from app.shared.logger import get_logger
@@ -117,6 +117,11 @@ class TCPCheck(BaseCheck):
                 success = True
                 break
 
+            except LookupTimeoutError as e:
+                # Named as the lookup it is, and not retried: a retry would wait
+                # on the same slow lookup again.
+                error = f"Could not resolve host: {host} ({e})"
+                break
             except TimeoutError:
                 error = f"Connection timed out after {timeout}s"
                 continue

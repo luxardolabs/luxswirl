@@ -14,8 +14,11 @@ from typing import Any
 import httpcore
 import httpx
 
-from app.checks._lookups import TARGET_LOOKUPS
-from app.checks._ssrf_policy import allowed_addresses, block_private_networks
+from app.checks._ssrf_policy import (
+    allowed_addresses,
+    block_private_networks,
+    lookup_allowed_addresses,
+)
 from app.shared import ssrf_http
 
 
@@ -30,7 +33,7 @@ class VettedTransport(ssrf_http.VettedTransport):
         self._retired: list[httpcore.AsyncConnectionPool] = []
         self._policy = block_private_networks()
         super().__init__(
-            verify=verify, allowed=allowed_addresses, lookups=TARGET_LOOKUPS
+            verify=verify, allowed=allowed_addresses, lookup=lookup_allowed_addresses
         )
 
     async def handle_async_request(self, request: httpx.Request) -> httpx.Response:

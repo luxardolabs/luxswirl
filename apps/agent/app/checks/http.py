@@ -2,6 +2,7 @@
 HTTP Check Module - Implements HTTP/HTTPS health checks.
 """
 
+import asyncio
 import re
 import socket
 import ssl
@@ -15,7 +16,7 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.utils import CryptographyDeprecationWarning
 
 from app.agent.http_client import check_client
-from app.checks._lookups import LOOKUP_SECONDS, run_blocking
+from app.checks._lookups import run_blocking
 from app.checks._ssrf_http import ssrf_guarded_send
 from app.checks._ssrf_policy import allowed_addresses
 from app.checks.base import BaseCheck
@@ -49,9 +50,49 @@ class HTTPCheck(BaseCheck):
     async def run(self) -> dict[str, Any]:
         """Execute the HTTP health check.
 
+        An HTTPS target's certificate is read alongside the request, on the
+        checks' lookup pool (it resolves and connects with blocking sockets), and
+        only within the check's own time: a probe that is late leaves the result
+        without certificate details, never fails it.
+
         Returns:
             A dictionary containing the check result
         """
+        target = self.config["target"]
+        timeout = self.config.get("timeout", 3)
+        probe = None
+        if target.startswith("https://"):
+            probe = asyncio.create_task(
+                run_blocking(
+                    self._get_ssl_certificate_info, target, timeout, seconds=timeout
+                )
+            )
+        try:
+            return await self._request(probe)
+        finally:
+            if probe is not None:
+                if not probe.done():
+                    probe.cancel()
+                elif not probe.cancelled():
+                    probe.exception()  # read, so a late failure is not logged as lost
+
+    @staticmethod
+    async def _certificate_within(
+        probe: asyncio.Task[dict[str, Any] | None] | None, seconds: float
+    ) -> dict[str, Any] | None:
+        """The probe's certificate details if it finishes within `seconds`, else None."""
+        if probe is None:
+            return None
+        if seconds > 0:
+            await asyncio.wait({probe}, timeout=seconds)
+        if not probe.done() or probe.cancelled() or probe.exception() is not None:
+            return None
+        return probe.result()
+
+    async def _request(
+        self, probe: asyncio.Task[dict[str, Any] | None] | None
+    ) -> dict[str, Any]:
+        """The request, its retries and validation; `probe` is the certificate read."""
         cfg = self.config
         target = cfg["target"]
         method = cfg.get("method", "GET")
@@ -157,12 +198,8 @@ class HTTPCheck(BaseCheck):
         )
 
         # Get SSL certificate info for HTTPS targets
-        ssl_info = await run_blocking(
-            self._get_ssl_certificate_info,
-            target,
-            timeout,
-            seconds=LOOKUP_SECONDS + timeout,
-        )
+        # What is left of the attempt's own timeout (latency is in milliseconds).
+        ssl_info = await self._certificate_within(probe, timeout - latency / 1000)
         if ssl_info:
             response_data["ssl_certificate"] = ssl_info
 

@@ -144,7 +144,10 @@ async def test_a_lookup_is_bounded(
     result = await PingCheck(_cfg("ping")).run()
     assert time.monotonic() - begun < SLOW_SECONDS
     assert result["success"] is False
-    assert result["error"] == f"Could not resolve host: {SLOW} (it took over 0.2 s)"
+    assert (
+        result["error"]
+        == f"Could not resolve host: {SLOW} (the name lookup took over 0.2 s)"
+    )
 
 
 async def test_a_timed_out_lookup_is_the_checks_failed_result(
@@ -162,4 +165,4 @@ async def test_a_timed_out_lookup_is_the_checks_failed_result(
     )
     result, _ = await executor._run(_slow_check("dns"), timeout=5, longest=0)
     assert result["success"] is False
-    assert result["error"] == "Name lookup timed out: it took over 0.2 s"
+    assert result["error"] == "the name lookup took over 0.2 s"

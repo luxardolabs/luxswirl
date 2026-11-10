@@ -113,7 +113,13 @@ async def lookup_allowed_addresses(host: str) -> list[str]:
         SsrfBlockedError: It resolves, and every address is blocked.
         LookupTimeoutError: The lookup took over `LOOKUP_SECONDS`.
     """
-    return await run_blocking(_allowed_under, host, block_private_networks())
+    addresses = await run_blocking(_allowed_under, host, block_private_networks())
+    # Judged again under the policy as it is now: the server can change it while
+    # the name resolves.
+    allowed = [address for address in addresses if ip_allowed(address)]
+    if addresses and not allowed:
+        assert_ip_allowed(addresses[0])
+    return allowed
 
 
 def _allowed_under(host: str, block_private: bool) -> list[str]:

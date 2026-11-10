@@ -163,7 +163,7 @@ class CheckExecutor:
                 "Check target lookup timed out",
                 extra={"check_name": check.name, "reason": str(e)},
             )
-            result = self._failure(check, f"Name lookup timed out: {e}")
+            result = self._failure(check, str(e))
         except SsrfBlockedError as e:
             # The policy refusing the target is the check's result, not a fault:
             # the refusal itself is already logged, with the address and range.

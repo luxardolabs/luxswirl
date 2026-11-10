@@ -256,6 +256,7 @@ The agent includes several reliability features in `agent/core.py`:
 - **Watchdog**: Monitors result processing and forces flush if stalled
 - **Graceful shutdown**: Handles SIGTERM/SIGINT, processes remaining results before exit
 - **Per-check intervals**: Each check can have its own interval, independent of global setting
+- **Target lookups on their own pool** (`apps/agent/app/checks/_lookups.py`): every check's name lookup, and the http check's certificate probe, runs on threads only checks use, never on the event loop or its default executor (where the heartbeat and reporter resolve the server). Each is bounded to `LOOKUP_SECONDS` (10 s; past it, the check's failed result), and a lookup in flight for a host is shared, so a site whose DNS goes slow never stalls the rest of the agent
 
 ## Common Commands
 

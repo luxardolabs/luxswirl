@@ -13,7 +13,7 @@ and httpx reads no proxy from the environment for a client given a transport.
 import asyncio
 import contextvars
 import ssl
-from collections.abc import Callable, Iterable
+from collections.abc import Awaitable, Callable, Iterable
 from concurrent.futures import Executor
 from typing import Any
 
@@ -22,6 +22,8 @@ import httpcore
 import httpx
 
 AllowedAddresses = Callable[[str], list[str]]
+# The same, as a coroutine that runs the lookup where it chooses.
+AllowedAddressesLookup = Callable[[str], Awaitable[list[str]]]
 
 # How a `VettedBackend`'s ConnectError opens when the host has no address.
 NO_ADDRESS = "Could not resolve host"
@@ -65,8 +67,9 @@ class VettedBackend(httpcore.AsyncNetworkBackend):
     """Opens each TCP connection on an address `allowed` returns for its host.
 
     Raises what `allowed` raises when it refuses the host (`shared.ssrf.SsrfBlockedError`)
-    and ``httpcore.ConnectError`` when the host has no address. A lookup runs on
-    `lookups`, or on the loop's default executor. Each address but the last gets at most
+    and ``httpcore.ConnectError`` when the host has no address. A lookup is
+    `lookup`, awaited, when one is given; else `allowed` runs on `lookups`, or on the
+    loop's default executor. Each address but the last gets at most
     `address_seconds`, so a dead one leaves time for the next.
     """
 
@@ -75,10 +78,12 @@ class VettedBackend(httpcore.AsyncNetworkBackend):
         allowed: AllowedAddresses,
         lookups: Executor | None = None,
         address_seconds: float | None = None,
+        lookup: AllowedAddressesLookup | None = None,
     ) -> None:
         self._allowed = allowed
         self._lookups = lookups
         self._address_seconds = address_seconds
+        self._lookup = lookup
         self._backend = httpcore.AnyIOBackend()
 
     async def connect_tcp(
@@ -89,9 +94,12 @@ class VettedBackend(httpcore.AsyncNetworkBackend):
         local_address: str | None = None,
         socket_options: Iterable[Any] | None = None,
     ) -> httpcore.AsyncNetworkStream:
-        addresses = await asyncio.get_running_loop().run_in_executor(
-            self._lookups, contextvars.copy_context().run, self._allowed, host
-        )
+        if self._lookup is not None:
+            addresses = await self._lookup(host)
+        else:
+            addresses = await asyncio.get_running_loop().run_in_executor(
+                self._lookups, contextvars.copy_context().run, self._allowed, host
+            )
         last: Exception = httpcore.ConnectError(f"{NO_ADDRESS}: {host}")
         # Each allowed address in the resolver's order, as a client given the
         # name would: a dual-stack host with a dead IPv6 route answers on IPv4.
@@ -138,12 +146,14 @@ class VettedTransport(httpx.AsyncHTTPTransport):
         allowed: AllowedAddresses,
         lookups: Executor | None = None,
         address_seconds: float | None = None,
+        lookup: AllowedAddressesLookup | None = None,
     ) -> None:
         super().__init__(verify=verify)
         self._verify = verify
         self._allowed = allowed
         self._lookups = lookups
         self._address_seconds = address_seconds
+        self._lookup = lookup
         self._pool = self._new_pool()
 
     def _new_pool(self) -> httpcore.AsyncConnectionPool:
@@ -153,6 +163,6 @@ class VettedTransport(httpx.AsyncHTTPTransport):
             max_keepalive_connections=20,
             keepalive_expiry=5.0,
             network_backend=VettedBackend(
-                self._allowed, self._lookups, self._address_seconds
+                self._allowed, self._lookups, self._address_seconds, self._lookup
             ),
         )

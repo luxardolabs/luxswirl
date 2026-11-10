@@ -8,18 +8,23 @@ site's lookups. So every check runs its lookups (and the certificate probe, whic
 resolves and connects with blocking sockets) here, on threads only checks use, and
 waits for one at most its `seconds`. A call already running with the same function
 and arguments is shared by every caller that asks meanwhile, so a slow site holds
-one thread, not one per check.
+one thread per kind of lookup, not one per check.
+
+Stated limit: past `LOOKUP_WORKERS` distinct slow calls at once, a further call
+queues, and its wait counts toward its `seconds`.
 """
 
 import asyncio
 import contextvars
+import threading
 from collections.abc import Callable, Hashable
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor
 from typing import Any
 
 # Threads for checks' blocking calls. A thread runs on after its caller stops waiting
-# (a thread cannot be cancelled), so there are enough for many slow sites at once.
-LOOKUP_WORKERS = 64
+# (a thread cannot be cancelled), so there are enough for many slow sites at once;
+# each is one pid of the agent container's `pids_limit`.
+LOOKUP_WORKERS = 128
 
 # How long a check waits for one lookup.
 LOOKUP_SECONDS = 10.0
@@ -28,11 +33,35 @@ TARGET_LOOKUPS = ThreadPoolExecutor(
     max_workers=LOOKUP_WORKERS, thread_name_prefix="target-lookup"
 )
 
-_in_flight: dict[tuple[Any, ...], asyncio.Future[Any]] = {}
+# The calls running now, by function and arguments. Read and written from the
+# loop and from pool threads, so under the lock.
+_in_flight: dict[tuple[Any, ...], Future[Any]] = {}
+_in_flight_lock = threading.Lock()
 
 
 class LookupTimeoutError(OSError):
     """A blocking call on the lookup pool did not finish within its time."""
+
+
+def _shared_call(fn: Callable[..., Any], args: tuple[Hashable, ...]) -> Future[Any]:
+    """The pool's future for `fn(*args)`: the one running, else a new one."""
+    key = (fn, args)
+    with _in_flight_lock:
+        running = _in_flight.get(key)
+        if running is not None:
+            return running
+        call = TARGET_LOOKUPS.submit(contextvars.copy_context().run, fn, *args)
+        _in_flight[key] = call
+
+    def _forget(done: Future[Any]) -> None:
+        # In the pool's thread: no event loop is needed, so a call that outlives
+        # the loop that asked for it is still forgotten.
+        with _in_flight_lock:
+            if _in_flight.get(key) is done:
+                del _in_flight[key]
+
+    call.add_done_callback(_forget)
+    return call
 
 
 async def run_blocking[T](
@@ -41,6 +70,10 @@ async def run_blocking[T](
     """`fn(*args)` on the lookup pool, waited for at most `seconds`
     (`LOOKUP_SECONDS` when none is given).
 
+    Each caller waits on a future of its own, fed from the shared call, so a caller
+    that stops waiting (its time is up, or its check is cancelled) leaves the call
+    and every other caller as they were.
+
     Raises:
         LookupTimeoutError: It did not finish in time (it runs on, and a caller
             asking for the same call meanwhile waits on it).
@@ -48,23 +81,27 @@ async def run_blocking[T](
     """
     wait = LOOKUP_SECONDS if seconds is None else seconds
     loop = asyncio.get_running_loop()
-    key = (loop, fn, args)
-    future = _in_flight.get(key)
-    if future is None:
-        future = loop.run_in_executor(
-            TARGET_LOOKUPS, contextvars.copy_context().run, fn, *args
-        )
-        _in_flight[key] = future
+    mine: asyncio.Future[T] = loop.create_future()
 
-        def _forget(done: asyncio.Future[Any]) -> None:
-            if _in_flight.get(key) is done:
-                del _in_flight[key]
-            # Read here, so a failure no caller waited for is not logged as lost.
-            if not done.cancelled():
-                done.exception()
+    def _settle(call: Future[Any]) -> None:
+        if mine.done():
+            return
+        error = call.exception()
+        if error is not None:
+            mine.set_exception(error)
+        else:
+            mine.set_result(call.result())
 
-        future.add_done_callback(_forget)
+    def _hand_over(call: Future[Any]) -> None:
+        # In the pool's thread, or here when the call had already finished.
+        try:
+            loop.call_soon_threadsafe(_settle, call)
+        # swallowed-exceptions: the loop has closed, so no caller is left to tell.
+        except RuntimeError:
+            return
+
+    _shared_call(fn, args).add_done_callback(_hand_over)
     try:
-        return await asyncio.wait_for(asyncio.shield(future), wait)
+        return await asyncio.wait_for(mine, wait)
     except TimeoutError:
-        raise LookupTimeoutError(f"it took over {wait:g} s") from None
+        raise LookupTimeoutError(f"the name lookup took over {wait:g} s") from None
