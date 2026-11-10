@@ -15,6 +15,7 @@ from uuid_extensions import uuid7
 from app.core.datetime_utils import utc_now
 from app.core.exceptions import AgentNotFoundException
 from app.core.ssl_expiry import ssl_expiry_fields
+from app.crud.check_crud import CheckCRUD
 from app.crud.check_result_crud import (
     AggregateRow,
     CheckResultCRUD,
@@ -173,13 +174,14 @@ class CheckResultCoreService:
         # lock throughout, timing out the agent's own heartbeat behind it. The
         # heartbeat owns last_seen and the run id.
 
-        results_processed = 0
         results_failed = 0
-        check_display_names = []
+        check_display_names: list[str] = []
 
         # Batch process: collect all check definitions and results
 
         rows_to_insert: list[dict[str, Any]] = []
+        # Each row's display name, in the same order.
+        row_display_names: list[str] = []
 
         # The checks this agent may report: its manual checks, the replicate
         # checks it is selected for, and the distribute checks whose pool it is in.
@@ -299,8 +301,7 @@ class CheckResultCoreService:
                     }
                 )
 
-                results_processed += 1
-                check_display_names.append(display_name)
+                row_display_names.append(display_name)
 
             except Exception:
                 logger.exception("Error processing check result")
@@ -312,10 +313,34 @@ class CheckResultCoreService:
         # are the ones we post-process for metrics + alerts (a retried duplicate
         # must not re-fire either). (TimescaleDB >= 2.11 inserts into compressed
         # chunks transparently, so late data no longer rejects.)
+        # The checks the rows reference, locked as the insert's own foreign key
+        # check locks them: a check deleted after the report read it costs its
+        # own results, never the report, and a delete now waits for this one.
+        present = await CheckCRUD.key_share_existing(
+            db, [row["check_id"] for row in rows_to_insert]
+        )
+        kept_rows: list[dict[str, Any]] = []
+        for row, name in zip(rows_to_insert, row_display_names, strict=True):
+            if row["check_id"] in present:
+                kept_rows.append(row)
+                check_display_names.append(name)
+        dropped = len(rows_to_insert) - len(kept_rows)
+        if dropped:
+            results_failed += dropped
+            logger.warning(
+                "Results for checks deleted while the report was in flight - skipping them",
+                extra={
+                    "results_skipped": dropped,
+                    "agent_name": agent.agent_name,
+                    "agent_id": str(agent_id),
+                },
+            )
+        results_processed = len(kept_rows)
+
         inserted_results: list[CheckResult] = []
-        if rows_to_insert:
+        if kept_rows:
             inserted_results = await CheckResultCRUD.bulk_insert_idempotent(
-                db, rows_to_insert
+                db, kept_rows
             )
 
         logger.info(

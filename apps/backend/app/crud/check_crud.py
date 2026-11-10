@@ -79,6 +79,26 @@ class CheckCRUD:
         await db.refresh(check, ["agent"])
 
     @staticmethod
+    async def key_share_existing(
+        db: AsyncSession, check_ids: Sequence[UUID]
+    ) -> set[UUID]:
+        """Those of `check_ids` whose check still exists, each locked FOR KEY SHARE
+        to the transaction's end.
+
+        It is the lock an insert of a row referencing the check takes: a delete of
+        one of them waits for this transaction, and a check deleted before this
+        read is left out, so its results are not inserted against a missing row.
+        """
+        if not check_ids:
+            return set()
+        rows = await db.scalars(
+            select(Check.id)
+            .where(Check.id.in_(set(check_ids)))
+            .with_for_update(read=True, key_share=True)
+        )
+        return set(rows)
+
+    @staticmethod
     async def delete_check(db: AsyncSession, check: Check) -> None:
         """Delete the check and its alert mappings.
 
