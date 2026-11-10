@@ -13,6 +13,7 @@ from app.checks._lookups import LookupTimeoutError, run_blocking
 from app.checks.base import CheckConfigError
 from app.shared import ssrf
 from app.shared.logger import get_logger
+from app.shared.ssrf import SsrfBlockedError
 
 logger = get_logger("luxswirl.security.ssrf")
 
@@ -80,10 +81,23 @@ async def target_allowed(target: str, *, database: bool = False) -> None:
     while judged_under != (policy := block_private_networks()):
         try:
             await run_blocking(_target_allowed_under, target, database, policy)
+        except SsrfBlockedError:
+            if block_private_networks() != policy:
+                continue  # refused under a policy that has since changed
+            raise
         except LookupTimeoutError as e:
-            hosts = ", ".join(ssrf.extract_hosts(target, database=database))
-            raise LookupTimeoutError(f"Could not resolve host: {hosts} ({e})") from None
+            raise LookupTimeoutError(
+                f"Could not resolve host: {_named_hosts(target, database)} ({e})"
+            ) from None
         judged_under = policy
+
+
+def _named_hosts(target: str, database: bool) -> str:
+    """The hosts `target` names, for a message; the target itself if none can be read."""
+    try:
+        return ", ".join(ssrf.extract_hosts(target, database=database)) or target
+    except ssrf.UnallowableTargetError:
+        return target
 
 
 def _target_allowed_under(target: str, database: bool, block_private: bool) -> None:
@@ -120,10 +134,17 @@ async def lookup_allowed_addresses(host: str) -> list[str]:
         SsrfBlockedError: It resolves, and every address is blocked.
         LookupTimeoutError: The lookup took over `LOOKUP_SECONDS`; it names `host`.
     """
-    try:
-        addresses = await run_blocking(_allowed_under, host, block_private_networks())
-    except LookupTimeoutError as e:
-        raise LookupTimeoutError(f"Could not resolve host: {host} ({e})") from None
+    while True:
+        policy = block_private_networks()
+        try:
+            addresses = await run_blocking(_allowed_under, host, policy)
+        except SsrfBlockedError:
+            if block_private_networks() != policy:
+                continue  # refused under a policy that has since changed
+            raise
+        except LookupTimeoutError as e:
+            raise LookupTimeoutError(f"Could not resolve host: {host} ({e})") from None
+        break
     # Judged again under the policy as it is now: the server can change it while
     # the name resolves.
     allowed = [address for address in addresses if ip_allowed(address)]

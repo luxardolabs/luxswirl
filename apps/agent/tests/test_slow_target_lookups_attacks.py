@@ -99,7 +99,11 @@ def _https_check(
         return httpx.Response(200, request=httpx.Request("GET", target))
 
     def probe(
-        hostname: str, port: int, addresses: tuple[str, ...], timeout: float
+        hostname: str,
+        port: int,
+        addresses: tuple[str, ...],
+        timeout: float,
+        deadline: float | None = None,
     ) -> dict[str, Any] | None:
         time.sleep(probe_s)  # fresh TCP + TLS on its own socket
         return {"expiration_date": "Nov 10 22:56:57 2030 GMT"}

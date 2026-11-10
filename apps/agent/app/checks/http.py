@@ -270,6 +270,8 @@ class HTTPCheck(BaseCheck):
             return None
         if not hostname:
             return None
+        # The read's thread stops at the same moment its caller does.
+        deadline = time.monotonic() + seconds
         try:
             async with asyncio.timeout(seconds):
                 addresses = await lookup_allowed_addresses(hostname)
@@ -281,6 +283,7 @@ class HTTPCheck(BaseCheck):
                     port,
                     tuple(addresses),
                     timeout,
+                    deadline,
                     seconds=seconds,
                 )
         # swallowed-exceptions: certificate details are enrichment; the result stands
@@ -289,28 +292,55 @@ class HTTPCheck(BaseCheck):
             return None
 
     @staticmethod
-    def _vetted_connection(
-        addresses: tuple[str, ...], port: int, timeout: float
-    ) -> socket.socket:
-        """A TCP connection to the first of `addresses` that answers, each judged
-        under the SSRF policy as it is when the connection opens.
+    def _seconds_left(timeout: float, deadline: float | None) -> float:
+        """`timeout`, cut to what is left before `deadline` (a `time.monotonic()`).
 
         Raises:
-            OSError: No allowed address answers.
+            TimeoutError: The deadline has passed.
+        """
+        if deadline is None:
+            return timeout
+        left = deadline - time.monotonic()
+        if left <= 0:
+            raise TimeoutError("The certificate read ran out of time")
+        return min(timeout, left)
+
+    @staticmethod
+    def _vetted_connection(
+        addresses: tuple[str, ...],
+        port: int,
+        timeout: float,
+        deadline: float | None = None,
+    ) -> socket.socket:
+        """A TCP connection to the first of `addresses` that answers, each judged
+        under the SSRF policy as it is when the connection opens, and none tried
+        past `deadline`.
+
+        Raises:
+            OSError: No allowed address answers in time.
         """
         last: OSError = OSError("No allowed address")
         for address in addresses:
             if not ip_allowed(address):
                 continue
             try:
-                return socket.create_connection((address, port), timeout=timeout)
+                return socket.create_connection(
+                    (address, port), timeout=HTTPCheck._seconds_left(timeout, deadline)
+                )
             except OSError as e:
                 last = e
+                if isinstance(e, TimeoutError) and deadline is not None:
+                    if deadline <= time.monotonic():
+                        break
         raise last
 
     @staticmethod
     def _read_certificate(
-        hostname: str, port: int, addresses: tuple[str, ...], timeout: float
+        hostname: str,
+        port: int,
+        addresses: tuple[str, ...],
+        timeout: float,
+        deadline: float | None = None,
     ) -> dict[str, Any] | None:
         """
         Read the certificate `hostname` presents on one of `addresses`. It blocks:
@@ -321,6 +351,8 @@ class HTTPCheck(BaseCheck):
             port: The TLS port
             addresses: The addresses the SSRF policy allowed for `hostname`
             timeout: Connection timeout in seconds
+            deadline: A `time.monotonic()` past which the read gives up, so its
+                thread is free when its caller stops waiting
 
         Returns:
             Dictionary with cert info or None on error
@@ -333,69 +365,75 @@ class HTTPCheck(BaseCheck):
 
             # Connect on an address the SSRF policy allows (never the name, which
             # would be resolved again), presenting the name for SNI.
-            with (
-                HTTPCheck._vetted_connection(addresses, port, timeout) as sock,
-                context.wrap_socket(sock, server_hostname=hostname) as ssock,
-            ):
-                # Get cert in binary form (works even with CERT_NONE)
-                der_cert = ssock.getpeercert(binary_form=True)
+            with HTTPCheck._vetted_connection(
+                addresses, port, timeout, deadline
+            ) as sock:
+                # The handshake gets what is left, not a fresh `timeout`.
+                sock.settimeout(HTTPCheck._seconds_left(timeout, deadline))
+                with context.wrap_socket(sock, server_hostname=hostname) as ssock:
+                    # Get cert in binary form (works even with CERT_NONE)
+                    der_cert = ssock.getpeercert(binary_form=True)
 
-                if not der_cert:
-                    return None
+                    if not der_cert:
+                        return None
 
-                # Parse the DER certificate using cryptography library
-                # Suppress warning about NULL parameters in signature (common with IPMI/BMC certs)
-                with warnings.catch_warnings():
-                    warnings.filterwarnings(
-                        "ignore", category=CryptographyDeprecationWarning
-                    )
-                    cert = x509.load_der_x509_certificate(der_cert, default_backend())
+                    # Parse the DER certificate using cryptography library
+                    # Suppress warning about NULL parameters in signature (common with IPMI/BMC certs)
+                    with warnings.catch_warnings():
+                        warnings.filterwarnings(
+                            "ignore", category=CryptographyDeprecationWarning
+                        )
+                        cert = x509.load_der_x509_certificate(
+                            der_cert, default_backend()
+                        )
 
-                # Extract expiration dates (use UTC versions)
-                not_after = cert.not_valid_after_utc
-                not_before = cert.not_valid_before_utc
+                    # Extract expiration dates (use UTC versions)
+                    not_after = cert.not_valid_after_utc
+                    not_before = cert.not_valid_before_utc
 
-                # OpenSSL's notAfter format (e.g. "Nov 10 22:56:57 2025 GMT"), the one
-                # the server's app/core/ssl_expiry.py reads first (it also reads ISO 8601)
-                expiration_date = not_after.strftime("%b %d %H:%M:%S %Y GMT")
-                valid_from = not_before.strftime("%b %d %H:%M:%S %Y GMT")
+                    # OpenSSL's notAfter format (e.g. "Nov 10 22:56:57 2025 GMT"), the one
+                    # the server's app/core/ssl_expiry.py reads first (it also reads ISO 8601)
+                    expiration_date = not_after.strftime("%b %d %H:%M:%S %Y GMT")
+                    valid_from = not_before.strftime("%b %d %H:%M:%S %Y GMT")
 
-                # Extract subject Common Name
-                subject_cn = hostname
-                try:
-                    cn_value = cert.subject.get_attributes_for_oid(
-                        x509.NameOID.COMMON_NAME
-                    )[0].value
-                    subject_cn = str(cn_value) if cn_value is not None else hostname
-                except IndexError, AttributeError:
-                    pass
-
-                # Extract issuer Organization or Common Name
-                issuer_name = "Unknown"
-                try:
-                    # Try Organization first
-                    org_value = cert.issuer.get_attributes_for_oid(
-                        x509.NameOID.ORGANIZATION_NAME
-                    )[0].value
-                    issuer_name = str(org_value) if org_value is not None else "Unknown"
-                except IndexError, AttributeError:
+                    # Extract subject Common Name
+                    subject_cn = hostname
                     try:
-                        # Fall back to Common Name
-                        cn_value = cert.issuer.get_attributes_for_oid(
+                        cn_value = cert.subject.get_attributes_for_oid(
                             x509.NameOID.COMMON_NAME
                         )[0].value
-                        issuer_name = (
-                            str(cn_value) if cn_value is not None else "Unknown"
-                        )
+                        subject_cn = str(cn_value) if cn_value is not None else hostname
                     except IndexError, AttributeError:
                         pass
 
-                return {
-                    "expiration_date": expiration_date,
-                    "valid_from": valid_from,
-                    "issuer": issuer_name,
-                    "subject": subject_cn,
-                }
+                    # Extract issuer Organization or Common Name
+                    issuer_name = "Unknown"
+                    try:
+                        # Try Organization first
+                        org_value = cert.issuer.get_attributes_for_oid(
+                            x509.NameOID.ORGANIZATION_NAME
+                        )[0].value
+                        issuer_name = (
+                            str(org_value) if org_value is not None else "Unknown"
+                        )
+                    except IndexError, AttributeError:
+                        try:
+                            # Fall back to Common Name
+                            cn_value = cert.issuer.get_attributes_for_oid(
+                                x509.NameOID.COMMON_NAME
+                            )[0].value
+                            issuer_name = (
+                                str(cn_value) if cn_value is not None else "Unknown"
+                            )
+                        except IndexError, AttributeError:
+                            pass
+
+                    return {
+                        "expiration_date": expiration_date,
+                        "valid_from": valid_from,
+                        "issuer": issuer_name,
+                        "subject": subject_cn,
+                    }
 
         # swallowed-exceptions: certificate details are enrichment — the HTTP result stands without them
         except Exception:
