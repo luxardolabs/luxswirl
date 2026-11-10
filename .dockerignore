@@ -103,10 +103,17 @@ compose*.yaml
 
 # Scripts and utilities (not needed in runtime)
 Makefile
+Makefile.local
 build.sh
 deploy.sh
 *.sh
 !docker-entrypoint.sh
+
+# The operator's own files beside the images, which no image COPYs: the reverse
+# proxy's config, local deploy configs and marketing drafts. Each can name hosts.
+nginx/
+deploy/
+marketing/
 
 # Config examples
 *.example
