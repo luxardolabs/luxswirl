@@ -88,12 +88,17 @@ class CheckCRUD:
         It is the lock an insert of a row referencing the check takes: a delete of
         one of them waits for this transaction, and a check deleted before this
         read is left out, so its results are not inserted against a missing row.
+        The rows are locked in id order, the order an agent delete removes its
+        checks in, so the two never wait on each other in a cycle. Stated limit: a
+        check whose every result turns out a duplicate (skipped by the insert)
+        stays locked to the transaction's end too.
         """
         if not check_ids:
             return set()
         rows = await db.scalars(
             select(Check.id)
             .where(Check.id.in_(set(check_ids)))
+            .order_by(Check.id)
             .with_for_update(read=True, key_share=True)
         )
         return set(rows)

@@ -15,6 +15,7 @@ from uuid_extensions import uuid7
 from app.core.datetime_utils import utc_now
 from app.core.exceptions import AgentNotFoundException
 from app.core.ssl_expiry import ssl_expiry_fields
+from app.crud.agent_crud import AgentCRUD
 from app.crud.check_crud import CheckCRUD
 from app.crud.check_result_crud import (
     AggregateRow,
@@ -313,12 +314,16 @@ class CheckResultCoreService:
         # are the ones we post-process for metrics + alerts (a retried duplicate
         # must not re-fire either). (TimescaleDB >= 2.11 inserts into compressed
         # chunks transparently, so late data no longer rejects.)
-        # The checks the rows reference, locked as the insert's own foreign key
-        # check locks them: a check deleted after the report read it costs its
-        # own results, never the report, and a delete now waits for this one.
+        # The checks the rows reference, then the agent, locked as the insert's
+        # own foreign key checks lock them and in the order an agent delete
+        # removes them: a check deleted after the report read it costs its own
+        # results, never the report; an agent deleted meanwhile is not found;
+        # and a delete arriving now waits for this report.
         present = await CheckCRUD.key_share_existing(
             db, [row["check_id"] for row in rows_to_insert]
         )
+        if rows_to_insert and not await AgentCRUD.key_share_exists(db, agent.id):
+            raise AgentNotFoundException(str(agent_id))
         kept_rows: list[dict[str, Any]] = []
         for row, name in zip(rows_to_insert, row_display_names, strict=True):
             if row["check_id"] in present:

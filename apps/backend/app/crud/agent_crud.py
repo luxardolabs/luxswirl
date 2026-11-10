@@ -121,6 +121,19 @@ class AgentCRUD:
         )
 
     @staticmethod
+    async def key_share_exists(db: AsyncSession, agent_id: UUID) -> bool:
+        """Whether the agent still exists, its row locked FOR KEY SHARE to the
+        transaction's end: the lock an insert of a row referencing it takes, so a
+        delete waits for this transaction, while the heartbeat's update of the
+        row (no key column) does not."""
+        found = await db.scalar(
+            select(Agent.id)
+            .where(Agent.id == agent_id)
+            .with_for_update(read=True, key_share=True)
+        )
+        return found is not None
+
+    @staticmethod
     async def get_by_id_with_checks(db: AsyncSession, agent_id: UUID) -> Agent | None:
         """Fetch agent by id with checks loaded."""
         result = await db.execute(
