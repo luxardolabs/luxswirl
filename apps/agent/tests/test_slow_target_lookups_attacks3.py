@@ -9,6 +9,7 @@ test drives (a TLS server, a trickling peer, or nothing).
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import datetime
 import socket
 import ssl
@@ -111,19 +112,15 @@ class Peers:
             with self.lock:
                 peers = list(self.far)
             for far in peers:
-                try:
+                with contextlib.suppress(OSError):
                     far.send(b"\x00")
-                except OSError:
-                    pass
 
     def close(self) -> None:
         self.stop.set()
         with self.lock:
             for far in self.far:
-                try:
+                with contextlib.suppress(OSError):
                     far.close()
-                except OSError:
-                    pass
 
 
 def _server_ctx(tmp_path: Any) -> ssl.SSLContext:

@@ -329,9 +329,8 @@ class HTTPCheck(BaseCheck):
                 )
             except OSError as e:
                 last = e
-                if isinstance(e, TimeoutError) and deadline is not None:
-                    if deadline <= time.monotonic():
-                        break
+                if deadline is not None and deadline <= time.monotonic():
+                    break
         raise last
 
     @staticmethod
