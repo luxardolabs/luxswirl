@@ -5,7 +5,7 @@ DNS Check Module - Implements DNS query health checks.
 from collections.abc import Iterable
 from typing import Any
 
-from app.checks._ssrf_policy import assert_target_allowed
+from app.checks._ssrf_policy import target_allowed
 from app.checks.base import BaseCheck
 from app.shared.logger import get_logger
 
@@ -93,7 +93,7 @@ class DNSCheck(BaseCheck):
 
         # SSRF: the nameserver is the host the agent actually connects to — block
         # one that resolves into a blocked range.
-        assert_target_allowed(nameserver)
+        await target_allowed(nameserver)
 
         # Try query with retries
         for _attempt in range(retries):

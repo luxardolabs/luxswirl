@@ -9,6 +9,7 @@ heartbeat, and the checks list sets it before any check first runs.
 from collections.abc import Mapping
 from typing import Any
 
+from app.checks._lookups import run_blocking
 from app.checks.base import CheckConfigError
 from app.shared import ssrf
 from app.shared.logger import get_logger
@@ -53,7 +54,8 @@ def _vet_host_name(host: str) -> None:
 def assert_target_allowed(target: str, *, database: bool = False) -> None:
     """Refuse `target` if ANY address it resolves to is in a range the policy
     blocks: for a check whose driver resolves the name itself. `database`: the
-    driver is a database's, which reads a URL with no `//` too.
+    driver is a database's, which reads a URL with no `//` too. It blocks while
+    the names resolve: a check awaits `target_allowed` instead.
 
     Raises:
         CheckConfigError: A host it names cannot be resolved as written, or a
@@ -61,6 +63,23 @@ def assert_target_allowed(target: str, *, database: bool = False) -> None:
             the check's settings are what is wrong.
         SsrfBlockedError: An address a host resolves to is blocked.
     """
+    _target_allowed_under(target, database, block_private_networks())
+
+
+async def target_allowed(target: str, *, database: bool = False) -> None:
+    """`assert_target_allowed`, its lookups on the checks' lookup pool.
+
+    Raises:
+        CheckConfigError: As `assert_target_allowed`.
+        SsrfBlockedError: As `assert_target_allowed`.
+        LookupTimeoutError: A lookup took over `LOOKUP_SECONDS`.
+    """
+    await run_blocking(
+        _target_allowed_under, target, database, block_private_networks()
+    )
+
+
+def _target_allowed_under(target: str, database: bool, block_private: bool) -> None:
     try:
         hosts = ssrf.extract_hosts(target, database=database)
     except ssrf.UnallowableTargetError as e:
@@ -70,23 +89,39 @@ def assert_target_allowed(target: str, *, database: bool = False) -> None:
     ssrf.assert_target_allowed(
         target,
         block_cloud_metadata=True,
-        block_private_networks=block_private_networks(),
+        block_private_networks=block_private,
         database=database,
     )
 
 
 def allowed_addresses(host: str) -> list[str]:
     """The addresses `host` resolves to that the policy allows, to connect to.
+    It blocks while the name resolves: run it on the lookup pool.
 
     Raises:
         CheckConfigError: `host` cannot be resolved as written.
         SsrfBlockedError: It resolves, and every address is blocked.
     """
+    return _allowed_under(host, block_private_networks())
+
+
+async def lookup_allowed_addresses(host: str) -> list[str]:
+    """`allowed_addresses`, on the checks' lookup pool.
+
+    Raises:
+        CheckConfigError: `host` cannot be resolved as written.
+        SsrfBlockedError: It resolves, and every address is blocked.
+        LookupTimeoutError: The lookup took over `LOOKUP_SECONDS`.
+    """
+    return await run_blocking(_allowed_under, host, block_private_networks())
+
+
+def _allowed_under(host: str, block_private: bool) -> list[str]:
     _vet_host_name(host)
     return ssrf.allowed_addresses(
         host,
         block_cloud_metadata=True,
-        block_private_networks=block_private_networks(),
+        block_private_networks=block_private,
     )
 
 

@@ -5,7 +5,7 @@ PostgreSQL Check Module - Implements PostgreSQL database health checks.
 from typing import Any
 from urllib.parse import urlparse
 
-from app.checks._ssrf_policy import assert_target_allowed
+from app.checks._ssrf_policy import target_allowed
 from app.checks.base import BaseCheck, CheckConfigError
 from app.shared import ssrf
 from app.shared.logger import get_logger
@@ -89,7 +89,7 @@ class PostgreSQLCheck(BaseCheck):
         database = str(parsed.path).lstrip("/") if parsed.path else "unknown"
 
         # SSRF: block a connection host that resolves into a blocked range.
-        assert_target_allowed(connection_string, database=True)
+        await target_allowed(connection_string, database=True)
 
         success = False
         connection_latency_ms = None

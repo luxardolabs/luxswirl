@@ -15,6 +15,7 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.utils import CryptographyDeprecationWarning
 
 from app.agent.http_client import check_client
+from app.checks._lookups import LOOKUP_SECONDS, run_blocking
 from app.checks._ssrf_http import ssrf_guarded_send
 from app.checks._ssrf_policy import allowed_addresses
 from app.checks.base import BaseCheck
@@ -156,7 +157,12 @@ class HTTPCheck(BaseCheck):
         )
 
         # Get SSL certificate info for HTTPS targets
-        ssl_info = self._get_ssl_certificate_info(target, timeout=timeout)
+        ssl_info = await run_blocking(
+            self._get_ssl_certificate_info,
+            target,
+            timeout,
+            seconds=LOOKUP_SECONDS + timeout,
+        )
         if ssl_info:
             response_data["ssl_certificate"] = ssl_info
 

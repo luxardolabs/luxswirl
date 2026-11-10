@@ -15,6 +15,7 @@ from typing import Any
 
 from uuid_extensions import uuid7
 
+from app.checks._lookups import LookupTimeoutError
 from app.checks.base import BaseCheck, CheckConfigError
 from app.shared.logger import get_logger
 from app.shared.ssrf import SsrfBlockedError
@@ -156,6 +157,13 @@ class CheckExecutor:
                 extra={"check_name": check.name},
             )
             result = self._failure(check, "timeout")
+        except LookupTimeoutError as e:
+            # A slow resolver is the target's failure, like an unreachable host.
+            self.logger.warning(
+                "Check target lookup timed out",
+                extra={"check_name": check.name, "reason": str(e)},
+            )
+            result = self._failure(check, f"Name lookup timed out: {e}")
         except SsrfBlockedError as e:
             # The policy refusing the target is the check's result, not a fault:
             # the refusal itself is already logged, with the address and range.

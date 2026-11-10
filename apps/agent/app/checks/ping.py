@@ -6,7 +6,8 @@ import platform
 import re
 from typing import Any
 
-from app.checks._ssrf_policy import allowed_addresses
+from app.checks._lookups import LookupTimeoutError
+from app.checks._ssrf_policy import lookup_allowed_addresses
 from app.checks.base import BaseCheck
 from app.shared.logger import get_logger
 from app.shared.subprocess_safe import get_subprocess_config, run_subprocess_safely
@@ -42,12 +43,17 @@ class PingCheck(BaseCheck):
         host = self.config["target"]
         # SSRF: ping an address the policy allows, never the name (`ping` would
         # resolve it again, unvetted); a name with no allowed address is refused.
-        addresses = allowed_addresses(host)
+        try:
+            addresses = await lookup_allowed_addresses(host)
+            unresolved = f"Could not resolve host: {host}"
+        except LookupTimeoutError as e:
+            addresses = []
+            unresolved = f"Could not resolve host: {host} ({e})"
         if not addresses:
             return self.create_result(
                 success=False,
                 latency_ms=None,
-                error=f"Could not resolve host: {host}",
+                error=unresolved,
                 target_host=host,
                 packet_loss=100,
                 ping_statistics=None,

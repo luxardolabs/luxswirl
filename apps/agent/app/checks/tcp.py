@@ -7,6 +7,7 @@ import contextlib
 import socket
 from typing import Any
 
+from app.checks._lookups import run_blocking
 from app.checks._ssrf_policy import assert_ip_allowed, ip_allowed
 from app.checks.base import BaseCheck
 from app.shared.logger import get_logger
@@ -171,8 +172,8 @@ class TCPCheck(BaseCheck):
         """
         try:
             # Use getaddrinfo to support both IPv4 and IPv6
-            infos = await asyncio.get_event_loop().getaddrinfo(
-                host, port, family=socket.AF_UNSPEC, type=socket.SOCK_STREAM
+            infos = await run_blocking(
+                socket.getaddrinfo, host, port, socket.AF_UNSPEC, socket.SOCK_STREAM
             )
         except socket.gaierror, UnicodeError:
             # Unresolvable, or a name IDNA cannot encode (a label over 63).
