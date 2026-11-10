@@ -14,6 +14,7 @@ from sqlalchemy.orm import selectinload
 from app.core.datetime_utils import utc_now
 from app.models.agent_metric_model import AgentMetric
 from app.models.agent_model import Agent
+from app.models.check_model import Check
 from app.models.enum_model import AgentApprovalStatus
 
 
@@ -87,16 +88,22 @@ class AgentCRUD:
     async def delete_stale_agents(db: AsyncSession, cutoff: datetime) -> int:
         """Delete agents with last_seen older than cutoff; the number deleted.
 
-        An archived agent is kept, as in `get_stale_agent_names`.
+        An archived agent is kept, as in `get_stale_agent_names`. The checks the
+        cascade removes are locked in id order first (it removes them agent by
+        agent), as a report locks the checks its results reference: the two never
+        wait on each other in a cycle.
         """
-        result = await db.execute(
-            delete(Agent)
-            .where(
-                Agent.last_seen < cutoff,
-                Agent.approval_status != AgentApprovalStatus.ARCHIVED,
-            )
-            .returning(Agent.id)
+        stale = (
+            Agent.last_seen < cutoff,
+            Agent.approval_status != AgentApprovalStatus.ARCHIVED,
         )
+        await db.execute(
+            select(Check.id)
+            .where(Check.agent_id.in_(select(Agent.id).where(*stale)))
+            .order_by(Check.id)
+            .with_for_update()
+        )
+        result = await db.execute(delete(Agent).where(*stale).returning(Agent.id))
         return len(result.all())
 
     @staticmethod
@@ -124,8 +131,9 @@ class AgentCRUD:
     async def key_share_exists(db: AsyncSession, agent_id: UUID) -> bool:
         """Whether the agent still exists, its row locked FOR KEY SHARE to the
         transaction's end: the lock an insert of a row referencing it takes, so a
-        delete waits for this transaction, while the heartbeat's update of the
-        row (no key column) does not."""
+        delete waits for this transaction, and so does a `lock` (FOR UPDATE) of
+        the row, as it waits for that insert's own lock; a plain update that
+        changes no key does not."""
         found = await db.scalar(
             select(Agent.id)
             .where(Agent.id == agent_id)

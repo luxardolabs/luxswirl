@@ -123,8 +123,21 @@ class CheckCRUD:
             if agent_id is not None
             else Check.id.in_(set(check_ids or ()))
         )
+        await CheckCRUD._lock_in_id_order(db, condition, key_share=False)
+
+    @staticmethod
+    async def _lock_in_id_order(
+        db: AsyncSession, condition: ColumnElement[bool], *, key_share: bool
+    ) -> None:
+        """Lock the checks `condition` selects in id order: FOR UPDATE, or FOR NO
+        KEY UPDATE with `key_share` (a write that changes no key, which a report's
+        KEY SHARE lock does not wait for). Every writer of many checks locks them
+        this way first, so no two wait on each other in a cycle."""
         await db.execute(
-            select(Check.id).where(condition).order_by(Check.id).with_for_update()
+            select(Check.id)
+            .where(condition)
+            .order_by(Check.id)
+            .with_for_update(key_share=key_share)
         )
 
     @staticmethod
@@ -319,9 +332,14 @@ class CheckCRUD:
     async def bulk_set_enabled(
         db: AsyncSession, check_ids: list[UUID], enabled: bool
     ) -> int:
-        """Bulk update enabled flag; the number of checks updated."""
+        """Bulk update enabled flag; the number of checks updated.
+
+        The rows are locked in id order first (an UPDATE takes them in scan
+        order), as a bulk delete and a report lock them.
+        """
         if not check_ids:
             return 0
+        await CheckCRUD._lock_in_id_order(db, Check.id.in_(check_ids), key_share=True)
         result = await db.execute(
             update(Check)
             .where(Check.id.in_(check_ids))
