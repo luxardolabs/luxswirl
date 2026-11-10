@@ -404,7 +404,7 @@ docker run -d \
   -e LUXSWIRL_SERVER_URL=https://server.example.com:9000 \
   -e LUXSWIRL_AUTH_KEY=your_registration_key_here \
   -v luxswirl_agent_data:/app/data \
-  ghcr.io/luxardolabs/luxswirl-agent:2026.09.0
+  ghcr.io/luxardolabs/luxswirl-agent:2026.11.0
 ```
 
 3. **Verify connection**:

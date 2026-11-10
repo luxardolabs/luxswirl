@@ -67,13 +67,13 @@ services:
       - "5432"   # Internal only
 
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U luxswirl"]
+      test: ["CMD-SHELL", "PGPASSWORD=$$POSTGRES_PASSWORD psql -h 127.0.0.1 -U $$POSTGRES_USER -d $$POSTGRES_DB -tAc 'select 1' >/dev/null"]
       interval: 10s
       timeout: 5s
       retries: 5
 
   luxswirl_server:
-    image: ghcr.io/luxardolabs/luxswirl-backend:2026.09.0
+    image: ghcr.io/luxardolabs/luxswirl-backend:2026.11.0
     container_name: luxswirl_server
     restart: unless-stopped
 
@@ -250,7 +250,7 @@ services:
     #   - "5432:5432"
 
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U luxswirl"]
+      test: ["CMD-SHELL", "PGPASSWORD=$$POSTGRES_PASSWORD psql -h 127.0.0.1 -U $$POSTGRES_USER -d $$POSTGRES_DB -tAc 'select 1' >/dev/null"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -266,7 +266,7 @@ services:
           memory: 512M
 
   luxswirl_server:
-    image: ghcr.io/luxardolabs/luxswirl-backend:2026.09.0
+    image: ghcr.io/luxardolabs/luxswirl-backend:2026.11.0
     container_name: luxswirl_server
     restart: unless-stopped
 
@@ -436,18 +436,19 @@ http {
 
 **Trusted proxy configuration (required for accurate rate limiting and audit logs):**
 
-When the LuxSwirl server runs behind a reverse proxy, set `SECURITY__TRUSTED_PROXY_NETWORKS` to the CIDR of your proxy. Without it, every external client shares one rate-limit bucket (the proxy's IP), and audit logs record the proxy's address for every event.
+The server reads the client's address from `X-Forwarded-For` only when the request comes from a trusted proxy. Without one it would see every client as the proxy, so they would share one rate-limit bucket and audit logs would record the proxy's address for every event.
 
-The default covers Docker bridge networks and RFC 1918 ranges, which works for most compose-based deployments without changes:
+By default it trusts loopback and the addresses the name `nginx` resolves to, the proxy the shipped compose file runs, looked up again every 30 seconds:
 
 ```yaml
 # compose.yml — luxswirl_server service environment:
 environment:
-  # Defaults shown; override only if your proxy is on a non-standard network.
-  SECURITY__TRUSTED_PROXY_NETWORKS: '["127.0.0.0/8","::1/128","10.0.0.0/8","172.16.0.0/12","192.168.0.0/16"]'
+  # Defaults shown; set these only if your proxy is not the compose service `nginx`.
+  SECURITY__TRUSTED_PROXY_HOSTS: '["nginx"]'
+  SECURITY__TRUSTED_PROXY_NETWORKS: '["127.0.0.0/8","::1/128"]'
 ```
 
-For a fixed-IP proxy (e.g., AWS ALB on a known subnet), tighten to just that range. If LuxSwirl is exposed directly with no proxy in front, set to `[]` — X-Forwarded-For will be ignored entirely. See `docs/reference/settings-reference.md` for full details.
+For a proxy with another name, list it in `SECURITY__TRUSTED_PROXY_HOSTS`; for one at a fixed address (e.g., AWS ALB on a known subnet), add that range to `SECURITY__TRUSTED_PROXY_NETWORKS`. If LuxSwirl is exposed directly with no proxy in front, set both to `[]`, so `X-Forwarded-For` is ignored entirely. See `docs/reference/settings-reference.md` for full details.
 
 **Directory structure:**
 

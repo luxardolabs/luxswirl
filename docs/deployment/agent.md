@@ -20,7 +20,7 @@ The published agent image is `ghcr.io/luxardolabs/luxswirl-agent` (tagged `:<ver
 ```yaml
 services:
   luxswirl_agent:
-    image: ghcr.io/luxardolabs/luxswirl-agent:2026.09.0
+    image: ghcr.io/luxardolabs/luxswirl-agent:2026.11.0
     container_name: luxswirl_agent
     command: ["python", "-m", "app.main"]
     network_mode: host  # Recommended for stability
@@ -107,7 +107,7 @@ In the server's web UI:
 ```yaml
 services:
   luxswirl_agent:
-    image: ghcr.io/luxardolabs/luxswirl-agent:2026.09.0
+    image: ghcr.io/luxardolabs/luxswirl-agent:2026.11.0
     container_name: luxswirl_agent
     network_mode: host
     restart: unless-stopped
@@ -139,7 +139,7 @@ services:
 ```yaml
 services:
   luxswirl_agent:
-    image: ghcr.io/luxardolabs/luxswirl-agent:2026.09.0
+    image: ghcr.io/luxardolabs/luxswirl-agent:2026.11.0
     container_name: luxswirl_agent_prod  # IMPORTANT: Use fixed name
     restart: unless-stopped
 
@@ -172,7 +172,7 @@ services:
 ```yaml
 services:
   luxswirl_agent:
-    image: ghcr.io/luxardolabs/luxswirl-agent:2026.09.0
+    image: ghcr.io/luxardolabs/luxswirl-agent:2026.11.0
     container_name: luxswirl_agent
     network_mode: host
     restart: unless-stopped
@@ -202,7 +202,7 @@ services:
 ```yaml
 services:
   luxswirl_agent_web:
-    image: ghcr.io/luxardolabs/luxswirl-agent:2026.09.0
+    image: ghcr.io/luxardolabs/luxswirl-agent:2026.11.0
     container_name: luxswirl_agent_web
     network_mode: bridge
     restart: unless-stopped
@@ -216,7 +216,7 @@ services:
       - agent_web_data:/app/data
 
   luxswirl_agent_db:
-    image: ghcr.io/luxardolabs/luxswirl-agent:2026.09.0
+    image: ghcr.io/luxardolabs/luxswirl-agent:2026.11.0
     container_name: luxswirl_agent_db
     network_mode: bridge
     restart: unless-stopped
@@ -276,7 +276,7 @@ volumes:
 ```yaml
 services:
   luxswirl_agent:
-    image: ghcr.io/luxardolabs/luxswirl-agent:2026.09.0
+    image: ghcr.io/luxardolabs/luxswirl-agent:2026.11.0
     container_name: luxswirl_agent
     network_mode: host
     restart: unless-stopped
@@ -345,7 +345,7 @@ environment:
 ```yaml
 services:
   luxswirl_agent:
-    image: ghcr.io/luxardolabs/luxswirl-agent:2026.09.0
+    image: ghcr.io/luxardolabs/luxswirl-agent:2026.11.0
     container_name: luxswirl_agent
     network_mode: host
     restart: unless-stopped
@@ -641,7 +641,7 @@ Run the agent with no capabilities, a read-only root filesystem and a memory and
 ```yaml
 services:
   luxswirl_agent:
-    image: ghcr.io/luxardolabs/luxswirl-agent:2026.09.0
+    image: ghcr.io/luxardolabs/luxswirl-agent:2026.11.0
     container_name: luxswirl_agent
 
     dns:
@@ -662,7 +662,7 @@ networks:
 
 services:
   luxswirl_agent:
-    image: ghcr.io/luxardolabs/luxswirl-agent:2026.09.0
+    image: ghcr.io/luxardolabs/luxswirl-agent:2026.11.0
     container_name: luxswirl_agent
 
     networks:
@@ -691,7 +691,7 @@ environment:
 ```yaml
 services:
   luxswirl_agent:
-    image: ghcr.io/luxardolabs/luxswirl-agent:2026.09.0
+    image: ghcr.io/luxardolabs/luxswirl-agent:2026.11.0
 
     deploy:
       mode: global  # One agent per node

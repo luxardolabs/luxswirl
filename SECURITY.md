@@ -163,7 +163,7 @@ A synthetic check runs an admin's Python in the agent container. The trust model
 ```yaml
 services:
   luxswirl_agent:
-    image: ghcr.io/luxardolabs/luxswirl-agent:2026.09.0
+    image: ghcr.io/luxardolabs/luxswirl-agent:2026.11.0
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
     read_only: true
