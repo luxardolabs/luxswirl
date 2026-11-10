@@ -1,4 +1,4 @@
-# luxarch:logging asset v9 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit logging`.
+# luxarch:logging asset v10 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit logging`.
 """The fleet's ONE logging setup: standard-library `logging`, one JSON line per record on stdout.
 
 Why the standard library (sources in `luxarch --playbook logging`): every log platform the fleet might
@@ -80,6 +80,7 @@ stale copy and repo.logging_canonical reds a second setup.
 from __future__ import annotations
 
 import contextvars
+import copy
 import json
 import logging
 import os
@@ -106,6 +107,9 @@ _FIELD_KEYS = "_log_field_keys"
 # caller bound itself (`log_context(trace_id=...)`) is lifted there too when the instrumentation did not
 # set one.
 _TRACE_FIELDS = {"otelTraceID": "trace_id", "otelSpanID": "span_id"}
+# A caller who passes either of these as `extra=` names its own trace: the span's pair is then not
+# written, so a line never carries one id from the caller and the other from the span.
+_OWN_IDS = frozenset(_TRACE_FIELDS)
 # What a hostile or broken value can raise while being serialised or repr()'d (RecursionError is a
 # RuntimeError). A log line is never dropped for any of them.
 _VALUE_ERRORS = (
@@ -210,7 +214,7 @@ def _make_record(
     names: dict[str, str] = {}
     record.__dict__[_FIELD_KEYS] = names
     source = _trace_ids[0]
-    if source is not None:
+    if source is not None and _OWN_IDS.isdisjoint(extra or ()):
         # Any exception, not a list: a tracing defect must never cost the application its log line.
         try:
             ids = cast(object, source())
@@ -229,7 +233,79 @@ def _make_record(
     return record
 
 
-class JsonFormatter(logging.Formatter):
+# A validation error's text quotes the value that failed (`input_value=...`), a password included.
+_QUOTING_CLASSES = frozenset({"ValidationError", "ValidationException"})
+_QUOTING_PACKAGES = frozenset({"pydantic", "pydantic_core", "fastapi"})
+
+
+def _quotes_input(exc: BaseException | None, seen: set[int]) -> bool:
+    """Whether `exc`, or anything in its cause / context chain or exception group, is a pydantic or
+    FastAPI validation error: classes named by package, so this module imports neither."""
+    if exc is None or id(exc) in seen:
+        return False
+    seen.add(id(exc))
+    for cls in type(exc).__mro__:
+        if (
+            cls.__module__.partition(".")[0] in _QUOTING_PACKAGES
+            and cls.__name__ in _QUOTING_CLASSES
+        ):
+            return True
+    members = getattr(exc, "exceptions", None)
+    inner = (
+        [m for m in members if isinstance(m, BaseException)]
+        if isinstance(members, tuple)
+        else []
+    )
+    return any(_quotes_input(e, seen) for e in [exc.__cause__, exc.__context__, *inner])
+
+
+def _withhold_input(exc_info: _SysExcInfo) -> _SysExcInfo:
+    """`exc_info`, or, when its chain holds a validation error, the same frames under a message that
+    names the exception type and withholds the text."""
+    exc = exc_info[1]
+    if exc is None or not _quotes_input(exc, set()):
+        return exc_info
+    kept = RuntimeError(
+        f"{type(exc).__qualname__} (message withheld: its chain holds a validation error's input)"
+    )
+    return (RuntimeError, kept, exc_info[2])
+
+
+def _hide_input(value: object) -> object:
+    if isinstance(value, BaseException) and _quotes_input(value, set()):
+        return f"<{type(value).__qualname__}: input withheld>"
+    return value
+
+
+class _Withholding(logging.Formatter):
+    """A formatter whose traceback text never quotes a validation error's input, for every logger
+    (a server's own `Exception in ASGI application` line included)."""
+
+    def formatException(self, ei: _SysExcInfo) -> str:
+        return super().formatException(_withhold_input(ei))
+
+    def message(self, record: logging.LogRecord) -> str:
+        """`record.getMessage()`, with each `%` argument (or message) that is a validation error
+        replaced by its type name: `logger.exception("failed: %s", err)` would print its text."""
+        args, msg = record.args, record.msg
+        if isinstance(args, tuple):
+            safe_args: Any = tuple(_hide_input(a) for a in args)
+        elif isinstance(args, Mapping):
+            safe_args = {k: _hide_input(v) for k, v in args.items()}
+        else:
+            safe_args = args
+        safe_msg = _hide_input(msg)
+        if safe_msg is msg and (
+            safe_args == args if isinstance(args, tuple | Mapping) else True
+        ):
+            return record.getMessage()
+        clone = copy.copy(record)
+        clone.msg = safe_msg
+        clone.args = () if safe_msg is not msg else safe_args
+        return clone.getMessage()
+
+
+class JsonFormatter(_Withholding):
     """One JSON object per record: the fixed fields, then `attributes`: the bound context and every
     `extra=` field, each under the name the caller gave it.
 
@@ -258,7 +334,7 @@ class JsonFormatter(logging.Formatter):
             .replace("+00:00", "Z"),
             "level": record.levelname,
             "logger": record.name,
-            "message": record.getMessage(),
+            "message": self.message(record),
             "service": self.service,
             "version": self.version,
             "module": record.module,
@@ -322,7 +398,7 @@ class _Handler(logging.StreamHandler[TextIO]):
             )
 
 
-class TextFormatter(logging.Formatter):
+class TextFormatter(_Withholding):
     """`LOG_FORMAT=text`: one readable line for a terminal; context and extras appended as k=v.
 
     Built from the same fields as the JSON line, and through the same redactor: a developer's
@@ -335,7 +411,7 @@ class TextFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         # `logger` is there for the redactor (one that scrubs by logger), as in the JSON line; the
         # head below names the logger, so it is not repeated in the tail
-        line: dict[str, Any] = {"message": record.getMessage(), "logger": record.name}
+        line: dict[str, Any] = {"message": self.message(record), "logger": record.name}
         if record.exc_info:
             line["exception"] = self.formatException(record.exc_info)
         if record.stack_info:
@@ -494,7 +570,9 @@ def configure_logging(
     keeps its fixed fields and says the redaction failed; the unscrubbed content is dropped.
 
     `trace_ids` is the tracing module's `current_trace_ids`: every record made inside a span gets
-    `trace_id` and `span_id`.
+    `trace_id` and `span_id`. A record whose `extra=` names `otelTraceID` or `otelSpanID` itself keeps
+    the caller's and gets none from the span: the two ids of a line always come from one place.
+    `luxarch --emit logging-contract` is the contract test for this source.
 
     Idempotent: calling it again replaces the handler instead of adding a second one.
     """

@@ -1,4 +1,4 @@
-# luxarch:admin-bootstrap-crud asset v6 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit admin-bootstrap-crud`.
+# luxarch:admin-bootstrap-crud asset v7 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit admin-bootstrap-crud`.
 """The user-table half of the admin bootstrap. `luxarch --emit admin-bootstrap-crud`.
 
 Drop this in at `app/crud/admin_bootstrap_crud.py`. It is the ONLY module of the bootstrap that
@@ -85,6 +85,8 @@ def _store_password(
 # --- EDIT THIS: end every session this user holds (FLEET-AUTH-SESSION-STANDARD §2.1 and §2.5). The
 # fleet default is a `sessions_valid_after` the auth dependency compares with a token's issued-at; a
 # session table deletes the user's rows here instead. It runs in the same transaction as the new hash.
+# The cut-off uses the clock that stamps what it is compared with: the app's, which stamps a token's
+# issued-at; an app whose session rows the database stamps uses that clock here (`func.now()`).
 async def _end_sessions(db: AsyncSession, user: User) -> None:
     # Lock the user row before the purge (autoflush is off, so the new hash is
     # not yet written): a sign-in that already checked the old password holds

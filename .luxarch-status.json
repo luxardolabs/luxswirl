@@ -1,6 +1,6 @@
 {
   "guard": "luxarch",
-  "guard_version": "0.356.0",
+  "guard_version": "0.358.0",
   "repo": "/repo",
   "targets": [
     {
@@ -2186,10 +2186,21 @@
           "inert_reason": "",
           "fix": "",
           "example": ""
+        },
+        {
+          "rule": "fw.first_party_imports_app_prefixed",
+          "status": "PASS",
+          "since": "0.358.0",
+          "violations": 0,
+          "deferred": false,
+          "inert": false,
+          "inert_reason": "",
+          "fix": "",
+          "example": ""
         }
       ],
       "summary": {
-        "PASS": 7,
+        "PASS": 8,
         "FAIL": 0,
         "XFAIL": 0,
         "XPASS": 0,
@@ -2596,6 +2607,17 @@
         "example": ""
       },
       {
+        "rule": "repo.ops_scripts_in_runbook",
+        "status": "INERT",
+        "since": "0.358.0",
+        "violations": 0,
+        "deferred": false,
+        "inert": true,
+        "inert_reason": "no `scripts/ops/` directory beside any app package, so there is no one-off operator script to judge (a script kept elsewhere is not seen: its home is `<component>/scripts/ops/`)",
+        "fix": "",
+        "example": ""
+      },
+      {
         "rule": "repo.github_release_wired",
         "status": "PASS",
         "since": "0.150.0",
@@ -2797,6 +2819,17 @@
         "rule": "repo.compose_restarts_after_kill",
         "status": "PASS",
         "since": "0.343.0",
+        "violations": 0,
+        "deferred": false,
+        "inert": false,
+        "inert_reason": "",
+        "fix": "",
+        "example": ""
+      },
+      {
+        "rule": "repo.compose_pg_healthcheck_tcp",
+        "status": "PASS",
+        "since": "0.358.0",
         "violations": 0,
         "deferred": false,
         "inert": false,
@@ -3015,20 +3048,20 @@
       }
     ],
     "summary": {
-      "PASS": 73,
+      "PASS": 74,
       "FAIL": 0,
       "XFAIL": 0,
       "XPASS": 0,
-      "INERT": 1
+      "INERT": 2
     }
   },
   "summary": {
-    "PASS": 249,
+    "PASS": 251,
     "FAIL": 0,
     "XFAIL": 0,
     "XPASS": 0,
-    "INERT": 22
+    "INERT": 23
   },
-  "commit": "f215b0cbcc0df557d842ca1d5672a3fe6406d7a8",
-  "generated_at": "2026-11-09T15:55:44Z"
+  "commit": "effc3302ff22391f5c8f06d8cf2af2cc7e86317c",
+  "generated_at": "2026-11-10T00:28:25Z"
 }

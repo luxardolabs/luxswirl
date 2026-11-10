@@ -39,7 +39,7 @@ DEV_WAIT_TIMEOUT      ?= 180
 # Makefile.local (gitignored): copy Makefile.local.example -> Makefile.local and set it.
 # Contributors don't need it — lint/test and the import-linter contracts run without it.
 LUXARCH_REGISTRY ?=
-LUXARCH_VERSION := 0.356.0
+LUXARCH_VERSION := 0.358.0
 LUXARCH_IMAGE    ?= $(LUXARCH_REGISTRY)/luxardolabs/luxarch:$(LUXARCH_VERSION)
 # Dependency-CVE guard (luxaudit) — same private registry as luxarch, mount-only.
 # Scans the pinned poetry.locks against the live advisory feed (see .luxaudit.toml).
@@ -49,7 +49,7 @@ LUXAUDIT_IMAGE   ?= $(LUXARCH_REGISTRY)/luxardolabs/luxaudit:$(LUXAUDIT_VERSION)
 # ruff/mypy config byte-identical (see .luxlint.toml); ruff runs mount-only, mypy
 # runs as an in-repo tail (needs a current mypy for PEP 758 excepts — the baked
 # lint image freezes an older one, so the tail installs a fresh mypy).
-LUXLINT_VERSION := 0.76.0
+LUXLINT_VERSION := 0.77.0
 LUXLINT_IMAGE    ?= $(LUXARCH_REGISTRY)/luxardolabs/luxlint:$(LUXLINT_VERSION)
 # The gitleaks asset reads the luxlint ref as $(LUXLINT).
 LUXLINT          = $(LUXLINT_IMAGE)
@@ -275,7 +275,7 @@ override sq = $(if $(findstring $(IB_NL),$(1)),$(error REFUSING: a value a block
 override sqw = $(foreach w,$(1),$(call sq,$(w)))
 # luxarch:build-core end - DO NOT edit this marker line: the image block's runtime guard reads its range.
 
-# luxarch:image-block asset v22 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit image-block`.
+# luxarch:image-block asset v23 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit image-block`.
 # ── Images: ONE naming scheme, and the NAME declares what the image IS ──────────────────────────
 # Emitted by `luxarch --emit image-block`. Two axes, both readable from the name alone:
 #
@@ -285,54 +285,26 @@ override sqw = $(foreach w,$(1),$(call sq,$(w)))
 #   Immutable tag (:$(VERSION), :sha-…)  ->  a stack MAY pin it
 #   Moving tag (:dev, :latest)           ->  a human alias; NOTHING pins it, NOTHING builds FROM it
 #
-# **Immutable tags are the point.** "A deployable never rolls" is why `:latest` is banned as a
-# deploy tag — and `:dev` rolls identically. Every `docker push` of `:dev` silently changes what
-# every stack pinned to it will run on next restart, so a moving tag cannot be a deployment record:
-# you cannot say which bits are in dev, and you cannot roll back to them. One build -> one permanent
-# identifier -> environments reference THAT. The sha costs nothing: this repo already computes it
-# for BUILD_COMMIT.
-#
-# **A local-only image must not wear a registry name.** One repo's compose pulled
-# `$(REGISTRY)/luxardolabs/<app>:dev` with no `build:` fallback, its Makefile never pushed it,
-# the registry held ZERO tags, and a routine `docker image prune` took the service down with
-# nothing to re-pull. The name promised a registry artifact; only a local one existed.
-#
-# Enforced by `repo.image_name_declares_provenance`.
+# Immutable tags are the point: a moving tag (`:dev` rolls as `:latest` does) cannot be a deployment
+# record, and a local-only image must not wear a registry name (repo.image_name_declares_provenance).
+# The why: --doc FLEET-BUILD-DEPLOY-STANDARD.
 
-# v18: the image names (IMAGE_NAME, IMAGES and the `img_*` helpers), where each is built from
-# (BUILD_CONTEXT, DOCKERFILE), TEST_IMAGE and the quoting (`sq`, `sqw`) moved to the build core
-# (`luxarch --emit build-core`), which the test block builds with too: a repo that builds and publishes
-# elsewhere pastes the core and the test block, never this block. Paste the core directly ABOVE this
-# block, in the same makefile: every target here refuses without it, and the inline publish guard
-# below checks the core's lines as the block's own (a name either one sets is defined inside one of
-# the two ranges, nowhere else).
-# v14: the registry HOST is never written here. v1-v13 defaulted REGISTRY to the fleet's private host
-# in this do-not-edit text, so a PUBLIC repo could not commit the block at all: its own gitleaks
-# disclosure tier refuses that host in a committed file. Define it ABOVE the block: a private repo in
-# its Makefile (`REGISTRY := <host>:<port>`), a public one in its gitignored `Makefile.local`
-# (`-include Makefile.local` above the block). Left empty, every target that pushes or pins refuses.
+# v18: the image names, build inputs, TEST_IMAGE and the quoting (`sq`, `sqw`) are the build core's
+# (`luxarch --emit build-core`): paste it directly ABOVE this block, in the same makefile. Every target
+# refuses without it, and the inline guard checks the core's lines as the block's own.
+# v14: the registry HOST is set ABOVE the block, never here: a private repo in its Makefile
+# (`REGISTRY := <host>:<port>`), a public one in its gitignored `Makefile.local`. Empty, every target
+# that pushes or pins refuses.
 REGISTRY      ?=
-# v17, RECOMMENDED and optional: the registry this repo declares PRIVATE, as a literal beside REGISTRY
-# (`PRIVATE_REGISTRY := <host>:<port>`). Nothing in the block can tell a private host from a public
-# one, so the declaration is the fact: set, REGISTRY (every candidate before its scan, every sha-
-# build) must be it, compared by host as for PUBLIC_REGISTRY, and so must RELEASE_REGISTRY when it is
-# REGISTRY. Unset, nothing is checked against it, except (v21) that REGISTRY is never a public
-# registry service (docker.io, ghcr.io, quay.io, public.ecr.aws, gcr.io, *.pkg.dev, …), and that a repo
-# whose RELEASE_REGISTRY is another host than REGISTRY must declare it.
+# v17, optional: `PRIVATE_REGISTRY := <host>:<port>` declares the private registry. Set, REGISTRY (and
+# RELEASE_REGISTRY when it is REGISTRY) must be it; unset, REGISTRY is still never a public registry
+# service (v21), and a RELEASE_REGISTRY on another host than REGISTRY requires it.
 PRIVATE_REGISTRY ?=
-# v13: the registry the RELEASE goes to, the one prod pulls from. The fleet has more than one: dev
-# stacks pull from the local registry above, prod at a remote host pulls from a registry it can reach
-# (a public app: GHCR). v1-v12 pushed `:$(VERSION)` to REGISTRY, so a repo whose prod cannot reach it
-# had to override REGISTRY on the command line for every release, and a release cut without the
-# override landed where prod could not pull it. Set it above the block when prod pulls elsewhere,
-# e.g. `RELEASE_REGISTRY := registry.example.com`; one registry for both needs nothing.
+# v13: the registry the RELEASE goes to, the one prod pulls from. Set it above the block when prod
+# pulls elsewhere (`RELEASE_REGISTRY := registry.example.com`); one registry for both needs nothing.
 RELEASE_REGISTRY ?= $(REGISTRY)
-# One image's tags, `$(call img_<x>,<name>)`, beside the build core's `img_*` settings helpers.
-# With an EMPTY name each is the single-image VARIABLE itself, not a recomputation of it, so the ref
-# checked is the ref pushed (an adversarial pass: v16 checked `$(SHA_IMAGE)` but pushed a recomputed
-# ref, and re-pushed a published `:sha`). v17: none of these refs may be set from outside the
-# makefile (require_registry refuses one from the command line or an `-e` environment): every pushed
-# ref is derived from the makefile's own registry and name.
+# One image's tags, `$(call img_<x>,<name>)`. With an EMPTY name each is the single-image VARIABLE
+# itself, so the ref checked is the ref pushed. None may be set from outside the makefile.
 override img_base       = $(if $(1),$(REGISTRY)/$(call img_name,$(1)),$(IMAGE))
 override img_release    = $(if $(1),$(RELEASE_REGISTRY)/$(call img_name,$(1)),$(RELEASE_IMAGE))
 override img_version    = $(if $(1),$(call img_release,$(1)):$(VERSION),$(VERSION_IMAGE))
@@ -345,12 +317,8 @@ override img_public     = $(if $(1),$(PUBLIC_REGISTRY)/$(call img_name,$(1)):$(V
 # own commands.
 override image_block_each = $(call $(1),$(firstword $(IMAGE_LIST)))$(foreach i,$(wordlist 2,$(words $(IMAGE_LIST)),$(IMAGE_LIST)),$(2) $(call $(1),$(i)))
 
-# BASE — no tag; every tag composes from it. The comment sits ABOVE the value, never after it:
-# GNU make keeps the whitespace between a value and an inline `#`, so `IMAGE := …/repo   # note`
-# defines IMAGE *with trailing spaces*, and every tag built from it — `…/repo   :0.1.0` — is an
-# invalid docker reference. This block shipped that way from 0.197.0 and `make release` could not
-# run at all; no repo had executed it, so three green rules stood over a recipe that was broken on
-# its first line. Locked by test_emitted_makefiles_have_no_inline_comment_on_an_assignment.
+# BASE — no tag; every tag composes from it. A comment sits ABOVE a value, never after it: make keeps
+# the spaces before an inline `#` in the value (test_emitted_makefiles_have_no_inline_comment_on_an_assignment).
 override IMAGE         := $(REGISTRY)/$(if $(IMAGE_PRIMARY),$($(IMAGE_PRIMARY)_IMAGE_NAME),$(IMAGE_NAME))
 override RELEASE_IMAGE := $(RELEASE_REGISTRY)/$(if $(IMAGE_PRIMARY),$($(IMAGE_PRIMARY)_IMAGE_NAME),$(IMAGE_NAME))
 override COMMIT        := $(shell git rev-parse --short=12 HEAD 2>/dev/null || echo unknown)
@@ -365,65 +333,34 @@ override SHA_IMAGE     := $(IMAGE):sha-$(COMMIT)
 # never a base. If you delete this line nothing breaks; that is the test of an alias.
 override DEV_ALIAS     := $(IMAGE):dev
 
-# v14: the architectures a release builds. EMPTY, the default, builds the host's one architecture with
-# `docker build --load`, as v13 did: everything the fleet runs itself is x86 (amd64). Set it
-# only when this repo publishes an image someone ELSE runs on another architecture, as buildx's comma
-# list, above this block (it picks the recipe when make reads it): `PLATFORMS := linux/amd64,linux/arm64`.
-# Set, `release` and `publish-sha` build every platform once with `docker buildx build --push` on the
-# shared builder (`buildx-setup`, `luxarch --emit buildx-setup`, in the same Makefile) under a
-# `candidate-<commit>` tag nothing pins, scan EACH platform's image, and only then point the immutable
-# tag at that candidate with `imagetools create`. The immutable tag is never built directly.
+# v14: the architectures a release builds. EMPTY (the default) builds the host's one architecture with
+# `docker build --load`. Set it, as buildx's comma list above the block, only for an image someone ELSE
+# runs elsewhere (`PLATFORMS := linux/amd64,linux/arm64`): `release` and `publish-sha` then build every
+# platform once on the shared builder (`luxarch --emit buildx-setup`) under a `candidate-<commit>` tag,
+# scan EACH platform, and only then point the immutable tag at it (`imagetools create`).
 # --doc FLEET-BUILD-DEPLOY-STANDARD, "Architectures".
 PLATFORMS ?=
 override IMAGE_BLOCK_COMMA := ,
 override PLATFORM_LIST := $(subst $(IMAGE_BLOCK_COMMA), ,$(strip $(PLATFORMS)))
-# v14: where a multi-arch build pushes its candidate: REGISTRY, the private one, ALWAYS. A candidate
-# exists to be scanned, and a rejected one must never be public: a release whose prod pulls from a
-# public registry (RELEASE_REGISTRY := ghcr.io) would otherwise publish unscanned bits under a tag
-# anyone can pull. `imagetools create` copies the scanned digest into RELEASE_REGISTRY afterwards.
+# v14: a multi-arch candidate is pushed to REGISTRY, the private one, ALWAYS: a rejected candidate must
+# never be public. `imagetools create` copies the scanned digest into RELEASE_REGISTRY afterwards.
 override CANDIDATE     := $(IMAGE):candidate-$(COMMIT)
 
-# ── Deploy: build AND push, always together ─────────────────────────────────────────────────────
-# Never split them. A `docker build` of a registry-qualified tag with no matching push is what
-# leaves a deployable name pointing at nothing.
-#
-# v14: every target that pushes or pins is ONE `set -e` shell: its refusals, its build, its scan and
-# its push are a single recipe line. v13 put each refusal and the scan on a line of its own, and make
-# carries on past a failing line under `make -i`, a `-i` in MAKEFLAGS or a `.IGNORE:`: an existing
-# `:$(VERSION)` was overwritten and a failing scan still pushed. The pieces below are shell text,
-# joined into that one line by each target; never give one of them a recipe line of its own.
+# ── Deploy: build AND push, always together (a registry tag built and not pushed names nothing) ──
+# v14: every target that pushes or pins is ONE `set -e` shell (refusals, build, scan, push), so
+# `make -i`, a `-i` in MAKEFLAGS or `.IGNORE:` cannot carry on past a refusal. The pieces below are
+# shell text joined into that one line; never give one a recipe line of its own. The cut target is
+# `release`, the name the release skill, the standard and repo.github_release_wired use.
 
-# Named `release`, not `publish`. An earlier cut of this block called it `publish` while
-# `--emit release-skill` step 11, `--doc FLEET-RELEASE-PROCESS` §8 and `repo.github_release_wired`
-# all said `release` — so a repo that correctly adopted THIS asset ended up with no `release` target
-# and the rule stopped looking. Adopting the newer asset was what made the older rule go quiet.
-# One name, and `release` is the one the skill, the standard, the rule and every
-# fleet Makefile already use.
-
-# v17: the registries are the makefile's, never the shell's or the command line's. v16 took REGISTRY
-# from wherever make found it, and the block's own `REGISTRY ?=` yields to the environment: a shell
-# that had sourced an env file holding `REGISTRY=<public host>` pushed the UNSCANNED multi-arch
-# candidate, and `release` the version, to the public registry. Each of REGISTRY, RELEASE_REGISTRY and
-# PUBLIC_REGISTRY must come from a makefile (`$(origin)` `file`, or an `override` there), so set it
-# with `:=` (which an exported shell value cannot replace) in the Makefile or Makefile.local; and
-# REGISTRY, where every candidate and every `:sha` goes, is never the public registry. Hosts are
-# compared lowercased, without the default port :443, with 127.x.x.x, 0.0.0.0 and [::1] as localhost
-# and docker hub's index / registry-1 names as docker.io. A stated limit: the short and numeric
-# spellings of a loopback address (127.1, 2130706433, 0x7f.1) are not folded.
-# v17: and every ref the block pushes is DERIVED: IMAGE, CANDIDATE, SHA_IMAGE, VERSION_IMAGE and the
-# rest are `:=` in the block, so the environment cannot change them, but the command line (or `make
-# -e`) can, and `make publish-sha IMAGE=<public host>/…` pushed `:sha` and `:dev` there past every
-# registry check, a CANDIDATE override left an unscanned candidate public, and `make release
-# VERSION_IMAGE=<public>…` skipped release-public's checks. One from outside the makefile refuses.
-# v17: the make INVOCATION is part of what is judged. Every variable and macro the block sets is
-# `override`, so a command line (`make publish-sha require_registry=true IMAGE=…`), `make -e` or a
-# MAKEFILES file cannot replace it, and `--eval=override …` is read before the block and replaced by
-# it. A command-line value of one of them would be silently ignored, so it refuses instead, and so do
-# `make -e` (the environment overriding the makefile), `--eval` and MAKEFILE_LIST from outside. The
-# makefile make read FIRST must be this directory's default one (GNUmakefile, makefile, Makefile):
-# `make -f <wrapper>` puts the wrapper's settings ahead of everything, and the clean evaluation below
-# reads the default makefile, never the one `-f` named. A stated limit: a makefile that reads a file
-# through HOME or PATH (`-include $(HOME)/…`) reads it in the clean evaluation too.
+# v17: the registries are the makefile's: each of REGISTRY, RELEASE_REGISTRY and PUBLIC_REGISTRY comes
+# from a makefile (`:=` in the Makefile or Makefile.local), and REGISTRY, where every candidate and
+# `:sha` goes, is never the public registry. Hosts compare lowercased, without :443, loopback forms as
+# localhost and docker hub's names as docker.io (not folded: 127.1, 2130706433, 0x7f.1).
+# v17: every ref the block pushes is DERIVED (`:=` in the block); one set from outside refuses.
+# v17: the make INVOCATION is judged too. Every name the block sets is `override`, so a command-line
+# value of one (silently ignored) refuses, as do `make -e`, `--eval`, MAKEFILES and MAKEFILE_LIST from
+# outside; and the makefile make read FIRST must be this directory's default one (no `-f <wrapper>`).
+# A stated limit: a makefile reading a file through HOME or PATH reads it in the clean evaluation too.
 override define require_make_inputs
 $(strip $(foreach w,$(MAKEOVERRIDES),$(if $(filter override,$(origin $(firstword $(subst :, ,$(subst =, ,$(w)))))),echo "REFUSING: $(firstword $(subst :, ,$(subst =, ,$(w)))) is set from the command line but the makefile defines it itself (an override): the image block refuses a value it would ignore"; exit 1; )))$(if $(filter-out --%,$(firstword $(MAKEFLAGS))),$(if $(findstring e,$(firstword $(MAKEFLAGS))),echo "REFUSING: make -e lets the environment override the makefile's own values: run make without -e"; exit 1; ))$(if $(filter --eval=%,$(MAKEFLAGS)),echo "REFUSING: make was run with --eval: it adds makefile text nobody committed. Run it without"; exit 1; )$(if $(filter-out file,$(origin MAKEFILE_LIST)),echo "REFUSING: MAKEFILE_LIST is set from outside the makefile"; exit 1; )\
 [ -z $(call sq,$(strip $(MAKEFILES))) ] || { \
@@ -803,6 +740,11 @@ endef
 override define promote_create
 docker buildx imagetools create $(foreach t,$(2),-t $(call sq,$(t))) $(call sq,$(1))@sha256:$$$(or $(3),h)
 endef
+# v23: the public copy is a carbon copy (`--prefer-index=false`): buildx otherwise wraps a single image
+# in a new index, another digest than the one prod pins. Arguments as promote_create's.
+override define promote_copy
+docker buildx imagetools create --prefer-index=false $(foreach t,$(2),-t $(call sq,$(t))) $(call sq,$(1))@sha256:$$$(or $(3),h)
+endef
 
 # v11: every build names its output (`--load`). On the fleet's shared builder (`buildx-setup`, driver
 # `docker-container`) a build with no output writes only to the build cache: it warns, exits 0, and
@@ -971,6 +913,11 @@ endef
 
 override define gh_release_preflight
 command -v gh >/dev/null 2>&1 || { echo "REFUSING: the GitHub CLI (gh) is not installed; the release publishes its notes with it"; exit 1; }; \
+ghv=$$(gh --version 2>/dev/null | head -n 1 || true); \
+printf '%s\n' "$$ghv" | grep -Eq '^gh version [0-9]+\.[0-9]+\.[0-9]+' || { \
+  echo "REFUSING: $$(command -v gh) is not the GitHub CLI: its --version printed '$$ghv', not 'gh version X.Y.Z'. Reinstall gh"; exit 1; }; \
+ghh=$$(gh release view --help 2>&1 || true); case "$$ghh" in *--json*) ;; *) \
+  echo "REFUSING: $$ghv is too old: its gh release view takes no --json, which the release reads the Release back with. Install a gh whose 'gh release view --help' lists --json"; exit 1 ;; esac; \
 gh auth status >/dev/null 2>&1 || { echo "REFUSING: gh is not authenticated (gh auth login)"; exit 1; }; \
 set -- $(call sqw,$(RELEASE_NOTES)); if [ $$# -ne 1 ]; then \
   echo "REFUSING: need exactly ONE release notes file for "$(call sq,$(VERSION))", found $$#: "$(call sq,$(or $(RELEASE_NOTES),none)); \
@@ -980,12 +927,32 @@ fi; \
 $(require_origin_tag)
 endef
 
+# v23: a Release is reported only when gh shows it published (by its tag, and not a draft): an exit
+# status is no proof, and a `gh` that is not the GitHub CLI exits 0 having published nothing.
+override define gh_release_shown
+ib_ght=$$(gh release view $(call sq,v$(VERSION)) --json tagName,isDraft --jq '.tagName + " " + (.isDraft | tostring)' 2>/dev/null || true); [ "$$ib_ght" = $(call sq,v$(VERSION))" false" ]
+endef
+
 override define gh_release_publish
-if gh release view $(call sq,v$(VERSION)) >/dev/null 2>&1; then \
+if $(gh_release_shown); then \
   echo "GitHub Release v"$(call sq,$(VERSION))" already exists, skipped (a Release, like its tag, is immutable)"; \
+elif [ "$$ib_ght" = $(call sq,v$(VERSION))" true" ]; then \
+  echo "REFUSING: GitHub Release v"$(call sq,$(VERSION))" is a draft, which nobody can see: publish or delete the draft v"$(call sq,$(VERSION)); exit 1; \
 else \
-  gh release create $(call sq,v$(VERSION)) --verify-tag --title $(call sq,$(VERSION)) --notes-file $(call sqw,$(RELEASE_NOTES)); \
+  gh release create $(call sq,v$(VERSION)) --verify-tag --title $(call sq,$(VERSION)) --notes-file $(call sqw,$(RELEASE_NOTES)) || { \
+    echo "REFUSING: gh release create v"$(call sq,$(VERSION))" failed; nothing was published"; exit 1; }; \
+  $(gh_release_shown) || { \
+    echo "REFUSING: gh release create exited 0, but gh release view v"$(call sq,$(VERSION))" does not show the Release: nothing is published"; exit 1; }; \
+  echo "Published GitHub Release v"$(call sq,$(VERSION)); \
 fi
+endef
+
+# v23: with PUBLIC_REGISTRY set, users pull from there, so the GitHub Release follows the public copy:
+# `release` leaves it to `release-public`, and a standalone `gh-release` refuses until every image's
+# public `:$(VERSION)` exists (any answer but the manifest refuses, an unreachable registry too).
+override define gh_release_public_check
+docker manifest inspect $(call sq,$(call img_public,$(1))) >/dev/null 2>&1 || { \
+  echo "REFUSING: "$(call sq,$(call img_public,$(1)))" is not published, and the GitHub Release follows the public copy (users pull from "$(call sq,$(PUBLIC_REGISTRY))"): make release-public publishes both"; exit 1; }
 endef
 
 gh-release: ## Publish the GitHub Release for v$(VERSION) from its release notes (idempotent; `release` runs it)
@@ -1015,7 +982,7 @@ gh-release: ## Publish the GitHub Release for v$(VERSION) from its release notes
 	ib_bad=$$(printf '%s\n' "$$ib_db" | awk -v F="$$ib_bf" -v m="$$ib_m" -v e="$$ib_e" -v cm="$$ib_cm" -v ce="$$ib_ce" -v names="$$ib_nm" -v tg='$(subst ','\'',release publish-sha release-public publish-mirror dev-deploy dev-pin gh-release $@ $(MAKECMDGOALS))' 'function bad(n, w, f, l) { if (index(names, " " n " ") && (w != "" || f != F || (l + 0 < m || l + 0 > e) && (l + 0 < cm || l + 0 > ce))) printf "%s%s at %s:%s; ", n, (w != "" ? " (" w "-specific)" : ""), f, l; else if (w != "" && index(" REGISTRY RELEASE_REGISTRY PUBLIC_REGISTRY PRIVATE_REGISTRY LUXAUDIT_IMAGE LUXAUDIT IMAGE_NAME PLATFORMS ", " " n " ") && reaches(sc)) printf "%s (%s-specific, %s) at %s:%s; ", n, w, sc, f, l } function reaches(p,   i, k, T, a, b) { k = split(tg, T, " "); i = index(p, "%"); for (a = 1; a <= k; a++) { if (i == 0 && T[a] == p) return 1; if (i > 0 && index(T[a], substr(p, 1, i - 1)) == 1 && length(T[a]) >= length(p) - 1 && substr(T[a], length(T[a]) - (length(p) - i) + 1) == substr(p, i + 1)) return 1 } return 0 } /^# Pattern-specific Variable Values/ { pat = 1 } /^# (Directories|Implicit Rules|Files)/ { pat = 0 } pat && /^[^#].* :$$/ { ph = $$0; sub(/ :$$/, "", ph) } /^# (makefile|\047override\047 directive|environment|environment under -e|command line|default|automatic)( \(from \047.*\047, line [0-9]+\))?$$/ { o = 1; f = ""; l = 0; if (match($$0, /\(from \047.*\047, line [0-9]+\)$$/)) { s = substr($$0, RSTART + 7, RLENGTH - 8); f = s; sub(/\047, line [0-9]+$$/, "", f); l = s; sub(/^.*\047, line /, "", l) } next } o && pat && /^# [A-Za-z_.][A-Za-z0-9_.]* (::?:?=|=|\+=|\?=|!=)/ { sc = ph; bad($$2, "pattern", f, l); o = 0; next } o && /^[^#\t ][^:]*: [A-Za-z_.][A-Za-z0-9_.]* (::?:?=|=|\+=|\?=|!=)/ { x = $$0; sc = x; sub(/:.*/, "", sc); sub(/^[^:]*: /, "", x); split(x, X, " "); bad(X[1], "target", f, l); o = 0; next } o && /^define [A-Za-z_]/ { bad($$2, "", f, l); o = 0; next } o && /^[A-Za-z_.][A-Za-z0-9_.]* (::?:?=|=|\+=|\?=|!=)/ { bad($$1, "", f, l); o = 0; next } { o = 0 }'); \
 	[ -z "$$ib_bad" ] || { echo "REFUSING: make's own database (a clean evaluation with these goals) defines what the image block defines from outside the block: $${ib_bad%; }. The block's names are set inside it only."; exit 1; }; \
 	$(gh_release_preflight); \
-	$(gh_release_publish)$(ib_unchanged)
+	$(if $(strip $(PUBLIC_REGISTRY)),$(call image_block_each,gh_release_public_check,;); )$(gh_release_publish)$(ib_unchanged)
 
 # Cut VERSION: the immutable release tag prod pins. Refuses when that version is ALREADY released, in
 # the registry or as a git tag at another commit: a released version is never re-pushed, not even from
@@ -1055,8 +1022,11 @@ $(call image_block_each,release_multi_build)\
 $(call image_block_each,release_multi_push,;)
 endef
 
+# v23: and, with PUBLIC_REGISTRY set, a version already public there: a new private `:$(VERSION)` would
+# name other bits than the public one, and every copy is the released digest.
 override define release_refuse
-$(call refuse_published,$(call img_version,$(1)),Bump VERSION for a new release; deploy this commit to dev with make dev-deploy. If its GitHub Release is missing: make gh-release)
+$(call refuse_published,$(call img_version,$(1)),Bump VERSION for a new release; deploy this commit to dev with make dev-deploy. If its GitHub Release is missing: make gh-release)$(if $(strip $(PUBLIC_REGISTRY)),; \
+$(call refuse_published,$(call img_public,$(1)),A released version is immutable on the public registry too: bump VERSION.))
 endef
 
 release: $(if $(PLATFORM_LIST),buildx-setup) ## Cut VERSION: build + scan + PUSH :$(VERSION), then the GitHub Release (refuses an already-released VERSION)
@@ -1099,7 +1069,7 @@ release: $(if $(PLATFORM_LIST),buildx-setup) ## Cut VERSION: build + scan + PUSH
 	$(export_head); \
 	$(if $(PLATFORM_LIST),$(release_multi),$(release_single)); \
 	$(export_leave); \
-	$(gh_release_publish); \
+	$(if $(strip $(PUBLIC_REGISTRY)),echo "The GitHub Release for v"$(call sq,$(VERSION))" follows the public copy: make release-public copies the release to "$(call sq,$(PUBLIC_REGISTRY))" and then publishes it",$(gh_release_publish)); \
 	echo "released "$(call sq,$(call image_block_each,img_version))"; pin prod to TAG="$(call sq,$(VERSION))$(ib_unchanged)
 
 # v14: a PUBLIC copy of the release, for an image other people pull (a public collector on GHCR). Set
@@ -1117,8 +1087,30 @@ override PUBLIC_IMAGE := $(PUBLIC_REGISTRY)/$(if $(IMAGE_PRIMARY),$($(IMAGE_PRIM
 override PUBLIC_LATEST_IMAGE := $(PUBLIC_REGISTRY)/$(if $(IMAGE_PRIMARY),$($(IMAGE_PRIMARY)_IMAGE_NAME),$(IMAGE_NAME)):latest
 
 # v16, IMAGES set: every image's checks first, every rescan next, the copies last.
+# v23: `make release-public PUBLIC_RESUME=1` resumes a copy that stopped part way, image by image: an
+# image whose public `:$(VERSION)` exists must hold the digest just rescanned and only its `:latest`
+# moves; an image whose public `:$(VERSION)` is absent is copied whole. Without it a public
+# `:$(VERSION)` refuses, as always. It is one run's choice on this make's own command line: another
+# origin, a parent make (MAKELEVEL) or an exported MAKEFLAGS naming it refuses. A stated limit: that
+# check reads make's starting environment in /proc, so a resume runs on Linux only.
+override IB_PUBLIC_RESUME = $(and $(filter command line,$(origin PUBLIC_RESUME)),$(filter 1,$(PUBLIC_RESUME)))
+override define public_resume_gate
+$(if $(filter-out undefined,$(origin PUBLIC_RESUME)),$(if $(filter-out command line,$(origin PUBLIC_RESUME)),echo "REFUSING: PUBLIC_RESUME is set in "$(call sq,$(origin PUBLIC_RESUME))": resuming a public copy is a choice for one run on the command line (make release-public PUBLIC_RESUME=1)"; exit 1; ,$(if $(IB_PUBLIC_RESUME),,echo "REFUSING: PUBLIC_RESUME="$(call sq,$(PUBLIC_RESUME))" is not 1"; exit 1; )))$(if $(IB_PUBLIC_RESUME),[ $(call sq,$(MAKELEVEL)) = 0 ] || { \
+  echo "REFUSING: PUBLIC_RESUME came from a parent make (MAKELEVEL "$(call sq,$(MAKELEVEL))"): it is one run's choice on this make's own command line"; exit 1; }; \
+ib_pe=$$(tr '\0' '\n' < /proc/$$PPID/environ) || { echo "REFUSING: PUBLIC_RESUME needs make's starting environment (/proc/$$PPID/environ) to tell this command line from an exported MAKEFLAGS"; exit 1; }; \
+if printf '%s\n' "$$ib_pe" | grep -Eq '^(GNU)?MAKEFLAGS=.*PUBLIC_RESUME'; then echo "REFUSING: PUBLIC_RESUME is in an exported MAKEFLAGS: it is one run's choice on this make's own command line"; exit 1; fi; )
+endef
+
+override define public_seen
+$(or $(if $(1),pv_$(1)),pv)=; \
+if docker manifest inspect $(call sq,$(call img_public,$(1))) >/dev/null 2>&1; then $(or $(if $(1),pv_$(1)),pv)=1; \
+elif out=$$(docker manifest inspect $(call sq,$(call img_public,$(1))) 2>&1); then $(or $(if $(1),pv_$(1)),pv)=1; \
+else case "$$out" in *[Nn]"o such manifest"*|*"manifest unknown"*) ;; \
+  *) echo "REFUSING: cannot verify whether "$(call sq,$(call img_public,$(1)))" is published: $$out"; exit 1 ;; esac; fi
+endef
+
 override define public_refuse
-$(call refuse_published,$(call img_public,$(1)),A released version is immutable: bump VERSION.); \
+$(if $(IB_PUBLIC_RESUME),$(call public_seen,$(1)),$(call refuse_published,$(call img_public,$(1)),A released version is immutable: bump VERSION. If it holds the released digest (a copy that stopped before :latest): make release-public PUBLIC_RESUME=1)); \
 docker manifest inspect $(call sq,$(call img_version,$(1))) >/dev/null 2>&1 || { \
   echo "REFUSING: "$(call sq,$(call img_version,$(1)))" is not released; run make release first (publish only what you released)"; exit 1; }
 endef
@@ -1190,8 +1182,15 @@ endef
 
 override img_public_latest = $(if $(1),$(PUBLIC_REGISTRY)/$(call img_name,$(1)):latest,$(PUBLIC_LATEST_IMAGE))
 
+override define public_match
+[ -z "$$$(or $(if $(1),pv_$(1)),pv)" ] || { pd=$$(docker buildx imagetools inspect $(call sq,$(call img_public,$(1))) --format '{{.Manifest.Digest.Encoded}}') || pd=; \
+case "$$pd" in ''|*[!0-9a-f]*) echo "REFUSING: could not read the digest of "$(call sq,$(call img_public,$(1)))"; nothing is promoted"; exit 1 ;; esac; \
+[ "$$pd" = "$$$(or $(if $(1),h_$(1)),h)" ] || { \
+  echo "REFUSING: "$(call sq,$(call img_public,$(1)))" is PUBLISHED at another digest (sha256:$$pd) than the released "$(call sq,$(call img_version,$(1)))" (sha256:$$$(or $(if $(1),h_$(1)),h)): there is no copy to resume, and it is immutable. Bump VERSION."; exit 1; }; }
+endef
+
 override define public_copy
-$(call promote_create,$(call img_release,$(1)),$(call img_public,$(1)) $(if $(filter 1,$(strip $(PUBLIC_LATEST))),$(call img_public_latest,$(1))),$(if $(1),h_$(1)))
+$(if $(IB_PUBLIC_RESUME),if [ -n "$$$(or $(if $(1),pv_$(1)),pv)" ]; then $(if $(filter 1,$(strip $(PUBLIC_LATEST))),$(call promote_copy,$(call img_release,$(1)),$(call img_public_latest,$(1)),$(if $(1),h_$(1))),echo $(call sq,$(call img_public,$(1)))" already holds the released digest: nothing to copy"); else $(call promote_copy,$(call img_release,$(1)),$(call img_public,$(1)) $(if $(filter 1,$(strip $(PUBLIC_LATEST))),$(call img_public_latest,$(1))),$(if $(1),h_$(1))); fi,$(call promote_copy,$(call img_release,$(1)),$(call img_public,$(1)) $(if $(filter 1,$(strip $(PUBLIC_LATEST))),$(call img_public_latest,$(1))),$(if $(1),h_$(1))))
 endef
 
 override public_said = $(call img_version,$(1)) as $(call img_public,$(1))
@@ -1223,10 +1222,12 @@ release-public: ## Copy the RELEASED :$(VERSION) to $(PUBLIC_REGISTRY) by digest
 	ib_nm=$$(awk -v m="$$ib_m" -v e="$$ib_e" -v cm="$$ib_cm" -v ce="$$ib_ce" '(NR >= m && NR <= e || NR >= cm && NR <= ce) && /^override / { s = $$0; sub(/^override +(define +)?/, "", s); sub(/[ \t:=+!?].*/, "", s); printf " %s", s } END { print " " }' "$$ib_bf"); \
 	ib_bad=$$(printf '%s\n' "$$ib_db" | awk -v F="$$ib_bf" -v m="$$ib_m" -v e="$$ib_e" -v cm="$$ib_cm" -v ce="$$ib_ce" -v names="$$ib_nm" -v tg='$(subst ','\'',release publish-sha release-public publish-mirror dev-deploy dev-pin gh-release $@ $(MAKECMDGOALS))' 'function bad(n, w, f, l) { if (index(names, " " n " ") && (w != "" || f != F || (l + 0 < m || l + 0 > e) && (l + 0 < cm || l + 0 > ce))) printf "%s%s at %s:%s; ", n, (w != "" ? " (" w "-specific)" : ""), f, l; else if (w != "" && index(" REGISTRY RELEASE_REGISTRY PUBLIC_REGISTRY PRIVATE_REGISTRY LUXAUDIT_IMAGE LUXAUDIT IMAGE_NAME PLATFORMS ", " " n " ") && reaches(sc)) printf "%s (%s-specific, %s) at %s:%s; ", n, w, sc, f, l } function reaches(p,   i, k, T, a, b) { k = split(tg, T, " "); i = index(p, "%"); for (a = 1; a <= k; a++) { if (i == 0 && T[a] == p) return 1; if (i > 0 && index(T[a], substr(p, 1, i - 1)) == 1 && length(T[a]) >= length(p) - 1 && substr(T[a], length(T[a]) - (length(p) - i) + 1) == substr(p, i + 1)) return 1 } return 0 } /^# Pattern-specific Variable Values/ { pat = 1 } /^# (Directories|Implicit Rules|Files)/ { pat = 0 } pat && /^[^#].* :$$/ { ph = $$0; sub(/ :$$/, "", ph) } /^# (makefile|\047override\047 directive|environment|environment under -e|command line|default|automatic)( \(from \047.*\047, line [0-9]+\))?$$/ { o = 1; f = ""; l = 0; if (match($$0, /\(from \047.*\047, line [0-9]+\)$$/)) { s = substr($$0, RSTART + 7, RLENGTH - 8); f = s; sub(/\047, line [0-9]+$$/, "", f); l = s; sub(/^.*\047, line /, "", l) } next } o && pat && /^# [A-Za-z_.][A-Za-z0-9_.]* (::?:?=|=|\+=|\?=|!=)/ { sc = ph; bad($$2, "pattern", f, l); o = 0; next } o && /^[^#\t ][^:]*: [A-Za-z_.][A-Za-z0-9_.]* (::?:?=|=|\+=|\?=|!=)/ { x = $$0; sc = x; sub(/:.*/, "", sc); sub(/^[^:]*: /, "", x); split(x, X, " "); bad(X[1], "target", f, l); o = 0; next } o && /^define [A-Za-z_]/ { bad($$2, "", f, l); o = 0; next } o && /^[A-Za-z_.][A-Za-z0-9_.]* (::?:?=|=|\+=|\?=|!=)/ { bad($$1, "", f, l); o = 0; next } { o = 0 }'); \
 	[ -z "$$ib_bad" ] || { echo "REFUSING: make's own database (a clean evaluation with these goals) defines what the image block defines from outside the block: $${ib_bad%; }. The block's names are set inside it only."; exit 1; }; \
-	$(require_registry); $(require_images)$(require_build_inputs)$(public_gate); $(require_scanner); \
+	$(require_registry); $(require_images)$(require_build_inputs)$(public_gate); $(require_scanner); $(gh_release_preflight); $(public_resume_gate)\
 	$(call image_block_each,public_refuse,;); \
 	$(call image_block_each,public_scan)\
+	$(if $(IB_PUBLIC_RESUME),$(call image_block_each,public_match,;); )\
 	$(call image_block_each,public_copy,;); \
+	$(gh_release_publish); \
 	echo "published "$(call sq,$(call image_block_each,public_said,$(IMAGE_BLOCK_COMMA)))", the same digest"$(ib_unchanged)
 endif
 
@@ -1341,6 +1342,9 @@ DEV_ENV_FILE ?= .env.dev
 # containers STARTED, so `smoke` hit the proxy before the app listened: every first probe was a 502, and
 # the forged-Host probe "passed" because nothing answered at all. Seconds to wait before failing the deploy:
 DEV_WAIT_TIMEOUT ?= 120
+
+# v23: the compose services recreated when their bind-mounted config changed (dev_recreate below).
+DEV_RECREATE ?=
 
 # v19: where the dev stack runs. `compose` (the default) is the stack above: `dev-pin` writes `TAG=` into
 # DEV_ENV_FILE and restarts compose. `kustomize` is a Kubernetes dev cluster (FLEET-BUILD-DEPLOY-STANDARD,
@@ -1567,7 +1571,8 @@ endef
 # v17: DEV_ENV_FILE reaches the shell as one word, so it must be one plain path (a space would pin
 # one file and start the stack from another, or from none).
 override define require_dev_deploy
-case $(call sq,$(DEV_DEPLOY)) in compose|kustomize) ;; \
+case $(call sq,$(DEV_DEPLOY)) in compose) ;; \
+  kustomize) $(if $(strip $(DEV_RECREATE)),echo "REFUSING: DEV_RECREATE recreates services of the compose dev lane: under kustomize a changed config ships in the overlay it renders"; exit 1) ;; \
   none) echo "REFUSING: "$(call sq,$(IB_NO_STACK)); exit 1 ;; \
   *) echo "REFUSING: DEV_DEPLOY must be compose, kustomize or none, not "$(call sq,$(DEV_DEPLOY)); exit 1 ;; esac
 endef
@@ -1660,13 +1665,52 @@ svcs=$$($(dev_compose) config --services 2>/dev/null) && model=$$($(dev_compose)
   echo "REFUSING: compose cannot resolve the dev stack from "$(call sq,$(DEV_ENV_FILE))" to tell its one-shot services from the long-running ones (run its config to see why; not printed here: it carries values)"; exit 1; }; \
 once=$$(printf '%s\n' "$$model" | awk '/^[^ ]/ { top = $$0; next } top != "services:" { next } /^  [^ ]/ { s = $$1; sub(/:$$/, "", s); S[s] = 1; dep = 0; next } /^    [^ ]/ { dep = ($$0 == "    depends_on:"); if ($$1 == "restart:") { r = $$2; gsub(/["\047]/, "", r); R[s] = r } next } dep && /^      [^ ]/ { d = $$1; sub(/:$$/, "", d); next } dep && $$0 == "        condition: service_completed_successfully" { T[d] = 1 } END { for (x in T) if ((x in S) && (!(x in R) || R[x] == "no")) print x }' | sort -u); \
 long=$$(printf '%s\n' "$$svcs" | awk -v once=" $$(echo $$once) " '$$0 != "" && index(once, " " $$0 " ") == 0'); \
-ib_up_hint() { echo "If a service runs once and exits (restart: \"no\"), declare it one-shot: the service that needs it gets depends_on: <it>: condition: service_completed_successfully. dev-pin then waits only for the long-running services and judges it by exiting 0."; }; \
+ib_up_why() { for s in $$1; do \
+  ps=$$($(dev_compose) ps -a --format '{{.Name}} {{.State}} {{.ExitCode}} {{.Health}}' "$$s" 2>/dev/null) || ps=; \
+  [ -n "$$ps" ] || { echo "FAIL  $$s: compose reports no container for it"; continue; }; \
+  printf '%s\n' "$$ps" | while read -r n st ec hl; do \
+    case "$$st $$hl" in "running healthy"|"running ") continue ;; esac; \
+    why=$$(docker inspect -f '{{if .State.Health}}{{range .State.Health.Log}}{{.Output}}{{end}}{{end}}' "$$n" 2>/dev/null | grep -v '^[[:space:]]*$$' | tail -n 1); \
+    x=; [ "$$st" != exited ] || x=" (exit code $$ec)"; \
+    echo "FAIL  $$s ($$n) is $$st$${hl:+ and $$hl}$$x$${why:+; its health check last said: $$why}"; \
+    [ "$$st $$ec" != "exited 0" ] || echo "      $$s exited 0. If it runs once and exits (restart: \"no\"), declare it one-shot: the service that needs it gets depends_on: <it>: condition: service_completed_successfully. dev-pin then waits only for the long-running services and judges it by exiting 0."; \
+  done; done; }; \
 if [ -z "$$once" ] || [ -z "$$long" ]; then \
-  $(dev_compose) up -d --wait --wait-timeout $(call sq,$(DEV_WAIT_TIMEOUT)) || { ib_up_hint; exit 1; }; \
+  $(dev_compose) up -d --wait --wait-timeout $(call sq,$(DEV_WAIT_TIMEOUT)) || { ib_up_why "$$svcs"; exit 1; }; \
 else \
-  $(dev_compose) up -d --wait --wait-timeout $(call sq,$(DEV_WAIT_TIMEOUT)) $$long || { ib_up_hint; exit 1; }; \
+  $(dev_compose) up -d --wait --wait-timeout $(call sq,$(DEV_WAIT_TIMEOUT)) $$long || { ib_up_why "$$long"; exit 1; }; \
   for s in $$once; do st=$$($(dev_compose) ps -a --format '{{.State}} {{.ExitCode}}' "$$s" | sort -u); \
     [ "$$st" = "exited 0" ] || { echo "FAIL: the one-shot service $$s did not exit 0 (compose reports: $${st:-no container}), so the dev stack is not up"; exit 1; }; done; \
+fi$(foreach s,$(DEV_RECREATE),; $(call dev_recreate,$(s)))
+endef
+
+# v23: DEV_RECREATE names services whose bind-mounted config compose cannot see change, each with the
+# paths it starts from and an optional check run first in a throwaway container:
+#   DEV_RECREATE := nginx
+#   nginx_RECREATE_PATHS := nginx/nginx.conf nginx/templates
+#   nginx_RECREATE_CHECK := nginx -t
+# After `up --wait`, a service whose paths changed after its container started is checked, then
+# recreated alone. Nothing enters the compose model. A missing path, an empty path list and a service
+# the stack does not run refuse. The compose lane only.
+override define dev_recreate
+s=$(call sq,$(1)); \
+case "$$s" in ''|-*|*[!A-Za-z0-9._-]*) echo "REFUSING: DEV_RECREATE entry '$$s' is not a compose service name"; exit 1 ;; esac; \
+[ -n $(call sq,$(strip $($(1)_RECREATE_PATHS))) ] || { \
+  echo "REFUSING: DEV_RECREATE names $$s but "$(call sq,$(1)_RECREATE_PATHS)" is empty: name the bind-mounted config it starts from"; exit 1; }; \
+for p in $(call sqw,$($(1)_RECREATE_PATHS)); do case "$$p" in -*|/*|..|../*|*/..|*/../*) \
+    echo "REFUSING: "$(call sq,$(1)_RECREATE_PATHS)" names $$p: each is a path inside the repo"; exit 1 ;; esac; \
+  [ -e "$$p" ] || { echo "REFUSING: "$(call sq,$(1)_RECREATE_PATHS)" names $$p, which is not in this checkout: a misspelt path would never recreate $$s"; exit 1; }; done; \
+ids=$$($(dev_compose) ps -q "$$s" 2>/dev/null) || ids=; \
+[ -n "$$ids" ] || { echo "REFUSING: DEV_RECREATE names $$s, but the dev stack runs no container for $$s"; exit 1; }; \
+ch=; for id in $$ids; do st=$$(docker inspect -f '{{.State.StartedAt}}' "$$id" 2>/dev/null) || st=; rf=$$(mktemp); \
+  touch -d "$$st" "$$rf" 2>/dev/null && [ -n "$$st" ] || { rm -f "$$rf"; \
+    echo "REFUSING: could not read when $$s's container $$id started ('$$st'), so nothing says whether it runs its current config"; exit 1; }; \
+  c=$$(find $(call sqw,$($(1)_RECREATE_PATHS)) -newer "$$rf" -print 2>/dev/null | head -n 1); rm -f "$$rf"; [ -z "$$c" ] || ch=$$c; done; \
+if [ -n "$$ch" ]; then \
+  $(if $(strip $($(1)_RECREATE_CHECK)),$(dev_compose) run --rm --no-deps -T "$$s" $(call sqw,$($(1)_RECREATE_CHECK)) || { \
+    echo "FAIL  $$s's changed config fails its check ("$(call sq,$(strip $($(1)_RECREATE_CHECK)))"): $$s is not recreated and keeps running its previous one"; exit 1; }; )\
+  $(dev_compose) up -d --wait --wait-timeout $(call sq,$(DEV_WAIT_TIMEOUT)) --force-recreate --no-deps "$$s" || { ib_up_why "$$s"; exit 1; }; \
+  echo "$$s: recreated ($$ch changed after its container started)"; \
 fi
 endef
 
@@ -1725,10 +1769,11 @@ dev-pin: ## Point the dev stack (compose, or the kustomize dev overlay) at an AL
 #     strips poetry. v3 said only "FROM production", which a production stage hardened per
 #     FLEET-BUILD-DEPLOY-STANDARD (no pip/poetry in the runtime) cannot satisfy literally.
 # Either way the Dockerfile needs a stage named `test`: this target builds it. v16, IMAGES set: the
-# first image's, the one the suite runs in (TEST_IMAGE).
+# first image's, the one the suite runs in (TEST_IMAGE). v23: under `DEV_DEPLOY := none` (a tool mirror
+# only) it refuses and builds nothing, as `dev-deploy` and `dev-pin` do.
 
 test-build: ## Build the LOCAL test image from source (never pushed, never a deploy tag)
-	@$(if $(and $(value sq),$(value sqw),$(value img_dockerfile)),,$(error REFUSING: the image block (v18) builds with the build core's quoting and image helpers (sq, sqw, img_*), which this makefile does not define. Paste `luxarch --emit build-core` directly above the image block))set -f; docker build --load --target test $(call sqw,$(BUILD_ARGS)) -f $(call sq,$(call img_dockerfile,$(IMAGE_PRIMARY))) -t $(call sq,$(TEST_IMAGE)) $(call sq,$(call img_context,$(IMAGE_PRIMARY))) >/dev/null
+	@$(if $(and $(value sq),$(value sqw),$(value img_dockerfile)),,$(error REFUSING: the image block (v18) builds with the build core's quoting and image helpers (sq, sqw, img_*), which this makefile does not define. Paste `luxarch --emit build-core` directly above the image block))$(if $(filter none,$(DEV_DEPLOY)),echo "REFUSING: "$(call sq,$(IB_NO_STACK))"; it has no app image to build a test stage of"; exit 1,set -f; docker build --load --target test $(call sqw,$(BUILD_ARGS)) -f $(call sq,$(call img_dockerfile,$(IMAGE_PRIMARY))) -t $(call sq,$(TEST_IMAGE)) $(call sq,$(call img_context,$(IMAGE_PRIMARY))) >/dev/null)
 # luxarch:image-block end - DO NOT edit this marker line: the block's runtime guard reads its range.
 
 # The sandbox is a second stack of the same published images: it pins its own env file
@@ -2879,7 +2924,7 @@ gitleaks-commit-msg: ## secret + denylist scan of the commit MESSAGE being writt
 	  echo "  commit forever: reword it and commit again. Never --no-verify." >&2; \
 	  exit 1; }
 
-# luxarch:check-gate asset v4 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit check-gate`.
+# luxarch:check-gate asset v5 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit check-gate`.
 # ── The fleet gate: every leg runs, then the gate fails naming each red leg ───────────────────────
 # Emitted by `luxarch --emit check-gate`; it replaces a hand-written `check:` line. A gate written as a
 # prerequisite list (`check: … lint mypy test arch …`) stops at the FIRST failing leg: one ruff finding
@@ -2922,6 +2967,8 @@ gitleaks-commit-msg: ## secret + denylist scan of the commit MESSAGE being writt
 # its legs run, so a full gate counts once against HEAVY_SLOTS and every scan and suite it starts runs
 # inside that slot instead of waiting for a second one. Its two fatal steps run before it takes the
 # slot, so each of their full scans takes a slot of its own for as long as it runs.
+# Each leg ends with a `── make <leg>: <N>s` line, its wall time, so a slow gate says which leg holds
+# the time.
 
 # Setting: the legs, in order, set in the makefile. An app repo's are exactly these; a repo with more
 # legs (a guard's own parity suite) appends them. Removing one reds repo.makefile_canonical ----------
@@ -2937,7 +2984,9 @@ check: ## THE fleet gate: runs every leg, then fails naming each red one
 	$(if $(value guard_slot),,$(error REFUSING: the gate holds a heavy-job slot from the guard-run block (v4), which this makefile does not define: paste luxarch --emit guard-run above it))$(guard_slot); \
 	failed=; for leg in $(CHECK_LEGS); do \
 	  printf '\n── make %s\n' "$$leg"; \
+	  started=$$(date +%s); \
 	  $(MAKE) --no-print-directory "$$leg" || failed="$$failed $$leg"; \
+	  printf '── make %s: %ss\n' "$$leg" "$$(($$(date +%s) - started))"; \
 	done; \
 	if [ -n "$$failed" ]; then printf '\n✗ make check FAILED:%s (every leg ran; each one is above)\n' "$$failed"; exit 1; fi; \
 	case '$(filter-out -%,$(firstword $(MAKEFLAGS)))' in *n*) printf '\nmake -n: the legs above were printed, not run, so make check gives no verdict\n'; exit 1;; esac; \
@@ -3420,7 +3469,7 @@ migration-check: test-build ## Verify alembic migrations match the models — `a
 # `|| true` on the run: --json exits non-zero when the repo is red — a red repo still has a
 # valid, committable status. `set -e` so a failed stamp aborts (never a false "wrote").
 STAMP = python3 -c 'import json,sys,os; d=json.load(open(sys.argv[1])); g=d.get("guard"); g==sys.argv[3] or sys.exit(f"status: {sys.argv[1]} holds {g!r} output, expected {sys.argv[3]!r}; refusing to stamp"); d["commit"]=os.environ["SHA"]; d["generated_at"]=os.environ["TS"]; json.dump(d,open(sys.argv[2],"w"),indent=2)'
-# luxarch:guard-run asset v8 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit guard-run`.
+# luxarch:guard-run asset v9 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit guard-run`.
 # ── GUARD_RUN: how every guard sees this checkout ───────────────────────────────────────────────────
 # Emitted by `luxarch --emit guard-run`; paste it above the targets that run the guards (`status:`, and
 # `arch:` / `lint:` / `audit:` where they run a guard image).
@@ -3476,6 +3525,11 @@ override GUARD_RUN = guard_slot_run() ( $(guard_slot_body) $(guard_capped) ); gu
 # takes the slot and execs the client with it open), and the gate's and the suite's recipe shell
 # opens it, so every command they start inherits it. The kernel releases it when the last of them
 # exits, on a normal exit, Ctrl-C or kill -9 alike: there is no cleanup step and nothing goes stale.
+# A guard's container runs under the docker daemon, not under the client that started it, so a kill
+# -9 of the client frees the lock while the capped container runs on. So GUARD_RUN labels the
+# container `fleet.heavy-slot=<slot file>`, and a slot whose lock is free while a running container
+# carries its label (`docker ps -q --filter label=...` lists one) counts as held: the slot stays
+# taken until that container ends (v9). Where docker cannot be asked, only the lock counts.
 # It is taken with flock(1), or where there is none (macOS) with python3's fcntl.flock on the same
 # descriptor; with neither, the job is refused, naming both.
 # The slot code runs in the recipe's own shell and holds under `set -e` there, as the fleet's
@@ -3551,7 +3605,7 @@ HEAVY_CPUS ?=
 unexport HEAVY_SLOTS HEAVY_SLOT_DIR HEAVY_MEMORY HEAVY_CPUS guard_slot guard_slot_vals guard_slot_body guard_caps guard_capped
 override guard_caps = $(foreach v,HEAVY_MEMORY HEAVY_CPUS,$(if $(filter environment% command,$(origin $(v))),$(error REFUSING: $(v) comes from the $(origin $(v)), so the caller chose how much of this machine one heavy job may take: set it in Makefile.local)))--oom-score-adj=500 --memory='$(subst ','\'',$(HEAVY_MEMORY))' --memory-swap='$(subst ','\'',$(HEAVY_MEMORY))'$(if $(HEAVY_CPUS), --cpus='$(subst ','\'',$(HEAVY_CPUS))')
 # the run, then its exit: 137 is a SIGKILL, which for a capped container is almost always its own limit
-override guard_capped = gs_rc=0; "$$@" || gs_rc=$$?; [ "$$gs_rc" != 137 ] || echo "$$gs_job: the container was killed (exit 137), most likely at its memory cap (HEAVY_MEMORY $(HEAVY_MEMORY)): raise HEAVY_MEMORY in Makefile.local, or lower HEAVY_SLOTS so the machine has room" >&2; exit "$$gs_rc"
+override guard_capped = if [ -z "$$gs_x" ] && [ "$${1:-}" = docker ] && [ "$${2:-}" = run ]; then shift 2; set -- docker run --label "fleet.heavy-slot=$$gs_f" "$$@"; fi; gs_rc=0; "$$@" || gs_rc=$$?; [ "$$gs_rc" != 137 ] || echo "$$gs_job: the container was killed (exit 137), most likely at its memory cap (HEAVY_MEMORY $(HEAVY_MEMORY)): raise HEAVY_MEMORY in Makefile.local, or lower HEAVY_SLOTS so the machine has room" >&2; exit "$$gs_rc"
 # make's own flags are what MAKEFLAGS holds before ` -- `: a variable's value after it can read like a flag.
 override guard_space := $(subst x,,x x)
 override guard_flags = $(subst :SP:, ,$(firstword $(subst :CUT:, ,$(subst $(guard_space),:SP:,$(subst $(guard_space)--$(guard_space),:CUT:,x $(MAKEFLAGS))))))
@@ -3562,6 +3616,7 @@ override guard_slot_body = gs_d=$$1 gs_n=$$2 gs_job=$$3; shift 3; \
   gs_x=; gs_p=; for gs_a in "$$@"; do case "$$gs_p" in (--rule) case "$$gs_a" in (*[![:space:],]*) gs_x=1;; esac;; esac; \
     case "$$gs_a" in (--rule=*[![:space:],]*|--emit|--emit=?*|--emit-*|--doc|--doc=?*|--docs|--playbook|--playbook=?*|--version|--list-rules|--changelog|--new-rules|--coverage-ratchet|--help) gs_x=1;; esac; gs_p=$$gs_a; done; \
   gs_who() { gs_t=$$(mktemp "$$gs_d/.who.XXXXXX") && { printf "%s\n" "$$gs_job (shell pid $$$$, user $$(id -un 2>/dev/null))" > "$$gs_t"; chmod 644 "$$gs_t"; mv -f "$$gs_t" "$$gs_f.who" 2>/dev/null || rm -f "$$gs_t"; }; }; \
+  gs_busy() { command -v docker >/dev/null 2>&1 && docker ps -q --filter "label=fleet.heavy-slot=$$1" 2>/dev/null | grep -qE '^[0-9a-f]{12,64}$$'; }; \
   gs_lock() { if command -v flock >/dev/null 2>&1; then flock -n -E 75 9; else python3 -I -c "import fcntl,os,sys; sys.excepthook=lambda t,v,b: os._exit(75 if t is BlockingIOError else 2); fcntl.flock(9, fcntl.LOCK_EX | fcntl.LOCK_NB)"; fi; }; \
   gs_have=; if [ -z "$$gs_x" ]; then gs_i=1; while [ "$$gs_i" -le "$$gs_n" ]; do gs_f=$$gs_d/slot.$$gs_i; \
       if [ /dev/fd/9 -ef "$$gs_f" ] && gs_lock; then gs_have=1; break; fi; gs_i=$$((gs_i + 1)); done; \
@@ -3578,7 +3633,7 @@ override guard_slot_body = gs_d=$$1 gs_n=$$2 gs_job=$$3; shift 3; \
         if [ ! -e "$$gs_f" ] && [ ! -L "$$gs_f" ]; then gs_t=$$(mktemp "$$gs_d/.slot.XXXXXX") && { chmod 644 "$$gs_t"; ln "$$gs_t" "$$gs_f" 2>/dev/null || :; rm -f "$$gs_t"; }; fi; \
         if [ -L "$$gs_f" ] || [ ! -f "$$gs_f" ] || [ ! -r "$$gs_f" ]; then \
           echo "REFUSING: $$gs_f is not a plain file this job can read, so the heavy-job slots cannot be counted: remove it" >&2; exit 2; fi; \
-        exec 9<"$$gs_f"; gs_r=0; gs_lock || gs_r=$$?; [ "$$gs_r" = 75 ] || break 2; gs_i=$$((gs_i + 1)); done; \
+        exec 9<"$$gs_f"; gs_r=0; gs_lock || gs_r=$$?; [ "$$gs_r" != 0 ] || ! gs_busy "$$gs_f" || gs_r=75; [ "$$gs_r" = 75 ] || break 2; gs_i=$$((gs_i + 1)); done; \
       if [ -z "$$gs_w" ]; then gs_w=0; elif [ "$$gs_w" = 0 ]; then gs_w=1; gs_h=; gs_i=1; while [ "$$gs_i" -le "$$gs_n" ]; do gs_o=; gs_f=$$gs_d/slot.$$gs_i.who; \
           if [ -f "$$gs_f" ] && [ ! -L "$$gs_f" ]; then read -r gs_o < "$$gs_f" || :; fi; gs_h="$$gs_h$${gs_h:+; }$${gs_o:-slot $$gs_i: holder unknown}"; gs_i=$$((gs_i + 1)); done; \
         echo "$$gs_job: waiting for a heavy-job slot ($$gs_n in use in $$gs_d, held by: $$gs_h)" >&2; fi; \

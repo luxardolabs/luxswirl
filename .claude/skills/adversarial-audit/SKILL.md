@@ -3,7 +3,7 @@ name: adversarial-audit
 description: Attack the WHOLE platform, not just a change — take the attack surface from `luxarch --sweep attack-surface`, rank it by this repo's committed audit profile, hand each slice to an independent attacker, verify every break with a second agent, and file each confirmed break in LuxPM with its failing test. Direct it in plain words ("what changed since the last release", "just payments, go deep", "quick"); re-runs attack only what changed. Use for a first full review of an app, on the owner's schedule, or when asked to audit or red-team the platform.
 ---
 
-<!-- luxarch:adversarial-audit-skill asset v10 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit adversarial-audit-skill`. -->
+<!-- luxarch:adversarial-audit-skill asset v11 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit adversarial-audit-skill`. -->
 
 # Adversarial audit: the whole platform
 
@@ -182,7 +182,7 @@ Tier the verification by what is at stake. **Full verification** (the second age
 
 ## 6. `deep` only: the chaining pass
 
-One more independent agent gets every REAL finding and UNREPRODUCED lead from this run, plus the profile, and asks how two of them combine into something worse than either: a low-severity read that hands over the id a second slice trusts, an unauthenticated write that a background job later acts on. Same evidence bar; same verification for anything it confirms.
+One more independent **general-purpose** agent, on the strongest model (judgment work, never a cheaper tier), gets every REAL finding and UNREPRODUCED lead from this run, plus the profile, and asks how two of them combine into something worse than either: a low-severity read that hands over the id a second slice trusts, an unauthenticated write that a background job later acts on. Same evidence bar; same verification for anything it confirms.
 
 ## 7. File the burn-down and record the run
 

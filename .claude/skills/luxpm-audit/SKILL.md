@@ -3,7 +3,7 @@ name: luxpm-audit
 description: Audit this repo's whole LuxPM project, not just the issues the current work touched — verify every open issue against the code and close, park, merge or comment on it with evidence, backfill a close summary on every closed issue that lacks one, recover work a closed summary deferred without tracking it, then re-issue the sync receipt. Use when the receipt shows untriaged or unexplained issues, when repo.luxpm_backlog_triaged is red, or when asked to review/clean up/audit LuxPM.
 ---
 
-<!-- luxarch:luxpm-audit-skill asset v10 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit luxpm-audit-skill`. -->
+<!-- luxarch:luxpm-audit-skill asset v11 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit luxpm-audit-skill`. -->
 
 # Audit the LuxPM backlog
 
@@ -54,7 +54,7 @@ For each `done`/`cancelled` issue in this project with a blank `close_summary` (
 python3 .claude/hooks/luxpm-close-tracks-deferrals.py --scan <scratch>/closed.json
 ```
 
-It prints each sentence that defers work without naming another issue or `dropped`, as `<KEY>: <sentence>`. For each one:
+It prints each sentence of prose that reads like a deferral naming no other issue and no `dropped`, as `<KEY>: <sentence>`. This is the prose backstop: the close hook itself holds only labelled slots (`Not built:`, `Deferred:`, `Follow-up:` and the rest), so a deferral written as prose reaches you here. Each hit is for you to judge one by one, never an automatic denial: many are sentences that defer nothing. For each one:
 
 - **Read it in context.** A sentence about the ticket itself ("left open for two weeks") defers nothing: note it and move on.
 - **Check the code.** Work done since (`git log -S <symbol>`, the file it names) needs no issue.

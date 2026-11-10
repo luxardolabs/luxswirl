@@ -76,8 +76,11 @@ services:
     oom_score_adj: -500
     networks:
       - luxswirl-network
+    # Ready = an authenticated query over TCP. A bare `pg_isready` probes the unix
+    # socket, which initdb's temporary server answers before the role and its
+    # password exist, so the server would start against a database mid-bootstrap.
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U luxswirl"]
+      test: ["CMD-SHELL", "PGPASSWORD=$$POSTGRES_PASSWORD psql -h 127.0.0.1 -U $$POSTGRES_USER -d $$POSTGRES_DB -tAc 'select 1' >/dev/null"]
       interval: 10s
       timeout: 5s
       retries: 5

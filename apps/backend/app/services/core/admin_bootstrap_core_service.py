@@ -1,4 +1,4 @@
-# luxarch:admin-bootstrap asset v8 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit admin-bootstrap`.
+# luxarch:admin-bootstrap asset v9 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit admin-bootstrap`.
 """How the first admin comes to exist, and how a locked-out owner gets back in.
 
 `luxarch --emit admin-bootstrap`. Drop this in at `app/services/core/admin_bootstrap_core_service.py`.
@@ -89,6 +89,9 @@ comparison, `current_password_verified` after a match; EDIT THIS points both at 
 counter). Without it, whoever held a stolen session cookie could guess the password without limit,
 and the right guess both changed it and ended the owner's other sign-ins. A locked login raises
 `CurrentPasswordLockedError`, a `CurrentPasswordError` whose message is safe to show.
+
+v9: the login policy is public (`login_policy_problem`), so an app's own user forms hold a new or
+renamed login to the policy the seed and `/setup` enforce.
 
 What is deliberately absent: an environment password applied on every boot. Once a user exists the
 database is authoritative. Re-applying the environment silently reverts the owner's own change.
@@ -274,7 +277,11 @@ def _env_value(name: str) -> tuple[str, str]:
         return "", f"{name}_FILE ({path}) is not UTF-8 text"
 
 
-def _login_problem(login: str) -> str:
+def login_policy_problem(login: str) -> str:
+    """The login policy the seed and `/setup` hold a new login to: a message for a login it refuses,
+    "" for one it accepts. Public so that every other place the app creates or renames a login (an
+    admin's user form, a sign-up) holds it to this one policy rather than a copy that drifts; an app
+    that keeps logins stored before it adopted the policy calls it for new and renamed logins only."""
     shape = _LOGIN_SHAPE.get(LOGIN_KIND)
     if shape is None:
         return f"LOGIN_KIND is {LOGIN_KIND!r}, not 'email' or 'username'"
@@ -461,7 +468,9 @@ class AdminBootstrapCoreService:
         if not problem and not (login and password):
             problem = f"set both {SEED_LOGIN} and {SEED_PASSWORD}"
         problem = (
-            problem or _login_problem(login) or await _password_problem(db, password)
+            problem
+            or login_policy_problem(login)
+            or await _password_problem(db, password)
         )
         password_hash = ""
         if not problem:
@@ -509,7 +518,7 @@ class AdminBootstrapCoreService:
         ):
             logger.warning("admin_setup_token_refused", extra={"login": login})
             raise SetupTokenError
-        problem = _login_problem(login) or await _password_problem(db, password)
+        problem = login_policy_problem(login) or await _password_problem(db, password)
         if problem:
             raise PasswordPolicyError(problem)
         # The admin chose this password, so no forced change follows.
