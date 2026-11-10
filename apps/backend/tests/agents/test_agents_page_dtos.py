@@ -159,3 +159,27 @@ async def test_dead_lettered_batches_show_as_a_warning_on_the_card(
     assert "3 dead-lettered" in resp.text
     badge = resp.text[: resp.text.index("3 dead-lettered")]
     assert "bg-yellow-600/20" in badge[badge.rindex("<span") :]
+
+
+async def test_a_cards_version_executed_count_and_last_seen_sit_in_its_header(
+    client: AsyncClient, db: AsyncSession
+) -> None:
+    """Who the agent is and when it last spoke read with its name, above the
+    stats and graphs, not at the foot of a tall card."""
+    agent = make_agent(
+        agent_name="edge-version",
+        approval_status="active",
+        version="2026.11.0",
+        checks_executed_total=4321,
+        last_seen=utc_now(),
+    )
+    db.add(agent)
+    await db.flush()
+
+    resp = await client.get("/agents")
+
+    assert resp.status_code == 200, resp.text[:500]
+    card = resp.text[resp.text.index("edge-version") :]
+    stats = card.index("Success Rate")
+    for shown in ("v2026.11.0", "Executed:", "4321", "Last seen:"):
+        assert shown in card[:stats], shown

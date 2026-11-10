@@ -26,7 +26,7 @@
                         {% endfor %}
                     {% endif %}
                 </div>
-                <div class="flex items-center gap-3 text-xs text-dark-text-muted mt-0.5">
+                <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-dark-text-muted mt-0.5">
                     {% if item.agent.hostname %}
                     <span class="font-mono">{{ item.agent.hostname }}</span>
                     {% endif %}
@@ -37,6 +37,14 @@
                     <span class="flex items-center gap-1">
                         <span class="w-3 h-3 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/arrow-path.svg" %}</span>
                         Sync: <span class="font-mono">{{ item.agent.check_sync_interval or item.default_check_sync }}s</span>
+                    </span>
+                    {% if item.agent.version %}
+                    <span class="font-mono text-dark-text-primary">v{{ item.agent.version }}</span>
+                    {% endif %}
+                    <span>Executed: <span class="font-mono text-dark-text-primary">{{ item.agent.checks_executed_total or 0 }}</span></span>
+                    <span class="flex items-center gap-1 {% if is_stale %}text-yellow-400{% endif %}">
+                        {% if is_stale %}<span class="w-3 h-3 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/exclamation-triangle.svg" %}</span>{% endif %}
+                        Last seen: <span class="font-mono">{{ item.agent.last_seen | format_datetime('%Y-%m-%d %I:%M%p') }}</span>
                     </span>
                 </div>
             </div>
@@ -335,23 +343,6 @@
         </div>
     </div>
 
-    <!-- Footer Info -->
-    <div class="mt-4 pt-4 border-t border-dark-border flex items-center justify-between text-xs text-dark-text-muted">
-        <div class="flex items-center gap-4">
-            <span>Executed: <span class="font-mono text-dark-text-primary">{{ item.agent.checks_executed_total or 0 }}</span></span>
-            {% if item.agent.version %}
-            <span>v{{ item.agent.version }}</span>
-            {% endif %}
-        </div>
-        <div class="flex items-center gap-2">
-            {% if is_stale %}
-            <span class="w-4 h-4 text-yellow-400 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/exclamation-triangle.svg" %}</span>
-            <span class="font-mono {% if is_stale %}text-yellow-400{% endif %}">{{ item.agent.last_seen | format_datetime('%Y-%m-%d %I:%M%p') }}</span>
-            {% else %}
-            <span class="font-mono">{{ item.agent.last_seen | format_datetime('%Y-%m-%d %I:%M%p') }}</span>
-            {% endif %}
-        </div>
-    </div>
 </div>
 {% endmacro %}
 
