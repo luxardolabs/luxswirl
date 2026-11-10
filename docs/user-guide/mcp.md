@@ -42,7 +42,7 @@ Call `whoami` first: it names the token's user, role and scopes, and the tools i
 | `create_checks_from_job`                      | `jobs:write` and `checks:write` | editor | Make ping, web, ssh or database checks from a scan's hosts                        |
 | `get_maintenance_job`                         | `jobs:read`                     | any    | A background job's status and progress                                            |
 
-A tool that changes something takes the same body as its admin-API route, and is held to the same rules: a viewer reads every credential masked, a synthetic check is an admin's, an unknown id is an error. Deletes, users, settings, API and registration keys, import and the scheduler are not served over MCP; they stay in the web UI and the admin API.
+A tool that changes something takes the same body as its admin-API route, and is held to the same rules: a viewer reads a check's target, connection string and nameserver as their scheme, host and port alone, and free text with its credentials masked ([Admin API](admin-api.md#checks)); a synthetic check is an admin's; an unknown id is an error. Deletes, users, settings, API and registration keys, import and the scheduler are not served over MCP; they stay in the web UI and the admin API.
 
 A refused call comes back as a tool error whose text starts `FORBIDDEN:` and names the role or scope it needs; a bad argument comes back as an error naming what is valid.
 
