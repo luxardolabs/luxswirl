@@ -889,6 +889,9 @@ class AgentCoreService:
             db, agent_id, actor_is_admin=actor_is_admin
         )
 
+        # Its checks locked in id order first, as a report locks them: the cascade
+        # below removes them in the ORM's dependency order.
+        await CheckCRUD.lock_for_delete(db, agent_id=agent_id)
         await AgentCRUD.delete_agent(db, agent)
 
         logger.info(

@@ -104,6 +104,30 @@ class CheckCRUD:
         return set(rows)
 
     @staticmethod
+    async def lock_for_delete(
+        db: AsyncSession,
+        *,
+        check_ids: Sequence[UUID] | None = None,
+        agent_id: UUID | None = None,
+    ) -> None:
+        """Lock the checks a delete is about to remove (`check_ids`, or every check
+        of `agent_id`) FOR UPDATE, in id order, before it removes any.
+
+        A report locks the checks its results reference in the same order, so
+        the two never wait on each other in a cycle, whatever order the delete
+        then removes the rows in (the ORM removes a dependent check before its
+        parent).
+        """
+        condition = (
+            Check.agent_id == agent_id
+            if agent_id is not None
+            else Check.id.in_(set(check_ids or ()))
+        )
+        await db.execute(
+            select(Check.id).where(condition).order_by(Check.id).with_for_update()
+        )
+
+    @staticmethod
     async def delete_check(db: AsyncSession, check: Check) -> None:
         """Delete the check and its alert mappings.
 

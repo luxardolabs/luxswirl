@@ -980,6 +980,9 @@ class CheckCoreService:
         # swallowed-exceptions: a DB failure is reported as failures; the savepoint keeps the worker's session committable, which is what delivers that report
         try:
             async with db.begin_nested():
+                # Locked in id order first, as a report locks them: the delete
+                # below takes its row locks in scan order.
+                await CheckCRUD.lock_for_delete(db, check_ids=check_ids)
                 affected = await CheckCoreService._touch_agents_of(db, check_ids)
                 success_count = await CheckCRUD.bulk_delete_by_ids(db, check_ids)
         except SQLAlchemyError as e:
