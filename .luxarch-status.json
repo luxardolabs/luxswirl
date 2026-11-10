@@ -1,6 +1,6 @@
 {
   "guard": "luxarch",
-  "guard_version": "0.358.0",
+  "guard_version": "0.359.0",
   "repo": "/repo",
   "targets": [
     {
@@ -1769,13 +1769,13 @@
         },
         {
           "rule": "fw.single_use_claim_atomic",
-          "status": "PASS",
+          "status": "FAIL",
           "since": "0.287.0",
-          "violations": 0,
+          "violations": 2,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
-          "fix": "",
+          "fix": "Claim it in one statement that only matches an available row: `update(Model).where(Model.token_hash == h, Model.used_at.is_(None), Model.expires_at > now).values(used_at=now).returning(Model)`, and refuse when it returns no row. When a side effect (a payment call) must sit between the check and the write, serialize the claimers first: load the row with `.with_for_update()` (a crud method that always locks counts), or take `pg_advisory_xact_lock(<key>)` before the load, the lock to use where the app also writes that row from a separate session (a row lock deadlocks there). A password set (a verify against the stored hash, then a new hash written) reads the row locked, with `populate_existing=True`, and verifies the password against the locked read: a lock taken after the verify leaves it checking a stale hash. A sign-in reads it the same way and issues the session after that verify, in the same transaction. See --doc FLEET-AUTH-SESSION-STANDARD \u00a71.2.",
           "example": ""
         },
         {
@@ -2066,8 +2066,8 @@
         }
       ],
       "summary": {
-        "PASS": 169,
-        "FAIL": 0,
+        "PASS": 168,
+        "FAIL": 1,
         "XFAIL": 0,
         "XPASS": 0,
         "INERT": 18
@@ -2509,13 +2509,13 @@
       },
       {
         "rule": "repo.luxpm_backlog_triaged",
-        "status": "PASS",
+        "status": "FAIL",
         "since": "0.252.0",
-        "violations": 0,
+        "violations": 1,
         "deferred": false,
         "inert": false,
         "inert_reason": "",
-        "fix": "",
+        "fix": "run `/luxpm-audit` (`luxarch --emit luxpm-audit-skill > .claude/skills/luxpm-audit/SKILL.md`): verify each open issue against the code and close it with evidence, park it `on_hold` with `waiting_on`, merge it into its duplicate, or comment what remains; backfill a summary on each unexplained close; then re-issue the receipt. Never close live work to move the count, and leave escalations to the guard maintainer.",
         "example": ""
       },
       {
@@ -3048,20 +3048,20 @@
       }
     ],
     "summary": {
-      "PASS": 74,
-      "FAIL": 0,
+      "PASS": 73,
+      "FAIL": 1,
       "XFAIL": 0,
       "XPASS": 0,
       "INERT": 2
     }
   },
   "summary": {
-    "PASS": 251,
-    "FAIL": 0,
+    "PASS": 249,
+    "FAIL": 2,
     "XFAIL": 0,
     "XPASS": 0,
     "INERT": 23
   },
-  "commit": "effc3302ff22391f5c8f06d8cf2af2cc7e86317c",
-  "generated_at": "2026-11-10T00:28:25Z"
+  "commit": "cb2ee6d5d8eca73d3a356c55d1c7d6bbf7f4169b",
+  "generated_at": "2026-11-10T05:38:32Z"
 }

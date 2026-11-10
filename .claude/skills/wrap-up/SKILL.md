@@ -3,7 +3,7 @@ name: wrap-up
 description: Close out a piece of work the fleet way before calling it done — tests written and run for what changed, every red in touched files fixed, docs updated (stale advice removed), make check green, committed in the issue's worktree, LuxPM fully closed out (issues, checklists, activities, commit links, sync receipt), then landed on the base branch, the worktree removed, and pushed as the repo declares. Every step reports evidence, not a tick.
 ---
 
-<!-- luxarch:wrap-up-skill asset v21 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit wrap-up-skill`. -->
+<!-- luxarch:wrap-up-skill asset v22 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit wrap-up-skill`. -->
 
 # Wrap up
 
@@ -54,7 +54,7 @@ A red can also be moved instead of fixed: the code goes to another layer, helper
 
 ## 5. The gate, committed in the issue's worktree
 
-- You are in the issue's worktree (`.claude/worktrees/<ISSUE-KEY>`; `luxarch --doc FLEET-AGENT-CONDUCT-STANDARD`, "Concurrent agents: one worktree per issue"). If the work was done in the main checkout, that is the failure the standard exists to stop: say so in the report.
+- You are in the issue's worktree (`<repo parent>/.worktrees/<repo>/<ISSUE-KEY>`, or `.claude/worktrees/<ISSUE-KEY>` for one made before worktrees moved beside the repository; `luxarch --doc FLEET-AGENT-CONDUCT-STANDARD`, "Concurrent agents: one worktree per issue"). If the work was done in the main checkout, that is the failure the standard exists to stop: say so in the report.
 - `make check` green, run in the worktree. A red you could not fix stays red with an open escalation (`/escalate`), never deferred or silenced.
 - Commit as `luxardolabs` via the global git config (never `git -c user.email=…`), no AI attribution.
 

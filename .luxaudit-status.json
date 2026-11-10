@@ -7,8 +7,7 @@
   "summary": {
     "PASS": 214,
     "FAIL": 0,
-    "XFAIL": 0,
-    "INERT": 1
+    "XFAIL": 0
   },
   "vulnerable": [],
   "deferred": [],
@@ -17,14 +16,11 @@
   "by_public_version": [],
   "warnings": [],
   "image": {
-    "ref": "ghcr.io/luxardolabs/luxswirl-backend:2026.09.0, ghcr.io/luxardolabs/luxswirl-agent:2026.09.0",
-    "inert": true,
-    "inert_reason": "ghcr.io/luxardolabs/luxswirl-backend:2026.09.0, ghcr.io/luxardolabs/luxswirl-agent:2026.09.0: not in the registry, so nothing was released at this VERSION. A deploy that pins `:sha-\u2026` is not visible from the mount; name it in `[image] refs`",
+    "ref": "ghcr.io/luxardolabs/luxswirl-backend:2026.11.0, ghcr.io/luxardolabs/luxswirl-agent:2026.11.0",
+    "inert": false,
+    "inert_reason": "",
     "error": "",
-    "not_released": [
-      "ghcr.io/luxardolabs/luxswirl-backend:2026.09.0",
-      "ghcr.io/luxardolabs/luxswirl-agent:2026.09.0"
-    ],
+    "not_released": [],
     "vulnerable": [],
     "deferred": []
   },
@@ -33,6 +29,6 @@
     "expired": [],
     "unjudged": []
   },
-  "commit": "effc3302ff22391f5c8f06d8cf2af2cc7e86317c",
-  "generated_at": "2026-11-10T00:28:25Z"
+  "commit": "cb2ee6d5d8eca73d3a356c55d1c7d6bbf7f4169b",
+  "generated_at": "2026-11-10T05:38:32Z"
 }
