@@ -98,12 +98,18 @@ def _https_check(
         await asyncio.sleep(request_s)  # the request itself answers in time
         return httpx.Response(200, request=httpx.Request("GET", target))
 
-    def probe(self: HTTPCheck, tgt: str, timeout: float = 5) -> dict[str, Any] | None:
-        time.sleep(probe_s)  # fresh DNS + TCP + TLS on its own socket
+    def probe(
+        hostname: str, port: int, addresses: tuple[str, ...], timeout: float
+    ) -> dict[str, Any] | None:
+        time.sleep(probe_s)  # fresh TCP + TLS on its own socket
         return {"expiration_date": "Nov 10 22:56:57 2030 GMT"}
 
+    async def resolved(host: str) -> list[str]:
+        return ["93.184.216.34"]
+
     monkeypatch.setattr(http, "ssrf_guarded_send", send)
-    monkeypatch.setattr(HTTPCheck, "_get_ssl_certificate_info", probe)
+    monkeypatch.setattr(http, "lookup_allowed_addresses", resolved)
+    monkeypatch.setattr(HTTPCheck, "_read_certificate", staticmethod(probe))
     return HTTPCheck(_cfg("http", target, timeout=1.0))
 
 

@@ -48,7 +48,7 @@ class PingCheck(BaseCheck):
             unresolved = f"Could not resolve host: {host}"
         except LookupTimeoutError as e:
             addresses = []
-            unresolved = f"Could not resolve host: {host} ({e})"
+            unresolved = str(e)
         if not addresses:
             return self.create_result(
                 success=False,

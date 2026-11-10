@@ -9,7 +9,7 @@ heartbeat, and the checks list sets it before any check first runs.
 from collections.abc import Mapping
 from typing import Any
 
-from app.checks._lookups import run_blocking
+from app.checks._lookups import LookupTimeoutError, run_blocking
 from app.checks.base import CheckConfigError
 from app.shared import ssrf
 from app.shared.logger import get_logger
@@ -67,16 +67,23 @@ def assert_target_allowed(target: str, *, database: bool = False) -> None:
 
 
 async def target_allowed(target: str, *, database: bool = False) -> None:
-    """`assert_target_allowed`, its lookups on the checks' lookup pool.
+    """`assert_target_allowed`, its lookups on the checks' lookup pool. A target
+    judged under a policy the server changed while its names resolved is judged
+    again under the new one.
 
     Raises:
         CheckConfigError: As `assert_target_allowed`.
         SsrfBlockedError: As `assert_target_allowed`.
-        LookupTimeoutError: A lookup took over `LOOKUP_SECONDS`.
+        LookupTimeoutError: A lookup took over `LOOKUP_SECONDS`; it names the hosts.
     """
-    await run_blocking(
-        _target_allowed_under, target, database, block_private_networks()
-    )
+    judged_under = None
+    while judged_under != (policy := block_private_networks()):
+        try:
+            await run_blocking(_target_allowed_under, target, database, policy)
+        except LookupTimeoutError as e:
+            hosts = ", ".join(ssrf.extract_hosts(target, database=database))
+            raise LookupTimeoutError(f"Could not resolve host: {hosts} ({e})") from None
+        judged_under = policy
 
 
 def _target_allowed_under(target: str, database: bool, block_private: bool) -> None:
@@ -111,9 +118,12 @@ async def lookup_allowed_addresses(host: str) -> list[str]:
     Raises:
         CheckConfigError: `host` cannot be resolved as written.
         SsrfBlockedError: It resolves, and every address is blocked.
-        LookupTimeoutError: The lookup took over `LOOKUP_SECONDS`.
+        LookupTimeoutError: The lookup took over `LOOKUP_SECONDS`; it names `host`.
     """
-    addresses = await run_blocking(_allowed_under, host, block_private_networks())
+    try:
+        addresses = await run_blocking(_allowed_under, host, block_private_networks())
+    except LookupTimeoutError as e:
+        raise LookupTimeoutError(f"Could not resolve host: {host} ({e})") from None
     # Judged again under the policy as it is now: the server can change it while
     # the name resolves.
     allowed = [address for address in addresses if ip_allowed(address)]

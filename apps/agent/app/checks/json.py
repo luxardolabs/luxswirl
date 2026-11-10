@@ -13,6 +13,7 @@ import httpx
 import jsonata
 
 from app.agent.http_client import check_client
+from app.checks._lookups import LookupTimeoutError
 from app.checks._ssrf_http import ssrf_guarded_send
 from app.checks.base import BaseCheck
 from app.shared.logger import get_logger
@@ -126,6 +127,9 @@ class JSONCheck(BaseCheck):
                 # If we got a response, break out of retry loop
                 break
 
+            except LookupTimeoutError as e:
+                # Named, and not retried: a retry would wait on the same lookup.
+                return self.create_result(success=False, latency_ms=None, error=str(e))
             except (
                 httpx.RequestError,
                 SsrfBlockedError,

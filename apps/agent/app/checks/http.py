@@ -6,6 +6,7 @@ import asyncio
 import re
 import socket
 import ssl
+import time
 import warnings
 from typing import Any
 from urllib.parse import urlparse
@@ -16,12 +17,16 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.utils import CryptographyDeprecationWarning
 
 from app.agent.http_client import check_client
-from app.checks._lookups import run_blocking
+from app.checks._lookups import LookupTimeoutError, run_blocking
 from app.checks._ssrf_http import ssrf_guarded_send
-from app.checks._ssrf_policy import allowed_addresses
-from app.checks.base import BaseCheck
+from app.checks._ssrf_policy import ip_allowed, lookup_allowed_addresses
+from app.checks.base import BaseCheck, CheckConfigError
 from app.shared.logger import get_logger
 from app.shared.ssrf import SsrfBlockedError
+
+# Kept free at the end of a run's time for building its result, so a late
+# certificate read never takes the run past the executor's timeout.
+_RESULT_MARGIN_SECONDS = 0.1
 
 logger = get_logger("luxswirl.agent.checks.http")
 
@@ -50,49 +55,15 @@ class HTTPCheck(BaseCheck):
     async def run(self) -> dict[str, Any]:
         """Execute the HTTP health check.
 
-        An HTTPS target's certificate is read alongside the request, on the
-        checks' lookup pool (it resolves and connects with blocking sockets), and
-        only within the check's own time: a probe that is late leaves the result
-        without certificate details, never fails it.
+        An HTTPS target that answered has its certificate read within what is left
+        of the check's own time: a read that is late leaves the result without
+        certificate details, never fails it.
 
         Returns:
             A dictionary containing the check result
         """
-        target = self.config["target"]
-        timeout = self.config.get("timeout", 3)
-        probe = None
-        if target.startswith("https://"):
-            probe = asyncio.create_task(
-                run_blocking(
-                    self._get_ssl_certificate_info, target, timeout, seconds=timeout
-                )
-            )
-        try:
-            return await self._request(probe)
-        finally:
-            if probe is not None:
-                if not probe.done():
-                    probe.cancel()
-                elif not probe.cancelled():
-                    probe.exception()  # read, so a late failure is not logged as lost
-
-    @staticmethod
-    async def _certificate_within(
-        probe: asyncio.Task[dict[str, Any] | None] | None, seconds: float
-    ) -> dict[str, Any] | None:
-        """The probe's certificate details if it finishes within `seconds`, else None."""
-        if probe is None:
-            return None
-        if seconds > 0:
-            await asyncio.wait({probe}, timeout=seconds)
-        if not probe.done() or probe.cancelled() or probe.exception() is not None:
-            return None
-        return probe.result()
-
-    async def _request(
-        self, probe: asyncio.Task[dict[str, Any] | None] | None
-    ) -> dict[str, Any]:
-        """The request, its retries and validation; `probe` is the certificate read."""
+        # The run's own deadline: the executor gives the whole run `timeout`.
+        deadline = time.monotonic() + self.config.get("timeout", 3)
         cfg = self.config
         target = cfg["target"]
         method = cfg.get("method", "GET")
@@ -150,6 +121,9 @@ class HTTPCheck(BaseCheck):
                 # If we got a response, break out of retry loop
                 break
 
+            except LookupTimeoutError as e:
+                # Named, and not retried: a retry would wait on the same lookup.
+                return self.create_result(success=False, latency_ms=None, error=str(e))
             except (
                 httpx.RequestError,
                 SsrfBlockedError,
@@ -197,9 +171,11 @@ class HTTPCheck(BaseCheck):
             http_response, validate_options, latency
         )
 
-        # Get SSL certificate info for HTTPS targets
-        # What is left of the attempt's own timeout (latency is in milliseconds).
-        ssl_info = await self._certificate_within(probe, timeout - latency / 1000)
+        # Get SSL certificate info for HTTPS targets, in what is left of the run's
+        # time, less a margin for the result itself.
+        ssl_info = await self._certificate(
+            target, timeout, deadline - time.monotonic() - _RESULT_MARGIN_SECONDS
+        )
         if ssl_info:
             response_data["ssl_certificate"] = ssl_info
 
@@ -274,47 +250,82 @@ class HTTPCheck(BaseCheck):
         return result
 
     @staticmethod
-    def _vetted_connection(hostname: str, port: int, timeout: float) -> socket.socket:
-        """A TCP connection to the first allowed address of `hostname` that answers.
+    async def _certificate(
+        target: str, timeout: float, seconds: float
+    ) -> dict[str, Any] | None:
+        """The certificate details of an HTTPS `target`, read within `seconds`.
+
+        The host is looked up as every check's is (shared, on the lookup pool,
+        under the SSRF policy), and the blocking read gets the addresses it may
+        connect to. None when it is not HTTPS, has no allowed address, or the read
+        is late or fails: the details are enrichment on top of the result.
+        """
+        if seconds <= 0 or not target.startswith("https://"):
+            return None
+        try:
+            parsed = urlparse(target)
+            hostname = parsed.hostname
+            port = parsed.port or 443
+        except ValueError:
+            return None
+        if not hostname:
+            return None
+        try:
+            async with asyncio.timeout(seconds):
+                addresses = await lookup_allowed_addresses(hostname)
+                if not addresses:
+                    return None
+                return await run_blocking(
+                    HTTPCheck._read_certificate,
+                    hostname,
+                    port,
+                    tuple(addresses),
+                    timeout,
+                    seconds=seconds,
+                )
+        # swallowed-exceptions: certificate details are enrichment; the result stands
+        # without them, and the request already met any refusal or failure here.
+        except TimeoutError, OSError, SsrfBlockedError, CheckConfigError:
+            return None
+
+    @staticmethod
+    def _vetted_connection(
+        addresses: tuple[str, ...], port: int, timeout: float
+    ) -> socket.socket:
+        """A TCP connection to the first of `addresses` that answers, each judged
+        under the SSRF policy as it is when the connection opens.
 
         Raises:
-            SsrfBlockedError: Every address `hostname` resolves to is blocked.
-            OSError: It does not resolve, or no allowed address answers.
+            OSError: No allowed address answers.
         """
-        last: OSError = OSError(f"Could not resolve host: {hostname}")
-        for address in allowed_addresses(hostname):
+        last: OSError = OSError("No allowed address")
+        for address in addresses:
+            if not ip_allowed(address):
+                continue
             try:
                 return socket.create_connection((address, port), timeout=timeout)
             except OSError as e:
                 last = e
         raise last
 
-    def _get_ssl_certificate_info(
-        self, target: str, timeout: float = 5
+    @staticmethod
+    def _read_certificate(
+        hostname: str, port: int, addresses: tuple[str, ...], timeout: float
     ) -> dict[str, Any] | None:
         """
-        Extract SSL certificate information from HTTPS target.
+        Read the certificate `hostname` presents on one of `addresses`. It blocks:
+        run it on the lookup pool.
 
         Args:
-            target: The HTTPS URL to check
+            hostname: The name presented for SNI
+            port: The TLS port
+            addresses: The addresses the SSRF policy allowed for `hostname`
             timeout: Connection timeout in seconds
 
         Returns:
-            Dictionary with cert info or None if not HTTPS or error
+            Dictionary with cert info or None on error
         """
         try:
-            # Only process HTTPS URLs
-            if not target.startswith("https://"):
-                return None
-
-            # Parse URL to get hostname and port
-            parsed = urlparse(target)
-            hostname = parsed.hostname
-            port = parsed.port or 443
-
-            if not hostname:
-                return None
-
             # Create SSL context
             context = ssl.create_default_context()
             context.check_hostname = False
@@ -323,7 +334,7 @@ class HTTPCheck(BaseCheck):
             # Connect on an address the SSRF policy allows (never the name, which
             # would be resolved again), presenting the name for SNI.
             with (
-                self._vetted_connection(hostname, port, timeout) as sock,
+                HTTPCheck._vetted_connection(addresses, port, timeout) as sock,
                 context.wrap_socket(sock, server_hostname=hostname) as ssock,
             ):
                 # Get cert in binary form (works even with CERT_NONE)
