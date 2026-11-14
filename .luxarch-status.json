@@ -1,6 +1,6 @@
 {
   "guard": "luxarch",
-  "guard_version": "0.359.0",
+  "guard_version": "0.364.0",
   "repo": "/repo",
   "targets": [
     {
@@ -1769,13 +1769,13 @@
         },
         {
           "rule": "fw.single_use_claim_atomic",
-          "status": "FAIL",
+          "status": "PASS",
           "since": "0.287.0",
-          "violations": 2,
+          "violations": 0,
           "deferred": false,
           "inert": false,
           "inert_reason": "",
-          "fix": "Claim it in one statement that only matches an available row: `update(Model).where(Model.token_hash == h, Model.used_at.is_(None), Model.expires_at > now).values(used_at=now).returning(Model)`, and refuse when it returns no row. When a side effect (a payment call) must sit between the check and the write, serialize the claimers first: load the row with `.with_for_update()` (a crud method that always locks counts), or take `pg_advisory_xact_lock(<key>)` before the load, the lock to use where the app also writes that row from a separate session (a row lock deadlocks there). A password set (a verify against the stored hash, then a new hash written) reads the row locked, with `populate_existing=True`, and verifies the password against the locked read: a lock taken after the verify leaves it checking a stale hash. A sign-in reads it the same way and issues the session after that verify, in the same transaction. See --doc FLEET-AUTH-SESSION-STANDARD \u00a71.2.",
+          "fix": "",
           "example": ""
         },
         {
@@ -2066,8 +2066,8 @@
         }
       ],
       "summary": {
-        "PASS": 168,
-        "FAIL": 1,
+        "PASS": 169,
+        "FAIL": 0,
         "XFAIL": 0,
         "XPASS": 0,
         "INERT": 18
@@ -3056,12 +3056,12 @@
     }
   },
   "summary": {
-    "PASS": 249,
-    "FAIL": 2,
+    "PASS": 250,
+    "FAIL": 1,
     "XFAIL": 0,
     "XPASS": 0,
     "INERT": 23
   },
-  "commit": "ebbf57e11c0504a33c063b5b5de2fcd863123911",
-  "generated_at": "2026-11-10T13:39:10Z"
+  "commit": "bfc382d27131ff9084ed22e207947cc3f7e22960",
+  "generated_at": "2026-11-14T23:28:43Z"
 }

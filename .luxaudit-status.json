@@ -6,7 +6,7 @@
   "source": "apps/backend/poetry.lock, apps/agent/poetry.lock, apps/backend/package-lock.json",
   "summary": {
     "PASS": 214,
-    "FAIL": 0,
+    "FAIL": 2,
     "XFAIL": 0
   },
   "vulnerable": [],
@@ -21,7 +21,28 @@
     "inert_reason": "",
     "error": "",
     "not_released": [],
-    "vulnerable": [],
+    "vulnerable": [
+      {
+        "package": "dnspython",
+        "installed": "2.9.0",
+        "vuln_id": "CVE-2026-128089",
+        "severity": "HIGH",
+        "layer": "lang",
+        "path": "opt/venv/lib/python3.14/site-packages/dnspython-2.9.0.dist-info/METADATA",
+        "image": "ghcr.io/luxardolabs/luxswirl-backend:2026.11.0",
+        "fix": "2.9.2"
+      },
+      {
+        "package": "dnspython",
+        "installed": "2.9.0",
+        "vuln_id": "CVE-2026-128089",
+        "severity": "HIGH",
+        "layer": "lang",
+        "path": "opt/venv/lib/python3.14/site-packages/dnspython-2.9.0.dist-info/METADATA",
+        "image": "ghcr.io/luxardolabs/luxswirl-agent:2026.11.0",
+        "fix": "2.9.2"
+      }
+    ],
     "deferred": []
   },
   "ignore_rows": {
@@ -29,6 +50,6 @@
     "expired": [],
     "unjudged": []
   },
-  "commit": "ebbf57e11c0504a33c063b5b5de2fcd863123911",
-  "generated_at": "2026-11-10T13:39:10Z"
+  "commit": "bfc382d27131ff9084ed22e207947cc3f7e22960",
+  "generated_at": "2026-11-14T23:28:43Z"
 }

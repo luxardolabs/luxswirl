@@ -1,6 +1,6 @@
 {
   "guard": "luxlint",
-  "guard_version": "0.77.0",
+  "guard_version": "0.79.0",
   "repo": "/repo",
   "source": [
     "apps/backend/app",
@@ -94,10 +94,21 @@
     },
     {
       "rule": "lint.eslint",
-      "status": "PASS",
+      "status": "FAIL",
       "since": "0.18.0",
-      "violations": 0,
-      "sites": [],
+      "violations": 2,
+      "sites": [
+        {
+          "path": "apps/backend/app/static/js/database-health.js",
+          "line": 39,
+          "detail": "no-unused-vars: 'formatNumber' is defined but never used. Allowed unused vars must match /^_/u."
+        },
+        {
+          "path": "apps/backend/app/static/js/tags-picker.js",
+          "line": 7,
+          "detail": "no-unused-vars: 'initCheckFormTagPicker' is defined but never used. Allowed unused vars must match /^_/u."
+        }
+      ],
       "deferred": false
     },
     {
@@ -166,19 +177,21 @@
     },
     {
       "rule": "docs.coverage",
-      "status": "PASS",
+      "status": "INERT",
       "since": "0.5.0",
       "violations": 0,
       "sites": [],
-      "deferred": false
+      "deferred": false,
+      "inert_reason": "docstring checks are opt-in and this repo's `[docs]` block does not enable this one"
     },
     {
       "rule": "docs.substantive",
-      "status": "PASS",
+      "status": "INERT",
       "since": "0.5.0",
       "violations": 0,
       "sites": [],
-      "deferred": false
+      "deferred": false,
+      "inert_reason": "docstring checks are opt-in and this repo's `[docs]` block does not enable this one"
     },
     {
       "rule": "docs.markdown_format",
@@ -198,13 +211,13 @@
     }
   ],
   "summary": {
-    "PASS": 23,
-    "FAIL": 0,
+    "PASS": 20,
+    "FAIL": 1,
     "XFAIL": 0,
     "XPASS": 0,
-    "INERT": 0
+    "INERT": 2
   },
   "mypy": "separate: `luxlint --mypy` ([mypy].baseline ratchet)",
-  "commit": "ebbf57e11c0504a33c063b5b5de2fcd863123911",
-  "generated_at": "2026-11-10T13:39:10Z"
+  "commit": "bfc382d27131ff9084ed22e207947cc3f7e22960",
+  "generated_at": "2026-11-14T23:28:43Z"
 }
