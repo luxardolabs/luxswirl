@@ -34,13 +34,6 @@ function formatChartLabel(timestamp, hours) {
 }
 
 /**
- * Format number with thousands separator
- */
-function formatNumber(num) {
-    return num.toLocaleString('en-US');
-}
-
-/**
  * Initialize or update the growth chart
  */
 async function updateGrowthChart(hours) {

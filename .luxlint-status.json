@@ -94,21 +94,10 @@
     },
     {
       "rule": "lint.eslint",
-      "status": "FAIL",
+      "status": "PASS",
       "since": "0.18.0",
-      "violations": 2,
-      "sites": [
-        {
-          "path": "apps/backend/app/static/js/database-health.js",
-          "line": 39,
-          "detail": "no-unused-vars: 'formatNumber' is defined but never used. Allowed unused vars must match /^_/u."
-        },
-        {
-          "path": "apps/backend/app/static/js/tags-picker.js",
-          "line": 7,
-          "detail": "no-unused-vars: 'initCheckFormTagPicker' is defined but never used. Allowed unused vars must match /^_/u."
-        }
-      ],
+      "violations": 0,
+      "sites": [],
       "deferred": false
     },
     {
@@ -211,13 +200,13 @@
     }
   ],
   "summary": {
-    "PASS": 20,
-    "FAIL": 1,
+    "PASS": 21,
+    "FAIL": 0,
     "XFAIL": 0,
     "XPASS": 0,
     "INERT": 2
   },
   "mypy": "separate: `luxlint --mypy` ([mypy].baseline ratchet)",
-  "commit": "bfc382d27131ff9084ed22e207947cc3f7e22960",
-  "generated_at": "2026-11-14T23:28:43Z"
+  "commit": "2c0d4995c3ac2473f679ad5ed82066a2833068d1",
+  "generated_at": "2026-11-14T23:38:35Z"
 }
