@@ -13,7 +13,7 @@ function setupProviderFormHandler(form) {
         const config = {};
 
         // Collect all config_* fields into JSON
-        for (let [key, value] of formData.entries()) {
+        for (const [key, value] of formData.entries()) {
             if (key.startsWith('config_')) {
                 const fieldName = key.replace('config_', '');
 
@@ -21,7 +21,7 @@ function setupProviderFormHandler(form) {
                 if (value && value.trim().startsWith('{')) {
                     try {
                         config[fieldName] = JSON.parse(value);
-                    } catch (e) {
+                    } catch {
                         config[fieldName] = value;
                     }
                 }

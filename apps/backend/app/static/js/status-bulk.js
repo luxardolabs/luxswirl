@@ -105,7 +105,7 @@ function selectAllMatching() {
 // Clear selection
 function clearSelection() {
     const checkboxes = document.querySelectorAll('.check-select');
-    checkboxes.forEach(cb => cb.checked = false);
+    checkboxes.forEach(cb => { cb.checked = false; });
     const selectAllCheckbox = document.getElementById('select-all-page');
     if (selectAllCheckbox) {
         selectAllCheckbox.checked = false;

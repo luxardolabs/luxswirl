@@ -117,6 +117,12 @@ export function init() {
             toggleArtifacts();
         }
 
+        // Toggle a synthetic check's step timings table
+        if (target.hasAttribute('data-toggle-step-timings')) {
+            e.preventDefault();
+            toggleStepTimings();
+        }
+
         // Open image modal
         if (target.hasAttribute('data-image-modal')) {
             e.preventDefault();

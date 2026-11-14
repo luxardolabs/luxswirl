@@ -196,9 +196,9 @@ export function initLogo(containerId, initialConfig = {}) {
             const angle = time * comet.speed * config.cometSpeed + comet.offset;
 
             // 3D orbit calculation
-            let x = Math.cos(angle) * comet.radius;
-            let y = Math.sin(angle) * comet.radius;
-            let z = 0;
+            const x = Math.cos(angle) * comet.radius;
+            const y = Math.sin(angle) * comet.radius;
+            const z = 0;
 
             const cosInc = Math.cos(comet.inclinationAngle);
             const sinInc = Math.sin(comet.inclinationAngle);

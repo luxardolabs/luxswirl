@@ -208,7 +208,7 @@ export function initLogo(containerId, initialConfig = {}, callbacks = {}) {
         }
 
         // Animate rings with light patterns
-        rings.forEach((ring, ringIndex) => {
+        rings.forEach((ring) => {
             const ringTime = time * config.ringRotationSpeed;
 
             // Calculate ring-specific pulse (for particle size)
@@ -218,13 +218,13 @@ export function initLogo(containerId, initialConfig = {}, callbacks = {}) {
             const radiusPulse = 1 + Math.sin(time * config.ringRadiusPulseSpeed) * config.ringRadiusPulse;
             const pulsedRadius = ring.radius * radiusPulse;
 
-            ring.particles.forEach((particle, particleIndex) => {
+            ring.particles.forEach((particle) => {
                 const angle = particle.angleOffset + ringTime + ring.rotationOffset;
 
                 // Position on ring (using pulsed radius)
-                let x = Math.cos(angle) * pulsedRadius;
-                let z = Math.sin(angle) * pulsedRadius;
-                let y = 0;
+                const x = Math.cos(angle) * pulsedRadius;
+                const z = Math.sin(angle) * pulsedRadius;
+                const y = 0;
 
                 // Apply ring tilt and rotation
                 const cosAngle = Math.cos(ring.angle);
@@ -250,11 +250,11 @@ export function initLogo(containerId, initialConfig = {}, callbacks = {}) {
                 const lightTime = time * config.lightSpeed;
                 const trailLengthNormalized = config.trailLength / 100;
 
-                let patternIntensity = 1.0; // Base pattern brightness (0-1)
-                let trailFade = 0.0; // Trail gradient multiplier (0-1)
+                let patternIntensity; // Base pattern brightness (0-1)
+                let trailFade; // Trail gradient multiplier (0-1)
 
                 // First, calculate where the "hot spot" is based on pattern
-                let hotSpotPosition = (lightTime % 1);
+                const hotSpotPosition = (lightTime % 1);
 
                 // Calculate distance BEHIND hot spot (trail follows behind)
                 // Reverse the calculation so trail goes backwards from hot spot
@@ -299,25 +299,28 @@ export function initLogo(containerId, initialConfig = {}, callbacks = {}) {
 
                 // Now calculate pattern-specific intensity modifications
                 switch (config.lightPattern) {
-                    case 'wave':
+                    case 'wave': {
                         // Sine wave - modulates the trail brightness
                         const waveValue = (Math.sin(normalizedIndex * Math.PI * 4 + lightTime * 2) + 1) / 2;
                         patternIntensity = waveValue;
                         break;
+                    }
 
-                    case 'chase':
+                    case 'chase': {
                         // Broadway chase - hard sections that light up
                         const chaseWidth = 0.15;
                         const wrappedDistance = Math.min(distanceFromHotSpot, 1 - distanceFromHotSpot);
                         patternIntensity = wrappedDistance < chaseWidth ? 1.0 : 0.0;
                         break;
+                    }
 
-                    case 'sparkle':
+                    case 'sparkle': {
                         // Random sparkles - modulates trail brightness
                         const sparkleValue = Math.sin(particle.index * 0.1 + time * 2 + ring.sparkleOffset) *
                                             Math.sin(particle.index * 0.3 + time * 3 + ring.sparkleOffset * 2);
                         patternIntensity = sparkleValue > 0.7 ? 1.0 : 0.2;
                         break;
+                    }
 
                     case 'pulse':
                         // All particles pulse together - no trail effect, just pulse
@@ -335,7 +338,7 @@ export function initLogo(containerId, initialConfig = {}, callbacks = {}) {
                 }
 
                 // Combine pattern intensity with trail fade
-                let brightness = patternIntensity * trailFade;
+                const brightness = patternIntensity * trailFade;
 
                 // Base opacity with depth effect
                 const distance = particle.mesh.position.distanceTo(camera.position);

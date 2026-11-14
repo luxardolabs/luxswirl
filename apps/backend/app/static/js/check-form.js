@@ -29,7 +29,7 @@ function generateCheckName() {
         try {
             const url = new URL(target.value);
             cleanTarget = url.hostname.replace(/^www\./, '');
-        } catch (e) {
+        } catch {
             cleanTarget = target.value;
         }
     } else if (checkType.value === 'tcp') {

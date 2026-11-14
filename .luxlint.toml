@@ -23,18 +23,21 @@ paths = [
 ]
 
 [js]
-# Per-repo FACTS about this app's first-party browser JS, not rules. The layout is
-# the canonical one (app/static/js), so `paths` is left at its default. Without
-# this block `lint.eslint` is INERT and reports a green having scanned nothing —
-# 31 first-party files were in that state.
+# Per-repo FACTS about this app's first-party browser JS, not rules. The app JS
+# lives in the backend component, so `paths` names it from the repo root. Without
+# it `lint.eslint` scans nothing and reports a green.
+paths = ["apps/backend/app/static/js"]
 #
-# Classic <script src> tags, no bundler and no import/export anywhere in
-# app/static/js, so the fleet default `source_type = "script"` is correct.
+# The app JS is ES modules with no bundler: each page loads its entry with
+# <script type="module">, and the files import one another.
+source_type = "module"
 globals = [
   # Loaded from static/js/vendor before any app script (see base.html).
   "htmx",
   "Chart",
   "Alpine",
+  # Loaded from static/js/vendor by status_page_manage.html, before dashboard-manage.js.
+  "Sortable",
   # Assigned onto `window` by one app script and called from another or from an
   # inline template handler — writable, because the file that defines it also
   # declares it here.

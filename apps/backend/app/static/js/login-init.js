@@ -41,8 +41,8 @@ const loginPreset = {
 
 // CSS Glow settings
 let cssGlowColor = "#ffe4e3";
-let cssGlowIntensity = 40;
-let cssGlowLocked = true;
+const cssGlowIntensity = 40;
+const cssGlowLocked = true;
 let lastCssGlowColor = cssGlowColor;
 
 function updateCSSGlow() {
@@ -58,7 +58,7 @@ function updateCSSGlow() {
 }
 
 // Initialize logo with preset and CSS glow callback
-const logoController = initLogo('canvas-container', loginPreset, {
+initLogo('canvas-container', loginPreset, {
     onColorUpdate: (currentColor) => {
         if (cssGlowLocked && currentColor !== lastCssGlowColor) {
             cssGlowColor = currentColor;

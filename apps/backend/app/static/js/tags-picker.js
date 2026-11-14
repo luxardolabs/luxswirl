@@ -218,3 +218,6 @@ function tagPill(tag, { pillClass, buttonClass, dataKey }) {
     pill.append(label, button);
     return pill;
 }
+
+// jobs.js opens the bulk tag picker when htmx swaps the network-scan form in.
+window.initBulkTagPicker = initBulkTagPicker;
