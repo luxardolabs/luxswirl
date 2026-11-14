@@ -302,11 +302,21 @@ class AuthCoreService:
         # it names a user: a concurrent sign-in waits, then reads the failure
         # count and lock this one commits, so no guess is checked against the
         # real hash past the limit, and the queue says nothing of who exists.
-        user = (
+        queued = (
             await self._user_for_login(
                 db, username, password, client_ip=client_ip, user_agent=user_agent
             )
             if storable_text(username)
+            else None
+        )
+        # The password is verified, and the session issued, on the row read under
+        # its lock in this transaction itself, outside the queue's savepoint
+        # (FLEET-AUTH-SESSION-STANDARD §1.2): a reset or revoke that committed
+        # before the queue let this sign-in through is what it judges, and none
+        # can commit before the session is issued.
+        user = (
+            await UserCRUD.get_by_id_for_update(db, queued.id)
+            if queued is not None
             else None
         )
 
@@ -607,7 +617,7 @@ class AuthCoreService:
         # change and is then checked against the new hash) and on the same
         # failed-attempt budget: a stolen session cannot guess past the lockout.
         try:
-            user = await UserCRUD.get_by_id_for_login(
+            queued = await UserCRUD.get_by_id_for_login(
                 db, user_id, lock_wait_ms=self.LOGIN_LOCK_WAIT_MS
             )
         except DBAPIError as exc:
@@ -620,6 +630,16 @@ class AuthCoreService:
                 extra={"event": "auth.password_change.busy", "user_id": str(user_id)},
             )
             raise LoginBusyException() from exc
+        # The password is verified, and the new one written, on the row read under
+        # its lock in this transaction itself, outside the queue's savepoint
+        # (FLEET-AUTH-SESSION-STANDARD §1.2): a reset that committed before the
+        # queue let this change through is what it judges, and none can commit
+        # before the write.
+        user = (
+            await UserCRUD.get_by_id_for_update(db, queued.id)
+            if queued is not None
+            else None
+        )
         if user is None:
             raise ValueError("User not found")
 
