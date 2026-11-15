@@ -836,24 +836,25 @@ class CheckResultCRUD:
         return result.scalar_one_or_none()
 
     @staticmethod
-    async def list_by_keys(
-        db: AsyncSession, keys: Sequence[tuple[UUID, datetime]]
+    async def list_for_check_at(
+        db: AsyncSession, check_id: UUID, timestamps: Sequence[datetime]
     ) -> list[CheckResult]:
-        """The results named by `(id, timestamp)`, oldest first.
+        """A check's results at these instants, oldest first.
 
-        The timestamps bound the scan to the chunks that can hold them.
+        `(check_id, timestamp)` is a result's unique key; the timestamps also
+        bound the scan to the chunks that can hold them.
         """
-        if not keys:
+        if not timestamps:
             return []
-        stamps = [stamp for _, stamp in keys]
         result = await db.execute(
             select(CheckResult)
             .where(
-                CheckResult.id.in_([result_id for result_id, _ in keys]),
-                CheckResult.timestamp >= min(stamps),
-                CheckResult.timestamp <= max(stamps),
+                CheckResult.check_id == check_id,
+                CheckResult.timestamp.in_(timestamps),
+                CheckResult.timestamp >= min(timestamps),
+                CheckResult.timestamp <= max(timestamps),
             )
-            .order_by(CheckResult.timestamp, CheckResult.id)
+            .order_by(CheckResult.timestamp)
         )
         return list(result.scalars().all())
 

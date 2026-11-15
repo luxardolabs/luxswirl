@@ -25,7 +25,7 @@ A trigger type is **immutable** after creation — to use a different one, creat
 Triggers when a check fails (goes down).
 
 - **Consecutive Failures** (1–100, default 3): how many failures in a row before triggering. Setting 1 fires on the first failure; 3 requires three in a row.
-- **Behavior:** counts consecutive failures only and resets the counter on any success — so fail → succeed → fail restarts the count. A recovery notification is sent when the check comes back up (if enabled).
+- **Behavior:** counts consecutive failures only and resets the counter on any success — so fail → succeed → fail restarts the count. A recovery notification is sent when the check comes back up (if enabled), only after the alert notified the outage: failures fewer than the count end silently.
 
 ```
 Alert: "Production API Down"   Trigger: Status Change   Consecutive Failures: 3

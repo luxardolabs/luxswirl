@@ -40,8 +40,24 @@ SILENCE_TRIGGER_TYPES = frozenset(
 )
 
 
+# How long an evaluation waits for another evaluation of the same check, which
+# may be delivering a notification (a webhook's timeout is 10 s by default).
+# Under the agent's 30 s report timeout, so the report is still answered.
+CHECK_LOCK_WAIT_MS = 20_000
+
+
 class AlertEvaluationCoreService:
     """Evaluates check results against alerts and sends their notifications."""
+
+    @staticmethod
+    async def lock_check(db: AsyncSession, check_id: UUID) -> None:
+        """Hold alert evaluation for this check to the transaction's end.
+
+        Every evaluation of a check's results takes it first, so one
+        evaluation's notification rows are committed before the next reads
+        them to de-duplicate (`get_last_notification_for_dedup`).
+        """
+        await AlertCRUD.queue_on_check_alerts(db, check_id, CHECK_LOCK_WAIT_MS)
 
     @staticmethod
     async def evaluate_check_result(
@@ -84,6 +100,10 @@ class AlertEvaluationCoreService:
         for alert in all_alerts:
             if alert.trigger_type in SILENCE_TRIGGER_TYPES:
                 continue
+            if await AlertEvaluationCoreService._already_judged(
+                db, alert, check, check_result
+            ):
+                continue
             # swallowed-exceptions: one alert's failure is logged with its id and rolled back in its savepoint; the other alerts on the check must still fire
             try:
                 async with db.begin_nested():
@@ -103,6 +123,23 @@ class AlertEvaluationCoreService:
                         "check_id": str(check.id),
                     },
                 )
+
+    @staticmethod
+    async def _already_judged(
+        db: AsyncSession, alert: Alert, check: Check, check_result: CheckResult
+    ) -> bool:
+        """Whether the alert's last notification row for this check came from
+        this result or a later one.
+
+        Such a result says nothing new: evaluated again (its report sent once
+        more) it would repeat a decision, and evaluated after a later result
+        (another agent's report of a replicate check, delayed) it would set the
+        alert back to a state the check has left.
+        """
+        last = await AlertCRUD.get_last_notification_for_dedup(db, alert.id, check.id)
+        if last is None or last.check_result_timestamp is None:
+            return False
+        return bool(check_result.timestamp <= last.check_result_timestamp)
 
     @staticmethod
     async def _check_matches_filters(
@@ -277,7 +314,12 @@ class AlertEvaluationCoreService:
         check_result: CheckResult,
         config: dict[str, Any],
     ) -> bool:
-        """Evaluate status_change trigger."""
+        """Evaluate status_change trigger.
+
+        The result is judged against the check's results up to it, not the
+        check's newest: a report carries several results of one check, each
+        evaluated in turn.
+        """
         on_status = config.get("on_status", ["error"])
         consecutive_failures = config.get("consecutive_failures", 1)
 
@@ -286,18 +328,20 @@ class AlertEvaluationCoreService:
         # Check for recovery (error -> success)
         if current_status == "success" and alert.notify_on_recovery:
             recent_results = await AlertCRUD.get_recent_results_for_check(
-                db, check.id, 2
+                db, check.id, 2, at_or_before=check_result.timestamp
             )
 
             # post-db-filter: the read is LIMIT 2; this asks whether both rows exist
-            if len(recent_results) >= 2:
-                previous_status = "success" if recent_results[1].success else "error"
-                # If previous was error and current is success -> recovery
-                if previous_status == "error":
-                    return True
-
-            # No previous error, no recovery notification
-            return False
+            if len(recent_results) < 2 or recent_results[1].success:
+                # No previous error, no recovery notification
+                return False
+            # A recovery tells of the end of an outage this alert notified:
+            # with no notification recorded for the check, nobody was told of
+            # one (fewer failures than the alert needs, say).
+            last_notification = await AlertCRUD.get_last_notification_for_dedup(
+                db, alert.id, check.id
+            )
+            return last_notification is not None
 
         # Check if current status matches trigger
         if current_status not in on_status:
@@ -306,7 +350,7 @@ class AlertEvaluationCoreService:
         # If consecutive failures required, check previous results
         if consecutive_failures > 1:
             recent_results = await AlertCRUD.get_recent_results_for_check(
-                db, check.id, consecutive_failures
+                db, check.id, consecutive_failures, at_or_before=check_result.timestamp
             )
 
             # post-db-filter: the read is LIMIT consecutive_failures; this asks whether that many exist

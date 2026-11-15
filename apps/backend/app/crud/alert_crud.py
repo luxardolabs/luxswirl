@@ -31,6 +31,11 @@ DEDUP_RELEVANT_STATUSES = (
     NotificationStatus.DEDUPLICATED.value,
 )
 
+# The first key of the two-key advisory lock that serialises alert evaluation
+# per check (the second is the check id's hashtext). Any constant works: the
+# two-key space does not overlap the one-key space other advisory locks use.
+_ALERT_EVALUATION_LOCK_CLASS = 1_826_301_558
+
 
 class AlertCRUD:
     """Database queries for alerts and their relationships."""
@@ -247,16 +252,48 @@ class AlertCRUD:
 
     @staticmethod
     async def get_recent_results_for_check(
-        db: AsyncSession, check_id: UUID, limit: int
+        db: AsyncSession,
+        check_id: UUID,
+        limit: int,
+        *,
+        at_or_before: datetime | None = None,
     ) -> Sequence[CheckResult]:
-        """Most recent N results for a check, newest first."""
+        """Most recent N results for a check, newest first; with `at_or_before`,
+        the N up to that instant (the results a result is judged against)."""
+        query = select(CheckResult).where(CheckResult.check_id == check_id)
+        if at_or_before is not None:
+            query = query.where(CheckResult.timestamp <= at_or_before)
         result = await db.execute(
-            select(CheckResult)
-            .where(CheckResult.check_id == check_id)
-            .order_by(CheckResult.timestamp.desc())
-            .limit(limit)
+            query.order_by(CheckResult.timestamp.desc()).limit(limit)
         )
         return result.scalars().all()
+
+    @staticmethod
+    async def queue_on_check_alerts(
+        db: AsyncSession, check_id: UUID, wait_ms: int
+    ) -> None:
+        """Take the transaction's advisory lock on alert evaluation for a check,
+        waiting at most `wait_ms` for an evaluation that holds it.
+
+        The wait has its own statement timeout, longer than the session's,
+        since the holder may be delivering a notification; the session's own
+        timeout applies again once the lock is held.
+        """
+        previous: str = (
+            await db.execute(select(func.current_setting("statement_timeout")))
+        ).scalar_one()
+        await db.execute(
+            select(func.set_config("statement_timeout", f"{wait_ms}ms", True))
+        )
+        await db.execute(
+            select(
+                func.pg_advisory_xact_lock(
+                    _ALERT_EVALUATION_LOCK_CLASS,
+                    func.hashtext(str(check_id)),
+                )
+            )
+        )
+        await db.execute(select(func.set_config("statement_timeout", previous, True)))
 
     @staticmethod
     async def list_active_notif_mappings_for_alert(
