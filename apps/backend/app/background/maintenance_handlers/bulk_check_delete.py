@@ -4,9 +4,9 @@ job.params expects {"check_ids": ["uuid", ...]}.
 
 Delegates to CheckCoreService.bulk_delete so the cascade through
 check_results AND the business invariant — bumping each affected agent's
-checks_updated_at to trigger a config reload — both run. Calling CheckCRUD
-directly here previously dropped the timestamp bump, leaving deleted checks
-still executing on the agent until an unrelated config change.
+checks_updated_at to trigger a config reload — both run. Deleting through
+CheckCRUD alone would skip that bump, and the agent would keep running the
+deleted checks until an unrelated config change.
 """
 
 from uuid import UUID
