@@ -58,10 +58,11 @@ class NotificationLogCRUD:
         now: datetime,
         limit: int,
         *,
-        open_limit: int,
         provider_share: int,
     ) -> list[NotificationLog]:
-        """Up to `limit` rows due for delivery, locked FOR UPDATE SKIP LOCKED.
+        """Up to `limit` rows due for delivery, and the first due row of each
+        provider with nothing in flight beyond them, locked FOR UPDATE SKIP
+        LOCKED.
 
         Due: pending or retrying with `next_attempt_at` reached, or sending
         with its lease lapsed (its worker stopped). A row is held back while
@@ -75,10 +76,11 @@ class NotificationLogCRUD:
         across providers, the provider with the fewest in flight first (each
         provider's own in decision order), and no provider is given more
         than `provider_share` in flight in all, so providers whose every
-        attempt waits out its timeout never fill the slots between them.
-        Past the first `open_limit` rows, only a provider with nothing in
-        flight may take one (its first row), so a provider that comes due
-        while the slots are held is never left waiting for one to free.
+        attempt waits out its timeout never fill the slots between them. A
+        provider with nothing in flight is given its first row whether or not
+        a slot is free, so one that comes due while every slot is held, by
+        however many providers that never answer, is never left waiting for
+        one to free.
         """
         earlier = aliased(NotificationLog)
         awaiting = [
@@ -155,9 +157,8 @@ class NotificationLogCRUD:
             .subquery()
         )
         eligible = select(placed.c.id).where(
-            placed.c.position <= limit,
             or_(
-                placed.c.position <= open_limit,
+                placed.c.position <= limit,
                 and_(placed.c.held == 0, placed.c.rank == 1),
             ),
         )
@@ -165,12 +166,45 @@ class NotificationLogCRUD:
             select(NotificationLog)
             .where(NotificationLog.id.in_(eligible))
             .order_by(NotificationLog.decision_seq)
-            .limit(limit)
             .with_for_update(skip_locked=True, of=NotificationLog)
             # The rows as locked now, over any copy the session holds.
             .execution_options(populate_existing=True)
         )
         return list(result.scalars().all())
+
+    @staticmethod
+    async def database_now(db: AsyncSession) -> datetime:
+        """The database's clock: the one every server process's claims,
+        leases and retries are judged by, whatever each host's clock says."""
+        now: datetime = (await db.execute(select(func.clock_timestamp()))).scalar_one()
+        return now
+
+    @staticmethod
+    async def release_attempts(
+        db: AsyncSession, attempts: list[tuple[UUID, int]], now: datetime
+    ) -> int:
+        """Hand back rows whose attempts this process cut off (a graceful
+        stop): each still `sending` for that attempt is due again at `now`,
+        `retrying`, with no lease, so no process counts it in flight. How many
+        were handed back."""
+        released = 0
+        for log_id, attempt in attempts:
+            result = await db.execute(
+                update(NotificationLog)
+                .where(
+                    NotificationLog.id == log_id,
+                    NotificationLog.status == NotificationStatus.SENDING,
+                    NotificationLog.attempts == attempt,
+                )
+                .values(
+                    status=NotificationStatus.RETRYING,
+                    next_attempt_at=now,
+                    lease_expires_at=None,
+                )
+                .returning(NotificationLog.id)
+            )
+            released += result.scalar_one_or_none() is not None
+        return released
 
     @staticmethod
     async def mark_sending(

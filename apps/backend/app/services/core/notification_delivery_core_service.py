@@ -66,14 +66,13 @@ class NotificationDeliveryCoreService:
         now: datetime,
         limit: int,
         *,
-        open_limit: int | None = None,
         provider_share: int | None = None,
     ) -> ClaimedBatch:
         """Claim up to `limit` due rows (`NotificationLogCRUD.claim_due`),
         taken in turn across providers, with at most `provider_share` (all of
         `limit`, by default) in flight for one provider across every server
-        process, and past the first `open_limit` (all of `limit`, by default)
-        only a provider with nothing in flight given one.
+        process, and beyond them the first due row of each provider with
+        nothing in flight.
 
         A row whose payload this release cannot read is failed, one that is
         no longer to be sent (`_refusal`) is recorded as suppressed, and one
@@ -85,8 +84,7 @@ class NotificationDeliveryCoreService:
             db,
             now,
             limit,
-            open_limit=limit if open_limit is None else open_limit,
-            provider_share=provider_share or limit,
+            provider_share=provider_share or max(limit, 1),
         )
         deliveries: list[ClaimedDelivery] = []
         ended = 0
@@ -114,6 +112,23 @@ class NotificationDeliveryCoreService:
                 )
         network = await SettingsCoreService.get_network_protection(db)
         return ClaimedBatch(deliveries=deliveries, network=network, ended=ended)
+
+    @staticmethod
+    async def now(db: AsyncSession) -> datetime:
+        """The instant claims, leases and retries are judged by: the
+        database's clock, shared by every server process."""
+        return await NotificationLogCRUD.database_now(db)
+
+    @staticmethod
+    async def release(
+        db: AsyncSession, claimed: list[ClaimedDelivery], now: datetime
+    ) -> int:
+        """Hand back the rows of attempts cut off by a graceful stop, due again
+        at `now` (`NotificationLogCRUD.release_attempts`); a row another
+        worker has claimed since stays that worker's."""
+        return await NotificationLogCRUD.release_attempts(
+            db, [(each.log_id, each.attempt) for each in claimed], now
+        )
 
     @staticmethod
     def _read(

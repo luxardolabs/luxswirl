@@ -9,13 +9,15 @@ with no transaction open, and each outcome is recorded as it comes, in a
 short transaction of its own (`NotificationDeliveryCoreService`). Slots are
 claimed in turn across providers, the one with the fewest attempts in flight
 first; no provider has more than `PROVIDER_SHARE` in flight, counted across
-every server process (its `sending` rows under a live lease); and the last
-`IDLE_PROVIDER_SLOTS` of a pool's slots go only to a provider with nothing in
-flight. So providers whose every attempt waits out its timeout leave the
-others theirs, however many of them there are. Several server processes each
-run one; SKIP LOCKED keeps them off each other's rows, and a row whose worker
-stopped mid-delivery is claimed again once its lease lapses. Nothing is
-reaped at startup: the lease is the only recovery.
+every server process (its `sending` rows under a live lease); and a provider
+with nothing in flight anywhere is given its first due row even when every
+slot is held, one attempt past the pool's slots. So providers whose every
+attempt waits out its timeout leave the others theirs, however many of them
+there are. Several server processes each run one; SKIP LOCKED keeps them off
+each other's rows. Every instant is the database's clock, so processes on
+hosts whose clocks differ judge leases alike. A graceful stop hands back the
+rows of the attempts it cuts off, due again at once; a row whose worker died
+mid-delivery is claimed again once its lease lapses.
 """
 
 import asyncio
@@ -26,7 +28,6 @@ from datetime import datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.datetime_utils import utc_now
 from app.db import worker_session
 from app.schemas.notification_delivery_schema import ClaimedDelivery, DeliveryOutcome
 from app.services.core.notification_delivery_core_service import (
@@ -45,8 +46,6 @@ DELIVERY_SLOTS = 20
 # The most attempts one provider may have in flight, across every server
 # process.
 PROVIDER_SHARE = 10
-# Slots of a pool kept for a provider with nothing in flight.
-IDLE_PROVIDER_SLOTS = 1
 _POLL_IDLE_SECONDS = 1.0
 _POLL_ERROR_BACKOFF_SECONDS = 5.0
 
@@ -72,23 +71,22 @@ class DeliveryPool:
         """Whether any attempt is in flight."""
         return bool(self._in_flight)
 
-    def _clock(self) -> datetime:
-        return self._now or utc_now()
+    async def _clock(self, db: AsyncSession) -> datetime:
+        return self._now or await NotificationDeliveryCoreService.now(db)
 
     async def fill(self) -> int:
         """Claim due rows for the free slots, in turn across providers and
-        within each provider's share, and start their attempts; how many rows
-        the claim took, those it ended without an attempt included (each may
-        free the next row of its alert, subject and provider)."""
-        free = DELIVERY_SLOTS - len(self._in_flight)
-        if free <= 0:
-            return 0
+        within each provider's share, and the first due row of each provider
+        with nothing in flight, slot or no slot, and start their attempts;
+        how many rows the claim took, those it ended without an attempt
+        included (each may free the next row of its alert, subject and
+        provider)."""
+        free = max(0, DELIVERY_SLOTS - len(self._in_flight))
         async with self._open_session() as db:
             batch = await NotificationDeliveryCoreService.claim_due(
                 db,
-                self._clock(),
+                await self._clock(db),
                 free,
-                open_limit=max(0, free - IDLE_PROVIDER_SLOTS),
                 provider_share=PROVIDER_SHARE,
             )
         for claimed in batch.deliveries:
@@ -112,16 +110,34 @@ class DeliveryPool:
             outcome = attempt.result()
             async with self._open_session() as db:
                 await NotificationDeliveryCoreService.record(
-                    db, claimed, outcome, self._clock()
+                    db, claimed, outcome, await self._clock(db)
                 )
 
     async def cancel(self) -> None:
-        """Stop every attempt in flight; their rows are claimed again once
-        their leases lapse."""
+        """Stop every attempt in flight and hand their rows back, due again
+        at once. A row the hand-back cannot reach (the database gone) is
+        claimed again once its lease lapses."""
         for attempt in self._in_flight:
             attempt.cancel()
         await asyncio.gather(*self._in_flight, return_exceptions=True)
+        cut_off = list(self._in_flight.values())
         self._in_flight.clear()
+        if not cut_off:
+            return
+        try:
+            async with self._open_session() as db:
+                released = await NotificationDeliveryCoreService.release(
+                    db, cut_off, await self._clock(db)
+                )
+        except Exception:
+            logger.exception(
+                "Cut-off notifications not handed back; their leases recover them"
+            )
+            return
+        logger.info(
+            "Cut-off notifications handed back",
+            extra={"cut_off": len(cut_off), "released": released},
+        )
 
 
 async def deliver_due_notifications(
