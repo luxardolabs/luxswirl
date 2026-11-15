@@ -18,8 +18,10 @@ def _alert(trigger_type: str, config: dict | None = None):
     return SimpleNamespace(trigger_type=trigger_type, trigger_config=config or {})
 
 
-def _result(success: bool = True, metrics: dict | None = None):
-    r = SimpleNamespace(success=success)
+def _result(
+    success: bool = True, metrics: dict | None = None, latency_ms: float | None = None
+):
+    r = SimpleNamespace(success=success, latency_ms=latency_ms)
     r.get_metrics = lambda: metrics or {}
     return r
 
@@ -49,26 +51,51 @@ class TestThreshold:
             "threshold", {"metric": "latency_ms", "operator": ">", "value": 5000}
         )
         assert (
-            AlertEvaluationCoreService._compute_alert_state_key(alert, _result())
+            AlertEvaluationCoreService._compute_alert_state_key(
+                alert, _result(latency_ms=6000)
+            )
             == "threshold:latency_ms:>:5000"
+        )
+
+    def test_the_safe_side_is_its_own_state(self):
+        alert = _alert(
+            "threshold", {"metric": "latency_ms", "operator": ">", "value": 5000}
+        )
+        assert (
+            AlertEvaluationCoreService._compute_alert_state_key(
+                alert, _result(latency_ms=10)
+            )
+            == "threshold:latency_ms:>:5000:ok"
         )
 
     def test_uses_defaults_when_unconfigured(self):
         # operator defaults to ">", metric defaults to latency_ms
         alert = _alert("threshold", {"value": 1000})
         assert (
-            AlertEvaluationCoreService._compute_alert_state_key(alert, _result())
+            AlertEvaluationCoreService._compute_alert_state_key(
+                alert, _result(latency_ms=1500)
+            )
             == "threshold:latency_ms:>:1000"
         )
 
 
 class TestRepeatedFailure:
-    def test_active(self):
+    """Down and up are two states, so a recovery is not a repeat of the outage."""
+
+    def test_down(self):
         assert (
             AlertEvaluationCoreService._compute_alert_state_key(
                 _alert("repeated_failure"), _result(success=False)
             )
-            == "repeated_failure:active"
+            == "repeated_failure:down"
+        )
+
+    def test_up(self):
+        assert (
+            AlertEvaluationCoreService._compute_alert_state_key(
+                _alert("repeated_failure"), _result(success=True)
+            )
+            == "repeated_failure:up"
         )
 
 

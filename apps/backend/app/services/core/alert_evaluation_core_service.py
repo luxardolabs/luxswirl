@@ -190,12 +190,29 @@ class AlertEvaluationCoreService:
         before configs were validated) is its SHA-256: still one stable value
         per state, so dedup matches, and the log row can always be written.
         """
-        key = AlertEvaluationCoreService._state_key(
-            alert, check_result, parent_down=parent_down
+        return AlertEvaluationCoreService._fit_state_key(
+            AlertEvaluationCoreService._state_key(
+                alert, check_result, parent_down=parent_down
+            )
         )
+
+    @staticmethod
+    def _fit_state_key(key: str) -> str:
+        """`key` as the log column holds it: itself, or its SHA-256 when longer."""
         if len(key) <= STATE_KEY_LENGTH:
             return key
         return hashlib.sha256(key.encode()).hexdigest()
+
+    @staticmethod
+    def _threshold_key(alert: Alert, *, breached: bool) -> str:
+        """A threshold alert's state key: its comparison while breached, and
+        the same with `:ok` once the latency is on the safe side."""
+        config = alert.trigger_config or {}
+        key = (
+            f"threshold:{config.get('metric', 'latency_ms')}:"
+            f"{config.get('operator', '>')}:{config.get('value')}"
+        )
+        return key if breached else f"{key}:ok"
 
     @staticmethod
     def _state_key(
@@ -224,13 +241,15 @@ class AlertEvaluationCoreService:
             return f"status:{'up' if check_result.success else 'down'}"
 
         if trigger_type == "threshold":
-            metric = config.get("metric", "latency_ms")
-            operator = config.get("operator", ">")
-            value = config.get("value")
-            return f"threshold:{metric}:{operator}:{value}"
+            return AlertEvaluationCoreService._threshold_key(
+                alert,
+                breached=AlertEvaluationCoreService._threshold_breached(
+                    alert, check_result
+                ),
+            )
 
         if trigger_type == "repeated_failure":
-            return "repeated_failure:active"
+            return f"repeated_failure:{'up' if check_result.success else 'down'}"
 
         if trigger_type == "ssl_cert_expiry":
             thresholds = sorted(
@@ -351,8 +370,50 @@ class AlertEvaluationCoreService:
         return True
 
     @staticmethod
+    def _threshold_value(alert: Alert) -> float | None:
+        """A latency threshold alert's value as a number, or None when it has
+        none it can compare (another metric, no value, not a number)."""
+        config = alert.trigger_config or {}
+        if config.get("metric", "latency_ms") != "latency_ms":
+            return None
+        value = config.get("value")
+        # trigger_config is free-form JSON, so the threshold may be a number or
+        # a numeric string; anything else cannot be compared and never fires.
+        if value is None or not isinstance(value, int | float | str):
+            return None
+        try:
+            return float(value)
+        except ValueError:
+            logger.warning(
+                "Threshold trigger value is not a number",
+                extra={"alert_id": str(alert.id), "value": value},
+            )
+            return None
+
+    @staticmethod
+    def _threshold_breached(alert: Alert, check_result: CheckResult) -> bool:
+        """Whether the result's latency meets the threshold alert's comparison
+        (e.g. latency > 1000 ms). A result with no latency does not."""
+        threshold = AlertEvaluationCoreService._threshold_value(alert)
+        if threshold is None or check_result.latency_ms is None:
+            return False
+        current = float(check_result.latency_ms)
+        operator = (alert.trigger_config or {}).get("operator", ">")
+        if operator == ">":
+            return current > threshold
+        if operator == ">=":
+            return current >= threshold
+        if operator == "<":
+            return current < threshold
+        if operator == "<=":
+            return current <= threshold
+        if operator == "==":
+            return current == threshold
+        return False
+
+    @staticmethod
     # dropped-input: one of the _evaluate_* family, dispatched by trigger type on a
-    # shared signature; a threshold reads only the result and its own config.
+    # shared signature; a threshold reads the result, its alert and its history.
     async def _evaluate_threshold(
         db: AsyncSession,
         alert: Alert,
@@ -360,48 +421,24 @@ class AlertEvaluationCoreService:
         check_result: CheckResult,
         config: dict[str, Any],
     ) -> bool:
-        """Evaluate threshold trigger (e.g., latency > 1000ms)."""
-        metric = config.get("metric", "latency_ms")
-        operator = config.get("operator", ">")
-        threshold_value = config.get("value")
-
-        if threshold_value is None:
+        """Evaluate threshold trigger: fires while the latency meets the
+        comparison, and once on the safe side again (a recovery) when the
+        alert's last word for the check was that breach and it notifies on
+        recovery."""
+        if AlertEvaluationCoreService._threshold_breached(alert, check_result):
+            return True
+        if not alert.notify_on_recovery or check_result.latency_ms is None:
             return False
-
-        # Get metric value from result
-        if metric == "latency_ms":
-            current_value = check_result.latency_ms
-        else:
-            return False  # Unknown metric
-
-        if current_value is None:
-            return False
-
-        # trigger_config is free-form JSON, so the threshold may be a number or
-        # a numeric string; anything else cannot be compared and never fires.
-        if not isinstance(threshold_value, int | float | str):
-            return False
-        try:
-            threshold_float = float(threshold_value)
-        except ValueError:
-            logger.warning(
-                "Threshold trigger value is not a number",
-                extra={"alert_id": str(alert.id), "value": threshold_value},
+        last_notification = await AlertCRUD.get_last_notification_for_dedup(
+            db, alert.id, check.id
+        )
+        return (
+            last_notification is not None
+            and last_notification.notification_hash
+            == AlertEvaluationCoreService._fit_state_key(
+                AlertEvaluationCoreService._threshold_key(alert, breached=True)
             )
-            return False
-        current_float = float(current_value)
-        if operator == ">":
-            return bool(current_float > threshold_float)
-        elif operator == ">=":
-            return bool(current_float >= threshold_float)
-        elif operator == "<":
-            return bool(current_float < threshold_float)
-        elif operator == "<=":
-            return bool(current_float <= threshold_float)
-        elif operator == "==":
-            return bool(current_float == threshold_float)
-        else:
-            return False
+        )
 
     @staticmethod
     async def _evaluate_repeated_failure(
@@ -558,7 +595,9 @@ class AlertEvaluationCoreService:
 
         For an SSL expiry alert, only a certificate back out of every band
         (state `ssl:ok`): the check succeeds while a certificate expires, so
-        its success says nothing. For the others, a successful check.
+        its success says nothing. For a threshold alert, a latency back on the
+        safe side, whatever the check's own outcome. For the others, a
+        successful check.
         """
         if not alert.notify_on_recovery:
             return False
@@ -566,6 +605,10 @@ class AlertEvaluationCoreService:
             return (
                 AlertEvaluationCoreService._compute_alert_state_key(alert, check_result)
                 == "ssl:ok"
+            )
+        if alert.trigger_type == AlertTriggerType.THRESHOLD:
+            return not AlertEvaluationCoreService._threshold_breached(
+                alert, check_result
             )
         return bool(check_result.success)
 
@@ -849,6 +892,45 @@ class AlertEvaluationCoreService:
         return False
 
     @staticmethod
+    async def _left_breach_since(
+        db: AsyncSession,
+        alert: Alert,
+        check_result: CheckResult,
+        last_notification: NotificationLog,
+    ) -> bool:
+        """Whether, since the result `last_notification` was about, the check
+        had a result that did not breach this alert: a success for a failure
+        alert whose last word was the outage, a latency on the safe side for a
+        threshold alert. Such a result ended that breach, so this one starts
+        another, whether or not its end was announced."""
+        after = last_notification.check_result_timestamp
+        if after is None or after >= check_result.timestamp:
+            return False
+        key = last_notification.notification_hash or ""
+        if key in ("status:down", "repeated_failure:down"):
+            return await AlertCRUD.has_success_between(
+                db, check_result.check_id, after, check_result.timestamp
+            )
+        threshold = AlertEvaluationCoreService._threshold_value(alert)
+        if (
+            alert.trigger_type == AlertTriggerType.THRESHOLD
+            and threshold is not None
+            and key
+            == AlertEvaluationCoreService._fit_state_key(
+                AlertEvaluationCoreService._threshold_key(alert, breached=True)
+            )
+        ):
+            return await AlertCRUD.has_latency_within_between(
+                db,
+                check_result.check_id,
+                after,
+                check_result.timestamp,
+                operator=(alert.trigger_config or {}).get("operator", ">"),
+                value=threshold,
+            )
+        return False
+
+    @staticmethod
     async def _state_changed_since(
         db: AsyncSession,
         alert: Alert,
@@ -865,7 +947,11 @@ class AlertEvaluationCoreService:
                 alert, check_result
             )
             if last_notification.notification_hash == current_state_key:
-                return False
+                # The same state, unless the alert left it since and is back:
+                # a second outage after a recovery nobody was told of.
+                return await AlertEvaluationCoreService._left_breach_since(
+                    db, alert, check_result, last_notification
+                )
             logger.debug(
                 "Alert state changed - sending notification",
                 extra={
