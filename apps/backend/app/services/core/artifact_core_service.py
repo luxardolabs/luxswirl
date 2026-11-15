@@ -15,6 +15,7 @@ from app.schemas.check_artifact_schema import (
     CheckArtifactResponse,
 )
 from app.services.core.agent_assignment_core_service import AgentAssignmentCoreService
+from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.check_core_service import CheckCoreService
 from app.shared.logger import get_logger
 
@@ -26,7 +27,11 @@ class ArtifactCoreService:
 
     @staticmethod
     async def create_artifact(
-        db: AsyncSession, agent_id: UUID, data: CheckArtifactCreate
+        db: AsyncSession,
+        agent_id: UUID,
+        data: CheckArtifactCreate,
+        *,
+        verified_key_hash: str | None,
     ) -> CheckArtifactResponse:
         """Store an artifact one of `agent_id`'s check executions produced.
 
@@ -39,13 +44,20 @@ class ArtifactCoreService:
             db: Database session
             agent_id: The authenticated uploading agent
             data: Artifact creation data (includes base64-encoded binary data)
+            verified_key_hash: The key hash the upload's key was checked
+                against: once the artifact is written the agent is judged
+                again (`AgentCoreService.require_still_admitted`), after the
+                check's row is locked by the insert, as an agent delete locks
+                them.
 
         Returns:
             The stored artifact's metadata
 
         Raises:
             CheckNotFoundException: If the artifact's check does not exist
-            AuthorizationException: If the check is not assigned to the agent
+            AuthorizationException: If the check is not assigned to the agent,
+                or the agent left active meanwhile
+            AuthenticationException: If the agent's key changed meanwhile
         """
         await ArtifactCoreService._require_check(db, data.check_id)
         if not await AgentAssignmentCoreService.may_report_for_check(
@@ -70,6 +82,7 @@ class ArtifactCoreService:
             data=binary_data,
         )
         artifact = await ArtifactCRUD.add_artifact(db, artifact)
+        await AgentCoreService.require_still_admitted(db, agent_id, verified_key_hash)
         logger.info(
             "Created artifact",
             extra={

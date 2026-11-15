@@ -45,7 +45,7 @@ router = APIRouter(route_class=AgentProtocolRoute, tags=["Artifacts"])
 async def create_artifact(
     artifact: CheckArtifactCreate,
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
-    agent_id: UploadingAgentId,
+    agent: UploadingAgentId,
 ) -> CheckArtifactResponse:
     """
     Create a new check artifact.
@@ -54,4 +54,6 @@ async def create_artifact(
     traces, and other binary artifacts. Only the agent's own key is accepted
     (`UploadingAgentId`), and only for a check assigned to that agent.
     """
-    return await ArtifactCoreService.create_artifact(db, agent_id, artifact)
+    return await ArtifactCoreService.create_artifact(
+        db, agent.agent_id, artifact, verified_key_hash=agent.key_hash
+    )

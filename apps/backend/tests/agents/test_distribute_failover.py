@@ -286,7 +286,9 @@ async def test_the_owners_buffered_results_are_kept_before_its_heartbeat(
     await _go_offline(db, owner, timedelta(minutes=10))
 
     taken = await CheckResultCoreService.process_agent_report(
-        db, _report(owner.id, check.id, timedelta(minutes=9))
+        db,
+        _report(owner.id, check.id, timedelta(minutes=9)),
+        verified_key_hash=None,
     )
 
     assert taken["results_processed"] == 1
@@ -300,7 +302,9 @@ async def test_the_stand_ins_last_batch_is_kept_after_the_owner_returns(
     _, survivor = _first_choice(check, pool)
 
     taken = await CheckResultCoreService.process_agent_report(
-        db, _report(survivor.id, check.id, timedelta(seconds=20))
+        db,
+        _report(survivor.id, check.id, timedelta(seconds=20)),
+        verified_key_hash=None,
     )
 
     assert taken["results_processed"] == 1
@@ -318,7 +322,9 @@ async def test_an_agent_outside_the_pool_still_may_not_report(
 
     for agent in (outsider, pending):
         taken = await CheckResultCoreService.process_agent_report(
-            db, _report(agent.id, check.id, timedelta(seconds=5))
+            db,
+            _report(agent.id, check.id, timedelta(seconds=5)),
+            verified_key_hash=None,
         )
         assert taken["results_processed"] == 0
         assert not await AgentAssignmentCoreService.may_report_for_check(

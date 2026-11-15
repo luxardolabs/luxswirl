@@ -77,6 +77,7 @@ async def test_a_check_deleted_after_the_report_read_it_fails_only_its_results(
         AgentReportRequest(
             agent_id=agent.id, checks=[_result(kept.id), _result(gone_id)]
         ),
+        verified_key_hash=None,
     )
 
     assert result["results_processed"] == 1

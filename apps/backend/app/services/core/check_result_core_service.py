@@ -3,7 +3,7 @@ CheckResult service - business logic for check result operations and analytics.
 """
 
 from collections.abc import Sequence
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
@@ -15,7 +15,6 @@ from uuid_extensions import uuid7
 from app.core.datetime_utils import utc_now
 from app.core.exceptions import AgentNotFoundException
 from app.core.ssl_expiry import ssl_expiry_fields
-from app.crud.agent_crud import AgentCRUD
 from app.crud.check_crud import CheckCRUD
 from app.crud.check_result_crud import (
     AggregateRow,
@@ -43,6 +42,20 @@ from app.services.core.settings_core_service import SettingsCoreService
 from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.services.check_result")
+
+# How far past the server's clock a result's timestamp may be. A result's
+# timestamp is the agent's clock, and every reader of a check's status bounds
+# results from below only (the newest result is the current one): a result
+# stamped later than this would stand as the check's status, whatever is
+# reported after it, until the clock caught up. Wide enough for an agent clock
+# a little fast.
+RESULT_CLOCK_TOLERANCE = timedelta(minutes=5)
+
+
+def _later_than(when: datetime, bound: datetime) -> bool:
+    """Whether `when` is after `bound`; a timestamp with no zone is UTC, as
+    the database stores it."""
+    return (when if when.tzinfo else when.replace(tzinfo=UTC)) > bound
 
 
 class CheckResultCoreService:
@@ -122,10 +135,13 @@ class CheckResultCoreService:
     async def process_agent_submission(
         db: AsyncSession,
         submission: AgentReportSubmission,
+        *,
+        verified_key_hash: str | None,
     ) -> dict[str, Any]:
         """Validate a report's results one by one, then process the valid ones.
 
         The refused results are added to `results_failed`.
+        `verified_key_hash` is as `process_agent_report` takes it.
         """
         valid, refused = CheckResultCoreService.validate_results(submission)
         report = AgentReportRequest(
@@ -134,7 +150,9 @@ class CheckResultCoreService:
             timestamp=submission.timestamp,
             checks=valid,
         )
-        result = await CheckResultCoreService.process_agent_report(db, report)
+        result = await CheckResultCoreService.process_agent_report(
+            db, report, verified_key_hash=verified_key_hash
+        )
         result["results_failed"] += refused
         return result
 
@@ -142,19 +160,35 @@ class CheckResultCoreService:
     async def process_agent_report(
         db: AsyncSession,
         report: AgentReportRequest,
+        *,
+        verified_key_hash: str | None,
     ) -> dict[str, Any]:
         """
         Process a report from an agent containing multiple check results.
 
+        A result timestamped later than the server's clock plus
+        `RESULT_CLOCK_TOLERANCE` is counted in `results_failed` and not stored.
+
         Args:
             db: Database session
             report: Agent report with check results
+            verified_key_hash: The key hash the report's key was checked
+                against (None for an agent that had none): before anything is
+                stored the agent is judged again on its row as stored now
+                (`AgentCoreService.require_still_admitted`).
 
         Returns:
             Processing summary
+
+        Raises:
+            AgentNotFoundException: The agent does not exist, or was deleted
+                while the report was in flight.
+            AuthenticationException: The agent's key changed meanwhile.
+            AuthorizationException: The agent left active meanwhile.
         """
         agent_id = report.agent_id
         timestamp = report.timestamp or utc_now()
+        latest_allowed = utc_now() + RESULT_CLOCK_TOLERANCE
 
         # Get agent
         agent = await AgentCoreService.get_agent_by_id(db, agent_id)
@@ -232,6 +266,24 @@ class CheckResultCoreService:
                     results_failed += 1
                     continue
 
+                # Use check's individual timestamp, not batch timestamp
+                check_timestamp = (
+                    check_data.timestamp if check_data.timestamp else timestamp
+                )
+                if _later_than(check_timestamp, latest_allowed):
+                    logger.warning(
+                        "Check result timestamped in the future - skipping result",
+                        extra={
+                            "check_id": str(check_id),
+                            "display_name": display_name,
+                            "agent_name": agent.agent_name,
+                            "agent_id": str(agent_id),
+                            "result_timestamp": check_timestamp.isoformat(),
+                        },
+                    )
+                    results_failed += 1
+                    continue
+
                 # Process SSL cert info if present in metrics
                 metrics_dict = check_data.metrics or {}
                 if (
@@ -265,10 +317,6 @@ class CheckResultCoreService:
                     result_id = uuid7()
 
                 # Prepare check result for bulk insert with all fields
-                # Use check's individual timestamp, not batch timestamp
-                check_timestamp = (
-                    check_data.timestamp if check_data.timestamp else timestamp
-                )
                 rows_to_insert.append(
                     {
                         "id": result_id,  # agent's UUID (or generated fallback)
@@ -318,12 +366,17 @@ class CheckResultCoreService:
         # own foreign key checks lock them and in the order an agent delete
         # removes them: a check deleted after the report read it costs its own
         # results, never the report; an agent deleted meanwhile is not found;
-        # and a delete arriving now waits for this report.
+        # and a delete arriving now waits for this report. The agent's lock is
+        # also where it is judged again: a key revoked or regenerated, or the
+        # agent taken out of active, since its key was checked refuses the
+        # report, and neither can land after it before this report commits.
         present = await CheckCRUD.key_share_existing(
             db, [row["check_id"] for row in rows_to_insert]
         )
-        if rows_to_insert and not await AgentCRUD.key_share_exists(db, agent.id):
-            raise AgentNotFoundException(str(agent_id))
+        if rows_to_insert:
+            await AgentCoreService.require_still_admitted(
+                db, agent.id, verified_key_hash
+            )
         kept_rows: list[dict[str, Any]] = []
         for row, name in zip(rows_to_insert, row_display_names, strict=True):
             if row["check_id"] in present:

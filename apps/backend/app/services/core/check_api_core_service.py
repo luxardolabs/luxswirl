@@ -127,12 +127,18 @@ class CheckApiCoreService:
 
     @staticmethod
     async def check_list_for_agent(
-        db: AsyncSession, agent_id: UUID
+        db: AsyncSession, agent_id: UUID, *, verified_key_hash: str | None
     ) -> CheckListResponse:
         """The checks `agent_id` should run, as the agent's check-list response.
 
+        The list carries the checks' decrypted configs, so once it is built the
+        agent is judged again against `verified_key_hash`, the key hash its key
+        was checked against (`AgentCoreService.require_still_admitted`).
+
         Raises:
             AgentNotFoundException: If the agent does not exist
+            AuthenticationException: If the agent's key changed meanwhile
+            AuthorizationException: If the agent left active meanwhile
         """
         agent = await AgentCoreService.get_agent_by_id(db, agent_id)
         checks = await AgentAssignmentCoreService.get_checks_for_agent(db, agent)
@@ -141,4 +147,5 @@ class CheckApiCoreService:
             checks, agent.agent_name
         )
         response.block_private_networks = protection.block_private_networks
+        await AgentCoreService.require_still_admitted(db, agent_id, verified_key_hash)
         return response

@@ -97,6 +97,7 @@ async def _race_real_agent_delete(
                 AgentReportRequest(
                     agent_id=agent_id, checks=[_result(LOW), _result(HIGH)]
                 ),
+                verified_key_hash=None,
             )
             await s.commit()
             return out
@@ -195,6 +196,7 @@ async def _race_bulk_delete(
             out = await CheckResultCoreService.process_agent_report(
                 s,
                 AgentReportRequest(agent_id=agent.id, checks=[_result(i) for i in ids]),
+                verified_key_hash=None,
             )
             await s.commit()
             return out

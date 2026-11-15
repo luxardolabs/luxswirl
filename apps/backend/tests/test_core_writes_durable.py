@@ -113,6 +113,7 @@ async def test_create_artifact_is_committed(worker_db) -> None:
                 filename="shot.png",
                 data_base64=base64.b64encode(b"png-bytes").decode(),
             ),
+            verified_key_hash=None,
         )
         await s.commit()
 

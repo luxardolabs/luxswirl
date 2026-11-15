@@ -80,16 +80,53 @@ class JobApiCoreService:
         return None if job is None else await JobApiCoreService._with_hostname(db, job)
 
     @staticmethod
-    async def mark_job_started(db: AsyncSession, job_id: UUID) -> JobResponse | None:
-        """The agent began the job: it is running from now; None if there is no such job."""
+    async def _judge_owner(
+        db: AsyncSession, agent_id: UUID | None, verified_key_hash: str | None
+    ) -> None:
+        """Judge the job's agent again before its job is written
+        (`AgentCoreService.require_still_admitted`); its row is locked before
+        the job's, as an agent delete removes them. No agent is judged only
+        with authentication off, when the route checked no key."""
+        if agent_id is not None:
+            await AgentCoreService.require_still_admitted(
+                db, agent_id, verified_key_hash
+            )
+
+    @staticmethod
+    async def mark_job_started(
+        db: AsyncSession,
+        job_id: UUID,
+        *,
+        agent_id: UUID | None,
+        verified_key_hash: str | None,
+    ) -> JobResponse | None:
+        """The agent began the job: it is running from now; None if there is no such job.
+
+        `agent_id` is the job's agent that authenticated the request, and
+        `verified_key_hash` the key hash its key was checked against.
+
+        Raises:
+            AuthenticationException: The agent's key changed meanwhile.
+            AuthorizationException: The agent left active meanwhile.
+        """
+        await JobApiCoreService._judge_owner(db, agent_id, verified_key_hash)
         job = await JobCoreService.update_job_status(db, job_id, JobStatus.RUNNING)
         return None if job is None else await JobApiCoreService._with_hostname(db, job)
 
     @staticmethod
     async def submit_job_result(
-        db: AsyncSession, job_id: UUID, data: JobResultSubmit
+        db: AsyncSession,
+        job_id: UUID,
+        data: JobResultSubmit,
+        *,
+        agent_id: UUID | None,
+        verified_key_hash: str | None,
     ) -> JobResponse | None:
-        """Record a job's result; None if there is no such job."""
+        """Record a job's result; None if there is no such job.
+
+        The agent is judged again as in `mark_job_started`.
+        """
+        await JobApiCoreService._judge_owner(db, agent_id, verified_key_hash)
         job = await JobCoreService.submit_job_result(db, job_id, data)
         return None if job is None else await JobApiCoreService._with_hostname(db, job)
 

@@ -82,6 +82,7 @@ async def test_an_agent_deleted_mid_flight_is_not_found_not_a_foreign_key_500(
         await CheckResultCoreService.process_agent_report(
             db,
             AgentReportRequest(agent_id=reporter.id, checks=[_result(replicated.id)]),
+            verified_key_hash=None,
         )
 
 
@@ -99,7 +100,9 @@ async def test_an_agent_deleted_mid_flight_with_only_its_own_checks_is_not_found
 
     with pytest.raises(AgentNotFoundException):
         await CheckResultCoreService.process_agent_report(
-            db, AgentReportRequest(agent_id=reporter.id, checks=[_result(own_id)])
+            db,
+            AgentReportRequest(agent_id=reporter.id, checks=[_result(own_id)]),
+            verified_key_hash=None,
         )
 
 
@@ -205,6 +208,7 @@ async def _race_agent_style_delete(
             out = await CheckResultCoreService.process_agent_report(
                 s,
                 AgentReportRequest(agent_id=agent_id, checks=[_result(i) for i in ids]),
+                verified_key_hash=None,
             )
             await s.commit()
             return out
@@ -243,7 +247,9 @@ async def _hold_in_alert_eval(
     ts = utc_now()
     async with worker_db() as s:
         await CheckResultCoreService.process_agent_report(
-            s, AgentReportRequest(agent_id=agent.id, checks=[_result(dup.id, ts)])
+            s,
+            AgentReportRequest(agent_id=agent.id, checks=[_result(dup.id, ts)]),
+            verified_key_hash=None,
         )
         await s.commit()
 
@@ -264,6 +270,7 @@ async def _hold_in_alert_eval(
                 AgentReportRequest(
                     agent_id=agent.id, checks=[_result(fresh.id), _result(dup.id, ts)]
                 ),
+                verified_key_hash=None,
             )
             await s.commit()
             return out

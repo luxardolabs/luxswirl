@@ -36,7 +36,7 @@ logger = get_logger("luxswirl.api.checks")
     name="api.agent.checks.index",
 )
 async def list_checks(
-    agent_id: AuthenticatedAgentId,
+    agent: AuthenticatedAgentId,
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> CheckListResponse:
     """
@@ -50,4 +50,6 @@ async def list_checks(
     The agent authenticates with its own key and must be approved
     (`AuthenticatedAgentId`).
     """
-    return await CheckApiCoreService.check_list_for_agent(db, agent_id)
+    return await CheckApiCoreService.check_list_for_agent(
+        db, agent.agent_id, verified_key_hash=agent.key_hash
+    )

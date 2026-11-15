@@ -37,7 +37,7 @@ router = APIRouter(route_class=AgentProtocolRoute, tags=["Check Results"])
 )
 async def submit_report(
     report: AgentReportSubmission,
-    _agent_id: ReportingAgentId,
+    agent: ReportingAgentId,
     background_tasks: BackgroundTasks,
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> AgentReportResponse:
@@ -51,7 +51,9 @@ async def submit_report(
     counted in `results_failed`, and the rest are stored.
     """
     # Process report (this commits the transaction)
-    result = await CheckResultCoreService.process_agent_submission(db, report)
+    result = await CheckResultCoreService.process_agent_submission(
+        db, report, verified_key_hash=agent.key_hash
+    )
 
     return AgentReportResponse(
         status=result["status"],

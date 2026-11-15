@@ -132,7 +132,9 @@ class TestProcessAgentReport:
                 ),
             ],
         )
-        result = await CheckResultCoreService.process_agent_report(db, report)
+        result = await CheckResultCoreService.process_agent_report(
+            db, report, verified_key_hash=None
+        )
 
         assert result["results_processed"] == 2
         assert result["results_failed"] == 0
@@ -151,7 +153,9 @@ class TestProcessAgentReport:
             agent_id=agent.id,
             checks=[_result_payload(check_id=uuid4(), display_name="unregistered")],
         )
-        result = await CheckResultCoreService.process_agent_report(db, report)
+        result = await CheckResultCoreService.process_agent_report(
+            db, report, verified_key_hash=None
+        )
         assert result["results_processed"] == 0
         assert result["results_failed"] == 1
 
@@ -172,7 +176,9 @@ class TestProcessAgentReport:
                 ),
             ],
         )
-        result = await CheckResultCoreService.process_agent_report(db, report)
+        result = await CheckResultCoreService.process_agent_report(
+            db, report, verified_key_hash=None
+        )
         assert result["results_processed"] == 0
         assert result["results_failed"] == 1
 
@@ -184,7 +190,9 @@ class TestProcessAgentReport:
             ],
         )
         with pytest.raises(AgentNotFoundException):
-            await CheckResultCoreService.process_agent_report(db, report)
+            await CheckResultCoreService.process_agent_report(
+                db, report, verified_key_hash=None
+            )
 
     async def test_leaves_the_agent_row_unwritten(self, db: AsyncSession):
         """A report never writes the agent row. It runs as one long transaction
@@ -208,7 +216,9 @@ class TestProcessAgentReport:
             agent_run_id="run-after",
             checks=[_result_payload(check_id=check.id)],
         )
-        await CheckResultCoreService.process_agent_report(db, report)
+        await CheckResultCoreService.process_agent_report(
+            db, report, verified_key_hash=None
+        )
 
         assert agent not in db.dirty
         await db.refresh(agent)
@@ -239,7 +249,9 @@ class TestProcessAgentReport:
                 ),
             ],
         )
-        await CheckResultCoreService.process_agent_report(db, report)
+        await CheckResultCoreService.process_agent_report(
+            db, report, verified_key_hash=None
+        )
 
         history = await _history(db, check.id)
         assert len(history) == 1
@@ -266,7 +278,9 @@ class TestProcessAgentReport:
             ],
         )
         # Bad result_id should not crash the whole report — falls back
-        result = await CheckResultCoreService.process_agent_report(db, report)
+        result = await CheckResultCoreService.process_agent_report(
+            db, report, verified_key_hash=None
+        )
         assert result["results_processed"] == 1
 
     async def test_metrics_with_ssl_certificate_data_persisted(self, db: AsyncSession):
@@ -299,7 +313,9 @@ class TestProcessAgentReport:
                 ),
             ],
         )
-        result = await CheckResultCoreService.process_agent_report(db, report)
+        result = await CheckResultCoreService.process_agent_report(
+            db, report, verified_key_hash=None
+        )
         assert result["results_processed"] == 1
 
         history = await _history(db, check.id)
@@ -318,6 +334,8 @@ class TestProcessAgentReport:
         await db.flush()
 
         report = AgentReportRequest(agent_id=agent.id, checks=[])
-        result = await CheckResultCoreService.process_agent_report(db, report)
+        result = await CheckResultCoreService.process_agent_report(
+            db, report, verified_key_hash=None
+        )
         assert result["results_processed"] == 0
         assert result["results_failed"] == 0

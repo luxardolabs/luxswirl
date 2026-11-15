@@ -122,13 +122,40 @@ RecoveryRegistrationKeyRequired = Annotated[
 ]
 
 
+@dataclass(frozen=True)
+class VerifiedAgent:
+    """The agent that authenticated a request with its own key, and the key
+    hash that key was checked against.
+
+    The check ran on a row read unlocked, before the route's work: core judges
+    the agent again on its row as stored now, with this hash
+    (`AgentCoreService.require_still_admitted`), so a revoke, a regenerate or
+    a disable that lands meanwhile is seen. Yields ids, not the row, so no ORM
+    agent crosses the seam.
+    """
+
+    agent_id: UUID
+    key_hash: str | None
+
+
+@dataclass(frozen=True)
+class OwnedJob:
+    """A job, and the assigned agent that authenticated a request about it
+    with the key hash its key was checked against, as in `VerifiedAgent`.
+    Both None only with authentication off, when no key is checked."""
+
+    job_id: UUID
+    agent_id: UUID | None
+    key_hash: str | None
+
+
 @limiter.limit(settings.security.agent_api_rate_limit)
 async def require_job_owner(
     request: Request,
     job_id: UUID,
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     authorization: Annotated[str | None, Header()] = None,
-) -> UUID:
+) -> OwnedJob:
     """`job_id`, once the job's assigned agent has proved its own key.
 
     Only the agent the job is assigned to may report on it, with its
@@ -142,7 +169,7 @@ async def require_job_owner(
             status_code=status.HTTP_404_NOT_FOUND, detail=f"Job not found: {job_id}"
         )
     if not settings.security.auth_enabled:
-        return job.id
+        return OwnedJob(job_id=job.id, agent_id=None, key_hash=None)
     agent = None
     if job.agent_id is not None:
         with contextlib.suppress(AgentNotFoundException):
@@ -155,12 +182,13 @@ async def require_job_owner(
                 "is assigned to, with its agent-specific key"
             ),
         )
+    key_hash = agent.api_key_hash
     await verify_agent_token(agent, authorization)
-    return job.id
+    return OwnedJob(job_id=job.id, agent_id=agent.id, key_hash=key_hash)
 
 
-# The id of a job whose assigned agent authenticated this request.
-AgentOwnedJobId = Annotated[UUID, Depends(require_job_owner)]
+# A job whose assigned agent authenticated this request.
+AgentOwnedJobId = Annotated[OwnedJob, Depends(require_job_owner)]
 
 
 @limiter.limit(settings.security.agent_api_rate_limit)
@@ -169,12 +197,8 @@ async def require_agent(
     agent_id: UUID,
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     authorization: Annotated[str | None, Header()] = None,
-) -> UUID:
-    """`agent_id`, once that agent has authenticated with its key and is approved.
-
-    Yields the id, not the row: the route hands it to core, which loads what it
-    needs, so no ORM agent crosses the seam.
-    """
+) -> VerifiedAgent:
+    """`agent_id`, once that agent has authenticated with its key and is approved."""
     try:
         agent = await AgentCoreService.get_agent_by_id(db, agent_id)
     except AgentNotFoundException:
@@ -182,12 +206,13 @@ async def require_agent(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Agent not found: {agent_id}",
         ) from None
+    key_hash = agent.api_key_hash
     await verify_agent_token(agent, authorization)
-    return agent.id
+    return VerifiedAgent(agent_id=agent.id, key_hash=key_hash)
 
 
-# The id of the agent that authenticated this request (query parameter agent_id).
-AuthenticatedAgentId = Annotated[UUID, Depends(require_agent)]
+# The agent that authenticated this request (query parameter agent_id).
+AuthenticatedAgentId = Annotated[VerifiedAgent, Depends(require_agent)]
 
 
 @dataclass(frozen=True)
@@ -247,7 +272,7 @@ async def require_reporting_agent(
     report: AgentReportSubmission,
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     authorization: Annotated[str | None, Header()] = None,
-) -> UUID:
+) -> VerifiedAgent:
     """The report's agent, authenticated by its OWN key.
 
     Check results are accepted only with the agent-specific key, never the
@@ -269,12 +294,13 @@ async def require_reporting_agent(
                 "check results"
             ),
         )
+    key_hash = agent.api_key_hash
     await verify_agent_token(agent, authorization)
-    return agent.id
+    return VerifiedAgent(agent_id=agent.id, key_hash=key_hash)
 
 
-# The id of the agent whose own key authenticated this report.
-ReportingAgentId = Annotated[UUID, Depends(require_reporting_agent)]
+# The agent whose own key authenticated this report.
+ReportingAgentId = Annotated[VerifiedAgent, Depends(require_reporting_agent)]
 
 
 @limiter.limit(settings.security.agent_api_rate_limit)
@@ -283,7 +309,7 @@ async def require_uploading_agent(
     artifact: CheckArtifactCreate,
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     authorization: Annotated[str | None, Header()] = None,
-) -> UUID:
+) -> VerifiedAgent:
     """The artifact's agent, authenticated by its OWN key, exactly as for reports.
 
     Never the registration key, so one agent cannot upload as another. Proves
@@ -305,12 +331,13 @@ async def require_uploading_agent(
                 "Agent must be approved and have agent-specific key to upload artifacts"
             ),
         )
+    key_hash = agent.api_key_hash
     await verify_agent_token(agent, authorization)
-    return agent.id
+    return VerifiedAgent(agent_id=agent.id, key_hash=key_hash)
 
 
-# The id of the agent whose own key authenticated this artifact upload.
-UploadingAgentId = Annotated[UUID, Depends(require_uploading_agent)]
+# The agent whose own key authenticated this artifact upload.
+UploadingAgentId = Annotated[VerifiedAgent, Depends(require_uploading_agent)]
 
 
 # ── The admin API: a user's API token, with that user's role ─────────────────

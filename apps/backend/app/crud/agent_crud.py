@@ -128,18 +128,27 @@ class AgentCRUD:
         )
 
     @staticmethod
-    async def key_share_exists(db: AsyncSession, agent_id: UUID) -> bool:
-        """Whether the agent still exists, its row locked FOR KEY SHARE to the
-        transaction's end: the lock an insert of a row referencing it takes, so a
-        delete waits for this transaction, and so does a `lock` (FOR UPDATE) of
-        the row, as it waits for that insert's own lock; a plain update that
-        changes no key does not."""
-        found = await db.scalar(
-            select(Agent.id)
-            .where(Agent.id == agent_id)
-            .with_for_update(read=True, key_share=True)
-        )
-        return found is not None
+    async def key_share_admission(
+        db: AsyncSession, agent_id: UUID
+    ) -> tuple[AgentApprovalStatus, str | None] | None:
+        """The agent's status and key hash as stored now, its row locked FOR KEY
+        SHARE to the transaction's end; None if it no longer exists.
+
+        FOR KEY SHARE is the lock an insert of a row referencing the agent
+        takes, so a delete waits for this transaction, and so does a `lock`
+        (FOR UPDATE) of the row: a revoke, a regenerate or a status change
+        cannot commit between this read and the transaction's end. A plain
+        update that changes no key and takes no `lock` does not wait. Read
+        as columns, so it is never answered from the session's copy of the row.
+        """
+        row = (
+            await db.execute(
+                select(Agent.approval_status, Agent.api_key_hash)
+                .where(Agent.id == agent_id)
+                .with_for_update(read=True, key_share=True)
+            )
+        ).one_or_none()
+        return None if row is None else (row.approval_status, row.api_key_hash)
 
     @staticmethod
     async def get_by_id_with_checks(db: AsyncSession, agent_id: UUID) -> Agent | None:

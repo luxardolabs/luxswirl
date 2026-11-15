@@ -124,7 +124,11 @@ async def test_the_agent_is_told_a_cancelled_job_is_cancelled(worker_db) -> None
         worker_db,
         lambda s: JobCoreService.cancel_job(s, job.id),
         lambda s: JobApiCoreService.submit_job_result(
-            s, job.id, JobResultSubmit(status=JobStatus.FAILED, error="boom")
+            s,
+            job.id,
+            JobResultSubmit(status=JobStatus.FAILED, error="boom"),
+            agent_id=job.agent_id,
+            verified_key_hash=None,
         ),
     )
 

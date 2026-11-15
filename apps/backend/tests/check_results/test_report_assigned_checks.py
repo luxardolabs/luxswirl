@@ -63,7 +63,9 @@ async def test_a_replicate_check_takes_results_from_every_selected_agent(
 
     for agent in (owner, other):
         result = await CheckResultCoreService.process_agent_report(
-            db, _report(agent.id, check.id)
+            db,
+            _report(agent.id, check.id),
+            verified_key_hash=None,
         )
         assert result["results_processed"] == 1, agent.agent_name
 
@@ -81,7 +83,9 @@ async def test_an_agent_the_selector_does_not_match_is_refused(
     await db.flush()
 
     result = await CheckResultCoreService.process_agent_report(
-        db, _report(outsider.id, check.id)
+        db,
+        _report(outsider.id, check.id),
+        verified_key_hash=None,
     )
 
     assert result["results_processed"] == 0
@@ -111,11 +115,15 @@ async def test_a_distribute_check_runs_on_one_agent_and_takes_results_from_its_p
     assert len(assigned) == 1
 
     from_pool = [
-        await CheckResultCoreService.process_agent_report(db, _report(a.id, check.id))
+        await CheckResultCoreService.process_agent_report(
+            db, _report(a.id, check.id), verified_key_hash=None
+        )
         for a in (owner, other)
     ]
     refused = await CheckResultCoreService.process_agent_report(
-        db, _report(outsider.id, check.id)
+        db,
+        _report(outsider.id, check.id),
+        verified_key_hash=None,
     )
 
     assert [r["results_processed"] for r in from_pool] == [1, 1]
@@ -129,7 +137,9 @@ async def test_another_agents_manual_check_is_refused(db: AsyncSession) -> None:
     await db.flush()
 
     result = await CheckResultCoreService.process_agent_report(
-        db, _report(other.id, check.id)
+        db,
+        _report(other.id, check.id),
+        verified_key_hash=None,
     )
 
     assert result["results_processed"] == 0
@@ -153,7 +163,9 @@ async def test_a_pending_registration_cannot_steal_a_distribute_check(
     await db.flush()
 
     taken = await CheckResultCoreService.process_agent_report(
-        db, _report(owner.id, check.id)
+        db,
+        _report(owner.id, check.id),
+        verified_key_hash=None,
     )
     assert taken["results_processed"] == 1  # control
 
@@ -164,7 +176,9 @@ async def test_a_pending_registration_cannot_steal_a_distribute_check(
     await db.flush()
     owner_checks = await AgentAssignmentCoreService.get_checks_for_agent(db, owner)
     still_taken = await CheckResultCoreService.process_agent_report(
-        db, _report(owner.id, check.id)
+        db,
+        _report(owner.id, check.id),
+        verified_key_hash=None,
     )
 
     assert check.id in {c.id for c in owner_checks}

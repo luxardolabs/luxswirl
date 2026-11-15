@@ -16,6 +16,7 @@ from app.core.config import settings
 from app.core.datetime_utils import utc_now
 from app.core.exceptions import (
     AgentNotFoundException,
+    AuthenticationException,
     AuthorizationException,
     DuplicateResourceException,
     RecoverySecretRefusedException,
@@ -190,6 +191,48 @@ class AgentCoreService:
             raise AgentNotFoundException(str(agent_id))
 
         return agent
+
+    @staticmethod
+    async def require_still_admitted(
+        db: AsyncSession, agent_id: UUID, verified_key_hash: str | None
+    ) -> None:
+        """Judge an agent request again on the agent's row as stored now.
+
+        The route's dependency checked the agent's key (against
+        `verified_key_hash`) and status on a row it read unlocked, before the
+        request's work; an operator may have revoked or regenerated the key,
+        or taken the agent out of active, since. This reads the row FOR KEY
+        SHARE (`AgentCRUD.key_share_admission`), which a key change or a
+        status change waits for, so what it judges holds to the transaction's
+        end. With authentication off only the agent's existence is judged, as
+        the key check judges nothing either.
+
+        Raises:
+            AgentNotFoundException: The agent was deleted meanwhile.
+            AuthenticationException: The key it was checked against is no
+                longer the agent's.
+            AuthorizationException: The agent is no longer active.
+        """
+        admission = await AgentCRUD.key_share_admission(db, agent_id)
+        if admission is None:
+            raise AgentNotFoundException(str(agent_id))
+        if not settings.security.auth_enabled:
+            return
+        approval_status, key_hash = admission
+        if key_hash != verified_key_hash:
+            logger.warning(
+                "Agent key changed while its request was processed: refused",
+                extra={"agent_id": str(agent_id)},
+            )
+            raise AuthenticationException("Invalid agent API key")
+        if approval_status != AgentApprovalStatus.ACTIVE:
+            logger.warning(
+                "Agent left active while its request was processed: refused",
+                extra={"agent_id": str(agent_id), "status": str(approval_status)},
+            )
+            raise AuthorizationException(
+                f"Agent is not active. Current status: {approval_status}"
+            )
 
     @staticmethod
     async def resolve_for_assignment(
@@ -1134,6 +1177,9 @@ class AgentCoreService:
         Raises:
             AgentNotFoundException: If agent not found
         """
+        # Locked, as each move out of active is: an agent request in flight
+        # holds the row (`require_still_admitted`) and finishes first.
+        await AgentCRUD.lock(db, agent_id)
         agent = await AgentCoreService.get_agent_by_id(db, agent_id)
         _require_status(agent, (AgentApprovalStatus.ACTIVE,), "paused")
 
@@ -1191,6 +1237,8 @@ class AgentCoreService:
         Raises:
             AgentNotFoundException: If agent not found
         """
+        # Locked: see pause_agent.
+        await AgentCRUD.lock(db, agent_id)
         agent = await AgentCoreService.get_agent_by_id(db, agent_id)
         _require_status(agent, _DISABLEABLE, "disabled")
 
@@ -1247,6 +1295,8 @@ class AgentCoreService:
             AgentNotFoundException: If agent not found
             ValidationException: If the agent is pending, rejected or archived
         """
+        # Locked: see pause_agent.
+        await AgentCRUD.lock(db, agent_id)
         agent = await AgentCoreService.get_agent_by_id(db, agent_id)
         _require_status(agent, _ARCHIVABLE, "archived")
 

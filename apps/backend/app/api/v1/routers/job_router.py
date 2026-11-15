@@ -34,15 +34,20 @@ router = APIRouter(route_class=AgentProtocolRoute, prefix="/jobs", tags=["Jobs"]
     name="api.agent.jobs.start",
 )
 async def start_job(
-    owned_job_id: AgentOwnedJobId,
+    owned: AgentOwnedJobId,
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> JobResponse:
     """Mark the job running, for the agent the job is assigned to."""
-    job = await JobApiCoreService.mark_job_started(db, owned_job_id)
+    job = await JobApiCoreService.mark_job_started(
+        db,
+        owned.job_id,
+        agent_id=owned.agent_id,
+        verified_key_hash=owned.key_hash,
+    )
     if job is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Job not found: {owned_job_id}",
+            detail=f"Job not found: {owned.job_id}",
         )
     return job
 
@@ -58,15 +63,21 @@ async def start_job(
     name="api.agent.job_results.create",
 )
 async def submit_job_results(
-    owned_job_id: AgentOwnedJobId,
+    owned: AgentOwnedJobId,
     result_data: JobResultSubmit,
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> JobResponse:
     """Submit job results from the agent the job is assigned to."""
-    job = await JobApiCoreService.submit_job_result(db, owned_job_id, result_data)
+    job = await JobApiCoreService.submit_job_result(
+        db,
+        owned.job_id,
+        result_data,
+        agent_id=owned.agent_id,
+        verified_key_hash=owned.key_hash,
+    )
     if job is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Job not found: {owned_job_id}",
+            detail=f"Job not found: {owned.job_id}",
         )
     return job

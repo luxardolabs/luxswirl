@@ -111,6 +111,7 @@ async def _race_stale_cleanup(worker_db: Any) -> tuple[Any, Any]:
                 AgentReportRequest(
                     agent_id=live_id, checks=[_result(LOW), _result(HIGH)]
                 ),
+                verified_key_hash=None,
             )
             await s.commit()
             return out
@@ -235,4 +236,4 @@ async def test_lock_for_delete_edges_and_agent_with_no_checks(worker_db: Any) ->
         await AgentCoreService.delete_agent(s, agent_id, actor_is_admin=True)
         await s.commit()
     async with worker_db() as s:
-        assert await AgentCRUD.key_share_exists(s, agent_id) is False
+        assert await AgentCRUD.key_share_admission(s, agent_id) is None
