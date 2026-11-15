@@ -30,7 +30,11 @@ import re
 from typing import overload
 
 from app.core.credential_mask import mask_credentials, mask_mapping
-from app.core.synthetic_result import shown_synthetic_error, shown_synthetic_metrics
+from app.core.synthetic_result import (
+    is_synthetic_error,
+    shown_synthetic_error,
+    shown_synthetic_metrics,
+)
 from app.models.enum_model import UserRole
 
 _HIDDEN = "***"
@@ -389,17 +393,23 @@ def metrics_nameserver(metrics: object) -> str | None:
     return nameserver if isinstance(nameserver, str) else None
 
 
-def is_synthetic_result(metrics: object, *, ran_synthetic: bool) -> bool:
+def is_synthetic_result(
+    metrics: object, error: str | None, *, ran_synthetic: bool
+) -> bool:
     """Whether a result is read as a synthetic run's: its check is or has ever been
-    a synthetic check (`ran_synthetic`), or its metrics (a mapping, or the JSON
-    text a row stores) carry a synthetic section.
+    a synthetic check (`ran_synthetic`), its metrics (a mapping, or the JSON text a
+    row stores) carry a synthetic section, or its `error` starts as the agent
+    writes a synthetic run's failure (`is_synthetic_error`).
 
     Decided per result and failing closed: a check retyped away from synthetic
     keeps its old runs (and an agent not yet reloaded keeps running the old
     script), and the agent cuts an oversized result's metrics to a size note, so a
-    synthetic run's own metrics cannot be relied on to say what it was."""
+    synthetic run's own metrics cannot be relied on to say what it was; its error
+    still starts with the agent's own words."""
+    if ran_synthetic or is_synthetic_error(error):
+        return True
     decoded = _decoded(metrics)
-    return ran_synthetic or (isinstance(decoded, dict) and _SYNTHETIC in decoded)
+    return isinstance(decoded, dict) and _SYNTHETIC in decoded
 
 
 @overload
@@ -436,7 +446,7 @@ def masked_error(
     DNS-over-HTTPS nameserver is a URL whose path can be a token no credential
     pattern names, and a refusal can quote it whole."""
     decoded = _decoded(metrics)
-    if is_synthetic_result(decoded, ran_synthetic=ran_synthetic):
+    if is_synthetic_result(decoded, error, ran_synthetic=ran_synthetic):
         section = decoded.get(_SYNTHETIC) if isinstance(decoded, dict) else None
         return shown_synthetic_error(error, section)
     if not error:

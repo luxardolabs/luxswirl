@@ -3,8 +3,8 @@
 The agent reports raw `performance.timing` marks and per-step wall-clock
 durations in seconds. Every figure the panel shows is computed here, so the
 template only renders: a mark or duration the agent sent as anything but a
-finite number (null, text, NaN, a list) is shown as no figure, never a failed
-render.
+figure (`is_figure`: null, text, NaN, a list, a number past 2**53) is shown as no
+figure, never a failed render.
 """
 
 from typing import Any
@@ -19,12 +19,9 @@ _PAGE_TILES = (
 )
 
 
-def _whole(value: float) -> int | None:
-    """`value` as whole milliseconds, or None when it is no finite figure."""
-    try:
-        return int(value) if is_figure(float(value)) else None
-    except OverflowError:
-        return None
+def _whole(value: object) -> int | None:
+    """`value` as whole milliseconds, or None when it is no figure."""
+    return int(value) if is_figure(value) else None
 
 
 def _since_start(timing: object, mark: str) -> int | None:
@@ -37,14 +34,15 @@ def _since_start(timing: object, mark: str) -> int | None:
     start = timing.get("navigationStart")
     if not value or not is_figure(value) or not is_figure(start):
         return None
-    return _whole(value - start)
+    # Two figures, so the difference is finite; one past the limit is no figure.
+    return _whole(float(value) - float(start))
 
 
 def _seconds_as_ms(seconds: object) -> int:
     """A step's duration in seconds as whole ms; 0 when it is no figure."""
     if not is_figure(seconds):
         return 0
-    return _whole(seconds * 1000) or 0
+    return _whole(float(seconds) * 1000) or 0
 
 
 def _page_tiles(browser_timing: object) -> list[dict[str, object]]:
@@ -66,7 +64,8 @@ def build_synthetic_view(synthetic: object) -> dict[str, Any]:
         `synthetic_steps`, one row per step with its timing marks already
         turned into milliseconds relative to that step's navigationStart, and
         `synthetic_page`, a tile per page mark (`browser_timing`) the same way,
-        and `synthetic_execution_ms`, the whole check's run (None when absent).
+        `synthetic_execution_ms`, the whole check's run (None when absent), and
+        `synthetic_step_count`, the steps the run reported a duration for.
     """
     if not isinstance(synthetic, dict) or not synthetic:
         return {
@@ -74,6 +73,7 @@ def build_synthetic_view(synthetic: object) -> dict[str, Any]:
             "synthetic_steps": [],
             "synthetic_page": _page_tiles(None),
             "synthetic_execution_ms": None,
+            "synthetic_step_count": 0,
         }
 
     durations = synthetic.get("track_durations")
@@ -98,5 +98,6 @@ def build_synthetic_view(synthetic: object) -> dict[str, Any]:
         "synthetic_total_ms": sum(map(_seconds_as_ms, durations.values())),
         "synthetic_steps": steps,
         "synthetic_page": _page_tiles(synthetic.get("browser_timing")),
-        "synthetic_execution_ms": _whole(execution) if is_figure(execution) else None,
+        "synthetic_execution_ms": _whole(execution),
+        "synthetic_step_count": len(durations),
     }

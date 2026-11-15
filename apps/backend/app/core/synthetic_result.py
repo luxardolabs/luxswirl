@@ -14,7 +14,6 @@ text cut out of what the agent sent, apart from a name in the fixed vocabulary o
 `playwright_names`.
 """
 
-import math
 import re
 from typing import TypeGuard
 
@@ -33,6 +32,21 @@ _AGENT_PREFIXES = (
 )
 # The agent's message when the script outran its timeout (asyncio's TimeoutError).
 _TIMED_OUT = "Script execution timed out after "
+# How every failure the agent writes for a synthetic run starts: its prefixes, its
+# timeout message, its refusals of a script that defines or returns the wrong
+# thing, and the artifact captures that failed. No other check type writes these,
+# so a result whose error starts with one is a script's, whatever its metrics say.
+SYNTHETIC_ERROR_STARTS = (
+    *_AGENT_PREFIXES,
+    _TIMED_OUT,
+    "Script must define an async function called 'run_check(page)'",
+    "run_check() must return a dictionary",
+    "Failed to capture screenshot: ",
+    "Failed to capture trace: ",
+)
+# The largest magnitude a figure takes: every integer up to it is exact as a
+# float, and arithmetic on two of them cannot overflow.
+_FIGURE_LIMIT = 2**53
 # A leading `TimeoutError: ` (the agent writes the exception's class first), then
 # Playwright's leading `Page.goto: `: candidates, shown only when in the vocabulary.
 _EXCEPTION_NAME = re.compile(r"([A-Za-z_][A-Za-z0-9_]{0,63}): ")
@@ -113,11 +127,21 @@ def shown_synthetic_error(error: str | None, section: object = None) -> str | No
     return f"{FAILED}: {name}" if name else FAILED
 
 
+def is_synthetic_error(error: str | None) -> bool:
+    """Whether `error` starts as the agent writes a synthetic run's failure."""
+    return error is not None and error.startswith(SYNTHETIC_ERROR_STARTS)
+
+
 def is_figure(value: object) -> TypeGuard[int | float]:
-    """A number that is a figure: no bool, no NaN or infinity."""
+    """A number that is a figure: no bool, no NaN or infinity, and less than
+    2**53 either way, so it converts to a float exactly and a sum or difference of
+    two cannot overflow. Metrics are the agent's JSON, whose integers have no
+    bound."""
     if isinstance(value, bool):
         return False
-    return isinstance(value, int) or (isinstance(value, float) and math.isfinite(value))
+    if isinstance(value, int):
+        return abs(value) < _FIGURE_LIMIT
+    return isinstance(value, float) and abs(value) < _FIGURE_LIMIT
 
 
 def _timing(value: object) -> dict[str, object]:

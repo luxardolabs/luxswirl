@@ -78,6 +78,18 @@ SYNTHETIC_PANEL_DEFAULTS: dict[str, Any] = {
 }
 
 
+def _complete_synthetic(synthetic: dict[str, Any]) -> None:
+    """Give `synthetic` every key the panel reads, in the shape it reads it. The
+    script writes these fields itself, so a list or mapping it sent as anything
+    else (a number, text) is read as one that reported nothing."""
+    for key, empty in SYNTHETIC_PANEL_DEFAULTS.items():
+        value = synthetic.get(key)
+        if value is None or (
+            isinstance(empty, list | dict) and not isinstance(value, type(empty))
+        ):
+            synthetic[key] = copy.copy(empty)
+
+
 class ResultProxy:
     """One bucket of history, shaped like a result for the panel's template."""
 
@@ -235,8 +247,7 @@ class CheckDetailViewService:
             if synthetic is not None and not isinstance(synthetic, dict):
                 synthetic = metrics["synthetic"] = {}
             if isinstance(synthetic, dict):
-                for key, empty in SYNTHETIC_PANEL_DEFAULTS.items():
-                    synthetic.setdefault(key, copy.copy(empty))
+                _complete_synthetic(synthetic)
 
             # Complete the certificate the agent reported: the panel reads the
             # expiry flags unconditionally, so they are set for every cert.

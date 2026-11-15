@@ -22,6 +22,7 @@ def test_no_synthetic_block_is_zeroed():
             {"label": "Full Load (ms)", "mark": "loadEventEnd", "ms": None},
         ],
         "synthetic_execution_ms": None,
+        "synthetic_step_count": 0,
     }
 
 
@@ -51,6 +52,9 @@ def test_the_page_marks_become_ms_since_navigation_started():
         {"track_timings": {"a": "x", "b": [1], "c": {"navigationStart": "1"}}},
         {"browser_timing": {"navigationStart": None, "domLoading": 1200}},
         {"browser_timing": {"navigationStart": 1, "domLoading": 10**400}},
+        {"browser_timing": {"navigationStart": 1.5, "domLoading": 10**400}},
+        {"browser_timing": {"navigationStart": -(2**53), "domLoading": 1}},
+        {"track_durations": {"a": 10**400}, "total_execution_time_ms": 2**53},
         {"total_execution_time_ms": float("inf")},
     ],
 )
@@ -122,3 +126,9 @@ def test_a_step_with_no_recorded_duration_reports_zero():
         {"track_durations": {}, "track_timings": {"s": {"navigationStart": 0}}}
     )
     assert view["synthetic_steps"][0]["total_ms"] == 0
+
+
+def test_the_step_count_is_the_steps_with_a_duration():
+    view = build_synthetic_view({"track_durations": {"a": 1.5, "b": "x"}})
+    assert view["synthetic_step_count"] == 2
+    assert build_synthetic_view({"track_durations": 5})["synthetic_step_count"] == 0

@@ -14,7 +14,10 @@ import pytest
 import pytest_asyncio
 from app.core.config import settings
 from app.core.credential_mask import mask_mapping
+from app.core.datetime_utils import utc_now
+from app.core.rate_limit import limiter
 from app.main import app
+from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.auth_core_service import AuthCoreService
 from fixtures.factories import make_agent, make_check, make_check_result, make_user
 from httpx import ASGITransport, AsyncClient
@@ -521,3 +524,177 @@ async def test_a_timing_mark_that_is_no_figure_reads_as_a_dash(
     assert "Page Load Performance" in panel
     assert "DOM Load (ms)" in panel
     assert "—" in panel
+
+
+RESET_TOKEN = "Pr1vateResetT0ken"
+# The agent's size note: a run whose metrics outgrew the server's limit.
+SIZE_NOTE = json.dumps({"metrics_truncated": True, "metrics_original_chars": 90000})
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        "Script execution failed: TimeoutError: Page.goto: Timeout 30000ms exceeded "
+        f"navigating to https://app.example.com/reset/{RESET_TOKEN}",
+        f"Script compilation failed: SyntaxError: bad line 'https://x/{RESET_TOKEN}'",
+        f"Playwright initialization failed: Error: https://x/{RESET_TOKEN}",
+        f"Script execution timed out after 30s https://x/{RESET_TOKEN}",
+    ],
+    ids=["execution", "compilation", "initialization", "timed-out"],
+)
+async def test_a_viewer_reads_a_size_noted_synthetic_error_as_a_synthetic_one(
+    client: AsyncClient, db: AsyncSession, error: str
+) -> None:
+    """A check never marked as synthetic (retyped before the column existed),
+    whose run reached the server as the size note: the agent's own failure
+    prefix still says a script ran."""
+    agent = make_agent()
+    viewer = make_user(role="viewer")
+    db.add_all([agent, viewer])
+    await db.flush()
+    check = make_check(agent_id=agent.id, check_type="http")
+    db.add(check)
+    await db.flush()
+    assert check.ran_synthetic is False
+    db.add(
+        make_check_result(
+            check_id=check.id,
+            agent_id=agent.id,
+            success=False,
+            error=error,
+            metrics=SIZE_NOTE,
+        )
+    )
+    await db.flush()
+    _, session = await AuthCoreService().create_session(db, viewer.id)
+    client.cookies.set(settings.security.session_cookie_name, session)
+
+    resp = await client.get(f"/check/{check.id}")
+
+    assert resp.status_code == 200, resp.text
+    assert RESET_TOKEN not in resp.text
+    assert "Synthetic check failed" in resp.text
+
+
+HUGE = 10**400  # a JSON integer literal: json.loads reads it as a Python int
+
+
+def _timing_with(dom_loading: object) -> str:
+    return json.dumps(
+        {
+            "synthetic": {
+                "status": "failure",
+                "browser_timing": {
+                    "navigationStart": 1.5,
+                    "domLoading": dom_loading,
+                    "domComplete": 3.0,
+                    "loadEventEnd": 4.0,
+                },
+            }
+        }
+    )
+
+
+@pytest.mark.parametrize("role", ["viewer", "editor"])
+async def test_huge_integer_timing_mark_does_not_500_the_panel(
+    client: AsyncClient, db: AsyncSession, role: str
+) -> None:
+    panel = await _panel(client, db, "synthetic", role, _timing_with(HUGE))
+
+    assert "Page Load Performance" in panel
+
+
+@pytest.mark.parametrize("role", ["viewer", "editor"])
+async def test_huge_integer_step_mark_does_not_500_the_panel(
+    client: AsyncClient, db: AsyncSession, role: str
+) -> None:
+    metrics = json.dumps(
+        {
+            "synthetic": {
+                "status": "failure",
+                "track_durations": {"home": 1.0},
+                "track_timings": {"home": {"navigationStart": 0.5, "domLoading": HUGE}},
+            }
+        }
+    )
+
+    panel = await _panel(client, db, "synthetic", role, metrics)
+
+    assert "Multi-Step Navigation Performance" in panel
+
+
+async def test_agent_reported_huge_timing_500s_the_viewer_panel(
+    client: AsyncClient, db: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """End to end: an agent reports a timing mark as a JSON integer too big for a
+    float; ingestion stores it, and a viewer's panel still renders."""
+    monkeypatch.setattr(settings.security, "auth_enabled", True)
+    limiter.reset()
+    agent = make_agent(approval_status="pending")
+    viewer = make_user(role="viewer")
+    db.add_all([agent, viewer])
+    await db.flush()
+    _, key = await AgentCoreService.approve_agent(db, agent.id, actor_is_admin=True)
+    check = make_check(agent_id=agent.id, check_type="synthetic")
+    db.add(check)
+    await db.flush()
+    resp = await client.post(
+        "/api/v1/agent/reports",
+        json={
+            "agent_id": str(agent.id),
+            "checks": [
+                {
+                    "check_id": str(check.id),
+                    "display_name": "probe",
+                    "check_type": "synthetic",
+                    "target": "https://example.com",
+                    "timestamp": utc_now().isoformat(),
+                    "success": False,
+                    "latency_ms": 5.0,
+                    "error": "Script execution failed: ValueError: x",
+                    "metrics": json.loads(_timing_with(HUGE)),
+                }
+            ],
+        },
+        headers={"Authorization": f"Bearer {key}"},
+    )
+    assert resp.status_code == 202, resp.text
+    assert resp.json()["results_processed"] == 1, resp.text
+    _, session = await AuthCoreService().create_session(db, viewer.id)
+    client.cookies.set(settings.security.session_cookie_name, session)
+
+    panel = await client.get(f"/check/{check.id}")
+
+    assert panel.status_code == 200, panel.text[:200]
+
+
+@pytest.mark.parametrize(
+    "section",
+    [
+        {"status": "failure", "steps": 5},
+        {"status": "failure", "console_errors": 5},
+        {"status": "failure", "request_failures": 5},
+        {"status": "failure", "track_durations": 5},
+        {"status": "failure", "track_timings": "x"},
+        {"status": "failure", "browser_timing": [1, 2]},
+        {"status": "failure", "track_durations": ["a"], "track_timings": [1]},
+    ],
+    ids=[
+        "steps-int",
+        "console-errors-int",
+        "request-failures-int",
+        "track-durations-int",
+        "track-timings-text",
+        "browser-timing-list",
+        "track-lists",
+    ],
+)
+@pytest.mark.parametrize("role", ["viewer", "editor"])
+async def test_non_list_script_fields_do_not_500_the_panel(
+    client: AsyncClient, db: AsyncSession, role: str, section: dict[str, object]
+) -> None:
+    panel = await _panel(
+        client, db, "synthetic", role, json.dumps({"synthetic": section})
+    )
+
+    assert "Synthetic Monitor" in panel

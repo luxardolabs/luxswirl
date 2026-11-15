@@ -8,7 +8,11 @@ from __future__ import annotations
 import json
 
 import pytest
-from app.core.synthetic_result import shown_synthetic_error, shown_synthetic_metrics
+from app.core.synthetic_result import (
+    SYNTHETIC_ERROR_STARTS,
+    shown_synthetic_error,
+    shown_synthetic_metrics,
+)
 from app.core.target_origin import is_synthetic_result, masked_error
 
 LINK_ID = "9f8e7d6c5b4a39281706"
@@ -129,7 +133,7 @@ def test_a_run_whose_metrics_carry_a_synthetic_section_is_a_synthetic_run(
     old runs, and an agent not yet reloaded keeps running the old script."""
     error = f"Script execution failed: ValueError: bad at /reset/{LINK_ID}"
 
-    assert is_synthetic_result(metrics, ran_synthetic=False)
+    assert is_synthetic_result(metrics, None, ran_synthetic=False)
     assert masked_error(error, metrics, ran_synthetic=False, configured=()) == (
         "Synthetic check failed: ValueError"
     )
@@ -140,12 +144,33 @@ def test_every_run_of_a_check_that_ever_ran_a_script_is_a_synthetic_run() -> Non
     own metrics cannot be relied on to say it was a script's."""
     error = f"Script execution failed: refused at https://a.example/r/{LINK_ID}"
 
-    assert is_synthetic_result({"note": "metrics too large"}, ran_synthetic=True)
+    assert is_synthetic_result({"note": "metrics too large"}, None, ran_synthetic=True)
     assert masked_error(error, "{}", ran_synthetic=True, configured=()) == (
         "Synthetic check failed"
     )
-    assert not is_synthetic_result({"response": {}}, ran_synthetic=False)
-    assert not is_synthetic_result("not json", ran_synthetic=False)
+    assert not is_synthetic_result({"response": {}}, None, ran_synthetic=False)
+    assert not is_synthetic_result("not json", None, ran_synthetic=False)
+
+
+@pytest.mark.parametrize("start", SYNTHETIC_ERROR_STARTS)
+def test_a_run_whose_error_starts_as_the_agent_writes_a_scripts_is_synthetic(
+    start: str,
+) -> None:
+    """A check never marked, whose run's metrics are the agent's size note: the
+    error's start is the agent's own word that a script ran."""
+    error = f"{start}https://a.example/r/{LINK_ID}"
+    note = {"metrics_truncated": True}
+
+    assert is_synthetic_result(note, error, ran_synthetic=False)
+    shown = masked_error(error, note, ran_synthetic=False, configured=())
+    assert shown.startswith("Synthetic check failed")
+    assert LINK_ID not in shown
+
+
+def test_an_error_that_quotes_a_script_prefix_later_is_no_synthetic_run() -> None:
+    error = "HTTP 500: Script execution failed: upstream"
+
+    assert not is_synthetic_result({}, error, ran_synthetic=False)
 
 
 @pytest.mark.parametrize(
