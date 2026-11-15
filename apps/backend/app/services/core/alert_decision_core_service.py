@@ -79,6 +79,12 @@ class AlertDecisionCoreService:
         dropped. The queue entries taken are removed and the cursor moved to
         the newest of them, with the notification rows written.
 
+        A check no enabled alert evaluates any longer (its alerts disabled,
+        deleted or taken off it since its results were queued) has its whole
+        queue dropped undecided and its cursor moved past it, so its queued
+        rows never outlast the next pass: an alert that evaluates it again
+        decides the results stored after.
+
         Returns:
             How many queued results were taken (0 when the lock was not had).
         """
@@ -88,6 +94,8 @@ class AlertDecisionCoreService:
             return 0
         if not await CheckCRUD.key_share_existing(db, [check_id]):
             return 0
+        if not await AlertCRUD.checks_with_result_alerts(db, {check_id}):
+            return await AlertDecisionCoreService._drop_queue(db, check_id)
         queued = await AlertDecisionCRUD.queued_for_check(db, check_id, limit)
         if not queued:
             return 0
@@ -120,3 +128,17 @@ class AlertDecisionCoreService:
                 extra={"check_id": str(check_id), "alerts_evaluated": evaluated},
             )
         return len(queued)
+
+    @staticmethod
+    async def _drop_queue(db: AsyncSession, check_id: UUID) -> int:
+        """Drop every queued result of a check undecided, its cursor moved to
+        the newest; how many were dropped."""
+        newest = await AlertDecisionCRUD.newest_queued(db, check_id)
+        if newest is None:
+            return 0
+        dropped = await AlertDecisionCRUD.advance(db, check_id, newest)
+        logger.info(
+            "Queued results dropped: no enabled alert evaluates the check",
+            extra={"check_id": str(check_id), "dropped": dropped},
+        )
+        return dropped

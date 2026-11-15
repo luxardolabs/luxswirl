@@ -1,8 +1,10 @@
 """What the delivery worker holds a queued notification to when it delivers.
 
 The rate limit counts deliveries by when they were delivered (a backlog
-decided long ago is still limited), one dead provider never holds a healthy
-one's deliveries behind its timeouts, a row whose payload cannot be read
+decided long ago is still limited) and never counts a row cut off by a
+stopped worker against itself; dead providers, however many, never hold a
+healthy one's deliveries behind their timeouts, and a provider's share holds
+across server processes; a row whose payload cannot be read
 fails alone, and a notification whose provider or check is no longer on its
 alert (or whose pair is snoozed, or whose check is deleted) is suppressed.
 """
@@ -10,20 +12,29 @@ alert (or whose pair is snoozed, or whose check is deleted) is suppressed.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import time
 from datetime import timedelta
 from typing import Any
 from uuid import UUID
 
 import pytest
+from app.background.notification_delivery_worker import (
+    DELIVERY_SLOTS,
+    PROVIDER_SHARE,
+    DeliveryPool,
+    deliver_due_notifications,
+)
 from app.core.datetime_utils import utc_now
 from app.crud.alert_crud import AlertCRUD
+from app.db import worker_session
 from app.models.alert_notification_mapping_model import AlertNotificationMapping
 from app.models.check_model import Check
 from app.models.notification_log_model import NotificationLog
 from app.notifications.providers.base import NotificationContext
 from app.notifications.providers.webhook import WebhookNotificationProvider
 from app.services.core.notification_core_service import NotificationCoreService
+from app.services.core.notification_delivery_core_service import CLAIM_LEASE
 from fixtures.factories import (
     make_agent,
     make_alert,
@@ -62,12 +73,14 @@ class _Hooks:
         self.slow = slow or set()
         self.delay = delay
         self.sent: list[tuple[str, str, float]] = []
+        self.entered = asyncio.Event()
 
     def install(self, monkeypatch: pytest.MonkeyPatch) -> None:
         hook = self
 
         async def send(self: Any, context: NotificationContext) -> bool:
             url = self.config["post_url"]
+            hook.entered.set()
             if url in hook.slow:
                 await asyncio.sleep(hook.delay)
                 raise TimeoutError("endpoint did not answer")
@@ -162,28 +175,65 @@ async def test_rate_limit_holds_for_a_backlog_decided_before_the_window(
     assert statuses.count("rate_limited") == 4, statuses
 
 
-async def test_a_healthy_provider_is_not_held_behind_a_dead_one(
-    worker_db: Any, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """30 checks down, one alert, two providers, one of them a blackhole
-    (each attempt waits out its timeout). The healthy provider's 30 are
-    delivered at once, not one batch per dead timeout."""
-    dead_url = "https://dead.example.test/hook"
+async def _checks_on(worker_db: Any, alert_id: UUID, n: int) -> list[UUID]:
+    """`n` checks on the alert, each its own subject: no check's
+    notifications wait on another's."""
+    async with worker_db() as s:
+        agent = make_agent()
+        s.add(agent)
+        await s.flush()
+        checks = [make_check(agent_id=agent.id, display_name=f"c{i}") for i in range(n)]
+        s.add_all(checks)
+        await s.flush()
+        s.add_all(
+            make_alert_check_mapping(alert_id=alert_id, check_id=c.id) for c in checks
+        )
+        await s.commit()
+    return [c.id for c in checks]
+
+
+async def _healthy_beside_dead(
+    worker_db: Any, monkeypatch: pytest.MonkeyPatch, dead_count: int
+) -> tuple[int, float]:
+    """30 checks down, one alert, a healthy provider and `dead_count`
+    blackholes (each attempt waits out its timeout): how many of the healthy
+    provider's 30 were sent, and how long the last took."""
     good_url = "https://good.example.test/hook"
-    hook = _Hooks(slow={dead_url}, delay=2.0)
+    dead_urls = [f"https://dead{n}.example.test/hook" for n in range(dead_count)]
+    hook = _Hooks(slow=set(dead_urls), delay=2.0)
     hook.install(monkeypatch)
-    dead = make_notification_provider(config={"post_url": dead_url})
+    dead = [make_notification_provider(config={"post_url": u}) for u in dead_urls]
     good = make_notification_provider(config={"post_url": good_url})
-    alert_id = await _alert_with(worker_db, [dead, good])
-    for n in range(30):
-        await _queue(worker_db, alert_id, [dead.id, good.id], f"c{n}")
+    alert_id = await _alert_with(worker_db, [*dead, good])
+    providers = [*(p.id for p in dead), good.id]
+    for n, check_id in enumerate(await _checks_on(worker_db, alert_id, 30)):
+        await _queue(worker_db, alert_id, providers, f"c{n}", check_id)
 
     started = time.monotonic()
     await deliver_committed()
 
     good_times = [at for url, _, at in hook.sent if url == good_url]
-    assert len(good_times) == 30
-    took = max(good_times) - started
+    return len(good_times), max(good_times) - started
+
+
+async def test_a_healthy_provider_is_not_held_behind_a_dead_one(
+    worker_db: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The healthy provider's 30 are delivered at once, not one batch per
+    dead timeout."""
+    count, took = await _healthy_beside_dead(worker_db, monkeypatch, 1)
+    assert count == 30
+    assert took < 1.5, f"the healthy provider's 30 took {took:.1f}s"
+
+
+async def test_two_dead_providers_do_not_hold_a_healthy_third(
+    worker_db: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Two blackholes with a backlog each, enough to fill every slot
+    between them: slots are claimed in turn across providers, so the
+    healthy third's 30 still go out at once."""
+    count, took = await _healthy_beside_dead(worker_db, monkeypatch, 2)
+    assert count == 30
     assert took < 1.5, f"the healthy provider's 30 took {took:.1f}s"
 
 
@@ -312,3 +362,102 @@ async def test_a_check_still_on_the_alert_is_notified(
     sent, rows = await _edited_before_delivery(worker_db, monkeypatch, "none")
     assert sent == ["svc"]
     assert rows == [("sent", None)]
+
+
+async def test_cut_off_delivery_is_not_rate_limited_by_itself(
+    worker_db: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A provider limited to one notification per 10 minutes, nothing sent
+    in the window. The worker is stopped mid-attempt (a deploy's restart),
+    leaving the row `sending`; claimed again once its lease lapses, the row
+    is not counted against its own limit, and it is sent."""
+    url = "https://team.example.test/hook"
+    hanging = _Hooks(slow={url}, delay=3600)
+    hanging.install(monkeypatch)
+    provider = make_notification_provider(
+        config={"post_url": url}, rate_limit_count=1, rate_limit_window_minutes=10
+    )
+    alert_id = await _alert_with(worker_db, [provider])
+    ids = await _queue(worker_db, alert_id, [provider.id], "svc")
+    worker = asyncio.create_task(deliver_due_notifications())
+    await asyncio.wait_for(hanging.entered.wait(), 10)
+    worker.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await worker
+    assert [status for status, _ in await _rows(worker_db, ids)] == ["sending"]
+
+    answering = _Hooks()
+    answering.install(monkeypatch)
+    await deliver_due_notifications(now=utc_now() + CLAIM_LEASE + timedelta(seconds=1))
+
+    assert await _rows(worker_db, ids) == [("sent", None)]
+    assert answering.to(url) == ["svc"]
+
+
+async def _dead_backlog(worker_db: Any, dead_count: int) -> UUID:
+    """`dead_count` blackholes (each attempt hangs) on one alert, 30 checks
+    queued for each: more than the pool's slots."""
+    dead = [
+        make_notification_provider(config={"post_url": f"https://dead{n}.test/h"})
+        for n in range(dead_count)
+    ]
+    alert_id = await _alert_with(worker_db, dead)
+    for n, check_id in enumerate(await _checks_on(worker_db, alert_id, 30)):
+        await _queue(worker_db, alert_id, [p.id for p in dead], f"c{n}", check_id)
+    return alert_id
+
+
+async def test_a_provider_with_nothing_in_flight_has_a_slot_dead_ones_cannot_take(
+    worker_db: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Two blackholes take every slot they may while nothing else is due.
+    A notification for a third provider then comes due: the pool claims it
+    at once, not after a dead attempt times out."""
+    hook = _Hooks(slow={"https://dead0.test/h", "https://dead1.test/h"}, delay=3600)
+    hook.install(monkeypatch)
+    alert_id = await _dead_backlog(worker_db, 2)
+    pool = DeliveryPool(worker_session)
+    try:
+        dead_taken = await pool.fill()
+        good_url = "https://good.example.test/hook"
+        good = make_notification_provider(config={"post_url": good_url})
+        async with worker_db() as s:
+            s.add(good)
+            await s.flush()
+            s.add(
+                make_alert_notification_mapping(
+                    alert_id=alert_id, notification_provider_id=good.id
+                )
+            )
+            await s.commit()
+        [check_id] = await _checks_on(worker_db, alert_id, 1)
+        await _queue(worker_db, alert_id, [good.id], "late", check_id)
+
+        good_taken = await pool.fill()
+        await pool.settle(timeout=5)
+    finally:
+        await pool.cancel()
+
+    assert dead_taken < DELIVERY_SLOTS
+    assert good_taken == 1
+    assert hook.to(good_url) == ["late"]
+
+
+async def test_a_providers_share_holds_across_server_processes(
+    worker_db: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Two server processes (two pools) and one blackhole with a backlog:
+    the provider's share counts what every process has in flight, so the
+    second process claims none of it."""
+    hook = _Hooks(slow={"https://dead0.test/h"}, delay=3600)
+    hook.install(monkeypatch)
+    await _dead_backlog(worker_db, 1)
+    first = DeliveryPool(worker_session)
+    second = DeliveryPool(worker_session)
+    try:
+        taken = (await first.fill(), await second.fill())
+    finally:
+        await first.cancel()
+        await second.cancel()
+
+    assert taken == (PROVIDER_SHARE, 0)

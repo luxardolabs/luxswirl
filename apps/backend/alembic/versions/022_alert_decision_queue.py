@@ -6,10 +6,13 @@ check, oldest first, and records in `alert_decision_cursors` the timestamp of
 the newest result decided, so a result no newer (one that arrives after a newer
 result was decided) is stale and never decided.
 
-Every check starts with its cursor at the upgrade: the results stored before
-it had their alerts decided by the reports that stored them, so one sent again
-afterwards is stale and is never decided twice. A check created later has no
-cursor until its first decision.
+Every check starts with its cursor at its newest stored result: the results
+stored before the upgrade had their alerts decided by the reports that stored
+them, so one sent again afterwards is stale and is never decided twice, while
+a result an agent buffered while the server was down for the upgrade (older
+than the upgrade, newer than anything stored) is decided when it is replayed.
+A check with no stored result, or created later, has no cursor until its
+first decision.
 
 Revision ID: 9b4d6f1e3a72
 Revises: 7c3e9a1d5b26
@@ -66,9 +69,15 @@ def upgrade() -> None:
         ),
         sa.PrimaryKeyConstraint("check_id", name=op.f("pk_alert_decision_cursors")),
     )
+    # One index probe per check (check_results' unique (check_id, timestamp)
+    # index), never a scan of the results.
     op.execute(
         "INSERT INTO alert_decision_cursors (check_id, decided_through) "
-        "SELECT id, now() FROM checks"
+        "SELECT c.id, newest.decided_through FROM checks c "
+        "CROSS JOIN LATERAL ("
+        "SELECT r.timestamp AS decided_through FROM check_results r "
+        "WHERE r.check_id = c.id ORDER BY r.timestamp DESC LIMIT 1"
+        ") newest"
     )
 
 

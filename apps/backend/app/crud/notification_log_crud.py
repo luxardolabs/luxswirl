@@ -2,21 +2,17 @@
 NotificationLog CRUD - database queries for notification log operations.
 """
 
-from collections.abc import Mapping
 from datetime import datetime
 from typing import Any
 from uuid import UUID
 
 from sqlalchemy import (
-    ColumnElement,
     Row,
     Select,
     and_,
-    case,
     delete,
     exists,
     func,
-    literal,
     or_,
     select,
     update,
@@ -62,20 +58,27 @@ class NotificationLogCRUD:
         now: datetime,
         limit: int,
         *,
-        provider_room: Mapping[UUID, int],
+        open_limit: int,
         provider_share: int,
     ) -> list[NotificationLog]:
-        """Rows due for delivery, locked FOR UPDATE SKIP LOCKED, in decision order.
+        """Up to `limit` rows due for delivery, locked FOR UPDATE SKIP LOCKED.
 
         Due: pending or retrying with `next_attempt_at` reached, or sending
         with its lease lapsed (its worker stopped). A row is held back while
         an earlier-decided row of the same alert, subject (check or agent)
         and provider still awaits delivery, so one subject's notifications
         reach a provider in the order they were decided: a recovery never
-        overtakes its outage. At most `provider_share` rows are taken for one
-        provider, or `provider_room[provider]` for a provider the caller
-        already has rows in flight for, so a provider whose every attempt
-        waits out its timeout never fills the caller's slots.
+        overtakes its outage.
+
+        A provider's rows in flight are its `sending` rows under a live
+        lease, whichever server process holds them. Rows are taken in turn
+        across providers, the provider with the fewest in flight first (each
+        provider's own in decision order), and no provider is given more
+        than `provider_share` in flight in all, so providers whose every
+        attempt waits out its timeout never fill the slots between them.
+        Past the first `open_limit` rows, only a provider with nothing in
+        flight may take one (its first row), so a provider that comes due
+        while the slots are held is never left waiting for one to free.
         """
         earlier = aliased(NotificationLog)
         awaiting = [
@@ -104,10 +107,23 @@ class NotificationLogCRUD:
                 NotificationLog.lease_expires_at <= now,
             ),
         )
+        in_flight = (
+            select(
+                NotificationLog.notification_provider_id.label("provider_id"),
+                func.count().label("held"),
+            )
+            .where(
+                NotificationLog.status == NotificationStatus.SENDING,
+                NotificationLog.lease_expires_at > now,
+            )
+            .group_by(NotificationLog.notification_provider_id)
+            .subquery()
+        )
         ranked = (
             select(
                 NotificationLog.id,
                 NotificationLog.notification_provider_id,
+                NotificationLog.decision_seq,
                 func.row_number()
                 .over(
                     partition_by=NotificationLog.notification_provider_id,
@@ -118,16 +134,33 @@ class NotificationLogCRUD:
             .where(due, ~held_back)
             .subquery()
         )
-        room: ColumnElement[int] = (
-            case(
-                dict(provider_room),
-                value=ranked.c.notification_provider_id,
-                else_=provider_share,
+        held = func.coalesce(in_flight.c.held, 0)
+        turn = held + ranked.c.rank
+        placed = (
+            select(
+                ranked.c.id,
+                ranked.c.rank,
+                held.label("held"),
+                func.row_number()
+                .over(order_by=(turn, ranked.c.decision_seq))
+                .label("position"),
             )
-            if provider_room
-            else literal(provider_share)
+            .select_from(
+                ranked.outerjoin(
+                    in_flight,
+                    in_flight.c.provider_id == ranked.c.notification_provider_id,
+                )
+            )
+            .where(turn <= provider_share)
+            .subquery()
         )
-        eligible = select(ranked.c.id).where(ranked.c.rank <= room)
+        eligible = select(placed.c.id).where(
+            placed.c.position <= limit,
+            or_(
+                placed.c.position <= open_limit,
+                and_(placed.c.held == 0, placed.c.rank == 1),
+            ),
+        )
         result = await db.execute(
             select(NotificationLog)
             .where(NotificationLog.id.in_(eligible))
@@ -182,20 +215,34 @@ class NotificationLogCRUD:
 
     @staticmethod
     async def count_delivered_for_provider_since(
-        db: AsyncSession, provider_id: UUID, since: datetime
+        db: AsyncSession,
+        provider_id: UUID,
+        since: datetime,
+        *,
+        now: datetime,
+        excluding: UUID,
     ) -> int:
         """A provider's deliveries that count against its rate limit: those
         sent or rate limited at `since` or later, by when their delivery
         ended (a row from before delivery was recorded, by its decision), and
-        every one being sent now."""
+        every one being sent now, under a lease still live at `now`.
+
+        The row `excluding` (the one being judged) is never counted, and
+        neither is a `sending` row whose lease has lapsed: its worker stopped
+        mid-attempt, so it is due again, not in flight.
+        """
         ended_at = func.coalesce(NotificationLog.delivered_at, NotificationLog.sent_at)
         result = await db.execute(
             select(func.count())
             .select_from(NotificationLog)
             .where(
                 NotificationLog.notification_provider_id == provider_id,
+                NotificationLog.id != excluding,
                 or_(
-                    NotificationLog.status == NotificationStatus.SENDING,
+                    and_(
+                        NotificationLog.status == NotificationStatus.SENDING,
+                        NotificationLog.lease_expires_at > now,
+                    ),
                     and_(
                         NotificationLog.status.in_(
                             [NotificationStatus.SENT, NotificationStatus.RATE_LIMITED]

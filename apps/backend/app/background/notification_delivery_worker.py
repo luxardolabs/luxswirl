@@ -6,9 +6,13 @@ Single asyncio task launched in main.py lifespan. It keeps a pool of
 slow attempt never holds up the rest: rows are claimed FOR UPDATE SKIP LOCKED
 in a short transaction and marked `sending` under a lease, each is delivered
 with no transaction open, and each outcome is recorded as it comes, in a
-short transaction of its own (`NotificationDeliveryCoreService`). No provider
-takes more than `PROVIDER_SHARE` of the slots, so one whose every attempt
-waits out its timeout leaves the others theirs. Several server processes each
+short transaction of its own (`NotificationDeliveryCoreService`). Slots are
+claimed in turn across providers, the one with the fewest attempts in flight
+first; no provider has more than `PROVIDER_SHARE` in flight, counted across
+every server process (its `sending` rows under a live lease); and the last
+`IDLE_PROVIDER_SLOTS` of a pool's slots go only to a provider with nothing in
+flight. So providers whose every attempt waits out its timeout leave the
+others theirs, however many of them there are. Several server processes each
 run one; SKIP LOCKED keeps them off each other's rows, and a row whose worker
 stopped mid-delivery is claimed again once its lease lapses. Nothing is
 reaped at startup: the lease is the only recovery.
@@ -16,7 +20,6 @@ reaped at startup: the lease is the only recovery.
 
 import asyncio
 import contextlib
-from collections import Counter
 from collections.abc import Callable
 from contextlib import AbstractAsyncContextManager
 from datetime import datetime
@@ -39,8 +42,11 @@ SessionOpener = Callable[[], AbstractAsyncContextManager[AsyncSession]]
 _worker_task: asyncio.Task[None] | None = None
 # Attempts in flight at once.
 DELIVERY_SLOTS = 20
-# The most of them one provider may hold.
+# The most attempts one provider may have in flight, across every server
+# process.
 PROVIDER_SHARE = 10
+# Slots of a pool kept for a provider with nothing in flight.
+IDLE_PROVIDER_SLOTS = 1
 _POLL_IDLE_SECONDS = 1.0
 _POLL_ERROR_BACKOFF_SECONDS = 5.0
 
@@ -70,21 +76,19 @@ class DeliveryPool:
         return self._now or utc_now()
 
     async def fill(self) -> int:
-        """Claim due rows for the free slots, within each provider's share,
-        and start their attempts; how many rows the claim took, those it
-        ended without an attempt included (each may free the next row of its
-        alert, subject and provider)."""
+        """Claim due rows for the free slots, in turn across providers and
+        within each provider's share, and start their attempts; how many rows
+        the claim took, those it ended without an attempt included (each may
+        free the next row of its alert, subject and provider)."""
         free = DELIVERY_SLOTS - len(self._in_flight)
         if free <= 0:
             return 0
-        held = Counter(claimed.provider_id for claimed in self._in_flight.values())
-        room = {provider: PROVIDER_SHARE - n for provider, n in held.items()}
         async with self._open_session() as db:
             batch = await NotificationDeliveryCoreService.claim_due(
                 db,
                 self._clock(),
                 free,
-                provider_room=room,
+                open_limit=max(0, free - IDLE_PROVIDER_SLOTS),
                 provider_share=PROVIDER_SHARE,
             )
         for claimed in batch.deliveries:

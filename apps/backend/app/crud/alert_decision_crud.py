@@ -43,11 +43,39 @@ class AlertDecisionCRUD:
 
     @staticmethod
     async def checks_with_queued(db: AsyncSession, limit: int) -> list[UUID]:
-        """Up to `limit` checks with queued results, the longest waiting first."""
+        """Up to `limit` checks with queued results, the longest waiting first.
+
+        Read from the queue's primary key alone, one probe per check with
+        queued results however many each has: the distinct checks are walked
+        one key at a time (a recursive skip over the index), and each one's
+        oldest entry is the first index entry under it.
+        """
+        queue = AlertDecisionQueue
+        anchor = (
+            select(queue.check_id)
+            .order_by(queue.check_id)
+            .limit(1)
+            .cte("queued_checks", recursive=True)
+        )
+        following = (
+            select(queue.check_id)
+            .where(queue.check_id > anchor.c.check_id)
+            .order_by(queue.check_id)
+            .limit(1)
+            .scalar_subquery()
+        )
+        walk = anchor.union_all(select(following).where(anchor.c.check_id.is_not(None)))
+        oldest = (
+            select(queue.result_timestamp)
+            .where(queue.check_id == walk.c.check_id)
+            .order_by(queue.result_timestamp)
+            .limit(1)
+            .scalar_subquery()
+        )
         result = await db.execute(
-            select(AlertDecisionQueue.check_id)
-            .group_by(AlertDecisionQueue.check_id)
-            .order_by(func.min(AlertDecisionQueue.result_timestamp))
+            select(walk.c.check_id)
+            .where(walk.c.check_id.is_not(None))
+            .order_by(oldest)
             .limit(limit)
         )
         return list(result.scalars().all())
@@ -75,6 +103,18 @@ class AlertDecisionCRUD:
         return list(result.scalars().all())
 
     @staticmethod
+    async def newest_queued(db: AsyncSession, check_id: UUID) -> datetime | None:
+        """The newest queued result timestamp of a check, or None when it has
+        none queued."""
+        result = await db.execute(
+            select(AlertDecisionQueue.result_timestamp)
+            .where(AlertDecisionQueue.check_id == check_id)
+            .order_by(AlertDecisionQueue.result_timestamp.desc())
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
+    @staticmethod
     async def get_cursor(db: AsyncSession, check_id: UUID) -> datetime | None:
         """The timestamp a check's results are decided through, or None when
         none has been."""
@@ -86,16 +126,19 @@ class AlertDecisionCRUD:
         return result.scalar_one_or_none()
 
     @staticmethod
-    async def advance(db: AsyncSession, check_id: UUID, through: datetime) -> None:
+    async def advance(db: AsyncSession, check_id: UUID, through: datetime) -> int:
         """Mark a check's results decided through `through`: its queued
         results no newer are removed, and its cursor moves to `through`
-        (never back)."""
-        await db.execute(
-            delete(AlertDecisionQueue).where(
+        (never back). How many queued results were removed."""
+        removed = await db.execute(
+            delete(AlertDecisionQueue)
+            .where(
                 AlertDecisionQueue.check_id == check_id,
                 AlertDecisionQueue.result_timestamp <= through,
             )
+            .returning(AlertDecisionQueue.result_timestamp)
         )
+        count = len(removed.all())
         insert = pg_insert(AlertDecisionCursor).values(
             check_id=check_id, decided_through=through
         )
@@ -110,3 +153,4 @@ class AlertDecisionCRUD:
                 },
             )
         )
+        return count

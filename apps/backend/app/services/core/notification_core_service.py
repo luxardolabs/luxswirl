@@ -578,13 +578,23 @@ class NotificationCoreService:
     async def check_rate_limit(
         db: AsyncSession,
         provider: NotificationProvider,
+        *,
+        now: datetime,
+        log_id: UUID,
     ) -> tuple[bool, str | None]:
-        """
-        Check if provider has exceeded rate limit.
+        """Whether delivering the notification row `log_id` now would exceed
+        its provider's rate limit.
+
+        Deliveries in the window count by when they were delivered, so a
+        backlog decided before the window is still held to the limit; those
+        in flight elsewhere count too, but never the row itself, which a
+        stopped worker can leave `sending` before it is claimed again.
 
         Args:
             db: Database session
             provider: Notification provider
+            now: The instant the delivery is judged at
+            log_id: The row being judged
 
         Returns:
             Tuple of (is_limited, reason)
@@ -592,12 +602,10 @@ class NotificationCoreService:
         if not provider.rate_limit_count or not provider.rate_limit_window_minutes:
             return False, None
 
-        # Deliveries in the window, by when they were delivered: a backlog
-        # decided before the window is still held to the limit.
-        window_start = utc_now() - timedelta(minutes=provider.rate_limit_window_minutes)
+        window_start = now - timedelta(minutes=provider.rate_limit_window_minutes)
 
         count = await NotificationLogCRUD.count_delivered_for_provider_since(
-            db, provider.id, window_start
+            db, provider.id, window_start, now=now, excluding=log_id
         )
 
         if count >= provider.rate_limit_count:

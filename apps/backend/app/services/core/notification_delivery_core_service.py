@@ -10,7 +10,6 @@ short transaction (`record`). No database lock is held while a provider is
 waited on.
 """
 
-from collections.abc import Mapping
 from datetime import datetime, timedelta
 from typing import Any
 from uuid import UUID
@@ -67,13 +66,14 @@ class NotificationDeliveryCoreService:
         now: datetime,
         limit: int,
         *,
-        provider_room: Mapping[UUID, int] | None = None,
+        open_limit: int | None = None,
         provider_share: int | None = None,
     ) -> ClaimedBatch:
-        """Claim up to `limit` due rows (`NotificationLogCRUD.claim_due`), at
-        most `provider_share` (all of `limit`, by default) for one provider,
-        or `provider_room[provider]` for one the caller has rows in flight
-        for.
+        """Claim up to `limit` due rows (`NotificationLogCRUD.claim_due`),
+        taken in turn across providers, with at most `provider_share` (all of
+        `limit`, by default) in flight for one provider across every server
+        process, and past the first `open_limit` (all of `limit`, by default)
+        only a provider with nothing in flight given one.
 
         A row whose payload this release cannot read is failed, one that is
         no longer to be sent (`_refusal`) is recorded as suppressed, and one
@@ -85,7 +85,7 @@ class NotificationDeliveryCoreService:
             db,
             now,
             limit,
-            provider_room=provider_room or {},
+            open_limit=limit if open_limit is None else open_limit,
             provider_share=provider_share or limit,
         )
         deliveries: list[ClaimedDelivery] = []
@@ -184,7 +184,9 @@ class NotificationDeliveryCoreService:
             )
             if check_refusal is not None:
                 return NotificationStatus.SUPPRESSED, check_refusal
-        limited, reason = await NotificationCoreService.check_rate_limit(db, provider)
+        limited, reason = await NotificationCoreService.check_rate_limit(
+            db, provider, now=now, log_id=row.id
+        )
         if limited:
             return NotificationStatus.RATE_LIMITED, reason or "Rate limit exceeded"
         return None
