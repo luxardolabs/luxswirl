@@ -26,7 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.datetime_utils import utc_now
 from app.core.exceptions import NotFoundException, ValidationException
-from app.core.target_origin import masked_error, masked_metrics
+from app.core.target_origin import bucket_error, masked_error, masked_metrics
 from app.models.check_model import Check
 from app.models.check_result_model import CheckResult
 from app.models.enum_model import UserRole
@@ -197,8 +197,13 @@ class AdminCheckResultCoreService:
                     bucket_time=row.bucket_time,
                     success=row.success,
                     latency_ms=row.latency_ms,
-                    error=AdminCheckResultCoreService._error(
-                        row.error, role, check, row.metrics
+                    error=bucket_error(
+                        row.errors,
+                        row.metrics,
+                        size_noted=row.size_noted,
+                        masked=role == UserRole.VIEWER,
+                        ran_synthetic=check.ran_synthetic,
+                        configured=(check.target, check.nameserver),
                     ),
                 )
                 for row in rows

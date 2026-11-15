@@ -27,6 +27,7 @@ that can backtrack.
 import ipaddress
 import json
 import re
+from collections.abc import Sequence
 from typing import overload
 
 from app.core.credential_mask import mask_credentials, mask_mapping
@@ -444,11 +445,12 @@ def masked_error(
     A synthetic run's (`is_synthetic_result`) is read as the type of what failed
     alone (`shown_synthetic_error`): it is text about pages the hidden script
     opened. So is a run whose metrics are the agent's size note (`shown_failure`):
-    nothing left in it says a script did not write its error. Any other's has each of `configured` (the check's own target and DNS
-    nameserver) and the nameserver its metrics name cut to its origin wherever the
-    error quotes it exactly, then every credential masked. A target or a
-    DNS-over-HTTPS nameserver is a URL whose path can be a token no credential
-    pattern names, and a refusal can quote it whole."""
+    nothing left in it says a script did not write its error. Any other's has
+    each of `configured` (the check's own target and DNS nameserver) and the
+    nameserver its metrics name cut to its origin wherever the error quotes it
+    exactly, then every credential masked. A target or a DNS-over-HTTPS
+    nameserver is a URL whose path can be a token no credential pattern names,
+    and a refusal can quote it whole."""
     decoded = _decoded(metrics)
     if is_synthetic_result(decoded, error, ran_synthetic=ran_synthetic):
         section = decoded.get(_SYNTHETIC) if isinstance(decoded, dict) else None
@@ -461,3 +463,30 @@ def masked_error(
     for value in sorted(quoted, key=len, reverse=True):
         error = error.replace(value, target_origin(value) or _HIDDEN)
     return mask_credentials(error)
+
+
+def bucket_error(
+    errors: Sequence[str] | None,
+    metrics: object,
+    *,
+    size_noted: bool,
+    masked: bool,
+    ran_synthetic: bool,
+    configured: tuple[str | None, ...],
+) -> str | None:
+    """A history bucket's distinct `errors`, joined with `; `, each read as
+    `masked_error` reads its own result's when `masked`. `metrics` are the
+    bucket's newest result's; when any of its results was cut to the size note
+    (`size_noted`), every error is judged as one that was, since which one it
+    was is no longer known."""
+    if not masked:
+        shown: list[str | None] = list(errors or ())
+    else:
+        judged = {_SIZE_NOTED: True} if size_noted else metrics
+        shown = [
+            masked_error(
+                error, judged, ran_synthetic=ran_synthetic, configured=configured
+            )
+            for error in errors or ()
+        ]
+    return "; ".join(dict.fromkeys(error for error in shown if error)) or None

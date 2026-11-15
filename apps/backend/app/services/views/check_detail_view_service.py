@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.datetime_utils import utc_now
 from app.core.ssl_expiry import ssl_expiry_fields
 from app.core.synthetic_timings import build_synthetic_view
-from app.core.target_origin import masked_error, masked_metrics
+from app.core.target_origin import bucket_error, masked_error, masked_metrics
 from app.models.enum_model import UserRole
 from app.schemas.check_result_schema import RecentCheckResult
 from app.services.core.check_core_service import CheckCoreService
@@ -218,7 +218,14 @@ class CheckDetailViewService:
                 row.bucket_time,
                 row.success,
                 row.latency_ms,
-                row.error,
+                bucket_error(
+                    row.errors,
+                    row.metrics,
+                    size_noted=row.size_noted,
+                    masked=masked,
+                    ran_synthetic=check.ran_synthetic,
+                    configured=(check.target, nameserver),
+                ),
                 row.metrics,
                 check_id,
             )
@@ -235,7 +242,7 @@ class CheckDetailViewService:
         history: list[dict[str, Any]] = []
         for result in history_models:
             metrics = result.get_metrics()  # SSL cert already computed by the server
-            error = shown_error(result.error, metrics)
+            error = result.error  # each of the bucket's errors already shown
             if masked:
                 metrics = masked_metrics(metrics)
             history_item: dict[str, Any] = {

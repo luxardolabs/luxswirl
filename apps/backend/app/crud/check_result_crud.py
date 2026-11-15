@@ -682,7 +682,11 @@ class CheckResultCRUD:
           the 500-bucket cap
 
         Returns:
-            List of result rows with bucket_time, success, latency_ms, error, metrics
+            List of result rows with bucket_time, success, latency_ms, `errors`
+            (the bucket's distinct errors), `size_noted` (whether any of its
+            results' metrics are the agent's size note) and `metrics` (its newest
+            result's). Each error is judged by its own result, so the bucket
+            keeps them apart and says whether any result was cut to the note.
         """
         cutoff = utc_now() - timedelta(hours=hours)
 
@@ -704,7 +708,10 @@ class CheckResultCRUD:
                 check_id,
                 BOOL_AND(success) as success,
                 AVG(latency_ms) as latency_ms,
-                STRING_AGG(DISTINCT error, '; ') as error,
+                ARRAY_AGG(DISTINCT error) FILTER (WHERE error IS NOT NULL)
+                    as errors,
+                COALESCE(BOOL_OR(metrics LIKE '%"metrics_truncated"%'), false)
+                    as size_noted,
                 (ARRAY_AGG(metrics ORDER BY timestamp DESC))[1] as metrics
             FROM check_results
             WHERE check_id = :check_id
