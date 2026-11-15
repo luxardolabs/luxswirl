@@ -108,9 +108,9 @@
                                 {% for step in synthetic_steps %}
                                 <tr>
                                     <td>{{ step.name }}</td>
-                                    <td class="text-right text-blue-400 font-mono">{{ step.dom_load_ms }}ms</td>
-                                    <td class="text-right text-blue-400 font-mono">{{ step.dom_complete_ms }}ms</td>
-                                    <td class="text-right text-green-400 font-mono">{{ step.full_load_ms }}ms</td>
+                                    <td class="text-right text-blue-400 font-mono">{{ step.dom_load_ms ~ 'ms' if step.dom_load_ms is not none else '—' }}</td>
+                                    <td class="text-right text-blue-400 font-mono">{{ step.dom_complete_ms ~ 'ms' if step.dom_complete_ms is not none else '—' }}</td>
+                                    <td class="text-right text-green-400 font-mono">{{ step.full_load_ms ~ 'ms' if step.full_load_ms is not none else '—' }}</td>
                                     <td class="text-right text-dark-text-primary font-mono font-semibold">{{ step.total_ms }}ms</td>
                                 </tr>
                                 {% endfor %}
@@ -127,35 +127,23 @@
                         <span class="text-xs text-dark-text-muted" title="Measured by browser performance.timing API">📊 Actual Page Speed</span>
                     </div>
                     <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        {% if synthetic.browser_timing.domLoading and synthetic.browser_timing.navigationStart %}
-                        <div class="text-center p-2 bg-dark-bg-primary rounded">
-                            <p class="text-2xl font-bold text-blue-400">{{ (synthetic.browser_timing.domLoading - synthetic.browser_timing.navigationStart)|int }}</p>
-                            <p class="text-xs text-dark-text-muted mt-1">DOM Load (ms)</p>
+                        {% for tile in synthetic_page %}
+                        <div class="text-center p-2 bg-dark-bg-primary rounded{% if tile.mark == 'loadEventEnd' %} border border-green-500/30{% endif %}">
+                            <p class="text-2xl font-bold {% if tile.mark == 'loadEventEnd' %}text-green-400{% else %}text-blue-400{% endif %}">{{ tile.ms if tile.ms is not none else '—' }}</p>
+                            <p class="text-xs text-dark-text-muted mt-1">{{ tile.label }}</p>
                         </div>
-                        {% endif %}
-                        {% if synthetic.browser_timing.domComplete and synthetic.browser_timing.navigationStart %}
-                        <div class="text-center p-2 bg-dark-bg-primary rounded">
-                            <p class="text-2xl font-bold text-blue-400">{{ (synthetic.browser_timing.domComplete - synthetic.browser_timing.navigationStart)|int }}</p>
-                            <p class="text-xs text-dark-text-muted mt-1">DOM Complete (ms)</p>
-                        </div>
-                        {% endif %}
-                        {% if synthetic.browser_timing.loadEventEnd and synthetic.browser_timing.navigationStart %}
-                        <div class="text-center p-2 bg-dark-bg-primary rounded border border-green-500/30">
-                            <p class="text-2xl font-bold text-green-400">{{ (synthetic.browser_timing.loadEventEnd - synthetic.browser_timing.navigationStart)|int }}</p>
-                            <p class="text-xs text-dark-text-muted mt-1">Full Load (ms)</p>
-                        </div>
-                        {% endif %}
+                        {% endfor %}
                     </div>
                     <p class="text-xs text-dark-text-muted mt-2 text-center">✓ This is the real page performance users experience</p>
                 </div>
                 {% endif %}
 
                 <!-- Total Execution Time (Reference) -->
-                {% if synthetic.total_execution_time_ms %}
+                {% if synthetic_execution_ms %}
                 <div class="p-3 bg-dark-bg-tertiary/30 border border-dark-border rounded-lg">
                     <div class="flex items-center justify-between text-xs">
                         <span class="text-dark-text-muted">Total Check Execution:</span>
-                        <span class="text-dark-text-primary font-mono">{{ synthetic.total_execution_time_ms|int }}ms</span>
+                        <span class="text-dark-text-primary font-mono">{{ synthetic_execution_ms }}ms</span>
                     </div>
                     <p class="text-xs text-dark-text-muted mt-1">Includes browser launch, page load, screenshot, trace capture, and shutdown</p>
                 </div>

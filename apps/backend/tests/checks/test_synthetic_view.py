@@ -7,12 +7,61 @@ each step's duration out of a second dict by loop variable.
 
 from __future__ import annotations
 
+import pytest
 from app.core.synthetic_timings import build_synthetic_view
 
 
 def test_no_synthetic_block_is_zeroed():
     view = build_synthetic_view(None)
-    assert view == {"synthetic_total_ms": 0, "synthetic_steps": []}
+    assert view == {
+        "synthetic_total_ms": 0,
+        "synthetic_steps": [],
+        "synthetic_page": [
+            {"label": "DOM Load (ms)", "mark": "domLoading", "ms": None},
+            {"label": "DOM Complete (ms)", "mark": "domComplete", "ms": None},
+            {"label": "Full Load (ms)", "mark": "loadEventEnd", "ms": None},
+        ],
+        "synthetic_execution_ms": None,
+    }
+
+
+def test_the_page_marks_become_ms_since_navigation_started():
+    view = build_synthetic_view(
+        {
+            "browser_timing": {
+                "navigationStart": 1_000,
+                "domLoading": 1_120,
+                "domComplete": 1_400,
+                "loadEventEnd": None,
+            },
+            "total_execution_time_ms": 2400.7,
+        }
+    )
+    assert [tile["ms"] for tile in view["synthetic_page"]] == [120, 400, None]
+    assert view["synthetic_execution_ms"] == 2400
+
+
+@pytest.mark.parametrize(
+    "synthetic",
+    [
+        ["status", "failure"],
+        {"track_durations": ["a"], "track_timings": "x"},
+        {"track_durations": {"a": "1.5", "b": None, "c": True}},
+        {"track_durations": {"a": 1e308, "b": float("nan")}},
+        {"track_timings": {"a": "x", "b": [1], "c": {"navigationStart": "1"}}},
+        {"browser_timing": {"navigationStart": None, "domLoading": 1200}},
+        {"browser_timing": {"navigationStart": 1, "domLoading": 10**400}},
+        {"total_execution_time_ms": float("inf")},
+    ],
+)
+def test_a_figure_that_is_no_finite_number_is_none_never_an_error(synthetic):
+    view = build_synthetic_view(synthetic)
+
+    assert [tile["ms"] for tile in view["synthetic_page"]] == [None, None, None]
+    assert view["synthetic_execution_ms"] is None
+    assert view["synthetic_total_ms"] == 0
+    for step in view["synthetic_steps"]:
+        assert step["dom_load_ms"] is None
 
 
 def test_total_is_the_sum_of_step_durations_in_ms():

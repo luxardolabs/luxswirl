@@ -1,58 +1,102 @@
 """Display shaping for a synthetic check's browser-timing panel.
 
 The agent reports raw `performance.timing` marks and per-step wall-clock
-durations in seconds. The panel used to subtract the marks and multiply the
-seconds inline, and to look each step's duration up out of a second dict by a
-loop variable.
+durations in seconds. Every figure the panel shows is computed here, so the
+template only renders: a mark or duration the agent sent as anything but a
+finite number (null, text, NaN, a list) is shown as no figure, never a failed
+render.
 """
 
 from typing import Any
 
+from app.core.synthetic_result import is_figure
 
-def _since_start(timing: dict[str, Any], start: float, mark: str) -> int | None:
-    """One timing mark as whole ms after navigation started, or None if absent.
+# The single-page tiles: each a mark of `browser_timing` after navigationStart.
+_PAGE_TILES = (
+    ("DOM Load (ms)", "domLoading"),
+    ("DOM Complete (ms)", "domComplete"),
+    ("Full Load (ms)", "loadEventEnd"),
+)
 
-    A module-level function rather than a closure inside the loop below: as a
-    closure it captured `timing` by reference, so it read whichever step the
-    loop had reached rather than the step it was built for. It happened to be
-    correct only because every call was made before the next iteration.
-    """
+
+def _whole(value: float) -> int | None:
+    """`value` as whole milliseconds, or None when it is no finite figure."""
+    try:
+        return int(value) if is_figure(float(value)) else None
+    except OverflowError:
+        return None
+
+
+def _since_start(timing: object, mark: str) -> int | None:
+    """One timing mark as whole ms after that timing's navigationStart, or None
+    when the mark is absent or zero, or either is no figure: a mark is an epoch
+    time, so one counted from no start would read as decades."""
+    if not isinstance(timing, dict):
+        return None
     value = timing.get(mark)
-    return int(value - start) if value else None
+    start = timing.get("navigationStart")
+    if not value or not is_figure(value) or not is_figure(start):
+        return None
+    return _whole(value - start)
 
 
-def build_synthetic_view(synthetic: dict[str, Any] | None) -> dict[str, Any]:
+def _seconds_as_ms(seconds: object) -> int:
+    """A step's duration in seconds as whole ms; 0 when it is no figure."""
+    if not is_figure(seconds):
+        return 0
+    return _whole(seconds * 1000) or 0
+
+
+def _page_tiles(browser_timing: object) -> list[dict[str, object]]:
+    """The single-page tiles: each one's label, mark and milliseconds (or None)."""
+    return [
+        {"label": label, "mark": mark, "ms": _since_start(browser_timing, mark)}
+        for label, mark in _PAGE_TILES
+    ]
+
+
+def build_synthetic_view(synthetic: object) -> dict[str, Any]:
     """Millisecond figures for the synthetic panel.
 
     Args:
         synthetic: The `synthetic` block of a check result's metrics, if present.
 
     Returns:
-        `synthetic_total_ms` (the whole run's navigation time) and
+        `synthetic_total_ms` (the whole run's navigation time),
         `synthetic_steps`, one row per step with its timing marks already
-        turned into milliseconds relative to that step's navigationStart.
+        turned into milliseconds relative to that step's navigationStart, and
+        `synthetic_page`, a tile per page mark (`browser_timing`) the same way,
+        and `synthetic_execution_ms`, the whole check's run (None when absent).
     """
-    if not synthetic:
-        return {"synthetic_total_ms": 0, "synthetic_steps": []}
+    if not isinstance(synthetic, dict) or not synthetic:
+        return {
+            "synthetic_total_ms": 0,
+            "synthetic_steps": [],
+            "synthetic_page": _page_tiles(None),
+            "synthetic_execution_ms": None,
+        }
 
-    durations: dict[str, float] = synthetic.get("track_durations") or {}
-    timings: dict[str, dict[str, Any]] = synthetic.get("track_timings") or {}
+    durations = synthetic.get("track_durations")
+    timings = synthetic.get("track_timings")
+    durations = durations if isinstance(durations, dict) else {}
+    timings = timings if isinstance(timings, dict) else {}
 
-    steps = []
-    for name, timing in timings.items():
-        start = timing.get("navigationStart") or 0
-        steps.append(
-            {
-                "name": name,
-                "dom_load_ms": _since_start(timing, start, "domLoading"),
-                "dom_complete_ms": _since_start(timing, start, "domComplete"),
-                "full_load_ms": _since_start(timing, start, "loadEventEnd"),
-                # The agent reports the step's own duration in seconds.
-                "total_ms": int(durations.get(name, 0) * 1000),
-            }
-        )
+    steps = [
+        {
+            "name": name,
+            "dom_load_ms": _since_start(timing, "domLoading"),
+            "dom_complete_ms": _since_start(timing, "domComplete"),
+            "full_load_ms": _since_start(timing, "loadEventEnd"),
+            # The agent reports the step's own duration in seconds.
+            "total_ms": _seconds_as_ms(durations.get(name)),
+        }
+        for name, timing in timings.items()
+    ]
+    execution = synthetic.get("total_execution_time_ms")
 
     return {
-        "synthetic_total_ms": int(sum(durations.values()) * 1000),
+        "synthetic_total_ms": sum(map(_seconds_as_ms, durations.values())),
         "synthetic_steps": steps,
+        "synthetic_page": _page_tiles(synthetic.get("browser_timing")),
+        "synthetic_execution_ms": _whole(execution) if is_figure(execution) else None,
     }

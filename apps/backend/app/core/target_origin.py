@@ -31,7 +31,7 @@ from typing import overload
 
 from app.core.credential_mask import mask_credentials, mask_mapping
 from app.core.synthetic_result import shown_synthetic_error, shown_synthetic_metrics
-from app.models.enum_model import CheckType, UserRole
+from app.models.enum_model import UserRole
 
 _HIDDEN = "***"
 _SYNTHETIC = "synthetic"
@@ -370,41 +370,78 @@ def masked_metrics(metrics: dict[str, object]) -> dict[str, object]:
     return masked
 
 
+def _decoded(metrics: object) -> object:
+    """A result's metrics as a mapping when they are the JSON text a row stores."""
+    if isinstance(metrics, str):
+        try:
+            return json.loads(metrics)
+        except ValueError:
+            return None
+    return metrics
+
+
 def metrics_nameserver(metrics: object) -> str | None:
     """The nameserver a DNS result's metrics (a dict, or the JSON text a row
     stores) name, or None. The agent copies the check's there when it runs."""
-    if isinstance(metrics, str):
-        try:
-            metrics = json.loads(metrics)
-        except ValueError:
-            return None
+    metrics = _decoded(metrics)
     dns = metrics.get("dns") if isinstance(metrics, dict) else None
     nameserver = dns.get("nameserver") if isinstance(dns, dict) else None
     return nameserver if isinstance(nameserver, str) else None
 
 
+def is_synthetic_result(metrics: object, *, ran_synthetic: bool) -> bool:
+    """Whether a result is read as a synthetic run's: its check is or has ever been
+    a synthetic check (`ran_synthetic`), or its metrics (a mapping, or the JSON
+    text a row stores) carry a synthetic section.
+
+    Decided per result and failing closed: a check retyped away from synthetic
+    keeps its old runs (and an agent not yet reloaded keeps running the old
+    script), and the agent cuts an oversized result's metrics to a size note, so a
+    synthetic run's own metrics cannot be relied on to say what it was."""
+    decoded = _decoded(metrics)
+    return ran_synthetic or (isinstance(decoded, dict) and _SYNTHETIC in decoded)
+
+
 @overload
 def masked_error(
-    error: str, nameservers: tuple[str | None, ...], check_type: str
+    error: str,
+    metrics: object,
+    *,
+    ran_synthetic: bool,
+    configured: tuple[str | None, ...],
 ) -> str: ...
 @overload
 def masked_error(
-    error: None, nameservers: tuple[str | None, ...], check_type: str
+    error: None,
+    metrics: object,
+    *,
+    ran_synthetic: bool,
+    configured: tuple[str | None, ...],
 ) -> None: ...
 def masked_error(
-    error: str | None, nameservers: tuple[str | None, ...], check_type: str
+    error: str | None,
+    metrics: object,
+    *,
+    ran_synthetic: bool,
+    configured: tuple[str | None, ...],
 ) -> str | None:
     """A check result's error as a reader who does not hold the check's credentials
-    reads it. A synthetic check's (`check_type`) is read as the type of what failed
-    alone (`shown_synthetic_error`): it is text about pages the hidden script opened.
-    Any other's has each of `nameservers` (the check's DNS nameserver, and the one
-    the result's metrics name) cut to its origin wherever the error quotes it, then
-    every credential masked. A DNS-over-HTTPS nameserver is a URL whose path can be
-    the resolver account's token, and a resolver's refusal quotes it whole."""
-    if check_type == CheckType.SYNTHETIC:
-        return shown_synthetic_error(error)
+    reads it. `metrics` are the result's (a mapping, or the JSON text a row stores).
+
+    A synthetic run's (`is_synthetic_result`) is read as the type of what failed
+    alone (`shown_synthetic_error`): it is text about pages the hidden script
+    opened. Any other's has each of `configured` (the check's own target and DNS
+    nameserver) and the nameserver its metrics name cut to its origin wherever the
+    error quotes it exactly, then every credential masked. A target or a
+    DNS-over-HTTPS nameserver is a URL whose path can be a token no credential
+    pattern names, and a refusal can quote it whole."""
+    decoded = _decoded(metrics)
+    if is_synthetic_result(decoded, ran_synthetic=ran_synthetic):
+        section = decoded.get(_SYNTHETIC) if isinstance(decoded, dict) else None
+        return shown_synthetic_error(error, section)
     if not error:
         return error
-    for nameserver in sorted({n for n in nameservers if n}, key=len, reverse=True):
-        error = error.replace(nameserver, target_origin(nameserver) or _HIDDEN)
+    quoted = {value for value in (*configured, metrics_nameserver(decoded)) if value}
+    for value in sorted(quoted, key=len, reverse=True):
+        error = error.replace(value, target_origin(value) or _HIDDEN)
     return mask_credentials(error)

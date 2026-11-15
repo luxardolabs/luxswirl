@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.datetime_utils import utc_now
 from app.core.ssl_expiry import ssl_expiry_fields
 from app.core.synthetic_timings import build_synthetic_view
-from app.core.target_origin import masked_error, masked_metrics, metrics_nameserver
+from app.core.target_origin import masked_error, masked_metrics
 from app.models.enum_model import UserRole
 from app.schemas.check_result_schema import RecentCheckResult
 from app.services.core.check_core_service import CheckCoreService
@@ -183,7 +183,10 @@ class CheckDetailViewService:
             if not masked:
                 return error
             return masked_error(
-                error, (nameserver, metrics_nameserver(metrics)), check.check_type
+                error,
+                metrics,
+                ran_synthetic=check.ran_synthetic,
+                configured=(check.target, nameserver),
             )
 
         # Get recent results based on time range (bucketed by core service)
@@ -227,7 +230,10 @@ class CheckDetailViewService:
             # Complete the synthetic block the same way: the panel reads every
             # one of these keys, and a script that reports no page timings (the
             # agent's default) leaves the track_* keys out.
+            # A section that is no mapping is read as one that reported nothing.
             synthetic = metrics.get("synthetic") if metrics else None
+            if synthetic is not None and not isinstance(synthetic, dict):
+                synthetic = metrics["synthetic"] = {}
             if isinstance(synthetic, dict):
                 for key, empty in SYNTHETIC_PANEL_DEFAULTS.items():
                     synthetic.setdefault(key, copy.copy(empty))
@@ -432,7 +438,7 @@ class CheckDetailViewService:
                 "timestamp": result.timestamp.isoformat(),  # ISO string for template
                 "success": result.success,
                 "latency_ms": result.latency_ms,
-                "error": shown_error(result.error, None),
+                "error": shown_error(result.error, result.metrics),
             }
             for result in status_bar_results
         ]

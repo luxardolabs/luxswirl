@@ -79,13 +79,23 @@ async def _panel(
 
 
 @pytest.mark.parametrize(
-    ("check_type", "still_shown"),
-    [("http", "could not connect to"), ("synthetic", "Synthetic check failed")],
+    ("check_type", "metrics", "still_shown"),
+    [
+        ("http", "{}", "could not connect to"),
+        ("synthetic", METRICS, "Synthetic check failed"),
+        # A run whose metrics carry a synthetic section is a script's, whatever
+        # the check's type is now.
+        ("http", METRICS, "Synthetic check failed"),
+    ],
 )
 async def test_a_viewer_reads_the_panel_masked(
-    client: AsyncClient, db: AsyncSession, check_type: str, still_shown: str
+    client: AsyncClient,
+    db: AsyncSession,
+    check_type: str,
+    metrics: str,
+    still_shown: str,
 ) -> None:
-    panel = await _panel(client, db, check_type, "viewer")
+    panel = await _panel(client, db, check_type, "viewer", metrics)
 
     assert still_shown in panel
     assert SECRET not in panel
@@ -388,3 +398,126 @@ async def test_a_viewer_reads_a_synthetic_result_as_its_exception_type_alone(
     if not shown:
         assert "Step 1" in resp.text
         assert "1500" in resp.text
+
+
+async def _panel_of_a_retyped_check(
+    client: AsyncClient, db: AsyncSession, role: str, metrics: str | None
+) -> str:
+    """A synthetic check that failed, then retyped to http by an admin."""
+    agent = make_agent()
+    user = make_user(role=role)
+    db.add_all([agent, user])
+    await db.flush()
+    check = make_check(
+        agent_id=agent.id, check_type="synthetic", target="https://app.example.com"
+    )
+    db.add(check)
+    await db.flush()
+    error = (
+        "Script execution failed: Page.goto: net::ERR_CONNECTION_REFUSED at "
+        f"https://app.example.com/password-reset/{LINK_ID}"
+    )
+    db.add(
+        make_check_result(
+            check_id=check.id,
+            agent_id=agent.id,
+            success=False,
+            error=error,
+            metrics=metrics,
+        )
+    )
+    check.check_type = "http"
+    await db.flush()
+    _, session = await AuthCoreService().create_session(db, user.id)
+    client.cookies.set(settings.security.session_cookie_name, session)
+
+    resp = await client.get(f"/check/{check.id}")
+
+    assert resp.status_code == 200, resp.text
+    return resp.text
+
+
+@pytest.mark.parametrize(
+    "metrics",
+    [
+        json.dumps({"synthetic": {"status": "failure", "errors": [LINK_ID]}}),
+        # The agent cut the run's oversized metrics to a size note.
+        json.dumps({"note": "metrics too large"}),
+        None,
+    ],
+)
+@pytest.mark.parametrize(("role", "shown"), [("viewer", False), ("editor", True)])
+async def test_a_check_retyped_from_synthetic_shows_a_viewer_no_old_script_text(
+    client: AsyncClient,
+    db: AsyncSession,
+    metrics: str | None,
+    role: str,
+    shown: bool,
+) -> None:
+    """The history and Recent Events: the old runs are a script's output."""
+    panel = await _panel_of_a_retyped_check(client, db, role, metrics)
+
+    assert (LINK_ID in panel) is shown
+    if not shown:
+        assert "Synthetic check failed: Page.goto" in panel
+
+
+# A synthetic section's figures the agent sent as anything but a finite number.
+ODD_SYNTHETIC: dict[str, object] = {
+    "null_mark": {
+        "status": "success",
+        "browser_timing": {
+            "navigationStart": None,
+            "domLoading": 1200,
+            "domComplete": 1500,
+            "loadEventEnd": 1700,
+        },
+    },
+    "text_figures": {
+        "status": 7,
+        "track_durations": {"a": "1.5"},
+        "track_timings": {"a": "x", "b": [1]},
+        "browser_timing": {"navigationStart": "1", "domLoading": 5},
+        "total_execution_time_ms": "12",
+    },
+    "nulls": {
+        "status": None,
+        "track_durations": None,
+        "track_timings": None,
+        "browser_timing": None,
+        "total_execution_time_ms": None,
+    },
+    "huge": {"status": "failure", "track_durations": {"a": 1e308}},
+    "big_int": {
+        "status": "failure",
+        "track_durations": {"a": 10**40},
+        "total_execution_time_ms": 10**40,
+        "browser_timing": {"navigationStart": 1, "domLoading": 10**40},
+    },
+    "not_a_mapping": ["status", "failure"],
+}
+
+
+@pytest.mark.parametrize("role", ["viewer", "editor"])
+@pytest.mark.parametrize("case", list(ODD_SYNTHETIC))
+async def test_the_panel_renders_a_synthetic_section_with_odd_figures(
+    client: AsyncClient, db: AsyncSession, case: str, role: str
+) -> None:
+    metrics = json.dumps({"synthetic": ODD_SYNTHETIC[case]})
+
+    panel = await _panel(client, db, "synthetic", role, metrics)
+
+    assert "Synthetic Monitor" in panel
+
+
+@pytest.mark.parametrize("role", ["viewer", "editor"])
+async def test_a_timing_mark_that_is_no_figure_reads_as_a_dash(
+    client: AsyncClient, db: AsyncSession, role: str
+) -> None:
+    metrics = json.dumps({"synthetic": ODD_SYNTHETIC["null_mark"]})
+
+    panel = await _panel(client, db, "synthetic", role, metrics)
+
+    assert "Page Load Performance" in panel
+    assert "DOM Load (ms)" in panel
+    assert "—" in panel

@@ -9,10 +9,12 @@ viewer reads only the sections the web UI's detail panel shows, every string
 in them masked: an HTTP check's metrics also carry every response header the
 monitored service sent (a session cookie among them). A DNS check's
 nameserver is cut to its origin (`masked_metrics`), as the check's own is,
-and so is every place an `error` quotes it (`masked_error`). A synthetic
-check's error is read as the type of what failed alone, and its metrics as
-figures alone: its text is about pages the script (which a viewer is not
-shown) opened, and a URL's path there can be a credential.
+and so is every place an `error` quotes it or the check's target
+(`masked_error`). A synthetic run's error is read as the type of what failed
+alone, and its metrics as figures alone: its text is about pages the script
+(which a viewer is not shown) opened, and a URL's path there can be a
+credential. A run is synthetic when its check is or ever was synthetic, or
+its metrics carry a synthetic section, whatever the check's type is now.
 """
 
 import json
@@ -24,7 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.datetime_utils import utc_now
 from app.core.exceptions import NotFoundException, ValidationException
-from app.core.target_origin import masked_error, masked_metrics, metrics_nameserver
+from app.core.target_origin import masked_error, masked_metrics
 from app.models.check_model import Check
 from app.models.check_result_model import CheckResult
 from app.models.enum_model import UserRole
@@ -106,7 +108,10 @@ class AdminCheckResultCoreService:
         if role != UserRole.VIEWER:
             return error
         return masked_error(
-            error, (check.nameserver, metrics_nameserver(metrics)), check.check_type
+            error,
+            metrics,
+            ran_synthetic=check.ran_synthetic,
+            configured=(check.target, check.nameserver),
         )
 
     @staticmethod

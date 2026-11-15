@@ -671,3 +671,110 @@ async def test_a_viewer_reads_a_non_synthetic_error_that_names_no_url_as_written
     assert page.json()["items"][0]["error"] == error
     assert one.json()["error"] == error
     assert [p["error"] for p in history.json()["points"] if p["error"]] == [error]
+
+
+# ── A synthetic run is read as one whatever its check's type is now ───────────
+
+RESET_ERROR = (
+    "Script execution failed: Page.goto: net::ERR_CONNECTION_REFUSED at "
+    f"https://app.example.com/password-reset/{LINK_ID}"
+)
+
+
+async def _reads(client: AsyncClient, check, headers) -> list[str]:
+    return [
+        (await client.get(f"{CHECKS}/{check.id}/results", headers=headers)).text,
+        (await client.get(f"{CHECKS}/{check.id}/history", headers=headers)).text,
+        (await client.get(f"{CHECKS}/{check.id}/summary", headers=headers)).text,
+    ]
+
+
+@pytest.mark.parametrize(
+    "metrics",
+    [
+        json.dumps({"synthetic": {"status": "failure", "errors": [RESET_ERROR]}}),
+        # The agent cut the run's oversized metrics to a size note.
+        json.dumps({"note": "metrics too large"}),
+        None,
+    ],
+)
+async def test_a_check_retyped_from_synthetic_shows_a_viewer_no_old_script_text(
+    db: AsyncSession, client: AsyncClient, metrics: str | None
+) -> None:
+    admin = await _as(db, "admin")
+    viewer = await _as(db, "viewer")
+    agent = make_agent()
+    db.add(agent)
+    await db.flush()
+    check = make_check(
+        agent_id=agent.id,
+        check_type="synthetic",
+        target="https://app.example.com",
+        script_code="async def run_check(page):\n    return {'status': 'success'}\n",
+    )
+    db.add(check)
+    await db.flush()
+    await _result(db, check, 2, success=False, error=RESET_ERROR, metrics=metrics)
+
+    patched = await client.patch(
+        f"{CHECKS}/{check.id}",
+        json={"check_type": "http", "target": "https://app.example.com"},
+        headers=admin,
+    )
+    assert patched.status_code == 200, patched.text
+    assert patched.json()["check_type"] == "http"
+
+    for text in await _reads(client, check, viewer):
+        assert LINK_ID not in text, text
+        assert "Synthetic check failed: Page.goto" in text, text
+    assert LINK_ID in (await _reads(client, check, admin))[0]
+
+
+async def test_a_check_retyped_to_synthetic_reads_its_runs_as_a_scripts(
+    db: AsyncSession, client: AsyncClient
+) -> None:
+    admin = await _as(db, "admin")
+    viewer = await _as(db, "viewer")
+    check = await _check(db)
+    await _result(db, check, 2, success=False, error=RESET_ERROR)
+
+    patched = await client.patch(
+        f"{CHECKS}/{check.id}",
+        json={
+            "check_type": "synthetic",
+            "script_code": "async def run_check(page):\n    return {}\n",
+        },
+        headers=admin,
+    )
+    assert patched.status_code == 200, patched.text
+    patched = await client.patch(
+        f"{CHECKS}/{check.id}",
+        json={"check_type": "http", "target": "https://app.example.com"},
+        headers=admin,
+    )
+    assert patched.status_code == 200, patched.text
+
+    for text in await _reads(client, check, viewer):
+        assert LINK_ID not in text, text
+
+
+async def test_a_viewer_reads_the_checks_own_target_in_an_error_as_its_origin(
+    db: AsyncSession, client: AsyncClient
+) -> None:
+    viewer = await _as(db, "viewer")
+    agent = make_agent()
+    db.add(agent)
+    await db.flush()
+    target = f"https://hooks.example.com/notify/{LINK_ID}"
+    check = make_check(agent_id=agent.id, check_type="http", target=target)
+    db.add(check)
+    await db.flush()
+    error = f"HTTP 503 from {target}"
+    await _result(db, check, 2, success=False, error=error)
+
+    for text in await _reads(client, check, viewer):
+        assert LINK_ID not in text, text
+    page = await client.get(f"{CHECKS}/{check.id}/results", headers=viewer)
+    assert page.json()["items"][0]["error"] == (
+        "HTTP 503 from https://hooks.example.com"
+    )

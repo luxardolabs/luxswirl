@@ -72,6 +72,7 @@ Stores health-check definitions. Defined by the `Check` model (`check_model.py`)
 | depends_on_check_id                | UUID FK → checks.id, NULL   | Parent check; notifications suppressed when parent is down (`ON DELETE SET NULL`) |
 | display_name                       | VARCHAR(255)                | Friendly editable display name                                                    |
 | check_type                         | VARCHAR(50)                 | ping / http / tcp / json / etc.                                                   |
+| ran_synthetic                      | BOOLEAN                     | Set once the check is synthetic, never cleared (`server_default 'false'`)         |
 | target                             | EncryptedString(1000)       | Target URL/host/IP — **encrypted at rest**                                        |
 | interval_seconds / timeout_seconds | INT, NULL                   | Optional scheduling config                                                        |
 | description                        | VARCHAR(1000), NULL         | Human-readable description                                                        |

@@ -119,6 +119,9 @@ class RecentCheckResult(BaseSchema):
     latency_ms: float | None
     error: str | None
     http_status_code: int | None
+    # The metrics as the row stores them (JSON text): a viewer's reading of the
+    # error depends on them.
+    metrics: str | None
 
 
 class StatusBarResult(BaseSchema):

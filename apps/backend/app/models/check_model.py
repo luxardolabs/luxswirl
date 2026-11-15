@@ -5,9 +5,9 @@ Check model - represents health check definitions.
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
-from sqlalchemy import ARRAY, ForeignKey, Index, Integer, String, Text, Uuid
+from sqlalchemy import ARRAY, Boolean, ForeignKey, Index, Integer, String, Text, Uuid
 from sqlalchemy.dialects.postgresql import JSON
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 
 from app.core.encrypted_types import EncryptedJSON, EncryptedString
 from app.models.base_model import UUIDBaseModel, str_enum
@@ -62,6 +62,17 @@ class Check(UUIDBaseModel):
         str_enum(CheckType, 50),
         nullable=False,
         comment="Type of check (ping, http, tcp, json, etc.)",
+    )
+
+    # Set the moment the check is made or retyped synthetic, never cleared
+    # (`_note_synthetic`): its results may be a script's output whatever its type
+    # is now, so a reader not shown scripts reads them as a synthetic run's.
+    ran_synthetic: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="false",
+        comment="Whether the check is or has ever been a synthetic check",
     )
 
     # Check target (encrypted - may contain credentials in URL)
@@ -305,6 +316,14 @@ class Check(UUIDBaseModel):
     @property
     def query(self) -> str | None:
         return self._config_str("query")
+
+    @validates("check_type")
+    def _note_synthetic(self, _key: str, check_type: CheckType) -> CheckType:
+        """Mark the check `ran_synthetic` when it is given the synthetic type, by
+        any path that sets it (create, update, clone, import)."""
+        if check_type == CheckType.SYNTHETIC:
+            self.ran_synthetic = True
+        return check_type
 
     def __repr__(self) -> str:
         """Generate a helpful repr string."""

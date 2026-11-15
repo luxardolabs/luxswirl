@@ -236,6 +236,9 @@ class CheckStatusInfo(BaseSchema):
     id: UUID
     display_name: str
     check_type: CheckType
+    # Whether the check is or has ever been synthetic: a viewer reads its results
+    # as a synthetic run's whatever its type is now.
+    ran_synthetic: bool
     target: str
     enabled: bool
     tags: list[str] | None = None

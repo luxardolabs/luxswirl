@@ -19,6 +19,12 @@ from app.shared.logger import get_logger
 logger = get_logger("luxswirl.agent.checks.synthetic")
 
 
+def _described(error: BaseException) -> str:
+    """`error` as `<its class>: <its text>` (`TimeoutError: Page.goto: ...`):
+    its text alone names no class (`str(ValueError("x"))` is `x`)."""
+    return f"{type(error).__name__}: {error}"
+
+
 class SyntheticCheck(BaseCheck):
     """Synthetic monitoring check using Playwright browser automation."""
 
@@ -58,6 +64,10 @@ class SyntheticCheck(BaseCheck):
             "request_failures": [],
             "browser_timing": {},
             "artifacts": [],  # Will contain screenshot and trace data
+            # The class of the exception that failed the run (`TimeoutError`,
+            # `ValueError`), or None: the server shows a reader who is not shown
+            # the script this name alone, never the error's text.
+            "error_type": None,
         }
 
         start_time = self.start_timer()
@@ -95,7 +105,7 @@ class SyntheticCheck(BaseCheck):
 
                     # Execute the user's script with timeout (time only the script, not Playwright overhead)
                     script_start = self.start_timer()
-                    check_result = await asyncio.wait_for(
+                    check_result, failed_as = await asyncio.wait_for(
                         self._execute_user_script(script_code, page), timeout=timeout
                     )
                     script_execution_time_ms = self.stop_timer(script_start)
@@ -110,17 +120,23 @@ class SyntheticCheck(BaseCheck):
                     for key, value in check_result.items():
                         if key not in ["status", "steps", "errors"]:
                             result_data[key] = value
+                    # Set after the script's own fields, so a script cannot name it.
+                    result_data["error_type"] = failed_as
 
                 except TimeoutError:
                     result_data["status"] = "failure"
                     result_data["errors"].append(
                         f"Script execution timed out after {timeout}s"
                     )
+                    result_data["error_type"] = TimeoutError.__name__
                 # swallowed-exceptions: a failing script is the check's result; its error and traceback are returned in result_data["errors"]
                 except Exception as e:
                     result_data["status"] = "failure"
-                    result_data["errors"].append(f"Script execution failed: {str(e)}")
+                    result_data["errors"].append(
+                        f"Script execution failed: {_described(e)}"
+                    )
                     result_data["errors"].append(traceback.format_exc())
+                    result_data["error_type"] = type(e).__name__
 
                 finally:
                     # Capture browser timing metrics
@@ -216,8 +232,11 @@ class SyntheticCheck(BaseCheck):
                 extra={"check_name": self.name},
             )
             result_data["status"] = "failure"
-            result_data["errors"].append(f"Playwright initialization failed: {str(e)}")
+            result_data["errors"].append(
+                f"Playwright initialization failed: {_described(e)}"
+            )
             result_data["errors"].append(traceback.format_exc())
+            result_data["error_type"] = type(e).__name__
 
         # Calculate total execution time (Playwright overhead + page load)
         total_execution_time = self.stop_timer(start_time)
@@ -279,7 +298,7 @@ class SyntheticCheck(BaseCheck):
 
     async def _execute_user_script(
         self, script_code: str, page: Page
-    ) -> dict[str, Any]:
+    ) -> tuple[dict[str, Any], str | None]:
         """Execute user-provided script code in a controlled environment.
 
         Args:
@@ -287,7 +306,8 @@ class SyntheticCheck(BaseCheck):
             page: Playwright Page object
 
         Returns:
-            Dictionary with check results from user script
+            The check results from the user script, and the class name of the
+            exception that failed it (None when none did)
 
         The user script must define an async function called `run_check(page)`
         that accepts a Playwright Page object and returns a dict with:
@@ -314,10 +334,10 @@ class SyntheticCheck(BaseCheck):
                 "status": "failure",
                 "steps": [],
                 "errors": [
-                    f"Script compilation failed: {str(e)}",
+                    f"Script compilation failed: {_described(e)}",
                     traceback.format_exc(),
                 ],
-            }
+            }, type(e).__name__
 
         # Check if run_check function exists
         if "run_check" not in script_globals:
@@ -327,7 +347,7 @@ class SyntheticCheck(BaseCheck):
                 "errors": [
                     "Script must define an async function called 'run_check(page)'"
                 ],
-            }
+            }, None
 
         # Execute the run_check function
         try:
@@ -340,9 +360,9 @@ class SyntheticCheck(BaseCheck):
                     "status": "failure",
                     "steps": [],
                     "errors": ["run_check() must return a dictionary"],
-                }
+                }, None
 
-            return result
+            return result, None
 
         # swallowed-exceptions: the failure IS the check result, returned as a failed run with the traceback
         except Exception as e:
@@ -350,7 +370,7 @@ class SyntheticCheck(BaseCheck):
                 "status": "failure",
                 "steps": [],
                 "errors": [
-                    f"Script execution failed: {str(e)}",
+                    f"Script execution failed: {_described(e)}",
                     traceback.format_exc(),
                 ],
-            }
+            }, type(e).__name__
