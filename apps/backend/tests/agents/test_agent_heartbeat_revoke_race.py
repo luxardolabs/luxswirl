@@ -20,8 +20,13 @@ from app.core.security import authenticate_heartbeat
 from app.models.agent_model import Agent
 from app.schemas.agent_schema import AgentHeartbeat, AgentHeartbeatResponse
 from app.schemas.job_schema import JobCreate
+from app.schemas.registration_key_schema import RegistrationKeyCreate
 from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.job_core_service import JobCoreService
+from app.services.core.registration_key_core_service import (
+    RegistrationKeyCoreService,
+)
+from fixtures.factories import make_agent
 
 pytestmark = pytest.mark.integration
 
@@ -177,3 +182,60 @@ async def test_m2_control_a_live_secret_heartbeat_is_applied(
     monkeypatch.setattr(settings.security, "auth_enabled", True)
     stored = await _pending_heartbeat_revoked_meanwhile(worker_db, revoke=False)
     assert stored.tags == ["m2"]
+
+
+# The same race on the registration-key path: a pending agent that never had a
+# secret is checked against the shared registration key, then revoked before
+# core locks its row. The revoke voided its secret, so the key no longer
+# speaks for it.
+async def _registration_key_heartbeat_revoked_meanwhile(
+    worker_db, *, revoke: bool
+) -> Agent:
+    async with worker_db() as s:
+        _, token = await RegistrationKeyCoreService.create_key(
+            s, RegistrationKeyCreate(name="m3"), created_by="tests"
+        )
+        agent = make_agent(approval_status="pending", hostname="m3.test")
+        s.add(agent)
+        await s.commit()
+    async with worker_db() as hb:
+        row = await AgentCoreService.get_agent_by_id(hb, agent.id)
+        used_key = await authenticate_heartbeat(
+            row, f"Bearer {token}", None, hb, "198.51.100.11"
+        )
+        assert used_key is False
+        if revoke:
+            async with worker_db() as operator:
+                await AgentCoreService.revoke_agent_key(operator, agent.id)
+                await operator.commit()
+        await AgentCoreService.process_heartbeat(
+            hb,
+            agent.id,
+            AgentHeartbeat(
+                agent_id=agent.id, timestamp=utc_now(), status="online", tags=["m3"]
+            ),
+            using_agent_key=False,
+            verified_key_hash=None,
+            verified_secret_hash=None,
+        )
+        await hb.commit()
+    async with worker_db() as s:
+        return await AgentCoreService.get_agent_by_id(s, agent.id)
+
+
+async def test_m3_a_registration_key_heartbeat_revoked_meanwhile_is_refused(
+    worker_db, monkeypatch
+) -> None:
+    monkeypatch.setattr(settings.security, "auth_enabled", True)
+    with pytest.raises(RecoverySecretRefusedException):
+        await _registration_key_heartbeat_revoked_meanwhile(worker_db, revoke=True)
+
+
+async def test_m3_control_a_registration_key_heartbeat_is_applied(
+    worker_db, monkeypatch
+) -> None:
+    monkeypatch.setattr(settings.security, "auth_enabled", True)
+    stored = await _registration_key_heartbeat_revoked_meanwhile(
+        worker_db, revoke=False
+    )
+    assert stored.tags == ["m3"]

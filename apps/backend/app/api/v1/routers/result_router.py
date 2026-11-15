@@ -44,15 +44,21 @@ async def submit_report(
     """
     Submit a report from an agent containing multiple check results.
 
-    This endpoint accepts reports and processes them asynchronously.
+    The results are stored in the request's transaction; their alerts are
+    evaluated, and notifications delivered, once it has committed
+    (`CheckResultCoreService.evaluate_alerts`, after the response).
 
     Only the agent's own key is accepted (`ReportingAgentId`), never the
     registration key. Each result is validated on its own: an invalid one is
     counted in `results_failed`, and the rest are stored.
     """
-    # Process report (this commits the transaction)
     result = await CheckResultCoreService.process_agent_submission(
         db, report, verified_key_hash=agent.key_hash
+    )
+    # The results commit as this returns (get_db); the alerts are evaluated
+    # after the response, in their own transaction.
+    background_tasks.add_task(
+        CheckResultCoreService.evaluate_alerts, result["stored_results"]
     )
 
     return AgentReportResponse(

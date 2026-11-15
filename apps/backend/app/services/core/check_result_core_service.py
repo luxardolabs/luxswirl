@@ -22,6 +22,7 @@ from app.crud.check_result_crud import (
     ResultCounts,
     UptimeCounts,
 )
+from app.db import worker_session
 from app.models.check_result_model import CheckResult
 from app.schemas.agent_schema import AgentOption
 from app.schemas.check_artifact_schema import CheckArtifactResponse
@@ -178,7 +179,8 @@ class CheckResultCoreService:
                 (`AgentCoreService.require_still_admitted`).
 
         Returns:
-            Processing summary
+            Processing summary, with `stored_results`: the `(id, timestamp)` of
+            each result stored, for `evaluate_alerts` once the caller commits
 
         Raises:
             AgentNotFoundException: The agent does not exist, or was deleted
@@ -204,10 +206,10 @@ class CheckResultCoreService:
             },
         )
 
-        # No write to the agent row here: this transaction runs long (insert the
-        # results, evaluate the alerts), and a row write at its start held that
-        # lock throughout, timing out the agent's own heartbeat behind it. The
-        # heartbeat owns last_seen and the run id.
+        # No write to the agent row here: a row write at the start of this
+        # transaction would hold that lock through the whole insert, timing out
+        # the agent's own heartbeat behind it. The heartbeat owns last_seen and
+        # the run id.
 
         results_failed = 0
         check_display_names: list[str] = []
@@ -411,7 +413,7 @@ class CheckResultCoreService:
             },
         )
 
-        # Update Prometheus metrics in-memory (after commit, instant update on ingestion)
+        # Update the in-memory Prometheus metrics: an instant update on ingestion.
 
         for check_result in inserted_results:
             try:
@@ -419,32 +421,16 @@ class CheckResultCoreService:
                 MetricsCollectorCoreService.update_check_result(
                     check_result, check, agent
                 )
-            # swallowed-exceptions: per-result metrics update — the batch is
-            # already committed, so one failed gauge must not drop the rest.
+            # swallowed-exceptions: per-result metrics update — the results are
+            # stored, so one failed gauge must not drop the rest.
             except Exception:
                 logger.exception("Error updating Prometheus metrics")
 
-        # Evaluate alerts for each check result (after commit)
-        # This happens asynchronously - errors are logged but don't fail the report processing
-        alerts_evaluated = 0
-        for check_result in inserted_results:
-            try:
-                await AlertEvaluationCoreService.evaluate_check_result(db, check_result)
-                alerts_evaluated += 1
-            # swallowed-exceptions: per-result alert evaluation runs after the
-            # batch commits — one bad alert must not stop the others firing.
-            except Exception:
-                logger.exception(
-                    "Error evaluating alerts for check result",
-                    extra={"check_result_id": str(check_result.id)},
-                )
-
-        if alerts_evaluated > 0:
-            logger.info(
-                "Evaluated alerts for check results",
-                extra={"alerts_evaluated": alerts_evaluated},
-            )
-
+        # The alerts are not evaluated here: their notifications are delivered
+        # inline (a webhook may wait out its whole timeout), and this
+        # transaction holds the agent's row FOR KEY SHARE to its commit, which
+        # an operator's pause, disable, archive, revoke or delete waits for.
+        # The caller commits, then hands `stored_results` to `evaluate_alerts`.
         return {
             "status": "ok",
             "agent_id": agent_id,
@@ -452,8 +438,56 @@ class CheckResultCoreService:
             "results_processed": results_processed,
             "results_failed": results_failed,
             "check_display_names": check_display_names,
-            "alerts_evaluated": alerts_evaluated,
+            "stored_results": [(r.id, r.timestamp) for r in inserted_results],
         }
+
+    @staticmethod
+    async def evaluate_alerts(stored_results: Sequence[tuple[UUID, datetime]]) -> int:
+        """Evaluate the alerts for results a report stored, once it committed.
+
+        Runs in a transaction of its own (`worker_session`), after the report's
+        (the report route schedules it after its response), so the delivery of
+        a notification never holds the report's lock on its agent's row. Each
+        result is evaluated in turn, oldest first; one that fails is logged and
+        the others are still evaluated.
+
+        Args:
+            stored_results: `(id, timestamp)` of each result the report stored
+                (`process_agent_report`'s `stored_results`)
+
+        Returns:
+            How many results were evaluated.
+        """
+        if not stored_results:
+            return 0
+        evaluated = 0
+        # swallowed-exceptions: the report is answered and its results are committed; a failure here (the database gone) is logged, never raised into the server after the response
+        try:
+            async with worker_session() as db:
+                results = await CheckResultCRUD.list_by_keys(db, stored_results)
+                for check_result in results:
+                    # swallowed-exceptions: one result's failed evaluation is logged with its id; the other results' alerts must still fire
+                    try:
+                        await AlertEvaluationCoreService.evaluate_check_result(
+                            db, check_result
+                        )
+                        evaluated += 1
+                    except Exception:
+                        logger.exception(
+                            "Error evaluating alerts for check result",
+                            extra={"check_result_id": str(check_result.id)},
+                        )
+        except Exception:
+            logger.exception(
+                "Alert evaluation for a report failed",
+                extra={"results": len(stored_results)},
+            )
+        if evaluated:
+            logger.info(
+                "Evaluated alerts for check results",
+                extra={"alerts_evaluated": evaluated},
+            )
+        return evaluated
 
     # ------------------------------------------------------------------
     # CRUD delegation methods (used by view services)

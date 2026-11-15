@@ -487,3 +487,27 @@ async def test_the_registration_key_alone_for_an_agent_with_a_secret_spends_the_
     ]
 
     assert answers == [401] * allowed + [429], answers
+
+
+# A revoke voids a pending agent's secret (one leaked, say): the row is then
+# spoken for by no credential at all, never by the shared registration key,
+# which every install holds.
+async def test_registration_key_cannot_drive_a_pending_agent_whose_secret_was_revoked(
+    client: AsyncClient, db: AsyncSession, registration_token: str
+) -> None:
+    agent_id = await _registered_pending(client, registration_token)
+    await AgentCoreService.revoke_agent_key(db, UUID(agent_id))
+    await db.flush()
+
+    resp = await client.post(
+        "/api/v1/agent/heartbeat",
+        json={**_beat(agent_id), "hostname": "attacker-host", "tags": ["role:db"]},
+        headers={"Authorization": f"Bearer {registration_token}"},
+    )
+
+    agent = await db.get(Agent, UUID(agent_id))
+    assert agent is not None
+    await db.refresh(agent)
+    assert (agent.hostname, agent.tags) == ("victim-host", ["role:web"])
+    assert resp.status_code == 401, resp.text
+    assert resp.headers[REFUSAL_HEADER] == RECOVERY_SECRET_REFUSED

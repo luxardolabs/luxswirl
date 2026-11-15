@@ -195,10 +195,9 @@ class TestProcessAgentReport:
             )
 
     async def test_leaves_the_agent_row_unwritten(self, db: AsyncSession):
-        """A report never writes the agent row. It runs as one long transaction
-        (insert the results, evaluate the alerts); an agent-row write at its
-        start held that row's lock for all of it, and the agent's heartbeat,
-        which owns last_seen, timed out waiting behind it."""
+        """A report never writes the agent row: a write at the start of its
+        transaction would hold that row's lock through the whole insert, and
+        the agent's heartbeat, which owns last_seen, would time out behind it."""
         import datetime as dt
 
         agent = make_agent(

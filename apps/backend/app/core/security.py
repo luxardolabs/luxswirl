@@ -13,7 +13,7 @@ from fastapi import Cookie, Depends, Header, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.agent_key import bearer_holds_agent_key
-from app.core.bcrypt_secret import bcrypt_matches
+from app.core.bcrypt_secret import bcrypt_matches_threaded
 from app.core.config import settings
 from app.core.datetime_utils import utc_now
 from app.core.rate_limit import reserve_pending_heartbeat_attempt
@@ -359,9 +359,10 @@ async def authenticate_heartbeat(
 
     The pending credential is the agent's own recovery secret (header
     X-Agent-Recovery-Secret), issued to it alone at registration. Only an
-    agent with no secret on record (registered by a build from before
+    agent that never had a secret (registered by a build from before
     secrets) is checked against the shared registration key instead, with a
-    warning to upgrade it; one with a secret that sends none is refused as a
+    warning to upgrade it; one with a secret that sends none, and one whose
+    secret a revoke voided (`recovery_secret_voided_at`), are refused as a
     wrong secret is (401 marked `recovery-secret`). Each credential refused
     counts against `client` for this agent alone
     (`reserve_pending_heartbeat_attempt`), past the registration budget the
@@ -405,9 +406,14 @@ async def authenticate_heartbeat(
         )
     refused = False
     try:
-        if recovery_secret is not None or agent.recovery_secret_hash is not None:
+        if (
+            recovery_secret is not None
+            or agent.recovery_secret_hash is not None
+            or agent.recovery_secret_voided_at is not None
+        ):
             # An agent with a secret on record is spoken for by that secret
-            # alone: sent without it, it is refused as a wrong secret is.
+            # alone: sent without it, it is refused as a wrong secret is. One
+            # whose secret a revoke voided is spoken for by nothing.
             try:
                 verify_agent_recovery_secret(agent, recovery_secret)
             except HTTPException:
@@ -629,7 +635,7 @@ async def verify_agent_token(
     if agent.api_key_hash:
         # Validate token against agent's specific key
         try:
-            is_valid = bcrypt_matches(token, agent.api_key_hash)
+            is_valid = await bcrypt_matches_threaded(token, agent.api_key_hash)
         except Exception:
             logger.exception(
                 "Error verifying agent key",

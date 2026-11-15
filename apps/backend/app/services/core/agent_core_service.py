@@ -8,10 +8,10 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-import bcrypt
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.agent_key import new_agent_key
+from app.core.bcrypt_secret import bcrypt_hash_threaded
 from app.core.config import settings
 from app.core.datetime_utils import utc_now
 from app.core.exceptions import (
@@ -792,13 +792,15 @@ class AgentCoreService:
         key changed since is answered as refused (`agent_key_accepted`
         false); an agent no longer active is refused as its key check would
         refuse it now; a recovery secret voided since (a revoke) is refused
-        as the secret check would refuse it now.
+        as the secret check would refuse it now, and so is the registration
+        key once a revoke has voided the agent's secret.
 
         Raises:
             AuthorizationException: The key was checked while the agent was
                 active, and it is not any more.
             RecoverySecretRefusedException: The recovery secret was checked,
-                and a revoke voided it since.
+                and a revoke voided it since; or the registration key was,
+                and a revoke has voided the agent's secret.
 
         The heartbeat is applied (identity, liveness, health, a metric row)
         when the agent's own key sent it, or when the agent is pending and has
@@ -813,6 +815,15 @@ class AgentCoreService:
         # approval judges them, or not at all.
         await AgentCRUD.lock(db, agent_id)
         agent = await AgentCoreService.get_agent_by_id(db, agent_id)
+        if (
+            settings.security.auth_enabled
+            and not using_agent_key
+            and verified_secret_hash is None
+            and agent.recovery_secret_voided_at is not None
+        ):
+            # The shared registration key was checked, and a revoke has voided
+            # the agent's secret since: the key never speaks for such an agent.
+            raise RecoverySecretRefusedException("Invalid agent recovery secret")
         if using_agent_key and agent.api_key_hash != verified_key_hash:
             # The key was revoked or regenerated after it was checked: this
             # heartbeat is answered as one whose key is refused.
@@ -981,8 +992,7 @@ class AgentCoreService:
         await AgentCoreService.get_agent_by_id(db, agent_id)
 
         new_key = new_agent_key()
-        salt = bcrypt.gensalt()
-        key_hash = bcrypt.hashpw(new_key.encode("utf-8"), salt).decode("utf-8")
+        key_hash = await bcrypt_hash_threaded(new_key)
 
         # Claimed in one statement that only matches an agent with no key, so two
         # concurrent requests cannot both issue one (the loser's key would be dead).
@@ -1021,8 +1031,7 @@ class AgentCoreService:
 
         # Generate new key
         new_key = new_agent_key()
-        salt = bcrypt.gensalt()
-        key_hash = bcrypt.hashpw(new_key.encode("utf-8"), salt).decode("utf-8")
+        key_hash = await bcrypt_hash_threaded(new_key)
 
         # Revoke old key and set new one
         agent.api_key_hash = key_hash
@@ -1046,7 +1055,9 @@ class AgentCoreService:
         new key by itself, a revoke ends this install: with no secret on
         record neither a heartbeat nor recover-key accepts the one it holds
         (or any copy of it), so it must register again for an operator to
-        approve.
+        approve. The void is recorded (`recovery_secret_voided_at`): a pending
+        agent revoked this way is spoken for by no credential, never by the
+        shared registration key.
 
         Args:
             db: Database session
@@ -1068,6 +1079,10 @@ class AgentCoreService:
         agent.api_key_created_at = None
         agent.api_key_last_used = None
         agent.recovery_secret_hash = None
+        # Recorded, so the row is never taken for one that never had a secret,
+        # which the shared registration key still speaks for while pending.
+        if agent.recovery_secret_voided_at is None:
+            agent.recovery_secret_voided_at = utc_now()
 
         await AgentCRUD.save_agent(db, agent)
         logger.info(
@@ -1115,8 +1130,7 @@ class AgentCoreService:
 
         # Generate agent-specific API key
         api_key = new_agent_key()
-        salt = bcrypt.gensalt()
-        key_hash = bcrypt.hashpw(api_key.encode("utf-8"), salt).decode("utf-8")
+        key_hash = await bcrypt_hash_threaded(api_key)
 
         agent.approval_status = AgentApprovalStatus.ACTIVE
         agent.api_key_hash = key_hash

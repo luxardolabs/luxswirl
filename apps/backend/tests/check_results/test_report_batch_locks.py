@@ -22,8 +22,10 @@ from app.models.check_model import Check
 from app.schemas.check_result_schema import AgentReportRequest, CheckResultCreate
 from app.services.core.agent_assignment_core_service import AgentAssignmentCoreService
 from app.services.core.agent_core_service import AgentCoreService
-from app.services.core.alert_evaluation_core_service import AlertEvaluationCoreService
 from app.services.core.check_result_core_service import CheckResultCoreService
+from app.services.core.metrics_collector_core_service import (
+    MetricsCollectorCoreService,
+)
 from fixtures.factories import make_agent, make_check
 from sqlalchemy import delete, event, text, update
 from sqlalchemy.exc import DBAPIError
@@ -232,11 +234,11 @@ async def test_a_report_never_deadlocks_against_an_agent_delete(
 # --- What the held lock leaves free ----------------------------------------------
 
 
-async def _hold_in_alert_eval(
+async def _hold_after_insert(
     worker_db: Any, monkeypatch: pytest.MonkeyPatch
 ) -> tuple[UUID, UUID, asyncio.Event, asyncio.Task[Any]]:
-    """A report of a new result for `fresh` and a duplicate for `dup`, paused in
-    alert evaluation (after the insert, locks held)."""
+    """A report of a new result for `fresh` and a duplicate for `dup`, paused
+    after the insert (its locks held) while it updates the metrics."""
     async with worker_db() as s:
         agent = make_agent()
         s.add(agent)
@@ -254,14 +256,11 @@ async def _hold_in_alert_eval(
         await s.commit()
 
     paused, release = asyncio.Event(), asyncio.Event()
+    update = MetricsCollectorCoreService.update_check_result
 
-    async def slow_eval(db: AsyncSession, result: Any) -> None:
+    def update_then_pause(*args: Any) -> None:
+        update(*args)
         paused.set()
-        await release.wait()
-
-    monkeypatch.setattr(
-        AlertEvaluationCoreService, "evaluate_check_result", staticmethod(slow_eval)
-    )
 
     async def report() -> Any:
         async with worker_db() as s:
@@ -272,9 +271,15 @@ async def _hold_in_alert_eval(
                 ),
                 verified_key_hash=None,
             )
+            await release.wait()
             await s.commit()
             return out
 
+    monkeypatch.setattr(
+        MetricsCollectorCoreService,
+        "update_check_result",
+        staticmethod(update_then_pause),
+    )
     task = asyncio.create_task(report())
     await asyncio.wait_for(paused.wait(), 5)
     return fresh.id, dup.id, release, task
@@ -297,7 +302,7 @@ async def _runs_within(worker_db: Any, stmt: Any, seconds: float) -> bool:
 async def test_a_non_key_check_edit_is_not_blocked_by_the_report(
     worker_db: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    fresh, dup, release, task = await _hold_in_alert_eval(worker_db, monkeypatch)
+    fresh, dup, release, task = await _hold_after_insert(worker_db, monkeypatch)
     try:
         edited = await _runs_within(
             worker_db,

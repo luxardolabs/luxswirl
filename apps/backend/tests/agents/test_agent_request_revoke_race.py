@@ -14,6 +14,7 @@ changed since is refused 401, an agent no longer active 403.
 
 from __future__ import annotations
 
+import asyncio
 import base64
 from collections.abc import Awaitable, Callable
 from typing import Any
@@ -23,18 +24,22 @@ import pytest
 from app.core.config import settings
 from app.core.datetime_utils import utc_now
 from app.core.exceptions import AuthenticationException, AuthorizationException
+from app.core.rate_limit import limiter
 from app.core.security import verify_agent_token
+from app.main import app
 from app.models.enum_model import JobStatus
 from app.schemas.check_artifact_schema import CheckArtifactCreate
 from app.schemas.check_result_schema import AgentReportSubmission
 from app.schemas.job_schema import JobCreate, JobResultSubmit
 from app.services.core.agent_core_service import AgentCoreService
+from app.services.core.alert_evaluation_core_service import AlertEvaluationCoreService
 from app.services.core.artifact_core_service import ArtifactCoreService
 from app.services.core.check_api_core_service import CheckApiCoreService
 from app.services.core.check_result_core_service import CheckResultCoreService
 from app.services.core.job_api_core_service import JobApiCoreService
 from app.services.core.job_core_service import JobCoreService
 from fixtures.factories import make_check
+from httpx import ASGITransport, AsyncClient, Response
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -254,3 +259,77 @@ async def test_a_transition_out_of_active_waits_for_a_request_in_flight(
     worker_db: Any, transition: str
 ) -> None:
     assert await _transition_waits_for_a_request_in_flight(worker_db, transition)
+
+
+# A report's results are committed before its alerts are evaluated, and their
+# notifications delivered (a webhook may take its whole 10 s timeout): the
+# report's hold on its agent's row ends with the insert, so an operator who
+# stops the agent while the report's alerts deliver never waits behind them,
+# nor runs into the web pool's statement timeout.
+@pytest.mark.parametrize(
+    "transition",
+    [
+        "pause_agent",
+        "disable_agent",
+        "archive_agent",
+        "revoke_agent_key",
+        "regenerate_agent_key",
+    ],
+)
+async def test_an_operator_can_stop_an_agent_whose_report_is_delivering_alerts(
+    worker_db: Any, monkeypatch: pytest.MonkeyPatch, transition: str
+) -> None:
+    monkeypatch.setattr(settings.security, "auth_enabled", True)
+    limiter.reset()
+    seeded = await _seed(worker_db, job_running=False)
+    delivering, stopped = asyncio.Event(), asyncio.Event()
+
+    async def delivering_until_stopped(db: AsyncSession, result: Any) -> None:
+        delivering.set()
+        await asyncio.wait_for(stopped.wait(), 10)
+
+    monkeypatch.setattr(
+        AlertEvaluationCoreService,
+        "evaluate_check_result",
+        staticmethod(delivering_until_stopped),
+    )
+
+    async def operator() -> None:
+        await asyncio.wait_for(delivering.wait(), 10)
+        try:
+            async with worker_db() as op:
+                await getattr(AgentCoreService, transition)(op, seeded.agent_id)
+                await op.commit()
+        finally:
+            stopped.set()
+
+    submission = {
+        "agent_id": str(seeded.agent_id),
+        "checks": [
+            {
+                "timestamp": utc_now().isoformat(),
+                "success": True,
+                "latency_ms": 5.0,
+                "check_id": str(seeded.check_id),
+                "display_name": "probe",
+                "check_type": "ping",
+                "target": "192.0.2.10",
+            }
+        ],
+    }
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        report, stop = await asyncio.gather(
+            client.post(
+                "/api/v1/agent/reports",
+                json=submission,
+                headers={"Authorization": f"Bearer {seeded.key}"},
+            ),
+            operator(),
+            return_exceptions=True,
+        )
+
+    assert not isinstance(stop, BaseException), f"{stop!r:.400}"
+    assert isinstance(report, Response), repr(report)
+    assert report.status_code == 202, report.text

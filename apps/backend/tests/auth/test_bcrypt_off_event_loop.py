@@ -13,19 +13,24 @@ import asyncio
 import time
 from collections.abc import AsyncIterator, Awaitable
 
+import bcrypt
 import pytest
 import pytest_asyncio
+from app.core.agent_key import new_agent_key
 from app.core.config import settings
 from app.core.rate_limit import limiter
+from app.core.security import verify_agent_token
 from app.main import app
 from app.schemas.registration_key_schema import RegistrationKeyCreate
 from app.schemas.user_schema import UserCreate
+from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.auth_core_service import AuthCoreService
 from app.services.core.registration_key_core_service import (
     RegistrationKeyCoreService,
 )
 from app.services.core.user_core_service import UserCoreService
-from fixtures.factories import make_user
+from fastapi import HTTPException
+from fixtures.factories import make_agent, make_user
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -172,3 +177,64 @@ async def test_creating_a_registration_key_does_not_stall_the_event_loop(
     )
     assert plaintext
     assert gap < STALL, f"event loop blocked for {gap:.3f}s by a key create"
+
+
+async def _agent_key_check(authorization: str, key_hash: str) -> int:
+    """The status an agent request with `authorization` is answered."""
+    try:
+        await verify_agent_token(make_agent(api_key_hash=key_hash), authorization)
+    except HTTPException as exc:
+        return exc.status_code
+    return 200
+
+
+@pytest.mark.parametrize("right", [False, True], ids=["wrong-key", "valid-key"])
+async def test_an_agent_key_check_does_not_stall_the_event_loop(
+    monkeypatch: pytest.MonkeyPatch, right: bool
+) -> None:
+    """Every agent request checks its key; anyone who knows an agent id can
+    send a wrong one."""
+    monkeypatch.setattr(settings.security, "auth_enabled", True)
+    key = new_agent_key()
+    key_hash = bcrypt.hashpw(key.encode(), bcrypt.gensalt()).decode()
+    sent = key if right else new_agent_key()
+    gap, code = await _longest_stall(_agent_key_check(f"Bearer {sent}", key_hash))
+    assert code == (200 if right else 401)
+    assert gap < STALL, f"event loop blocked for {gap:.3f}s by an agent-key check"
+
+
+async def test_approving_an_agent_does_not_stall_the_event_loop(
+    db: AsyncSession,
+) -> None:
+    agent, _ = await AgentCoreService.register_agent(db, hostname="off-loop.test")
+    await db.flush()
+    gap, (_, key) = await _longest_stall(
+        AgentCoreService.approve_agent(db, agent.id, actor_is_admin=True)
+    )
+    assert key
+    assert gap < STALL, f"event loop blocked for {gap:.3f}s by an approval"
+
+
+async def test_issuing_an_agent_key_does_not_stall_the_event_loop(
+    db: AsyncSession,
+) -> None:
+    agent, _ = await AgentCoreService.register_agent(db, hostname="off-loop.test")
+    await db.flush()
+    gap, (_, key) = await _longest_stall(
+        AgentCoreService.generate_agent_key(db, agent.id)
+    )
+    assert key
+    assert gap < STALL, f"event loop blocked for {gap:.3f}s by a key issue"
+
+
+async def test_regenerating_an_agent_key_does_not_stall_the_event_loop(
+    db: AsyncSession,
+) -> None:
+    agent, _ = await AgentCoreService.register_agent(db, hostname="off-loop.test")
+    await db.flush()
+    await AgentCoreService.approve_agent(db, agent.id, actor_is_admin=True)
+    gap, (_, key) = await _longest_stall(
+        AgentCoreService.regenerate_agent_key(db, agent.id)
+    )
+    assert key
+    assert gap < STALL, f"event loop blocked for {gap:.3f}s by a key regenerate"

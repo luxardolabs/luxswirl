@@ -328,6 +328,14 @@ class Agent(UUIDBaseModel):
         ),
     )
 
+    recovery_secret_voided_at: Mapped[datetime | None] = mapped_column(
+        nullable=True,
+        comment=(
+            "When a revoke voided the agent's recovery secret (NULL if none was "
+            "voided): no credential speaks for the agent's pending heartbeat"
+        ),
+    )
+
     api_key_created_at: Mapped[datetime | None] = mapped_column(
         nullable=True,
         comment="When the API key was created/last regenerated",
