@@ -358,9 +358,11 @@ async def authenticate_heartbeat(
     (`AgentCoreService.process_heartbeat`).
 
     The pending credential is the agent's own recovery secret (header
-    X-Agent-Recovery-Secret), issued to it alone at registration. An agent
-    build that sends no secret is checked against the shared registration key
-    instead, with a warning to upgrade it. Either way each credential refused
+    X-Agent-Recovery-Secret), issued to it alone at registration. Only an
+    agent with no secret on record (registered by a build from before
+    secrets) is checked against the shared registration key instead, with a
+    warning to upgrade it; one with a secret that sends none is refused as a
+    wrong secret is (401 marked `recovery-secret`). Each credential refused
     counts against `client` for this agent alone
     (`reserve_pending_heartbeat_attempt`), past the registration budget the
     heartbeat answers 429 without checking it, and a right one leaves no count.
@@ -403,7 +405,9 @@ async def authenticate_heartbeat(
         )
     refused = False
     try:
-        if recovery_secret is not None:
+        if recovery_secret is not None or agent.recovery_secret_hash is not None:
+            # An agent with a secret on record is spoken for by that secret
+            # alone: sent without it, it is refused as a wrong secret is.
             try:
                 verify_agent_recovery_secret(agent, recovery_secret)
             except HTTPException:

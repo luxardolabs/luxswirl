@@ -302,6 +302,10 @@ async def test_a_keyless_agents_refused_registration_key_is_named(
         headers={"Authorization": f"Bearer {registration_key}"},
     )
     agent_id = UUID(resp.json()["agent_id"])
+    # Registered by a build from before secrets: no secret on record.
+    agent = await AgentCoreService.get_agent_by_id(db, agent_id)
+    agent.recovery_secret_hash = None
+    await db.flush()
     if rejected:
         await AgentCoreService.reject_agent(db, agent_id)
     limiter.reset()

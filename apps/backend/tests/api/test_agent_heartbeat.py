@@ -32,6 +32,7 @@ from app.shared.agent_protocol import (
 )
 from fixtures.factories import make_agent
 from httpx import ASGITransport, AsyncClient
+from limits import parse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 pytestmark = pytest.mark.integration
@@ -430,3 +431,59 @@ async def test_other_refusals_are_not_marked_as_refusing_the_secret(
     assert key_alone.headers[REFUSAL_HEADER] == AGENT_KEY_REFUSED
     assert wrong_registration_key.status_code == 401, wrong_registration_key.text
     assert wrong_registration_key.headers[REFUSAL_HEADER] == REGISTRATION_KEY_REFUSED
+
+
+# The shared registration key stands in for the pending credential only for an
+# agent with no recovery secret on record (registered by a build from before
+# secrets). One that was issued a secret is spoken for by that secret alone:
+# anyone holding the registration key and its id would otherwise rewrite its
+# hostname, address and the tags an approver is shown.
+async def _registered_pending(client: AsyncClient, token: str) -> str:
+    resp = await client.post(
+        "/api/v1/agent/register",
+        json={"hostname": "victim-host", "tags": ["role:web"]},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 201, resp.text
+    assert resp.json()["recovery_secret"]
+    return str(resp.json()["agent_id"])
+
+
+async def test_the_registration_key_alone_cannot_drive_an_agent_with_a_secret(
+    client: AsyncClient, db: AsyncSession, registration_token: str
+) -> None:
+    agent_id = await _registered_pending(client, registration_token)
+
+    resp = await client.post(
+        "/api/v1/agent/heartbeat",
+        json={**_beat(agent_id), "hostname": "attacker-host", "tags": ["role:db"]},
+        headers={"Authorization": f"Bearer {registration_token}"},
+    )
+
+    agent = await db.get(Agent, UUID(agent_id))
+    assert agent is not None
+    await db.refresh(agent)
+    assert resp.status_code == 401, resp.text
+    assert resp.headers[REFUSAL_HEADER] == RECOVERY_SECRET_REFUSED
+    assert (agent.hostname, agent.tags) == ("victim-host", ["role:web"])
+
+
+async def test_the_registration_key_alone_for_an_agent_with_a_secret_spends_the_budget(
+    client: AsyncClient, registration_token: str
+) -> None:
+    agent_id = await _registered_pending(client, registration_token)
+    limiter.reset()
+    allowed = parse(settings.security.registration_rate_limit).amount
+
+    answers = [
+        (
+            await client.post(
+                "/api/v1/agent/heartbeat",
+                json=_beat(agent_id),
+                headers={"Authorization": f"Bearer {registration_token}"},
+            )
+        ).status_code
+        for _ in range(allowed + 1)
+    ]
+
+    assert answers == [401] * allowed + [429], answers

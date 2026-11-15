@@ -82,8 +82,16 @@ async def _checks_text(client: AsyncClient, agent: Agent, key: str) -> str:
 
 
 async def _heartbeat(
-    client: AsyncClient, agent_id: UUID, key: str, tags: list[str]
+    client: AsyncClient,
+    agent_id: UUID,
+    key: str,
+    tags: list[str],
+    *,
+    recovery_secret: str | None = None,
 ) -> None:
+    headers = {"Authorization": f"Bearer {key}"}
+    if recovery_secret is not None:
+        headers["X-Agent-Recovery-Secret"] = recovery_secret
     resp = await client.post(
         "/api/v1/agent/heartbeat",
         json={
@@ -92,7 +100,7 @@ async def _heartbeat(
             "status": "online",
             "tags": tags,
         },
-        headers={"Authorization": f"Bearer {key}"},
+        headers=headers,
     )
     assert resp.status_code == 200, resp.text
 
@@ -160,7 +168,13 @@ async def test_a_pending_agents_registered_tags_are_kept_as_its_initial_tags(
     assert agent is not None
     assert agent.tags == ["role:web", "region:eu"]
 
-    await _heartbeat(client, agent_id, registration_token, ["role:web", "region:us"])
+    await _heartbeat(
+        client,
+        agent_id,
+        registration_token,
+        ["role:web", "region:us"],
+        recovery_secret=resp.json()["recovery_secret"],
+    )
     await db.refresh(agent)
     assert agent.tags == ["role:web", "region:us"]
 
