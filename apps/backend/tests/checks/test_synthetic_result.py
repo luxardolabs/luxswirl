@@ -279,6 +279,6 @@ def test_a_size_noted_runs_error_reads_as_its_type_alone(metrics: object) -> Non
 def test_control_a_runs_error_with_its_metrics_whole_is_masked_as_usual() -> None:
     error = "connection refused by db.internal:5432"
 
-    assert masked_error(error, {"response": {}}, ran_synthetic=False, configured=()) == (
-        error
-    )
+    assert masked_error(
+        error, {"response": {}}, ran_synthetic=False, configured=()
+    ) == (error)

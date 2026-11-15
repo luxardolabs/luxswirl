@@ -700,7 +700,9 @@ async def test_non_list_script_fields_do_not_500_the_panel(
     assert "Synthetic Monitor" in panel
 
 
-SCRIPTS_OWN_ERROR = f"Login failed after opening https://app.example.com/reset/{RESET_TOKEN}"
+SCRIPTS_OWN_ERROR = (
+    f"Login failed after opening https://app.example.com/reset/{RESET_TOKEN}"
+)
 
 
 @pytest.mark.parametrize(("role", "shown"), [("viewer", False), ("editor", True)])

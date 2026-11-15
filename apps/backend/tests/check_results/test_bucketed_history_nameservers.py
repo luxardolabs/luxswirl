@@ -121,9 +121,7 @@ async def test_control_one_bucket_holds_every_run(db: AsyncSession) -> None:
     rows = await CheckResultCRUD.get_bucketed_history(db, check.id, 720)
 
     assert len(rows) == 1
-    assert rows[0].errors == [
-        "DNS record does not contain expected value: 192.0.2.99"
-    ]
+    assert rows[0].errors == ["DNS record does not contain expected value: 192.0.2.99"]
 
 
 async def test_a_bucket_carries_each_nameserver_once(

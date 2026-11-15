@@ -9,8 +9,8 @@ from __future__ import annotations
 import importlib.util
 import json
 from pathlib import Path
-from uuid import uuid4
 from typing import Any
+from uuid import uuid4
 
 import pytest
 from alembic.migration import MigrationContext
@@ -231,8 +231,10 @@ async def test_backfill_marks_a_retyped_check_that_still_holds_its_script(
     error can be the script's own text, cut to the size note."""
     check_id = await _http_check_with(db, metrics=SIZE_NOTE, error=SCRIPTS_OWN_ERROR)
     await db.execute(
-        text("UPDATE checks SET script_code = 'async def run_check(page): ...' "
-             "WHERE id = :i"),
+        text(
+            "UPDATE checks SET script_code = 'async def run_check(page): ...' "
+            "WHERE id = :i"
+        ),
         {"i": check_id},
     )
 
