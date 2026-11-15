@@ -2,8 +2,8 @@
         {% from 'macros/tables.html' import data_table %}
         <!-- Synthetic Check Details -->
         {# undefined-guards: additional_data is always a dict; the per-check-type metric keys inside it are genuinely optional #}
-        {% if check.check_type == 'synthetic' and history and history|length > 0 and history[0].additional_data and history[0].additional_data.get('synthetic') %}
-        {% set synthetic = history[0].additional_data.synthetic %}
+        {% if check.check_type == 'synthetic' and latest and latest.additional_data and latest.additional_data.get('synthetic') %}
+        {% set synthetic = latest.additional_data.synthetic %}
         <div class="card p-5 bg-gradient-to-br from-purple-500/10 to-blue-500/5 border-purple-500/30">
             <div class="flex items-center justify-between mb-4">
                 <h3 class="text-sm font-medium uppercase tracking-wide text-purple-400 flex items-center gap-2">

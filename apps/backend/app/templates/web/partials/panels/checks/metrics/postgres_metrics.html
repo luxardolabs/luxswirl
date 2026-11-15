@@ -1,7 +1,7 @@
 <!-- PostgreSQL Check Details -->
 {# undefined-guards: additional_data is always a dict; the per-check-type metric keys inside it are genuinely optional #}
-{% if check.check_type == 'postgres' and history and history|length > 0 and history[0].additional_data and history[0].additional_data.get('postgres') %}
-{% set postgres = history[0].additional_data.postgres %}
+{% if check.check_type == 'postgres' and latest and latest.additional_data and latest.additional_data.get('postgres') %}
+{% set postgres = latest.additional_data.postgres %}
 <div class="card p-5 bg-gradient-to-br from-indigo-500/10 to-blue-500/5 border-indigo-500/30">
     <div class="flex items-center justify-between mb-4">
         <h3 class="text-sm font-medium uppercase tracking-wide text-indigo-400 flex items-center gap-2">

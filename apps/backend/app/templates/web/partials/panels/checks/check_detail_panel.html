@@ -216,8 +216,8 @@
 
         <!-- SSL Certificate Info (for HTTPS checks) -->
         {# undefined-guards: additional_data is always a dict; the per-check-type metric keys inside it are genuinely optional #}
-        {% if history and history|length > 0 and history[0].additional_data and history[0].additional_data.get('response') and history[0].additional_data.response.get('ssl_certificate') %}
-        {% set ssl_cert = history[0].additional_data.response.ssl_certificate %}
+        {% if latest and latest.additional_data and latest.additional_data.get('response') and latest.additional_data.response.get('ssl_certificate') %}
+        {% set ssl_cert = latest.additional_data.response.ssl_certificate %}
         {% include 'partials/panels/checks/metrics/ssl_certificate.html' %}
         {% endif %}
 

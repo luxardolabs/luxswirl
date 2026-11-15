@@ -764,7 +764,7 @@ Created PostgreSQL check for monitoring LuxSwirl's own database:
 **Metrics Storage:**
 
 - Check results store type-specific data in `metrics` JSONB column
-- Template accesses via `history[0].additional_data.{check_type}`
+- Template accesses via `latest.additional_data.{check_type}`: `latest` is the newest bucket of the panel's history (`CheckDetailViewService`), each card's section completed with its defaults (`PANEL_SECTION_DEFAULTS`)
 - Services map database JSONB to Pydantic schemas for validation
 - UI renders metrics in themed sections matching check type
 

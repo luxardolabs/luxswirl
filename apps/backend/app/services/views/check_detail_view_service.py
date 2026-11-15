@@ -78,16 +78,62 @@ SYNTHETIC_PANEL_DEFAULTS: dict[str, Any] = {
 }
 
 
-def _complete_synthetic(synthetic: dict[str, Any]) -> None:
-    """Give `synthetic` every key the panel reads, in the shape it reads it. The
-    script writes these fields itself, so a list or mapping it sent as anything
-    else (a number, text) is read as one that reported nothing."""
-    for key, empty in SYNTHETIC_PANEL_DEFAULTS.items():
-        value = synthetic.get(key)
+# Every key the DNS card reads. The agent sets the answer's flags, TTL and
+# records only when an answer came back, and the canonical name only when it
+# came through a CNAME (apps/agent/app/checks/dns.py).
+DNS_PANEL_DEFAULTS: dict[str, Any] = {
+    "target_domain": None,
+    "record_type": None,
+    "nameserver": None,
+    "port": None,
+    "ttl": None,
+    "record_count": 0,
+    "records": [],
+    "canonical_name": None,
+    "authoritative": None,
+    "truncated": None,
+    "recursion_desired": None,
+    "recursion_available": None,
+}
+
+# Every key the MySQL and PostgreSQL cards read.
+DATABASE_PANEL_DEFAULTS: dict[str, Any] = {
+    "host": None,
+    "port": None,
+    "database": None,
+    "query": None,
+    "connection_latency_ms": None,
+    "query_latency_ms": None,
+    "row_count": None,
+    "columns": [],
+    "error_type": None,
+}
+
+# The metric sections the panel draws a card for, with the keys each reads.
+PANEL_SECTION_DEFAULTS: dict[str, dict[str, Any]] = {
+    "synthetic": SYNTHETIC_PANEL_DEFAULTS,
+    "dns": DNS_PANEL_DEFAULTS,
+    "mysql": DATABASE_PANEL_DEFAULTS,
+    "postgres": DATABASE_PANEL_DEFAULTS,
+}
+
+
+def _complete_section(section: dict[str, Any], defaults: dict[str, Any]) -> None:
+    """Give a metric `section` every key its card reads, in the shape it reads
+    it: a key the result did not report, or a list or mapping sent as anything
+    else (a number, text), is read as one that reported nothing."""
+    for key, empty in defaults.items():
+        value = section.get(key)
         if value is None or (
             isinstance(empty, list | dict) and not isinstance(value, type(empty))
         ):
-            synthetic[key] = copy.copy(empty)
+            section[key] = copy.copy(empty)
+
+
+def _complete_synthetic(synthetic: dict[str, Any]) -> None:
+    """Give `synthetic` every key the panel reads, in the shape it reads it
+    (`_complete_section`); the script writes these fields itself."""
+    _complete_section(synthetic, SYNTHETIC_PANEL_DEFAULTS)
     # Each failed request is drawn as its URL and its failure: keep the items in
     # the agent's shape, each with both.
     synthetic["request_failures"] = [
@@ -254,15 +300,19 @@ class CheckDetailViewService:
                 "additional_data": metrics,
             }
 
-            # Complete the synthetic block the same way: the panel reads every
-            # one of these keys, and a script that reports no page timings (the
-            # agent's default) leaves the track_* keys out.
-            # A section that is no mapping is read as one that reported nothing.
-            synthetic = metrics.get("synthetic") if metrics else None
-            if synthetic is not None and not isinstance(synthetic, dict):
-                synthetic = metrics["synthetic"] = {}
-            if isinstance(synthetic, dict):
-                _complete_synthetic(synthetic)
+            # Complete each section a card is drawn for: the card reads every
+            # one of its keys, and a result reports only those of its path (a
+            # failed DNS query no flags, a script no page timings). A section
+            # that is no mapping is read as one that reported nothing.
+            for name, defaults in PANEL_SECTION_DEFAULTS.items():
+                section = metrics.get(name) if metrics else None
+                if section is not None and not isinstance(section, dict):
+                    section = metrics[name] = {}
+                if isinstance(section, dict):
+                    if name == "synthetic":
+                        _complete_synthetic(section)
+                    else:
+                        _complete_section(section, defaults)
 
             # Complete the certificate the agent reported: the panel reads the
             # expiry flags unconditionally, so they are set for every cert.
@@ -593,7 +643,9 @@ class CheckDetailViewService:
             db, check_id
         )
 
-        latest_metrics = history[0]["additional_data"] if history else {}
+        # History runs oldest first: the cards show its newest bucket.
+        latest = history[-1] if history else None
+        latest_metrics = (latest or {}).get("additional_data") or {}
         return {
             **build_synthetic_view((latest_metrics or {}).get("synthetic")),
             "check_urls": build_check_urls(request, check_id, hours),
@@ -607,6 +659,7 @@ class CheckDetailViewService:
             "check": check,
             "agent": agent,
             "history": history,
+            "latest": latest,
             "recent_results": recent_results,  # Last 30min raw data for Recent Events
             "minute_bars": minute_bars,
             "hours": hours,
