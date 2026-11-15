@@ -11,7 +11,7 @@ claimed in turn across providers, the one with the fewest attempts in flight
 first; no provider has more than `PROVIDER_SHARE` in flight, counted across
 every server process (its `sending` rows under a live lease); and a provider
 with nothing in flight anywhere is given its first due row even when every
-slot is held, one attempt past the pool's slots. So providers whose every
+slot is held, one attempt past the pool's slots for each such provider. So providers whose every
 attempt waits out its timeout leave the others theirs, however many of them
 there are. Several server processes each run one; SKIP LOCKED keeps them off
 each other's rows. Every instant is the database's clock, so processes on
@@ -88,6 +88,9 @@ class DeliveryPool:
                 await self._clock(db),
                 free,
                 provider_share=PROVIDER_SHARE,
+                # Its own attempts, recorded or not: never claimed twice here,
+                # even once a record that kept failing outlasts the lease.
+                held=[claimed.log_id for claimed in self._in_flight.values()],
             )
         for claimed in batch.deliveries:
             attempt = asyncio.create_task(

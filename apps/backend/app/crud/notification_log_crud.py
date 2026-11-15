@@ -2,6 +2,7 @@
 NotificationLog CRUD - database queries for notification log operations.
 """
 
+from collections.abc import Collection
 from datetime import datetime
 from typing import Any
 from uuid import UUID
@@ -59,6 +60,7 @@ class NotificationLogCRUD:
         limit: int,
         *,
         provider_share: int,
+        held: Collection[UUID] = (),
     ) -> list[NotificationLog]:
         """Up to `limit` rows due for delivery, and the first due row of each
         provider with nothing in flight beyond them, locked FOR UPDATE SKIP
@@ -80,7 +82,8 @@ class NotificationLogCRUD:
         provider with nothing in flight is given its first row whether or not
         a slot is free, so one that comes due while every slot is held, by
         however many providers that never answer, is never left waiting for
-        one to free.
+        one to free. A row in `held` (this process's own attempts, still
+        unrecorded) is never claimed, whatever its lease says.
         """
         earlier = aliased(NotificationLog)
         awaiting = [
@@ -133,7 +136,7 @@ class NotificationLogCRUD:
                 )
                 .label("rank"),
             )
-            .where(due, ~held_back)
+            .where(due, ~held_back, NotificationLog.id.not_in(list(held)))
             .subquery()
         )
         held = func.coalesce(in_flight.c.held, 0)

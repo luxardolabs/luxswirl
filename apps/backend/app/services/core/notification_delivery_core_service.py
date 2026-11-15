@@ -10,6 +10,7 @@ short transaction (`record`). No database lock is held while a provider is
 waited on.
 """
 
+from collections.abc import Collection
 from datetime import datetime, timedelta
 from typing import Any
 from uuid import UUID
@@ -67,12 +68,13 @@ class NotificationDeliveryCoreService:
         limit: int,
         *,
         provider_share: int | None = None,
+        held: Collection[UUID] = (),
     ) -> ClaimedBatch:
         """Claim up to `limit` due rows (`NotificationLogCRUD.claim_due`),
         taken in turn across providers, with at most `provider_share` (all of
         `limit`, by default) in flight for one provider across every server
         process, and beyond them the first due row of each provider with
-        nothing in flight.
+        nothing in flight; never a row in `held`.
 
         A row whose payload this release cannot read is failed, one that is
         no longer to be sent (`_refusal`) is recorded as suppressed, and one
@@ -85,6 +87,7 @@ class NotificationDeliveryCoreService:
             now,
             limit,
             provider_share=provider_share or max(limit, 1),
+            held=held,
         )
         deliveries: list[ClaimedDelivery] = []
         ended = 0
