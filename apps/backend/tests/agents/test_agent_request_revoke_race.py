@@ -268,9 +268,10 @@ async def test_a_transition_out_of_active_waits_for_a_request_in_flight(
     assert await _transition_waits_for_a_request_in_flight(worker_db, transition)
 
 
-# A report decides its alerts in its own transaction and only queues their
-# notifications; the delivery worker sends them after it commits, holding no
-# lock on the agent or its checks (a webhook may take its whole 10 s timeout).
+# A report only stores its results and queues them for their alert decisions;
+# the alert decision worker decides them and the delivery worker sends the
+# notifications, neither holding a lock on the agent or its checks while a
+# provider is waited on (a webhook may take its whole 10 s timeout).
 # An operator who stops the agent while its report's notification is being
 # delivered never waits behind the delivery, nor runs into the web pool's
 # statement timeout.

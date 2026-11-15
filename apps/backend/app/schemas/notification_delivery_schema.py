@@ -40,7 +40,10 @@ class ClaimedDelivery:
 
 @dataclass(frozen=True)
 class ClaimedBatch:
-    """The rows one claim took, and the SSRF settings their attempts run under."""
+    """The rows one claim took for an attempt, how many more it ended without
+    one (failed, suppressed or rate limited at the claim), and the SSRF
+    settings the attempts run under."""
 
     deliveries: list[ClaimedDelivery]
     network: NetworkProtection
+    ended: int = 0

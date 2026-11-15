@@ -592,18 +592,12 @@ class NotificationCoreService:
         if not provider.rate_limit_count or not provider.rate_limit_window_minutes:
             return False, None
 
-        # Count notifications sent in the time window
+        # Deliveries in the window, by when they were delivered: a backlog
+        # decided before the window is still held to the limit.
         window_start = utc_now() - timedelta(minutes=provider.rate_limit_window_minutes)
 
-        count = await NotificationLogCRUD.count_for_provider_since(
-            db,
-            provider.id,
-            window_start,
-            [
-                NotificationStatus.SENT,
-                NotificationStatus.SENDING,
-                NotificationStatus.RATE_LIMITED,
-            ],
+        count = await NotificationLogCRUD.count_delivered_for_provider_since(
+            db, provider.id, window_start
         )
 
         if count >= provider.rate_limit_count:

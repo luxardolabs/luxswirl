@@ -12,7 +12,7 @@ from app.models.enum_model import NotificationStatus
 from app.notifications.providers.base import NotificationContext
 from app.services.core.notification_core_service import NotificationCoreService
 from fixtures.factories import make_alert, make_notification_provider
-from fixtures.outbox import deliver_in, queue_and_deliver
+from fixtures.outbox import attach_providers, deliver_in, queue_and_deliver
 from sqlalchemy.ext.asyncio import AsyncSession
 
 pytestmark = pytest.mark.integration
@@ -98,6 +98,7 @@ async def test_a_provider_deleted_before_delivery_is_suppressed(
     gone = make_notification_provider()
     db.add_all([alert, live, gone])
     await db.flush()
+    await attach_providers(db, alert.id, [live.id, gone.id])
     rows = await NotificationCoreService.queue_notifications(
         db,
         [live.id, gone.id],

@@ -6,7 +6,7 @@ from collections.abc import Collection, Sequence
 from datetime import datetime, timedelta
 from uuid import UUID
 
-from sqlalchemy import ARRAY, Integer, and_, case, delete, func, literal, select, update
+from sqlalchemy import and_, case, delete, func, literal, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -27,12 +27,6 @@ from app.models.notification_provider_model import NotificationProvider
 # leaving out the undelivered would decide one state twice before its first
 # notification was delivered.
 DEDUP_RELEVANT_STATUSES = tuple(status.value for status in NotificationStatus)
-
-# The first key of the two-key advisory locks that serialise the alert
-# decisions for a check (the second is the check's bucket,
-# `AlertEvaluationCoreService.decision_lock_key`). Any constant works: the
-# two-key space does not overlap the one-key space other advisory locks use.
-_ALERT_DECISION_LOCK_CLASS = 1_826_301_558
 
 
 class AlertCRUD:
@@ -267,29 +261,6 @@ class AlertCRUD:
         return result.scalars().all()
 
     @staticmethod
-    async def lock_alert_decisions(db: AsyncSession, keys: Sequence[int]) -> None:
-        """Take the transaction's advisory locks on alert decisions for these
-        keys, in the order given (ascending, so two transactions never wait
-        on each other in a cycle), under the session's statement timeout.
-        """
-        if not keys:
-            return
-        ordered = (
-            select(func.unnest(literal(list(keys), ARRAY(Integer))).label("key"))
-            .order_by("key")
-            .subquery()
-        )
-        await db.execute(
-            select(
-                func.count(
-                    func.pg_advisory_xact_lock(
-                        _ALERT_DECISION_LOCK_CLASS, ordered.c.key
-                    )
-                )
-            )
-        )
-
-    @staticmethod
     async def checks_with_result_alerts(
         db: AsyncSession, check_ids: Collection[UUID]
     ) -> set[UUID]:
@@ -312,6 +283,20 @@ class AlertCRUD:
             .distinct()
         )
         return set(result.scalars().all())
+
+    @staticmethod
+    async def provider_enabled_on_alert(
+        db: AsyncSession, alert_id: UUID, provider_id: UUID
+    ) -> bool:
+        """Whether the provider is mapped to the alert, its mapping enabled."""
+        result = await db.execute(
+            select(AlertNotificationMapping.id).where(
+                AlertNotificationMapping.alert_id == alert_id,
+                AlertNotificationMapping.notification_provider_id == provider_id,
+                AlertNotificationMapping.is_enabled.is_(True),
+            )
+        )
+        return result.scalar_one_or_none() is not None
 
     @staticmethod
     async def list_active_notif_mappings_for_alert(

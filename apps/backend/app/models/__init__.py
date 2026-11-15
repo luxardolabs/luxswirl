@@ -5,6 +5,7 @@ Models package - SQLAlchemy ORM models.
 from app.models.agent_metric_model import AgentMetric
 from app.models.agent_model import Agent
 from app.models.alert_check_mapping_model import AlertCheckMapping
+from app.models.alert_decision_model import AlertDecisionCursor, AlertDecisionQueue
 from app.models.alert_model import Alert
 from app.models.alert_notification_mapping_model import AlertNotificationMapping
 from app.models.api_call_model import ApiCall
@@ -60,6 +61,8 @@ __all__ = [
     "Alert",
     "AlertNotificationMapping",
     "AlertCheckMapping",
+    "AlertDecisionCursor",
+    "AlertDecisionQueue",
     "NotificationLog",
     "Job",
     "MaintenanceJob",

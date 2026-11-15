@@ -32,6 +32,10 @@ from app.background import (
     stop_session_cleanup_task,
     stop_trusted_proxy_refresh_task,
 )
+from app.background.alert_decision_worker import (
+    start_alert_decision_worker,
+    stop_alert_decision_worker,
+)
 from app.background.maintenance_handlers import (
     register_all as register_maintenance_handlers,
 )
@@ -196,7 +200,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     start_database_maintenance_task()
     register_maintenance_handlers()
     await start_maintenance_worker()
-    # Delivers the alert notifications evaluation queues (notification_logs).
+    # Decides the alerts of the results reports queue (alert_decision_queue),
+    # and delivers the notifications it decides (notification_logs).
+    start_alert_decision_worker()
     start_notification_delivery_worker()
 
     # Start async scheduler
@@ -216,6 +222,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     # Stop background tasks
     await stop_maintenance_worker()
+    await stop_alert_decision_worker()
     await stop_notification_delivery_worker()
     await stop_job_purge_task()
     await stop_session_cleanup_task()

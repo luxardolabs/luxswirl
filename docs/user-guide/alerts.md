@@ -193,7 +193,7 @@ ______________________________________________________________________
 
 ## Evaluation and de-duplication
 
-Every time the server receives a check result, it evaluates all applicable alerts: all enabled global alerts, plus enabled specific alerts assigned to that check, where the alert–check mapping is enabled and not snoozed. De-duplication then decides whether to actually send.
+Every check result the server stores is evaluated against all applicable alerts: all enabled global alerts, plus enabled specific alerts assigned to that check, where the alert–check mapping is enabled and not snoozed. The evaluation runs in the server's alert decision worker, shortly after the agent's report is stored, never while the agent waits: each check's results are evaluated oldest first, and a result older than one already evaluated for that check (a delayed report from another agent of a replicate check) is skipped, so a check that is up never ends with its alert down. A check with no enabled alert has nothing evaluated; an alert attached to it later evaluates the results stored after. De-duplication then decides whether to actually send, and the notification is delivered unless, by then, its provider, alert or check was disabled, deleted or taken off the alert, or the pair was snoozed (logged as **Suppressed** with the reason).
 
 **Rules:**
 

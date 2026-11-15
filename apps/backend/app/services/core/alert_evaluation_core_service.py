@@ -3,17 +3,16 @@ Alert evaluation - decides, per incoming check result, whether an alert fires
 and whether its notification is sent, resent, de-duplicated or suppressed.
 
 The configuration side of alerts (CRUD, check assignment, snoozing) lives in
-`alert_core_service`. This is the engine the result-ingestion pipeline drives,
-inside the report's own transaction: it reads the configured alerts and writes
-each decision to the notification log (`notification_logs`), a notification
-to send as a `pending` row that the delivery worker delivers once the report
-commits (`NotificationDeliveryCoreService`). Nothing here waits on a provider.
+`alert_core_service`. This is the engine the alert decision worker drives
+(`AlertDecisionCoreService.decide_check`), one check's queued results at a
+time, oldest first: it reads the configured alerts and writes each decision to
+the notification log (`notification_logs`), a notification to send as a
+`pending` row that the delivery worker delivers once the decision commits
+(`NotificationDeliveryCoreService`). Nothing here waits on a provider.
 """
 
 import fnmatch
 import hashlib
-import zlib
-from collections.abc import Sequence
 from datetime import datetime
 from typing import Any
 from uuid import UUID
@@ -44,81 +43,8 @@ SILENCE_TRIGGER_TYPES = frozenset(
 )
 
 
-# Alert decisions are serialised per check under advisory locks keyed by the
-# check's bucket: one transaction holds at most this many, however many checks
-# its report names (PostgreSQL's lock table is shared and bounded), and checks
-# that share a bucket only wait on each other's short decisions.
-DECISION_LOCK_BUCKETS = 1024
-
-
 class AlertEvaluationCoreService:
     """Evaluates check results against alerts and queues their notifications."""
-
-    @staticmethod
-    def decision_lock_key(check_id: UUID) -> int:
-        """The advisory lock key a check's alert decisions are taken under."""
-        return zlib.crc32(check_id.bytes) % DECISION_LOCK_BUCKETS
-
-    @staticmethod
-    async def decide_report_alerts(
-        db: AsyncSession, result_keys: Sequence[tuple[UUID, datetime]]
-    ) -> int:
-        """Decide every alert notification for a report's results, in its own
-        transaction, after they are inserted.
-
-        The checks an alert evaluates are locked first, all at once and in key
-        order (`AlertCRUD.lock_alert_decisions`), to the transaction's end: a
-        second report on one of them (a replicate check's other agent, the
-        same report sent again) decides only once this one has committed, and
-        reads its decisions. Each check's results are then decided oldest
-        first. A decision is a notification row (`queue_notifications`), never
-        a delivery, so the locks are held for reads and inserts alone. A lock
-        not had within the session's statement timeout fails the report,
-        which the agent sends again; nothing is decided without it.
-
-        Args:
-            db: The report's session, its results inserted
-            result_keys: `(check_id, timestamp)` of every result the report
-                names that is stored, whether this report stored it or an
-                earlier send of it did
-
-        Returns:
-            How many results were evaluated.
-        """
-        by_check: dict[UUID, list[datetime]] = {}
-        for check_id, timestamp in result_keys:
-            by_check.setdefault(check_id, []).append(timestamp)
-        alerted = await AlertCRUD.checks_with_result_alerts(db, by_check)
-        if not alerted:
-            return 0
-        await AlertCRUD.lock_alert_decisions(
-            db,
-            sorted({AlertEvaluationCoreService.decision_lock_key(c) for c in alerted}),
-        )
-        evaluated = 0
-        for check_id in sorted(alerted):
-            results = await CheckResultCRUD.list_for_check_at(
-                db, check_id, by_check[check_id]
-            )
-            for check_result in results:
-                # swallowed-exceptions: one result's failed evaluation is logged with its id and rolled back to its savepoint; the report's other results must still be decided, and its results stay stored
-                try:
-                    async with db.begin_nested():
-                        await AlertEvaluationCoreService.evaluate_check_result(
-                            db, check_result
-                        )
-                    evaluated += 1
-                except Exception:
-                    logger.exception(
-                        "Error evaluating alerts for check result",
-                        extra={"check_result_id": str(check_result.id)},
-                    )
-        if evaluated:
-            logger.info(
-                "Evaluated alerts for check results",
-                extra={"alerts_evaluated": evaluated},
-            )
-        return evaluated
 
     @staticmethod
     async def evaluate_check_result(

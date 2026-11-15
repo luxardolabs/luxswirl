@@ -26,7 +26,7 @@ from fixtures.factories import (
     make_notification_log,
     make_notification_provider,
 )
-from fixtures.outbox import deliver_committed
+from fixtures.outbox import attach_providers, deliver_committed
 from sqlalchemy import select
 
 pytestmark = pytest.mark.integration
@@ -104,6 +104,7 @@ async def _send(maker, provider_id: UUID, alert_id: UUID) -> None:
     """Queue a notification and commit it, then run the delivery worker's
     passes, each committing its own transactions."""
     async with maker() as s:
+        await attach_providers(s, alert_id, [provider_id])
         await NotificationCoreService.queue_notifications(
             s,
             [provider_id],

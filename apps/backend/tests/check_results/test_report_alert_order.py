@@ -1,28 +1,32 @@
-"""A report's alerts are decided in its own transaction and delivered after it.
+"""A report's alerts are decided after it, by the alert decision worker, and
+delivered after that, by the delivery worker.
 
-The report route stores a report's results and, in the same transaction,
-decides every alert notification they call for, oldest result first per
-check, under an advisory lock per check: each decision is a `pending`
-notification row, de-duplicated against the decisions already committed. The
-report commits and the agent is answered; nothing waits on a provider. The
-delivery worker then claims the pending rows (FOR UPDATE SKIP LOCKED), delivers
-each with no transaction open and records the outcome, one alert and check's
-notifications in the order they were decided.
+The report route stores a report's results and queues each one an alert
+evaluates, in its own transaction; it decides nothing, so the agent is
+answered as soon as its results are stored. The alert decision worker then
+decides each check's queued results oldest first, one short transaction per
+check: each decision is a `pending` notification row, de-duplicated against
+the decisions already committed, and a result no newer than the check's
+cursor is stale. The delivery worker claims the pending rows (FOR UPDATE SKIP
+LOCKED), delivers each with no transaction open and records the outcome, one
+alert and check's notifications in the order they were decided.
 """
 
 from __future__ import annotations
 
 import asyncio
 import time
+import zlib
 from datetime import timedelta
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
 from app.core.config import settings
 from app.core.datetime_utils import utc_now
 from app.core.rate_limit import limiter
 from app.crud.alert_crud import AlertCRUD
+from app.crud.alert_decision_crud import AlertDecisionCRUD
 from app.crud.check_result_crud import CheckResultCRUD
 from app.main import app
 from app.models.agent_model import Agent
@@ -31,10 +35,8 @@ from app.models.check_model import Check
 from app.models.notification_log_model import NotificationLog
 from app.notifications.providers.base import NotificationContext
 from app.notifications.providers.webhook import WebhookNotificationProvider
-from app.schemas.check_result_schema import AgentReportSubmission
 from app.services.core.agent_core_service import AgentCoreService
-from app.services.core.alert_evaluation_core_service import AlertEvaluationCoreService
-from app.services.core.check_result_core_service import CheckResultCoreService
+from app.services.core.alert_decision_core_service import AlertDecisionCoreService
 from app.services.core.notification_delivery_core_service import (
     CLAIM_LEASE,
     MAX_ATTEMPTS,
@@ -50,7 +52,7 @@ from fixtures.factories import (
     make_check_result,
     make_notification_provider,
 )
-from fixtures.outbox import deliver_committed
+from fixtures.outbox import decide_committed, deliver_committed
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import delete, select, text, update
 from sqlalchemy.exc import DBAPIError
@@ -173,8 +175,9 @@ async def _statuses(worker_db: Any, alert_id: UUID) -> list[str]:
 async def test_a_report_is_answered_with_its_notification_queued_not_sent(
     worker_db: Any, monkeypatch: pytest.MonkeyPatch, agent_auth: None
 ) -> None:
-    """The report's answer waits on no provider: its notification is a
-    pending row when the agent is answered, and the worker sends it."""
+    """The report's answer waits on no decision and no provider: the alert
+    decision worker decides its notification (a pending row) after the
+    agent is answered, and the delivery worker sends it."""
     ids = await _seed(worker_db)
     hook = _Webhook()
     hook.install(monkeypatch)
@@ -182,6 +185,8 @@ async def test_a_report_is_answered_with_its_notification_queued_not_sent(
     assert await _post(ids, [_wire(ids["y-service"], utc_now(), success=False)]) == 202
 
     assert hook.sent == []
+    assert await _statuses(worker_db, ids["alert"]) == []
+    assert await decide_committed() == 1
     assert await _statuses(worker_db, ids["alert"]) == ["pending"]
     assert await deliver_committed() == 1
     assert hook.of("y-service") == ["error"]
@@ -323,12 +328,13 @@ async def test_overlapping_reports_of_one_check_notify_its_outage_once(
     assert hook.of("y-service") == ["error"], hook.sent
 
 
-async def test_a_report_whose_decision_lock_is_not_had_is_refused_and_sent_again(
+async def test_a_check_whose_decisions_are_held_is_left_for_the_next_pass(
     worker_db: Any, monkeypatch: pytest.MonkeyPatch, agent_auth: None
 ) -> None:
-    """A report that cannot take its check's decision lock within the
-    statement timeout fails whole (results too), so the agent sends it again
-    and the recovery is decided then: it is never dropped."""
+    """While another transaction holds a check's decision lock, the report
+    is still stored and answered, and the worker leaves the check queued
+    rather than wait; once the lock is free the recovery is decided and
+    sent: it is never dropped."""
     ids = await _seed(worker_db)
     hook = _Webhook()
     hook.install(monkeypatch)
@@ -337,30 +343,20 @@ async def test_a_report_whose_decision_lock_is_not_had_is_refused_and_sent_again
     await deliver_committed()
     up = [_wire(ids["y-service"], t0 + timedelta(seconds=10), success=True)]
 
-    async with worker_db() as holder, worker_db() as report:
-        await AlertCRUD.lock_alert_decisions(
-            holder, [AlertEvaluationCoreService.decision_lock_key(ids["y-service"])]
+    async with worker_db() as holder:
+        assert await AlertDecisionCRUD.try_lock_check(
+            holder, AlertDecisionCoreService.decision_lock_key(ids["y-service"])
         )
-        agent = await report.get(Agent, ids["agent"])
-        assert agent is not None
-        # The request's session: the pool's 5 s statement timeout ends the wait.
-        with pytest.raises(DBAPIError, match="statement timeout"):
-            await CheckResultCoreService.process_agent_submission(
-                report,
-                AgentReportSubmission.model_validate(
-                    {"agent_id": str(ids["agent"]), "checks": up}
-                ),
-                verified_key_hash=agent.api_key_hash,
-            )
-        await report.rollback()
+        assert await _post(ids, up) == 202
+        assert await decide_committed() == 0
         await holder.rollback()
     async with worker_db() as s:
         stored = await CheckResultCRUD.list_for_check_at(
             s, ids["y-service"], [t0 + timedelta(seconds=10)]
         )
-    assert stored == []
+    assert len(stored) == 1
+    assert hook.of("y-service") == ["error"]
 
-    assert await _post(ids, up) == 202
     await deliver_committed()
     assert hook.of("y-service") == ["error", "success"], hook.sent
 
@@ -411,13 +407,15 @@ async def test_a_result_older_than_the_last_decided_one_queues_nothing(
         )
         await s.commit()
 
-    # Down, then up, then the delayed down between them.
+    # Down, then up, then the delayed down between them, each decided
+    # before the next is queued.
     for stamp in stamps:
         async with worker_db() as s:
-            await AlertEvaluationCoreService.decide_report_alerts(
+            await AlertDecisionCoreService.queue_report_results(
                 s, [(ids["y-service"], stamp)]
             )
             await s.commit()
+        await decide_committed()
     await deliver_committed()
 
     assert hook.of("y-service") == ["error", "success"], hook.sent
@@ -547,6 +545,7 @@ async def test_a_claim_whose_worker_stopped_is_delivered_again_after_its_lease(
     hook = _Webhook()
     hook.install(monkeypatch)
     assert await _post(ids, [_wire(ids["y-service"], utc_now(), success=False)]) == 202
+    await decide_committed()
     now = utc_now()
     async with worker_db() as s:
         batch = await NotificationDeliveryCoreService.claim_due(s, now, 10)
@@ -587,6 +586,7 @@ async def test_a_failed_delivery_is_retried_with_backoff_then_given_up(
     assert await _post(ids, [_wire(ids["y-service"], t0, success=False)]) == 202
     up = [_wire(ids["y-service"], t0 + timedelta(seconds=10), success=True)]
     assert await _post(ids, up) == 202
+    await decide_committed()
 
     now = utc_now()
     assert await deliver_committed(now=now) == 1
@@ -599,3 +599,96 @@ async def test_a_failed_delivery_is_retried_with_backoff_then_given_up(
 
     assert attempts == ["error"] * MAX_ATTEMPTS + ["success"]
     assert await _statuses(worker_db, ids["alert"]) == ["failed", "retrying"]
+
+
+async def _seed_many(
+    worker_db: Any, n: int, *, bucket_of: set[int] | None = None
+) -> dict[str, Any]:
+    """An approved agent with `n` checks, one alert on them all. With
+    `bucket_of`, each check's id hashes (crc32 mod 1024) into one of those
+    buckets."""
+    async with worker_db() as s:
+        agent = make_agent(approval_status="pending")
+        s.add(agent)
+        await s.flush()
+        _, key = await AgentCoreService.approve_agent(s, agent.id, actor_is_admin=True)
+        checks = []
+        for i in range(n):
+            check_id = uuid4()
+            while bucket_of is not None and _bucket(check_id) not in bucket_of:
+                check_id = uuid4()
+            checks.append(
+                make_check(id=check_id, agent_id=agent.id, display_name=f"k{i}")
+            )
+        provider = make_notification_provider()
+        made = make_alert()
+        s.add_all([*checks, provider, made])
+        await s.flush()
+        s.add_all(
+            [make_alert_check_mapping(alert_id=made.id, check_id=c.id) for c in checks]
+        )
+        s.add(
+            make_alert_notification_mapping(
+                alert_id=made.id, notification_provider_id=provider.id
+            )
+        )
+        await s.commit()
+    return {"agent": agent.id, "key": key, "checks": [c.id for c in checks]}
+
+
+def _bucket(check_id: UUID) -> int:
+    return zlib.crc32(check_id.bytes) % 1024
+
+
+async def test_an_unrelated_agents_report_is_stored_while_a_big_report_decides(
+    worker_db: Any, agent_auth: None
+) -> None:
+    """Agent A replays a backlog: 2000 failing results, one alert on its
+    checks. Agent B reports one result for its own check, whose id hashes
+    alike one of A's (so any per-bucket serialisation of reports would hold
+    B behind A). B's result is stored, and A is answered well inside the
+    agent's 30 s timeout."""
+    a = await _seed_many(worker_db, 2000)
+    b = await _seed_many(worker_db, 1, bucket_of={_bucket(c) for c in a["checks"]})
+    at = utc_now() - timedelta(seconds=30)
+
+    started = time.monotonic()
+    a_task = asyncio.create_task(
+        _post(a, [_wire(c, at, success=False) for c in a["checks"]])
+    )
+    await asyncio.sleep(1.5)
+    b_status = await _post(b, [_wire(b["checks"][0], at, success=False)])
+    a_status = await a_task
+    a_took = time.monotonic() - started
+    async with worker_db() as s:
+        b_stored = await CheckResultCRUD.list_for_check_at(s, b["checks"][0], [at])
+
+    assert (a_status, b_status, len(b_stored)) == (202, 202, 1)
+    assert a_took < 30, f"A's report answered after {a_took:.1f}s"
+
+
+async def test_operator_write_on_the_agent_is_not_held_by_a_reports_decisions(
+    worker_db: Any, agent_auth: None
+) -> None:
+    """While a 1000-result report is handled, the operator pauses (disables,
+    archives, revokes) its agent, locking the agent's row: the lock is had
+    within the pool's 5 s statement timeout."""
+    a = await _seed_many(worker_db, 1000)
+    at = utc_now() - timedelta(seconds=30)
+    a_task = asyncio.create_task(
+        _post(a, [_wire(c, at, success=False) for c in a["checks"]])
+    )
+    await asyncio.sleep(1.5)
+    locked = True
+    try:
+        async with worker_db() as s:
+            # As pause, disable, archive and revoke lock it (AgentCRUD.lock).
+            await s.execute(
+                select(Agent.id).where(Agent.id == a["agent"]).with_for_update()
+            )
+            await s.commit()
+    except DBAPIError:
+        locked = False
+
+    assert await a_task == 202
+    assert locked, "the agent's row was held past the statement timeout"

@@ -38,10 +38,10 @@ async def submit_report(
     """
     Submit a report from an agent containing multiple check results.
 
-    The results are stored, and their alerts decided, in the request's
-    transaction; each notification decided is queued in it and delivered by
-    the delivery worker once it commits, so the answer never waits on a
-    notification provider.
+    The results are stored, and those an alert evaluates queued for their
+    alert decisions, in the request's transaction; the alert decision worker
+    decides them and the delivery worker sends the notifications after it
+    commits, so the answer waits on neither a decision nor a provider.
 
     Only the agent's own key is accepted (`ReportingAgentId`), never the
     registration key. Each result is validated on its own: an invalid one is

@@ -153,6 +153,12 @@ class CheckCRUD:
         await db.flush()
 
     @staticmethod
+    async def exists(db: AsyncSession, check_id: UUID) -> bool:
+        """Whether the check exists."""
+        result = await db.execute(select(Check.id).where(Check.id == check_id))
+        return result.scalar_one_or_none() is not None
+
+    @staticmethod
     async def get_by_id(
         db: AsyncSession, check_id: UUID, *, include_script_code: bool = False
     ) -> Check | None:

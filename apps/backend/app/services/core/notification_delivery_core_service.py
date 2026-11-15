@@ -10,14 +10,20 @@ short transaction (`record`). No database lock is held while a provider is
 waited on.
 """
 
+from collections.abc import Mapping
 from datetime import datetime, timedelta
 from typing import Any
+from uuid import UUID
 
+from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.crud.alert_crud import AlertCRUD
+from app.crud.check_crud import CheckCRUD
 from app.crud.notification_log_crud import NotificationLogCRUD
 from app.models.enum_model import NotificationStatus
 from app.models.notification_log_model import NotificationLog
+from app.notifications.providers.base import NotificationContext
 from app.schemas.notification_delivery_schema import (
     ClaimedBatch,
     ClaimedDelivery,
@@ -56,35 +62,48 @@ class NotificationDeliveryCoreService:
     """Claims, delivers and records queued alert notifications."""
 
     @staticmethod
-    async def claim_due(db: AsyncSession, now: datetime, limit: int) -> ClaimedBatch:
-        """Claim up to `limit` due rows (`NotificationLogCRUD.claim_due`).
+    async def claim_due(
+        db: AsyncSession,
+        now: datetime,
+        limit: int,
+        *,
+        provider_room: Mapping[UUID, int] | None = None,
+        provider_share: int | None = None,
+    ) -> ClaimedBatch:
+        """Claim up to `limit` due rows (`NotificationLogCRUD.claim_due`), at
+        most `provider_share` (all of `limit`, by default) for one provider,
+        or `provider_room[provider]` for one the caller has rows in flight
+        for.
 
-        A row whose alert is disabled or deleted, or whose provider is
-        disabled or deleted, is recorded as suppressed, and one past its
-        provider's rate limit as rate limited, here and now; the rest are
-        marked `sending` under a lease of `CLAIM_LEASE` and returned. The
-        caller commits before delivering.
+        A row whose payload this release cannot read is failed, one that is
+        no longer to be sent (`_refusal`) is recorded as suppressed, and one
+        past its provider's rate limit as rate limited, here and now, each on
+        its own; the rest are marked `sending` under a lease of `CLAIM_LEASE`
+        and returned. The caller commits before delivering.
         """
-        rows = await NotificationLogCRUD.claim_due(db, now, limit)
+        rows = await NotificationLogCRUD.claim_due(
+            db,
+            now,
+            limit,
+            provider_room=provider_room or {},
+            provider_share=provider_share or limit,
+        )
         deliveries: list[ClaimedDelivery] = []
+        ended = 0
         for row in rows:
-            payload = row.payload
-            if payload is None:
-                refusal: tuple[NotificationStatus, str] | None = (
-                    NotificationStatus.FAILED,
-                    "Nothing to deliver",
-                )
-            else:
-                refusal = await NotificationDeliveryCoreService._refusal(db, row)
-            if payload is not None and refusal is None:
+            context, refusal = NotificationDeliveryCoreService._read(row)
+            if refusal is None:
+                refusal = await NotificationDeliveryCoreService._refusal(db, row, now)
+            if context is not None and refusal is None:
                 deliveries.append(
-                    await NotificationDeliveryCoreService._claim(db, row, payload, now)
+                    await NotificationDeliveryCoreService._claim(db, row, context, now)
                 )
                 continue
             if refusal is not None:
                 status, reason = refusal
                 NotificationDeliveryCoreService._end(row, status, reason, now)
                 await NotificationLogCRUD.save_logs(db)
+                ended += 1
                 logger.info(
                     "Notification not delivered",
                     extra={
@@ -94,13 +113,31 @@ class NotificationDeliveryCoreService:
                     },
                 )
         network = await SettingsCoreService.get_network_protection(db)
-        return ClaimedBatch(deliveries=deliveries, network=network)
+        return ClaimedBatch(deliveries=deliveries, network=network, ended=ended)
+
+    @staticmethod
+    def _read(
+        row: NotificationLog,
+    ) -> tuple[NotificationContext | None, tuple[NotificationStatus, str] | None]:
+        """The notification a row carries, or why it cannot be delivered: no
+        payload, or one this release cannot read (written by another
+        release, say), which fails that row alone."""
+        if row.payload is None:
+            return None, (NotificationStatus.FAILED, "Nothing to deliver")
+        try:
+            return notification_from_payload(row.payload), None
+        except ValidationError:
+            logger.warning(
+                "Queued notification payload cannot be read",
+                extra={"notification_log_id": str(row.id)},
+            )
+            return None, (NotificationStatus.FAILED, "Unreadable payload")
 
     @staticmethod
     async def _claim(
         db: AsyncSession,
         row: NotificationLog,
-        payload: dict[str, Any],
+        context: NotificationContext,
         now: datetime,
     ) -> ClaimedDelivery:
         """Mark a row `sending` for one more attempt, under a lease."""
@@ -114,14 +151,19 @@ class NotificationDeliveryCoreService:
             provider_id=provider.id,
             provider_type=provider.provider_type,
             provider_config=dict(provider.config),
-            context=notification_from_payload(payload),
+            context=context,
         )
 
     @staticmethod
     async def _refusal(
-        db: AsyncSession, row: NotificationLog
+        db: AsyncSession, row: NotificationLog, now: datetime
     ) -> tuple[NotificationStatus, str] | None:
-        """Why this row is not to be delivered now, or None to deliver it."""
+        """Why this row is not to be delivered now, or None to deliver it.
+
+        Read as the alert stands at delivery: a notification whose alert,
+        provider or check was disabled, deleted, taken off the alert or
+        snoozed since it was decided is suppressed.
+        """
         alert = row.alert
         if alert.deleted_at is not None or not alert.is_enabled:
             return NotificationStatus.SUPPRESSED, "Alert is disabled"
@@ -131,9 +173,36 @@ class NotificationDeliveryCoreService:
         if not provider.is_enabled:
             # Intentionally disabled — distinct from a delivery failure.
             return NotificationStatus.SUPPRESSED, "Notification provider is disabled"
+        if not await AlertCRUD.provider_enabled_on_alert(db, alert.id, provider.id):
+            return (
+                NotificationStatus.SUPPRESSED,
+                "Notification provider is not on the alert",
+            )
+        if row.check_id is not None:
+            check_refusal = await NotificationDeliveryCoreService._check_refusal(
+                db, alert.id, row.check_id, now
+            )
+            if check_refusal is not None:
+                return NotificationStatus.SUPPRESSED, check_refusal
         limited, reason = await NotificationCoreService.check_rate_limit(db, provider)
         if limited:
             return NotificationStatus.RATE_LIMITED, reason or "Rate limit exceeded"
+        return None
+
+    @staticmethod
+    async def _check_refusal(
+        db: AsyncSession, alert_id: UUID, check_id: UUID, now: datetime
+    ) -> str | None:
+        """Why a notification about this check is not to be sent for this
+        alert now: the check deleted, off the alert (or its mapping
+        disabled), or the pair snoozed. None to send it."""
+        if not await CheckCRUD.exists(db, check_id):
+            return "Check is deleted"
+        mapping = await AlertCRUD.get_check_mapping(db, alert_id, check_id)
+        if mapping is None or not mapping.is_enabled:
+            return "Check is not on the alert"
+        if mapping.snoozed_until is not None and mapping.snoozed_until > now:
+            return "Alert is snoozed for the check"
         return None
 
     @staticmethod

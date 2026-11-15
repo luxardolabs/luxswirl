@@ -36,7 +36,7 @@ from app.schemas.check_result_schema import (
 from app.schemas.check_schema import CheckStatusInfo
 from app.services.core.agent_assignment_core_service import AgentAssignmentCoreService
 from app.services.core.agent_core_service import AgentCoreService
-from app.services.core.alert_evaluation_core_service import AlertEvaluationCoreService
+from app.services.core.alert_decision_core_service import AlertDecisionCoreService
 from app.services.core.metrics_collector_core_service import MetricsCollectorCoreService
 from app.services.core.settings_core_service import SettingsCoreService
 from app.shared.logger import get_logger
@@ -177,11 +177,11 @@ class CheckResultCoreService:
                 stored the agent is judged again on its row as stored now
                 (`AgentCoreService.require_still_admitted`).
 
-        Every alert notification the stored results call for is decided in
-        this transaction, after the insert, and queued as a `pending`
-        notification row (`AlertEvaluationCoreService.decide_report_alerts`):
-        nothing is delivered before the caller commits, and the commit is all
-        the agent's answer waits on.
+        No alert is decided here: the key of each stored result an enabled
+        alert evaluates is queued in this transaction
+        (`AlertDecisionCoreService.queue_report_results`), and the alert
+        decision worker decides it once this commits. The commit is all the
+        agent's answer waits on.
 
         Returns:
             Processing summary
@@ -365,8 +365,8 @@ class CheckResultCoreService:
         # Bulk insert. ON CONFLICT DO NOTHING on the (check_id, timestamp) unique
         # index makes agent retries no-ops at the DB level — no catch, no rollback,
         # get_db() owns the commit. Returns only the rows actually inserted; those
-        # are the ones the metrics are updated for (alerts are decided for every
-        # kept row, below, and de-duplicate themselves). (TimescaleDB >= 2.11 inserts into compressed
+        # are the ones the metrics are updated for (every kept row is queued for its
+        # alert decisions, below). (TimescaleDB >= 2.11 inserts into compressed
         # chunks transparently, so late data no longer rejects.)
         # The checks the rows reference, then the agent, locked as the insert's
         # own foreign key checks lock them and in the order an agent delete
@@ -430,14 +430,13 @@ class CheckResultCoreService:
             except Exception:
                 logger.exception("Error updating Prometheus metrics")
 
-        # The alerts are decided here, in this transaction: a decision writes a
-        # notification row and delivers nothing (the delivery worker sends it
-        # once this commits), so the agent's row and the checks are never held
-        # while a provider is waited on. A result already stored (the agent
-        # sending again a report the server stored but never answered) is
-        # decided too: its alerts may never have been, and deciding them again
-        # queues nothing twice (`_already_judged`).
-        await AlertEvaluationCoreService.decide_report_alerts(
+        # The results' alerts are queued for the alert decision worker, never
+        # decided here: the report holds the agent's row and its checks only
+        # for its reads and inserts. A result already stored (the agent sending
+        # again a report the server stored but never answered) is queued too:
+        # its alerts may never have been decided, and the check's decision
+        # cursor drops it if they were.
+        await AlertDecisionCoreService.queue_report_results(
             db, [(row["check_id"], row["timestamp"]) for row in kept_rows]
         )
 

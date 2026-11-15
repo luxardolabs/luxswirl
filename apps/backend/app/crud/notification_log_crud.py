@@ -2,12 +2,25 @@
 NotificationLog CRUD - database queries for notification log operations.
 """
 
-from collections.abc import Sequence
+from collections.abc import Mapping
 from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import Row, Select, and_, delete, exists, func, or_, select, update
+from sqlalchemy import (
+    ColumnElement,
+    Row,
+    Select,
+    and_,
+    case,
+    delete,
+    exists,
+    func,
+    literal,
+    or_,
+    select,
+    update,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
@@ -45,7 +58,12 @@ class NotificationLogCRUD:
 
     @staticmethod
     async def claim_due(
-        db: AsyncSession, now: datetime, limit: int
+        db: AsyncSession,
+        now: datetime,
+        limit: int,
+        *,
+        provider_room: Mapping[UUID, int],
+        provider_share: int,
     ) -> list[NotificationLog]:
         """Rows due for delivery, locked FOR UPDATE SKIP LOCKED, in decision order.
 
@@ -54,7 +72,10 @@ class NotificationLogCRUD:
         an earlier-decided row of the same alert, subject (check or agent)
         and provider still awaits delivery, so one subject's notifications
         reach a provider in the order they were decided: a recovery never
-        overtakes its outage.
+        overtakes its outage. At most `provider_share` rows are taken for one
+        provider, or `provider_room[provider]` for a provider the caller
+        already has rows in flight for, so a provider whose every attempt
+        waits out its timeout never fills the caller's slots.
         """
         earlier = aliased(NotificationLog)
         awaiting = [
@@ -83,9 +104,33 @@ class NotificationLogCRUD:
                 NotificationLog.lease_expires_at <= now,
             ),
         )
+        ranked = (
+            select(
+                NotificationLog.id,
+                NotificationLog.notification_provider_id,
+                func.row_number()
+                .over(
+                    partition_by=NotificationLog.notification_provider_id,
+                    order_by=NotificationLog.decision_seq,
+                )
+                .label("rank"),
+            )
+            .where(due, ~held_back)
+            .subquery()
+        )
+        room: ColumnElement[int] = (
+            case(
+                dict(provider_room),
+                value=ranked.c.notification_provider_id,
+                else_=provider_share,
+            )
+            if provider_room
+            else literal(provider_share)
+        )
+        eligible = select(ranked.c.id).where(ranked.c.rank <= room)
         result = await db.execute(
             select(NotificationLog)
-            .where(due, ~held_back)
+            .where(NotificationLog.id.in_(eligible))
             .order_by(NotificationLog.decision_seq)
             .limit(limit)
             .with_for_update(skip_locked=True, of=NotificationLog)
@@ -136,19 +181,28 @@ class NotificationLogCRUD:
         return result.scalar_one_or_none() is not None
 
     @staticmethod
-    async def count_for_provider_since(
-        db: AsyncSession, provider_id: UUID, since: datetime, statuses: Sequence[str]
+    async def count_delivered_for_provider_since(
+        db: AsyncSession, provider_id: UUID, since: datetime
     ) -> int:
-        """Count notification logs for a provider sent since a timestamp with given statuses."""
+        """A provider's deliveries that count against its rate limit: those
+        sent or rate limited at `since` or later, by when their delivery
+        ended (a row from before delivery was recorded, by its decision), and
+        every one being sent now."""
+        ended_at = func.coalesce(NotificationLog.delivered_at, NotificationLog.sent_at)
         result = await db.execute(
             select(func.count())
             .select_from(NotificationLog)
             .where(
-                and_(
-                    NotificationLog.notification_provider_id == provider_id,
-                    NotificationLog.sent_at >= since,
-                    NotificationLog.status.in_(statuses),
-                )
+                NotificationLog.notification_provider_id == provider_id,
+                or_(
+                    NotificationLog.status == NotificationStatus.SENDING,
+                    and_(
+                        NotificationLog.status.in_(
+                            [NotificationStatus.SENT, NotificationStatus.RATE_LIMITED]
+                        ),
+                        ended_at >= since,
+                    ),
+                ),
             )
         )
         return result.scalar() or 0
