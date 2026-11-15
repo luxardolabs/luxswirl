@@ -46,6 +46,15 @@ RECOVERY_NOT_ANNOUNCED = "Recovered; recovery not announced"
 
 logger = get_logger("luxswirl.services.alert")
 
+# The triggers judged across the agents that run the check.
+VIEW_TRIGGER_TYPES = frozenset(
+    {
+        AlertTriggerType.STATUS_CHANGE,
+        AlertTriggerType.REPEATED_FAILURE,
+        AlertTriggerType.THRESHOLD,
+    }
+)
+
 SILENCE_TRIGGER_TYPES = frozenset(
     {AlertTriggerType.NO_DATA, AlertTriggerType.AGENT_OFFLINE}
 )
@@ -92,9 +101,14 @@ class AlertEvaluationCoreService:
         # Each alert in its own savepoint: one that fails (a stored trigger_config
         # of the wrong type, say) is logged and rolled back, and the next alert
         # on the check is still evaluated.
-        # The check at this result, across the agents that run it: what every
-        # alert's state, recovery and clear state are judged by.
-        view = await CheckOutageCoreService.view(db, check, check_result)
+        # The check at this result, across the agents that run it: what the
+        # status and threshold alerts' state, recovery and clear state are
+        # judged by. Read only when such an alert is on the check.
+        view = (
+            await CheckOutageCoreService.view(db, check, check_result)
+            if any(alert.trigger_type in VIEW_TRIGGER_TYPES for alert in all_alerts)
+            else CheckView.of(check_result)
+        )
         for alert in all_alerts:
             if alert.trigger_type in SILENCE_TRIGGER_TYPES:
                 continue
@@ -567,8 +581,17 @@ class AlertEvaluationCoreService:
             )
             return
 
+        # A latency breach tells of the result that breaches it most, which
+        # may be another agent's than the result that fired it.
+        subject = check_result
+        if alert.trigger_type == AlertTriggerType.THRESHOLD and not is_recovery:
+            subject = (view or CheckView.of(check_result)).worst(
+                alert.trigger_config
+            ) or check_result
+            if subject is not check_result:
+                await AlertCRUD.load_result_check_and_agent(db, subject)
         context = AlertEvaluationCoreService._build_notification_context(
-            alert, check, check_result, is_recovery=is_recovery
+            alert, check, subject, is_recovery=is_recovery
         )
         # State key recorded on every NotificationLog row so dedup can detect
         # transitions. Computed once per fire.

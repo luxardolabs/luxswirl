@@ -7,7 +7,6 @@ from datetime import datetime, timedelta
 from uuid import UUID
 
 from sqlalchemy import and_, case, delete, func, literal, or_, select, update
-from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -271,29 +270,29 @@ class AlertCRUD:
         check_id: UUID,
         agent_ids: Collection[UUID],
         *,
-        since: datetime,
         at_or_before: datetime,
         with_latency: bool = False,
     ) -> list[CheckResult]:
-        """Each of `agent_ids`' newest result for the check from `since` up to
+        """Each of `agent_ids`' newest result for the check up to
         `at_or_before` (with `with_latency`, its newest that has a latency); an
-        agent with none in that window is left out."""
-        if not agent_ids:
-            return []
-        query = select(CheckResult).where(
-            CheckResult.check_id == check_id,
-            CheckResult.agent_id.in_(list(agent_ids)),
-            CheckResult.timestamp >= since,
-            CheckResult.timestamp <= at_or_before,
-        )
-        if with_latency:
-            query = query.where(CheckResult.latency_ms.is_not(None))
-        result = await db.execute(
-            query.order_by(CheckResult.agent_id, CheckResult.timestamp.desc()).ext(
-                distinct_on(CheckResult.agent_id)
+        agent that never reported it is left out. One read per agent, newest
+        first on the agent's own results, so an agent silent for long is
+        found as fast as one that just reported."""
+        latest: list[CheckResult] = []
+        for agent_id in agent_ids:
+            query = select(CheckResult).where(
+                CheckResult.agent_id == agent_id,
+                CheckResult.check_id == check_id,
+                CheckResult.timestamp <= at_or_before,
             )
-        )
-        return list(result.scalars().all())
+            if with_latency:
+                query = query.where(CheckResult.latency_ms.is_not(None))
+            found = (
+                await db.execute(query.order_by(CheckResult.timestamp.desc()).limit(1))
+            ).scalar_one_or_none()
+            if found is not None:
+                latest.append(found)
+        return latest
 
     @staticmethod
     async def checks_with_result_alerts(

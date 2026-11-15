@@ -46,7 +46,12 @@ def _run(connection: Any) -> None:
 
 
 async def _pair(
-    db: AsyncSession, last_key: str, *, success: bool, latency: float | None
+    db: AsyncSession,
+    last_key: str,
+    *,
+    success: bool,
+    latency: float | None,
+    notify_on_recovery: bool = False,
 ) -> Any:
     """An alert+check whose last row has `last_key`, and the check's newest
     result."""
@@ -54,7 +59,7 @@ async def _pair(
     db.add(agent)
     await db.flush()
     check = make_check(agent_id=agent.id)
-    alert = make_alert()
+    alert = make_alert(notify_on_recovery=notify_on_recovery)
     provider = make_notification_provider()
     db.add_all([check, alert, provider])
     await db.flush()
@@ -121,3 +126,16 @@ async def test_an_ended_outage_is_recorded_once(
     await db.run_sync(lambda s: _run(s.connection()))
 
     assert await _keys(db, check_id) == [last_key] + ([added] if added else [])
+
+
+async def test_an_alert_that_notifies_on_recovery_is_left_to_its_results(
+    db: AsyncSession,
+) -> None:
+    """Its decisions announce the end; a row here would swallow that recovery."""
+    check_id = await _pair(
+        db, "status:down", success=True, latency=10.0, notify_on_recovery=True
+    )
+
+    await db.run_sync(lambda s: _run(s.connection()))
+
+    assert await _keys(db, check_id) == ["status:down"]

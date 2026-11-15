@@ -6,14 +6,13 @@ threshold is breached while any such agent's latest latency meets it, and clear
 once every one is on the safe side; a result with no latency (a timeout) is
 passed over, so it neither starts nor ends a breach.
 
-An agent's latest result counts while it is recent (`lookback`): an agent that
-stopped reporting does not hold the check's state, the silence alerts tell of
-it. A check one agent runs is judged by that agent's results, as before.
+Each running agent's latest result counts however old it is: an agent that
+stopped reporting keeps the check as it last saw it (the silence alerts tell of
+the silence). A check one agent runs is judged by that agent's results.
 """
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import timedelta
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -23,11 +22,6 @@ from app.models.check_model import Check
 from app.models.check_result_model import CheckResult
 from app.services.core.agent_assignment_core_service import AgentAssignmentCoreService
 
-# How far back an agent's latest result still speaks for the check, in check
-# intervals, and at least this long.
-LOOKBACK_INTERVALS = 3
-LOOKBACK_MINIMUM = timedelta(minutes=5)
-DEFAULT_INTERVAL_SECONDS = 60
 THRESHOLD_OPERATORS = (">", ">=", "<", "<=", "==")
 
 
@@ -99,6 +93,21 @@ class CheckView:
             latency_breaches(result.latency_ms, config) for result in self.latencies
         )
 
+    def worst(self, config: dict[str, Any] | None) -> CheckResult | None:
+        """The latest result whose latency breaches the threshold most, or
+        None while none does: what a breach notification tells of."""
+        breaching = [
+            result
+            for result in self.latencies
+            if latency_breaches(result.latency_ms, config)
+        ]
+        operator = (config or {}).get("operator", ">")
+        if not breaching:
+            return None
+        if operator in ("<", "<="):
+            return min(breaching, key=lambda r: float(r.latency_ms or 0))
+        return max(breaching, key=lambda r: float(r.latency_ms or 0))
+
     def clear(self, config: dict[str, Any] | None) -> bool:
         """Whether every running agent's latest latency is on the safe side."""
         return (
@@ -112,17 +121,18 @@ class CheckOutageCoreService:
     """Reads a check's state across the agents that run it."""
 
     @staticmethod
-    def lookback(check: Check) -> timedelta:
-        """How long an agent's latest result still speaks for `check`."""
-        interval = timedelta(seconds=check.interval_seconds or DEFAULT_INTERVAL_SECONDS)
-        return max(interval * LOOKBACK_INTERVALS, LOOKBACK_MINIMUM)
-
-    @staticmethod
     async def view(db: AsyncSession, check: Check, result: CheckResult) -> CheckView:
         """The check at `result`: the latest results, up to it, of the agents
-        that run the check now. `result` alone when none of them has one (its
-        agent no longer runs the check, say, and nothing else reported)."""
-        agents = await AgentAssignmentCoreService.agents_running(db, check)
+        that run the check now, and of `result`'s own agent (a late batch from
+        an agent the check has since moved off still speaks for itself)."""
+        agents = list(
+            dict.fromkeys(
+                [
+                    *await AgentAssignmentCoreService.agents_running(db, check),
+                    result.agent_id,
+                ]
+            )
+        )
         if agents == [result.agent_id]:
             # One agent: its own newest latency may predate this result.
             latencies = (
@@ -132,24 +142,15 @@ class CheckOutageCoreService:
                     db,
                     check.id,
                     agents,
-                    since=result.timestamp - CheckOutageCoreService.lookback(check),
                     at_or_before=result.timestamp,
                     with_latency=True,
                 )
             )
             return CheckView(results=[result], latencies=latencies)
-        since = result.timestamp - CheckOutageCoreService.lookback(check)
         results = await AlertCRUD.latest_results_by_agent(
-            db, check.id, agents, since=since, at_or_before=result.timestamp
+            db, check.id, agents, at_or_before=result.timestamp
         )
-        if not results:
-            return CheckView.of(result)
         latencies = await AlertCRUD.latest_results_by_agent(
-            db,
-            check.id,
-            agents,
-            since=since,
-            at_or_before=result.timestamp,
-            with_latency=True,
+            db, check.id, agents, at_or_before=result.timestamp, with_latency=True
         )
-        return CheckView(results=results, latencies=latencies)
+        return CheckView(results=results or [result], latencies=latencies)

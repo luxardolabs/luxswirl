@@ -4,9 +4,10 @@ An alert de-duplicates its notifications against its last row for a check, so
 the next outage is announced only when that row says the check came back up.
 Every alert that does not notify on recovery now records the end of an outage
 it announced as a `suppressed` row with the clear state's key. Rows stored
-before have none: an alert+check whose last row (a parent's outage aside) is an
-outage or a latency breach, while the check's newest stored result has ended
-it, gets one now, so the check's next outage is announced.
+before have none: an alert that does not notify on recovery, on a check one
+agent runs, whose last row (a parent's outage aside) is an outage or a latency
+breach while the check's newest stored result has ended it, gets one now, so
+the check's next outage is announced.
 
 The check's newest result is judged as the alert judges a check one agent runs:
 a success ends a status outage, and the newest result with a latency on the
@@ -28,16 +29,25 @@ depends_on = None
 
 NOTE = "Recovered; recovery not announced"
 
-# The alert's last row for each check, a parent's outage over it aside.
+# The alert's last row for each check, a parent's outage over it aside: for an
+# alert that does not notify on recovery (one that does announces the end, from
+# the results it decides), a check one agent runs (a replicated or distributed
+# check is judged across its agents, which its first all-clear result does), and
+# a check with no result still queued for its alerts (the decision of those is
+# the alert's).
 _LAST = """
 WITH last AS (
-    SELECT DISTINCT ON (alert_id, check_id)
-        alert_id, check_id, notification_provider_id, notification_hash
-    FROM notification_logs
-    WHERE check_id IS NOT NULL
-      AND notification_hash IS NOT NULL
-      AND notification_hash <> 'parent_down'
-    ORDER BY alert_id, check_id, sent_at DESC, decision_seq DESC
+    SELECT DISTINCT ON (n.alert_id, n.check_id)
+        n.alert_id, n.check_id, n.notification_provider_id, n.notification_hash
+    FROM notification_logs n
+    JOIN alerts a ON a.id = n.alert_id AND a.notify_on_recovery IS FALSE
+    JOIN checks c ON c.id = n.check_id AND c.assignment_mode = 'manual'
+    WHERE n.notification_hash IS NOT NULL
+      AND n.notification_hash <> 'parent_down'
+      AND NOT EXISTS (
+          SELECT 1 FROM alert_decision_queue q WHERE q.check_id = n.check_id
+      )
+    ORDER BY n.alert_id, n.check_id, n.sent_at DESC, n.decision_seq DESC
 )
 """
 
