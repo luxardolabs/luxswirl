@@ -2,6 +2,7 @@
 Auth Service - handles authentication, session management, and security.
 """
 
+import asyncio
 import hashlib
 import secrets
 from datetime import timedelta
@@ -69,7 +70,8 @@ class AuthCoreService:
         db: AsyncSession, password: str
     ) -> tuple[bool, str]:
         """
-        Validate password against complexity rules from database settings.
+        Validate a password against the stored password policy
+        (`SettingsCoreService.get_password_policy`).
 
         Args:
             db: Database session
@@ -85,11 +87,9 @@ class AuthCoreService:
             >>> if not valid:
             >>>     raise ValueError(error)
         """
-        # Get security settings from database
-        security_settings = await SettingsCoreService.get_security_settings(db)
+        policy = await SettingsCoreService.get_password_policy(db)
 
-        # Check minimum length
-        min_length = security_settings.get("min_password_length", 8)
+        min_length = policy.min_password_length
         if len(password) < min_length:
             return False, f"Password must be at least {min_length} characters long"
 
@@ -108,26 +108,16 @@ class AuthCoreService:
                 "(fewer characters if it uses accented or non-Latin letters)",
             )
 
-        # Check uppercase requirement
-        if security_settings.get("require_uppercase", True) and not any(
-            c.isupper() for c in password
-        ):
+        if policy.require_uppercase and not any(c.isupper() for c in password):
             return False, "Password must contain at least one uppercase letter"
 
-        # Check lowercase requirement
-        if security_settings.get("require_lowercase", True) and not any(
-            c.islower() for c in password
-        ):
+        if policy.require_lowercase and not any(c.islower() for c in password):
             return False, "Password must contain at least one lowercase letter"
 
-        # Check number requirement
-        if security_settings.get("require_number", True) and not any(
-            c.isdigit() for c in password
-        ):
+        if policy.require_number and not any(c.isdigit() for c in password):
             return False, "Password must contain at least one digit"
 
-        # Check special character requirement
-        if security_settings.get("require_special_char", False):
+        if policy.require_special_char:
             special_chars = "!@#$%^&*()_+-=[]{}|;:,.<>?"
             if not any(c in special_chars for c in password):
                 return (
@@ -135,10 +125,7 @@ class AuthCoreService:
                     f"Password must contain at least one special character ({special_chars})",
                 )
 
-        # Check against common passwords list
-        if security_settings.get("check_common_passwords", True) and is_common_password(
-            password
-        ):
+        if policy.check_common_passwords and is_common_password(password):
             return False, "Password is too common. Please choose a stronger password"
 
         return True, ""
@@ -172,6 +159,23 @@ class AuthCoreService:
             True if password matches hash
         """
         return bcrypt_matches(password, password_hash)
+
+    @staticmethod
+    async def hash_password_threaded(password: str) -> str:
+        """`hash_password` on a worker thread.
+
+        A bcrypt hash takes a fifth of a second, and the server is one process:
+        on the event loop every other request (agent reports, heartbeats, the UI)
+        would wait it out. bcrypt releases the GIL, so the thread runs alongside.
+        """
+        return await asyncio.to_thread(AuthCoreService.hash_password, password)
+
+    @staticmethod
+    async def verify_password_threaded(password: str, password_hash: str) -> bool:
+        """`verify_password` on a worker thread (see `hash_password_threaded`)."""
+        return await asyncio.to_thread(
+            AuthCoreService.verify_password, password, password_hash
+        )
 
     @staticmethod
     def generate_session_token() -> str:
@@ -224,7 +228,7 @@ class AuthCoreService:
             if not _lock_wait_ran_out(exc):
                 raise
             # Security: the refusal costs a bcrypt check like any other answer.
-            self.verify_password(password, self._FAKE_PASSWORD_HASH)
+            await self.verify_password_threaded(password, self._FAKE_PASSWORD_HASH)
             logger.warning(
                 "Login attempt refused: sign-ins for the username are queued",
                 extra={
@@ -329,7 +333,7 @@ class AuthCoreService:
         if not user:
             # Security: Always run bcrypt verification even for non-existent users
             # to maintain constant timing and prevent username enumeration
-            self.verify_password(password, self._FAKE_PASSWORD_HASH)
+            await self.verify_password_threaded(password, self._FAKE_PASSWORD_HASH)
             logger.warning(
                 "Login attempt for non-existent user",
                 extra={
@@ -344,7 +348,7 @@ class AuthCoreService:
         # Check if account is locked
         if user.is_locked:
             # Security: Run bcrypt to maintain constant timing
-            self.verify_password(password, self._FAKE_PASSWORD_HASH)
+            await self.verify_password_threaded(password, self._FAKE_PASSWORD_HASH)
             logger.warning(
                 "Login attempt for locked account",
                 extra={
@@ -360,7 +364,7 @@ class AuthCoreService:
         # Check if account is active
         if not user.is_active:
             # Security: Run bcrypt to maintain constant timing
-            self.verify_password(password, self._FAKE_PASSWORD_HASH)
+            await self.verify_password_threaded(password, self._FAKE_PASSWORD_HASH)
             logger.warning(
                 "Login attempt for inactive account",
                 extra={
@@ -373,7 +377,7 @@ class AuthCoreService:
             return None
 
         # Verify password
-        if not self.verify_password(password, user.password_hash):
+        if not await self.verify_password_threaded(password, user.password_hash):
             max_attempts = await self._count_failure(
                 db,
                 user,
@@ -630,7 +634,9 @@ class AuthCoreService:
             if not _lock_wait_ran_out(exc):
                 raise
             # Security: the refusal costs a bcrypt check like any other answer.
-            self.verify_password(current_password, self._FAKE_PASSWORD_HASH)
+            await self.verify_password_threaded(
+                current_password, self._FAKE_PASSWORD_HASH
+            )
             logger.warning(
                 "Password change refused: sign-ins for the account are queued",
                 extra={"event": "auth.password_change.busy", "user_id": str(user_id)},
@@ -652,7 +658,9 @@ class AuthCoreService:
         # A locked or inactive account is refused as a wrong password is, after
         # one bcrypt check, as sign-in refuses it: the answer says nothing more.
         if user.is_locked or not user.is_active:
-            self.verify_password(current_password, self._FAKE_PASSWORD_HASH)
+            await self.verify_password_threaded(
+                current_password, self._FAKE_PASSWORD_HASH
+            )
             logger.warning(
                 "Password change refused for locked or inactive account",
                 extra={
@@ -665,7 +673,9 @@ class AuthCoreService:
             )
             raise ValueError("Current password is incorrect")
 
-        if not self.verify_password(current_password, user.password_hash):
+        if not await self.verify_password_threaded(
+            current_password, user.password_hash
+        ):
             security_settings = await SettingsCoreService.get_security_settings(db)
             max_attempts = await self._count_failure(db, user, security_settings)
             logger.warning(
@@ -690,7 +700,7 @@ class AuthCoreService:
             raise ValueError(error_message)
 
         # Hash new password
-        user.password_hash = self.hash_password(new_password)
+        user.password_hash = await self.hash_password_threaded(new_password)
         user.password_changed_at = utc_now()
         user.must_change_password = False
 
@@ -752,7 +762,7 @@ class AuthCoreService:
         if user is None:
             raise UserNotFoundException(user_id)
 
-        user.password_hash = self.hash_password(new_password)
+        user.password_hash = await self.hash_password_threaded(new_password)
         user.password_changed_at = utc_now()
         user.must_change_password = force_change
         user.failed_login_attempts = 0

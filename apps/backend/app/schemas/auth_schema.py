@@ -5,7 +5,7 @@ Authentication schemas - Pydantic models for auth requests/responses.
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.core.datetime_utils import utc_now
 from app.models.enum_model import UserRole
@@ -67,26 +67,14 @@ class ChangePasswordRequest(BaseModel):
     current_password: StorableText = Field(
         ..., min_length=1, description="Current password"
     )
+    # The password policy (Settings > Security) is applied by the core service
+    # that changes the password, from the stored settings, not here.
     new_password: StorableText = Field(
         ...,
-        min_length=8,
+        min_length=1,
         max_length=100,
-        description="New password (min 8 characters)",
+        description="New password (the password policy applies)",
     )
-
-    @field_validator("new_password")
-    @classmethod
-    def validate_password_strength(cls, v: str) -> str:
-        """Validate password meets minimum strength requirements."""
-        if len(v) < 8:
-            raise ValueError("Password must be at least 8 characters long")
-        if not any(c.isupper() for c in v):
-            raise ValueError("Password must contain at least one uppercase letter")
-        if not any(c.islower() for c in v):
-            raise ValueError("Password must contain at least one lowercase letter")
-        if not any(c.isdigit() for c in v):
-            raise ValueError("Password must contain at least one digit")
-        return v
 
     model_config = ConfigDict(
         json_schema_extra={

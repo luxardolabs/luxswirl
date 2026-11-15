@@ -52,7 +52,8 @@ class AdminPasswordReset(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    new_password: StorableText = Field(..., min_length=8, max_length=100)
+    # The password policy (Settings > Security) is applied by the reset itself.
+    new_password: StorableText = Field(..., min_length=1, max_length=100)
     must_change: bool = Field(
         True, description="The user must change it at next sign-in"
     )

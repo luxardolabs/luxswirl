@@ -383,6 +383,8 @@ New checks inherit these; existing checks are unchanged and users can override p
 - **Require Special Character** (`security.require_special_char`, bool) — Default **false**.
 - **Check Against Common Passwords** (`security.check_common_passwords`, bool) — Default **true**.
 
+These rules hold every password set by any path: the first admin at `/setup` (which also needs at least 12 characters), a user an admin creates or resets (web or admin API), and a change of one's own password. A rule turned off is not enforced; a change applies to the next password set.
+
 #### Network Protection (SSRF)
 
 - **Block Cloud Metadata Endpoints** (`security.block_cloud_metadata`, bool) — Default **true**. Blocks checks targeting cloud metadata / link-local addresses (169.254.x.x, fe80::/10, AWS's fd00:ec2::254, Alibaba Cloud's 100.100.100.200, Oracle Cloud's 192.0.0.192, Azure's 168.63.129.16, and the IPv6 metadata servers fd20:ce::254 (Google) and fd00:a9fe:a9fe::1 (Akamai / Linode)), and the IPv6 forms that carry them. Webhook and Home Assistant notifications refuse this range whatever the setting.

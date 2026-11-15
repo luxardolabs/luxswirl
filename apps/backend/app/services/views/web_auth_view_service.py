@@ -13,6 +13,7 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.core.exceptions import value_error_message
 from app.schemas.auth_schema import AuthedUser, ChangePasswordRequest, CurrentUserDTO
 from app.services.core.auth_core_service import AuthCoreService
 from app.services.core.settings_core_service import SettingsCoreService
@@ -120,8 +121,8 @@ class WebAuthViewService:
         """
         Change user password.
 
-        The form values go through ChangePasswordRequest (its strength rules)
-        and then the core service (the configured complexity policy).
+        The form values go through ChangePasswordRequest (their shape) and then
+        the core service (the stored password policy).
 
         Args:
             db: Database session
@@ -143,8 +144,10 @@ class WebAuthViewService:
                 new_password=request.new_password,
             )
             return True, None
+        # A schema refusal is shown as field and reason, never pydantic's own
+        # text, which quotes the typed password.
         except ValueError as e:
-            return False, str(e)
+            return False, value_error_message(e)
 
     async def get_user_sessions(
         self, db: AsyncSession, user: AuthedUser

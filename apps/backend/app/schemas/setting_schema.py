@@ -72,6 +72,17 @@ class NetworkProtection(BaseModel):
     block_private_networks: bool
 
 
+class PasswordPolicy(BaseModel):
+    """The password rules (Settings > Security > Password Complexity)."""
+
+    min_password_length: int
+    require_uppercase: bool
+    require_lowercase: bool
+    require_number: bool
+    require_special_char: bool
+    check_common_passwords: bool
+
+
 class CheckDefaults(BaseModel):
     """Schema for check defaults bundle."""
 

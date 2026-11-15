@@ -24,6 +24,7 @@ from app.schemas.setting_schema import (
     AlertDefaults,
     CheckDefaults,
     NetworkProtection,
+    PasswordPolicy,
     SettingResponse,
     SettingScalar,
 )
@@ -44,6 +45,9 @@ _DISPLAY_KEYS = {
     "general.date_format": "date_format",
     "general.time_format": "time_format",
 }
+
+# Each default setting's value, by key.
+_DEFAULT_VALUES = {entry["key"]: entry["value"] for entry in DEFAULT_SETTINGS}
 
 # The route limit each rate-limit setting sets, by its name in `RateLimits`.
 _RATE_LIMIT_KEYS = {
@@ -553,6 +557,22 @@ class SettingsCoreService:
             block_private_networks=await SettingsCoreService.get_setting(
                 db, "security.block_private_networks", False
             ),
+        )
+
+    @staticmethod
+    async def get_password_policy(db: AsyncSession) -> PasswordPolicy:
+        """The password rules every path that sets a password holds it to.
+
+        Each rule is its `security.<field>` setting, or that setting's default
+        (`default_settings.py`) while none is stored.
+        """
+        return PasswordPolicy.model_validate(
+            {
+                name: await SettingsCoreService.get_setting(
+                    db, f"security.{name}", _DEFAULT_VALUES[f"security.{name}"]
+                )
+                for name in PasswordPolicy.model_fields
+            }
         )
 
     @staticmethod

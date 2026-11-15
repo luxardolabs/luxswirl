@@ -8,7 +8,11 @@ from __future__ import annotations
 from uuid import uuid4
 
 import pytest
-from app.core.exceptions import DuplicateResourceException, UserNotFoundException
+from app.core.exceptions import (
+    DuplicateResourceException,
+    UserNotFoundException,
+    ValidationException,
+)
 from app.crud.user_crud import UserCRUD
 from app.schemas.user_schema import UserCreate, UserUpdate
 from app.services.core.user_core_service import UserCoreService
@@ -73,7 +77,7 @@ class TestCreateUser:
         await db.flush()
 
     async def test_weak_password_rejected(self, db: AsyncSession, svc):
-        with pytest.raises(ValueError):
+        with pytest.raises(ValidationException, match="at least 8 characters"):
             await svc.create_user(
                 db,
                 _create_data(password="short"),

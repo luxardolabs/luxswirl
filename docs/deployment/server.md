@@ -557,7 +557,7 @@ docker exec luxswirl_timescaledb psql -U luxswirl luxswirl -c "
 
 1. Log in, then open **Profile** (top right)
 1. Click **Change Password**
-1. Enter your current password and a new one (min 8 characters: at least one uppercase, one lowercase, and one digit)
+1. Enter your current password and a new one that meets the password policy (by default at least 8 characters with an uppercase letter, a lowercase letter and a digit; an admin sets it under **Settings → System Defaults → Security → Password Complexity**)
 1. Save
 
 ### Create Additional Users

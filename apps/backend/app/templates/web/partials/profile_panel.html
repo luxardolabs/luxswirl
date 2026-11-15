@@ -82,14 +82,14 @@
                 <div class="grid grid-cols-2 gap-3">
                     <div>
                         <label class="label text-sm" for="new_password">New Password <span class="text-red-400">*</span></label>
-                        {{ input(name="new_password", type="password", placeholder="••••••••", id="new_password", minlength="8", required=true, class="input font-mono") }}
+                        {{ input(name="new_password", type="password", placeholder="••••••••", id="new_password", required=true, class="input font-mono") }}
                     </div>
                     <div>
                         <label class="label text-sm" for="confirm_password">Confirm <span class="text-red-400">*</span></label>
-                        {{ input(name="confirm_password", type="password", placeholder="••••••••", id="confirm_password", minlength="8", required=true, class="input font-mono") }}
+                        {{ input(name="confirm_password", type="password", placeholder="••••••••", id="confirm_password", required=true, class="input font-mono") }}
                     </div>
                 </div>
-                <p class="text-xs text-dark-text-muted -mt-2">Min 8 characters, must include uppercase, lowercase, and digit</p>
+                <p class="text-xs text-dark-text-muted -mt-2">The password policy an admin sets in Settings applies; a refusal names the rule it misses</p>
 
 
                 <!-- Submit Button -->

@@ -2,7 +2,9 @@
 Registration Key service - business logic for shared registration tokens.
 """
 
+import asyncio
 import secrets
+from collections.abc import Sequence
 from uuid import UUID
 
 import bcrypt
@@ -75,6 +77,18 @@ class RegistrationKeyCoreService:
             return False
 
     @staticmethod
+    def _first_match(key: str, key_hashes: Sequence[str]) -> int | None:
+        """The index of the first hash `key` matches, or None (blocking: bcrypt)."""
+        return next(
+            (
+                index
+                for index, key_hash in enumerate(key_hashes)
+                if RegistrationKeyCoreService.verify_key(key, key_hash)
+            ),
+            None,
+        )
+
+    @staticmethod
     async def create_key(
         db: AsyncSession,
         data: RegistrationKeyCreate,
@@ -95,8 +109,10 @@ class RegistrationKeyCoreService:
         # Generate key
         plaintext_key = RegistrationKeyCoreService.generate_key()
 
-        # Hash key
-        key_hash = RegistrationKeyCoreService.hash_key(plaintext_key)
+        # Hashed on a worker thread: on the event loop, bcrypt stalls every request.
+        key_hash = await asyncio.to_thread(
+            RegistrationKeyCoreService.hash_key, plaintext_key
+        )
 
         # Create model
         key = RegistrationKey(
@@ -253,15 +269,15 @@ class RegistrationKeyCoreService:
         """
         # bcrypt hashes are salted, so the key cannot be looked up by its hash:
         # each active key is checked in memory, and the first match is used.
+        # The checks run on a worker thread: an anonymous registration costs one
+        # bcrypt check per active key, which on the event loop would stall every
+        # other request for as long.
         active_keys = await RegistrationKeyCRUD.list_active(db)
-        match = next(
-            (
-                key
-                for key in active_keys
-                if RegistrationKeyCoreService.verify_key(plaintext_key, key.key_hash)
-            ),
-            None,
+        hashes = [key.key_hash for key in active_keys]
+        found = await asyncio.to_thread(
+            RegistrationKeyCoreService._first_match, plaintext_key, hashes
         )
+        match = active_keys[found] if found is not None else None
         if match is None:
             logger.warning("Failed to verify registration key")
             return None

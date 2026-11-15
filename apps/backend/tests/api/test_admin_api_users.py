@@ -433,7 +433,8 @@ async def test_a_refused_password_is_neither_logged_nor_echoed(
     assert resp.status_code == 422, resp.text
     assert secret not in resp.text
     logged = " ".join(f"{r.getMessage()} {r.__dict__}" for r in app_logs)
-    assert "Validation error" in logged
+    # Refused by the stored password policy, which names the rule it misses.
+    assert "Password must" in logged
     assert secret not in logged
 
 

@@ -144,6 +144,18 @@ def _dashboard_items(
     ]
 
 
+def _signed_in(current_user: AuthedUser | None) -> AuthedUser | None:
+    """The user a public status page treats as signed in.
+
+    A user who must still change their password is anonymous here: the forced
+    change comes before any other page (FLEET-ADMIN-BOOTSTRAP-STANDARD §5),
+    and these routes read the optional user, which skips that gate.
+    """
+    if current_user is None or current_user.must_change_password:
+        return None
+    return current_user
+
+
 class StatusPagesViewService:
     """View-layer wrapper for /status-pages and /status/{slug} endpoints."""
 
@@ -662,6 +674,7 @@ class StatusPagesViewService:
           - context None, signal "not_found" → 404
           - context None, signal "redirect_login" → 307 to login
         """
+        current_user = _signed_in(current_user)
         status_page = await StatusPageCoreService.get_page_by_slug(db, slug)
         if not status_page:
             return None, "not_found"
@@ -717,6 +730,7 @@ class StatusPagesViewService:
         Returns (context, http_status). status is set on error (404, 401),
         None on success.
         """
+        current_user = _signed_in(current_user)
         status_page = await StatusPageCoreService.get_page_by_slug(db, slug)
         if not status_page:
             return None, 404

@@ -18,8 +18,13 @@ class UserCreate(BaseModel):
     username: StorableText = Field(
         ..., min_length=3, max_length=100, description="Username (unique)"
     )
+    # The password policy (Settings > Security) is applied by the core service
+    # that creates the user, from the stored settings, not here.
     password: StorableText = Field(
-        ..., min_length=8, max_length=100, description="Password (min 8 characters)"
+        ...,
+        min_length=1,
+        max_length=100,
+        description="Password (the password policy applies)",
     )
     role: UserRole = Field(
         UserRole.VIEWER, description="User role: admin, editor, viewer"
@@ -38,20 +43,6 @@ class UserCreate(BaseModel):
             raise ValueError(
                 "Username can only contain letters, numbers, underscores, hyphens, and periods"
             )
-        return v
-
-    @field_validator("password")
-    @classmethod
-    def validate_password_strength(cls, v: str) -> str:
-        """Validate password meets minimum strength requirements."""
-        if len(v) < 8:
-            raise ValueError("Password must be at least 8 characters long")
-        if not any(c.isupper() for c in v):
-            raise ValueError("Password must contain at least one uppercase letter")
-        if not any(c.islower() for c in v):
-            raise ValueError("Password must contain at least one lowercase letter")
-        if not any(c.isdigit() for c in v):
-            raise ValueError("Password must contain at least one digit")
         return v
 
     model_config = ConfigDict(

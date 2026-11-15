@@ -62,7 +62,9 @@ class UserCoreService:
             raise ValidationException(error_message)
 
         # Hash password
-        password_hash = self.auth_service.hash_password(user_data.password)
+        password_hash = await self.auth_service.hash_password_threaded(
+            user_data.password
+        )
 
         # Create user
         user = User(
