@@ -36,6 +36,10 @@ logger = get_logger("luxswirl.services.auth")
 # PostgreSQL lock_not_available: a row lock not granted within lock_timeout.
 _LOCK_NOT_AVAILABLE = "55P03"
 
+# The id a sign-in for an unknown username re-reads: user ids are random (uuid4),
+# so none is the nil UUID.
+_NO_USER_ID = UUID(int=0)
+
 
 def _lock_wait_ran_out(exc: DBAPIError) -> bool:
     """Whether `exc` is PostgreSQL's lock_not_available: a sign-in lock wait
@@ -313,11 +317,11 @@ class AuthCoreService:
         # its lock in this transaction itself, outside the queue's savepoint
         # (FLEET-AUTH-SESSION-STANDARD §1.2): a reset or revoke that committed
         # before the queue let this sign-in through is what it judges, and none
-        # can commit before the session is issued.
-        user = (
-            await UserCRUD.get_by_id_for_update(db, queued.id)
-            if queued is not None
-            else None
+        # can commit before the session is issued. An unknown username is re-read
+        # too, by an id no user has, so the statements a sign-in sends say nothing
+        # of whether the account exists.
+        user = await UserCRUD.get_by_id_for_update(
+            db, queued.id if queued is not None else _NO_USER_ID
         )
 
         if not user:
