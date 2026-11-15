@@ -28,18 +28,25 @@ from app.core.rate_limit import limiter
 from app.core.security import verify_agent_token
 from app.main import app
 from app.models.enum_model import JobStatus
+from app.notifications.providers.webhook import WebhookNotificationProvider
 from app.schemas.check_artifact_schema import CheckArtifactCreate
 from app.schemas.check_result_schema import AgentReportSubmission
 from app.schemas.job_schema import JobCreate, JobResultSubmit
 from app.services.core.agent_core_service import AgentCoreService
-from app.services.core.alert_evaluation_core_service import AlertEvaluationCoreService
 from app.services.core.artifact_core_service import ArtifactCoreService
 from app.services.core.check_api_core_service import CheckApiCoreService
 from app.services.core.check_result_core_service import CheckResultCoreService
 from app.services.core.job_api_core_service import JobApiCoreService
 from app.services.core.job_core_service import JobCoreService
-from fixtures.factories import make_check
-from httpx import ASGITransport, AsyncClient, Response
+from fixtures.factories import (
+    make_alert,
+    make_alert_check_mapping,
+    make_alert_notification_mapping,
+    make_check,
+    make_notification_provider,
+)
+from fixtures.outbox import deliver_committed
+from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -261,11 +268,12 @@ async def test_a_transition_out_of_active_waits_for_a_request_in_flight(
     assert await _transition_waits_for_a_request_in_flight(worker_db, transition)
 
 
-# A report's results are committed before its alerts are evaluated, and their
-# notifications delivered (a webhook may take its whole 10 s timeout): the
-# report's hold on its agent's row ends with the insert, so an operator who
-# stops the agent while the report's alerts deliver never waits behind them,
-# nor runs into the web pool's statement timeout.
+# A report decides its alerts in its own transaction and only queues their
+# notifications; the delivery worker sends them after it commits, holding no
+# lock on the agent or its checks (a webhook may take its whole 10 s timeout).
+# An operator who stops the agent while its report's notification is being
+# delivered never waits behind the delivery, nor runs into the web pool's
+# statement timeout.
 @pytest.mark.parametrize(
     "transition",
     [
@@ -282,33 +290,36 @@ async def test_an_operator_can_stop_an_agent_whose_report_is_delivering_alerts(
     monkeypatch.setattr(settings.security, "auth_enabled", True)
     limiter.reset()
     seeded = await _seed(worker_db, job_running=False)
+    async with worker_db() as s:
+        provider = make_notification_provider()
+        alert = make_alert()
+        s.add_all([provider, alert])
+        await s.flush()
+        s.add_all(
+            [
+                make_alert_check_mapping(alert_id=alert.id, check_id=seeded.check_id),
+                make_alert_notification_mapping(
+                    alert_id=alert.id, notification_provider_id=provider.id
+                ),
+            ]
+        )
+        await s.commit()
     delivering, stopped = asyncio.Event(), asyncio.Event()
 
-    async def delivering_until_stopped(db: AsyncSession, result: Any) -> None:
+    async def delivering_until_stopped(self: Any, context: Any) -> bool:
         delivering.set()
         await asyncio.wait_for(stopped.wait(), 10)
+        return True
 
-    monkeypatch.setattr(
-        AlertEvaluationCoreService,
-        "evaluate_check_result",
-        staticmethod(delivering_until_stopped),
-    )
-
-    async def operator() -> None:
-        await asyncio.wait_for(delivering.wait(), 10)
-        try:
-            async with worker_db() as op:
-                await getattr(AgentCoreService, transition)(op, seeded.agent_id)
-                await op.commit()
-        finally:
-            stopped.set()
+    monkeypatch.setattr(WebhookNotificationProvider, "send", delivering_until_stopped)
 
     submission = {
         "agent_id": str(seeded.agent_id),
         "checks": [
             {
                 "timestamp": utc_now().isoformat(),
-                "success": True,
+                "success": False,
+                "error": "down",
                 "latency_ms": 5.0,
                 "check_id": str(seeded.check_id),
                 "display_name": "probe",
@@ -320,16 +331,29 @@ async def test_an_operator_can_stop_an_agent_whose_report_is_delivering_alerts(
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
     ) as client:
-        report, stop = await asyncio.gather(
-            client.post(
-                "/api/v1/agent/reports",
-                json=submission,
-                headers={"Authorization": f"Bearer {seeded.key}"},
-            ),
-            operator(),
-            return_exceptions=True,
+        report = await client.post(
+            "/api/v1/agent/reports",
+            json=submission,
+            headers={"Authorization": f"Bearer {seeded.key}"},
         )
+    # Answered before anything was delivered.
+    assert report.status_code == 202, report.text
+    assert not delivering.is_set()
+
+    async def operator() -> None:
+        await asyncio.wait_for(delivering.wait(), 10)
+        try:
+            async with worker_db() as op:
+                await asyncio.wait_for(
+                    getattr(AgentCoreService, transition)(op, seeded.agent_id), 5
+                )
+                await op.commit()
+        finally:
+            stopped.set()
+
+    delivered, stop = await asyncio.gather(
+        deliver_committed(), operator(), return_exceptions=True
+    )
 
     assert not isinstance(stop, BaseException), f"{stop!r:.400}"
-    assert isinstance(report, Response), repr(report)
-    assert report.status_code == 202, report.text
+    assert delivered == 1, repr(delivered)

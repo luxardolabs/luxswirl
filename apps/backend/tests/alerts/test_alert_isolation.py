@@ -34,6 +34,7 @@ from fixtures.factories import (
     make_check_result,
     make_notification_provider,
 )
+from fixtures.outbox import deliver_in
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -159,6 +160,7 @@ async def test_a_threshold_alert_sends_once_and_logs_it(
     threshold, results = await _two_failures(db, value)
     for result in results:
         await AlertEvaluationCoreService.evaluate_check_result(db, result)
+    await deliver_in(db)
 
     assert len([c for c in sent if c.alert_name == "threshold"]) == 1
     assert len(await _logged(db, threshold.id)) == 1

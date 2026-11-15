@@ -325,3 +325,47 @@ async def test_an_unknown_provider_is_404(
     assert (
         await client.get(f"{PROVIDERS}/{uuid4()}", headers=viewer)
     ).status_code == 404
+
+
+async def test_the_log_shows_queued_notifications_by_their_state_masked(
+    db: AsyncSession, client: AsyncClient
+) -> None:
+    """A notification awaiting delivery is read, and filtered, by its state
+    (pending, sending, retrying), a retrying row's last error masked as any."""
+    viewer = await _as(db, "viewer")
+    provider = await _email(db)
+    alert = make_alert()
+    db.add(alert)
+    await db.flush()
+    for status, error in (
+        ("pending", None),
+        ("sending", None),
+        ("retrying", f"Client error '503 Service Unavailable' for url '{HOOK}'"),
+    ):
+        db.add(
+            make_notification_log(
+                alert_id=alert.id,
+                notification_provider_id=provider.id,
+                check_result_id=None,
+                check_result_timestamp=None,
+                status=status,
+                error_message=error,
+                sent_at=utc_now(),
+            )
+        )
+    await db.flush()
+
+    every = await client.get(LOGS, params={"alert_id": str(alert.id)}, headers=viewer)
+    retrying = await client.get(
+        LOGS, params={"alert_id": str(alert.id), "status": "retrying"}, headers=viewer
+    )
+
+    assert every.status_code == 200, every.text
+    assert sorted(r["status"] for r in every.json()["items"]) == [
+        "pending",
+        "retrying",
+        "sending",
+    ]
+    (row,) = retrying.json()["items"]
+    assert row["error_message"].endswith("for url 'https://hooks.example.test/...'")
+    assert "hook-id-s3cret" not in every.text

@@ -39,6 +39,10 @@ from app.background.maintenance_worker import (
     start_maintenance_worker,
     stop_maintenance_worker,
 )
+from app.background.notification_delivery_worker import (
+    start_notification_delivery_worker,
+    stop_notification_delivery_worker,
+)
 from app.cli import bootstrap_on_startup
 from app.core.agent_refusals import AgentRefusalMarkMiddleware
 from app.core.config import settings
@@ -192,6 +196,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     start_database_maintenance_task()
     register_maintenance_handlers()
     await start_maintenance_worker()
+    # Delivers the alert notifications evaluation queues (notification_logs).
+    start_notification_delivery_worker()
 
     # Start async scheduler
     await scheduler_service.start()
@@ -210,6 +216,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     # Stop background tasks
     await stop_maintenance_worker()
+    await stop_notification_delivery_worker()
     await stop_job_purge_task()
     await stop_session_cleanup_task()
     await stop_trusted_proxy_refresh_task()

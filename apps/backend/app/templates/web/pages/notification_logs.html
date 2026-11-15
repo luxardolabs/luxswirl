@@ -9,11 +9,11 @@
 {% block content %}
 {{ page_header(
     title='Notification Logs',
-    description='History of all notifications sent by LuxSwirl'
+    description='Every notification an alert decided, and how its delivery went'
 ) }}
 
 <!-- Summary Stats -->
-<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+<div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
     <!-- Total Notifications -->
     <div class="card p-4">
             <div class="flex items-center justify-between">
@@ -36,6 +36,19 @@
                 </div>
                 <div class="w-10 h-10 rounded-lg bg-green-500/10 flex items-center justify-center">
                     <span class="w-6 h-6 text-green-500 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/check-circle.svg" %}</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Awaiting delivery: decided, not yet delivered (pending, sending, retrying) -->
+        <div class="card p-4">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-xs font-medium text-dark-text-secondary uppercase tracking-wider">Awaiting Delivery</p>
+                    <p class="text-2xl font-bold text-yellow-400 mt-1">{{ status_counts.pending + status_counts.sending + status_counts.retrying }}</p>
+                </div>
+                <div class="w-10 h-10 rounded-lg bg-yellow-500/10 flex items-center justify-center">
+                    <span class="w-6 h-6 text-yellow-500 inline-flex [&>svg]:w-full [&>svg]:h-full">{% include "icons/hero/outline/clock.svg" %}</span>
                 </div>
             </div>
         </div>

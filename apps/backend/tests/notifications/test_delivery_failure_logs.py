@@ -24,9 +24,13 @@ from app.notifications.providers import webhook as hook_mod
 from app.notifications.providers.base import NotificationContext
 from app.services.core.notification_core_service import NotificationCoreService
 from fixtures.factories import make_alert, make_notification_provider
+from fixtures.outbox import queue_and_deliver
 from sqlalchemy.ext.asyncio import AsyncSession
 
 pytestmark = pytest.mark.integration
+
+# Not delivered, its error stored: failed for good, or to be tried again.
+UNDELIVERED = {"failed", "retrying"}
 
 HA_URL = "https://10.0.0.5/api/webhook/ha-id-s3cret"
 HOOK_URL = "https://10.0.0.6/hooks/T000/B000/slack-tok-s3cret"
@@ -106,16 +110,11 @@ async def test_a_failed_delivery_logs_no_endpoint_path(
     await db.flush()
 
     with caplog.at_level(logging.DEBUG):
-        rows = await NotificationCoreService.send_notifications(
-            db,
-            [ha.id, hook.id],
-            _context(),
-            alert_id=alert.id,
-            check_result_id=None,
-            check_result_timestamp=None,
+        rows = await queue_and_deliver(
+            db, [ha.id, hook.id], _context(), alert_id=alert.id
         )
 
-    assert [row.status for row in rows] == ["failed", "failed"]
+    assert [row.status in UNDELIVERED for row in rows] == [True, True]
     _assert_url_free(caplog, "Notification send failed")
 
 
@@ -167,16 +166,9 @@ async def test_a_failed_email_is_logged_once_without_a_traceback(
     await db.flush()
 
     with caplog.at_level(logging.DEBUG):
-        rows = await NotificationCoreService.send_notifications(
-            db,
-            [mail.id],
-            _context(),
-            alert_id=alert.id,
-            check_result_id=None,
-            check_result_timestamp=None,
-        )
+        rows = await queue_and_deliver(db, [mail.id], _context(), alert_id=alert.id)
 
-    assert [row.status for row in rows] == ["failed"]
+    assert [row.status in UNDELIVERED for row in rows] == [True]
     assert not any(r.exc_info for r in caplog.records), caplog.text
     failures = [r for r in caplog.records if r.levelno >= logging.WARNING]
     assert [r.getMessage() for r in failures] == ["Notification send failed"]
@@ -275,16 +267,9 @@ async def _fail_both_ways(
     db.add_all([provider, alert])
     await db.flush()
     with caplog.at_level(logging.DEBUG):
-        rows = await NotificationCoreService.send_notifications(
-            db,
-            [provider.id],
-            _context(),
-            alert_id=alert.id,
-            check_result_id=None,
-            check_result_timestamp=None,
-        )
+        rows = await queue_and_deliver(db, [provider.id], _context(), alert_id=alert.id)
         ok, error = await NotificationCoreService.test_provider(db, provider.id)
-    assert [row.status for row in rows] == ["failed"]
+    assert [row.status in UNDELIVERED for row in rows] == [True]
     assert not ok
     assert rows[0].error_message == error
     return [_logged(caplog), error or ""]

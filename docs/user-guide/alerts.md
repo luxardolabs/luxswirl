@@ -323,7 +323,7 @@ ______________________________________________________________________
 
 ## Performance
 
-Every check result evaluates all applicable alerts, and consecutive-failure triggers query history — so prefer specific alerts over many broad globals, avoid overly complex logic, and consolidate redundant alerts. Notifications to multiple providers are sent **in parallel**, and one slow/failed provider doesn't block the others (watch the Notification Logs for slow providers). Notification logs grow over time (with automatic retention) — see [Database Health](database-health.md).
+Every check result evaluates all applicable alerts, and consecutive-failure triggers query history — so prefer specific alerts over many broad globals, avoid overly complex logic, and consolidate redundant alerts. Notifications are delivered by a worker after the result is stored, never while the agent waits, each provider on its own, so one slow/failed provider doesn't block the others (watch the Notification Logs for slow providers and for rows left **Retrying**; see [Notifications](notifications.md)). Notification logs grow over time (with automatic retention) — see [Database Health](database-health.md).
 
 ______________________________________________________________________
 

@@ -25,7 +25,7 @@ from app.models.alert_model import Alert
 from app.models.check_model import Check
 from app.models.notification_log_model import NotificationLog
 from app.notifications.providers.base import NotificationContext
-from app.schemas.alert_schema import AlertCreate, AlertUpdate
+from app.schemas.alert_schema import AlertCreate, AlertUpdate, SilencePassCounts
 from app.services.core.alert_evaluation_core_service import AlertEvaluationCoreService
 from app.services.core.scheduler_core_service import SchedulerCoreService
 from app.services.core.silence_alert_core_service import (
@@ -44,6 +44,7 @@ from fixtures.factories import (
     make_check_result,
     make_notification_provider,
 )
+from fixtures.outbox import deliver_committed, deliver_in
 from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -68,6 +69,13 @@ def sent() -> Iterator[list[NotificationContext]]:
         _send,
     ):
         yield contexts
+
+
+async def _evaluate(db: AsyncSession) -> SilencePassCounts:
+    """One silence pass, then the delivery worker's passes for what it queued."""
+    counts = await SilenceAlertCoreService.evaluate(db)
+    await deliver_in(db)
+    return counts
 
 
 async def _alert(
@@ -136,8 +144,8 @@ async def test_a_silent_check_notifies_once(db: AsyncSession, sent) -> None:
     check = await _check(db, agent, last_result_ago=THRESHOLD + timedelta(minutes=5))
     alert = await _alert(db, "no_data", [check])
 
-    await SilenceAlertCoreService.evaluate(db)
-    await SilenceAlertCoreService.evaluate(db)
+    await _evaluate(db)
+    await _evaluate(db)
 
     assert len(sent) == 1
     assert sent[0].check_name == check.display_name
@@ -158,7 +166,7 @@ async def test_each_long_silent_check_reports_its_own_last_result(
     never = await _check(db, agent, last_result_ago=None)
     await _alert(db, "no_data", [recent, older, never])
 
-    await SilenceAlertCoreService.evaluate(db)
+    await _evaluate(db)
 
     messages = {c.check_name: c.error_message or "" for c in sent}
     assert messages[recent.display_name].startswith("No results for 9 min")
@@ -173,7 +181,7 @@ async def test_a_check_reporting_on_time_does_not_notify(
     check = await _check(db, agent, last_result_ago=THRESHOLD - timedelta(seconds=30))
     await _alert(db, "no_data", [check])
 
-    counts = await SilenceAlertCoreService.evaluate(db)
+    counts = await _evaluate(db)
 
     assert sent == []
     assert counts.silent_checks == 0
@@ -187,7 +195,7 @@ async def test_missed_intervals_scales_the_threshold(db: AsyncSession, sent) -> 
     alert.trigger_config = {"missed_intervals": 20}
     await db.flush()
 
-    await SilenceAlertCoreService.evaluate(db)
+    await _evaluate(db)
 
     assert sent == []
 
@@ -198,12 +206,12 @@ async def test_data_resuming_sends_a_recovery_and_ends_the_episode(
     agent = await _agent(db)
     check = await _check(db, agent, last_result_ago=THRESHOLD + timedelta(minutes=5))
     alert = await _alert(db, "no_data", [check])
-    await SilenceAlertCoreService.evaluate(db)
+    await _evaluate(db)
 
     db.add(make_check_result(check_id=check.id, agent_id=agent.id))
     await db.flush()
-    await SilenceAlertCoreService.evaluate(db)
-    await SilenceAlertCoreService.evaluate(db)
+    await _evaluate(db)
+    await _evaluate(db)
 
     assert [c.is_recovery for c in sent] == [False, True]
     assert sent[1].status_label == "UP"
@@ -217,7 +225,7 @@ async def test_a_later_silence_is_a_new_episode(db: AsyncSession, sent) -> None:
     agent = await _agent(db)
     check = await _check(db, agent, last_result_ago=THRESHOLD + timedelta(minutes=5))
     alert = await _alert(db, "no_data", [check], notify_on_recovery=False)
-    await SilenceAlertCoreService.evaluate(db)
+    await _evaluate(db)
     (first,) = await _rows(db, alert)
     first.sent_at = utc_now() - timedelta(hours=2)
     db.add(
@@ -229,7 +237,7 @@ async def test_a_later_silence_is_a_new_episode(db: AsyncSession, sent) -> None:
     )
     await db.flush()
 
-    await SilenceAlertCoreService.evaluate(db)
+    await _evaluate(db)
 
     assert [c.is_recovery for c in sent] == [False, False]
     assert len(await _rows(db, alert)) == 2
@@ -241,12 +249,12 @@ async def test_a_silence_resends_after_the_resend_interval(
     agent = await _agent(db)
     check = await _check(db, agent, last_result_ago=timedelta(hours=3))
     alert = await _alert(db, "no_data", [check], resend_interval_minutes=30)
-    await SilenceAlertCoreService.evaluate(db)
+    await _evaluate(db)
     (first,) = await _rows(db, alert)
     first.sent_at = utc_now() - timedelta(minutes=31)
     await db.flush()
 
-    await SilenceAlertCoreService.evaluate(db)
+    await _evaluate(db)
 
     rows = await _rows(db, alert)
     assert [(r.is_resend, r.resend_count) for r in rows] == [(False, 0), (True, 1)]
@@ -263,7 +271,7 @@ async def test_a_check_that_never_reported_counts_from_its_creation(
     await db.flush()
     await _alert(db, "no_data", [old, new])
 
-    await SilenceAlertCoreService.evaluate(db)
+    await _evaluate(db)
 
     assert [c.check_name for c in sent] == [old.display_name]
     assert "since it was created" in (sent[0].error_message or "")
@@ -277,7 +285,7 @@ async def test_a_check_no_active_agent_runs_is_not_expected_to_report(
     check = await _check(db, agent, last_result_ago=timedelta(hours=3))
     await _alert(db, "no_data", [check])
 
-    await SilenceAlertCoreService.evaluate(db)
+    await _evaluate(db)
 
     assert sent == []
 
@@ -289,7 +297,7 @@ async def test_a_disabled_check_is_not_expected_to_report(
     check = await _check(db, agent, last_result_ago=timedelta(hours=3), enabled=False)
     await _alert(db, "no_data", [check])
 
-    await SilenceAlertCoreService.evaluate(db)
+    await _evaluate(db)
 
     assert sent == []
 
@@ -303,7 +311,7 @@ async def test_a_snoozed_check_does_not_notify(db: AsyncSession, sent) -> None:
     mapping.snoozed_until = utc_now() + timedelta(hours=1)
     await db.flush()
 
-    await SilenceAlertCoreService.evaluate(db)
+    await _evaluate(db)
 
     assert sent == []
 
@@ -325,7 +333,7 @@ async def test_a_replicate_check_is_silent_only_when_no_agent_reports(
     await db.flush()
     await _alert(db, "no_data", [check])
 
-    await SilenceAlertCoreService.evaluate(db)
+    await _evaluate(db)
 
     assert sent == []
 
@@ -363,8 +371,8 @@ async def test_an_offline_agent_notifies_once(db: AsyncSession, sent) -> None:
     check = await _check(db, agent, last_result_ago=timedelta(minutes=10))
     alert = await _alert(db, "agent_offline", [check])
 
-    await SilenceAlertCoreService.evaluate(db)
-    await SilenceAlertCoreService.evaluate(db)
+    await _evaluate(db)
+    await _evaluate(db)
 
     assert len(sent) == 1
     assert sent[0].status_label == "OFFLINE"
@@ -380,7 +388,7 @@ async def test_an_online_agent_does_not_notify(db: AsyncSession, sent) -> None:
     check = await _check(db, agent, last_result_ago=timedelta(seconds=10))
     await _alert(db, "agent_offline", [check])
 
-    await SilenceAlertCoreService.evaluate(db)
+    await _evaluate(db)
 
     assert sent == []
 
@@ -391,11 +399,11 @@ async def test_a_heartbeat_after_the_outage_sends_a_recovery(
     agent = await _offline_agent(db)
     check = await _check(db, agent, last_result_ago=timedelta(minutes=10))
     await _alert(db, "agent_offline", [check])
-    await SilenceAlertCoreService.evaluate(db)
+    await _evaluate(db)
 
     agent.last_seen = utc_now()
     await db.flush()
-    await SilenceAlertCoreService.evaluate(db)
+    await _evaluate(db)
 
     assert [(c.is_recovery, c.status_label) for c in sent] == [
         (False, "OFFLINE"),
@@ -415,8 +423,8 @@ async def test_an_offline_agents_checks_are_suppressed_not_sent(
     no_data = await _alert(db, "no_data", checks)
     await _alert(db, "agent_offline", checks)
 
-    await SilenceAlertCoreService.evaluate(db)
-    await SilenceAlertCoreService.evaluate(db)
+    await _evaluate(db)
+    await _evaluate(db)
 
     assert [c.status_label for c in sent] == ["OFFLINE"]
     rows = await _rows(db, no_data)
@@ -429,12 +437,12 @@ async def test_a_suppressed_silence_sends_no_recovery(db: AsyncSession, sent) ->
     agent = await _offline_agent(db)
     check = await _check(db, agent, last_result_ago=timedelta(minutes=10))
     no_data = await _alert(db, "no_data", [check])
-    await SilenceAlertCoreService.evaluate(db)
+    await _evaluate(db)
 
     agent.last_seen = utc_now()
     db.add(make_check_result(check_id=check.id, agent_id=agent.id))
     await db.flush()
-    await SilenceAlertCoreService.evaluate(db)
+    await _evaluate(db)
 
     assert sent == []
     assert [r.status for r in await _rows(db, no_data)] == ["suppressed"]
@@ -448,11 +456,11 @@ async def test_a_check_still_silent_once_its_agent_returns_notifies(
     agent = await _offline_agent(db)
     check = await _check(db, agent, last_result_ago=timedelta(minutes=10))
     await _alert(db, "no_data", [check])
-    await SilenceAlertCoreService.evaluate(db)
+    await _evaluate(db)
 
     agent.last_seen = utc_now()
     await db.flush()
-    await SilenceAlertCoreService.evaluate(db)
+    await _evaluate(db)
 
     assert [c.status_label for c in sent] == ["NO DATA"]
 
@@ -472,17 +480,16 @@ async def test_the_scheduler_runs_the_silence_pass() -> None:
 # ── what the adversarial pass broke ──────────────────────────────────────────
 
 
-async def test_a_pass_cut_short_does_not_redeliver_what_it_delivered(
+async def test_a_pass_never_waits_on_a_provider_and_each_notice_is_sent_once(
     worker_db,
 ) -> None:
-    """The scheduled job records each notification in its own transaction: a
-    pass stopped by its runtime limit keeps the rows of what it delivered, so
-    the next pass delivers only the rest."""
+    """The scheduled pass only queues its notifications: a provider that
+    takes seconds to answer never holds the pass (nor its runtime limit), and
+    the delivery worker sends each notice once, however many passes run."""
     delivered: list[str] = []
-    delay = 0.4
 
     async def _slow_send(self, context: NotificationContext) -> bool:
-        await asyncio.sleep(delay)
+        await asyncio.sleep(3)
         delivered.append(context.check_name)
         return True
 
@@ -498,13 +505,12 @@ async def test_a_pass_cut_short_does_not_redeliver_what_it_delivered(
         "app.notifications.providers.webhook.WebhookNotificationProvider.send",
         _slow_send,
     ):
-        with pytest.raises(TimeoutError):
-            await asyncio.wait_for(evaluate_silence_alerts(), timeout=1.0)
-        first = list(delivered)
-        delay = 0
-        await evaluate_silence_alerts()
+        counts = await asyncio.wait_for(evaluate_silence_alerts(), timeout=1.0)
+        assert delivered == []
+        await asyncio.wait_for(evaluate_silence_alerts(), timeout=1.0)
+        await asyncio.wait_for(deliver_committed(), timeout=10.0)
 
-    assert first, "the first pass delivered nothing before its limit"
+    assert counts["notified"] == 3, counts
     assert sorted(delivered) == sorted(c.display_name for c in checks)
 
 
@@ -521,7 +527,7 @@ async def test_one_failing_alert_does_not_stop_the_others(
     broken.trigger_config = {"missed_intervals": 10**12}
     await db.flush()
 
-    await SilenceAlertCoreService.evaluate(db)
+    await _evaluate(db)
 
     assert sorted(c.check_name for c in sent) == sorted(
         [good.display_name, other.display_name]
@@ -542,7 +548,7 @@ async def test_an_alert_that_raises_is_skipped(db: AsyncSession, sent) -> None:
         return await real(db_, alert, *args)
 
     with patch.object(SilenceAlertCoreService, "_decide_no_data", _flaky):
-        counts = await SilenceAlertCoreService.evaluate(db)
+        counts = await _evaluate(db)
 
     assert [c.check_name for c in sent] == [good.display_name]
     assert counts.failed == 1, "the skipped alert is not in the pass's output"
@@ -568,19 +574,19 @@ async def test_a_notified_silence_recovers_after_its_agent_restarts(
     agent = await _agent(db, heartbeat_interval=5)
     check = await _check(db, agent, last_result_ago=timedelta(minutes=10))
     await _alert(db, "no_data", [check])
-    await SilenceAlertCoreService.evaluate(db)
+    await _evaluate(db)
 
     agent.last_seen = utc_now() - timedelta(minutes=5)
     await db.flush()
-    await SilenceAlertCoreService.evaluate(db)
+    await _evaluate(db)
     agent.last_seen = utc_now() - timedelta(seconds=10)
     await db.flush()
-    await SilenceAlertCoreService.evaluate(db)
+    await _evaluate(db)
 
     agent.last_seen = utc_now()
     db.add(make_check_result(check_id=check.id, agent_id=agent.id))
     await db.flush()
-    await SilenceAlertCoreService.evaluate(db)
+    await _evaluate(db)
 
     assert [c.status_label for c in sent] == ["NO DATA", "UP"]
 
@@ -596,7 +602,7 @@ async def test_a_disabled_provider_records_the_silence_once(
     await db.flush()
 
     for _ in range(5):
-        await SilenceAlertCoreService.evaluate(db)
+        await _evaluate(db)
 
     rows = await _rows(db, alert)
     assert [(r.status, r.notification_hash) for r in rows] == [
@@ -611,7 +617,7 @@ async def test_an_old_silence_does_not_widen_the_read_for_every_check(
     healthy = await _check(db, agent, last_result_ago=timedelta(minutes=1))
     dead = await _check(db, agent, last_result_ago=timedelta(days=31))
     alert = await _alert(db, "no_data", [healthy, dead])
-    await SilenceAlertCoreService.evaluate(db)
+    await _evaluate(db)
     (row,) = await _rows(db, alert)
     row.sent_at = utc_now() - timedelta(days=30)
     await db.flush()
@@ -624,7 +630,7 @@ async def test_an_old_silence_does_not_widen_the_read_for_every_check(
         return await real(db_, ids, since)
 
     with patch.object(CheckResultCRUD, "latest_result_times", _spy):
-        await SilenceAlertCoreService.evaluate(db)
+        await _evaluate(db)
 
     (since,) = seen
     assert utc_now() - since < THRESHOLD + timedelta(minutes=1)
@@ -642,7 +648,7 @@ async def test_an_alert_without_providers_is_not_evaluated(
     db.add(make_alert_check_mapping(alert_id=alert.id, check_id=check.id))
     await db.flush()
 
-    totals = [(await SilenceAlertCoreService.evaluate(db)).as_dict() for _ in range(2)]
+    totals = [(await _evaluate(db)).as_dict() for _ in range(2)]
 
     assert all(t["notified"] == 0 and t["alerts"] == 0 for t in totals)
     assert sent == []
@@ -665,7 +671,7 @@ async def test_every_provider_of_an_alert_gets_its_row(db: AsyncSession, sent) -
     )
     await db.flush()
 
-    await SilenceAlertCoreService.evaluate(db)
+    await _evaluate(db)
 
     rows = await _rows(db, alert)
     assert sorted(r.status for r in rows) == ["sent", "sent"]

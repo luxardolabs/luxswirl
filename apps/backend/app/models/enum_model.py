@@ -30,11 +30,17 @@ from typing import Any, Literal
 
 
 class NotificationStatus(StrEnum):
-    """Outcome of a notification delivery attempt (or non-attempt)."""
+    """Where a decided notification stands: awaiting delivery (pending,
+    sending, retrying) or its outcome (the rest)."""
 
+    # Decided, waiting for the delivery worker.
+    PENDING = "pending"
+    # Claimed by a delivery worker, its lease running.
+    SENDING = "sending"
+    # An attempt failed; tried again at `next_attempt_at`.
+    RETRYING = "retrying"
     SENT = "sent"
     FAILED = "failed"
-    RETRYING = "retrying"
     RATE_LIMITED = "rate_limited"
     DEDUPLICATED = "deduplicated"
     SUPPRESSED = "suppressed"

@@ -22,8 +22,8 @@ from app.main import app
 from app.notifications.providers.base import NotificationContext
 from app.schemas.api_token_schema import ApiTokenCreate
 from app.services.core.api_token_core_service import ApiTokenCoreService
-from app.services.core.notification_core_service import NotificationCoreService
 from fixtures.factories import make_alert, make_notification_provider, make_user
+from fixtures.outbox import queue_and_deliver
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -193,14 +193,7 @@ async def test_bad_header_value_leaks_into_log(
             agent_id=None,
             status="error",
         )
-        rows = await NotificationCoreService.send_notifications(
-            db,
-            [provider.id],
-            ctx,
-            alert_id=alert.id,
-            check_result_id=None,
-            check_result_timestamp=None,
-        )
+        rows = await queue_and_deliver(db, [provider.id], ctx, alert_id=alert.id)
         await db.flush()
         logs = await client.get(
             LOGS, params={"alert_id": str(alert.id)}, headers=viewer

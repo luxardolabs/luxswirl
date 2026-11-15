@@ -5,10 +5,14 @@ All business logic is delegated to CheckResultCoreService.
 This router only handles HTTP concerns.
 """
 
-from fastapi import APIRouter, status
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, status
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import ReportingAgentId
 from app.core.agent_refusals import AgentProtocolRoute
+from app.db import get_db
 from app.schemas.check_result_schema import (
     AgentReportResponse,
     AgentReportSubmission,
@@ -29,21 +33,22 @@ router = APIRouter(route_class=AgentProtocolRoute, tags=["Check Results"])
 async def submit_report(
     report: AgentReportSubmission,
     agent: ReportingAgentId,
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> AgentReportResponse:
     """
     Submit a report from an agent containing multiple check results.
 
-    The results are stored and committed in a transaction of their own, then
-    their alerts are evaluated (`CheckResultCoreService.accept_agent_report`),
-    and only then is the agent answered: the agent sends its next report once
-    this one is answered, and sends this one again if it never is.
+    The results are stored, and their alerts decided, in the request's
+    transaction; each notification decided is queued in it and delivered by
+    the delivery worker once it commits, so the answer never waits on a
+    notification provider.
 
     Only the agent's own key is accepted (`ReportingAgentId`), never the
     registration key. Each result is validated on its own: an invalid one is
     counted in `results_failed`, and the rest are stored.
     """
-    result = await CheckResultCoreService.accept_agent_report(
-        report, verified_key_hash=agent.key_hash
+    result = await CheckResultCoreService.process_agent_submission(
+        db, report, verified_key_hash=agent.key_hash
     )
 
     return AgentReportResponse(

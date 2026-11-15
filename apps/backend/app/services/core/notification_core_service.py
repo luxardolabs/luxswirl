@@ -14,6 +14,7 @@ from uuid import UUID
 
 import aiosmtplib
 import httpx
+from pydantic import TypeAdapter
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.check_target_validator import (
@@ -30,6 +31,7 @@ from app.models.notification_log_model import NotificationLog
 from app.models.notification_provider_model import NotificationProvider
 from app.notifications.providers.base import NotificationContext
 from app.notifications.registry import NotificationRegistry
+from app.schemas.notification_delivery_schema import DeliveryOutcome
 from app.schemas.notification_provider_schema import (
     NotificationProviderCreate,
     NotificationProviderInDB,
@@ -40,6 +42,20 @@ from app.services.core.settings_core_service import SettingsCoreService
 from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.services.notification")
+
+_CONTEXT = TypeAdapter(NotificationContext)
+
+
+def notification_payload(context: NotificationContext) -> dict[str, Any]:
+    """A notification as `notification_logs.payload` stores it (JSON)."""
+    payload: dict[str, Any] = _CONTEXT.dump_python(context, mode="json")
+    return payload
+
+
+def notification_from_payload(payload: dict[str, Any]) -> NotificationContext:
+    """The notification a `notification_logs.payload` holds."""
+    return _CONTEXT.validate_python(payload)
+
 
 # The standard phrase per status: the endpoint's own reason text is its to
 # choose, and can quote the request.
@@ -403,7 +419,7 @@ class NotificationCoreService:
             return False, error_msg
 
     @staticmethod
-    async def send_notifications(
+    async def queue_notifications(
         db: AsyncSession,
         provider_ids: Sequence[UUID],
         context: NotificationContext,
@@ -417,12 +433,13 @@ class NotificationCoreService:
         is_resend: bool = False,
         resend_count: int = 0,
     ) -> list[NotificationLog]:
-        """Send a notification through several providers and log each attempt.
+        """Queue a decided notification for delivery through several providers.
 
-        The session is used one statement at a time (an AsyncSession is not
-        safe to share between concurrent tasks). The providers are read and
-        rate-limit-checked in turn, the deliveries run in parallel with no
-        database work, and each attempt's row is written in turn after them.
+        Writes one `pending` row per provider in the caller's transaction,
+        with the notification in its `payload`; nothing is sent here. The
+        delivery worker (`NotificationDeliveryCoreService`) claims each row
+        once the transaction commits, delivers it outside any transaction and
+        records the outcome, so the decision never waits on a provider.
 
         Args:
             db: Database session
@@ -442,81 +459,32 @@ class NotificationCoreService:
 
         Returns:
             One NotificationLog row per provider, in `provider_ids` order.
-
-        Raises:
-            NotFoundException: If a provider is not found
         """
-
-        def _row(
-            provider_id: UUID, status: NotificationStatus, error: str | None
-        ) -> NotificationLog:
-            return NotificationLog(
-                alert_id=alert_id,
-                notification_provider_id=provider_id,
-                check_result_id=check_result_id,
-                check_result_timestamp=check_result_timestamp,
-                check_id=check_id,
-                agent_id=agent_id,
-                check_success=context.success,
-                check_latency_ms=context.latency_ms,
-                status=status,
-                error_message=error,
-                notification_hash=notification_hash,
-                is_resend=is_resend,
-                resend_count=resend_count,
-                sent_at=utc_now(),
-            )
-
-        # 1. Gate each provider (database reads, in turn).
-        outcomes: dict[UUID, tuple[NotificationStatus, str | None]] = {}
-        deliverable: list[NotificationProvider] = []
-        providers = await NotificationProviderCRUD.get_by_ids(db, provider_ids)
-        for provider_id in provider_ids:
-            provider = providers.get(provider_id)
-            if provider is None:
-                raise NotFoundException(
-                    f"Notification provider {provider_id} not found"
-                )
-            if not provider.is_enabled:
-                # Intentionally disabled — distinct from a delivery failure.
-                outcomes[provider_id] = (
-                    NotificationStatus.SUPPRESSED,
-                    "Notification provider is disabled",
-                )
-                logger.info(
-                    "Notification suppressed - provider is disabled",
-                    extra={"provider_id": str(provider_id)},
-                )
-                continue
-            is_rate_limited, reason = await NotificationCoreService._check_rate_limit(
-                db, provider
-            )
-            if is_rate_limited:
-                outcomes[provider_id] = (NotificationStatus.RATE_LIMITED, reason)
-                logger.warning(
-                    "Notification rate limited",
-                    extra={"provider_id": str(provider_id), "reason": reason},
-                )
-                continue
-            deliverable.append(provider)
-
-        # 2. Deliver in parallel (no database work), under the SSRF settings.
-        network = await SettingsCoreService.get_network_protection(db)
-        delivered = await asyncio.gather(
-            *(
-                NotificationCoreService._deliver(provider, context, network)
-                for provider in deliverable
-            )
-        )
-        for provider, outcome in zip(deliverable, delivered, strict=True):
-            outcomes[provider.id] = outcome
-
-        # 3. Record every attempt (database writes, in turn).
+        now = utc_now()
+        payload = notification_payload(context)
         rows: list[NotificationLog] = []
         for provider_id in provider_ids:
-            status, error = outcomes[provider_id]
             rows.append(
-                await NotificationLogCRUD.add_log(db, _row(provider_id, status, error))
+                await NotificationLogCRUD.add_log(
+                    db,
+                    NotificationLog(
+                        alert_id=alert_id,
+                        notification_provider_id=provider_id,
+                        check_result_id=check_result_id,
+                        check_result_timestamp=check_result_timestamp,
+                        check_id=check_id,
+                        agent_id=agent_id,
+                        check_success=context.success,
+                        check_latency_ms=context.latency_ms,
+                        status=NotificationStatus.PENDING,
+                        notification_hash=notification_hash,
+                        is_resend=is_resend,
+                        resend_count=resend_count,
+                        sent_at=now,
+                        payload=payload,
+                        next_attempt_at=now,
+                    ),
+                )
             )
         return rows
 
@@ -552,33 +520,62 @@ class NotificationCoreService:
         return summary
 
     @staticmethod
-    async def _deliver(
-        provider: NotificationProvider,
+    async def deliver(
+        provider_type: str,
+        provider_id: UUID,
+        config: dict[str, Any],
         context: NotificationContext,
         network: NetworkProtection,
-    ) -> tuple[NotificationStatus, str | None]:
-        """One provider's delivery attempt under the SSRF settings `network`: its
-        status and error, never raised."""
+        *,
+        timeout_seconds: float,
+    ) -> DeliveryOutcome:
+        """One delivery attempt through a provider under the SSRF settings
+        `network`, cut off after `timeout_seconds`: its outcome, never raised.
+
+        A refusal the provider's settings make certain to repeat (the SSRF
+        refusal, a header HTTP cannot send, an HTTP 4xx other than 408 and
+        429) is not worth another attempt; any other failure may be.
+        """
         try:
             provider_instance = NotificationRegistry.create_provider(
-                provider.provider_type,
-                provider.config,
-                network,
+                provider_type, config, network
             )
-            if await provider_instance.send(context):
-                return NotificationStatus.SENT, None
-            return NotificationStatus.FAILED, "Provider returned failure"
+            async with asyncio.timeout(timeout_seconds):
+                delivered = await provider_instance.send(context)
+            if delivered:
+                return DeliveryOutcome(
+                    status=NotificationStatus.SENT, error=None, retryable=False
+                )
+            return DeliveryOutcome(
+                status=NotificationStatus.FAILED,
+                error="Provider returned failure",
+                retryable=True,
+            )
         except Exception as e:
             # The summary, not the traceback: the error's text can quote what was sent.
             error_msg = NotificationCoreService._delivery_error(e)
             logger.warning(
                 "Notification send failed",
-                extra={"provider_id": str(provider.id), "error_message": error_msg},
+                extra={"provider_id": str(provider_id), "error_message": error_msg},
             )
-            return NotificationStatus.FAILED, error_msg
+            return DeliveryOutcome(
+                status=NotificationStatus.FAILED,
+                error=error_msg,
+                retryable=NotificationCoreService._worth_retrying(e),
+            )
 
     @staticmethod
-    async def _check_rate_limit(
+    def _worth_retrying(error: Exception) -> bool:
+        """Whether a failed attempt may succeed when tried again."""
+        if isinstance(error, CheckTargetBlockedError | HeaderRefusedError):
+            return False
+        if isinstance(error, httpx.HTTPStatusError):
+            code = error.response.status_code
+            return code >= 500 or code in (408, 429)
+        return True
+
+    @staticmethod
+    async def check_rate_limit(
         db: AsyncSession,
         provider: NotificationProvider,
     ) -> tuple[bool, str | None]:
@@ -599,7 +596,14 @@ class NotificationCoreService:
         window_start = utc_now() - timedelta(minutes=provider.rate_limit_window_minutes)
 
         count = await NotificationLogCRUD.count_for_provider_since(
-            db, provider.id, window_start, ["sent", "rate_limited"]
+            db,
+            provider.id,
+            window_start,
+            [
+                NotificationStatus.SENT,
+                NotificationStatus.SENDING,
+                NotificationStatus.RATE_LIMITED,
+            ],
         )
 
         if count >= provider.rate_limit_count:

@@ -57,7 +57,7 @@
 
     <!-- Notification Status -->
     <td>
-        {% set notif_status_map = {'sent': 'success', 'failed': 'danger', 'retrying': 'warning', 'rate_limited': 'warning', 'deduplicated': 'info', 'suppressed': 'neutral'} %}
+        {% set notif_status_map = {'pending': 'info', 'sending': 'info', 'sent': 'success', 'failed': 'danger', 'retrying': 'warning', 'rate_limited': 'warning', 'deduplicated': 'info', 'suppressed': 'neutral'} %}
         {{ badge(log.status|replace('_', ' ')|title, notif_status_map.get(log.status, 'neutral')) }}
     </td>
 

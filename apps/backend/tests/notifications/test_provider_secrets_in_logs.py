@@ -23,13 +23,13 @@ from app.notifications.providers import homeassistant as ha_mod
 from app.notifications.providers import webhook as hook_mod
 from app.notifications.providers.base import NotificationContext
 from app.services.core.auth_core_service import AuthCoreService
-from app.services.core.notification_core_service import NotificationCoreService
 from fixtures.factories import (
     make_alert,
     make_notification_log,
     make_notification_provider,
     make_user,
 )
+from fixtures.outbox import queue_and_deliver
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -93,14 +93,7 @@ async def setup(db: AsyncSession, monkeypatch) -> AsyncIterator[dict]:
         status="error",
         alert_name=alert.name,
     )
-    rows = await NotificationCoreService.send_notifications(
-        db,
-        [ha.id, hook.id],
-        context,
-        alert_id=alert.id,
-        check_result_id=None,
-        check_result_timestamp=None,
-    )
+    rows = await queue_and_deliver(db, [ha.id, hook.id], context, alert_id=alert.id)
     await db.flush()
     viewer = await _browser(db, "viewer")
     yield {"rows": rows, "viewer": viewer, "alert": alert, "ha": ha}
@@ -109,10 +102,14 @@ async def setup(db: AsyncSession, monkeypatch) -> AsyncIterator[dict]:
 
 
 async def test_a_refused_delivery_stores_its_status_not_its_url(setup: dict) -> None:
-    errors = sorted(row.error_message or "" for row in setup["rows"])
+    outcomes = sorted((row.error_message or "", row.status) for row in setup["rows"])
 
-    assert all(row.status == "failed" for row in setup["rows"]), errors
-    assert errors == ["HTTP 404 Not Found", "HTTP 500 Internal Server Error"]
+    # A 404 will be refused again, so it fails for good; a 500 is tried again
+    # later, its error shown meanwhile.
+    assert outcomes == [
+        ("HTTP 404 Not Found", "failed"),
+        ("HTTP 500 Internal Server Error", "retrying"),
+    ]
 
 
 async def test_the_logs_page_shows_no_endpoint_secret(
@@ -154,3 +151,17 @@ async def test_the_logs_page_shows_no_endpoint_secret(
 )
 def test_mask_url_paths(text: str | None, shown: str | None) -> None:
     assert mask_url_paths(text) == shown
+
+
+async def test_the_logs_page_shows_what_awaits_delivery(
+    db: AsyncSession, setup: dict
+) -> None:
+    """A delivery to be tried again is shown as retrying and counted among
+    the notifications awaiting delivery."""
+    response = await setup["viewer"].get("/notification-logs")
+
+    assert response.status_code == 200
+    assert "Awaiting Delivery" in response.text
+    assert "Retrying" in response.text
+    for secret in SECRETS:
+        assert secret not in response.text, secret

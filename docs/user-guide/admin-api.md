@@ -296,7 +296,7 @@ A provider's `config` holds its credentials: an SMTP password, a webhook URL who
 | ------ | --------------------------------- | ---- | ----------------------------------------------- |
 | `GET`  | `/api/v1/admin/notification-logs` | any  | One page of notification attempts, newest first |
 
-Filters: `status` (`sent`, `failed`, `retrying`, `rate_limited`, `deduplicated`, `suppressed`), `alert_id`, `notification_provider_id`, and `search` over alert, provider and check names. Each row's `error_message` has every URL in it cut to its host, and its `check_target` is shown as the token's role reads a target: an editor's with any credential masked, a viewer's as its scheme, host and port.
+Filters: `status` (`pending`, `sending`, `retrying`, `sent`, `failed`, `rate_limited`, `deduplicated`, `suppressed`; the first three are awaiting delivery), `alert_id`, `notification_provider_id`, and `search` over alert, provider and check names. Each row's `error_message` has every URL in it cut to its host, and its `check_target` is shown as the token's role reads a target: an editor's with any credential masked, a viewer's as its scheme, host and port.
 
 ## Status pages
 

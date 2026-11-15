@@ -6,7 +6,7 @@ from collections.abc import Collection, Sequence
 from datetime import datetime, timedelta
 from uuid import UUID
 
-from sqlalchemy import and_, case, delete, func, literal, select, update
+from sqlalchemy import ARRAY, Integer, and_, case, delete, func, literal, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -19,22 +19,20 @@ from app.models.enum_model import AlertTriggerType, NotificationStatus
 from app.models.notification_log_model import NotificationLog
 from app.models.notification_provider_model import NotificationProvider
 
-# Statuses that represent "alert evaluation already produced an audit row for this state."
-# Used by `get_last_notification_for_dedup` to recover dedup memory across provider-disabled,
-# rate-limited, suppressed, and failed-delivery conditions. `retrying` is excluded because it
-# represents a pending decision, not a recorded state.
-DEDUP_RELEVANT_STATUSES = (
-    NotificationStatus.SENT.value,
-    NotificationStatus.FAILED.value,
-    NotificationStatus.RATE_LIMITED.value,
-    NotificationStatus.SUPPRESSED.value,
-    NotificationStatus.DEDUPLICATED.value,
-)
+# Every status a notification row can hold: a row records a decision the
+# alert evaluation made for this state, whether it is still awaiting delivery
+# (pending, sending, retrying) or its delivery ended (sent, failed, rate
+# limited, suppressed). `get_last_notification_for_dedup` reads them all:
+# counting only `sent` would forget the state each time delivery failed, and
+# leaving out the undelivered would decide one state twice before its first
+# notification was delivered.
+DEDUP_RELEVANT_STATUSES = tuple(status.value for status in NotificationStatus)
 
-# The first key of the two-key advisory lock that serialises alert evaluation
-# per check (the second is the check id's hashtext). Any constant works: the
+# The first key of the two-key advisory locks that serialise the alert
+# decisions for a check (the second is the check's bucket,
+# `AlertEvaluationCoreService.decision_lock_key`). Any constant works: the
 # two-key space does not overlap the one-key space other advisory locks use.
-_ALERT_EVALUATION_LOCK_CLASS = 1_826_301_558
+_ALERT_DECISION_LOCK_CLASS = 1_826_301_558
 
 
 class AlertCRUD:
@@ -269,31 +267,51 @@ class AlertCRUD:
         return result.scalars().all()
 
     @staticmethod
-    async def queue_on_check_alerts(
-        db: AsyncSession, check_id: UUID, wait_ms: int
-    ) -> None:
-        """Take the transaction's advisory lock on alert evaluation for a check,
-        waiting at most `wait_ms` for an evaluation that holds it.
-
-        The wait has its own statement timeout, longer than the session's,
-        since the holder may be delivering a notification; the session's own
-        timeout applies again once the lock is held.
+    async def lock_alert_decisions(db: AsyncSession, keys: Sequence[int]) -> None:
+        """Take the transaction's advisory locks on alert decisions for these
+        keys, in the order given (ascending, so two transactions never wait
+        on each other in a cycle), under the session's statement timeout.
         """
-        previous: str = (
-            await db.execute(select(func.current_setting("statement_timeout")))
-        ).scalar_one()
-        await db.execute(
-            select(func.set_config("statement_timeout", f"{wait_ms}ms", True))
+        if not keys:
+            return
+        ordered = (
+            select(func.unnest(literal(list(keys), ARRAY(Integer))).label("key"))
+            .order_by("key")
+            .subquery()
         )
         await db.execute(
             select(
-                func.pg_advisory_xact_lock(
-                    _ALERT_EVALUATION_LOCK_CLASS,
-                    func.hashtext(str(check_id)),
+                func.count(
+                    func.pg_advisory_xact_lock(
+                        _ALERT_DECISION_LOCK_CLASS, ordered.c.key
+                    )
                 )
             )
         )
-        await db.execute(select(func.set_config("statement_timeout", previous, True)))
+
+    @staticmethod
+    async def checks_with_result_alerts(
+        db: AsyncSession, check_ids: Collection[UUID]
+    ) -> set[UUID]:
+        """Which of `check_ids` an enabled alert evaluates results for (any
+        trigger but the silence ones, which fire on missing results)."""
+        if not check_ids:
+            return set()
+        result = await db.execute(
+            select(AlertCheckMapping.check_id)
+            .join(Alert, Alert.id == AlertCheckMapping.alert_id)
+            .where(
+                AlertCheckMapping.check_id.in_(list(check_ids)),
+                AlertCheckMapping.is_enabled.is_(True),
+                Alert.is_enabled.is_(True),
+                Alert.deleted_at.is_(None),
+                Alert.trigger_type.not_in(
+                    [AlertTriggerType.NO_DATA, AlertTriggerType.AGENT_OFFLINE]
+                ),
+            )
+            .distinct()
+        )
+        return set(result.scalars().all())
 
     @staticmethod
     async def list_active_notif_mappings_for_alert(
@@ -319,11 +337,13 @@ class AlertCRUD:
         """Most recent dedup-relevant notification row for an alert+check pairing.
 
         Used by `_should_send_notification` to decide whether the current alert
-        evaluation represents a new state. Includes `sent`, `failed`, `rate_limited`,
-        `suppressed`, and `deduplicated` — anything that proves we already audited
-        this alert+check. Filtering to `sent` only would reset the dedup memory
-        every time the provider was disabled / rate-limited / failed, producing one
-        notification row per check execution.
+        evaluation represents a new state. Reads every status
+        (`DEDUP_RELEVANT_STATUSES`): a row awaiting delivery is as much a
+        decision for its state as one delivered, and filtering to `sent` only
+        would reset the dedup memory every time the provider was disabled /
+        rate-limited / failed, producing one notification row per check
+        execution. Rows decided in one instant are told apart by
+        `decision_seq`.
 
         Uses the denormalized `notification_logs.check_id` column so the lookup is a
         single-table index scan — earlier versions joined through `check_results`,
@@ -338,7 +358,9 @@ class AlertCRUD:
                     NotificationLog.status.in_(DEDUP_RELEVANT_STATUSES),
                 )
             )
-            .order_by(NotificationLog.sent_at.desc())
+            .order_by(
+                NotificationLog.sent_at.desc(), NotificationLog.decision_seq.desc()
+            )
             .limit(1)
         )
         return result.scalar_one_or_none()

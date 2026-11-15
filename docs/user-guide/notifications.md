@@ -3,9 +3,9 @@
 The notification system has two parts:
 
 - **Notification providers** — the destinations notifications are sent to (Email, Webhook, Home Assistant). Configured once and attached to alerts.
-- **Notification logs** — a complete audit trail of every notification LuxSwirl has sent.
+- **Notification logs** — a complete audit trail of every notification an alert decided, and how its delivery went.
 
-When an alert fires, notifications are sent through all of its attached providers in parallel; if one provider fails, the others still receive theirs.
+Delivery is asynchronous. When an alert fires, LuxSwirl records one notification per attached provider as **Pending**, in the same transaction that stores the check result; a delivery worker in the server then sends each one, separately from the agent's report and from every other provider, and records the outcome on the same log row. An agent's report is never held up by a slow provider, and if one provider fails, the others still receive theirs. Notifications about one check (or agent) from one alert reach each provider in the order they were decided: a recovery is never delivered before its outage. A delivery that fails in a way that may pass (a timeout, a connection error, an HTTP 5xx, 408 or 429) is tried again, up to 5 attempts, after 30 seconds, 2, 10 and 30 minutes; one that would fail the same way again (an HTTP 4xx, a blocked address, a header HTTP cannot send) fails at once. An attempt is cut off after 120 seconds. A server that stops mid-delivery leaves the notification **Sending**; it is delivered again once its 3-minute claim lapses, so a notification can, rarely, arrive twice.
 
 **Access:** providers under **Settings → Notifications**; logs via **Notifications** in the sidebar (`/notification-logs`).
 
@@ -261,15 +261,18 @@ ______________________________________________________________________
 
 ## Notification logs
 
-The logs page summarizes **Total / Sent Successfully / Failed** and lists every notification attempt. Each row shows timestamp, alert, provider, check type, check name, target, check result (Up/Down), latency, notification status, any error, and actions (view check, snooze/un-snooze). Filter by **Status**, **Alert**, **Provider**, and **Per Page**; filters persist in the URL for sharing.
+The logs page summarizes **Total / Sent Successfully / Awaiting Delivery / Failed** and lists every notification. Each row shows timestamp, alert, provider, check type, check name, target, check result (Up/Down), latency, notification status, any error, and actions (view check, snooze/un-snooze). Filter by **Status**, **Alert**, **Provider**, and **Per Page**; filters persist in the URL for sharing.
 
-| Status           | Meaning                                                                                                                                                                                                                                                                                   |
-| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Sent**         | Delivered — provider returned success (2xx / SMTP OK)                                                                                                                                                                                                                                     |
-| **Failed**       | Delivery failed (4xx/5xx or SMTP error); the Error column has the message. Common causes: bad config, network, auth failure, timeout, invalid recipient                                                                                                                                   |
-| **Rate Limited** | Suppressed by the provider's rate limit (see below)                                                                                                                                                                                                                                       |
-| **Deduplicated** | Suppressed by alert de-duplication (same status within the resend window)                                                                                                                                                                                                                 |
-| **Suppressed**   | Not delivered for an audited reason in the Error column — either **"Notification provider is disabled"** (re-enable it), or **"Suppressed: parent check '\<name>' is down"** (cascade suppression — resumes automatically when the parent recovers; see [Checks → Depends On](checks.md)) |
+| Status           | Meaning                                                                                                                                                                                                                                                                                                                                                                                            |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Pending**      | Decided, waiting for the delivery worker (usually a second or two)                                                                                                                                                                                                                                                                                                                                 |
+| **Sending**      | Being delivered now                                                                                                                                                                                                                                                                                                                                                                                |
+| **Retrying**     | An attempt failed in a way that may pass; tried again later (see above). The Error column has the last attempt's error                                                                                                                                                                                                                                                                             |
+| **Sent**         | Delivered — provider returned success (2xx / SMTP OK)                                                                                                                                                                                                                                                                                                                                              |
+| **Failed**       | Delivery failed for good (a refusal that would repeat, or the last attempt); the Error column has the message. Common causes: bad config, network, auth failure, timeout, invalid recipient                                                                                                                                                                                                        |
+| **Rate Limited** | Suppressed by the provider's rate limit (see below)                                                                                                                                                                                                                                                                                                                                                |
+| **Deduplicated** | Suppressed by alert de-duplication (same status within the resend window)                                                                                                                                                                                                                                                                                                                          |
+| **Suppressed**   | Not delivered for an audited reason in the Error column — **"Notification provider is disabled"** (re-enable it), **"Notification provider is deleted"** or **"Alert is disabled"** (changed after the notification was decided), or **"Suppressed: parent check '\<name>' is down"** (cascade suppression — resumes automatically when the parent recovers; see [Checks → Depends On](checks.md)) |
 
 **Snooze** pauses notifications for one **alert–check relationship**. From a log row, click **Snooze** (adds 15 minutes; click again to extend; the button shows remaining time like `1h 30m`); **un-snooze** to resume immediately. Snooze is scoped to that pair only — the same alert on other checks, and other alerts on the same check, keep notifying. Monitoring and data collection continue while snoozed.
 
@@ -293,10 +296,11 @@ Each provider can cap its own volume to prevent spam:
 | **Rate Limit Count**            | null    | Max notifications per window. `null` = unlimited |
 | **Rate Limit Window (minutes)** | 60      | The counting window                              |
 
-When a notification is about to send, LuxSwirl counts how many were sent via that provider within the window; if the count has reached the limit, it suppresses the send and logs it as `rate_limited` until the window rolls forward:
+When the delivery worker is about to send a notification, it counts how many were sent (or are being sent, or were rate limited) via that provider within the window; if the count has reached the limit, it does not send and logs it as `rate_limited` until the window rolls forward:
 
 ```
-sent_in_window = COUNT(logs WHERE provider = X AND status = 'sent'
+sent_in_window = COUNT(logs WHERE provider = X
+                       AND status IN ('sent', 'sending', 'rate_limited')
                        AND sent_at >= NOW() - window_minutes)
 if sent_in_window >= rate_limit_count:  suppress (log "rate_limited")
 else:                                   send

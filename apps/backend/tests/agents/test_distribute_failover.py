@@ -38,6 +38,7 @@ from fixtures.factories import (
     make_check_result,
     make_notification_provider,
 )
+from fixtures.outbox import deliver_in
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -398,6 +399,7 @@ async def test_a_check_that_just_moved_is_not_yet_silent(
     alert = await _alert(db, "no_data", check)
 
     await SilenceAlertCoreService.evaluate(db)
+    await deliver_in(db)
 
     assert sent == []
     assert await _rows(db, alert) == []
@@ -414,6 +416,7 @@ async def test_a_moved_check_its_new_agent_never_reports_notifies(
     alert = await _alert(db, "no_data", check)
 
     await SilenceAlertCoreService.evaluate(db)
+    await deliver_in(db)
 
     assert [c.status_label for c in sent] == ["NO DATA"]
     assert [r.status for r in await _rows(db, alert)] != ["suppressed"]
@@ -429,6 +432,7 @@ async def test_an_offline_agent_is_watched_after_its_checks_moved(
     await _alert(db, "agent_offline", check)
 
     await SilenceAlertCoreService.evaluate(db)
+    await deliver_in(db)
 
     assert [(c.status_label, c.agent_id) for c in sent] == [("OFFLINE", owner.id)]
 
@@ -465,6 +469,7 @@ async def test_a_moved_check_is_not_silent_before_its_agent_can_know(
     alert = await _alert(db, "no_data", check)
 
     await SilenceAlertCoreService.evaluate(db)
+    await deliver_in(db)
 
     assert sent == []
     assert await _rows(db, alert) == []

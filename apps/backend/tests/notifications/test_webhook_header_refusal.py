@@ -31,6 +31,7 @@ from app.services.core.api_token_core_service import ApiTokenCoreService
 from app.services.core.auth_core_service import AuthCoreService
 from app.services.core.notification_core_service import NotificationCoreService
 from fixtures.factories import make_alert, make_notification_provider, make_user
+from fixtures.outbox import queue_and_deliver
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -231,14 +232,7 @@ async def test_stored_bad_value_fails_before_sending(
     ctx = NotificationContext(
         check_name="c", check_type="http", target="t", agent_id=None, status="error"
     )
-    rows = await NotificationCoreService.send_notifications(
-        db,
-        [provider.id],
-        ctx,
-        alert_id=alert.id,
-        check_result_id=None,
-        check_result_timestamp=None,
-    )
+    rows = await queue_and_deliver(db, [provider.id], ctx, alert_id=alert.id)
     assert requests_seen == []
     assert [r.status for r in rows] == [NotificationStatus.FAILED]
     error = rows[0].error_message or ""

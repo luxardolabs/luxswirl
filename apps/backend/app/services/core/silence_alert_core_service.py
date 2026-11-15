@@ -19,10 +19,11 @@ dead agent with a hundred checks sends one agent_offline notification, not a
 hundred no_data ones. A silence already open (notified) stays as it is while
 its agent restarts, so its recovery still goes out.
 
-A pass first decides, reading only, then delivers. The scheduled job records
-each notification in its own transaction, so a pass cut short (the job's
-runtime limit, a slow provider) keeps the rows of what it already delivered
-and the next pass does not deliver them again.
+A pass first decides, reading only, then records. The scheduled job records
+each notification in its own transaction, as a `pending` notification row the
+delivery worker sends (`NotificationDeliveryCoreService`), so a pass never
+waits on a provider, and a pass cut short (the job's runtime limit) keeps the
+rows it already recorded, which the next pass does not record again.
 """
 
 from collections.abc import Sequence
@@ -159,7 +160,7 @@ class SilenceAlertCoreService:
     async def _record(
         db: AsyncSession, notice: _Notice, counts: SilencePassCounts
     ) -> None:
-        """Send or record one decided notice."""
+        """Queue or record one decided notice."""
         if notice.suppressed is not None:
             mappings = await AlertCRUD.list_active_notif_mappings_for_alert(
                 db, notice.alert_id
@@ -186,7 +187,7 @@ class SilenceAlertCoreService:
 
         if notice.context is None:
             return
-        written = await AlertEvaluationCoreService.send_to_providers(
+        written = await AlertEvaluationCoreService.queue_for_providers(
             db,
             notice.alert_id,
             notice.context,
@@ -516,7 +517,7 @@ class SilenceAlertCoreService:
 
 async def evaluate_silence_alerts() -> dict[str, int]:
     """Scheduler job: decide in one session, then record each notice in its own,
-    so what is delivered is committed with it before the next is sent."""
+    so each notice's rows commit before the next notice is recorded."""
     counts = SilencePassCounts()
     async with worker_session() as db:
         notices = await SilenceAlertCoreService._decide(db, counts)

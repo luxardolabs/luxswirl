@@ -3,13 +3,17 @@ Alert evaluation - decides, per incoming check result, whether an alert fires
 and whether its notification is sent, resent, de-duplicated or suppressed.
 
 The configuration side of alerts (CRUD, check assignment, snoozing) lives in
-`alert_core_service`. This is the engine the result-ingestion pipeline drives:
-it reads the configured alerts, writes the notification audit trail
-(`notification_logs`) and hands sends to the notification providers.
+`alert_core_service`. This is the engine the result-ingestion pipeline drives,
+inside the report's own transaction: it reads the configured alerts and writes
+each decision to the notification log (`notification_logs`), a notification
+to send as a `pending` row that the delivery worker delivers once the report
+commits (`NotificationDeliveryCoreService`). Nothing here waits on a provider.
 """
 
 import fnmatch
 import hashlib
+import zlib
+from collections.abc import Sequence
 from datetime import datetime
 from typing import Any
 from uuid import UUID
@@ -40,24 +44,81 @@ SILENCE_TRIGGER_TYPES = frozenset(
 )
 
 
-# How long an evaluation waits for another evaluation of the same check, which
-# may be delivering a notification (a webhook's timeout is 10 s by default).
-# Under the agent's 30 s report timeout, so the report is still answered.
-CHECK_LOCK_WAIT_MS = 20_000
+# Alert decisions are serialised per check under advisory locks keyed by the
+# check's bucket: one transaction holds at most this many, however many checks
+# its report names (PostgreSQL's lock table is shared and bounded), and checks
+# that share a bucket only wait on each other's short decisions.
+DECISION_LOCK_BUCKETS = 1024
 
 
 class AlertEvaluationCoreService:
-    """Evaluates check results against alerts and sends their notifications."""
+    """Evaluates check results against alerts and queues their notifications."""
 
     @staticmethod
-    async def lock_check(db: AsyncSession, check_id: UUID) -> None:
-        """Hold alert evaluation for this check to the transaction's end.
+    def decision_lock_key(check_id: UUID) -> int:
+        """The advisory lock key a check's alert decisions are taken under."""
+        return zlib.crc32(check_id.bytes) % DECISION_LOCK_BUCKETS
 
-        Every evaluation of a check's results takes it first, so one
-        evaluation's notification rows are committed before the next reads
-        them to de-duplicate (`get_last_notification_for_dedup`).
+    @staticmethod
+    async def decide_report_alerts(
+        db: AsyncSession, result_keys: Sequence[tuple[UUID, datetime]]
+    ) -> int:
+        """Decide every alert notification for a report's results, in its own
+        transaction, after they are inserted.
+
+        The checks an alert evaluates are locked first, all at once and in key
+        order (`AlertCRUD.lock_alert_decisions`), to the transaction's end: a
+        second report on one of them (a replicate check's other agent, the
+        same report sent again) decides only once this one has committed, and
+        reads its decisions. Each check's results are then decided oldest
+        first. A decision is a notification row (`queue_notifications`), never
+        a delivery, so the locks are held for reads and inserts alone. A lock
+        not had within the session's statement timeout fails the report,
+        which the agent sends again; nothing is decided without it.
+
+        Args:
+            db: The report's session, its results inserted
+            result_keys: `(check_id, timestamp)` of every result the report
+                names that is stored, whether this report stored it or an
+                earlier send of it did
+
+        Returns:
+            How many results were evaluated.
         """
-        await AlertCRUD.queue_on_check_alerts(db, check_id, CHECK_LOCK_WAIT_MS)
+        by_check: dict[UUID, list[datetime]] = {}
+        for check_id, timestamp in result_keys:
+            by_check.setdefault(check_id, []).append(timestamp)
+        alerted = await AlertCRUD.checks_with_result_alerts(db, by_check)
+        if not alerted:
+            return 0
+        await AlertCRUD.lock_alert_decisions(
+            db,
+            sorted({AlertEvaluationCoreService.decision_lock_key(c) for c in alerted}),
+        )
+        evaluated = 0
+        for check_id in sorted(alerted):
+            results = await CheckResultCRUD.list_for_check_at(
+                db, check_id, by_check[check_id]
+            )
+            for check_result in results:
+                # swallowed-exceptions: one result's failed evaluation is logged with its id and rolled back to its savepoint; the report's other results must still be decided, and its results stay stored
+                try:
+                    async with db.begin_nested():
+                        await AlertEvaluationCoreService.evaluate_check_result(
+                            db, check_result
+                        )
+                    evaluated += 1
+                except Exception:
+                    logger.exception(
+                        "Error evaluating alerts for check result",
+                        extra={"check_result_id": str(check_result.id)},
+                    )
+        if evaluated:
+            logger.info(
+                "Evaluated alerts for check results",
+                extra={"alerts_evaluated": evaluated},
+            )
+        return evaluated
 
     @staticmethod
     async def evaluate_check_result(
@@ -502,7 +563,7 @@ class AlertEvaluationCoreService:
         check_result: CheckResult,
     ) -> None:
         """
-        Fire an alert - send notifications through all configured providers.
+        Fire an alert - queue its notification for each configured provider.
 
         Args:
             db: Database session
@@ -552,7 +613,7 @@ class AlertEvaluationCoreService:
         )
         # State key recorded on every NotificationLog row so dedup can detect
         # transitions. Computed once per fire.
-        await AlertEvaluationCoreService.send_to_providers(
+        await AlertEvaluationCoreService.queue_for_providers(
             db,
             alert.id,
             context,
@@ -640,7 +701,7 @@ class AlertEvaluationCoreService:
         )
 
     @staticmethod
-    async def send_to_providers(
+    async def queue_for_providers(
         db: AsyncSession,
         alert_id: UUID,
         context: NotificationContext,
@@ -652,12 +713,12 @@ class AlertEvaluationCoreService:
         check_result_id: UUID | None = None,
         check_result_timestamp: datetime | None = None,
     ) -> int:
-        """Send `context` through each of the alert's live providers.
+        """Queue `context` for delivery through each of the alert's live providers.
 
         Every provider's NotificationLog row records `state_key`, the subject
         (`check_id`, or `agent_id` for an agent_offline alert) and the result
-        that triggered it, when one did. A provider that fails is recorded as
-        failed; it never stops the others.
+        that triggered it, when one did, and waits as `pending` for the
+        delivery worker, which records each provider's outcome on its row.
 
         Returns:
             How many notification rows were written (0 when the alert has no
@@ -671,7 +732,7 @@ class AlertEvaluationCoreService:
         ]
         if not provider_ids:
             return 0
-        rows = await NotificationCoreService.send_notifications(
+        rows = await NotificationCoreService.queue_notifications(
             db,
             provider_ids,
             context,

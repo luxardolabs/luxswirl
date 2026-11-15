@@ -8,15 +8,18 @@ from uuid import UUID, uuid4
 
 from sqlalchemy import (
     JSON,
+    BigInteger,
     Boolean,
     DateTime,
     Float,
     ForeignKey,
     Index,
+    Sequence,
     String,
     Text,
     Uuid,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
@@ -29,6 +32,9 @@ from app.models.base_model import (
 )
 from app.models.enum_model import NotificationStatus
 
+# Numbers the rows in the order they are decided (`decision_seq`).
+DECISION_SEQUENCE = Sequence("notification_decision_order")
+
 if TYPE_CHECKING:
     from app.models.alert_model import Alert
     from app.models.notification_provider_model import NotificationProvider
@@ -36,9 +42,14 @@ if TYPE_CHECKING:
 
 class NotificationLog(Base, TimestampMixin, TableNameMixin, SerializerMixin):
     """
-    Notification Log - tracks all notification attempts.
+    Notification Log - every notification an alert decided, and its delivery.
 
-    Provides audit trail and helps with de-duplication and rate limiting.
+    Also the delivery outbox: alert evaluation writes a `pending` row, with
+    the notification's `payload`, in the transaction that decides it, and the
+    delivery worker (`app/background/notification_delivery_worker.py`)
+    claims it, delivers it outside any transaction and records the outcome.
+    Provides the audit trail and the memory de-duplication and rate limiting
+    read.
 
     Plain table (not a hypertable): low-volume audit data queried by alert /
     provider / status, with DELETE-based retention via cleanup_notification_logs.
@@ -57,6 +68,13 @@ class NotificationLog(Base, TimestampMixin, TableNameMixin, SerializerMixin):
             "check_result_timestamp",
         ),
         Index("idx_notification_logs_status", "status"),
+        # The delivery worker's claim: rows still awaiting delivery, by when
+        # they are next due.
+        Index(
+            "idx_notification_logs_undelivered",
+            "next_attempt_at",
+            postgresql_where="status IN ('pending', 'sending', 'retrying')",
+        ),
         Index("idx_notification_logs_alert_agent", "alert_id", "agent_id"),
         Index("idx_notification_logs_sent_at", "sent_at"),
         # Composite index for rate limiting queries
@@ -133,7 +151,48 @@ class NotificationLog(Base, TimestampMixin, TableNameMixin, SerializerMixin):
     status: Mapped[NotificationStatus] = mapped_column(
         str_enum(NotificationStatus, 50),
         nullable=False,
-        comment="Status of notification (sent, failed, retrying, rate_limited, deduplicated, suppressed)",
+        comment="Status of notification (pending, sending, retrying, sent, failed, rate_limited, deduplicated, suppressed)",
+    )
+
+    # The delivery outbox
+    decision_seq: Mapped[int] = mapped_column(
+        BigInteger,
+        # Each insert takes the sequence's next value; the column's default in
+        # the database (migration 020) does the same for a row written without it.
+        DECISION_SEQUENCE,
+        nullable=False,
+        comment="Order the rows were decided in: one alert's notifications about one subject are delivered to a provider in this order",
+    )
+
+    payload: Mapped[dict[str, Any] | None] = mapped_column(
+        JSONB,
+        nullable=True,
+        comment="The notification to deliver (NotificationContext) while it awaits delivery; cleared once delivery ends",
+    )
+
+    attempts: Mapped[int] = mapped_column(
+        nullable=False,
+        default=0,
+        server_default="0",
+        comment="Delivery attempts made",
+    )
+
+    next_attempt_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="When a pending or retrying row is next due for delivery",
+    )
+
+    lease_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="When a sending row's claim lapses and another worker may deliver it",
+    )
+
+    delivered_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="When delivery ended (sent, failed, suppressed or rate limited by the worker)",
     )
 
     error_message: Mapped[str | None] = mapped_column(
@@ -146,7 +205,7 @@ class NotificationLog(Base, TimestampMixin, TableNameMixin, SerializerMixin):
         DateTime(timezone=True),
         server_default=func.now(),
         nullable=False,
-        comment="When notification was sent",
+        comment="When the notification was decided (delivered_at is when its delivery ended)",
     )
 
     # Provider response data (for debugging)

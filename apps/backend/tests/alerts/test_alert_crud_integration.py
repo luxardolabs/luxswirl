@@ -291,10 +291,11 @@ class TestDedupRelevantStatuses:
         assert "suppressed" in DEDUP_RELEVANT_STATUSES
         assert "deduplicated" in DEDUP_RELEVANT_STATUSES
 
-    def test_excludes_retrying(self):
-        """`retrying` represents a pending decision, not a recorded state.
-        Including it would let in-flight retries spoof dedup precedent."""
-        assert "retrying" not in DEDUP_RELEVANT_STATUSES
+    def test_includes_the_notifications_awaiting_delivery(self):
+        """A row still pending, sending or retrying is a decision already
+        made for its state: leaving it out would decide one state again
+        before its first notification was delivered."""
+        assert {"pending", "sending", "retrying"} <= set(DEDUP_RELEVANT_STATUSES)
 
 
 # ---------------------------------------------------------------------------

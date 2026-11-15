@@ -42,7 +42,7 @@ from app.core.security import (
     verify_recovery_registration_key,
     verify_registration_token,
 )
-from app.db import get_db, worker_session
+from app.db import get_db
 from app.models.enum_model import UserRole
 from app.schemas.admin_check_schema import AdminBulkCreate
 from app.schemas.agent_schema import AgentHeartbeat, AgentRegisterRequest
@@ -270,6 +270,7 @@ AuthenticatedHeartbeat = Annotated[HeartbeatSender, Depends(require_heartbeat_se
 async def require_reporting_agent(
     request: Request,
     report: AgentReportSubmission,
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     authorization: Annotated[str | None, Header()] = None,
 ) -> VerifiedAgent:
     """The report's agent, authenticated by its OWN key.
@@ -277,32 +278,25 @@ async def require_reporting_agent(
     Check results are accepted only with the agent-specific key, never the
     registration key, so one agent cannot submit results as another. Runs
     before the route body, so nothing is written for a caller that fails.
-
-    The agent is read in a transaction of its own, ended before the route
-    runs: the report is stored and its alerts evaluated in transactions of
-    their own (`CheckResultCoreService.accept_agent_report`), which may wait
-    out a notification's delivery, and this read must not sit idle in a
-    transaction, holding a pooled connection, until the answer.
     """
-    async with worker_session() as db:
-        try:
-            agent = await AgentCoreService.get_agent_by_id(db, report.agent_id)
-        except AgentNotFoundException:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Agent not found: {report.agent_id}",
-            ) from None
-        if not agent.api_key_hash:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=(
-                    "Agent must be approved and have agent-specific key to submit "
-                    "check results"
-                ),
-            )
-        key_hash = agent.api_key_hash
-        await verify_agent_token(agent, authorization)
-        return VerifiedAgent(agent_id=agent.id, key_hash=key_hash)
+    try:
+        agent = await AgentCoreService.get_agent_by_id(db, report.agent_id)
+    except AgentNotFoundException:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Agent not found: {report.agent_id}",
+        ) from None
+    if not agent.api_key_hash:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "Agent must be approved and have agent-specific key to submit "
+                "check results"
+            ),
+        )
+    key_hash = agent.api_key_hash
+    await verify_agent_token(agent, authorization)
+    return VerifiedAgent(agent_id=agent.id, key_hash=key_hash)
 
 
 # The agent whose own key authenticated this report.

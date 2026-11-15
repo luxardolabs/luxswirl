@@ -22,7 +22,6 @@ from app.crud.check_result_crud import (
     ResultCounts,
     UptimeCounts,
 )
-from app.db import worker_session
 from app.models.check_result_model import CheckResult
 from app.schemas.agent_schema import AgentOption
 from app.schemas.check_artifact_schema import CheckArtifactResponse
@@ -178,11 +177,14 @@ class CheckResultCoreService:
                 stored the agent is judged again on its row as stored now
                 (`AgentCoreService.require_still_admitted`).
 
+        Every alert notification the stored results call for is decided in
+        this transaction, after the insert, and queued as a `pending`
+        notification row (`AlertEvaluationCoreService.decide_report_alerts`):
+        nothing is delivered before the caller commits, and the commit is all
+        the agent's answer waits on.
+
         Returns:
-            Processing summary, with `result_keys`: the `(check_id, timestamp)`
-            of each result the report names that is stored, whether this report
-            stored it or an earlier send of it did, for `evaluate_alerts` once
-            the caller commits
+            Processing summary
 
         Raises:
             AgentNotFoundException: The agent does not exist, or was deleted
@@ -363,8 +365,8 @@ class CheckResultCoreService:
         # Bulk insert. ON CONFLICT DO NOTHING on the (check_id, timestamp) unique
         # index makes agent retries no-ops at the DB level — no catch, no rollback,
         # get_db() owns the commit. Returns only the rows actually inserted; those
-        # are the ones we post-process for metrics + alerts (a retried duplicate
-        # must not re-fire either). (TimescaleDB >= 2.11 inserts into compressed
+        # are the ones the metrics are updated for (alerts are decided for every
+        # kept row, below, and de-duplicate themselves). (TimescaleDB >= 2.11 inserts into compressed
         # chunks transparently, so late data no longer rejects.)
         # The checks the rows reference, then the agent, locked as the insert's
         # own foreign key checks lock them and in the order an agent delete
@@ -428,14 +430,17 @@ class CheckResultCoreService:
             except Exception:
                 logger.exception("Error updating Prometheus metrics")
 
-        # The alerts are not evaluated here: their notifications are delivered
-        # inline (a webhook may wait out its whole timeout), and this
-        # transaction holds the agent's row FOR KEY SHARE to its commit, which
-        # an operator's pause, disable, archive, revoke or delete waits for.
-        # The caller commits, then hands `result_keys` to `evaluate_alerts`.
-        # A result already stored (the agent sending again a report the server
-        # stored but never answered) is named too: its alerts may never have
-        # been evaluated, and evaluating them again sends nothing twice.
+        # The alerts are decided here, in this transaction: a decision writes a
+        # notification row and delivers nothing (the delivery worker sends it
+        # once this commits), so the agent's row and the checks are never held
+        # while a provider is waited on. A result already stored (the agent
+        # sending again a report the server stored but never answered) is
+        # decided too: its alerts may never have been, and deciding them again
+        # queues nothing twice (`_already_judged`).
+        await AlertEvaluationCoreService.decide_report_alerts(
+            db, [(row["check_id"], row["timestamp"]) for row in kept_rows]
+        )
+
         return {
             "status": "ok",
             "agent_id": agent_id,
@@ -443,96 +448,7 @@ class CheckResultCoreService:
             "results_processed": results_processed,
             "results_failed": results_failed,
             "check_display_names": check_display_names,
-            "result_keys": [(row["check_id"], row["timestamp"]) for row in kept_rows],
         }
-
-    @staticmethod
-    async def accept_agent_report(
-        submission: AgentReportSubmission, *, verified_key_hash: str | None
-    ) -> dict[str, Any]:
-        """Store a report's results, commit them, then evaluate their alerts.
-
-        The results are stored in a transaction of their own, which holds the
-        agent's row FOR KEY SHARE only until they are committed; the alerts
-        are evaluated after it (`evaluate_alerts`), so an operator's write to
-        the agent never waits behind a notification's delivery. The caller
-        answers the agent only once this returns: the agent sends one report
-        at a time, so each report's notifications are decided before its next
-        report arrives, and a server that stops before answering is sent the
-        report again.
-
-        Args:
-            submission: The agent's report, its results not yet validated
-            verified_key_hash: As `process_agent_report` takes it
-
-        Returns:
-            `process_agent_report`'s summary.
-        """
-        async with worker_session() as db:
-            result = await CheckResultCoreService.process_agent_submission(
-                db, submission, verified_key_hash=verified_key_hash
-            )
-        await CheckResultCoreService.evaluate_alerts(result["result_keys"])
-        return result
-
-    @staticmethod
-    async def evaluate_alerts(result_keys: Sequence[tuple[UUID, datetime]]) -> int:
-        """Evaluate the alerts for results a report stored, once it committed.
-
-        Each check's results are evaluated in a transaction of their own,
-        oldest first, holding the check's advisory lock
-        (`AlertEvaluationCoreService.lock_check`): two evaluations of one
-        check (a replicate check reported by several agents, a report sent
-        again) run one after the other, and each sees the notifications the
-        other committed. A result that fails is logged and rolled back to its
-        savepoint, and the check's other results are still evaluated; a check
-        whose evaluation fails as a whole (its lock not had in time, the
-        database gone) is logged, and the next result reported for it is
-        judged afresh.
-
-        Args:
-            result_keys: `(check_id, timestamp)` of each result to evaluate
-                (`process_agent_report`'s `result_keys`)
-
-        Returns:
-            How many results were evaluated.
-        """
-        by_check: dict[UUID, list[datetime]] = {}
-        for check_id, timestamp in result_keys:
-            by_check.setdefault(check_id, []).append(timestamp)
-        evaluated = 0
-        for check_id, timestamps in by_check.items():
-            # swallowed-exceptions: one check's failed evaluation (its lock not had in time, the database gone) is logged; the other checks' alerts must still fire
-            try:
-                async with worker_session() as db:
-                    await AlertEvaluationCoreService.lock_check(db, check_id)
-                    results = await CheckResultCRUD.list_for_check_at(
-                        db, check_id, timestamps
-                    )
-                    for check_result in results:
-                        # swallowed-exceptions: one result's failed evaluation is logged with its id and rolled back to its savepoint; the check's other results must still be evaluated
-                        try:
-                            async with db.begin_nested():
-                                await AlertEvaluationCoreService.evaluate_check_result(
-                                    db, check_result
-                                )
-                            evaluated += 1
-                        except Exception:
-                            logger.exception(
-                                "Error evaluating alerts for check result",
-                                extra={"check_result_id": str(check_result.id)},
-                            )
-            except Exception:
-                logger.exception(
-                    "Alert evaluation for a check failed",
-                    extra={"check_id": str(check_id), "results": len(timestamps)},
-                )
-        if evaluated:
-            logger.info(
-                "Evaluated alerts for check results",
-                extra={"alerts_evaluated": evaluated},
-            )
-        return evaluated
 
     # ------------------------------------------------------------------
     # CRUD delegation methods (used by view services)
