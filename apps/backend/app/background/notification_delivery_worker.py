@@ -106,21 +106,39 @@ class DeliveryPool:
             self._in_flight, timeout=timeout, return_when=asyncio.FIRST_COMPLETED
         )
         for attempt in ended:
-            claimed = self._in_flight.pop(attempt)
-            outcome = attempt.result()
-            async with self._open_session() as db:
-                await NotificationDeliveryCoreService.record(
-                    db, claimed, outcome, await self._clock(db)
-                )
+            await self._record(attempt)
+
+    async def _record(self, attempt: asyncio.Task[DeliveryOutcome]) -> None:
+        """Record an ended attempt's outcome. It stays in flight until the
+        record commits, so a stop that interrupts the record records it
+        again rather than losing it."""
+        claimed = self._in_flight[attempt]
+        async with self._open_session() as db:
+            await NotificationDeliveryCoreService.record(
+                db, claimed, attempt.result(), await self._clock(db)
+            )
+        del self._in_flight[attempt]
 
     async def cancel(self) -> None:
-        """Stop every attempt in flight and hand their rows back, due again
-        at once. A row the hand-back cannot reach (the database gone) is
-        claimed again once its lease lapses."""
+        """Stop every attempt in flight and hand back the rows of those it
+        cut off, due again at once; an attempt that had already ended is
+        recorded, never sent again. A row the hand-back or the record cannot
+        reach (the database gone) is claimed again once its lease lapses."""
         for attempt in self._in_flight:
             attempt.cancel()
         await asyncio.gather(*self._in_flight, return_exceptions=True)
-        cut_off = list(self._in_flight.values())
+        cut_off: list[ClaimedDelivery] = []
+        for attempt, claimed in list(self._in_flight.items()):
+            if attempt.cancelled() or attempt.exception() is not None:
+                cut_off.append(claimed)
+                del self._in_flight[attempt]
+                continue
+            try:
+                await self._record(attempt)
+            except Exception:
+                logger.exception(
+                    "Ended notification not recorded; its lease recovers it"
+                )
         self._in_flight.clear()
         if not cut_off:
             return
