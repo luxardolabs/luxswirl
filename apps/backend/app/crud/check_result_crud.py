@@ -67,6 +67,11 @@ def _in_use() -> ColumnElement[bool]:
 # 2.1 cannot type `func.*` columns, so the row is typed by its arity only.
 type AggregateRow = Row[*tuple[Any, ...]]
 
+# A `"nameserver"` key's string value in stored metrics, captured as the JSON
+# string it is written as, quotes and escapes included. Rows stored before the
+# server wrote compact JSON have a space after the colon.
+_NAMESERVER_VALUE = r'"nameserver"\s*:\s*("(?:[^"\\]|\\.)*")'
+
 
 class ResultCounts(NamedTuple):
     """How many results a check reported in a window, and how many succeeded."""
@@ -684,11 +689,12 @@ class CheckResultCRUD:
         Returns:
             List of result rows with bucket_time, success, latency_ms, `errors`
             (the bucket's distinct errors), `size_noted` (whether any of its
-            results' metrics are the agent's size note), `nameserver_metrics`
-            (the distinct metrics of its failed results that name a nameserver)
-            and `metrics` (its newest result's). Each error is judged by its own
-            result, so the bucket keeps them apart and carries what judging them
-            reads.
+            results' metrics are the agent's size note), `nameservers` (the
+            distinct `"nameserver"` values its failed results' metrics hold, each
+            as the JSON string it is stored as) and `metrics` (its newest
+            result's). Each error is judged by its own result, so the bucket keeps
+            them apart and carries what judging them reads, never more than one
+            copy of a value however many results hold it.
         """
         cutoff = utc_now() - timedelta(hours=hours)
 
@@ -714,9 +720,11 @@ class CheckResultCRUD:
                     as errors,
                 COALESCE(BOOL_OR(metrics LIKE '%"metrics_truncated"%'), false)
                     as size_noted,
-                ARRAY_AGG(DISTINCT metrics) FILTER (
+                ARRAY_AGG(
+                    DISTINCT substring(metrics FROM :nameserver_value)
+                ) FILTER (
                     WHERE error IS NOT NULL AND metrics LIKE '%"nameserver"%'
-                ) as nameserver_metrics,
+                ) as nameservers,
                 (ARRAY_AGG(metrics ORDER BY timestamp DESC))[1] as metrics
             FROM check_results
             WHERE check_id = :check_id
@@ -727,7 +735,13 @@ class CheckResultCRUD:
             """
         )
         result = await db.execute(
-            history_query, {"check_id": check_id, "cutoff": cutoff, "bucket": bucket}
+            history_query,
+            {
+                "check_id": check_id,
+                "cutoff": cutoff,
+                "bucket": bucket,
+                "nameserver_value": _NAMESERVER_VALUE,
+            },
         )
         return list(result.all())
 

@@ -222,7 +222,7 @@ class CheckDetailViewService:
                     row.errors,
                     row.metrics,
                     size_noted=row.size_noted,
-                    nameserver_metrics=row.nameserver_metrics,
+                    nameservers=row.nameservers,
                     masked=masked,
                     ran_synthetic=check.ran_synthetic,
                     configured=(check.target, nameserver),
