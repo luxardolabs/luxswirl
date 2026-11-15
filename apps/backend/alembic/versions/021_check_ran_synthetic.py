@@ -9,7 +9,7 @@ Backfilled for every check that is synthetic now, and for every other check with
 a stored result whose metrics name a synthetic section (one retyped earlier).
 
 Revision ID: 7c3e9a1d5b26
-Revises: 5d2b8e4f7a19
+Revises: 7c3e9a2d4b61
 Create Date: 2026-11-15
 
 """
@@ -18,7 +18,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "7c3e9a1d5b26"
-down_revision = "5d2b8e4f7a19"
+down_revision = "7c3e9a2d4b61"
 branch_labels = None
 depends_on = None
 

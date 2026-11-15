@@ -24,7 +24,7 @@ _REVISION = (
     Path(__file__).resolve().parent.parent.parent
     / "alembic"
     / "versions"
-    / "020_check_ran_synthetic.py"
+    / "021_check_ran_synthetic.py"
 )
 
 
