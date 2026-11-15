@@ -73,3 +73,59 @@ webhook = 0
 mounts = 1
 jobs = 37
 tools = 23
+
+[slices."apps/backend/app:api/v1/routers/agent_router"]
+fingerprint = "5659fcfd13dac091d9f5cda0ddb50862c974f20a341fd0bb127e7a28f7773dff"
+commit = "154f58e3"
+date = "2026-11-14"
+epic = "LUXSWIRL-566"
+findings = ["LUXSWIRL-568", "LUXSWIRL-574", "LUXSWIRL-575", "LUXSWIRL-569", "LUXSWIRL-587"]
+
+[slices."apps/backend/app:main"]
+fingerprint = "9cdec3a286a6991fba1ae1eb27c1c374318076c504f165d45da67eec154f6829"
+commit = "154f58e3"
+date = "2026-11-14"
+epic = "LUXSWIRL-566"
+findings = ["LUXSWIRL-585", "LUXSWIRL-586", "LUXSWIRL-587"]
+
+[slices."apps/backend/app:mcp/tools/alerts"]
+fingerprint = "95efa58a304ea0051623bf662524bd6b1bb21f6bf25ea7ad6487a682dcfa05b1"
+commit = "154f58e3"
+date = "2026-11-14"
+epic = "LUXSWIRL-566"
+findings = ["LUXSWIRL-585"]
+
+[slices."apps/backend/app:mcp/tools/checks"]
+fingerprint = "676653e136c22035cd30e057a4c25eff1fb43cc15a15f0576f69529ca2dbd051"
+commit = "154f58e3"
+date = "2026-11-14"
+epic = "LUXSWIRL-566"
+findings = ["LUXSWIRL-567", "LUXSWIRL-579", "LUXSWIRL-511", "LUXSWIRL-581", "LUXSWIRL-582"]
+
+[slices."apps/backend/app:mcp/tools/jobs"]
+fingerprint = "2c7d085a0724100b25ed8404d8cca0ee18307b8174245b43d95c2b93a1ca418f"
+commit = "154f58e3"
+date = "2026-11-14"
+epic = "LUXSWIRL-566"
+findings = ["LUXSWIRL-572", "LUXSWIRL-573", "LUXSWIRL-583", "LUXSWIRL-584", "LUXSWIRL-587"]
+
+[slices."apps/backend/app:web/routers/auth_router"]
+fingerprint = "4e6403c5c677e78c69036aa61ca67b1caede00b89d318595117a45cfd5e3009b"
+commit = "154f58e3"
+date = "2026-11-14"
+epic = "LUXSWIRL-566"
+findings = ["LUXSWIRL-569", "LUXSWIRL-577", "LUXSWIRL-578"]
+
+[slices."apps/backend/app:web/routers/agents_router#setup"]
+fingerprint = "8e7c288d318c71ed71bf80d7fc7d3409bc47ae97f9bc4874118355e219fd6a8b"
+commit = "154f58e3"
+date = "2026-11-14"
+epic = "LUXSWIRL-566"
+findings = ["LUXSWIRL-570", "LUXSWIRL-587"]
+
+[slices."apps/backend/app:web/routers/status_pages_router#status"]
+fingerprint = "1e2856f8919dd16970b153bc4ca57c1b3edf8463dd8c99a12268362107ac96bb"
+commit = "154f58e3"
+date = "2026-11-14"
+epic = "LUXSWIRL-566"
+findings = ["LUXSWIRL-571", "LUXSWIRL-576", "LUXSWIRL-587"]
