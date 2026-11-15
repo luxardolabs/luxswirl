@@ -318,6 +318,95 @@ async def test_an_editor_cannot_create_a_synthetic_check(db: AsyncSession) -> No
     assert row.arguments["script_code"] == "<29 characters>"
 
 
+SYNTHETIC_SCRIPT = (
+    "async def run_check(page):\n"
+    "    await page.goto('https://app.test')\n"
+    "    return {'status': 'success', 'steps': ['Loaded page']}\n"
+)
+
+
+def _synthetic_check(agent_id: UUID) -> dict[str, Any]:
+    return {
+        "agent_id": str(agent_id),
+        "display_name": "browser",
+        "check_type": "synthetic",
+        "target": "https://app.test",
+        "script_code": SYNTHETIC_SCRIPT,
+    }
+
+
+async def test_an_admin_read_write_token_cannot_create_a_synthetic_check(
+    db: AsyncSession,
+) -> None:
+    """A synthetic check runs code on an agent: `checks:admin` on the token, too."""
+    token = await _token(db, "admin", ["*:read", "*:write"])
+    agent_id = await _agent(db)
+    async with wire_client() as client:
+        response = await client.post(
+            "/mcp/",
+            headers=_headers(token),
+            json=_call("create_check", _synthetic_check(agent_id)),
+        )
+    result = _result(response)
+    assert result["isError"] is True
+    assert "Synthetic checks require admin privileges" in result["content"][0]["text"]
+    db.expire_all()
+    made = (await db.scalars(select(Check).where(Check.agent_id == agent_id))).all()
+    assert made == []
+
+
+async def test_an_admin_read_write_token_cannot_rewrite_a_synthetic_script(
+    db: AsyncSession,
+) -> None:
+    token = await _token(db, "admin", ["*:read", "*:write"])
+    check = make_check(
+        agent_id=await _agent(db),
+        check_type="synthetic",
+        target="https://app.test",
+        script_code=SYNTHETIC_SCRIPT,
+    )
+    db.add(check)
+    await db.flush()
+    check_id = check.id
+    async with wire_client() as client:
+        response = await client.post(
+            "/mcp/",
+            headers=_headers(token),
+            json=_call(
+                "update_check",
+                {
+                    "check_id": str(check_id),
+                    "changes": {
+                        "script_code": SYNTHETIC_SCRIPT.replace("app.test", "b.test")
+                    },
+                },
+            ),
+        )
+    assert _result(response)["isError"] is True
+    db.expire_all()
+    stored = await db.scalar(select(Check.script_code).where(Check.id == check_id))
+    assert stored == SYNTHETIC_SCRIPT
+
+
+@pytest.mark.parametrize(
+    "scopes",
+    [["*"], ["*:read", "*:write", "checks:admin"]],
+    ids=["full", "read-write-and-checks-admin"],
+)
+async def test_an_admin_token_granting_checks_admin_creates_a_synthetic_check(
+    db: AsyncSession, scopes: list[str]
+) -> None:
+    token = await _token(db, "admin", scopes)
+    agent_id = await _agent(db)
+    async with wire_client() as client:
+        response = await client.post(
+            "/mcp/",
+            headers=_headers(token),
+            json=_call("create_check", _synthetic_check(agent_id)),
+        )
+    assert _payload(response)["check_type"] == "synthetic"
+
+
 async def test_a_viewer_reads_a_check_s_credentials_masked(db: AsyncSession) -> None:
     token = await _token(db, "viewer", ["*:read"])
     agent_id = await _agent(db)

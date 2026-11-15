@@ -33,7 +33,6 @@ from app.main import app
 from app.models.alert_check_mapping_model import AlertCheckMapping
 from app.models.alert_notification_mapping_model import AlertNotificationMapping
 from app.models.check_model import Check
-from app.models.enum_model import UserRole
 from app.models.notification_provider_model import NotificationProvider
 from app.schemas.admin_alert_schema import AdminAlertChecks
 from app.schemas.api_token_schema import ApiTokenCreate
@@ -467,7 +466,10 @@ async def test_a_synthetic_check_attached_mid_replacement_is_not_detached_unjudg
     monkeypatch.setattr(AlertCRUD, "list_check_ids", staticmethod(read_then_attach))
     async with worker_db() as s:
         await AdminAlertCoreService.set_checks(
-            s, UserRole.EDITOR, alert_id, AdminAlertChecks(check_ids=[plain_id])
+            s,
+            alert_id,
+            AdminAlertChecks(check_ids=[plain_id]),
+            synthetic_admin=False,
         )
         await s.commit()
 
@@ -513,7 +515,10 @@ async def test_a_replacement_reports_only_the_rows_it_changed(
     monkeypatch.setattr(AlertCRUD, "list_check_ids", staticmethod(read_then_attach))
     async with worker_db() as s:
         change = await AdminAlertCoreService.set_checks(
-            s, UserRole.EDITOR, alert_id, AdminAlertChecks(check_ids=[plain_id])
+            s,
+            alert_id,
+            AdminAlertChecks(check_ids=[plain_id]),
+            synthetic_admin=False,
         )
         await s.commit()
 
@@ -571,9 +576,9 @@ async def test_a_judged_check_cannot_turn_synthetic_before_the_replacement_commi
     async with worker_db() as s:
         await AdminAlertCoreService.set_checks(
             s,
-            UserRole.EDITOR,
             alert_id,
             AdminAlertChecks(check_ids=[plain_id] if attach else []),
+            synthetic_admin=False,
         )
         await s.commit()
 
@@ -619,7 +624,10 @@ async def _two_checks_and_an_alert(
 async def _replace(worker_db, alert_id: UUID, check_ids: list[UUID]) -> None:
     async with worker_db() as s:
         await AdminAlertCoreService.set_checks(
-            s, UserRole.EDITOR, alert_id, AdminAlertChecks(check_ids=check_ids)
+            s,
+            alert_id,
+            AdminAlertChecks(check_ids=check_ids),
+            synthetic_admin=False,
         )
         await s.commit()
 

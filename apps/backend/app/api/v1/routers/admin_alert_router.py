@@ -86,7 +86,9 @@ async def admin_create_alert(
     principal: ApiEditor,
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> AdminAlertDetail:
-    return await AdminAlertCoreService.create_alert(db, principal.user.role, data)
+    return await AdminAlertCoreService.create_alert(
+        db, data, synthetic_admin=principal.synthetic_admin
+    )
 
 
 @router.patch(
@@ -182,7 +184,7 @@ async def admin_set_alert_checks(
 ) -> AlertMappingChange:
     """Make exactly these checks the ones a non-global alert watches."""
     return await AdminAlertCoreService.set_checks(
-        db, principal.user.role, alert_id, data
+        db, alert_id, data, synthetic_admin=principal.synthetic_admin
     )
 
 

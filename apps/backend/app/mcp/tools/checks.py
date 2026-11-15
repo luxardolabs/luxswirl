@@ -291,7 +291,12 @@ async def handle_get_check_summary(arguments: dict[str, Any]) -> list[TextConten
 async def handle_create_check(arguments: dict[str, Any]) -> list[TextContent]:
     data = parse_body(AdminCheckCreate, arguments)
     return json_response(
-        await AdminCheckCoreService.create_check(get_db(), principal().user.role, data)
+        await AdminCheckCoreService.create_check(
+            get_db(),
+            principal().user.role,
+            data,
+            synthetic_admin=principal().synthetic_admin,
+        )
     )
 
 
@@ -300,7 +305,11 @@ async def handle_update_check(arguments: dict[str, Any]) -> list[TextContent]:
     data = parse_body(AdminCheckUpdate, arguments.get("changes") or {})
     return json_response(
         await AdminCheckCoreService.update_check(
-            get_db(), principal().user.role, check_id, data
+            get_db(),
+            principal().user.role,
+            check_id,
+            data,
+            synthetic_admin=principal().synthetic_admin,
         )
     )
 
@@ -310,7 +319,11 @@ async def handle_clone_check(arguments: dict[str, Any]) -> list[TextContent]:
     data = parse_body(AdminCheckClone, arguments.get("changes") or {})
     return json_response(
         await AdminCheckCoreService.clone_check(
-            get_db(), principal().user.role, check_id, data
+            get_db(),
+            principal().user.role,
+            check_id,
+            data,
+            synthetic_admin=principal().synthetic_admin,
         )
     )
 
@@ -324,6 +337,7 @@ async def _set_enabled(
             principal().user.role,
             validate_uuid(arguments.get("check_id"), "check_id"),
             enabled=enabled,
+            synthetic_admin=principal().synthetic_admin,
         )
     )
 

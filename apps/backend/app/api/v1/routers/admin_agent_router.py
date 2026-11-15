@@ -86,7 +86,7 @@ async def admin_update_agent(
 ) -> AgentResponse:
     """Change the agent's name, tags or configuration (the fields sent)."""
     return await AdminAgentCoreService.update_agent(
-        db, principal.user.role, agent_id, data
+        db, agent_id, data, synthetic_admin=principal.synthetic_admin
     )
 
 
@@ -110,7 +110,7 @@ async def admin_delete_agent(
     Poll `/api/v1/admin/maintenance-jobs/{id}` for the outcome.
     """
     return await AdminAgentCoreService.enqueue_delete(
-        db, principal.user.role, principal.user.id, agent_id
+        db, principal.user.id, agent_id, synthetic_admin=principal.synthetic_admin
     )
 
 
@@ -128,7 +128,9 @@ async def admin_approve_agent(
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> AgentResponse:
     """Admit a pending or rejected agent; it fetches its key itself."""
-    return await AdminAgentCoreService.act(db, principal.user.role, agent_id, "approve")
+    return await AdminAgentCoreService.act(
+        db, agent_id, "approve", synthetic_admin=principal.synthetic_admin
+    )
 
 
 @router.post(
@@ -143,7 +145,7 @@ async def admin_reject_agent(
     data: AdminAgentReason | None = None,
 ) -> AgentResponse:
     return await AdminAgentCoreService.act(
-        db, principal.user.role, agent_id, "reject", data
+        db, agent_id, "reject", data, synthetic_admin=principal.synthetic_admin
     )
 
 
@@ -159,7 +161,7 @@ async def admin_pause_agent(
     data: AdminAgentReason | None = None,
 ) -> AgentResponse:
     return await AdminAgentCoreService.act(
-        db, principal.user.role, agent_id, "pause", data
+        db, agent_id, "pause", data, synthetic_admin=principal.synthetic_admin
     )
 
 
@@ -173,7 +175,9 @@ async def admin_resume_agent(
     principal: ApiEditor,
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> AgentResponse:
-    return await AdminAgentCoreService.act(db, principal.user.role, agent_id, "resume")
+    return await AdminAgentCoreService.act(
+        db, agent_id, "resume", synthetic_admin=principal.synthetic_admin
+    )
 
 
 @router.post(
@@ -188,7 +192,7 @@ async def admin_disable_agent(
     data: AdminAgentReason | None = None,
 ) -> AgentResponse:
     return await AdminAgentCoreService.act(
-        db, principal.user.role, agent_id, "disable", data
+        db, agent_id, "disable", data, synthetic_admin=principal.synthetic_admin
     )
 
 
@@ -202,7 +206,9 @@ async def admin_enable_agent(
     principal: ApiEditor,
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> AgentResponse:
-    return await AdminAgentCoreService.act(db, principal.user.role, agent_id, "enable")
+    return await AdminAgentCoreService.act(
+        db, agent_id, "enable", synthetic_admin=principal.synthetic_admin
+    )
 
 
 @router.post(
@@ -216,7 +222,9 @@ async def admin_archive_agent(
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> AgentResponse:
     """Retire the agent: it gets no checks, while it and its history are kept."""
-    return await AdminAgentCoreService.act(db, principal.user.role, agent_id, "archive")
+    return await AdminAgentCoreService.act(
+        db, agent_id, "archive", synthetic_admin=principal.synthetic_admin
+    )
 
 
 @router.post(
@@ -230,7 +238,9 @@ async def admin_restore_agent(
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> AgentResponse:
     """Bring an archived agent back as disabled."""
-    return await AdminAgentCoreService.act(db, principal.user.role, agent_id, "restore")
+    return await AdminAgentCoreService.act(
+        db, agent_id, "restore", synthetic_admin=principal.synthetic_admin
+    )
 
 
 @router.post(
@@ -247,7 +257,7 @@ async def admin_force_reload_agent(
 ) -> AgentResponse:
     """Make the agent fetch its checks again on its next sync."""
     return await AdminAgentCoreService.act(
-        db, principal.user.role, agent_id, "force-reload"
+        db, agent_id, "force-reload", synthetic_admin=principal.synthetic_admin
     )
 
 

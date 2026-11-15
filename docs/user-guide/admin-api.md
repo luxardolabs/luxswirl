@@ -34,6 +34,8 @@ A token's scopes narrow its user's role; they never widen it. A scope is `family
 
 `checks:*` grants every action on checks, `*:read` reading everything, and `*` everything. A read (`GET`) needs `family:read`; any other call needs `family:write`, or `family:admin` for the families only an admin works with (`registration_keys`, `settings`, `scheduler`, `users`, and check export and import). A call the scopes do not grant gets `403` naming the scope it needs, even when the user's role would allow it.
 
+A synthetic check runs its script on an agent, so everything only an admin may do to one needs an admin's token that also grants `checks:admin` (`checks:*`, or `*`): creating, changing, cloning, enabling, disabling or deleting one, naming one in a bulk selection or a dependents list, attaching an alert to it or detaching one, and moving or deleting one with its agent. A token without it, an admin's **Read and write** among them, is refused those calls as an editor's is (`403`), and nothing is changed.
+
 A call that reaches another family's data needs that family's scope as well:
 
 | Call                                                       | Also needs                     | Why                                                                                    |
@@ -45,11 +47,11 @@ A call that reaches another family's data needs that family's scope as well:
 
 The **Access** choice when creating a token sets its scopes:
 
-| Access         | Scopes              | Can                                                                    |
-| -------------- | ------------------- | ---------------------------------------------------------------------- |
-| Read only      | `*:read`            | Read everything the user can see; change nothing. The default.         |
-| Read and write | `*:read`, `*:write` | Also make the changes an editor can, short of the admin-only families. |
-| Full           | `*`                 | Everything the user's role allows.                                     |
+| Access         | Scopes              | Can                                                                                         |
+| -------------- | ------------------- | ------------------------------------------------------------------------------------------- |
+| Read only      | `*:read`            | Read everything the user can see; change nothing. The default.                              |
+| Read and write | `*:read`, `*:write` | Also make the changes an editor can, short of the admin-only families and synthetic checks. |
+| Full           | `*`                 | Everything the user's role allows.                                                          |
 
 Tokens made before scopes existed hold `*`.
 
@@ -82,7 +84,7 @@ A missing, unknown, revoked or expired token gets `401` with `WWW-Authenticate: 
 
 ## Checks
 
-A check is addressed by its own id. Reads take any token; writes take an editor's or an admin's. Any write to a synthetic check (create, change, clone, enable, disable, delete) is an admin's alone, and only a synthetic check keeps a `script_code`.
+A check is addressed by its own id. Reads take any token; writes take an editor's or an admin's. Any write to a synthetic check (create, change, clone, enable, disable, delete) is an admin's alone, with a token that grants `checks:admin` ([Scopes](#scopes)), and only a synthetic check keeps a `script_code`.
 
 | Method   | Path                                | Role   | Does                                                                               |
 | -------- | ----------------------------------- | ------ | ---------------------------------------------------------------------------------- |
@@ -126,7 +128,7 @@ Each takes `{"check_ids": [...]}`, 1 to 10,000 ids; a modify adds the fields to 
 | `POST` | `/api/v1/admin/checks/bulk/delete`  | editor | Delete them and their results in the background; `202` with the job                                                       |
 | `POST` | `/api/v1/admin/checks/bulk/modify`  | editor | Set `interval_seconds`, `timeout_seconds`, `retry_attempts`, move to `agent_id`, or assign `alert_id`; `202` with the job |
 
-The whole selection is judged before anything runs: an id no check has refuses it (`422`), and so does a synthetic check in the selection of anyone but an admin (`403`). Nothing is changed or queued. A modify must set at least one field, and none to `null`. An unknown `agent_id` or `alert_id` is a `404`, and moving checks to an agent awaiting approval, rejected or archived is a `422`.
+The whole selection is judged before anything runs: an id no check has refuses it (`422`), and so does a synthetic check in the selection of anyone but an admin whose token grants `checks:admin` (`403`). Nothing is changed or queued. A modify must set at least one field, and none to `null`. An unknown `agent_id` or `alert_id` is a `404`, and moving checks to an agent awaiting approval, rejected or archived is a `422`.
 
 ### Bulk create
 

@@ -4,8 +4,9 @@ Admin alert core service - alert rules as the admin API serves them.
 Every provider and check an alert is given is proved to exist first, so an
 unknown id is a 422 naming it, never a foreign-key failure. A soft-deleted
 alert is not found. Attaching an alert to a synthetic check, or detaching one,
-changes how that check is watched, so it is an admin's, as every change to a
-synthetic check is. A snooze is logged with who asked for it.
+changes how that check is watched, so it takes `synthetic_admin` (an admin
+whose token grants `checks:admin`, `ApiPrincipal.synthetic_admin`), as every
+change to a synthetic check does. A snooze is logged with who asked for it.
 """
 
 from uuid import UUID
@@ -13,7 +14,6 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ValidationException
-from app.models.enum_model import UserRole
 from app.schemas.admin_alert_schema import (
     AdminAlertChecks,
     AdminAlertCreate,
@@ -68,11 +68,11 @@ class AdminAlertCoreService:
 
     @staticmethod
     async def create_alert(
-        db: AsyncSession, role: UserRole, data: AdminAlertCreate
+        db: AsyncSession, data: AdminAlertCreate, *, synthetic_admin: bool
     ) -> AdminAlertDetail:
         await AlertCoreService.require_providers(db, data.notification_provider_ids)
         await AlertCoreService.require_checks(
-            db, data.check_ids, actor_is_admin=role == UserRole.ADMIN
+            db, data.check_ids, actor_is_admin=synthetic_admin
         )
         payload = data.model_dump()
         payload["notification_provider_ids"] = list(
@@ -128,10 +128,14 @@ class AdminAlertCoreService:
 
     @staticmethod
     async def set_checks(
-        db: AsyncSession, role: UserRole, alert_id: UUID, data: AdminAlertChecks
+        db: AsyncSession,
+        alert_id: UUID,
+        data: AdminAlertChecks,
+        *,
+        synthetic_admin: bool,
     ) -> AlertMappingChange:
         added, removed = await AlertCoreService.set_checks(
-            db, alert_id, data.check_ids, actor_is_admin=role == UserRole.ADMIN
+            db, alert_id, data.check_ids, actor_is_admin=synthetic_admin
         )
         return AlertMappingChange(added=added, removed=removed)
 

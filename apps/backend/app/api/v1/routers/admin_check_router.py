@@ -90,7 +90,7 @@ async def admin_bulk_enable_checks(
 ) -> BulkCheckResult:
     """Enable every check named, now."""
     return await AdminCheckCoreService.bulk_set_enabled(
-        db, principal.user.role, data, enabled=True
+        db, data, enabled=True, synthetic_admin=principal.synthetic_admin
     )
 
 
@@ -108,7 +108,7 @@ async def admin_bulk_disable_checks(
 ) -> BulkCheckResult:
     """Disable every check named, now."""
     return await AdminCheckCoreService.bulk_set_enabled(
-        db, principal.user.role, data, enabled=False
+        db, data, enabled=False, synthetic_admin=principal.synthetic_admin
     )
 
 
@@ -130,7 +130,7 @@ async def admin_bulk_delete_checks(
     Poll `/api/v1/admin/maintenance-jobs/{id}` for the outcome.
     """
     return await AdminCheckCoreService.enqueue_bulk_delete(
-        db, principal.user.role, principal.user.id, data
+        db, principal.user.id, data, synthetic_admin=principal.synthetic_admin
     )
 
 
@@ -151,7 +151,7 @@ async def admin_bulk_modify_checks(
     in the background. Poll `/api/v1/admin/maintenance-jobs/{id}` for the outcome.
     """
     return await AdminCheckCoreService.enqueue_bulk_modify(
-        db, principal.user.role, principal.user.id, data
+        db, principal.user.id, data, synthetic_admin=principal.synthetic_admin
     )
 
 
@@ -200,7 +200,9 @@ async def admin_create_check(
     principal: ApiEditor,
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> CheckResponse:
-    return await AdminCheckCoreService.create_check(db, principal.user.role, data)
+    return await AdminCheckCoreService.create_check(
+        db, principal.user.role, data, synthetic_admin=principal.synthetic_admin
+    )
 
 
 @router.patch(
@@ -215,7 +217,11 @@ async def admin_update_check(
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> CheckResponse:
     return await AdminCheckCoreService.update_check(
-        db, principal.user.role, check_id, data
+        db,
+        principal.user.role,
+        check_id,
+        data,
+        synthetic_admin=principal.synthetic_admin,
     )
 
 
@@ -231,7 +237,9 @@ async def admin_delete_check(
     principal: ApiEditor,
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> Response:
-    await AdminCheckCoreService.delete_check(db, principal.user.role, check_id)
+    await AdminCheckCoreService.delete_check(
+        db, check_id, synthetic_admin=principal.synthetic_admin
+    )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -250,7 +258,11 @@ async def admin_clone_check(
     data: AdminCheckClone | None = None,
 ) -> CheckResponse:
     return await AdminCheckCoreService.clone_check(
-        db, principal.user.role, check_id, data or AdminCheckClone()
+        db,
+        principal.user.role,
+        check_id,
+        data or AdminCheckClone(),
+        synthetic_admin=principal.synthetic_admin,
     )
 
 
@@ -265,7 +277,11 @@ async def admin_enable_check(
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> CheckResponse:
     return await AdminCheckCoreService.set_enabled(
-        db, principal.user.role, check_id, enabled=True
+        db,
+        principal.user.role,
+        check_id,
+        enabled=True,
+        synthetic_admin=principal.synthetic_admin,
     )
 
 
@@ -280,7 +296,11 @@ async def admin_disable_check(
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> CheckResponse:
     return await AdminCheckCoreService.set_enabled(
-        db, principal.user.role, check_id, enabled=False
+        db,
+        principal.user.role,
+        check_id,
+        enabled=False,
+        synthetic_admin=principal.synthetic_admin,
     )
 
 
@@ -317,5 +337,5 @@ async def admin_set_check_dependents(
 ) -> DependentsChange:
     """Make exactly these checks depend on this one; any other is detached."""
     return await AdminCheckCoreService.set_dependents(
-        db, principal.user.role, check_id, data
+        db, check_id, data, synthetic_admin=principal.synthetic_admin
     )

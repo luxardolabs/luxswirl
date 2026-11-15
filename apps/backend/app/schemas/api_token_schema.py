@@ -8,7 +8,7 @@ from uuid import UUID
 
 from pydantic import Field, field_validator
 
-from app.core.authorization import DEFAULT_SCOPES, validate_scope
+from app.core.authorization import DEFAULT_SCOPES, scope_grants, validate_scope
 from app.core.datetime_utils import utc_now
 from app.models.enum_model import UserRole
 from app.schemas.auth_schema import CurrentUserDTO
@@ -73,6 +73,18 @@ class ApiPrincipal:
     token_name: str
     token_expires_at: datetime | None
     scopes: tuple[str, ...]
+
+    @property
+    def synthetic_admin(self) -> bool:
+        """Whether this request may do what only an admin may do to a synthetic
+        check (create, change, clone, toggle, delete, select in bulk, attach,
+        move or delete with its agent): its user is an admin AND its token
+        grants `checks:admin`. A synthetic check runs its script on an agent,
+        so a token scoped short of that (an admin's "Read and write") is
+        refused, as an editor is."""
+        return self.user.role == UserRole.ADMIN and scope_grants(
+            self.scopes, "checks:admin"
+        )
 
 
 class ApiWhoAmIResponse(BaseSchema):
