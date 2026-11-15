@@ -19,6 +19,7 @@ keeps a frame per character.
 """
 
 import re
+from collections.abc import Callable
 from typing import overload
 
 _MASK = "***"
@@ -187,34 +188,56 @@ def names_a_secret(key: str) -> bool:
     return any(_SECRET_KEY_NAME.fullmatch(word) for word in key[:_KEY_LENGTH].split())
 
 
+def _as_written(text: str) -> str:
+    return text
+
+
 def _masked_items(
-    mapping: dict[str, object], names: KeyNames, depth: int, hidden: bool
+    mapping: dict[str, object],
+    names: KeyNames,
+    depth: int,
+    hidden: bool,
+    shown: Callable[[str], str],
 ) -> dict[str, object]:
     return {
-        names.of(key): _masked(item, names, depth, hidden or names_a_secret(key))
+        names.of(key, shown(key)): _masked(
+            item, names, depth, hidden or names_a_secret(key), shown
+        )
         for key, item in mapping.items()
     }
 
 
-def _masked(value: object, names: KeyNames, depth: int, hidden: bool) -> object:
+def _masked(
+    value: object,
+    names: KeyNames,
+    depth: int,
+    hidden: bool,
+    shown: Callable[[str], str],
+) -> object:
     if depth > _MAX_DEPTH:
         return _MASK
     if isinstance(value, str):
-        return _MASK if hidden and value else mask_credentials(value)
+        return _MASK if hidden and value else mask_credentials(shown(value))
     if isinstance(value, dict):
-        return _masked_items(value, names, depth + 1, hidden)
+        return _masked_items(value, names, depth + 1, hidden, shown)
     if isinstance(value, list):
-        return [_masked(item, names, depth + 1, hidden) for item in value]
+        return [_masked(item, names, depth + 1, hidden, shown) for item in value]
     return value
 
 
-def mask_mapping(mapping: dict[str, object]) -> dict[str, object]:
+def mask_mapping(
+    mapping: dict[str, object], shown: Callable[[str], str] = _as_written
+) -> dict[str, object]:
     """`mapping` (decoded JSON) with every string in its keys and values masked, and every
     string under a key that names a secret hidden whole, however deep. Its shape and its
     figures stay, since a page reads them by name and a key can be a step someone named
     `get_token`.
 
+    `shown` rewrites each string, key or value, before it is masked: a reader who
+    does not hold the document's credentials reads its URLs cut to their origin
+    (`target_origin.cut_urls`).
+
     Nesting past `_MAX_DEPTH` is replaced whole: an agent chooses it, and recursing
     to whatever depth it sent would end in a RecursionError.
     """
-    return _masked_items(mapping, KeyNames(), 1, False)
+    return _masked_items(mapping, KeyNames(), 1, False, shown)

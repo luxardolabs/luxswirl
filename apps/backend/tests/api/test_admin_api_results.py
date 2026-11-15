@@ -236,9 +236,7 @@ async def test_a_viewer_reads_no_credential_and_no_response_body(
         assert "s3cret-pw" not in resp.text
         assert "tok-abc123" not in resp.text
     assert one.json()["response_data"] is None
-    assert one.json()["error"] == (
-        "connect to postgresql://***@db.internal:5432/app failed"
-    )
+    assert one.json()["error"] == ("connect to postgresql://db.internal:5432 failed")
 
 
 async def test_a_result_of_another_check_is_not_found(
@@ -370,7 +368,7 @@ async def test_a_viewer_reads_a_synthetic_checks_errors_masked_in_metrics(
     for resp in (page, one, summary):
         assert "s3cret-pw" not in resp.text
     assert page.json()["items"][0]["metrics"]["synthetic"]["errors"] == [
-        "connect to postgresql://***@db.internal:5432/app failed"
+        "connect to postgresql://db.internal:5432 failed"
     ]
 
 
@@ -515,6 +513,111 @@ async def test_a_viewer_never_reads_a_doh_nameserver_in_a_results_error(
     shown = reads[0].json()["items"][0]["error"]
     assert shown.startswith("Invalid nameserver: nameserver http://doh.example.net")
     assert full.json()["items"][0]["error"] == DOH_ERROR
+
+
+DOH_HTTPS = f"https://doh.example.net/{DOH_TOKEN}/dns-query"
+
+
+async def test_a_history_bucket_cuts_a_nameserver_its_newest_row_does_not_name(
+    db: AsyncSession, client: AsyncClient
+) -> None:
+    """A bucket's errors are every row's, its metrics the newest row's: an older
+    row's error quoting a nameserver the check and the newest row no longer name
+    is still read as its origin."""
+    viewer = await _as(db, "viewer")
+    agent = make_agent()
+    db.add(agent)
+    await db.flush()
+    check = make_check(
+        agent_id=agent.id,
+        check_type="dns",
+        check_config={"nameserver": DOH_HTTPS, "record_type": "A"},
+    )
+    db.add(check)
+    await db.flush()
+    start = (utc_now() - timedelta(minutes=30)).replace(second=0, microsecond=0)
+    for offset, error, nameserver in (
+        (5, DOH_ERROR, DOH_HTTP),
+        (40, None, DOH_HTTPS),
+    ):
+        db.add(
+            make_check_result(
+                check_id=check.id,
+                agent_id=agent.id,
+                timestamp=start + timedelta(seconds=offset),
+                success=error is None,
+                error=error,
+                metrics=json.dumps({"dns": {"nameserver": nameserver, "port": 53}}),
+            )
+        )
+    await db.flush()
+
+    resp = await client.get(
+        f"{CHECKS}/{check.id}/history", params={"hours": 1}, headers=viewer
+    )
+
+    assert resp.status_code == 200, resp.text
+    assert "Invalid nameserver" in resp.text
+    assert DOH_TOKEN not in resp.text, resp.text
+
+
+SCRIPT_PATH = "reset/9f8e7d6c5b4a39281706"
+PLAYWRIGHT_ERROR = (
+    "Script execution failed: Page.goto: net::ERR_NAME_NOT_RESOLVED at "
+    f"https://app.example.com/{SCRIPT_PATH}\nCall log:\n"
+    f'  - navigating to "https://app.example.com/{SCRIPT_PATH}", waiting until "load"'
+)
+
+
+async def test_a_viewer_never_reads_the_path_of_a_url_a_synthetic_error_quotes(
+    db: AsyncSession, client: AsyncClient
+) -> None:
+    """A viewer is shown no script and a target cut to its origin; the error a
+    script's page raised, in `error` and in the metrics, is read the same way."""
+    viewer = await _as(db, "viewer")
+    editor = await _as(db, "editor")
+    agent = make_agent()
+    db.add(agent)
+    await db.flush()
+    check = make_check(
+        agent_id=agent.id,
+        check_type="synthetic",
+        target=f"https://app.example.com/{SCRIPT_PATH}",
+    )
+    db.add(check)
+    await db.flush()
+    metrics = {
+        "synthetic": {
+            "status": "failure",
+            "errors": [PLAYWRIGHT_ERROR],
+            "request_failures": [
+                {"url": f"https://app.example.com/{SCRIPT_PATH}", "failure": "x"}
+            ],
+            "track_durations": {f"app.example.com/{SCRIPT_PATH}": 1.0},
+        }
+    }
+    result = await _result(
+        db, check, 5, success=False, error=PLAYWRIGHT_ERROR, metrics=json.dumps(metrics)
+    )
+
+    reads = [
+        await client.get(f"{CHECKS}/{check.id}", headers=viewer),
+        await client.get(f"{CHECKS}/{check.id}/results", headers=viewer),
+        await client.get(f"{CHECKS}/{check.id}/results/{result.id}", headers=viewer),
+        await client.get(f"{CHECKS}/{check.id}/summary", headers=viewer),
+        await client.get(f"{CHECKS}/{check.id}/history", headers=viewer),
+    ]
+    full = await client.get(f"{CHECKS}/{check.id}/results", headers=editor)
+
+    for resp in reads:
+        assert resp.status_code == 200, resp.text
+        assert SCRIPT_PATH not in resp.text, resp.text
+    shown = reads[1].json()["items"][0]
+    assert "net::ERR_NAME_NOT_RESOLVED at https://app.example.com\n" in shown["error"]
+    assert shown["metrics"]["synthetic"]["request_failures"][0]["url"] == (
+        "https://app.example.com"
+    )
+    assert full.json()["items"][0]["error"] == PLAYWRIGHT_ERROR
 
 
 @pytest.mark.parametrize(

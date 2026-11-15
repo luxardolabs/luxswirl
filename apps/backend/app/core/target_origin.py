@@ -345,13 +345,61 @@ def shown_target(value: str | None, role: UserRole | None) -> str | None:
     return target_origin(value)
 
 
+# A word of free text: a URL in an error runs to a space, a quote or an angle bracket.
+_WORD = re.compile(r"[^\s'\"<>`]++")
+_SCHEME_CHARS = frozenset(
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789+.-"
+)
+# What closes the sentence a URL sits in rather than the URL: kept after its origin.
+_CLOSING = ".,;:!?)]}"
+# What opens a bracket before a bare host.
+_OPENING = "([{"
+
+
+def _cut_bare(word: str) -> str:
+    """`word` cut to its host when it is a bare `host[:port]/path` (a nameserver or a
+    page a resolver or a browser quotes without its scheme), else as written. A host
+    is told from a word by a dot, a port or a userinfo before the first `/`, so
+    `and/or`, `Chrome/120.0` and a file path stay."""
+    text = word.lstrip(_OPENING)
+    lead = word[: len(word) - len(text)]
+    end = _first_index(text, _AUTHORITY_END)
+    if end == 0 or end == len(text) or text[end] != "/":
+        return word
+    if not any(char in text[:end] for char in ".:@["):
+        return word
+    return lead + (_authority(text) or _HIDDEN)
+
+
+def _cut_word(word: str) -> str:
+    """`word` with the URL in it (from its scheme on) cut to its origin."""
+    separator = word.find("://")
+    if separator < 0:
+        return _cut_bare(word)
+    start = separator
+    while start > 0 and word[start - 1] in _SCHEME_CHARS:
+        start -= 1
+    url = word[start:]
+    core = url.rstrip(_CLOSING)
+    return _cut_bare(word[:start]) + target_origin(core) + url[len(core) :]
+
+
+def cut_urls(text: str) -> str:
+    """`text` with every URL it quotes cut to its scheme, host and port
+    (`target_origin`), a bare `host/path` to its host: what a reader who does not
+    hold a check's target reads of free text about it. A URL's path can be the
+    credential (a reset link a script opens, a resolver account's token), and a
+    browser's or a resolver's error quotes it whole."""
+    return _WORD.sub(lambda match: _cut_word(match.group()), text)
+
+
 def masked_metrics(metrics: dict[str, object]) -> dict[str, object]:
     """A check result's metrics as a reader who does not hold the check's credentials
-    reads them: every string masked (`mask_mapping`), and the DNS section's
-    `nameserver` cut to its origin, as the check's own is. The agent copies the
-    check's nameserver there, and a DNS-over-HTTPS one is a URL whose path can be
-    the resolver account's token, which no credential pattern names."""
-    masked = mask_mapping(metrics)
+    reads them: every string, key or value, with its URLs cut to their origin
+    (`cut_urls`) and masked (`mask_mapping`), and the DNS section's `nameserver` cut
+    to its origin, as the check's own is. A synthetic check's carry the URLs its
+    script opened, and the agent copies the check's nameserver into the DNS section."""
+    masked = mask_mapping(metrics, cut_urls)
     dns = metrics.get("dns")
     shown = masked.get("dns")
     if isinstance(dns, dict) and isinstance(shown, dict):
@@ -381,11 +429,13 @@ def masked_error(error: None, nameservers: tuple[str | None, ...]) -> None: ...
 def masked_error(error: str | None, nameservers: tuple[str | None, ...]) -> str | None:
     """A check result's error as a reader who does not hold the check's credentials
     reads it: each of `nameservers` (the check's DNS nameserver, and the one the
-    result's metrics name) cut to its origin wherever the error quotes it, then
-    every credential masked. A DNS-over-HTTPS nameserver is a URL whose path can be
-    the resolver account's token, and a resolver's refusal quotes it whole."""
+    result's metrics name) cut to its origin wherever the error quotes it, every
+    other URL it quotes cut the same way (`cut_urls`), then every credential masked.
+    The URLs are cut whatever the check now names: a nameserver an editor has since
+    changed, a page a synthetic script opened, a bucket's errors from rows whose
+    metrics are not read."""
     if not error:
         return error
     for nameserver in sorted({n for n in nameservers if n}, key=len, reverse=True):
         error = error.replace(nameserver, target_origin(nameserver) or _HIDDEN)
-    return mask_credentials(error)
+    return mask_credentials(cut_urls(error))
