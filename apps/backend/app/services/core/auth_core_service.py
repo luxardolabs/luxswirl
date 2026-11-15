@@ -5,6 +5,7 @@ Auth Service - handles authentication, session management, and security.
 import asyncio
 import hashlib
 import secrets
+import unicodedata
 from datetime import timedelta
 from typing import Any
 from uuid import UUID
@@ -52,6 +53,24 @@ def _lock_wait_ran_out(exc: DBAPIError) -> bool:
     )
 
 
+# Unicode categories that draw nothing: format (U+200B, U+FEFF, U+2060),
+# control, and the space and separator categories.
+_INVISIBLE_CATEGORIES = frozenset({"Cf", "Cc", "Zs", "Zl", "Zp"})
+# Letters and symbols that render as blank space: the Hangul fillers and the
+# empty braille pattern.
+_BLANK_LOOKING = frozenset({"\u115f", "\u1160", "\u3164", "\uffa0", "\u2800"})
+
+
+def _has_visible_character(password: str) -> bool:
+    """Whether `password` holds at least one character that draws something."""
+    return any(
+        not c.isspace()
+        and c not in _BLANK_LOOKING
+        and unicodedata.category(c) not in _INVISIBLE_CATEGORIES
+        for c in password
+    )
+
+
 class AuthCoreService:
     """Service for authentication and session management."""
 
@@ -94,9 +113,9 @@ class AuthCoreService:
         if not storable_text(password):
             return False, "Password contains a character that cannot be stored"
 
-        # Whatever the stored policy allows, a password of whitespace alone is
-        # no password.
-        if not password.strip():
+        # Whatever the stored policy allows, a password that shows nothing
+        # (whitespace, zero-width or filler characters alone) is no password.
+        if not _has_visible_character(password):
             return False, "Password cannot be blank or whitespace only"
 
         policy = await SettingsCoreService.get_password_policy(db)
@@ -636,6 +655,12 @@ class AuthCoreService:
         valid, error_message = await self.validate_password_complexity(db, new_password)
         if not valid:
             raise ValueError(error_message)
+        # A change must leave a password nobody else was told: after an admin
+        # reset the current password is the one the admin chose. This compares
+        # the two submitted fields, not the stored hash, so it answers the same
+        # for a right and a wrong current password.
+        if new_password == current_password:
+            raise ValueError("New password must differ from the current password")
 
         # Core takes an id and refetches — the web layer's DTO never enters core, so the
         # row mutated below is always a live, session-attached ORM object.

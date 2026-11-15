@@ -360,3 +360,57 @@ async def test_a_refused_new_password_says_nothing_about_the_current_one(
     user = await _stored(worker_db, "cp-oracle")
     assert user.failed_login_attempts == 1
     assert AuthCoreService.verify_password(RIGHT, user.password_hash)
+
+
+async def _seed_forced(worker_db, username: str):
+    """A user an admin reset: must_change_password, the admin-chosen RIGHT."""
+    async with worker_db() as s:
+        user = make_user(username=username, must_change_password=True)
+        s.add(user)
+        await s.commit()
+        return user.id
+
+
+async def test_forced_change_refuses_the_current_password_as_new(worker_db) -> None:
+    """A change after an admin reset must leave a password the admin does not
+    know: resubmitting the current password as the new one is refused, the
+    flag stays set and nothing is counted."""
+    uid = await _seed_forced(worker_db, "cp-force-same")
+    async with worker_db() as s:
+        try:
+            await AuthCoreService().change_password(s, uid, RIGHT, RIGHT)
+            refused = None
+        except ValueError as exc:
+            refused = str(exc)
+        await s.commit()
+    assert refused == "New password must differ from the current password"
+    user = await _stored(worker_db, "cp-force-same")
+    assert user.must_change_password
+    assert user.failed_login_attempts == 0
+
+
+async def test_a_wrong_current_equal_to_the_new_is_refused_uncounted(
+    worker_db,
+) -> None:
+    """The same-password refusal compares the two submitted fields only: a
+    wrong guess posted as both is refused the same way and never counted."""
+    uid = await _seed(worker_db, "cp-same-wrong", failed=1)
+    async with worker_db() as s:
+        try:
+            await AuthCoreService().change_password(s, uid, NEW, NEW)
+            refused = None
+        except ValueError as exc:
+            refused = str(exc)
+        await s.commit()
+    assert refused == "New password must differ from the current password"
+    assert (await _stored(worker_db, "cp-same-wrong")).failed_login_attempts == 1
+
+
+async def test_control_forced_change_to_a_new_password_clears_flag(worker_db) -> None:
+    uid = await _seed_forced(worker_db, "cp-force-ok")
+    async with worker_db() as s:
+        assert await _change(AuthCoreService(), s, uid, RIGHT) is None
+        await s.commit()
+    user = await _stored(worker_db, "cp-force-ok")
+    assert not user.must_change_password
+    assert AuthCoreService.verify_password(NEW, user.password_hash)

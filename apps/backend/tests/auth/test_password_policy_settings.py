@@ -266,6 +266,58 @@ async def test_relaxed_policy_still_refuses_a_whitespace_only_password(
         )
 
 
+async def _relaxed(db: AsyncSession) -> None:
+    await _store(db, "security.min_password_length", 6)
+    for key in ("require_uppercase", "require_lowercase", "require_number"):
+        await _store(db, f"security.{key}", False)
+
+
+async def test_control_relaxed_policy_refuses_whitespace(db: AsyncSession) -> None:
+    await _relaxed(db)
+    assert (await AuthCoreService.validate_password_complexity(db, "qwzxkv"))[0]
+    assert not (await AuthCoreService.validate_password_complexity(db, " " * 8))[0]
+
+
+@pytest.mark.parametrize(
+    "blank",
+    [
+        "\u200b" * 8,
+        "\u3164" * 8,
+        "\u2800" * 8,
+        "\ufeff" * 8,
+        "\u2060" * 8,
+        "\u115f\u1160" * 4,
+        "\uffa0" * 8,
+        "\u200b \u3164\u2800\u00a0\u2028\u2029\x7f",
+    ],
+    ids=[
+        "zwsp",
+        "hangul-filler",
+        "braille-blank",
+        "bom",
+        "word-joiner",
+        "hangul-choseong-jungseong-fillers",
+        "halfwidth-hangul-filler",
+        "mixed",
+    ],
+)
+async def test_relaxed_policy_refuses_an_invisible_only_password(
+    db: AsyncSession, blank: str
+) -> None:
+    await _relaxed(db)
+    valid, _ = await AuthCoreService.validate_password_complexity(db, blank)
+    assert valid is False, f"invisible-only password {blank!r} accepted"
+
+
+async def test_relaxed_policy_accepts_a_zwj_between_visible_characters(
+    db: AsyncSession,
+) -> None:
+    """An emoji sequence joined by U+200D is a legitimate password."""
+    await _relaxed(db)
+    password = "qwz\U0001f469\u200d\U0001f4bbxkv"
+    assert (await AuthCoreService.validate_password_complexity(db, password))[0]
+
+
 async def test_the_change_password_page_lists_the_stored_policy(
     db: AsyncSession, client: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
