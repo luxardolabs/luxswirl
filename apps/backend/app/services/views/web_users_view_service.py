@@ -324,7 +324,7 @@ class WebUsersViewService:
 
     @staticmethod
     async def build_user_create_form_context(
-        db: AsyncSession, *, request: Request, current_user: AuthedUser
+        db: AsyncSession, *, request: Request, user: AuthedUser
     ) -> dict[str, Any]:
         """Build context for the user create form panel.
 
@@ -333,7 +333,7 @@ class WebUsersViewService:
         """
         policy = await SettingsCoreService.get_password_policy(db)
         return {
-            "current_user": current_user,
+            "current_user": user,
             "role_options": options_for(UserRole),
             "create_url": str(request.app.url_path_for("users.create")),
             "password_requirements": policy.requirements,
