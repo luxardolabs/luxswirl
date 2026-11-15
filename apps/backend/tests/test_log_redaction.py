@@ -12,6 +12,7 @@ import logging
 import sys
 
 import pytest
+from app.core.config import Settings, settings
 from app.core.logging_config import JsonFormatter
 from app.core.logging_options import logging_options
 from app.shared.log_redaction import scrub, scrub_text
@@ -190,6 +191,15 @@ def test_the_server_line_is_redacted_in_message_fields_and_traceback() -> None:
     assert line["service"] == "luxswirl"
     assert line["level"] == "ERROR"
     assert line["exception_type"] == "RuntimeError"
+
+
+def test_log_lines_carry_the_environment_the_guards_read(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings.server, "environment", "staging")
+
+    assert logging_options()["environment"] == "staging"
+    assert "environment" not in Settings.model_fields
 
 
 def test_server_options_carry_the_redactor_and_the_level_defaults() -> None:

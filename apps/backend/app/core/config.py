@@ -352,10 +352,6 @@ class Settings(BaseSettings):
     build_commit: str = Field(
         default="local", description="Commit the running image was built from"
     )
-    environment: Literal["development", "staging", "production"] = Field(
-        default="development",
-        description="Environment",
-    )
     debug: bool = Field(default=False, description="Debug mode")
 
     # The Host names this deployment serves (ALLOWED_HOSTS in .env.<env>, comma-separated).
@@ -385,16 +381,6 @@ class Settings(BaseSettings):
     def same_origin_hosts(self) -> list[str]:
         """The hosts a browser request may come from: ALLOWED_HOSTS plus the CORS origins'."""
         return [*self.allowed_hosts, *self.server.cors_origin_hosts]
-
-    @property
-    def is_production(self) -> bool:
-        """Check if running in production."""
-        return self.environment == "production"
-
-    @property
-    def is_development(self) -> bool:
-        """Check if running in development."""
-        return self.environment == "development"
 
 
 @lru_cache

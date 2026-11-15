@@ -23,6 +23,8 @@ def logging_options() -> dict[str, Any]:
         # Code defaults, then the operator's LOG__MODULE_LEVELS on top
         # (LOG_MODULE_LEVELS, read by the module itself, wins over both).
         "levels": {**THIRD_PARTY_LEVELS, **settings.logging.module_levels},
-        "environment": settings.environment,
+        # The one environment setting (SERVER__ENVIRONMENT), the one every
+        # production guard reads.
+        "environment": settings.server.environment,
         "redact": scrub,
     }
