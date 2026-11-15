@@ -80,7 +80,7 @@ async def _panel(
 
 @pytest.mark.parametrize(
     ("check_type", "still_shown"),
-    [("http", "could not connect to"), ("synthetic", "app.example.com")],
+    [("http", "could not connect to"), ("synthetic", "Synthetic check failed")],
 )
 async def test_a_viewer_reads_the_panel_masked(
     client: AsyncClient, db: AsyncSession, check_type: str, still_shown: str
@@ -162,7 +162,7 @@ async def test_an_editor_reads_the_error_as_it_was_reported(
     assert SECRET in panel
 
 
-async def test_a_step_named_for_a_url_reads_masked(
+async def test_a_step_named_for_a_url_reads_as_its_number(
     client: AsyncClient, db: AsyncSession
 ) -> None:
     url = f"https://monitor:{SECRET}@app.example.com/login"
@@ -178,7 +178,8 @@ async def test_a_step_named_for_a_url_reads_masked(
 
     panel = await _panel(client, db, "synthetic", "viewer", metrics)
 
-    assert "app.example.com/login" in panel
+    assert "Step 1" in panel
+    assert "app.example.com/login" not in panel
     assert SECRET not in panel
 
 
@@ -324,3 +325,66 @@ async def test_a_step_with_no_timing_reads_the_same_figures_as_an_editor(
     assert "BBB222" not in viewer
     for number in ("1000ms", "2000ms", "3000"):
         assert (number in viewer) == (number in editor), number
+
+
+LINK_ID = "9f8e7d6c5b4a39281706"
+# What a synthetic script's failure quotes of the page it opened: JSON-escaped,
+# scheme-relative, a quote in the path, Playwright's own error.
+SYNTHETIC_LEAKS = [
+    'Script execution failed: refused: {"next":"https:\\/\\/app.example.com\\/reset\\/'
+    + LINK_ID
+    + '"}',
+    f"Script execution failed: Refused to load '//app.example.com/reset/{LINK_ID}'",
+    f"Script execution failed: page.goto: at https://app.example.com/o'brien/{LINK_ID}",
+    "Script execution failed: Page.goto: net::ERR_NAME_NOT_RESOLVED at "
+    f"https://app.example.com/reset/{LINK_ID}",
+]
+
+
+@pytest.mark.parametrize("error", SYNTHETIC_LEAKS)
+@pytest.mark.parametrize(("role", "shown"), [("viewer", False), ("editor", True)])
+async def test_a_viewer_reads_a_synthetic_result_as_its_exception_type_alone(
+    client: AsyncClient, db: AsyncSession, error: str, role: str, shown: bool
+) -> None:
+    """The latest result's synthetic section, the history and Recent Events."""
+    agent = make_agent()
+    user = make_user(role=role)
+    db.add_all([agent, user])
+    await db.flush()
+    check = make_check(
+        agent_id=agent.id, check_type="synthetic", target="https://app.example.com"
+    )
+    db.add(check)
+    await db.flush()
+    metrics = {
+        "synthetic": {
+            "status": "failure",
+            "errors": [error],
+            "console_errors": [error],
+            "request_failures": [{"url": error, "failure": error}],
+            "steps": [error],
+            "track_durations": {error: 1.5},
+            "track_timings": {error: {"navigationStart": 1000, "loadEventEnd": 1222}},
+        }
+    }
+    db.add(
+        make_check_result(
+            check_id=check.id,
+            agent_id=agent.id,
+            success=False,
+            error=error,
+            metrics=json.dumps(metrics),
+        )
+    )
+    await db.flush()
+    _, session = await AuthCoreService().create_session(db, user.id)
+    client.cookies.set(settings.security.session_cookie_name, session)
+
+    resp = await client.get(f"/check/{check.id}")
+
+    assert resp.status_code == 200, resp.text
+    assert (LINK_ID in resp.text) is shown
+    assert ("Synthetic check failed" in resp.text) is not shown
+    if not shown:
+        assert "Step 1" in resp.text
+        assert "1500" in resp.text

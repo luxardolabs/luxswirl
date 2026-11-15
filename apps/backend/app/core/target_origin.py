@@ -30,9 +30,11 @@ import re
 from typing import overload
 
 from app.core.credential_mask import mask_credentials, mask_mapping
-from app.models.enum_model import UserRole
+from app.core.synthetic_result import shown_synthetic_error, shown_synthetic_metrics
+from app.models.enum_model import CheckType, UserRole
 
 _HIDDEN = "***"
+_SYNTHETIC = "synthetic"
 
 # The schemes a target is shown with. Any other is no scheme a check uses and can be
 # text a secret was typed into (`jdbc:SECRET://`, `admin:SECRET://x@db`), so the
@@ -347,11 +349,18 @@ def shown_target(value: str | None, role: UserRole | None) -> str | None:
 
 def masked_metrics(metrics: dict[str, object]) -> dict[str, object]:
     """A check result's metrics as a reader who does not hold the check's credentials
-    reads them: every string masked (`mask_mapping`), and the DNS section's
-    `nameserver` cut to its origin, as the check's own is. The agent copies the
-    check's nameserver there, and a DNS-over-HTTPS one is a URL whose path can be
-    the resolver account's token, which no credential pattern names."""
-    masked = mask_mapping(metrics)
+    reads them: every string masked (`mask_mapping`), the DNS section's
+    `nameserver` cut to its origin, as the check's own is, and the synthetic section
+    as figures alone (`shown_synthetic_metrics`). The agent copies the check's
+    nameserver there, and a DNS-over-HTTPS one is a URL whose path can be the
+    resolver account's token, which no credential pattern names; a synthetic
+    section's text is about pages the script opened, whose URLs no pattern finds."""
+    masked = mask_mapping(
+        {
+            key: shown_synthetic_metrics(value) if key == _SYNTHETIC else value
+            for key, value in metrics.items()
+        }
+    )
     dns = metrics.get("dns")
     shown = masked.get("dns")
     if isinstance(dns, dict) and isinstance(shown, dict):
@@ -375,15 +384,25 @@ def metrics_nameserver(metrics: object) -> str | None:
 
 
 @overload
-def masked_error(error: str, nameservers: tuple[str | None, ...]) -> str: ...
+def masked_error(
+    error: str, nameservers: tuple[str | None, ...], check_type: str
+) -> str: ...
 @overload
-def masked_error(error: None, nameservers: tuple[str | None, ...]) -> None: ...
-def masked_error(error: str | None, nameservers: tuple[str | None, ...]) -> str | None:
+def masked_error(
+    error: None, nameservers: tuple[str | None, ...], check_type: str
+) -> None: ...
+def masked_error(
+    error: str | None, nameservers: tuple[str | None, ...], check_type: str
+) -> str | None:
     """A check result's error as a reader who does not hold the check's credentials
-    reads it: each of `nameservers` (the check's DNS nameserver, and the one the
-    result's metrics name) cut to its origin wherever the error quotes it, then
+    reads it. A synthetic check's (`check_type`) is read as the type of what failed
+    alone (`shown_synthetic_error`): it is text about pages the hidden script opened.
+    Any other's has each of `nameservers` (the check's DNS nameserver, and the one
+    the result's metrics name) cut to its origin wherever the error quotes it, then
     every credential masked. A DNS-over-HTTPS nameserver is a URL whose path can be
     the resolver account's token, and a resolver's refusal quotes it whole."""
+    if check_type == CheckType.SYNTHETIC:
+        return shown_synthetic_error(error)
     if not error:
         return error
     for nameserver in sorted({n for n in nameservers if n}, key=len, reverse=True):

@@ -7,10 +7,12 @@ is, and never a result's `response_data`: the web UI never shows it, and a
 response body can hold anything the monitored service sent. Of `metrics`, a
 viewer reads only the sections the web UI's detail panel shows, every string
 in them masked: an HTTP check's metrics also carry every response header the
-monitored service sent (a session cookie among them), and a synthetic check's
-carry the raw errors its `error` is made from. A DNS check's nameserver is
-cut to its origin (`masked_metrics`), as the check's own is, and so is every
-place an `error` quotes it (`masked_error`).
+monitored service sent (a session cookie among them). A DNS check's
+nameserver is cut to its origin (`masked_metrics`), as the check's own is,
+and so is every place an `error` quotes it (`masked_error`). A synthetic
+check's error is read as the type of what failed alone, and its metrics as
+figures alone: its text is about pages the script (which a viewer is not
+shown) opened, and a URL's path there can be a credential.
 """
 
 import json
@@ -23,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.datetime_utils import utc_now
 from app.core.exceptions import NotFoundException, ValidationException
 from app.core.target_origin import masked_error, masked_metrics, metrics_nameserver
+from app.models.check_model import Check
 from app.models.check_result_model import CheckResult
 from app.models.enum_model import UserRole
 from app.schemas.admin_check_result_schema import (
@@ -97,15 +100,18 @@ class AdminCheckResultCoreService:
 
     @staticmethod
     def _error(
-        error: str | None, role: UserRole, nameservers: tuple[str | None, ...]
+        error: str | None, role: UserRole, check: Check, metrics: object
     ) -> str | None:
-        return masked_error(error, nameservers) if role == UserRole.VIEWER else error
+        """`error` as `role` reads it; `metrics` are its result's."""
+        if role != UserRole.VIEWER:
+            return error
+        return masked_error(
+            error, (check.nameserver, metrics_nameserver(metrics)), check.check_type
+        )
 
     @staticmethod
-    def _result(
-        row: CheckResult, role: UserRole, nameserver: str | None
-    ) -> AdminCheckResult:
-        """`row` as `role` reads it; `nameserver` is its check's DNS nameserver."""
+    def _result(row: CheckResult, role: UserRole, check: Check) -> AdminCheckResult:
+        """`row`, a result of `check`, as `role` reads it."""
         metrics = _metrics(row.metrics)
         return AdminCheckResult(
             id=row.id,
@@ -114,9 +120,7 @@ class AdminCheckResultCoreService:
             timestamp=row.timestamp,
             success=row.success,
             latency_ms=row.latency_ms,
-            error=AdminCheckResultCoreService._error(
-                row.error, role, (nameserver, metrics_nameserver(metrics))
-            ),
+            error=AdminCheckResultCoreService._error(row.error, role, check, metrics),
             error_type=row.error_type,
             http_status_code=row.http_status_code,
             http_response_time_ms=row.http_response_time_ms,
@@ -151,10 +155,7 @@ class AdminCheckResultCoreService:
             db, check_id, start, end, skip=(page - 1) * per_page, limit=per_page
         )
         return CheckResultPage.of(
-            [
-                AdminCheckResultCoreService._result(row, role, check.nameserver)
-                for row in rows
-            ],
+            [AdminCheckResultCoreService._result(row, role, check) for row in rows],
             build_pagination(page=page, per_page=per_page, total=total),
         )
 
@@ -171,9 +172,7 @@ class AdminCheckResultCoreService:
             db, check_id, row.id, row.timestamp
         )
         return AdminCheckResultDetail(
-            **AdminCheckResultCoreService._result(
-                row, role, check.nameserver
-            ).model_dump(),
+            **AdminCheckResultCoreService._result(row, role, check).model_dump(),
             response_data=None if role == UserRole.VIEWER else row.response_data,
             artifacts=artifacts,
         )
@@ -194,9 +193,7 @@ class AdminCheckResultCoreService:
                     success=row.success,
                     latency_ms=row.latency_ms,
                     error=AdminCheckResultCoreService._error(
-                        row.error,
-                        role,
-                        (check.nameserver, metrics_nameserver(row.metrics)),
+                        row.error, role, check, row.metrics
                     ),
                 )
                 for row in rows
@@ -223,7 +220,7 @@ class AdminCheckResultCoreService:
             min_latency_ms=stats.min_latency,
             max_latency_ms=stats.max_latency,
             latest=(
-                AdminCheckResultCoreService._result(latest, role, check.nameserver)
+                AdminCheckResultCoreService._result(latest, role, check)
                 if latest
                 else None
             ),

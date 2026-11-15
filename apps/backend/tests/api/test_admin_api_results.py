@@ -353,7 +353,7 @@ async def test_a_viewer_reads_no_response_headers_but_the_certificate(
     assert full.json()["items"][0]["metrics"] == HTTP_METRICS
 
 
-async def test_a_viewer_reads_a_synthetic_checks_errors_masked_in_metrics(
+async def test_a_viewer_reads_no_text_of_a_synthetic_section(
     db: AsyncSession, client: AsyncClient
 ) -> None:
     viewer = await _as(db, "viewer")
@@ -369,9 +369,12 @@ async def test_a_viewer_reads_a_synthetic_checks_errors_masked_in_metrics(
 
     for resp in (page, one, summary):
         assert "s3cret-pw" not in resp.text
-    assert page.json()["items"][0]["metrics"]["synthetic"]["errors"] == [
-        "connect to postgresql://***@db.internal:5432/app failed"
-    ]
+    assert page.json()["items"][0]["metrics"]["synthetic"] == {
+        "status": "failure",
+        "browser_timing": {},
+        "track_durations": {},
+        "track_timings": {},
+    }
 
 
 # ── Edges ────────────────────────────────────────────────────────────────────
@@ -538,3 +541,133 @@ async def test_a_moment_outside_the_results_calendar_is_refused(
     )
 
     assert resp.status_code == 422, resp.text
+
+
+# ── A synthetic check's result: its exception type alone, for a viewer ───────
+
+LINK_ID = "9f8e7d6c5b4a39281706"
+# What a synthetic script's failure quotes of the page it opened, in the forms free
+# text takes: JSON-escaped (`\/`), scheme-relative, a quote in the path, and
+# Playwright's own error with its call log.
+SYNTHETIC_LEAKS = {
+    "json_escaped": (
+        "Script execution failed: login refused: "
+        '{"next":"https:\\/\\/app.example.com\\/reset\\/' + LINK_ID + '"}'
+    ),
+    "scheme_relative": (
+        "Script execution failed: Refused to load the script "
+        f"'//app.example.com/reset/{LINK_ID}' because it violates the CSP"
+    ),
+    "apostrophe_in_path": (
+        "Script execution failed: page.goto: net::ERR_ABORTED at "
+        f"https://app.example.com/o'brien/{LINK_ID}"
+    ),
+    "playwright_goto": (
+        "Script execution failed: Page.goto: net::ERR_NAME_NOT_RESOLVED at "
+        f"https://app.example.com/reset/{LINK_ID}\nCall log:\n"
+        f'  - navigating to "https://app.example.com/reset/{LINK_ID}", '
+        'waiting until "load"'
+    ),
+}
+SHOWN_AS = {
+    "json_escaped": "Synthetic check failed",
+    "scheme_relative": "Synthetic check failed",
+    "apostrophe_in_path": "Synthetic check failed",
+    "playwright_goto": "Synthetic check failed: Page.goto",
+}
+
+
+def _synthetic_metrics(leak: str) -> dict[str, object]:
+    return {
+        "synthetic": {
+            "status": "failure",
+            "errors": [leak],
+            "console_errors": [leak],
+            "request_failures": [{"url": leak, "failure": leak}],
+            "steps": [leak],
+            "track_durations": {leak: 1.5},
+            "track_timings": {leak: {"navigationStart": 1000, "loadEventEnd": 1222}},
+            "browser_timing": {"navigationStart": 1000, "loadEventEnd": 1300},
+            "script_execution_time_ms": 1500.0,
+            "total_execution_time_ms": 2400.0,
+            "next_page": leak,
+        }
+    }
+
+
+@pytest.mark.parametrize("leak", list(SYNTHETIC_LEAKS))
+async def test_a_viewer_reads_a_synthetic_result_as_its_exception_type_alone(
+    db: AsyncSession, client: AsyncClient, leak: str
+) -> None:
+    error = SYNTHETIC_LEAKS[leak]
+    viewer = await _as(db, "viewer")
+    editor = await _as(db, "editor")
+    agent = make_agent()
+    db.add(agent)
+    await db.flush()
+    check = make_check(
+        agent_id=agent.id, check_type="synthetic", target="https://app.example.com"
+    )
+    db.add(check)
+    await db.flush()
+    metrics = _synthetic_metrics(error)
+    result = await _result(
+        db, check, 5, success=False, error=error, metrics=json.dumps(metrics)
+    )
+
+    reads = [
+        await client.get(f"{CHECKS}/{check.id}/results", headers=viewer),
+        await client.get(f"{CHECKS}/{check.id}/results/{result.id}", headers=viewer),
+        await client.get(f"{CHECKS}/{check.id}/summary", headers=viewer),
+        await client.get(f"{CHECKS}/{check.id}/history", headers=viewer),
+    ]
+    full = await client.get(f"{CHECKS}/{check.id}/results", headers=editor)
+
+    for resp in reads:
+        assert resp.status_code == 200, resp.text
+        assert LINK_ID not in resp.text, resp.text
+        assert "reset" not in resp.text, resp.text
+    shown = reads[0].json()["items"][0]
+    assert shown["error"] == SHOWN_AS[leak]
+    assert [p["error"] for p in reads[3].json()["points"] if p["error"]] == [
+        SHOWN_AS[leak]
+    ]
+    assert shown["metrics"] == {
+        "synthetic": {
+            "status": "failure",
+            "script_execution_time_ms": 1500.0,
+            "total_execution_time_ms": 2400.0,
+            "browser_timing": {"navigationStart": 1000, "loadEventEnd": 1300},
+            "track_durations": {"Step 1": 1.5},
+            "track_timings": {
+                "Step 1": {"navigationStart": 1000, "loadEventEnd": 1222}
+            },
+        }
+    }
+    assert full.json()["items"][0]["error"] == error
+    assert full.json()["items"][0]["metrics"] == metrics
+
+
+# Text that is no URL, in a check that runs no script: a viewer reads it as written.
+PLAIN_ERRORS = [
+    "expected agent 1.2.3/4 got 1.2.2",
+    "Error: ENOENT C:/Users/ops/report.txt",
+    "at Object.<anonymous> (node:internal/modules/cjs/loader:1105:14)",
+]
+
+
+@pytest.mark.parametrize("error", PLAIN_ERRORS)
+async def test_a_viewer_reads_a_non_synthetic_error_that_names_no_url_as_written(
+    db: AsyncSession, client: AsyncClient, error: str
+) -> None:
+    viewer = await _as(db, "viewer")
+    check = await _check(db)
+    result = await _result(db, check, 5, success=False, error=error)
+
+    page = await client.get(f"{CHECKS}/{check.id}/results", headers=viewer)
+    one = await client.get(f"{CHECKS}/{check.id}/results/{result.id}", headers=viewer)
+    history = await client.get(f"{CHECKS}/{check.id}/history", headers=viewer)
+
+    assert page.json()["items"][0]["error"] == error
+    assert one.json()["error"] == error
+    assert [p["error"] for p in history.json()["points"] if p["error"]] == [error]

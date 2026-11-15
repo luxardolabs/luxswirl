@@ -182,7 +182,9 @@ class CheckDetailViewService:
             """`error` as the reader is shown it; `metrics` are its result's."""
             if not masked:
                 return error
-            return masked_error(error, (nameserver, metrics_nameserver(metrics)))
+            return masked_error(
+                error, (nameserver, metrics_nameserver(metrics)), check.check_type
+            )
 
         # Get recent results based on time range (bucketed by core service)
         raw_rows = await CheckResultCoreService.get_bucketed_history(
