@@ -470,6 +470,7 @@ def bucket_error(
     metrics: object,
     *,
     size_noted: bool,
+    nameserver_metrics: Sequence[str] | None,
     masked: bool,
     ran_synthetic: bool,
     configured: tuple[str | None, ...],
@@ -478,14 +479,20 @@ def bucket_error(
     `masked_error` reads its own result's when `masked`. `metrics` are the
     bucket's newest result's; when any of its results was cut to the size note
     (`size_noted`), every error is judged as one that was, since which one it
-    was is no longer known."""
+    was is no longer known. The nameserver each of `nameserver_metrics` (the
+    metrics of the bucket's failed results that name one) names is cut in every
+    error, as a result's own is in its error."""
     if not masked:
         shown: list[str | None] = list(errors or ())
     else:
         judged = {_SIZE_NOTED: True} if size_noted else metrics
+        named = tuple(metrics_nameserver(each) for each in nameserver_metrics or ())
         shown = [
             masked_error(
-                error, judged, ran_synthetic=ran_synthetic, configured=configured
+                error,
+                judged,
+                ran_synthetic=ran_synthetic,
+                configured=(*configured, *named),
             )
             for error in errors or ()
         ]
