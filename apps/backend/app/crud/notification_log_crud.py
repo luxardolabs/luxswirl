@@ -176,13 +176,6 @@ class NotificationLogCRUD:
         return list(result.scalars().all())
 
     @staticmethod
-    async def database_now(db: AsyncSession) -> datetime:
-        """The database's clock: the one every server process's claims,
-        leases and retries are judged by, whatever each host's clock says."""
-        now: datetime = (await db.execute(select(func.clock_timestamp()))).scalar_one()
-        return now
-
-    @staticmethod
     async def release_attempts(
         db: AsyncSession, attempts: list[tuple[UUID, int]], now: datetime
     ) -> int:

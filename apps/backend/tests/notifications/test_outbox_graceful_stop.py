@@ -1,21 +1,16 @@
-"""A graceful stop never sends a notification twice, and a host's clock never
-delays its own.
+"""A graceful stop never sends a notification twice.
 
 A stop that lands while the worker records one ended attempt records every
-attempt that ended and hands back only those it cut off. Notifications are
-queued, and judged due, by the database's clock.
+attempt that ended and hands back only those it cut off.
 """
 
 from __future__ import annotations
 
 import asyncio
-from datetime import timedelta
 from typing import Any
 
 import pytest
 from app.background import notification_delivery_worker as worker_module
-from app.core.datetime_utils import utc_now
-from app.services.core import notification_core_service as core_module
 from app.services.core.notification_delivery_core_service import (
     NotificationDeliveryCoreService,
 )
@@ -91,34 +86,3 @@ async def test_control_stop_hands_back_an_attempt_cut_off_mid_send(
     answering.install(monkeypatch)
     await deliver_committed()
     assert answering.to("https://slow.test/h") == ["down"]
-
-
-async def test_a_host_clock_ahead_of_the_database_delivers_at_once(
-    worker_db: Any, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """A server whose host clock runs two minutes ahead of the database
-    decides an outage: it goes out on this pass."""
-    hook = _Hooks()
-    hook.install(monkeypatch)
-    provider = make_notification_provider(config={"post_url": "https://p.test/h"})
-    alert_id = await _alert_with(worker_db, [provider])
-    fast = utc_now() + timedelta(minutes=2)
-    monkeypatch.setattr(core_module, "utc_now", lambda: fast)
-    await _queue(worker_db, alert_id, [provider.id], "down")
-
-    await deliver_committed()
-    assert hook.to("https://p.test/h") == ["down"]
-
-
-async def test_control_host_clock_in_step_delivers_at_once(
-    worker_db: Any, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Control: the same with the host clock in step goes out on this pass."""
-    hook = _Hooks()
-    hook.install(monkeypatch)
-    provider = make_notification_provider(config={"post_url": "https://p.test/h"})
-    alert_id = await _alert_with(worker_db, [provider])
-    await _queue(worker_db, alert_id, [provider.id], "down")
-
-    await deliver_committed()
-    assert hook.to("https://p.test/h") == ["down"]

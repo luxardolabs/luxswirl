@@ -117,12 +117,6 @@ class NotificationDeliveryCoreService:
         return ClaimedBatch(deliveries=deliveries, network=network, ended=ended)
 
     @staticmethod
-    async def now(db: AsyncSession) -> datetime:
-        """The instant claims, leases and retries are judged by: the
-        database's clock, shared by every server process."""
-        return await NotificationLogCRUD.database_now(db)
-
-    @staticmethod
     async def release(
         db: AsyncSession, claimed: list[ClaimedDelivery], now: datetime
     ) -> int:

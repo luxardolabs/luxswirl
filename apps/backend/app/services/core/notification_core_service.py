@@ -460,13 +460,7 @@ class NotificationCoreService:
         Returns:
             One NotificationLog row per provider, in `provider_ids` order.
         """
-        # `sent_at` is the decision's instant on this host's clock, the clock
-        # an episode is judged by (an agent's last_seen, the resend interval);
-        # `next_attempt_at` is the database's, which the delivery worker
-        # judges due rows by, so a host whose clock runs ahead queues nothing
-        # for later.
         now = utc_now()
-        due = await NotificationLogCRUD.database_now(db)
         payload = notification_payload(context)
         rows: list[NotificationLog] = []
         for provider_id in provider_ids:
@@ -488,7 +482,7 @@ class NotificationCoreService:
                         resend_count=resend_count,
                         sent_at=now,
                         payload=payload,
-                        next_attempt_at=due,
+                        next_attempt_at=now,
                     ),
                 )
             )

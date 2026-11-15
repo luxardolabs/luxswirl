@@ -19,7 +19,6 @@ from typing import Any
 from uuid import UUID
 
 import pytest
-from app.background import notification_delivery_worker as worker_module
 from app.background.notification_delivery_worker import (
     DELIVERY_SLOTS,
     PROVIDER_SHARE,
@@ -34,7 +33,6 @@ from app.models.check_model import Check
 from app.models.notification_log_model import NotificationLog
 from app.notifications.providers.base import NotificationContext
 from app.notifications.providers.webhook import WebhookNotificationProvider
-from app.services.core import notification_delivery_core_service as delivery_module
 from app.services.core.notification_core_service import NotificationCoreService
 from app.services.core.notification_delivery_core_service import (
     CLAIM_LEASE,
@@ -564,29 +562,3 @@ async def test_a_graceful_stop_leaves_nothing_counted_in_flight(
         await restarted.cancel()
 
     assert taken == PROVIDER_SHARE
-
-
-async def test_a_host_clock_running_fast_does_not_claim_a_live_lease(
-    worker_db: Any, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """One server process holds a provider's row under its lease; another,
-    on a host whose clock runs past the lease, claims nothing: every
-    process judges leases by the database's clock."""
-    hanging = _Hooks(slow={"https://dead0.test/h"}, delay=3600)
-    hanging.install(monkeypatch)
-    await _dead_backlog(worker_db, 1)
-    holder = DeliveryPool(worker_session)
-    fast = utc_now() + CLAIM_LEASE + timedelta(minutes=1)
-    try:
-        assert await holder.fill() == PROVIDER_SHARE
-        monkeypatch.setattr(worker_module, "utc_now", lambda: fast, raising=False)
-        monkeypatch.setattr(delivery_module, "utc_now", lambda: fast, raising=False)
-        other = DeliveryPool(worker_session)
-        try:
-            taken = await other.fill()
-        finally:
-            await other.cancel()
-    finally:
-        await holder.cancel()
-
-    assert taken == 0

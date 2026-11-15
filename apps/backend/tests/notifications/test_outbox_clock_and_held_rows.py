@@ -2,8 +2,8 @@
 a pool never claims a row it still holds.
 
 An episode is judged against `sent_at`, on the host's clock like every value it
-is compared with; only the due time is the database's. A pool whose record of
-an ended attempt keeps failing past the lease never claims that row again.
+is compared with. A pool whose record of an ended attempt keeps failing past
+the lease never claims that row again.
 """
 
 from __future__ import annotations
@@ -13,6 +13,7 @@ from typing import Any
 
 import pytest
 from alerts.test_silence_alerts import _agent, _alert, _check, _evaluate, sent
+from app.background import notification_delivery_worker as worker_module
 from app.background.notification_delivery_worker import DeliveryPool
 from app.core import datetime_utils
 from app.db import worker_session
@@ -47,6 +48,7 @@ async def _offline_passes(
     monkeypatch.setattr(silence_module, "utc_now", host_now)
     monkeypatch.setattr(evaluation_module, "utc_now", host_now)
     monkeypatch.setattr(notification_module, "utc_now", host_now)
+    monkeypatch.setattr(worker_module, "utc_now", host_now)
     # The heartbeat was received, and stamped, by this server's host clock.
     agent = await _agent(
         db, heartbeat_interval=5, last_seen=host_now() - timedelta(seconds=90)
@@ -60,8 +62,8 @@ async def _offline_passes(
 async def test_a_host_clock_ahead_notifies_an_offline_agent_once(
     db: AsyncSession, sent: list[Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A host clock two minutes ahead of the database (the skew the change's
-    own clock test models): one offline episode must notify once."""
+    """A host clock two minutes ahead of the database: one offline episode
+    notifies once."""
     await _offline_passes(db, monkeypatch, timedelta(minutes=2))
     assert len(sent) == 1, [c.status_label for c in sent]
 
@@ -86,8 +88,7 @@ async def _record_fails_then_database_returns(
     provider = make_notification_provider(config={"post_url": url})
     alert_id = await _alert_with(worker_db, [provider])
     await _queue(worker_db, alert_id, [provider.id], "down")
-    async with worker_db() as s:
-        start = await NotificationDeliveryCoreService.now(s) + timedelta(seconds=1)
+    start = datetime_utils.utc_now() + timedelta(seconds=1)
 
     original = NotificationDeliveryCoreService.record
     failures = {"left": 1}

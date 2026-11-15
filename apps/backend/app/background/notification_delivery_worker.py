@@ -14,8 +14,7 @@ with nothing in flight anywhere is given its first due row even when every
 slot is held, one attempt past the pool's slots for each such provider. So providers whose every
 attempt waits out its timeout leave the others theirs, however many of them
 there are. Several server processes each run one; SKIP LOCKED keeps them off
-each other's rows. Every instant is the database's clock, so processes on
-hosts whose clocks differ judge leases alike. A graceful stop hands back the
+each other's rows. A graceful stop hands back the
 rows of the attempts it cuts off, due again at once; a row whose worker died
 mid-delivery is claimed again once its lease lapses.
 """
@@ -28,6 +27,7 @@ from datetime import datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.datetime_utils import utc_now
 from app.db import worker_session
 from app.schemas.notification_delivery_schema import ClaimedDelivery, DeliveryOutcome
 from app.services.core.notification_delivery_core_service import (
@@ -71,8 +71,8 @@ class DeliveryPool:
         """Whether any attempt is in flight."""
         return bool(self._in_flight)
 
-    async def _clock(self, db: AsyncSession) -> datetime:
-        return self._now or await NotificationDeliveryCoreService.now(db)
+    def _clock(self) -> datetime:
+        return self._now or utc_now()
 
     async def fill(self) -> int:
         """Claim due rows for the free slots, in turn across providers and
@@ -85,7 +85,7 @@ class DeliveryPool:
         async with self._open_session() as db:
             batch = await NotificationDeliveryCoreService.claim_due(
                 db,
-                await self._clock(db),
+                self._clock(),
                 free,
                 provider_share=PROVIDER_SHARE,
                 # Its own attempts, recorded or not: never claimed twice here,
@@ -118,7 +118,7 @@ class DeliveryPool:
         claimed = self._in_flight[attempt]
         async with self._open_session() as db:
             await NotificationDeliveryCoreService.record(
-                db, claimed, attempt.result(), await self._clock(db)
+                db, claimed, attempt.result(), self._clock()
             )
         del self._in_flight[attempt]
 
@@ -148,7 +148,7 @@ class DeliveryPool:
         try:
             async with self._open_session() as db:
                 released = await NotificationDeliveryCoreService.release(
-                    db, cut_off, await self._clock(db)
+                    db, cut_off, self._clock()
                 )
         except Exception:
             logger.exception(
