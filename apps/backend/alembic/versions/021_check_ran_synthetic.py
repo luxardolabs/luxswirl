@@ -43,10 +43,24 @@ _SYNTHETIC_ERROR_STARTS = (
     "Failed to capture trace: ",
 )
 
+# Reads text as jsonb, or NULL where PostgreSQL refuses it, so no row can fail the
+# upgrade. A plpgsql handler rather than pg_input_is_valid, which needs PostgreSQL
+# 16: the installation guide supports PostgreSQL 14 and later.
+_JSONB_OR_NULL = """
+CREATE FUNCTION pg_temp.luxswirl_jsonb_or_null(value text) RETURNS jsonb
+LANGUAGE plpgsql IMMUTABLE AS $$
+BEGIN
+    RETURN value::jsonb;
+EXCEPTION WHEN others THEN
+    RETURN NULL;
+END
+$$
+"""
+
 # A CASE fixes the order: the text match first (cheap, and most rows fail it),
-# then the cast only of text that is valid JSON, so no row can fail the upgrade.
-# Text that is no valid JSON (Python writes NaN, which PostgreSQL refuses) counts
-# when it opens with the key, as the agent's `{"synthetic": ...}` does stored.
+# then the cast only of text that is valid JSON. Text that is no valid JSON (Python
+# writes NaN, which PostgreSQL refuses) counts when it opens with the key, as the
+# agent's `{"synthetic": ...}` does stored.
 _BACKFILL = """
 UPDATE checks SET ran_synthetic = true
 WHERE check_type = 'synthetic'
@@ -60,10 +74,11 @@ OR EXISTS (
         )
         OR CASE
             WHEN r.metrics IS NULL OR r.metrics NOT LIKE '%"synthetic"%' THEN false
-            WHEN NOT pg_input_is_valid(r.metrics, 'jsonb')
+            WHEN pg_temp.luxswirl_jsonb_or_null(r.metrics) IS NULL
                 THEN r.metrics LIKE '{"synthetic":%'
-            WHEN jsonb_typeof(r.metrics::jsonb) <> 'object' THEN false
-            ELSE (r.metrics::jsonb -> 'synthetic') IS NOT NULL
+            WHEN jsonb_typeof(pg_temp.luxswirl_jsonb_or_null(r.metrics)) <> 'object'
+                THEN false
+            ELSE (pg_temp.luxswirl_jsonb_or_null(r.metrics) -> 'synthetic') IS NOT NULL
         END
     )
 )
@@ -81,7 +96,9 @@ def upgrade() -> None:
             comment="Whether the check is or has ever been a synthetic check",
         ),
     )
+    op.execute(_JSONB_OR_NULL)
     op.execute(sa.text(_BACKFILL).bindparams(starts=list(_SYNTHETIC_ERROR_STARTS)))
+    op.execute("DROP FUNCTION pg_temp.luxswirl_jsonb_or_null(text)")
 
 
 def downgrade() -> None:
