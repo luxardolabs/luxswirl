@@ -51,6 +51,27 @@ def refuse_control_chars(value: str) -> str:
     return value
 
 
+# What a search filter refuses: a control character (C0, DEL, C1; NUL among
+# them), a lone surrogate, a line or paragraph separator, and the bidi
+# embedding, override and isolate characters. The other format characters (a
+# zero-width joiner in an emoji sequence, a ZWNJ in Persian, a soft hyphen) are
+# in names people store, so a search for such a name must be allowed.
+_SEARCH_REFUSED_CATEGORIES = frozenset({"Cc", "Cs", "Zl", "Zp"})
+_BIDI_CONTROLS = frozenset("‪‫‬‭‮⁦⁧⁨⁩")
+
+
+def refuse_search_controls(value: str) -> str:
+    """Refuse a search or filter string holding a character no name it matches
+    can usefully hold: a control character, a lone surrogate, a line or
+    paragraph separator, a bidi embedding, override or isolate."""
+    if any(
+        c in _BIDI_CONTROLS or unicodedata.category(c) in _SEARCH_REFUSED_CATEGORIES
+        for c in value
+    ):
+        raise ValueError("must not contain control characters")
+    return value
+
+
 # What a note that spans lines may hold of the control characters.
 _NOTE_WHITESPACE = frozenset("\n\r\t")
 

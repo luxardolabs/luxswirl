@@ -379,6 +379,42 @@ async def test_a_control_character_in_a_list_filter_is_refused(
     assert resp.status_code == 422, resp.text
 
 
+# Names a check stores and people write: a ZWJ emoji sequence, a ZWNJ in
+# Persian, a soft hyphen. Each holds a format (Cf) character.
+STORED_NAMES = {
+    "zwj-emoji": "web \U0001f469\u200d\U0001f4bb",
+    "zwnj-persian": "می\u200cخواهم",
+    "soft-hyphen": "data\u00adbase",
+}
+
+
+@pytest.mark.parametrize("name", list(STORED_NAMES.values()), ids=list(STORED_NAMES))
+async def test_a_search_for_a_stored_name_finds_it(
+    db: AsyncSession, client: AsyncClient, name: str
+) -> None:
+    viewer = await _as(db, "viewer")
+    admin = await _as(db, "admin")
+    agent = await _agent(db)
+    await _check(db, agent, display_name=name)
+
+    exact = await client.get(
+        CHECKS, params={"agent_id": str(agent.id), "search": name}, headers=viewer
+    )
+    others = [
+        await client.get(path, params={"search": name}, headers=admin)
+        for path in (
+            "/api/v1/admin/agents",
+            "/api/v1/admin/users",
+            "/api/v1/admin/notification-logs",
+        )
+    ]
+
+    assert exact.status_code == 200, exact.text
+    assert [c["display_name"] for c in exact.json()["items"]] == [name]
+    for resp in others:
+        assert resp.status_code == 200, resp.text
+
+
 async def test_a_plain_tag_filter_still_lists(
     db: AsyncSession, client: AsyncClient
 ) -> None:

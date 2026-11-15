@@ -15,7 +15,7 @@ from app.mcp.context import get_principal
 from app.mcp.validators import MCPValidationError, validate_int_range
 from app.schemas.admin_page_schema import MAX_PAGE
 from app.schemas.api_token_schema import ApiPrincipal
-from app.schemas.base_schema import refuse_control_chars
+from app.schemas.base_schema import refuse_search_controls
 
 
 class ToolError(Exception):
@@ -56,7 +56,8 @@ def choice[E: StrEnum](value: Any, enum: type[E], field_name: str) -> E | None:
 
 def text_arg(value: Any, field_name: str, *, max_length: int) -> str | None:
     """A one-line free-text argument, at most `max_length` characters, with no
-    control character: the admin route's own bounds (`SearchFilter`, `TagFilter`)."""
+    control character (`refuse_search_controls`): the admin route's own bounds
+    (`SearchFilter`, `TagFilter`)."""
     if value in (None, ""):
         return None
     if not isinstance(value, str):
@@ -66,7 +67,7 @@ def text_arg(value: Any, field_name: str, *, max_length: int) -> str | None:
             f"{field_name} is at most {max_length} characters, got {len(value)}"
         )
     try:
-        return refuse_control_chars(value)
+        return refuse_search_controls(value)
     except ValueError as e:
         raise MCPValidationError(f"{field_name} {e}") from None
 

@@ -35,7 +35,7 @@ from app.models.enum_model import (
     SettingCategory,
     UserRole,
 )
-from app.schemas.base_schema import MAX_TAG_LENGTH, refuse_control_chars
+from app.schemas.base_schema import MAX_TAG_LENGTH, refuse_search_controls
 
 
 def empty_to_none(v: object) -> object:
@@ -44,12 +44,15 @@ def empty_to_none(v: object) -> object:
 
 
 def one_line_or_none(v: str | None) -> str | None:
-    """A text filter as given, refused (422) when it holds a control character.
+    """A text filter as given, refused (422) when it holds a control character
+    (`refuse_search_controls`).
 
     A filter is matched against one-line text (names, tags), so no control
-    character can match, and a NUL is a character PostgreSQL refuses outright.
+    character can usefully match, and a NUL is a character PostgreSQL refuses
+    outright. A zero-width joiner, a ZWNJ or a soft hyphen is kept: a stored
+    name can hold one.
     """
-    return None if v is None else refuse_control_chars(v)
+    return None if v is None else refuse_search_controls(v)
 
 
 def split_csv(value: str | None) -> list[str] | None:

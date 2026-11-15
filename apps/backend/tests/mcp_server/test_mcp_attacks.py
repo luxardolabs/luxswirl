@@ -498,6 +498,19 @@ async def test_a_control_character_in_a_list_filter_is_named(
     assert _INTERNAL not in text, text
 
 
+@pytest.mark.parametrize(
+    "name",
+    ["web \U0001f469\u200d\U0001f4bb", "می\u200cخواهم", "data\u00adbase"],
+    ids=["zwj-emoji", "zwnj-persian", "soft-hyphen"],
+)
+async def test_a_search_for_a_stored_name_lists(db: AsyncSession, name: str) -> None:
+    token = await _token(db, "viewer", ["*:read"])
+
+    result = await _tool(token, "list_checks", {"search": name})
+
+    assert result["isError"] is False, result
+
+
 async def test_control_a_plain_tag_lists(db: AsyncSession) -> None:
     token = await _token(db, "viewer", ["*:read"])
 
