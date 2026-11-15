@@ -88,6 +88,13 @@ def _complete_synthetic(synthetic: dict[str, Any]) -> None:
             isinstance(empty, list | dict) and not isinstance(value, type(empty))
         ):
             synthetic[key] = copy.copy(empty)
+    # Each failed request is drawn as its URL and its failure: keep the items in
+    # the agent's shape, each with both.
+    synthetic["request_failures"] = [
+        {"url": item.get("url", ""), "failure": item.get("failure", "")}
+        for item in synthetic["request_failures"]
+        if isinstance(item, dict)
+    ]
 
 
 class ResultProxy:

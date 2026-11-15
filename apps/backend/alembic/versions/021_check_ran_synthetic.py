@@ -5,8 +5,10 @@ a reader who is not shown the script (a viewer) reads them as the type of what
 failed alone. A check retyped away from synthetic keeps those results, so the
 reading is decided by whether the check ever ran a script, not by its type now.
 
-Backfilled for every check that is synthetic now, and for every other check with a
-stored result that a synthetic run wrote (one retyped earlier):
+Backfilled for every check that is synthetic now, every check that still holds a
+script or owns an artifact (only a synthetic run uploads a screenshot or a trace),
+and every other check with a stored result that a synthetic run wrote (one retyped
+earlier):
 
 - its metrics are a JSON object with a top-level `synthetic` key. Only the top
   level: an http check's metrics carry its response headers, whose values can be
@@ -64,6 +66,8 @@ $$
 _BACKFILL = """
 UPDATE checks SET ran_synthetic = true
 WHERE check_type = 'synthetic'
+OR script_code IS NOT NULL
+OR EXISTS (SELECT 1 FROM check_artifacts a WHERE a.check_id = checks.id)
 OR EXISTS (
     SELECT 1 FROM check_results r
     WHERE r.check_id = checks.id

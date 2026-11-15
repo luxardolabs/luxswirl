@@ -65,7 +65,8 @@ def build_synthetic_view(synthetic: object) -> dict[str, Any]:
         turned into milliseconds relative to that step's navigationStart, and
         `synthetic_page`, a tile per page mark (`browser_timing`) the same way,
         `synthetic_execution_ms`, the whole check's run (None when absent), and
-        `synthetic_step_count`, the steps the run reported a duration for.
+        `synthetic_step_count`, the steps the run reported a duration for that
+        is a figure (`is_figure`), as a viewer's metrics keep them.
     """
     if not isinstance(synthetic, dict) or not synthetic:
         return {
@@ -99,5 +100,5 @@ def build_synthetic_view(synthetic: object) -> dict[str, Any]:
         "synthetic_steps": steps,
         "synthetic_page": _page_tiles(synthetic.get("browser_timing")),
         "synthetic_execution_ms": _whole(execution),
-        "synthetic_step_count": len(durations),
+        "synthetic_step_count": sum(map(is_figure, durations.values())),
     }

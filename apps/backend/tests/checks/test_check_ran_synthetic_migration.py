@@ -9,11 +9,15 @@ from __future__ import annotations
 import importlib.util
 import json
 from pathlib import Path
+from uuid import uuid4
 from typing import Any
 
 import pytest
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
+from app.core.datetime_utils import utc_now
+from app.models.check_artifact_model import CheckArtifact
+from app.models.enum_model import CheckArtifactType
 from fixtures.factories import make_agent, make_check, make_check_result
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -212,3 +216,64 @@ async def test_backfill_marks_a_synthetic_row_postgres_cannot_read_as_json(
     await _upgrade_again(db)
 
     assert await _ran(db, check_id) is True
+
+
+# What the agent writes when a script returns `{"status": "failure", "errors":
+# [...]}`: the script's own text, with no prefix of the agent's.
+SCRIPTS_OWN_ERROR = "Login failed after opening https://app.example.com/reset/Zt0k"
+SIZE_NOTE = json.dumps({"metrics_truncated": True, "metrics_original_chars": 90000})
+
+
+async def test_backfill_marks_a_retyped_check_that_still_holds_its_script(
+    db: AsyncSession,
+) -> None:
+    """A check retyped before a retype cleared the script keeps it; its runs'
+    error can be the script's own text, cut to the size note."""
+    check_id = await _http_check_with(db, metrics=SIZE_NOTE, error=SCRIPTS_OWN_ERROR)
+    await db.execute(
+        text("UPDATE checks SET script_code = 'async def run_check(page): ...' "
+             "WHERE id = :i"),
+        {"i": check_id},
+    )
+
+    await _upgrade_again(db)
+
+    assert await _ran(db, check_id) is True
+
+
+async def test_backfill_marks_a_retyped_check_that_owns_an_artifact(
+    db: AsyncSession,
+) -> None:
+    """Only a synthetic run uploads a screenshot or a trace."""
+    check_id = await _http_check_with(db, metrics=SIZE_NOTE, error=SCRIPTS_OWN_ERROR)
+    now = utc_now()
+    db.add(
+        CheckArtifact(
+            id=uuid4(),
+            check_id=check_id,
+            check_result_id=uuid4(),
+            check_result_timestamp=now,
+            artifact_type=CheckArtifactType.SCREENSHOT,
+            content_type="image/png",
+            filename="final-state.png",
+            size_bytes=4,
+            data=b"\x89PNG",
+            created_at=now,
+            updated_at=now,
+        )
+    )
+    await db.flush()
+
+    await _upgrade_again(db)
+
+    assert await _ran(db, check_id) is True
+
+
+async def test_backfill_control_size_noted_http_run_with_neither_stays_unmarked(
+    db: AsyncSession,
+) -> None:
+    check_id = await _http_check_with(db, metrics=SIZE_NOTE, error=SCRIPTS_OWN_ERROR)
+
+    await _upgrade_again(db)
+
+    assert await _ran(db, check_id) is False

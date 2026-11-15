@@ -32,6 +32,7 @@ from typing import overload
 from app.core.credential_mask import mask_credentials, mask_mapping
 from app.core.synthetic_result import (
     is_synthetic_error,
+    shown_failure,
     shown_synthetic_error,
     shown_synthetic_metrics,
 )
@@ -39,6 +40,8 @@ from app.models.enum_model import UserRole
 
 _HIDDEN = "***"
 _SYNTHETIC = "synthetic"
+# The agent's size note, which stands for metrics that outgrew the server's limit.
+_SIZE_NOTED = "metrics_truncated"
 
 # The schemes a target is shown with. Any other is no scheme a check uses and can be
 # text a secret was typed into (`jdbc:SECRET://`, `admin:SECRET://x@db`), so the
@@ -440,7 +443,8 @@ def masked_error(
 
     A synthetic run's (`is_synthetic_result`) is read as the type of what failed
     alone (`shown_synthetic_error`): it is text about pages the hidden script
-    opened. Any other's has each of `configured` (the check's own target and DNS
+    opened. So is a run whose metrics are the agent's size note (`shown_failure`):
+    nothing left in it says a script did not write its error. Any other's has each of `configured` (the check's own target and DNS
     nameserver) and the nameserver its metrics name cut to its origin wherever the
     error quotes it exactly, then every credential masked. A target or a
     DNS-over-HTTPS nameserver is a URL whose path can be a token no credential
@@ -449,6 +453,8 @@ def masked_error(
     if is_synthetic_result(decoded, error, ran_synthetic=ran_synthetic):
         section = decoded.get(_SYNTHETIC) if isinstance(decoded, dict) else None
         return shown_synthetic_error(error, section)
+    if isinstance(decoded, dict) and decoded.get(_SIZE_NOTED) is True:
+        return shown_failure(error)
     if not error:
         return error
     quoted = {value for value in (*configured, metrics_nameserver(decoded)) if value}

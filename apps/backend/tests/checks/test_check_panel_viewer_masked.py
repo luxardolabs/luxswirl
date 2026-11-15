@@ -698,3 +698,83 @@ async def test_non_list_script_fields_do_not_500_the_panel(
     )
 
     assert "Synthetic Monitor" in panel
+
+
+SCRIPTS_OWN_ERROR = f"Login failed after opening https://app.example.com/reset/{RESET_TOKEN}"
+
+
+@pytest.mark.parametrize(("role", "shown"), [("viewer", False), ("editor", True)])
+async def test_a_size_noted_runs_own_error_is_kept_from_a_viewer(
+    client: AsyncClient, db: AsyncSession, role: str, shown: bool
+) -> None:
+    """A check retyped away from synthetic that nothing marked, whose run reached
+    the server as the size note with the script's own error: nothing says a
+    script wrote it, so a viewer reads it as a failure alone."""
+    agent = make_agent()
+    user = make_user(role=role)
+    db.add_all([agent, user])
+    await db.flush()
+    check = make_check(agent_id=agent.id, check_type="http")
+    db.add(check)
+    await db.flush()
+    db.add(
+        make_check_result(
+            check_id=check.id,
+            agent_id=agent.id,
+            success=False,
+            error=SCRIPTS_OWN_ERROR,
+            metrics=SIZE_NOTE,
+        )
+    )
+    await db.flush()
+    _, session = await AuthCoreService().create_session(db, user.id)
+    client.cookies.set(settings.security.session_cookie_name, session)
+
+    resp = await client.get(f"/check/{check.id}")
+
+    assert resp.status_code == 200, resp.text
+    assert (RESET_TOKEN in resp.text) is shown
+    if not shown:
+        assert "Check failed" in resp.text
+
+
+@pytest.mark.parametrize(
+    "failures",
+    [
+        ["https://x.example/"],
+        [1, 2],
+        [{"failure": "net::ERR_ONE"}],
+        [{"url": "https://x.example/"}],
+        [None],
+        [{"url": 5, "failure": ["net::ERR_LIST"]}],
+    ],
+    ids=["strings", "ints", "no-url", "no-failure", "none", "odd-values"],
+)
+async def test_script_shaped_request_failures_do_not_500_the_editors_panel(
+    client: AsyncClient, db: AsyncSession, failures: list[object]
+) -> None:
+    """A script's returned fields overwrite the agent's, so `request_failures`
+    can be any list."""
+    section = {"status": "failure", "request_failures": failures}
+
+    panel = await _panel(
+        client, db, "synthetic", "editor", json.dumps({"synthetic": section})
+    )
+
+    assert "Synthetic Monitor" in panel
+
+
+async def test_control_agent_shaped_request_failures_are_listed(
+    client: AsyncClient, db: AsyncSession
+) -> None:
+    section = {
+        "status": "failure",
+        "request_failures": [{"url": "https://x.example/a", "failure": "net::ERR_X"}],
+    }
+
+    panel = await _panel(
+        client, db, "synthetic", "editor", json.dumps({"synthetic": section})
+    )
+
+    assert "https://x.example/a" in panel
+    assert "net::ERR_X" in panel

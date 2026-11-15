@@ -8,6 +8,7 @@ each step's duration out of a second dict by loop variable.
 from __future__ import annotations
 
 import pytest
+from app.core.synthetic_result import shown_synthetic_metrics
 from app.core.synthetic_timings import build_synthetic_view
 
 
@@ -129,6 +130,10 @@ def test_a_step_with_no_recorded_duration_reports_zero():
 
 
 def test_the_step_count_is_the_steps_with_a_duration():
+    """A duration that is no figure is none, for an editor as for a viewer, whose
+    metrics keep figures alone."""
     view = build_synthetic_view({"track_durations": {"a": 1.5, "b": "x"}})
-    assert view["synthetic_step_count"] == 2
+    assert view["synthetic_step_count"] == 1
+    shown = shown_synthetic_metrics({"track_durations": {"a": 1.5, "b": "x"}})
+    assert build_synthetic_view(shown)["synthetic_step_count"] == 1
     assert build_synthetic_view({"track_durations": 5})["synthetic_step_count"] == 0

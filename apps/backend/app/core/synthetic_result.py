@@ -53,6 +53,8 @@ _EXCEPTION_NAME = re.compile(r"([A-Za-z_][A-Za-z0-9_]{0,63}): ")
 _PLAYWRIGHT_CALL = re.compile(r"([A-Za-z]{1,32})\.([A-Za-z_]{1,64}):")
 
 FAILED = "Synthetic check failed"
+# A run whose error nothing says the source of (see `shown_failure`).
+UNREAD_FAILED = "Check failed"
 
 # The marks of the browser's `performance.timing`: the only keys of a timing read.
 _TIMING_MARKS = frozenset(
@@ -125,6 +127,17 @@ def shown_synthetic_error(error: str | None, section: object = None) -> str | No
         return error
     name = _failed_as(error, section)
     return f"{FAILED}: {name}" if name else FAILED
+
+
+def shown_failure(error: str | None) -> str | None:
+    """`error` as `Check failed: <type>`, or `Check failed` when it names no type
+    in the vocabulary: for a run that kept nothing saying what wrote its error. A
+    run whose metrics the agent cut to its size note may be a script's, whose
+    error can be the script's own text, with no prefix of the agent's."""
+    if not error:
+        return error
+    name = _failed_as(error, None)
+    return f"{UNREAD_FAILED}: {name}" if name else UNREAD_FAILED
 
 
 def is_synthetic_error(error: str | None) -> bool:

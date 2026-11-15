@@ -253,3 +253,32 @@ def test_the_synthetic_status_reads_as_one_of_three(status: object, shown: str) 
 
 def test_a_synthetic_section_that_is_no_mapping_reads_as_unknown() -> None:
     assert shown_synthetic_metrics([LINK_ID]) == {"status": "unknown"}
+
+
+SIZE_NOTE = {"metrics_truncated": True, "metrics_original_chars": 90000}
+
+
+@pytest.mark.parametrize("metrics", [SIZE_NOTE, json.dumps(SIZE_NOTE)])
+def test_a_size_noted_runs_error_reads_as_its_type_alone(metrics: object) -> None:
+    """A run cut to the size note keeps nothing that says what wrote its error,
+    which can be a script's own text about the pages it opened (a check retyped
+    away from synthetic that nothing marked)."""
+    error = f"Login failed after opening https://app.example.com/reset/{LINK_ID}"
+
+    assert masked_error(error, metrics, ran_synthetic=False, configured=()) == (
+        "Check failed"
+    )
+    assert masked_error(
+        f"TimeoutError: waiting for https://a.example/r/{LINK_ID}",
+        metrics,
+        ran_synthetic=False,
+        configured=(),
+    ) == ("Check failed: TimeoutError")
+
+
+def test_control_a_runs_error_with_its_metrics_whole_is_masked_as_usual() -> None:
+    error = "connection refused by db.internal:5432"
+
+    assert masked_error(error, {"response": {}}, ran_synthetic=False, configured=()) == (
+        error
+    )
