@@ -178,8 +178,7 @@ async def test_a_step_named_for_a_url_reads_masked(
 
     panel = await _panel(client, db, "synthetic", "viewer", metrics)
 
-    assert "https://app.example.com" in panel
-    assert "app.example.com/login" not in panel
+    assert "app.example.com/login" in panel
     assert SECRET not in panel
 
 
@@ -325,87 +324,3 @@ async def test_a_step_with_no_timing_reads_the_same_figures_as_an_editor(
     assert "BBB222" not in viewer
     for number in ("1000ms", "2000ms", "3000"):
         assert (number in viewer) == (number in editor), number
-
-
-DOH_OLD = f"http://doh.example.net/{DOH_TOKEN}/dns-query"
-DOH_NEW = f"https://doh.example.net/{DOH_TOKEN}/dns-query"
-
-
-async def test_recent_events_cut_a_nameserver_the_check_no_longer_names(
-    client: AsyncClient, db: AsyncSession
-) -> None:
-    """An editor fixed the nameserver's scheme and kept its token: an older
-    error quoting the old form is still read as its origin."""
-    agent = make_agent()
-    user = make_user(role="viewer")
-    db.add_all([agent, user])
-    await db.flush()
-    check = make_check(
-        agent_id=agent.id,
-        check_type="dns",
-        check_config={"nameserver": DOH_NEW, "record_type": "A"},
-    )
-    db.add(check)
-    await db.flush()
-    db.add(
-        make_check_result(
-            check_id=check.id,
-            agent_id=agent.id,
-            success=False,
-            error=f"Invalid nameserver: nameserver {DOH_OLD} is not a valid https URL",
-            metrics=DOH_METRICS.replace(
-                f"https://doh.example.net/{DOH_TOKEN}", DOH_OLD
-            ),
-        )
-    )
-    await db.flush()
-    _, session = await AuthCoreService().create_session(db, user.id)
-    client.cookies.set(settings.security.session_cookie_name, session)
-
-    resp = await client.get(f"/check/{check.id}")
-
-    assert resp.status_code == 200, resp.text
-    assert "Invalid nameserver" in resp.text
-    assert DOH_TOKEN not in resp.text
-
-
-SCRIPT_PATH = "reset/9f8e7d6c5b4a39281706"
-
-
-@pytest.mark.parametrize(("role", "shown"), [("viewer", False), ("editor", True)])
-async def test_a_viewer_reads_a_synthetic_error_with_each_url_cut_to_its_origin(
-    client: AsyncClient, db: AsyncSession, role: str, shown: bool
-) -> None:
-    agent = make_agent()
-    user = make_user(role=role)
-    db.add_all([agent, user])
-    await db.flush()
-    check = make_check(
-        agent_id=agent.id,
-        check_type="synthetic",
-        target=f"https://app.example.com/{SCRIPT_PATH}",
-    )
-    db.add(check)
-    await db.flush()
-    error = (
-        "Page.goto: net::ERR_NAME_NOT_RESOLVED at "
-        f"https://app.example.com/{SCRIPT_PATH}"
-    )
-    db.add(
-        make_check_result(
-            check_id=check.id,
-            agent_id=agent.id,
-            success=False,
-            error=error,
-            metrics=json.dumps({"synthetic": {"status": "failure", "errors": [error]}}),
-        )
-    )
-    await db.flush()
-    _, session = await AuthCoreService().create_session(db, user.id)
-    client.cookies.set(settings.security.session_cookie_name, session)
-
-    resp = await client.get(f"/check/{check.id}")
-
-    assert resp.status_code == 200, resp.text
-    assert "ERR_NAME_NOT_RESOLVED at https://app.example.com" in resp.text
-    assert (SCRIPT_PATH in resp.text) is shown

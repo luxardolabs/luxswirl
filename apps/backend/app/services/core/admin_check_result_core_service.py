@@ -8,10 +8,9 @@ response body can hold anything the monitored service sent. Of `metrics`, a
 viewer reads only the sections the web UI's detail panel shows, every string
 in them masked: an HTTP check's metrics also carry every response header the
 monitored service sent (a session cookie among them), and a synthetic check's
-carry the raw errors its `error` is made from. Every URL an `error` or the
-metrics quote (a page a synthetic script opened, a DNS-over-HTTPS nameserver)
-is cut to its origin (`masked_error`, `masked_metrics`), as the check's own
-target is.
+carry the raw errors its `error` is made from. A DNS check's nameserver is
+cut to its origin (`masked_metrics`), as the check's own is, and so is every
+place an `error` quotes it (`masked_error`).
 """
 
 import json

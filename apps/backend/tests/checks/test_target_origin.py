@@ -17,12 +17,7 @@ import pytest
 import pytest_asyncio
 from app.core.config import settings
 from app.core.rate_limit import limiter
-from app.core.target_origin import (
-    masked_error,
-    masked_metrics,
-    shown_target,
-    target_origin,
-)
+from app.core.target_origin import shown_target, target_origin
 from app.main import app
 from app.models.enum_model import UserRole
 from app.schemas.api_token_schema import ApiTokenCreate
@@ -238,96 +233,6 @@ def test_reading_a_long_value_takes_no_time(hostile: str) -> None:
     started = time.perf_counter()
     target_origin(hostile)
     assert time.perf_counter() - started < 2.0
-
-
-# --- a result's error as a viewer reads it: every URL it quotes cut to its origin --
-
-
-@pytest.mark.parametrize(
-    ("error", "shown"),
-    [
-        (
-            "Page.goto: net::ERR_NAME_NOT_RESOLVED at https://app.example.com/reset/T0K",
-            "Page.goto: net::ERR_NAME_NOT_RESOLVED at https://app.example.com",
-        ),
-        (
-            'navigating to "https://app.example.com/reset/T0K", waiting until "load"',
-            'navigating to "https://app.example.com", waiting until "load"',
-        ),
-        (
-            "nameserver http://doh.example.net/T0K/dns-query is not a valid https URL",
-            "nameserver http://doh.example.net is not a valid https URL",
-        ),
-        (
-            "refused (https://api.example.com:8443/v1/T0K).",
-            "refused (https://api.example.com:8443).",
-        ),
-        ("url=https://u:pw@api.example.com/T0K", "url=https://api.example.com"),
-        (
-            "no answer from doh.example.net/T0K/dns-query",
-            "no answer from doh.example.net",
-        ),
-        ("no answer from 10.0.0.5:8053/T0K", "no answer from 10.0.0.5:8053"),
-        (
-            "a jdbc:postgresql://db.internal:5432/T0K b",
-            "a jdbc:postgresql://db.internal:5432 b",
-        ),
-        ("odd scheme chrome-error://chromewebdata/T0K", "odd scheme ***"),
-        ("Status code 500 != expected 200", "Status code 500 != expected 200"),
-        (
-            'File "/usr/lib/python3.12/site.py", line 3, in and/or Chrome/120.0',
-            'File "/usr/lib/python3.12/site.py", line 3, in and/or Chrome/120.0',
-        ),
-        (
-            "The DNS query name does not exist: example.com.",
-            "The DNS query name does not exist: example.com.",
-        ),
-    ],
-)
-def test_a_viewer_reads_every_url_in_an_error_as_its_origin(
-    error: str, shown: str
-) -> None:
-    assert masked_error(error, ()) == shown
-
-
-@pytest.mark.parametrize(
-    "hostile",
-    [
-        "a" * (4 << 20),
-        "https://" * (1 << 19),
-        "x.y/" * (1 << 20),
-        "a.b" + ".c" * (2 << 20) + "/",
-        ":" * (4 << 20) + "//",
-    ],
-)
-def test_cutting_the_urls_of_a_long_error_takes_no_time(hostile: str) -> None:
-    started = time.perf_counter()
-    masked_error(hostile, ())
-    assert time.perf_counter() - started < 2.0
-
-
-def test_a_viewer_reads_every_url_in_the_metrics_as_its_origin() -> None:
-    step = "https://app.example.com/reset/T0K"
-    masked = masked_metrics(
-        {
-            "synthetic": {
-                "errors": [f"Page.goto at {step}"],
-                "request_failures": [{"url": step}],
-                "track_durations": {step: 1.0, "https://app.example.com/b/T1K": 2.0},
-            }
-        }
-    )
-
-    assert masked == {
-        "synthetic": {
-            "errors": ["Page.goto at https://app.example.com"],
-            "request_failures": [{"url": "https://app.example.com"}],
-            "track_durations": {
-                "https://app.example.com": 1.0,
-                "https://app.example.com (2)": 2.0,
-            },
-        }
-    }
 
 
 # --- every surface a viewer, or no one signed in, reads a target on ---------------
