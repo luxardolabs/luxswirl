@@ -101,6 +101,16 @@ class CheckCoreService:
         return check
 
     @staticmethod
+    async def get_nameserver(db: AsyncSession, check_id: UUID) -> str | None:
+        """The check's DNS nameserver, or None (no such check, or none set).
+
+        A reader who does not hold the check's credentials is shown its results'
+        errors with this nameserver cut to its origin (`masked_error`).
+        """
+        check = await CheckCRUD.get_by_id(db, check_id)
+        return check.nameserver if check else None
+
+    @staticmethod
     async def create_check(
         db: AsyncSession,
         agent_id: UUID,

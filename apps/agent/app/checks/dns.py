@@ -4,6 +4,7 @@ DNS Check Module - Implements DNS query health checks.
 
 from collections.abc import Iterable
 from typing import Any
+from urllib.parse import urlsplit
 
 from app.checks._ssrf_policy import target_allowed
 from app.checks.base import BaseCheck
@@ -20,6 +21,19 @@ except ImportError:
     DNS_AVAILABLE = False
 
 logger = get_logger("luxswirl.agent.checks.dns")
+
+
+def _nameserver_host(nameserver: str) -> str:
+    """`nameserver` without what follows its host: a URL's scheme and host, or
+    `"the nameserver"` when it has none."""
+    try:
+        parts = urlsplit(nameserver if "//" in nameserver else f"//{nameserver}")
+        host = parts.hostname
+    except ValueError:
+        return "the nameserver"
+    if not host:
+        return "the nameserver"
+    return f"{parts.scheme}://{host}" if parts.scheme else host
 
 
 class DNSCheck(BaseCheck):
@@ -108,9 +122,11 @@ class DNSCheck(BaseCheck):
                 # Configure nameserver with port
                 try:
                     resolver.nameservers = [nameserver]
-                except ValueError as e:
-                    # A nameserver given as a name rather than an address.
-                    error = f"Invalid nameserver: {e}"
+                except ValueError:
+                    # A nameserver given as a name rather than an address. The
+                    # resolver's message quotes the nameserver whole, and a
+                    # DNS-over-HTTPS one's path can be its access token.
+                    error = "Invalid nameserver: not an IP address or an https URL"
                     continue
                 resolver.port = port
 
@@ -189,6 +205,18 @@ class DNSCheck(BaseCheck):
                 )
                 error = f"Unexpected error: {str(e)}"
                 continue
+
+        # The server shows a result's error to every signed-in user, and a
+        # DNS-over-HTTPS nameserver's path can be its access token: an error
+        # that quotes the nameserver names it without the path. A bare address
+        # (an IPv6 one has colons, never a slash or an @) is quoted as it is.
+        if (
+            error
+            and isinstance(nameserver, str)
+            and ("/" in nameserver or "@" in nameserver)
+            and nameserver in error
+        ):
+            error = error.replace(nameserver, _nameserver_host(nameserver))
 
         # Create the result with DNS data in metrics
         return self.create_result(

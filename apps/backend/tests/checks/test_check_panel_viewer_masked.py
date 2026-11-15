@@ -122,6 +122,38 @@ async def test_a_viewer_reads_a_doh_nameserver_as_its_origin(
     assert DOH_TOKEN in editor
 
 
+async def test_a_viewer_never_reads_a_doh_nameserver_in_a_results_error(
+    client: AsyncClient, db: AsyncSession
+) -> None:
+    nameserver = f"http://doh.example.net/{DOH_TOKEN}/dns-query"
+    error = f"Invalid nameserver: nameserver {nameserver} is not a valid https URL"
+    agent = make_agent()
+    user = make_user(role="viewer")
+    db.add_all([agent, user])
+    await db.flush()
+    check = make_check(
+        agent_id=agent.id,
+        check_type="dns",
+        check_config={"nameserver": nameserver, "record_type": "A"},
+    )
+    db.add(check)
+    await db.flush()
+    db.add(
+        make_check_result(
+            check_id=check.id, agent_id=agent.id, success=False, error=error
+        )
+    )
+    await db.flush()
+    _, session = await AuthCoreService().create_session(db, user.id)
+    client.cookies.set(settings.security.session_cookie_name, session)
+
+    resp = await client.get(f"/check/{check.id}")
+
+    assert resp.status_code == 200, resp.text
+    assert "Invalid nameserver" in resp.text
+    assert DOH_TOKEN not in resp.text
+
+
 async def test_an_editor_reads_the_error_as_it_was_reported(
     client: AsyncClient, db: AsyncSession
 ) -> None:

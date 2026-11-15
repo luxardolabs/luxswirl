@@ -25,6 +25,7 @@ that can backtrack.
 """
 
 import ipaddress
+import json
 import re
 from typing import overload
 
@@ -358,3 +359,33 @@ def masked_metrics(metrics: dict[str, object]) -> dict[str, object]:
         if isinstance(nameserver, str):
             shown["nameserver"] = target_origin(nameserver)
     return masked
+
+
+def metrics_nameserver(metrics: object) -> str | None:
+    """The nameserver a DNS result's metrics (a dict, or the JSON text a row
+    stores) name, or None. The agent copies the check's there when it runs."""
+    if isinstance(metrics, str):
+        try:
+            metrics = json.loads(metrics)
+        except ValueError:
+            return None
+    dns = metrics.get("dns") if isinstance(metrics, dict) else None
+    nameserver = dns.get("nameserver") if isinstance(dns, dict) else None
+    return nameserver if isinstance(nameserver, str) else None
+
+
+@overload
+def masked_error(error: str, nameservers: tuple[str | None, ...]) -> str: ...
+@overload
+def masked_error(error: None, nameservers: tuple[str | None, ...]) -> None: ...
+def masked_error(error: str | None, nameservers: tuple[str | None, ...]) -> str | None:
+    """A check result's error as a reader who does not hold the check's credentials
+    reads it: each of `nameservers` (the check's DNS nameserver, and the one the
+    result's metrics name) cut to its origin wherever the error quotes it, then
+    every credential masked. A DNS-over-HTTPS nameserver is a URL whose path can be
+    the resolver account's token, and a resolver's refusal quotes it whole."""
+    if not error:
+        return error
+    for nameserver in sorted({n for n in nameservers if n}, key=len, reverse=True):
+        error = error.replace(nameserver, target_origin(nameserver) or _HIDDEN)
+    return mask_credentials(error)

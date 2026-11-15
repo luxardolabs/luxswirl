@@ -12,13 +12,13 @@ from uuid import UUID
 from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.credential_mask import mask_credentials
 from app.core.datetime_utils import utc_now
 from app.core.ssl_expiry import ssl_expiry_fields
 from app.core.synthetic_timings import build_synthetic_view
-from app.core.target_origin import masked_metrics
+from app.core.target_origin import masked_error, masked_metrics, metrics_nameserver
 from app.models.enum_model import UserRole
 from app.schemas.check_result_schema import RecentCheckResult
+from app.services.core.check_core_service import CheckCoreService
 from app.services.core.check_dependency_core_service import (
     CheckDependencyCoreService,
 )
@@ -166,9 +166,6 @@ class CheckDetailViewService:
         """
         masked = role == UserRole.VIEWER
 
-        def shown_error(error: str | None) -> str | None:
-            return mask_credentials(error) if masked else error
-
         # Get check with agent
         row = await CheckResultCoreService.get_check_with_agent(db, check_id)
 
@@ -176,6 +173,16 @@ class CheckDetailViewService:
             return None
 
         check, agent = row
+
+        nameserver = (
+            await CheckCoreService.get_nameserver(db, check_id) if masked else None
+        )
+
+        def shown_error(error: str | None, metrics: object) -> str | None:
+            """`error` as the reader is shown it; `metrics` are its result's."""
+            if not masked:
+                return error
+            return masked_error(error, (nameserver, metrics_nameserver(metrics)))
 
         # Get recent results based on time range (bucketed by core service)
         raw_rows = await CheckResultCoreService.get_bucketed_history(
@@ -204,13 +211,14 @@ class CheckDetailViewService:
         history: list[dict[str, Any]] = []
         for result in history_models:
             metrics = result.get_metrics()  # SSL cert already computed by the server
+            error = shown_error(result.error, metrics)
             if masked:
                 metrics = masked_metrics(metrics)
             history_item: dict[str, Any] = {
                 "timestamp": result.timestamp.isoformat(),  # ISO string for JSON serialization
                 "success": result.success,
                 "latency_ms": result.latency_ms,
-                "error": shown_error(result.error),
+                "error": error,
                 "additional_data": metrics,
             }
 
@@ -422,7 +430,7 @@ class CheckDetailViewService:
                 "timestamp": result.timestamp.isoformat(),  # ISO string for template
                 "success": result.success,
                 "latency_ms": result.latency_ms,
-                "error": shown_error(result.error),
+                "error": shown_error(result.error, None),
             }
             for result in status_bar_results
         ]

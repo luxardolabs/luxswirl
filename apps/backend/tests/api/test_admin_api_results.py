@@ -464,6 +464,59 @@ async def test_a_viewer_reads_a_doh_nameserver_cut_to_its_origin(
     assert full.json()["items"][0]["metrics"]["dns"]["nameserver"] == DOH
 
 
+# dnspython's refusal of a nameserver it cannot use, as an agent stores it.
+DOH_HTTP = f"http://doh.example.net/{DOH_TOKEN}/dns-query"
+DOH_ERROR = (
+    f"Invalid nameserver: nameserver {DOH_HTTP} is not a "
+    "dns.nameserver.Nameserver instance or text form, IP address, nor a valid "
+    "https URL"
+)
+
+
+@pytest.mark.parametrize(
+    ("check_config", "metrics"),
+    [
+        (None, {"dns": {"nameserver": DOH_HTTP, "port": 53}}),
+        ({"nameserver": DOH_HTTP, "record_type": "A"}, None),
+    ],
+    ids=["named-by-the-result", "named-by-the-check"],
+)
+async def test_a_viewer_never_reads_a_doh_nameserver_in_a_results_error(
+    db: AsyncSession, client: AsyncClient, check_config, metrics
+) -> None:
+    viewer = await _as(db, "viewer")
+    editor = await _as(db, "editor")
+    agent = make_agent()
+    db.add(agent)
+    await db.flush()
+    check = make_check(agent_id=agent.id, check_type="dns", check_config=check_config)
+    db.add(check)
+    await db.flush()
+    result = await _result(
+        db,
+        check,
+        5,
+        success=False,
+        error=DOH_ERROR,
+        metrics=json.dumps(metrics) if metrics else None,
+    )
+
+    reads = [
+        await client.get(f"{CHECKS}/{check.id}/results", headers=viewer),
+        await client.get(f"{CHECKS}/{check.id}/results/{result.id}", headers=viewer),
+        await client.get(f"{CHECKS}/{check.id}/summary", headers=viewer),
+        await client.get(f"{CHECKS}/{check.id}/history", headers=viewer),
+    ]
+    full = await client.get(f"{CHECKS}/{check.id}/results", headers=editor)
+
+    for resp in reads:
+        assert resp.status_code == 200, resp.text
+        assert DOH_TOKEN not in resp.text, resp.text
+    shown = reads[0].json()["items"][0]["error"]
+    assert shown.startswith("Invalid nameserver: nameserver http://doh.example.net")
+    assert full.json()["items"][0]["error"] == DOH_ERROR
+
+
 @pytest.mark.parametrize(
     ("name", "moment"),
     [

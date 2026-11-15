@@ -9,7 +9,8 @@ viewer reads only the sections the web UI's detail panel shows, every string
 in them masked: an HTTP check's metrics also carry every response header the
 monitored service sent (a session cookie among them), and a synthetic check's
 carry the raw errors its `error` is made from. A DNS check's nameserver is
-cut to its origin (`masked_metrics`), as the check's own is.
+cut to its origin (`masked_metrics`), as the check's own is, and so is every
+place an `error` quotes it (`masked_error`).
 """
 
 import json
@@ -19,10 +20,9 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.credential_mask import mask_credentials
 from app.core.datetime_utils import utc_now
 from app.core.exceptions import NotFoundException, ValidationException
-from app.core.target_origin import masked_metrics
+from app.core.target_origin import masked_error, masked_metrics, metrics_nameserver
 from app.models.check_result_model import CheckResult
 from app.models.enum_model import UserRole
 from app.schemas.admin_check_result_schema import (
@@ -96,11 +96,16 @@ class AdminCheckResultCoreService:
     """Read a check's results, one result, its history and its summary."""
 
     @staticmethod
-    def _error(error: str | None, role: UserRole) -> str | None:
-        return mask_credentials(error) if role == UserRole.VIEWER else error
+    def _error(
+        error: str | None, role: UserRole, nameservers: tuple[str | None, ...]
+    ) -> str | None:
+        return masked_error(error, nameservers) if role == UserRole.VIEWER else error
 
     @staticmethod
-    def _result(row: CheckResult, role: UserRole) -> AdminCheckResult:
+    def _result(
+        row: CheckResult, role: UserRole, nameserver: str | None
+    ) -> AdminCheckResult:
+        """`row` as `role` reads it; `nameserver` is its check's DNS nameserver."""
         metrics = _metrics(row.metrics)
         return AdminCheckResult(
             id=row.id,
@@ -109,7 +114,9 @@ class AdminCheckResultCoreService:
             timestamp=row.timestamp,
             success=row.success,
             latency_ms=row.latency_ms,
-            error=AdminCheckResultCoreService._error(row.error, role),
+            error=AdminCheckResultCoreService._error(
+                row.error, role, (nameserver, metrics_nameserver(metrics))
+            ),
             error_type=row.error_type,
             http_status_code=row.http_status_code,
             http_response_time_ms=row.http_response_time_ms,
@@ -132,7 +139,7 @@ class AdminCheckResultCoreService:
         `until` defaults to now and `since` to 24 hours before it; the window
         must run forward, span at most 31 days and start in 1970 or later.
         """
-        await CheckCoreService.get_check_by_id(db, check_id)
+        check = await CheckCoreService.get_check_by_id(db, check_id)
         end = _utc(until, "until") if until is not None else utc_now()
         start = _utc(since, "since") if since is not None else end - DEFAULT_WINDOW
         if start >= end:
@@ -144,7 +151,10 @@ class AdminCheckResultCoreService:
             db, check_id, start, end, skip=(page - 1) * per_page, limit=per_page
         )
         return CheckResultPage.of(
-            [AdminCheckResultCoreService._result(row, role) for row in rows],
+            [
+                AdminCheckResultCoreService._result(row, role, check.nameserver)
+                for row in rows
+            ],
             build_pagination(page=page, per_page=per_page, total=total),
         )
 
@@ -153,7 +163,7 @@ class AdminCheckResultCoreService:
         db: AsyncSession, role: UserRole, check_id: UUID, result_id: UUID
     ) -> AdminCheckResultDetail:
         """One result of the check, whole; one of another check is not found."""
-        await CheckCoreService.get_check_by_id(db, check_id)
+        check = await CheckCoreService.get_check_by_id(db, check_id)
         row = await CheckResultCoreService.get_result_of_check(db, check_id, result_id)
         if row is None:
             raise NotFoundException(f"Check {check_id} has no result {result_id}")
@@ -161,7 +171,9 @@ class AdminCheckResultCoreService:
             db, check_id, row.id, row.timestamp
         )
         return AdminCheckResultDetail(
-            **AdminCheckResultCoreService._result(row, role).model_dump(),
+            **AdminCheckResultCoreService._result(
+                row, role, check.nameserver
+            ).model_dump(),
             response_data=None if role == UserRole.VIEWER else row.response_data,
             artifacts=artifacts,
         )
@@ -171,7 +183,7 @@ class AdminCheckResultCoreService:
         db: AsyncSession, role: UserRole, check_id: UUID, hours: int
     ) -> CheckHistory:
         """The check's results over the last `hours`, bucketed as the panel draws them."""
-        await CheckCoreService.get_check_by_id(db, check_id)
+        check = await CheckCoreService.get_check_by_id(db, check_id)
         rows = await CheckResultCoreService.get_bucketed_history(db, check_id, hours)
         return CheckHistory(
             check_id=check_id,
@@ -181,7 +193,11 @@ class AdminCheckResultCoreService:
                     bucket_time=row.bucket_time,
                     success=row.success,
                     latency_ms=row.latency_ms,
-                    error=AdminCheckResultCoreService._error(row.error, role),
+                    error=AdminCheckResultCoreService._error(
+                        row.error,
+                        role,
+                        (check.nameserver, metrics_nameserver(row.metrics)),
+                    ),
                 )
                 for row in rows
             ],
@@ -192,7 +208,7 @@ class AdminCheckResultCoreService:
         db: AsyncSession, role: UserRole, check_id: UUID, hours: int
     ) -> CheckSummary:
         """The check's results over the last `hours`, counted, and its latest."""
-        await CheckCoreService.get_check_by_id(db, check_id)
+        check = await CheckCoreService.get_check_by_id(db, check_id)
         stats = await CheckResultCoreService.get_check_detail_stats(db, check_id, hours)
         latest = await CheckResultCoreService.get_latest_result_row(db, check_id)
         total = int(stats.total or 0)
@@ -207,6 +223,8 @@ class AdminCheckResultCoreService:
             min_latency_ms=stats.min_latency,
             max_latency_ms=stats.max_latency,
             latest=(
-                AdminCheckResultCoreService._result(latest, role) if latest else None
+                AdminCheckResultCoreService._result(latest, role, check.nameserver)
+                if latest
+                else None
             ),
         )
