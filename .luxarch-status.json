@@ -1,6 +1,6 @@
 {
   "guard": "luxarch",
-  "guard_version": "0.364.0",
+  "guard_version": "0.365.3",
   "repo": "/repo",
   "targets": [
     {
@@ -2871,6 +2871,17 @@
         "example": ""
       },
       {
+        "rule": "repo.dev_host_declared",
+        "status": "FAIL",
+        "since": "0.365.0",
+        "violations": 1,
+        "deferred": false,
+        "inert": false,
+        "inert_reason": "",
+        "fix": "Move the dev stack to the dev host: `DEV_HOST := devhost` committed in the Makefile, no host `ports:`, and the service the edge reaches on the `dev-edge` network: the app's own front nginx as `<app>-nginx`, or, for an app with none, the app itself. The whole recipe, both shapes: --doc FLEET-BUILD-DEPLOY-STANDARD, \"The dev host\", \"Moving a stack to the dev host\".",
+        "example": ""
+      },
+      {
         "rule": "repo.test_block_wired",
         "status": "PASS",
         "since": "0.271.0",
@@ -3049,7 +3060,7 @@
     ],
     "summary": {
       "PASS": 74,
-      "FAIL": 0,
+      "FAIL": 1,
       "XFAIL": 0,
       "XPASS": 0,
       "INERT": 2
@@ -3057,11 +3068,11 @@
   },
   "summary": {
     "PASS": 251,
-    "FAIL": 0,
+    "FAIL": 1,
     "XFAIL": 0,
     "XPASS": 0,
     "INERT": 23
   },
-  "commit": "23c5fa7ae95e50e60a798fa0ddf11233fed8e7dd",
-  "generated_at": "2026-11-14T23:57:34Z"
+  "commit": "cda203559a5cfd41eeaff1fd9b648bdabb25e061",
+  "generated_at": "2026-11-15T04:19:01Z"
 }
