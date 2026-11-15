@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, Form, Path, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.exceptions import StatusPageNotFoundException
 from app.core.query_params import (
     AgentIdFilter,
@@ -17,6 +18,7 @@ from app.core.query_params import (
     PerPageFilter,
     TimeRangeFilter,
 )
+from app.core.rate_limit import limiter
 from app.db import get_db
 from app.services.views.maintenance_job_view_service import MaintenanceJobViewService
 from app.services.views.status_pages_view_service import StatusPagesViewService
@@ -458,6 +460,7 @@ async def get_dashboard_items(
     include_in_schema=False,
     name="public_status_pages.show",
 )
+@limiter.limit(settings.security.status_page_rate_limit)
 async def view_public_status_page(
     request: Request,
     slug: Annotated[str, Path(description="Status page slug")],
@@ -502,6 +505,7 @@ async def view_public_status_page(
     include_in_schema=False,
     name="public_status_pages.partial",
 )
+@limiter.limit(settings.security.status_page_rate_limit)
 async def view_public_status_page_partial(
     request: Request,
     slug: Annotated[str, Path(description="Status page slug")],

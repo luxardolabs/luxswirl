@@ -202,6 +202,17 @@ class SecuritySettings(BaseSettings):
             "recoveries per IP (count/period)"
         ),
     )
+    status_page_rate_limit: str = Field(
+        default="120/minute",
+        description=(
+            "Rate limit per IP on each public status page route (/status/{slug} "
+            "and its /partial refresh, one budget each). Anyone may ask for a "
+            "public page, and each request reads every check on it, so this "
+            "bounds what one address can make the database do; an open page "
+            "polls three times a minute, so the default lets about forty "
+            "viewers share one address"
+        ),
+    )
     password_reset_rate_limit: str = Field(
         default="20/hour",
         description=(
@@ -268,6 +279,7 @@ class SecuritySettings(BaseSettings):
         "agent_api_rate_limit",
         "admin_api_rate_limit",
         "registration_rate_limit",
+        "status_page_rate_limit",
         "password_reset_rate_limit",
     )
     @classmethod

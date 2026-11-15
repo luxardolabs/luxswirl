@@ -2,6 +2,7 @@
 Dashboard rendering — view-model assembly for status-page dashboards.
 """
 
+from collections import Counter
 from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
@@ -10,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.datetime_utils import utc_now
 from app.core.sparkline import sparkline_path
+from app.models.enum_model import CheckHealthStatus
 from app.schemas.check_result_schema import CheckUptime, StatusBarResult
 from app.schemas.check_schema import DashboardCheck
 from app.schemas.status_page_schema import StatusPageInDB
@@ -41,6 +43,37 @@ def mark_check_runs(rendered_items: list[dict[str, Any]]) -> None:
             continue
         item["opens_run"] = index == 0 or types[index - 1] != "check"
         item["closes_run"] = index == len(types) - 1 or types[index + 1] != "check"
+
+
+def named_check(
+    named: dict[UUID, DashboardCheck], raw: object
+) -> DashboardCheck | None:
+    """The row for an item's check id as stored (a UUID string), or None for an
+    id that is not a UUID or names no check the read returned."""
+    try:
+        return named.get(UUID(str(raw)))
+    except ValueError:
+        return None
+
+
+def health_counts(checks: list[DashboardCheck]) -> Counter[CheckHealthStatus]:
+    """How many of `checks` are up, down and unknown, by their latest status."""
+    return Counter(check.latest_status for check in checks)
+
+
+def overall_health(up: int, down: int) -> str:
+    """A page's or group's verdict from its checks with a current result.
+
+    `unknown` when none has one, `operational` when none of them is down,
+    `outage` when all of them are down, `degraded` in between.
+    """
+    if up + down == 0:
+        return "unknown"
+    if down == 0:
+        return "operational"
+    if up == 0:
+        return "outage"
+    return "degraded"
 
 
 class DashboardRender:
@@ -704,7 +737,10 @@ class DashboardRender:
     ) -> dict[str, Any]:
         """
         Render public dashboard with all checks and stats.
-        Optimized with bulk queries to avoid N+1 problem.
+
+        Every check the items name, alone or in a container group, is read in
+        one `get_check_details_map`, so the statements a request runs do not
+        grow with the checks on the page; a dynamic group reads its own filter.
 
         Args:
             db: Database session
@@ -714,64 +750,40 @@ class DashboardRender:
         Returns:
             Dictionary with rendered dashboard data
         """
-        # PHASE 1: Collect all check IDs and load check objects
-        check_map = {}  # Maps check_id -> Check object
-        items_with_checks = []  # List of (item, check_ids) tuples
+        # PHASE 1: every named check in one read, then each item's checks from it
+        named_ids = list(
+            dict.fromkeys(
+                DashboardRender.extract_check_ids_from_items(status_page.items)
+            )
+        )
+        named = await DashboardRender.get_check_details_map(db, named_ids)
+
+        check_map: dict[str, DashboardCheck] = {}
+        items_with_checks: list[tuple[dict[str, Any], list[str]]] = []
 
         for item in status_page.items:
             item_type = item.get("type")
 
             if item_type == "check":
-                check_id_str = item.get("check_id")
-                if check_id_str:
-                    try:
-                        check_id = (
-                            UUID(check_id_str)
-                            if isinstance(check_id_str, str)
-                            else check_id_str
-                        )
-                        check = await DashboardRender.get_check_with_status(
-                            db, check_id
-                        )
-                        if check:
-                            check_map[check_id_str] = check
-                            items_with_checks.append((item, [check_id_str]))
-                    except ValueError, TypeError:
-                        logger.warning(
-                            "Invalid check_id in public dashboard",
-                            extra={"check_id_raw": check_id_str},
-                        )
-                        continue
+                check = named_check(named, item.get("check_id"))
+                if check:
+                    check_map[str(check.id)] = check
+                    items_with_checks.append((item, [str(check.id)]))
 
             elif item_type == "group":
-                group_checks = []
+                group_checks: list[DashboardCheck] = []
                 if "filter" in item:
                     # n-plus-one: same as the private dashboard above — one query per
                     # group on the page, each with its own filter and row cap.
-                    matching_checks = await DashboardRender.get_checks_matching_filter(
+                    group_checks = await DashboardRender.get_checks_matching_filter(
                         db, item.get("filter", {})
                     )
-                    group_checks = matching_checks
                 elif "checks" in item:
-                    check_ids = item.get("checks", [])
-                    for check_id_str in check_ids:
-                        try:
-                            check_id = (
-                                UUID(check_id_str)
-                                if isinstance(check_id_str, str)
-                                else check_id_str
-                            )
-                            check = await DashboardRender.get_check_with_status(
-                                db, check_id
-                            )
-                            if check:
-                                group_checks.append(check)
-                        except ValueError, TypeError:
-                            logger.warning(
-                                "Invalid check_id in group checks (public)",
-                                extra={"check_id_raw": check_id_str},
-                            )
-                            continue
+                    group_checks = [
+                        check
+                        for raw in item.get("checks", [])
+                        if (check := named_check(named, raw))
+                    ]
 
                 # Add to check_map (use string keys for template lookup)
                 group_check_ids = []
@@ -851,43 +863,39 @@ class DashboardRender:
                     group_checks, sort_by, sort_direction
                 )
 
-                # The group header shows up/down counts; the card renders them
+                # The group header shows its counts; the card renders them
                 # rather than filtering the list itself.
-                group_up = sum(1 for c in group_checks if c.latest_success)
+                group_counts = health_counts(group_checks)
                 rendered_items.append(
                     {
                         "type": "group",
                         "name": group_name,
                         "checks": group_checks,
                         "total": len(group_checks),
-                        "up": group_up,
-                        "down": len(group_checks) - group_up,
+                        "up": group_counts[CheckHealthStatus.UP],
+                        "down": group_counts[CheckHealthStatus.DOWN],
+                        "unknown": group_counts[CheckHealthStatus.UNKNOWN],
+                        "status": overall_health(
+                            group_counts[CheckHealthStatus.UP],
+                            group_counts[CheckHealthStatus.DOWN],
+                        ),
                         "sort_by": sort_by,
                         "sort_direction": sort_direction,
                     }
                 )
                 all_checks.extend(group_checks)
 
-        # Calculate overall stats
+        # Overall stats. A check with no current result (none yet, disabled,
+        # silent) is unknown: it is counted on its own and left out of the
+        # up/down ratio, since nothing says it is failing.
         total_checks = len(all_checks)
-        checks_up = sum(
-            1 for c in all_checks if hasattr(c, "latest_success") and c.latest_success
-        )
-        checks_down = total_checks - checks_up
-
-        # Calculate overall uptime
-        if total_checks > 0:
-            overall_uptime = round((checks_up / total_checks) * 100, 1)
-        else:
-            overall_uptime = 100.0
-
-        # Determine overall status
-        if checks_down == 0:
-            overall_status = "operational"
-        elif checks_down < total_checks:
-            overall_status = "degraded"
-        else:
-            overall_status = "outage"
+        counts = health_counts(all_checks)
+        checks_up = counts[CheckHealthStatus.UP]
+        checks_down = counts[CheckHealthStatus.DOWN]
+        checks_unknown = counts[CheckHealthStatus.UNKNOWN]
+        known = checks_up + checks_down
+        overall_status = overall_health(checks_up, checks_down)
+        overall_uptime = round(checks_up / known * 100, 1) if known else None
 
         bucket_size = DashboardRender._get_bucket_size(time_range_minutes)
         num_bars = time_range_minutes // bucket_size
@@ -900,6 +908,7 @@ class DashboardRender:
             "total_checks": total_checks,
             "checks_up": checks_up,
             "checks_down": checks_down,
+            "checks_unknown": checks_unknown,
             "rendered_items": rendered_items,
             "time_range_minutes": time_range_minutes,
             "time_range_label": DashboardRender.format_time_range_label(
