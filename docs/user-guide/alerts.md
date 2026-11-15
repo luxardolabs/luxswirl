@@ -38,7 +38,7 @@ Triggers when response time crosses a millisecond threshold.
 
 - **Operator** (default `>`): `>`, `>=`, `<`, `<=`, `==`.
 - **Threshold (ms)**: minimum 1 (1000 = 1 second).
-- **Behavior:** evaluates every result and fires on each one that meets the comparison (subject to de-duplication); a recovery notification fires when latency returns to the acceptable side.
+- **Behavior:** evaluates every result and fires while a latency meets the comparison (subject to de-duplication); a recovery notification fires when the latency is back on the acceptable side, even though the check itself succeeded throughout. A result with no latency (a timeout) neither starts nor ends a breach.
 
 ```
 Alert: "API Slow Response"        Operator: >   Threshold: 1000ms
@@ -193,11 +193,14 @@ ______________________________________________________________________
 
 ## Evaluation and de-duplication
 
+A check that several agents run (Replicate) is **down** while any agent that runs it has a failing latest result, and **up** once every such agent's latest result succeeds; a latency threshold is breached while any of their latest latencies breaches it. An agent whose latest result is older than three check intervals (at least five minutes) is left out, so an agent that stopped reporting does not hold the check down: the silence alerts tell of it. Consecutive failures are counted per agent.
+
 Every check result the server stores is evaluated against all applicable alerts: all enabled global alerts, plus enabled specific alerts assigned to that check, where the alert–check mapping is enabled and not snoozed. The evaluation runs in the server's alert decision worker, shortly after the agent's report is stored, never while the agent waits: each check's results are evaluated oldest first, and a result older than one already evaluated for that check (a delayed report from another agent of a replicate check) is skipped, so a check that is up never ends with its alert down. A check with no enabled alert has nothing evaluated; an alert attached to it later evaluates the results stored after. De-duplication then decides whether to actually send, and the notification is delivered unless, by then, its provider, alert or check was disabled, deleted or taken off the alert, or the pair was snoozed (logged as **Suppressed** with the reason).
 
 **Rules:**
 
 1. **Always send on a status change** (down → up or up → down).
+1. **A new outage is a change too:** once the check came back, the next outage or breach is announced, whether or not the recovery was (`notify_on_recovery` off). A recovery that is not announced is logged as **Suppressed** with *Recovered; recovery not announced*.
 1. **For the same status:** never resend if `resend_interval_minutes` is blank; otherwise resend after the interval elapses. `max_resends` caps the resends.
 
 ```

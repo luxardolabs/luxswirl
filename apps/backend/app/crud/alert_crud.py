@@ -6,7 +6,8 @@ from collections.abc import Collection, Sequence
 from datetime import datetime, timedelta
 from uuid import UUID
 
-from sqlalchemy import and_, case, delete, func, literal, select, update
+from sqlalchemy import and_, case, delete, func, literal, or_, select, update
+from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -249,16 +250,50 @@ class AlertCRUD:
         limit: int,
         *,
         at_or_before: datetime | None = None,
+        agent_id: UUID | None = None,
     ) -> Sequence[CheckResult]:
         """Most recent N results for a check, newest first; with `at_or_before`,
-        the N up to that instant (the results a result is judged against)."""
+        the N up to that instant (the results a result is judged against), and
+        with `agent_id`, that agent's alone."""
         query = select(CheckResult).where(CheckResult.check_id == check_id)
         if at_or_before is not None:
             query = query.where(CheckResult.timestamp <= at_or_before)
+        if agent_id is not None:
+            query = query.where(CheckResult.agent_id == agent_id)
         result = await db.execute(
             query.order_by(CheckResult.timestamp.desc()).limit(limit)
         )
         return result.scalars().all()
+
+    @staticmethod
+    async def latest_results_by_agent(
+        db: AsyncSession,
+        check_id: UUID,
+        agent_ids: Collection[UUID],
+        *,
+        since: datetime,
+        at_or_before: datetime,
+        with_latency: bool = False,
+    ) -> list[CheckResult]:
+        """Each of `agent_ids`' newest result for the check from `since` up to
+        `at_or_before` (with `with_latency`, its newest that has a latency); an
+        agent with none in that window is left out."""
+        if not agent_ids:
+            return []
+        query = select(CheckResult).where(
+            CheckResult.check_id == check_id,
+            CheckResult.agent_id.in_(list(agent_ids)),
+            CheckResult.timestamp >= since,
+            CheckResult.timestamp <= at_or_before,
+        )
+        if with_latency:
+            query = query.where(CheckResult.latency_ms.is_not(None))
+        result = await db.execute(
+            query.order_by(CheckResult.agent_id, CheckResult.timestamp.desc()).ext(
+                distinct_on(CheckResult.agent_id)
+            )
+        )
+        return list(result.scalars().all())
 
     @staticmethod
     async def checks_with_result_alerts(
@@ -317,7 +352,11 @@ class AlertCRUD:
 
     @staticmethod
     async def get_last_notification_for_dedup(
-        db: AsyncSession, alert_id: UUID, check_id: UUID
+        db: AsyncSession,
+        alert_id: UUID,
+        check_id: UUID,
+        *,
+        skip_hashes: Collection[str] = (),
     ) -> NotificationLog | None:
         """Most recent dedup-relevant notification row for an alert+check pairing.
 
@@ -333,16 +372,25 @@ class AlertCRUD:
         Uses the denormalized `notification_logs.check_id` column so the lookup is a
         single-table index scan — earlier versions joined through `check_results`,
         which on large datasets pushed sort buffers past PostgreSQL's shared memory.
+
+        `skip_hashes` passes over rows in those states (a parent's outage over
+        the check's own), to read the alert's last word on the check itself.
         """
-        result = await db.execute(
-            select(NotificationLog)
-            .where(
-                and_(
-                    NotificationLog.alert_id == alert_id,
-                    NotificationLog.check_id == check_id,
-                    NotificationLog.status.in_(DEDUP_RELEVANT_STATUSES),
+        conditions = [
+            NotificationLog.alert_id == alert_id,
+            NotificationLog.check_id == check_id,
+            NotificationLog.status.in_(DEDUP_RELEVANT_STATUSES),
+        ]
+        if skip_hashes:
+            conditions.append(
+                or_(
+                    NotificationLog.notification_hash.is_(None),
+                    NotificationLog.notification_hash.not_in(list(skip_hashes)),
                 )
             )
+        result = await db.execute(
+            select(NotificationLog)
+            .where(and_(*conditions))
             .order_by(
                 NotificationLog.sent_at.desc(), NotificationLog.decision_seq.desc()
             )

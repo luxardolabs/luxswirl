@@ -30,11 +30,19 @@ from app.models.enum_model import AlertTriggerType, NotificationStatus
 from app.models.notification_log_model import NotificationLog
 from app.notifications.providers.base import NotificationContext
 from app.schemas.alert_schema import SendDecision
+from app.services.core.check_outage_core_service import (
+    CheckOutageCoreService,
+    CheckView,
+)
 from app.services.core.notification_core_service import NotificationCoreService
 from app.shared.logger import get_logger
 
 # notification_logs.notification_hash is String(64).
 STATE_KEY_LENGTH = 64
+# The state key of a leaf suppressed while its parent is down.
+PARENT_DOWN = "parent_down"
+# Why the row recording an outage's unannounced end was not sent.
+RECOVERY_NOT_ANNOUNCED = "Recovered; recovery not announced"
 
 logger = get_logger("luxswirl.services.alert")
 
@@ -84,6 +92,9 @@ class AlertEvaluationCoreService:
         # Each alert in its own savepoint: one that fails (a stored trigger_config
         # of the wrong type, say) is logged and rolled back, and the next alert
         # on the check is still evaluated.
+        # The check at this result, across the agents that run it: what every
+        # alert's state, recovery and clear state are judged by.
+        view = await CheckOutageCoreService.view(db, check, check_result)
         for alert in all_alerts:
             if alert.trigger_type in SILENCE_TRIGGER_TYPES:
                 continue
@@ -95,12 +106,15 @@ class AlertEvaluationCoreService:
             try:
                 async with db.begin_nested():
                     should_fire = await AlertEvaluationCoreService._should_fire_alert(
-                        db, alert, check, check_result
+                        db, alert, check, check_result, view=view
                     )
                     if should_fire:
                         await AlertEvaluationCoreService._fire_alert(
-                            db, alert, check, check_result
+                            db, alert, check, check_result, view=view
                         )
+                    await AlertEvaluationCoreService._note_cleared(
+                        db, alert, check, check_result, view
+                    )
             except Exception:
                 logger.exception(
                     "Alert evaluation failed",
@@ -183,6 +197,7 @@ class AlertEvaluationCoreService:
         check_result: CheckResult,
         *,
         parent_down: bool = False,
+        view: CheckView | None = None,
     ) -> str:
         """The alert's state key, as `notification_logs.notification_hash` holds it.
 
@@ -190,12 +205,43 @@ class AlertEvaluationCoreService:
         before configs were validated) is its SHA-256: still one stable value
         per state, so dedup matches, and the log row can always be written.
         """
-        key = AlertEvaluationCoreService._state_key(
-            alert, check_result, parent_down=parent_down
+        return AlertEvaluationCoreService._fit_state_key(
+            AlertEvaluationCoreService._state_key(
+                alert, check_result, parent_down=parent_down, view=view
+            )
         )
+
+    @staticmethod
+    def _fit_state_key(key: str) -> str:
+        """`key` as the log column holds it: itself, or its SHA-256 when longer."""
         if len(key) <= STATE_KEY_LENGTH:
             return key
         return hashlib.sha256(key.encode()).hexdigest()
+
+    @staticmethod
+    def _threshold_key(alert: Alert, *, breached: bool) -> str:
+        """A threshold alert's state key: its comparison while breached, and the
+        same with `:ok` once the latency is on the safe side."""
+        config = alert.trigger_config or {}
+        key = (
+            f"threshold:{config.get('metric', 'latency_ms')}:"
+            f"{config.get('operator', '>')}:{config.get('value')}"
+        )
+        return key if breached else f"{key}:ok"
+
+    @staticmethod
+    def _breach_key(alert: Alert) -> str | None:
+        """The state key of the alert's outage or breach, as the log column
+        holds it; None for an alert with no such state."""
+        if alert.trigger_type == AlertTriggerType.STATUS_CHANGE:
+            return "status:down"
+        if alert.trigger_type == AlertTriggerType.REPEATED_FAILURE:
+            return "repeated_failure:down"
+        if alert.trigger_type == AlertTriggerType.THRESHOLD:
+            return AlertEvaluationCoreService._fit_state_key(
+                AlertEvaluationCoreService._threshold_key(alert, breached=True)
+            )
+        return None
 
     @staticmethod
     def _state_key(
@@ -203,6 +249,7 @@ class AlertEvaluationCoreService:
         check_result: CheckResult,
         *,
         parent_down: bool = False,
+        view: CheckView | None = None,
     ) -> str:
         """Stable string identifying the alert's current state.
 
@@ -212,25 +259,29 @@ class AlertEvaluationCoreService:
         is its own transition.
 
         Format: `<trigger_type>:<state>` for normal evaluations; `parent_down` when the
-        leaf is being suppressed by a downed parent.
+        leaf is being suppressed by a downed parent. A status or threshold
+        state is the check's across the agents that run it (`view`; the result
+        alone by default).
         """
         if parent_down:
-            return "parent_down"
+            return PARENT_DOWN
 
         trigger_type = alert.trigger_type
         config = alert.trigger_config or {}
 
         if trigger_type == "status_change":
-            return f"status:{'up' if check_result.success else 'down'}"
+            down = view.down if view else not check_result.success
+            return f"status:{'down' if down else 'up'}"
 
         if trigger_type == "threshold":
-            metric = config.get("metric", "latency_ms")
-            operator = config.get("operator", ">")
-            value = config.get("value")
-            return f"threshold:{metric}:{operator}:{value}"
+            return AlertEvaluationCoreService._threshold_key(
+                alert,
+                breached=(view or CheckView.of(check_result)).breached(config),
+            )
 
         if trigger_type == "repeated_failure":
-            return f"repeated_failure:{'up' if check_result.success else 'down'}"
+            down = view.down if view else not check_result.success
+            return f"repeated_failure:{'down' if down else 'up'}"
 
         if trigger_type == "ssl_cert_expiry":
             thresholds = sorted(
@@ -254,6 +305,8 @@ class AlertEvaluationCoreService:
         alert: Alert,
         check: Check,
         check_result: CheckResult,
+        *,
+        view: CheckView | None = None,
     ) -> bool:
         """
         Determine if an alert should fire based on trigger conditions.
@@ -272,15 +325,15 @@ class AlertEvaluationCoreService:
 
         if trigger_type == "status_change":
             return await AlertEvaluationCoreService._evaluate_status_change(
-                db, alert, check, check_result, trigger_config
+                db, alert, check, check_result, trigger_config, view=view
             )
         elif trigger_type == "threshold":
             return await AlertEvaluationCoreService._evaluate_threshold(
-                db, alert, check, check_result, trigger_config
+                db, alert, check, check_result, trigger_config, view=view
             )
         elif trigger_type == "repeated_failure":
             return await AlertEvaluationCoreService._evaluate_repeated_failure(
-                db, alert, check, check_result, trigger_config
+                db, alert, check, check_result, trigger_config, view=view
             )
         elif trigger_type == "ssl_cert_expiry":
             return await AlertEvaluationCoreService._evaluate_ssl_cert_expiry(
@@ -300,108 +353,83 @@ class AlertEvaluationCoreService:
         check: Check,
         check_result: CheckResult,
         config: dict[str, Any],
+        *,
+        view: CheckView | None = None,
     ) -> bool:
         """Evaluate status_change trigger.
 
-        The result is judged against the check's results up to it, not the
-        check's newest: a report carries several results of one check, each
-        evaluated in turn.
+        A failed result fires once its agent has failed `consecutive_failures`
+        times in a row (each agent of a check several run is counted on its
+        own). A successful one fires a recovery when the check is up across
+        its agents (`view`) and the alert's last word on the check was its
+        outage. The result is judged against the results up to it: a report
+        carries several results of one check, each evaluated in turn.
         """
+        view = view or CheckView.of(check_result)
         on_status = config.get("on_status", ["error"])
         consecutive_failures = config.get("consecutive_failures", 1)
 
         current_status = "success" if check_result.success else "error"
 
-        # Check for recovery (error -> success)
         if current_status == "success" and alert.notify_on_recovery:
-            recent_results = await AlertCRUD.get_recent_results_for_check(
-                db, check.id, 2, at_or_before=check_result.timestamp
+            return view.up and await AlertEvaluationCoreService._ends_breach(
+                db, alert, check
             )
 
-            # post-db-filter: the read is LIMIT 2; this asks whether both rows exist
-            if len(recent_results) < 2 or recent_results[1].success:
-                # No previous error, no recovery notification
-                return False
-            # A recovery tells of the end of an outage this alert notified:
-            # with no notification recorded for the check, nobody was told of
-            # one (fewer failures than the alert needs, say).
-            last_notification = await AlertCRUD.get_last_notification_for_dedup(
-                db, alert.id, check.id
-            )
-            return last_notification is not None
-
-        # Check if current status matches trigger
         if current_status not in on_status:
             return False
 
-        # If consecutive failures required, check previous results
         if consecutive_failures > 1:
             recent_results = await AlertCRUD.get_recent_results_for_check(
-                db, check.id, consecutive_failures, at_or_before=check_result.timestamp
+                db,
+                check.id,
+                consecutive_failures,
+                at_or_before=check_result.timestamp,
+                agent_id=check_result.agent_id,
             )
 
             # post-db-filter: the read is LIMIT consecutive_failures; this asks whether that many exist
             if len(recent_results) < consecutive_failures:
                 return False
 
-            # Check if all are failures
-            all_failures = all(not r.success for r in recent_results)
-            return all_failures
+            return all(not r.success for r in recent_results)
 
         return True
 
     @staticmethod
+    async def _ends_breach(db: AsyncSession, alert: Alert, check: Check) -> bool:
+        """Whether the alert's last word on the check, a parent's outage over it
+        aside, was its outage or breach: a recovery tells of the end of an
+        outage the alert announced, never of one nobody was told of."""
+        last = await AlertCRUD.get_last_notification_for_dedup(
+            db, alert.id, check.id, skip_hashes=(PARENT_DOWN,)
+        )
+        return last is not None and last.notification_hash == (
+            AlertEvaluationCoreService._breach_key(alert)
+        )
+
+    @staticmethod
     # dropped-input: one of the _evaluate_* family, dispatched by trigger type on a
-    # shared signature; a threshold reads only the result and its own config.
+    # shared signature; a threshold reads its alert, the view and its history.
     async def _evaluate_threshold(
         db: AsyncSession,
         alert: Alert,
         check: Check,
         check_result: CheckResult,
         config: dict[str, Any],
+        *,
+        view: CheckView | None = None,
     ) -> bool:
-        """Evaluate threshold trigger (e.g., latency > 1000ms)."""
-        metric = config.get("metric", "latency_ms")
-        operator = config.get("operator", ">")
-        threshold_value = config.get("value")
-
-        if threshold_value is None:
+        """Evaluate threshold trigger: fires while a latency of the check's
+        agents meets the comparison (e.g. > 1000 ms), and, when it notifies on
+        recovery, once every agent's latency is back on the safe side after a
+        breach it announced."""
+        view = view or CheckView.of(check_result)
+        if view.breached(config):
+            return True
+        if not alert.notify_on_recovery or not view.clear(config):
             return False
-
-        # Get metric value from result
-        if metric == "latency_ms":
-            current_value = check_result.latency_ms
-        else:
-            return False  # Unknown metric
-
-        if current_value is None:
-            return False
-
-        # trigger_config is free-form JSON, so the threshold may be a number or
-        # a numeric string; anything else cannot be compared and never fires.
-        if not isinstance(threshold_value, int | float | str):
-            return False
-        try:
-            threshold_float = float(threshold_value)
-        except ValueError:
-            logger.warning(
-                "Threshold trigger value is not a number",
-                extra={"alert_id": str(alert.id), "value": threshold_value},
-            )
-            return False
-        current_float = float(current_value)
-        if operator == ">":
-            return bool(current_float > threshold_float)
-        elif operator == ">=":
-            return bool(current_float >= threshold_float)
-        elif operator == "<":
-            return bool(current_float < threshold_float)
-        elif operator == "<=":
-            return bool(current_float <= threshold_float)
-        elif operator == "==":
-            return bool(current_float == threshold_float)
-        else:
-            return False
+        return await AlertEvaluationCoreService._ends_breach(db, alert, check)
 
     @staticmethod
     async def _evaluate_repeated_failure(
@@ -410,11 +438,12 @@ class AlertEvaluationCoreService:
         check: Check,
         check_result: CheckResult,
         config: dict[str, Any],
+        *,
+        view: CheckView | None = None,
     ) -> bool:
-        """Evaluate repeated_failure trigger."""
-        # Similar to status_change with consecutive failures
+        """Evaluate repeated_failure trigger: status_change's rules."""
         return await AlertEvaluationCoreService._evaluate_status_change(
-            db, alert, check, check_result, config
+            db, alert, check, check_result, config, view=view
         )
 
     @staticmethod
@@ -487,6 +516,8 @@ class AlertEvaluationCoreService:
         alert: Alert,
         check: Check,
         check_result: CheckResult,
+        *,
+        view: CheckView | None = None,
     ) -> None:
         """
         Fire an alert - queue its notification for each configured provider.
@@ -508,7 +539,9 @@ class AlertEvaluationCoreService:
             },
         )
 
-        is_recovery = AlertEvaluationCoreService._is_recovery(alert, check_result)
+        is_recovery = AlertEvaluationCoreService._is_recovery(
+            alert, check_result, view=view
+        )
 
         # Recovery notifications bypass parent suppression — operator wants to
         # know a leaf came back even while the parent is still down.
@@ -524,7 +557,7 @@ class AlertEvaluationCoreService:
         # De-duplication: Check if we should send this notification
         # Industry best practice - don't spam notifications for same status
         decision = await AlertEvaluationCoreService._should_send_notification(
-            db, alert, check, check_result
+            db, alert, check, check_result, view=view
         )
 
         if not decision.send:
@@ -545,7 +578,7 @@ class AlertEvaluationCoreService:
             context,
             decision,
             state_key=AlertEvaluationCoreService._compute_alert_state_key(
-                alert, check_result
+                alert, check_result, view=view
             ),
             check_id=check.id,
             check_result_id=check_result.id,
@@ -553,7 +586,9 @@ class AlertEvaluationCoreService:
         )
 
     @staticmethod
-    def _is_recovery(alert: Alert, check_result: CheckResult) -> bool:
+    def _is_recovery(
+        alert: Alert, check_result: CheckResult, *, view: CheckView | None = None
+    ) -> bool:
         """Whether this fire tells of a recovery.
 
         For an SSL expiry alert, only a certificate back out of every band
@@ -567,6 +602,10 @@ class AlertEvaluationCoreService:
                 AlertEvaluationCoreService._compute_alert_state_key(alert, check_result)
                 == "ssl:ok"
             )
+        if alert.trigger_type == AlertTriggerType.THRESHOLD:
+            # The check succeeds while its latency breaches: only the latency
+            # back on the safe side is a recovery.
+            return (view or CheckView.of(check_result)).clear(alert.trigger_config)
         return bool(check_result.success)
 
     @staticmethod
@@ -674,6 +713,58 @@ class AlertEvaluationCoreService:
         return len(rows)
 
     @staticmethod
+    async def _note_cleared(
+        db: AsyncSession,
+        alert: Alert,
+        check: Check,
+        check_result: CheckResult,
+        view: CheckView,
+    ) -> None:
+        """Record the end of an outage the alert announced when no recovery
+        told of it (the alert does not notify on recovery, or the recovery was
+        snoozed): one `suppressed` row per provider, its state key the clear
+        state's. De-duplication reads the alert's last row, so the next outage
+        is a new state, announced, not a repeat of the first."""
+        if alert.trigger_type == AlertTriggerType.THRESHOLD:
+            ended = view.clear(alert.trigger_config)
+        elif alert.trigger_type in (
+            AlertTriggerType.STATUS_CHANGE,
+            AlertTriggerType.REPEATED_FAILURE,
+        ):
+            ended = view.up
+        else:
+            return
+        if not ended or not await AlertEvaluationCoreService._ends_breach(
+            db, alert, check
+        ):
+            return
+        state_key = AlertEvaluationCoreService._compute_alert_state_key(
+            alert, check_result, view=view
+        )
+        mappings = await AlertCRUD.list_active_notif_mappings_for_alert(db, alert.id)
+        now = utc_now()
+        await AlertCRUD.add_notification_logs(
+            db,
+            [
+                NotificationLog(
+                    alert_id=alert.id,
+                    notification_provider_id=mapping.notification_provider.id,
+                    check_result_id=check_result.id,
+                    check_result_timestamp=check_result.timestamp,
+                    check_id=check.id,
+                    check_success=check_result.success,
+                    check_latency_ms=check_result.latency_ms,
+                    status=NotificationStatus.SUPPRESSED.value,
+                    error_message=RECOVERY_NOT_ANNOUNCED,
+                    notification_hash=state_key,
+                    sent_at=now,
+                )
+                for mapping in mappings
+                if mapping.notification_provider.deleted_at is None
+            ],
+        )
+
+    @staticmethod
     async def _handle_parent_suppression(
         db: AsyncSession,
         alert: Alert,
@@ -776,6 +867,8 @@ class AlertEvaluationCoreService:
         alert: Alert,
         check: Check,
         check_result: CheckResult,
+        *,
+        view: CheckView | None = None,
     ) -> SendDecision:
         """Decide whether to send and, if so, classify the send as fresh vs resend.
 
@@ -810,7 +903,7 @@ class AlertEvaluationCoreService:
             return SendDecision(send=True, is_resend=False, resend_count=0)
 
         if await AlertEvaluationCoreService._state_changed_since(
-            db, alert, check_result, last_notification
+            db, alert, check_result, last_notification, view=view
         ):
             # State changed — not a resend, restart the resend counter
             return SendDecision(send=True, is_resend=False, resend_count=0)
@@ -854,6 +947,8 @@ class AlertEvaluationCoreService:
         alert: Alert,
         check_result: CheckResult,
         last_notification: NotificationLog,
+        *,
+        view: CheckView | None = None,
     ) -> bool:
         """Whether the alert has left the state `last_notification` recorded."""
         if last_notification.notification_hash is not None:
@@ -862,7 +957,7 @@ class AlertEvaluationCoreService:
             # up/down, for threshold it's the metric+operator+value tuple. A different
             # key means the alert moved to a new state and the operator should know.
             current_state_key = AlertEvaluationCoreService._compute_alert_state_key(
-                alert, check_result
+                alert, check_result, view=view
             )
             if last_notification.notification_hash == current_state_key:
                 return False

@@ -335,6 +335,23 @@ class AgentAssignmentCoreService:
         return hashlib.sha256(f"{stamp}|{ids}".encode()).hexdigest()[:32]
 
     @staticmethod
+    async def agents_running(db: AsyncSession, check: Check) -> list[UUID]:
+        """The agents that currently run `check`, by the rules of
+        `get_checks_for_agent`: its own agent for a manual check, every active
+        agent its selector matches for a replicated one, and its owner for a
+        distributed one."""
+        if check.assignment_mode == AssignmentMode.MANUAL:
+            return [check.agent_id]
+        active_agents = await AgentCRUD.list_active(db)
+        pool = AgentAssignmentCoreService.filter_agents_by_selector(
+            active_agents, check.agent_selector
+        )
+        if check.assignment_mode == AssignmentMode.REPLICATE:
+            return [agent.id for agent in pool]
+        owner = AgentAssignmentCoreService.distribute_owner(check, pool, utc_now())
+        return [owner.id] if owner else []
+
+    @staticmethod
     async def assigned_agents_by_check(
         db: AsyncSession,
     ) -> list[tuple[Check, list[Agent], list[Agent]]]:

@@ -63,12 +63,14 @@ async def test_an_alert_that_raises_leaves_the_others_to_fire(
     await db.flush()
     fired: list[UUID] = []
 
-    async def should_fire(_db: Any, alert: Any, _check: Any, _result: Any) -> bool:
+    async def should_fire(
+        _db: Any, alert: Any, _check: Any, _result: Any, **_: Any
+    ) -> bool:
         if alert.id == broken.id:
             raise TypeError("'>' not supported between instances of 'str' and 'int'")
         return True
 
-    async def fire(_db: Any, alert: Any, _check: Any, _result: Any) -> None:
+    async def fire(_db: Any, alert: Any, _check: Any, _result: Any, **_: Any) -> None:
         fired.append(alert.id)
 
     with (
