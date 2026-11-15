@@ -9,7 +9,7 @@ from uuid import UUID
 from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import lazyload, selectinload
 
 from app.core.datetime_utils import utc_now
 from app.models.agent_metric_model import AgentMetric
@@ -112,6 +112,18 @@ class AgentCRUD:
         # unbounded-reads: the distribute pool: a distributed check is hashed over every active agent matching its selector, so all are the input
         result = await db.execute(
             select(Agent).where(Agent.approval_status == AgentApprovalStatus.ACTIVE)
+        )
+        return list(result.scalars().all())
+
+    @staticmethod
+    async def list_active_unloaded(db: AsyncSession) -> list[Agent]:
+        """The active agents' own columns, none of their relations: what a
+        selector match and a distributed check's owner read."""
+        # unbounded-reads: a selector is matched over every active agent, so all are the input
+        result = await db.execute(
+            select(Agent)
+            .where(Agent.approval_status == AgentApprovalStatus.ACTIVE)
+            .options(lazyload("*"))
         )
         return list(result.scalars().all())
 

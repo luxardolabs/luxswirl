@@ -342,7 +342,7 @@ class AgentAssignmentCoreService:
         distributed one."""
         if check.assignment_mode == AssignmentMode.MANUAL:
             return [check.agent_id]
-        active_agents = await AgentCRUD.list_active(db)
+        active_agents = await AgentCRUD.list_active_unloaded(db)
         pool = AgentAssignmentCoreService.filter_agents_by_selector(
             active_agents, check.agent_selector
         )
