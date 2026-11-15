@@ -3,6 +3,8 @@
  * Usage: jobs.js calls window.initBulkTagPicker() once the scan form is swapped in
  */
 
+import { tagPill } from './tag-pill.js';
+
 // Initialize tag picker for bulk actions (network scan)
 function initBulkTagPicker() {
     const tagsContainer = document.getElementById('bulk-tags-container');
@@ -107,29 +109,6 @@ function initBulkTagPicker() {
 
     // Initialize
     renderTags();
-}
-
-// jobs.html loads this file as a classic script, so it cannot import tag-pill.js.
-// A tag is set as text and as a data attribute and never parsed as HTML.
-function tagPill(tag, { pillClass, buttonClass, dataKey }) {
-    const pill = document.createElement('div');
-    pill.className = pillClass;
-
-    const label = document.createElement('span');
-    label.textContent = tag;
-
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = buttonClass;
-    button.dataset[dataKey] = tag;
-    button.innerHTML = `
-        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-        </svg>
-    `;
-
-    pill.append(label, button);
-    return pill;
 }
 
 // jobs.js opens the bulk tag picker when htmx swaps the network-scan form in.
