@@ -39,11 +39,11 @@ DEV_WAIT_TIMEOUT      ?= 180
 # Makefile.local (gitignored): copy Makefile.local.example -> Makefile.local and set it.
 # Contributors don't need it — lint/test and the import-linter contracts run without it.
 LUXARCH_REGISTRY ?=
-LUXARCH_VERSION := 0.364.0
+LUXARCH_VERSION := 0.365.1
 LUXARCH_IMAGE    ?= $(LUXARCH_REGISTRY)/luxardolabs/luxarch:$(LUXARCH_VERSION)
 # Dependency-CVE guard (luxaudit) — same private registry as luxarch, mount-only.
 # Scans the pinned poetry.locks against the live advisory feed (see .luxaudit.toml).
-LUXAUDIT_VERSION := 0.17.0
+LUXAUDIT_VERSION := 0.18.0
 LUXAUDIT_IMAGE   ?= $(LUXARCH_REGISTRY)/luxardolabs/luxaudit:$(LUXAUDIT_VERSION)
 # Lint/type/test-standard guard (luxlint) — same private registry. Owns the fleet
 # ruff/mypy config byte-identical (see .luxlint.toml); ruff runs mount-only, mypy
@@ -275,7 +275,7 @@ override sq = $(if $(findstring $(IB_NL),$(1)),$(error REFUSING: a value a block
 override sqw = $(foreach w,$(1),$(call sq,$(w)))
 # luxarch:build-core end - DO NOT edit this marker line: the image block's runtime guard reads its range.
 
-# luxarch:image-block asset v26 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit image-block`.
+# luxarch:image-block asset v27 - DO NOT edit this marker line; it is how repo.emitted_assets_current knows your copy is current. Re-emit with `luxarch --emit image-block`.
 # ── Images: ONE naming scheme, and the NAME declares what the image IS ──────────────────────────
 # Emitted by `luxarch --emit image-block`. Two axes, both readable from the name alone:
 #
@@ -1313,6 +1313,18 @@ DEV_FIELD_MANAGER ?=
 DEV_KUSTOMIZE ?= kubectl kustomize
 DEV_KUBECTL ?= kubectl
 
+# The compose dev stack's Docker host: exactly one `DEV_HOST := <host>` line in the committed
+# Makefile, an ssh alias every coding machine resolves (`DEV_HOST := devhost`), or `local`. `dev-pin`
+# and `smoke` reach it as `DOCKER_HOST=ssh://<DEV_HOST>` (`private`: dev-pin's prerequisites and
+# `publish-sha` stay on this machine). Before anything is written, dev-pin refuses unless its value
+# is that committed line (HEAD) exactly, and the dev host reads this checkout at the same path (a
+# probe file and the env file, compared by checksum over ssh). The stack publishes no host port
+# (`repo.dev_host_declared`). A DEV_HOST from the shell is ignored; `local` is this shell's docker.
+DEV_HOST ?=
+override IB_DEV_HOST = $(if $(filter file override,$(origin DEV_HOST)),$(strip $(DEV_HOST)))
+override IB_AMBIENT_DOCKER_HOST := $(DOCKER_HOST)
+dev-pin smoke: private export DOCKER_HOST = $(if $(filter-out local,$(IB_DEV_HOST)),ssh://$(IB_DEV_HOST),$(IB_AMBIENT_DOCKER_HOST))
+
 # v15: a file with more than one `TAG=` line refuses. v14 rewrote the first, and compose reads the
 # LAST, so the stack stayed on the old version under a pin that reported success.
 # v14: one awk pass writes the file, and the rewrite is refused unless every line but `TAG=` is
@@ -1579,6 +1591,40 @@ case $(call sq,$(DEV_ENV_FILE)) in ''|-*|*[!A-Za-z0-9._/-]*) \
   echo "REFUSING: DEV_ENV_FILE must be one plain path (letters, digits, . _ / -), not "$(call sq,$(DEV_ENV_FILE)); exit 1 ;; esac
 endef
 
+# DEV_HOST is empty, `local`, or one ssh destination `[user@]host` of plain characters: it becomes
+# `ssh://<it>`, so a space, an option or a path in it would point docker somewhere else.
+override define require_dev_host
+[ $(call sq,$(origin DEV_HOST)) != 'command line' ] || { echo "REFUSING: DEV_HOST is set on the command line: where the dev stack runs is the committed Makefile's DEV_HOST := line, never one run's choice"; exit 1; }; \
+case $(call sq,$(IB_DEV_HOST)) in ''|local) ;; \
+  -*|*@*@*|@*|*@|*[!A-Za-z0-9._@-]*) echo "REFUSING: DEV_HOST must be local or one ssh destination [user@]host (letters, digits, . _ -), not "$(call sq,$(DEV_HOST)); exit 1 ;; \
+  *) [ $(call sq,$(DEV_DEPLOY)) = compose ] || { echo "REFUSING: DEV_HOST is the compose dev lane's Docker host; DEV_DEPLOY is "$(call sq,$(DEV_DEPLOY))" (kustomize reaches its cluster through DEV_KUBECTL)"; exit 1; } ;; esac
+endef
+
+# The committed-line check, then (a host) the same-checkout check: see DEV_HOST above.
+override define dev_host_same_files
+dh_all=$$(git show "HEAD:./$$ib_dm" 2>/dev/null | grep -E '^[[:space:]]*(export[[:space:]]+|override[[:space:]]+)*DEV_HOST[[:space:]]*(::?=|:::=|\?=|\+=|!=|=)' | grep -vxE 'DEV_HOST[[:space:]]*\?=[[:space:]]*') || dh_all=; \
+dh_c=$$(printf '%s\n' "$$dh_all" | grep -E '^DEV_HOST[[:space:]]*:=') || dh_c=; \
+[ "$$(printf '%s\n' "$$dh_all" | grep -c 'DEV_HOST' || true)" = "$$(printf '%s\n' "$$dh_c" | grep -c 'DEV_HOST' || true)" ] || { echo "REFUSING: the committed $$ib_dm (HEAD) sets DEV_HOST with another form than DEV_HOST := <host> at the start of a line ($$(printf '%s\n' "$$dh_all" | grep -vE '^DEV_HOST[[:space:]]*:=' | head -n 1)). Write it as exactly one line: DEV_HOST := devhost"; exit 1; }; \
+[ "$$(printf '%s' "$$dh_c" | grep -c '^DEV_HOST' || true)" -le 1 ] || { echo "REFUSING: the committed $$ib_dm (HEAD) has more than one DEV_HOST := line, so where the dev stack runs depends on which one this machine evaluates. Keep one"; exit 1; }; \
+dh_v=$$(printf '%s\n' "$$dh_c" | sed -n 's/^DEV_HOST[[:space:]]*:=[[:space:]]*//p' | sed 's/[[:space:]]*$$//'); \
+case "$$dh_v" in *[!A-Za-z0-9._@-]*) echo "REFUSING: the committed $$ib_dm (HEAD) sets DEV_HOST to something other than a literal ($$dh_v). Write the host itself, with nothing after it: DEV_HOST := devhost"; exit 1 ;; esac; \
+[ "$$dh_v" = $(call sq,$(IB_DEV_HOST)) ] || { echo "REFUSING: DEV_HOST is "$(call sq,$(IB_DEV_HOST))" in this run, but the committed $$ib_dm (HEAD) says DEV_HOST := $${dh_v:-<nothing>}. Where the dev stack runs is that committed line, exactly: a Makefile.local, a conditional or computed definition, or an uncommitted edit moved it. Remove that, or commit the change"; exit 1; }; \
+if [ -n $(call sq,$(IB_DEV_HOST)) ] && [ $(call sq,$(IB_DEV_HOST)) != local ]; then \
+  [ "$${DOCKER_HOST:-}" = ssh://$(call sq,$(IB_DEV_HOST)) ] || { echo "REFUSING: DEV_HOST is "$(call sq,$(IB_DEV_HOST))" but this recipe's docker is $${DOCKER_HOST:-unset, this machine}: the stack would start somewhere else"; exit 1; }; \
+  cd -P . || exit 1; dh_d=$$(pwd -P); umask 077; \
+  case "$$dh_d" in *[!A-Za-z0-9._/-]*) echo "REFUSING: this checkout's path $$dh_d holds a character other than letters, digits, . _ / -, so the dev host cannot be asked for the same path"; exit 1 ;; esac; \
+  [ -s $(call sq,$(DEV_ENV_FILE)) ] || { echo "$$dh_d/"$(call sq,$(DEV_ENV_FILE))" is missing or empty — copy .env.example and fill it in first"; exit 1; }; \
+  dh_n=$$(mktemp "$$dh_d/.luxarch-dev-host.XXXXXX") || { echo "REFUSING: could not write a probe file in $$dh_d to show the dev host reads this same directory"; exit 1; }; \
+  trap 'trap "" HUP INT TERM; rm -f "$$dh_n"' EXIT; trap 'trap "" HUP INT TERM; exit 1' HUP INT TERM; \
+  od -An -N16 -tx1 /dev/urandom | tr -d ' \n' > "$$dh_n"; \
+  dh_want=$$(cat -- "$$dh_n" "$$dh_d/"$(call sq,$(DEV_ENV_FILE)) | cksum); \
+  dh_got=$$(ssh -o BatchMode=yes -o ConnectTimeout=10 $(call sq,$(IB_DEV_HOST)) cat -- "$$dh_n" "$$dh_d/"$(call sq,$(DEV_ENV_FILE)) 2>/dev/null </dev/null | cksum); \
+  rm -f "$$dh_n"; trap - EXIT; dh_ok=; [ "$$dh_got" != "$$dh_want" ] || dh_ok=1; \
+  [ -n "$$dh_ok" ] || { \
+    echo "REFUSING: the dev host "$(call sq,$(IB_DEV_HOST))" does not read this checkout at $$dh_d (unreachable over ssh, not mounted there at this path, or a copy rather than the same directory: a file just written here is not there, or "$(call sq,$(DEV_ENV_FILE))" differs). Its docker would start the stack with bind mounts taken from its own filesystem, and a missing one as an empty directory: mount the checkout on the dev host at this same path"; exit 1; }; \
+fi
+endef
+
 # v17: `--wait` waits for the LONG-RUNNING services only, and a ONE-SHOT service is judged by exiting
 # 0. v16 waited on every service, and a run-once init (it creates a bucket or seeds a schema and exits
 # 0) failed `up --wait` ("container … exited (0)"): a healthy deploy failed and its smoke never ran.
@@ -1707,9 +1753,9 @@ dev-pin: ## Point the dev stack (compose, or the kustomize dev overlay) at an AL
 	ib_nm=$$(awk -v m="$$ib_m" -v e="$$ib_e" -v cm="$$ib_cm" -v ce="$$ib_ce" -v gm="$$ib_gm" -v ge="$$ib_ge" '(NR >= m && NR <= e || NR >= cm && NR <= ce || NR >= gm && NR <= ge) && /^override / { s = $$0; sub(/^override +(define +)?/, "", s); sub(/[ \t:=+!?].*/, "", s); printf " %s", s } END { print " " }' "$$ib_bf"); \
 	ib_bad=$$(printf '%s\n' "$$ib_db" | awk -v F="$$ib_bf" -v m="$$ib_m" -v e="$$ib_e" -v cm="$$ib_cm" -v ce="$$ib_ce" -v gm="$$ib_gm" -v ge="$$ib_ge" -v names="$$ib_nm" -v tg='$(subst ','\'',release publish-sha release-public publish-mirror dev-deploy dev-pin gh-release $@ $(MAKECMDGOALS))' 'function bad(n, w, f, l) { if (index(names, " " n " ") && (w != "" || f != F || (l + 0 < m || l + 0 > e) && (l + 0 < cm || l + 0 > ce) && (l + 0 < gm || l + 0 > ge))) printf "%s%s at %s:%s; ", n, (w != "" ? " (" w "-specific)" : ""), f, l; else if (w != "" && index(" REGISTRY RELEASE_REGISTRY PUBLIC_REGISTRY PRIVATE_REGISTRY LUXAUDIT_IMAGE LUXAUDIT IMAGE_NAME PLATFORMS ", " " n " ") && reaches(sc)) printf "%s (%s-specific, %s) at %s:%s; ", n, w, sc, f, l } function reaches(p,   i, k, T, a, b) { k = split(tg, T, " "); i = index(p, "%"); for (a = 1; a <= k; a++) { if (i == 0 && T[a] == p) return 1; if (i > 0 && index(T[a], substr(p, 1, i - 1)) == 1 && length(T[a]) >= length(p) - 1 && substr(T[a], length(T[a]) - (length(p) - i) + 1) == substr(p, i + 1)) return 1 } return 0 } /^# Pattern-specific Variable Values/ { pat = 1 } /^# (Directories|Implicit Rules|Files)/ { pat = 0 } pat && /^[^#].* :$$/ { ph = $$0; sub(/ :$$/, "", ph) } /^# (makefile|\047override\047 directive|environment|environment under -e|command line|default|automatic)( \(from \047.*\047, line [0-9]+\))?$$/ { o = 1; f = ""; l = 0; if (match($$0, /\(from \047.*\047, line [0-9]+\)$$/)) { s = substr($$0, RSTART + 7, RLENGTH - 8); f = s; sub(/\047, line [0-9]+$$/, "", f); l = s; sub(/^.*\047, line /, "", l) } next } o && pat && /^# [A-Za-z_.][A-Za-z0-9_.]* (::?:?=|=|\+=|\?=|!=)/ { sc = ph; bad($$2, "pattern", f, l); o = 0; next } o && /^[^#\t ][^:]*: [A-Za-z_.][A-Za-z0-9_.]* (::?:?=|=|\+=|\?=|!=)/ { x = $$0; sc = x; sub(/:.*/, "", sc); sub(/^[^:]*: /, "", x); split(x, X, " "); bad(X[1], "target", f, l); o = 0; next } o && /^define [A-Za-z_]/ { bad($$2, "", f, l); o = 0; next } o && /^[A-Za-z_.][A-Za-z0-9_.]* (::?:?=|=|\+=|\?=|!=)/ { bad($$1, "", f, l); o = 0; next } { o = 0 }'); \
 	[ -z "$$ib_bad" ] || { echo "REFUSING: make's own database (a clean evaluation with these goals) defines what the image block defines from outside the block: $${ib_bad%; }. The block's names are set inside it only."; exit 1; }; \
-	$(require_main_checkout); $(require_registry); $(require_images)$(require_dev_deploy); $(require_dev_env_file); $(require_pin_tag); \
+	$(require_main_checkout); $(require_registry); $(require_images)$(require_dev_deploy); $(require_dev_env_file); $(require_dev_host); $(require_pin_tag); \
 	$(call image_block_each,dev_pin_check,;); \
-	$(if $(filter none,$(DEV_DEPLOY)),:,$(if $(filter kustomize,$(DEV_DEPLOY)),$(dev_kustomize),$(call pin_env_tag,$(DEV_ENV_FILE),$(TAG),$(foreach p,$(DEV_PROFILES),--profile $(p)),$(call image_block_each,img_base,)); $(dev_up)))$(ib_unchanged)
+	$(if $(filter none,$(DEV_DEPLOY)),:,$(if $(filter kustomize,$(DEV_DEPLOY)),$(dev_kustomize),$(dev_host_same_files); $(call pin_env_tag,$(DEV_ENV_FILE),$(TAG),$(foreach p,$(DEV_PROFILES),--profile $(p)),$(call image_block_each,img_base,)); $(dev_up)))$(ib_unchanged)
 
 # ── Verify: build from source, locally, every run ───────────────────────────────────────────────
 # The test image must carry the SAME app layers production ships, plus the dev group. Two Dockerfile

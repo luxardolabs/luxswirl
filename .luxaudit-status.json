@@ -1,6 +1,6 @@
 {
   "guard": "luxaudit",
-  "guard_version": "0.17.0",
+  "guard_version": "0.18.0",
   "repo": "/repo",
   "packages": 214,
   "source": "apps/backend/poetry.lock, apps/agent/poetry.lock, apps/backend/package-lock.json",
@@ -50,6 +50,6 @@
     "expired": [],
     "unjudged": []
   },
-  "commit": "23c5fa7ae95e50e60a798fa0ddf11233fed8e7dd",
-  "generated_at": "2026-11-14T23:57:34Z"
+  "commit": "05d82ef2c7741107251bc8ecbd670c39ac888360",
+  "generated_at": "2026-11-15T00:58:56Z"
 }
