@@ -307,6 +307,44 @@ class TestAgentWrittenHostFields:
         ]
         assert {urlsplit(t).hostname for t in targets} == {"10.1.2.3"}, targets
 
+    @pytest.mark.parametrize("category", ["web", "ssh", "database"])
+    @pytest.mark.parametrize(
+        "discovered",
+        [[], {"not": "a list"}, None],
+        ids=["empty", "not-a-list", "missing"],
+    )
+    async def test_agent_written_derived_keys_never_make_a_check(
+        self, db: AsyncSession, category, discovered
+    ):
+        """The server derives categorized_hosts itself: a result with no usable
+        discovered_hosts makes no check from the agent's own copy."""
+        forged = {
+            "ip": "10.1.2.3",
+            "hostname": "10.1.2.3@10.9.9.9",
+            "open_ports": [22, 80, 5432],
+        }
+        result: dict = {
+            "scan_params": {"ports": [22, 80, 5432]},
+            "categorized_hosts": {category: [forged]},
+            "hosts_by_category": {"web_servers": [forged]},
+        }
+        if discovered is not None:
+            result["discovered_hosts"] = discovered
+        a = await _agent(db)
+        job = await _scan_job(db, result)
+
+        await CREATORS[category](db, job.id, _params(a.id))
+
+        assert await CheckCoreService.list_checks_for_agent(db, a.id) == []
+        enriched = NetworkScanCoreService.enrich_result(result)
+        assert enriched["categorized_hosts"] == {
+            "web": [],
+            "ssh": [],
+            "database": [],
+            "other": [],
+        }
+        assert enriched["hosts_by_category"]["web_servers"] == []
+
 
 async def test_two_requests_at_once_make_each_check_once(worker_db, monkeypatch):
     """Both requests read the job before either writes: the second waits for

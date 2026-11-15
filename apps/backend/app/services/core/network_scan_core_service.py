@@ -24,6 +24,20 @@ logger = get_logger("luxswirl.services.jobs.network_scan")
 _LABEL = re.compile(r"[A-Za-z0-9_](?:[A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?")
 _MAX_HOSTNAME = 253
 
+# The keys `enrich_result` derives. An agent's result that names one is never
+# read: the server builds each from the hosts `scan_hosts` validated.
+_DERIVED_KEYS = frozenset(
+    {
+        "summary",
+        "host_categories",
+        "recommendations",
+        "hosts_by_category",
+        "categorized_hosts",
+        "port_aware_summary",
+        "port_aware_recommendations",
+    }
+)
+
 
 def _ip(value: object) -> str | None:
     """`value` if it is an IP address, as Python writes it; nothing otherwise."""
@@ -94,14 +108,29 @@ class NetworkScanCoreService:
 
         Returns:
             Enriched result with analysis and recommendations
+
+        The agent writes the result, and the check creators read
+        `categorized_hosts`: every key derived here (`_DERIVED_KEYS`) is the
+        server's own, built from the validated hosts, never the agent's copy.
         """
-        enriched = result.copy()
+        enriched = {k: v for k, v in result.items() if k not in _DERIVED_KEYS}
 
         discovered_hosts = NetworkScanCoreService.scan_hosts(result)
         enriched["discovered_hosts"] = discovered_hosts
+        enriched.update(
+            NetworkScanCoreService._categorize_by_scanned_ports(
+                result, discovered_hosts
+            )
+        )
 
         if not discovered_hosts:
             enriched["summary"] = "No hosts discovered on network"
+            enriched["hosts_by_category"] = {
+                "web_servers": [],
+                "ssh_servers": [],
+                "database_servers": [],
+                "other_hosts": [],
+            }
             return enriched
 
         # Categorize hosts by services
@@ -177,13 +206,6 @@ class NetworkScanCoreService:
             "database_servers": database_servers,
             "other_hosts": other_hosts,
         }
-
-        # Add port-aware categorization (used by templates rendering "Monitor All Web/SSH/DB" buttons)
-        enriched.update(
-            NetworkScanCoreService._categorize_by_scanned_ports(
-                result, discovered_hosts
-            )
-        )
 
         logger.info(
             "Enriched network_scan",
