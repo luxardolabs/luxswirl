@@ -1,14 +1,18 @@
-"""A refused sign-in sends the same statements whether or not the account exists.
+"""A sign-in refused before any password check sends the same statements whether
+or not the account exists.
 
 An unknown username, a locked account and an inactive account are all refused
-after one bcrypt check against a fake hash. The database work before that check
-is the same for all three as well, so neither the answer nor the number of round
-trips tells a caller which usernames are real.
+after one bcrypt check against a fake hash, and they send the same statements.
+Stated limits: a wrong password on an active account writes its failure count
+(one UPDATE and its re-read more), and a real account's row lock gives the
+transaction an id an unknown name's does not, so those still differ in database
+work. Both sit far below one bcrypt check.
 """
 
 from __future__ import annotations
 
 from datetime import timedelta
+from uuid import UUID
 
 import pytest
 from app.core.datetime_utils import utc_now
@@ -68,3 +72,19 @@ async def test_unknown_locked_and_inactive_sign_ins_send_the_same_statements(
 
     assert unknown == unknown_again
     assert (locked, inactive) == (unknown, unknown)
+
+
+async def test_an_unknown_username_signs_in_as_no_one_whatever_its_re_read_finds(
+    worker_db,
+) -> None:
+    """An unknown username's re-read is by the nil UUID; a row holding that id
+    still signs no one in."""
+    await _add(worker_db, id=UUID(int=0), username="parity_nil_holder")
+
+    async with worker_db() as session:
+        signed_in = await AuthCoreService().authenticate_user(
+            session, "parity_never_registered", "TestPass123!"
+        )
+        await session.rollback()
+
+    assert signed_in is None

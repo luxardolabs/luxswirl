@@ -317,12 +317,14 @@ class AuthCoreService:
         # its lock in this transaction itself, outside the queue's savepoint
         # (FLEET-AUTH-SESSION-STANDARD §1.2): a reset or revoke that committed
         # before the queue let this sign-in through is what it judges, and none
-        # can commit before the session is issued. An unknown username is re-read
-        # too, by an id no user has, so the statements a sign-in sends say nothing
-        # of whether the account exists.
-        user = await UserCRUD.get_by_id_for_update(
+        # can commit before the session is issued. An unknown username sends the
+        # same re-read, by an id no user has, so a refused sign-in sends the same
+        # statements up to the password check whether or not the account exists;
+        # whatever that read returns, an unknown username signs in as no one.
+        reread = await UserCRUD.get_by_id_for_update(
             db, queued.id if queued is not None else _NO_USER_ID
         )
+        user = reread if queued is not None else None
 
         if not user:
             # Security: Always run bcrypt verification even for non-existent users
