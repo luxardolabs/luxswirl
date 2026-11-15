@@ -2,10 +2,10 @@
 Admin agent core service - agents as the admin API serves them.
 
 Each method that can move or remove a synthetic check takes
-`synthetic_admin`, the principal's (`ApiPrincipal.synthetic_admin`: an admin
+`actor_is_admin`, the principal's (`ApiPrincipal.actor_is_admin`: an admin
 whose token grants `checks:admin`); the rules are AgentCoreService's, the same
 the web UI keeps: a rename, retag or approval that moves a synthetic check,
-and a delete that removes one, are a `synthetic_admin`'s. A delete runs as a
+and a delete that removes one, need `actor_is_admin`. A delete runs as a
 maintenance job, refused now and judged again when it runs.
 """
 
@@ -77,10 +77,10 @@ class AdminAgentCoreService:
         agent_id: UUID,
         data: AdminAgentUpdate,
         *,
-        synthetic_admin: bool,
+        actor_is_admin: bool,
     ) -> AgentResponse:
         await AgentCoreService.update_agent(
-            db, agent_id, data, actor_is_admin=synthetic_admin
+            db, agent_id, data, actor_is_admin=actor_is_admin
         )
         return await AgentCoreService.get_agent(db, agent_id)
 
@@ -91,7 +91,7 @@ class AdminAgentCoreService:
         action: AgentAction,
         data: AdminAgentReason | None = None,
         *,
-        synthetic_admin: bool,
+        actor_is_admin: bool,
     ) -> AgentResponse:
         """Move the agent through its lifecycle; a wrong-state action is refused."""
         reason = data.reason if data is not None else None
@@ -100,7 +100,7 @@ class AdminAgentCoreService:
                 # The key it generates is fetched by the agent with its own
                 # recovery secret, as after a web approval: never handed out here.
                 await AgentCoreService.approve_agent(
-                    db, agent_id, actor_is_admin=synthetic_admin
+                    db, agent_id, actor_is_admin=actor_is_admin
                 )
             case "reject":
                 await AgentCoreService.reject_agent(db, agent_id, reason)
@@ -122,12 +122,12 @@ class AdminAgentCoreService:
 
     @staticmethod
     async def enqueue_delete(
-        db: AsyncSession, owner_id: UUID, agent_id: UUID, *, synthetic_admin: bool
+        db: AsyncSession, owner_id: UUID, agent_id: UUID, *, actor_is_admin: bool
     ) -> MaintenanceJobResponse:
         """Delete the agent, its checks and their results in the worker."""
         await AgentCoreService.get_agent_by_id(db, agent_id)
         await AgentCoreService.require_may_delete(
-            db, agent_id, actor_is_admin=synthetic_admin
+            db, agent_id, actor_is_admin=actor_is_admin
         )
         return await MaintenanceJobCoreService.enqueue(
             db,

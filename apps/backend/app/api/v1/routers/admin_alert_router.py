@@ -87,7 +87,7 @@ async def admin_create_alert(
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> AdminAlertDetail:
     return await AdminAlertCoreService.create_alert(
-        db, data, synthetic_admin=principal.synthetic_admin
+        db, data, actor_is_admin=principal.actor_is_admin
     )
 
 
@@ -184,7 +184,7 @@ async def admin_set_alert_checks(
 ) -> AlertMappingChange:
     """Make exactly these checks the ones a non-global alert watches."""
     return await AdminAlertCoreService.set_checks(
-        db, alert_id, data, synthetic_admin=principal.synthetic_admin
+        db, alert_id, data, actor_is_admin=principal.actor_is_admin
     )
 
 

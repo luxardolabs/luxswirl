@@ -90,7 +90,7 @@ async def admin_bulk_enable_checks(
 ) -> BulkCheckResult:
     """Enable every check named, now."""
     return await AdminCheckCoreService.bulk_set_enabled(
-        db, data, enabled=True, synthetic_admin=principal.synthetic_admin
+        db, data, enabled=True, actor_is_admin=principal.actor_is_admin
     )
 
 
@@ -108,7 +108,7 @@ async def admin_bulk_disable_checks(
 ) -> BulkCheckResult:
     """Disable every check named, now."""
     return await AdminCheckCoreService.bulk_set_enabled(
-        db, data, enabled=False, synthetic_admin=principal.synthetic_admin
+        db, data, enabled=False, actor_is_admin=principal.actor_is_admin
     )
 
 
@@ -130,7 +130,7 @@ async def admin_bulk_delete_checks(
     Poll `/api/v1/admin/maintenance-jobs/{id}` for the outcome.
     """
     return await AdminCheckCoreService.enqueue_bulk_delete(
-        db, principal.user.id, data, synthetic_admin=principal.synthetic_admin
+        db, principal.user.id, data, actor_is_admin=principal.actor_is_admin
     )
 
 
@@ -151,7 +151,7 @@ async def admin_bulk_modify_checks(
     in the background. Poll `/api/v1/admin/maintenance-jobs/{id}` for the outcome.
     """
     return await AdminCheckCoreService.enqueue_bulk_modify(
-        db, principal.user.id, data, synthetic_admin=principal.synthetic_admin
+        db, principal.user.id, data, actor_is_admin=principal.actor_is_admin
     )
 
 
@@ -201,7 +201,7 @@ async def admin_create_check(
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> CheckResponse:
     return await AdminCheckCoreService.create_check(
-        db, principal.user.role, data, synthetic_admin=principal.synthetic_admin
+        db, principal.user.role, data, actor_is_admin=principal.actor_is_admin
     )
 
 
@@ -221,7 +221,7 @@ async def admin_update_check(
         principal.user.role,
         check_id,
         data,
-        synthetic_admin=principal.synthetic_admin,
+        actor_is_admin=principal.actor_is_admin,
     )
 
 
@@ -238,7 +238,7 @@ async def admin_delete_check(
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> Response:
     await AdminCheckCoreService.delete_check(
-        db, check_id, synthetic_admin=principal.synthetic_admin
+        db, check_id, actor_is_admin=principal.actor_is_admin
     )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -262,7 +262,7 @@ async def admin_clone_check(
         principal.user.role,
         check_id,
         data or AdminCheckClone(),
-        synthetic_admin=principal.synthetic_admin,
+        actor_is_admin=principal.actor_is_admin,
     )
 
 
@@ -281,7 +281,7 @@ async def admin_enable_check(
         principal.user.role,
         check_id,
         enabled=True,
-        synthetic_admin=principal.synthetic_admin,
+        actor_is_admin=principal.actor_is_admin,
     )
 
 
@@ -300,7 +300,7 @@ async def admin_disable_check(
         principal.user.role,
         check_id,
         enabled=False,
-        synthetic_admin=principal.synthetic_admin,
+        actor_is_admin=principal.actor_is_admin,
     )
 
 
@@ -337,5 +337,5 @@ async def admin_set_check_dependents(
 ) -> DependentsChange:
     """Make exactly these checks depend on this one; any other is detached."""
     return await AdminCheckCoreService.set_dependents(
-        db, check_id, data, synthetic_admin=principal.synthetic_admin
+        db, check_id, data, actor_is_admin=principal.actor_is_admin
     )

@@ -2,7 +2,7 @@
 Admin check core service - checks as the admin API serves them.
 
 Each read takes the caller's role. Each write that can reach a synthetic check
-takes `synthetic_admin`, the principal's (`ApiPrincipal.synthetic_admin`: an
+takes `actor_is_admin`, the principal's (`ApiPrincipal.actor_is_admin`: an
 admin whose token grants `checks:admin`), and goes through CheckCoreService,
 which refuses a synthetic check to anyone else and every address the SSRF
 policy refuses. A viewer is shown a check through `mask_credentials` in
@@ -12,8 +12,9 @@ without the synthetic `script_code`.
 
 A bulk action is judged whole before anything runs or is enqueued: an id no
 check has is refused (422), and so is a selection that names a synthetic
-check from a caller who is not `synthetic_admin` (403). Delete and modify cascade or move, so they run as
-maintenance jobs, which judge their owner again when they run.
+check from a caller who is not `actor_is_admin` (403). Delete and modify
+cascade or move, so they run as maintenance jobs, which judge their owner
+again when they run.
 """
 
 from collections.abc import Sequence
@@ -197,13 +198,13 @@ class AdminCheckCoreService:
         role: UserRole,
         data: AdminCheckCreate,
         *,
-        synthetic_admin: bool,
+        actor_is_admin: bool,
     ) -> CheckResponse:
         check = await CheckCoreService.create_check(
             db,
             data.agent_id,
             data.to_check_create(),
-            actor_is_admin=synthetic_admin,
+            actor_is_admin=actor_is_admin,
         )
         return await AdminCheckCoreService._reloaded(db, check.id, role)
 
@@ -214,10 +215,10 @@ class AdminCheckCoreService:
         check_id: UUID,
         data: AdminCheckUpdate,
         *,
-        synthetic_admin: bool,
+        actor_is_admin: bool,
     ) -> CheckResponse:
         await CheckCoreService.update_check(
-            db, check_id, data, actor_is_admin=synthetic_admin
+            db, check_id, data, actor_is_admin=actor_is_admin
         )
         return await AdminCheckCoreService._reloaded(db, check_id, role)
 
@@ -228,14 +229,14 @@ class AdminCheckCoreService:
         check_id: UUID,
         *,
         enabled: bool,
-        synthetic_admin: bool,
+        actor_is_admin: bool,
     ) -> CheckResponse:
         return await AdminCheckCoreService.update_check(
             db,
             role,
             check_id,
             AdminCheckUpdate(enabled=enabled),
-            synthetic_admin=synthetic_admin,
+            actor_is_admin=actor_is_admin,
         )
 
     @staticmethod
@@ -245,7 +246,7 @@ class AdminCheckCoreService:
         check_id: UUID,
         data: AdminCheckClone,
         *,
-        synthetic_admin: bool,
+        actor_is_admin: bool,
     ) -> CheckResponse:
         source = await CheckCoreService.get_check_by_id(db, check_id)
         clone = await CheckCoreService.clone_check(
@@ -253,23 +254,21 @@ class AdminCheckCoreService:
             check_id,
             data.agent_id or source.agent_id,
             data.overrides(),
-            actor_is_admin=synthetic_admin,
+            actor_is_admin=actor_is_admin,
         )
         return await AdminCheckCoreService._reloaded(db, clone.id, role)
 
     @staticmethod
     async def delete_check(
-        db: AsyncSession, check_id: UUID, *, synthetic_admin: bool
+        db: AsyncSession, check_id: UUID, *, actor_is_admin: bool
     ) -> None:
-        await CheckCoreService.delete_check(
-            db, check_id, actor_is_admin=synthetic_admin
-        )
+        await CheckCoreService.delete_check(db, check_id, actor_is_admin=actor_is_admin)
 
     # ── Bulk ────────────────────────────────────────────────────────────────
 
     @staticmethod
     async def _judge_selection(
-        db: AsyncSession, check_ids: list[UUID], *, synthetic_admin: bool
+        db: AsyncSession, check_ids: list[UUID], *, actor_is_admin: bool
     ) -> None:
         """Refuse the whole selection when any of it may not be acted on."""
         checks = await CheckCoreService.get_checks_by_ids(db, check_ids)
@@ -279,7 +278,7 @@ class AdminCheckCoreService:
             more = f" (and {len(missing) - 1} more)" if len(missing) > 1 else ""
             raise ValidationException(f"No check has the id {missing[0]}{more}")
         if any(check.check_type == SYNTHETIC for check in checks):
-            require_admin_actor(actor_is_admin=synthetic_admin)
+            require_admin_actor(actor_is_admin=actor_is_admin)
 
     @staticmethod
     async def bulk_set_enabled(
@@ -287,15 +286,15 @@ class AdminCheckCoreService:
         data: AdminBulkChecks,
         *,
         enabled: bool,
-        synthetic_admin: bool,
+        actor_is_admin: bool,
     ) -> BulkCheckResult:
         """Enable or disable the checks now: an in-place change, safe in a request."""
         ids = data.ids
         await AdminCheckCoreService._judge_selection(
-            db, ids, synthetic_admin=synthetic_admin
+            db, ids, actor_is_admin=actor_is_admin
         )
         result = await CheckCoreService.bulk_set_enabled(
-            db, ids, enabled=enabled, actor_is_admin=synthetic_admin
+            db, ids, enabled=enabled, actor_is_admin=actor_is_admin
         )
         return BulkCheckResult(
             success_count=result["success_count"],
@@ -309,12 +308,12 @@ class AdminCheckCoreService:
         owner_id: UUID,
         data: AdminBulkChecks,
         *,
-        synthetic_admin: bool,
+        actor_is_admin: bool,
     ) -> MaintenanceJobResponse:
         """Delete the checks and their results in the maintenance worker."""
         ids = data.ids
         await AdminCheckCoreService._judge_selection(
-            db, ids, synthetic_admin=synthetic_admin
+            db, ids, actor_is_admin=actor_is_admin
         )
         return await MaintenanceJobCoreService.enqueue(
             db,
@@ -330,12 +329,12 @@ class AdminCheckCoreService:
         owner_id: UUID,
         data: AdminBulkModify,
         *,
-        synthetic_admin: bool,
+        actor_is_admin: bool,
     ) -> MaintenanceJobResponse:
         """Change, move or alert the checks in the maintenance worker."""
         ids = data.ids
         await AdminCheckCoreService._judge_selection(
-            db, ids, synthetic_admin=synthetic_admin
+            db, ids, actor_is_admin=actor_is_admin
         )
         if data.agent_id is not None:
             await CheckCoreService.get_admitted_agent(db, data.agent_id)
@@ -372,7 +371,7 @@ class AdminCheckCoreService:
         check_id: UUID,
         data: AdminCheckDependents,
         *,
-        synthetic_admin: bool,
+        actor_is_admin: bool,
     ) -> DependentsChange:
         """Make `data.dependent_ids` exactly the checks that depend on `check_id`."""
         await CheckCoreService.get_check_by_id(db, check_id)
@@ -380,6 +379,6 @@ class AdminCheckCoreService:
             db,
             check_id,
             list(dict.fromkeys(data.dependent_ids)),
-            actor_is_admin=synthetic_admin,
+            actor_is_admin=actor_is_admin,
         )
         return DependentsChange(added=added, removed=removed)

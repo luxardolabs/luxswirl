@@ -295,7 +295,7 @@ async def handle_create_check(arguments: dict[str, Any]) -> list[TextContent]:
             get_db(),
             principal().user.role,
             data,
-            synthetic_admin=principal().synthetic_admin,
+            actor_is_admin=principal().actor_is_admin,
         )
     )
 
@@ -309,7 +309,7 @@ async def handle_update_check(arguments: dict[str, Any]) -> list[TextContent]:
             principal().user.role,
             check_id,
             data,
-            synthetic_admin=principal().synthetic_admin,
+            actor_is_admin=principal().actor_is_admin,
         )
     )
 
@@ -323,7 +323,7 @@ async def handle_clone_check(arguments: dict[str, Any]) -> list[TextContent]:
             principal().user.role,
             check_id,
             data,
-            synthetic_admin=principal().synthetic_admin,
+            actor_is_admin=principal().actor_is_admin,
         )
     )
 
@@ -337,7 +337,7 @@ async def _set_enabled(
             principal().user.role,
             validate_uuid(arguments.get("check_id"), "check_id"),
             enabled=enabled,
-            synthetic_admin=principal().synthetic_admin,
+            actor_is_admin=principal().actor_is_admin,
         )
     )
 

@@ -75,7 +75,7 @@ class ApiPrincipal:
     scopes: tuple[str, ...]
 
     @property
-    def synthetic_admin(self) -> bool:
+    def actor_is_admin(self) -> bool:
         """Whether this request may do what only an admin may do to a synthetic
         check (create, change, clone, toggle, delete, select in bulk, attach,
         move or delete with its agent): its user is an admin AND its token

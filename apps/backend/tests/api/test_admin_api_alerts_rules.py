@@ -469,7 +469,7 @@ async def test_a_synthetic_check_attached_mid_replacement_is_not_detached_unjudg
             s,
             alert_id,
             AdminAlertChecks(check_ids=[plain_id]),
-            synthetic_admin=False,
+            actor_is_admin=False,
         )
         await s.commit()
 
@@ -518,7 +518,7 @@ async def test_a_replacement_reports_only_the_rows_it_changed(
             s,
             alert_id,
             AdminAlertChecks(check_ids=[plain_id]),
-            synthetic_admin=False,
+            actor_is_admin=False,
         )
         await s.commit()
 
@@ -578,7 +578,7 @@ async def test_a_judged_check_cannot_turn_synthetic_before_the_replacement_commi
             s,
             alert_id,
             AdminAlertChecks(check_ids=[plain_id] if attach else []),
-            synthetic_admin=False,
+            actor_is_admin=False,
         )
         await s.commit()
 
@@ -627,7 +627,7 @@ async def _replace(worker_db, alert_id: UUID, check_ids: list[UUID]) -> None:
             s,
             alert_id,
             AdminAlertChecks(check_ids=check_ids),
-            synthetic_admin=False,
+            actor_is_admin=False,
         )
         await s.commit()
 
