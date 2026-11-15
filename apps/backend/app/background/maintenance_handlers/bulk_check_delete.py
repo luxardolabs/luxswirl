@@ -14,10 +14,12 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.background.maintenance_handlers._bulk_outcome import finish
-from app.background.maintenance_handlers._job_owner import require_owner_may_edit
+from app.background.maintenance_handlers._job_owner import (
+    acts_as_admin,
+    require_owner_may_edit,
+)
 from app.models.maintenance_job_model import MaintenanceJob
 from app.services.core.check_core_service import CheckCoreService
-from app.services.core.user_core_service import UserCoreService
 from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.maintenance.bulk_check_delete")
@@ -37,7 +39,7 @@ async def handle(db: AsyncSession, job: MaintenanceJob) -> None:
     result = await CheckCoreService.bulk_delete(
         db,
         check_ids,
-        actor_is_admin=await UserCoreService.is_active_admin(db, job.owner_id),
+        actor_is_admin=await acts_as_admin(db, job),
     )
     logger.info(
         "Bulk deleted checks",

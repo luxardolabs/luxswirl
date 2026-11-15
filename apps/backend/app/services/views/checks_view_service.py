@@ -936,6 +936,7 @@ class ChecksViewService:
                 target_id=None,
                 params={"check_ids": [str(check.id)]},
                 owner_id=current_user.id,
+                actor_is_admin=current_user.role == UserRole.ADMIN,
             )
             logger.info(
                 "Enqueued single check delete",
@@ -985,7 +986,7 @@ class ChecksViewService:
         enabled: str,
         tag: str,
         check_ids: list[UUID],
-        owner_id: UUID | None = None,
+        current_user: AuthedUser,
     ) -> tuple[MaintenanceJobResponse, int, str]:
         """Enqueue a maintenance job for a bulk check action (delete/enable/disable).
 
@@ -1001,7 +1002,8 @@ class ChecksViewService:
                 kind=MaintenanceJobKind.BULK_CHECK_DELETE,
                 target_id=None,
                 params={"check_ids": [str(c) for c in ids]},
-                owner_id=owner_id,
+                owner_id=current_user.id,
+                actor_is_admin=current_user.role == UserRole.ADMIN,
             )
             msg = f"Deleting {len(ids)} check(s) in background…"
         elif action in ("enable", "disable"):
@@ -1010,7 +1012,8 @@ class ChecksViewService:
                 kind=MaintenanceJobKind.BULK_CHECK_TOGGLE,
                 target_id=None,
                 params={"action": action, "check_ids": [str(c) for c in ids]},
-                owner_id=owner_id,
+                owner_id=current_user.id,
+                actor_is_admin=current_user.role == UserRole.ADMIN,
             )
             verb = "Enabling" if action == "enable" else "Disabling"
             msg = f"{verb} {len(ids)} check(s) in background…"
@@ -1029,7 +1032,7 @@ class ChecksViewService:
         update_data: CheckUpdate,
         new_agent_id: UUID | None,
         alert_id: UUID | None,
-        owner_id: UUID | None = None,
+        current_user: AuthedUser,
     ) -> tuple[MaintenanceJobResponse, int]:
         """Resolve selection + enqueue bulk_check_modify job.
 
@@ -1053,7 +1056,8 @@ class ChecksViewService:
                 "new_agent_id": str(new_agent_id) if new_agent_id else None,
                 "alert_id": str(alert_id) if alert_id else None,
             },
-            owner_id=owner_id,
+            owner_id=current_user.id,
+            actor_is_admin=current_user.role == UserRole.ADMIN,
         )
         return job, len(ids)
 

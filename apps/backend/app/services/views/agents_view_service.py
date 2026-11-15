@@ -318,6 +318,8 @@ class AgentsViewService:
             AgentNotFoundException: no such agent, so no job is queued.
             ValidationException: `confirm_name` is not the agent's name as the
                 confirmation shows it.
+            DuplicateResourceException: a delete of this agent queued by a
+                user of another role is still in flight.
         """
         agent = await AgentCoreService.get_agent(db, agent_id)
         expected = AgentsViewService._delete_confirm_name(
@@ -326,14 +328,16 @@ class AgentsViewService:
         if _confirm_key(confirm_name) != expected:
             raise ValidationException(f"Type {expected} exactly to delete this agent.")
         # Refused now, as well as when the job runs, so the form says so.
+        actor_is_admin = current_user.role == UserRole.ADMIN
         await AgentCoreService.require_may_delete(
-            db, agent_id, actor_is_admin=current_user.role == UserRole.ADMIN
+            db, agent_id, actor_is_admin=actor_is_admin
         )
         return await MaintenanceJobCoreService.enqueue(
             db,
             kind=MaintenanceJobKind.AGENT_DELETE,
             target_id=agent_id,
             owner_id=current_user.id,
+            actor_is_admin=actor_is_admin,
         )
 
     # Agent lifecycle actions. Each of these owns BOTH the core call and the HTMX

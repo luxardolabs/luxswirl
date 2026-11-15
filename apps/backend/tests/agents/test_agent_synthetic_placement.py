@@ -159,7 +159,7 @@ async def test_deleting_an_agent_that_owns_a_synthetic_check_is_an_admins(
         id=uuid4(),
         kind=MaintenanceJobKind.AGENT_DELETE,
         target_id=owner_id,
-        params={},
+        params={"actor_is_admin": role == "admin"},
         owner_id=user_id,
     )
 

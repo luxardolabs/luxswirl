@@ -334,7 +334,7 @@ async def bulk_action(
             enabled,
             tag,
             check_ids,
-            owner_id=current_user.id,
+            current_user,
         )
         return job_status_oob_response(request, current_user, job, msg)
 
@@ -392,7 +392,7 @@ async def bulk_modify(
         update_data,
         agent_id,
         alert_id,
-        owner_id=current_user.id,
+        current_user,
     )
     return job_status_oob_response(
         request, current_user, job, f"Modifying {count} check(s) in background…"

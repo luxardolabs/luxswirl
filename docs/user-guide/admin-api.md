@@ -159,7 +159,7 @@ An import takes 1 to 10,000 checks. `mode` is `merge` (the default: a check whos
 
 `status` goes `queued` → `running` → `done` or `failed`. Once a bulk job has run, done or failed, `progress` holds `success_count`, `failure_count` and the first 50 `errors`, so a check deleted before the job ran shows as a failure rather than disappearing. A job that changed no check is `failed`. An import's `progress` holds `created`, `updated`, `skipped`, `failure_count` and the first 50 `errors`. An import or bulk create sent again unchanged while the first is queued or running is the same job.
 
-A job runs after the request that queued it, so its owner is judged again when it runs: if they no longer hold the role the request needed (an active editor or admin; an active admin for an import), the job fails and changes nothing. An import onto an agent deleted since fails the same way. A failed job's `error`, and every error in `progress`, is a summary, never the database statement or a credential; the full error is in the server log.
+A job runs after the request that queued it, so its owner is judged again when it runs: if they no longer hold the role the request needed (an active editor or admin; an active admin for an import), the job fails and changes nothing. An import onto an agent deleted since fails the same way. A bulk delete or modify acts on a synthetic check only when the request that queued it could (an admin whose token grants `checks:admin`) and its owner is still an active admin when it runs: a check made synthetic after the job was queued is otherwise left as it is and reported in its `errors`. A failed job's `error`, and every error in `progress`, is a summary, never the database statement or a credential; the full error is in the server log.
 
 ### Dependents
 
@@ -204,7 +204,7 @@ An agent is addressed by its own id. Reads take any token; every change takes an
 
 The agent reports its own `agent_run_id`, `ip_address` and `version`: a change to them, or to any field the edit form does not have, is a `422`, and a name another agent already has is a `409`. `reject`, `pause` and `disable` take an optional `{"reason": "..."}`, kept as `status_reason`. An action the agent's status does not allow (approving an active agent, resuming one that is not paused) is a `422`. `approve` returns no key: the agent fetches its own with its recovery secret, as after a web approval. `key` on an agent that has one is a `400`; use `key/regenerate`.
 
-A delete is refused when queued and judged again when it runs: if its owner is no longer an active editor or admin by then, the job fails and nothing is deleted. Poll it at `/api/v1/admin/maintenance-jobs/{id}`.
+A delete is refused when queued and judged again when it runs: if its owner is no longer an active editor or admin by then, the job fails and nothing is deleted. It deletes an agent that owns a synthetic check only when the request that queued it could (an admin whose token grants `checks:admin`) and its owner is still an active admin: a synthetic check added to the agent after a delete queued by any other token fails the job, and nothing is deleted. A second delete of the same agent while one is queued or running is that job when its token has the same rights over synthetic checks, and a `409` when it does not. Poll it at `/api/v1/admin/maintenance-jobs/{id}`.
 
 ## Registration keys
 

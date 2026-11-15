@@ -321,6 +321,7 @@ class AdminCheckCoreService:
             target_id=None,
             params={"check_ids": [str(check_id) for check_id in ids]},
             owner_id=owner_id,
+            actor_is_admin=actor_is_admin,
         )
 
     @staticmethod
@@ -351,6 +352,7 @@ class AdminCheckCoreService:
                 "alert_id": str(data.alert_id) if data.alert_id else None,
             },
             owner_id=owner_id,
+            actor_is_admin=actor_is_admin,
         )
 
     # ── Dependents ──────────────────────────────────────────────────────────

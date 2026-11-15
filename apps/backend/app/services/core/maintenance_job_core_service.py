@@ -13,7 +13,7 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.credential_mask import mask_credentials
-from app.core.exceptions import NotFoundException
+from app.core.exceptions import DuplicateResourceException, NotFoundException
 from app.crud.maintenance_job_crud import MaintenanceJobCRUD
 from app.models.enum_model import MaintenanceJobKind
 from app.models.maintenance_job_model import MaintenanceJob
@@ -22,6 +22,10 @@ from app.shared.log_redaction import scrub_text
 from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.services.maintenance_job")
+
+# The params key holding whether the request that queued a job could act on a
+# synthetic check (`MaintenanceJobCoreService.enqueue`'s `actor_is_admin`).
+ACTOR_IS_ADMIN = "actor_is_admin"
 
 # Where a SQLAlchemy error's text starts its statement and parameters.
 _SQL_DETAIL = re.compile(r"\[SQL: |\[parameters: ")
@@ -43,6 +47,7 @@ class MaintenanceJobCoreService:
         target_id: UUID | None,
         params: dict[str, Any] | None = None,
         owner_id: UUID | None = None,
+        actor_is_admin: bool | None = None,
     ) -> MaintenanceJobResponse:
         """Insert an intent row, idempotently.
 
@@ -50,8 +55,21 @@ class MaintenanceJobCoreService:
         running)`` lets the INSERT use ON CONFLICT DO NOTHING, so a double-click
         or a race both collapse to the single inflight row — the DB enforces it,
         no catch and no rollback here.
+
+        `actor_is_admin`, for a job that may reach a synthetic check, is whether
+        the request could act on one (an admin by the web; an admin's token
+        holding `checks:admin` by the API). It is stored in the job's params:
+        the job runs later, without the request, and acts on a synthetic check
+        only when it is set (see `maintenance_handlers/_job_owner.py`).
+
+        Raises:
+            DuplicateResourceException: an inflight job for the same target was
+                queued with a different `actor_is_admin`; two requests that may
+                do different things are never one job.
         """
         kind_value = kind.value if isinstance(kind, MaintenanceJobKind) else kind
+        if actor_is_admin is not None:
+            params = {**(params or {}), ACTOR_IS_ADMIN: actor_is_admin}
 
         job = await MaintenanceJobCRUD.insert(
             db,
@@ -82,6 +100,13 @@ class MaintenanceJobCoreService:
             raise RuntimeError(
                 f"enqueue hit ON CONFLICT but found no inflight job for {kind_value}/{target_id}"
             )
+        if actor_is_admin is not None:
+            queued = await MaintenanceJobCRUD.get_params(db, existing.id) or {}
+            if queued.get(ACTOR_IS_ADMIN) is not actor_is_admin:
+                raise DuplicateResourceException(
+                    "This is already queued by a request with other rights over "
+                    "synthetic checks; try again once that job has finished"
+                )
         logger.info(
             "Maintenance job already inflight — returning existing",
             extra={

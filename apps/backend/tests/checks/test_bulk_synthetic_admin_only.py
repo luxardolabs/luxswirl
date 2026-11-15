@@ -1,7 +1,8 @@
 """A bulk action changes a synthetic check only when its owner is an admin.
 
 The web UI's bulk enable, disable, delete and modify run as maintenance jobs.
-Each job acts as the user who started it, judged when it runs: an editor's
+Each job acts as the user who started it: the web stores whether that user
+was an admin on the job, and it is judged again when the job runs. An editor's
 job leaves every synthetic check alone and reports it, an admin's changes it.
 """
 
@@ -73,6 +74,7 @@ async def test_a_bulk_disable_changes_a_synthetic_check_only_for_an_admin(
         s["owner"],
         action="disable",
         check_ids=_ids(s),
+        actor_is_admin=role == "admin",
     )
 
     await bulk_check_toggle.handle(db, job)
@@ -86,7 +88,12 @@ async def test_a_bulk_delete_removes_a_synthetic_check_only_for_an_admin(
     db: AsyncSession, role: str, changed: bool
 ) -> None:
     s = await _setup(db, role)
-    job = _job(MaintenanceJobKind.BULK_CHECK_DELETE, s["owner"], check_ids=_ids(s))
+    job = _job(
+        MaintenanceJobKind.BULK_CHECK_DELETE,
+        s["owner"],
+        check_ids=_ids(s),
+        actor_is_admin=role == "admin",
+    )
 
     await bulk_check_delete.handle(db, job)
 
@@ -106,6 +113,7 @@ async def test_a_bulk_move_moves_a_synthetic_check_only_for_an_admin(
         update_fields={},
         new_agent_id=str(s["other"]),
         alert_id=None,
+        actor_is_admin=role == "admin",
     )
 
     await bulk_check_modify.handle(db, job)

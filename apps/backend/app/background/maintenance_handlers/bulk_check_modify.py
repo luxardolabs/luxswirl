@@ -13,12 +13,14 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.background.maintenance_handlers._bulk_outcome import finish
-from app.background.maintenance_handlers._job_owner import require_owner_may_edit
+from app.background.maintenance_handlers._job_owner import (
+    acts_as_admin,
+    require_owner_may_edit,
+)
 from app.models.maintenance_job_model import MaintenanceJob
 from app.schemas.check_schema import CheckUpdate
 from app.services.core.alert_core_service import AlertCoreService
 from app.services.core.check_core_service import CheckCoreService
-from app.services.core.user_core_service import UserCoreService
 from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.maintenance.bulk_check_modify")
@@ -48,7 +50,7 @@ async def handle(db: AsyncSession, job: MaintenanceJob) -> None:
         check_ids=check_ids,
         update_data=update_data,
         new_agent_id=UUID(new_agent_id) if new_agent_id else None,
-        actor_is_admin=await UserCoreService.is_active_admin(db, job.owner_id),
+        actor_is_admin=await acts_as_admin(db, job),
     )
 
     # Alerts go on the checks the modify changed: never on one it refused.

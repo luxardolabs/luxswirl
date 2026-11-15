@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import (
     AgentNotFoundException,
     AuthorizationException,
+    DuplicateResourceException,
     ValidationException,
     value_error_message,
 )
@@ -202,15 +203,12 @@ async def delete_agent_web(
         job = await AgentsViewService.enqueue_delete(
             db, agent_id, confirm_name, current_user
         )
-    except (ValidationException, AuthorizationException) as e:
-        response = agent_status_message(
-            request,
-            "error",
-            e.message,
-            http_status.HTTP_403_FORBIDDEN
-            if isinstance(e, AuthorizationException)
-            else http_status.HTTP_422_UNPROCESSABLE_CONTENT,
-        )
+    except (
+        ValidationException,
+        AuthorizationException,
+        DuplicateResourceException,
+    ) as e:
+        response = agent_status_message(request, "error", e.message, e.status_code)
         response.headers["HX-Retarget"] = f"#agent-delete-error-{agent_id}"
         response.headers["HX-Reswap"] = "innerHTML"
         return response

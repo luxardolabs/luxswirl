@@ -49,6 +49,13 @@ class MaintenanceJobCRUD:
         return result.scalar_one_or_none()
 
     @staticmethod
+    async def get_params(db: AsyncSession, job_id: UUID) -> dict[str, Any] | None:
+        """The job's params, decrypted (None if the job is gone)."""
+        return await db.scalar(
+            select(MaintenanceJob.params).where(MaintenanceJob.id == job_id)
+        )
+
+    @staticmethod
     async def insert(
         db: AsyncSession,
         *,

@@ -134,6 +134,7 @@ class AdminAgentCoreService:
             kind=MaintenanceJobKind.AGENT_DELETE,
             target_id=agent_id,
             owner_id=owner_id,
+            actor_is_admin=actor_is_admin,
         )
 
     @staticmethod
