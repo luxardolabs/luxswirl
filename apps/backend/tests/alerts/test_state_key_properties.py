@@ -39,7 +39,7 @@ def _ssl_result(days_until: int):
 
 
 def _status_result(success: bool):
-    return SimpleNamespace(success=success, latency_ms=None)
+    return SimpleNamespace(success=success)
 
 
 # ---------------------------------------------------------------------------

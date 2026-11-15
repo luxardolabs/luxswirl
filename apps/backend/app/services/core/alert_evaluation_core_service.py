@@ -13,7 +13,6 @@ the notification log (`notification_logs`), a notification to send as a
 
 import fnmatch
 import hashlib
-from collections.abc import Sequence
 from datetime import datetime
 from typing import Any
 from uuid import UUID
@@ -36,10 +35,6 @@ from app.shared.logger import get_logger
 
 # notification_logs.notification_hash is String(64).
 STATE_KEY_LENGTH = 64
-
-# The newest results a recovery or a clear state is judged by: enough to reach
-# past a run of timeouts, and each agent of a check several agents run.
-RECENT_RESULTS = 50
 
 logger = get_logger("luxswirl.services.alert")
 
@@ -106,9 +101,6 @@ class AlertEvaluationCoreService:
                         await AlertEvaluationCoreService._fire_alert(
                             db, alert, check, check_result
                         )
-                    await AlertEvaluationCoreService._note_cleared(
-                        db, alert, check, check_result
-                    )
             except Exception:
                 logger.exception(
                     "Alert evaluation failed",
@@ -198,29 +190,12 @@ class AlertEvaluationCoreService:
         before configs were validated) is its SHA-256: still one stable value
         per state, so dedup matches, and the log row can always be written.
         """
-        return AlertEvaluationCoreService._fit_state_key(
-            AlertEvaluationCoreService._state_key(
-                alert, check_result, parent_down=parent_down
-            )
+        key = AlertEvaluationCoreService._state_key(
+            alert, check_result, parent_down=parent_down
         )
-
-    @staticmethod
-    def _fit_state_key(key: str) -> str:
-        """`key` as the log column holds it: itself, or its SHA-256 when longer."""
         if len(key) <= STATE_KEY_LENGTH:
             return key
         return hashlib.sha256(key.encode()).hexdigest()
-
-    @staticmethod
-    def _threshold_key(alert: Alert, *, breached: bool) -> str:
-        """A threshold alert's state key: its comparison while breached, and
-        the same with `:ok` once the latency is on the safe side."""
-        config = alert.trigger_config or {}
-        key = (
-            f"threshold:{config.get('metric', 'latency_ms')}:"
-            f"{config.get('operator', '>')}:{config.get('value')}"
-        )
-        return key if breached else f"{key}:ok"
 
     @staticmethod
     def _state_key(
@@ -249,12 +224,10 @@ class AlertEvaluationCoreService:
             return f"status:{'up' if check_result.success else 'down'}"
 
         if trigger_type == "threshold":
-            return AlertEvaluationCoreService._threshold_key(
-                alert,
-                breached=AlertEvaluationCoreService._threshold_breached(
-                    alert, check_result
-                ),
-            )
+            metric = config.get("metric", "latency_ms")
+            operator = config.get("operator", ">")
+            value = config.get("value")
+            return f"threshold:{metric}:{operator}:{value}"
 
         if trigger_type == "repeated_failure":
             return f"repeated_failure:{'up' if check_result.success else 'down'}"
@@ -378,50 +351,8 @@ class AlertEvaluationCoreService:
         return True
 
     @staticmethod
-    def _threshold_value(alert: Alert) -> float | None:
-        """A latency threshold alert's value as a number, or None when it has
-        none it can compare (another metric, no value, not a number)."""
-        config = alert.trigger_config or {}
-        if config.get("metric", "latency_ms") != "latency_ms":
-            return None
-        value = config.get("value")
-        # trigger_config is free-form JSON, so the threshold may be a number or
-        # a numeric string; anything else cannot be compared and never fires.
-        if value is None or not isinstance(value, int | float | str):
-            return None
-        try:
-            return float(value)
-        except ValueError:
-            logger.warning(
-                "Threshold trigger value is not a number",
-                extra={"alert_id": str(alert.id), "value": value},
-            )
-            return None
-
-    @staticmethod
-    def _threshold_breached(alert: Alert, check_result: CheckResult) -> bool:
-        """Whether the result's latency meets the threshold alert's comparison
-        (e.g. latency > 1000 ms). A result with no latency does not."""
-        threshold = AlertEvaluationCoreService._threshold_value(alert)
-        if threshold is None or check_result.latency_ms is None:
-            return False
-        current = float(check_result.latency_ms)
-        operator = (alert.trigger_config or {}).get("operator", ">")
-        if operator == ">":
-            return current > threshold
-        if operator == ">=":
-            return current >= threshold
-        if operator == "<":
-            return current < threshold
-        if operator == "<=":
-            return current <= threshold
-        if operator == "==":
-            return current == threshold
-        return False
-
-    @staticmethod
     # dropped-input: one of the _evaluate_* family, dispatched by trigger type on a
-    # shared signature; a threshold reads the result, its alert and its history.
+    # shared signature; a threshold reads only the result and its own config.
     async def _evaluate_threshold(
         db: AsyncSession,
         alert: Alert,
@@ -429,35 +360,48 @@ class AlertEvaluationCoreService:
         check_result: CheckResult,
         config: dict[str, Any],
     ) -> bool:
-        """Evaluate threshold trigger: fires while the latency meets the
-        comparison, and on the first result back on the safe side (a
-        recovery) when it notifies on recovery."""
-        if AlertEvaluationCoreService._threshold_breached(alert, check_result):
-            return True
-        if not alert.notify_on_recovery or check_result.latency_ms is None:
+        """Evaluate threshold trigger (e.g., latency > 1000ms)."""
+        metric = config.get("metric", "latency_ms")
+        operator = config.get("operator", ">")
+        threshold_value = config.get("value")
+
+        if threshold_value is None:
             return False
-        # A recovery tells of the end of the breach the alert last recorded:
-        # its last row is that breach (or a parent's outage over it), and the
-        # newest earlier result with a latency (a timeout has none) breached,
-        # so a breach long over, whose end nobody recorded, gets none.
-        last_notification = await AlertCRUD.get_last_notification_for_dedup(
-            db, alert.id, check.id
-        )
-        if last_notification is None or last_notification.notification_hash not in (
-            AlertEvaluationCoreService._breach_key(alert),
-            "parent_down",
-        ):
+
+        # Get metric value from result
+        if metric == "latency_ms":
+            current_value = check_result.latency_ms
+        else:
+            return False  # Unknown metric
+
+        if current_value is None:
             return False
-        recent = await AlertEvaluationCoreService._recent_results(
-            db, check, check_result
-        )
-        earlier = next(
-            (r for r in recent[1:] if r.latency_ms is not None),
-            None,
-        )
-        return earlier is not None and AlertEvaluationCoreService._threshold_breached(
-            alert, earlier
-        )
+
+        # trigger_config is free-form JSON, so the threshold may be a number or
+        # a numeric string; anything else cannot be compared and never fires.
+        if not isinstance(threshold_value, int | float | str):
+            return False
+        try:
+            threshold_float = float(threshold_value)
+        except ValueError:
+            logger.warning(
+                "Threshold trigger value is not a number",
+                extra={"alert_id": str(alert.id), "value": threshold_value},
+            )
+            return False
+        current_float = float(current_value)
+        if operator == ">":
+            return bool(current_float > threshold_float)
+        elif operator == ">=":
+            return bool(current_float >= threshold_float)
+        elif operator == "<":
+            return bool(current_float < threshold_float)
+        elif operator == "<=":
+            return bool(current_float <= threshold_float)
+        elif operator == "==":
+            return bool(current_float == threshold_float)
+        else:
+            return False
 
     @staticmethod
     async def _evaluate_repeated_failure(
@@ -614,9 +558,7 @@ class AlertEvaluationCoreService:
 
         For an SSL expiry alert, only a certificate back out of every band
         (state `ssl:ok`): the check succeeds while a certificate expires, so
-        its success says nothing. For a threshold alert, a latency back on the
-        safe side, whatever the check's own outcome. For the others, a
-        successful check.
+        its success says nothing. For the others, a successful check.
         """
         if not alert.notify_on_recovery:
             return False
@@ -624,10 +566,6 @@ class AlertEvaluationCoreService:
             return (
                 AlertEvaluationCoreService._compute_alert_state_key(alert, check_result)
                 == "ssl:ok"
-            )
-        if alert.trigger_type == AlertTriggerType.THRESHOLD:
-            return not AlertEvaluationCoreService._threshold_breached(
-                alert, check_result
             )
         return bool(check_result.success)
 
@@ -734,107 +672,6 @@ class AlertEvaluationCoreService:
             resend_count=decision.resend_count,
         )
         return len(rows)
-
-    @staticmethod
-    async def _recent_results(
-        db: AsyncSession, check: Check, check_result: CheckResult
-    ) -> Sequence[CheckResult]:
-        """The check's newest results up to `check_result`, newest first, at
-        most `RECENT_RESULTS`: what a recovery and a clear state are judged by."""
-        return await AlertCRUD.get_recent_results_for_check(
-            db, check.id, RECENT_RESULTS, at_or_before=check_result.timestamp
-        )
-
-    @staticmethod
-    def _is_clear(alert: Alert, check_result: CheckResult) -> bool:
-        """Whether the result is on the clear side of a breach alert: a success
-        for a failure alert, a latency on the safe side for a threshold one (a
-        result with no latency, a timeout, is neither)."""
-        if alert.trigger_type == AlertTriggerType.THRESHOLD:
-            return (
-                check_result.latency_ms is not None
-                and AlertEvaluationCoreService._threshold_value(alert) is not None
-                and not AlertEvaluationCoreService._threshold_breached(
-                    alert, check_result
-                )
-            )
-        if alert.trigger_type in (
-            AlertTriggerType.STATUS_CHANGE,
-            AlertTriggerType.REPEATED_FAILURE,
-        ):
-            return bool(check_result.success)
-        return False
-
-    @staticmethod
-    def _breach_key(alert: Alert) -> str | None:
-        """The state key of the alert's breach, as the log column holds it."""
-        if alert.trigger_type == AlertTriggerType.STATUS_CHANGE:
-            return "status:down"
-        if alert.trigger_type == AlertTriggerType.REPEATED_FAILURE:
-            return "repeated_failure:down"
-        if alert.trigger_type == AlertTriggerType.THRESHOLD:
-            return AlertEvaluationCoreService._fit_state_key(
-                AlertEvaluationCoreService._threshold_key(alert, breached=True)
-            )
-        return None
-
-    @staticmethod
-    async def _note_cleared(
-        db: AsyncSession,
-        alert: Alert,
-        check: Check,
-        check_result: CheckResult,
-    ) -> None:
-        """Record that the check left the breach the alert last notified, when
-        no recovery said so (the alert does not notify on recovery, or the
-        recovery was snoozed): one `suppressed` row per provider, its state key
-        the clear state's. De-duplication reads the alert's last row, so the
-        next breach is then a new state and is announced, not a repeat of the
-        first."""
-        if not AlertEvaluationCoreService._is_clear(alert, check_result):
-            return
-        last = await AlertCRUD.get_last_notification_for_dedup(db, alert.id, check.id)
-        if last is None or last.notification_hash is None:
-            return
-        if last.notification_hash != AlertEvaluationCoreService._breach_key(alert):
-            return
-        # A check several agents run is clear only when each agent's latest
-        # result is: one agent recovering while another still fails ends nothing.
-        latest: dict[object, CheckResult] = {}
-        for result in await AlertEvaluationCoreService._recent_results(
-            db, check, check_result
-        ):
-            latest.setdefault(result.agent_id, result)
-        if not all(
-            AlertEvaluationCoreService._is_clear(alert, result)
-            for result in latest.values()
-        ):
-            return
-        state_key = AlertEvaluationCoreService._compute_alert_state_key(
-            alert, check_result
-        )
-        mappings = await AlertCRUD.list_active_notif_mappings_for_alert(db, alert.id)
-        now = utc_now()
-        await AlertCRUD.add_notification_logs(
-            db,
-            [
-                NotificationLog(
-                    alert_id=alert.id,
-                    notification_provider_id=mapping.notification_provider.id,
-                    check_result_id=check_result.id,
-                    check_result_timestamp=check_result.timestamp,
-                    check_id=check.id,
-                    check_success=check_result.success,
-                    check_latency_ms=check_result.latency_ms,
-                    status=NotificationStatus.SUPPRESSED.value,
-                    error_message="Recovered; recovery not announced",
-                    notification_hash=state_key,
-                    sent_at=now,
-                )
-                for mapping in mappings
-                if mapping.notification_provider.deleted_at is None
-            ],
-        )
 
     @staticmethod
     async def _handle_parent_suppression(

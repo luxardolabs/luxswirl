@@ -61,8 +61,6 @@ def _prior(
         sent_at=sent_at or datetime.now(UTC),
         resend_count=resend_count,
         check_result_id=check_result_id or uuid4(),
-        # No result timestamp: nothing to read for a breach left since.
-        check_result_timestamp=None,
     )
 
 

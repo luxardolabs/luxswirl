@@ -20,11 +20,9 @@ pytestmark = pytest.mark.unit
 
 async def _fires(latency_ms: float | None, config: dict[str, Any]) -> bool:
     result = CheckResult(latency_ms=latency_ms)
-    # An alert that does not notify on recovery reads only the result and its
-    # own config.
-    alert = Alert(id=uuid4(), trigger_config=config, notify_on_recovery=False)
+    # The threshold trigger reads only the alert's id, the result and its config.
     return await AlertEvaluationCoreService._evaluate_threshold(
-        None, alert, None, result, config
+        None, Alert(id=uuid4()), None, result, config
     )
 
 

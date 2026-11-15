@@ -1,9 +1,8 @@
-"""Each outage an alert watches is announced, and so is its end.
+"""A repeated_failure alert announces its outage and its end.
 
 An alert's notifications are de-duplicated by its state key: a fire whose key
-matches the last notification's is a repeat of it. So the key says whether the
-alert is in breach: a recovery has a key of its own, and a second outage after
-a recovery, announced or not, is a new state rather than a repeat of the first.
+matches the last notification's is a repeat of it. A repeated_failure alert's
+outage and recovery have keys of their own, as a status_change alert's do.
 """
 
 from __future__ import annotations
@@ -103,58 +102,12 @@ async def test_a_repeated_failure_alert_announces_its_recovery(
     assert told == [False, True]
 
 
-@pytest.mark.parametrize("notify_on_recovery", [True, False])
 async def test_a_repeated_failure_alert_announces_a_second_outage(
-    db: AsyncSession, sent: list[NotificationContext], notify_on_recovery: bool
-) -> None:
-    told = await _run(
-        db,
-        sent,
-        [DOWN, DOWN, UP, DOWN, DOWN],
-        notify_on_recovery=notify_on_recovery,
-        **REPEATED,
-    )
-
-    expected = [False, True, False] if notify_on_recovery else [False, False]
-    assert told == expected
-
-
-async def test_a_status_change_alert_announces_a_second_outage_without_recoveries(
     db: AsyncSession, sent: list[NotificationContext]
 ) -> None:
-    told = await _run(db, sent, [DOWN, UP, DOWN], notify_on_recovery=False)
-
-    assert told == [False, False]
-
-
-async def test_a_threshold_alert_announces_a_second_breach(
-    db: AsyncSession, sent: list[NotificationContext]
-) -> None:
-    """The check succeeds throughout: a breach is never told as a recovery."""
-    told = await _run(
-        db,
-        sent,
-        [(True, 500.0), (True, 50.0), (True, 500.0)],
-        trigger_type="threshold",
-        trigger_config={"metric": "latency_ms", "operator": ">", "value": 100},
-    )
+    told = await _run(db, sent, [DOWN, DOWN, UP, DOWN, DOWN], **REPEATED)
 
     assert told == [False, True, False]
-
-
-async def test_a_threshold_alert_without_recoveries_announces_a_second_breach(
-    db: AsyncSession, sent: list[NotificationContext]
-) -> None:
-    told = await _run(
-        db,
-        sent,
-        [(True, 500.0), (True, 50.0), (True, 500.0)],
-        trigger_type="threshold",
-        trigger_config={"metric": "latency_ms", "operator": ">", "value": 100},
-        notify_on_recovery=False,
-    )
-
-    assert told == [False, False]
 
 
 async def test_control_a_steady_outage_is_announced_once(
