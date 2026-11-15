@@ -94,21 +94,20 @@ def test_html_sinks_write_only_known_constants(path: Path) -> None:
             assert (path.name, value) in _KNOWN_VALUES, f"{path.name}: {value[:120]}"
 
 
-def test_a_file_loaded_as_a_classic_script_has_no_import() -> None:
-    """An `import` statement is a syntax error there, which kills the whole file."""
+def test_every_first_party_script_loads_as_a_module() -> None:
+    """The app's scripts are ES modules (eslint reads them as modules): loaded as a
+    classic script, an `import` is a syntax error that kills the whole file. Only
+    vendored libraries load as classic scripts."""
     classic = {
         name
         for template in _TEMPLATES.rglob("*.html")
         for name in _CLASSIC_SCRIPT.findall(template.read_text())
-        if "vendor" not in name
     }
 
-    assert classic, (
-        "the scan found no classic script, so it is not looking at the right tags"
+    assert any(name.startswith("vendor/") for name in classic), (
+        "the scan found no classic vendor script, so it is not looking at the right tags"
     )
-    for name in sorted(classic):
-        source = (_JS / name).read_text()
-        assert not re.search(r"^\s*import\s", source, re.M), name
+    assert sorted(name for name in classic if not name.startswith("vendor/")) == []
 
 
 def test_every_first_party_module_is_loaded_by_something() -> None:

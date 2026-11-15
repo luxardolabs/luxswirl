@@ -50,6 +50,6 @@ def test_templates_render_toggle_hooks() -> None:
 def test_a_rendered_toggle_hook_has_a_handler(hook: str) -> None:
     scripts = _app_scripts()
 
-    assert f"data-toggle-{hook}" in scripts or f"dataset.{_dataset_name(hook)}" in scripts, (
-        f"templates render data-toggle-{hook}, and no app script handles it"
-    )
+    assert (
+        f"data-toggle-{hook}" in scripts or f"dataset.{_dataset_name(hook)}" in scripts
+    ), f"templates render data-toggle-{hook}, and no app script handles it"
