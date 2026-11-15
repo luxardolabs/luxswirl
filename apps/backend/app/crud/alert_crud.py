@@ -6,11 +6,22 @@ from collections.abc import Collection, Sequence
 from datetime import datetime, timedelta
 from uuid import UUID
 
-from sqlalchemy import and_, case, delete, func, literal, or_, select, update
+from sqlalchemy import (
+    and_,
+    case,
+    delete,
+    func,
+    literal,
+    or_,
+    select,
+    true,
+    update,
+)
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import aliased, lazyload, selectinload
 
+from app.models.agent_model import Agent
 from app.models.alert_check_mapping_model import AlertCheckMapping
 from app.models.alert_model import Alert
 from app.models.alert_notification_mapping_model import AlertNotificationMapping
@@ -275,24 +286,34 @@ class AlertCRUD:
     ) -> list[CheckResult]:
         """Each of `agent_ids`' newest result for the check up to
         `at_or_before` (with `with_latency`, its newest that has a latency); an
-        agent that never reported it is left out. One read per agent, newest
-        first on the agent's own results, so an agent silent for long is
-        found as fast as one that just reported."""
-        latest: list[CheckResult] = []
-        for agent_id in agent_ids:
-            query = select(CheckResult).where(
-                CheckResult.agent_id == agent_id,
-                CheckResult.check_id == check_id,
-                CheckResult.timestamp <= at_or_before,
-            )
-            if with_latency:
-                query = query.where(CheckResult.latency_ms.is_not(None))
-            found = (
-                await db.execute(query.order_by(CheckResult.timestamp.desc()).limit(1))
-            ).scalar_one_or_none()
-            if found is not None:
-                latest.append(found)
-        return latest
+        agent that never reported it is left out. One statement, a backward
+        index probe per agent, however many agents and however long one has
+        been silent; the results' relations are not loaded."""
+        if not agent_ids:
+            return []
+        conditions = [
+            CheckResult.agent_id == Agent.id,
+            CheckResult.check_id == check_id,
+            CheckResult.timestamp <= at_or_before,
+        ]
+        if with_latency:
+            conditions.append(CheckResult.latency_ms.is_not(None))
+        newest = (
+            select(CheckResult)
+            .where(*conditions)
+            .order_by(CheckResult.timestamp.desc())
+            .limit(1)
+            .lateral("newest_result")
+        )
+        latest = aliased(CheckResult, newest)
+        result = await db.execute(
+            select(latest)
+            .select_from(Agent)
+            .join(newest, true())
+            .where(Agent.id.in_(list(agent_ids)))
+            .options(lazyload("*"))
+        )
+        return list(result.scalars().all())
 
     @staticmethod
     async def checks_with_result_alerts(

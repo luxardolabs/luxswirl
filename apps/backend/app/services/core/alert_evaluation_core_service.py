@@ -411,16 +411,28 @@ class AlertEvaluationCoreService:
         return True
 
     @staticmethod
+    async def _breach_row(
+        db: AsyncSession, alert: Alert, check: Check
+    ) -> NotificationLog | None:
+        """The alert's last row for the check, a parent's outage over it aside,
+        when it was the alert's outage or breach; None otherwise."""
+        last = await AlertCRUD.get_last_notification_for_dedup(
+            db, alert.id, check.id, skip_hashes=(PARENT_DOWN,)
+        )
+        if last is None or last.notification_hash != (
+            AlertEvaluationCoreService._breach_key(alert)
+        ):
+            return None
+        return last
+
+    @staticmethod
     async def _ends_breach(db: AsyncSession, alert: Alert, check: Check) -> bool:
         """Whether the alert's last word on the check, a parent's outage over it
         aside, was its outage or breach: a recovery tells of the end of an
         outage the alert announced, never of one nobody was told of."""
-        last = await AlertCRUD.get_last_notification_for_dedup(
-            db, alert.id, check.id, skip_hashes=(PARENT_DOWN,)
-        )
-        return last is not None and last.notification_hash == (
-            AlertEvaluationCoreService._breach_key(alert)
-        )
+        return (
+            await AlertEvaluationCoreService._breach_row(db, alert, check)
+        ) is not None
 
     @staticmethod
     # dropped-input: one of the _evaluate_* family, dispatched by trigger type on a
@@ -584,9 +596,15 @@ class AlertEvaluationCoreService:
         # A latency breach tells of the result that breaches it most, which
         # may be another agent's than the result that fired it.
         subject = check_result
-        if alert.trigger_type == AlertTriggerType.THRESHOLD and not is_recovery:
-            subject = (view or CheckView.of(check_result)).worst(
-                alert.trigger_config
+        if alert.trigger_type == AlertTriggerType.THRESHOLD:
+            # A breach tells of the latency that breaches it most, a recovery
+            # of the newest one back on the safe side: either may be another
+            # agent's than the result judged (a timeout has no latency).
+            judged = view or CheckView.of(check_result)
+            subject = (
+                judged.newest_clear(alert.trigger_config)
+                if is_recovery
+                else judged.worst(alert.trigger_config)
             ) or check_result
             if subject is not check_result:
                 await AlertCRUD.load_result_check_and_agent(db, subject)
@@ -757,21 +775,31 @@ class AlertEvaluationCoreService:
             ended = view.up
         else:
             return
-        if not ended or not await AlertEvaluationCoreService._ends_breach(
-            db, alert, check
-        ):
+        breach = (
+            await AlertEvaluationCoreService._breach_row(db, alert, check)
+            if ended
+            else None
+        )
+        if breach is None:
             return
         state_key = AlertEvaluationCoreService._compute_alert_state_key(
             alert, check_result, view=view
         )
         mappings = await AlertCRUD.list_active_notif_mappings_for_alert(db, alert.id)
+        providers = [
+            mapping.notification_provider.id
+            for mapping in mappings
+            if mapping.notification_provider.deleted_at is None
+        ]
+        # With no provider to record it against, the outage's own row's: the
+        # end is recorded whether or not anyone could have been told.
         now = utc_now()
         await AlertCRUD.add_notification_logs(
             db,
             [
                 NotificationLog(
                     alert_id=alert.id,
-                    notification_provider_id=mapping.notification_provider.id,
+                    notification_provider_id=provider_id,
                     check_result_id=check_result.id,
                     check_result_timestamp=check_result.timestamp,
                     check_id=check.id,
@@ -782,8 +810,7 @@ class AlertEvaluationCoreService:
                     notification_hash=state_key,
                     sent_at=now,
                 )
-                for mapping in mappings
-                if mapping.notification_provider.deleted_at is None
+                for provider_id in providers or [breach.notification_provider_id]
             ],
         )
 

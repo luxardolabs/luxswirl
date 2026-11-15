@@ -108,6 +108,16 @@ class CheckView:
             return min(breaching, key=lambda r: float(r.latency_ms or 0))
         return max(breaching, key=lambda r: float(r.latency_ms or 0))
 
+    def newest_clear(self, config: dict[str, Any] | None) -> CheckResult | None:
+        """The newest latest result whose latency is on the safe side: what a
+        latency recovery tells of."""
+        safe = [
+            result
+            for result in self.latencies
+            if not latency_breaches(result.latency_ms, config)
+        ]
+        return max(safe, key=lambda r: r.timestamp) if safe else None
+
     def clear(self, config: dict[str, Any] | None) -> bool:
         """Whether every running agent's latest latency is on the safe side."""
         return (
