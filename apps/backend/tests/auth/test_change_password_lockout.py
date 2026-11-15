@@ -337,3 +337,26 @@ async def test_a_user_loaded_before_the_wait_is_judged_as_committed(
     user = await _stored(worker_db, "cp-stale")
     assert user.failed_login_attempts == 5
     assert AuthCoreService.verify_password(RIGHT, user.password_hash)
+
+
+async def test_a_refused_new_password_says_nothing_about_the_current_one(
+    worker_db,
+) -> None:
+    """The new password is held to the policy before the current one is
+    checked: a refused new password posted with a guessed current one answers
+    the same for a right and a wrong guess, changes nothing and counts nothing."""
+    uid = await _seed(worker_db, "cp-oracle", failed=1)
+    auth = AuthCoreService()
+    answers = []
+    for guess in ("wrong", RIGHT):
+        async with worker_db() as s:
+            try:
+                await auth.change_password(s, uid, guess, "short")
+            except ValueError as exc:
+                answers.append(str(exc))
+            await s.commit()
+    assert answers[0] == answers[1], answers
+    assert answers[0] != WRONG
+    user = await _stored(worker_db, "cp-oracle")
+    assert user.failed_login_attempts == 1
+    assert AuthCoreService.verify_password(RIGHT, user.password_hash)

@@ -323,17 +323,20 @@ class WebUsersViewService:
         }
 
     @staticmethod
-    def build_user_create_form_context(
-        *, request: Request, current_user: AuthedUser
+    async def build_user_create_form_context(
+        db: AsyncSession, *, request: Request, current_user: AuthedUser
     ) -> dict[str, Any]:
         """Build context for the user create form panel.
 
-        Form dropdown gets the longer descriptive labels from enum_model.
+        Form dropdown gets the longer descriptive labels from enum_model; the
+        password hint lists the stored password policy's rules.
         """
+        policy = await SettingsCoreService.get_password_policy(db)
         return {
             "current_user": current_user,
             "role_options": options_for(UserRole),
             "create_url": str(request.app.url_path_for("users.create")),
+            "password_requirements": policy.requirements,
         }
 
     @staticmethod

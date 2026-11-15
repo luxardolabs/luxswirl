@@ -383,7 +383,7 @@ New checks inherit these; existing checks are unchanged and users can override p
 - **Require Special Character** (`security.require_special_char`, bool) — Default **false**.
 - **Check Against Common Passwords** (`security.check_common_passwords`, bool) — Default **true**.
 
-These rules hold every password set by any path: the first admin at `/setup` (which also needs at least 12 characters), a user an admin creates or resets (web or admin API), and a change of one's own password. A rule turned off is not enforced; a change applies to the next password set.
+These rules hold every password set by any path: the first admin at `/setup` (which also needs at least 12 characters), a user an admin creates or resets (web or admin API), and a change of one's own password. A rule turned off is not enforced; a change applies to the next password set. Whatever the rules, a password of whitespace alone, or one holding a NUL or a character UTF-8 cannot encode, is refused. The forms that set a password (the change-password page, My Account, Create User) list the rules as they are stored. A password change checks the new password against these rules before the current password, so a refused new password says nothing about the current one and counts no failed attempt.
 
 #### Network Protection (SSRF)
 

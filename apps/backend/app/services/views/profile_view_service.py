@@ -21,6 +21,7 @@ from app.schemas.auth_schema import AuthedUser
 from app.schemas.user_schema import UserUpdate
 from app.services.core.api_token_core_service import ApiTokenCoreService
 from app.services.core.auth_core_service import AuthCoreService
+from app.services.core.settings_core_service import SettingsCoreService
 from app.services.core.user_core_service import UserCoreService
 from app.shared.logger import get_logger
 
@@ -34,8 +35,11 @@ class ProfileViewService:
     async def build_panel_context(
         db: AsyncSession, request: Request, current_user: AuthedUser
     ) -> dict[str, Any]:
-        """Initial-load panel context."""
+        """Initial-load panel context, with the stored password policy's rules
+        as the change-password hint."""
+        policy = await SettingsCoreService.get_password_policy(db)
         return {
+            "password_requirements": policy.requirements,
             **await ProfileViewService.api_tokens_context(db, request, current_user),
             "update_url": str(request.app.url_path_for("profile.update")),
             "change_password_url": str(

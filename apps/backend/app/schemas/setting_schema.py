@@ -16,6 +16,9 @@ from app.models.setting_model import value_type_of
 # `Any`, which is the type-check dodge fw.no_any_typed_service_boundary exists to catch.
 type SettingScalar = str | int | float | bool | list[Any] | dict[str, Any] | None
 
+# The characters `security.require_special_char` asks a password to hold one of.
+PASSWORD_SPECIAL_CHARACTERS = "!@#$%^&*()_+-=[]{}|;:,.<>?"
+
 
 class SettingResponse(BaseModel):
     """Schema for setting response."""
@@ -81,6 +84,25 @@ class PasswordPolicy(BaseModel):
     require_number: bool
     require_special_char: bool
     check_common_passwords: bool
+
+    @property
+    def requirements(self) -> list[str]:
+        """The rules this policy holds a new password to, one line each, as the
+        forms that set a password list them."""
+        lines = [f"At least {self.min_password_length} characters"]
+        if self.require_uppercase:
+            lines.append("At least one uppercase letter")
+        if self.require_lowercase:
+            lines.append("At least one lowercase letter")
+        if self.require_number:
+            lines.append("At least one digit")
+        if self.require_special_char:
+            lines.append(
+                f"At least one special character ({PASSWORD_SPECIAL_CHARACTERS})"
+            )
+        if self.check_common_passwords:
+            lines.append("Not a commonly used password")
+        return lines
 
 
 class CheckDefaults(BaseModel):

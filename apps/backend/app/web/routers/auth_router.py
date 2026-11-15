@@ -207,6 +207,7 @@ async def logout(
 async def change_password_page(
     request: Request,
     user: OptionalUserWeb,
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     required: bool = False,
 ) -> Response:
     """
@@ -223,14 +224,9 @@ async def change_password_page(
     return templates.TemplateResponse(
         request,
         "pages/change_password.html",
-        {
-            "current_user": user,
-            "user": user,
-            "required": required,
-            "error": None,
-            "success": None,
-            "page_title": "Change Password",
-        },
+        await WebAuthViewService.change_password_page_context(
+            db, user, required=required
+        ),
     )
 
 
@@ -267,14 +263,9 @@ async def change_password_submit(
         return templates.TemplateResponse(
             request,
             "pages/change_password.html",
-            {
-                "current_user": user,
-                "user": user,
-                "required": required,
-                "error": "New passwords do not match",
-                "success": None,
-                "page_title": "Change Password",
-            },
+            await WebAuthViewService.change_password_page_context(
+                db, user, required=required, error="New passwords do not match"
+            ),
             status_code=status.HTTP_400_BAD_REQUEST,
         )
 
@@ -309,27 +300,17 @@ async def change_password_submit(
         return templates.TemplateResponse(
             request,
             "pages/change_password.html",
-            {
-                "current_user": user,
-                "user": user,
-                "required": False,
-                "error": None,
-                "success": "Password changed successfully",
-                "page_title": "Change Password",
-            },
+            await WebAuthViewService.change_password_page_context(
+                db, user, required=False, success="Password changed successfully"
+            ),
         )
 
     except ValueError as e:
         return templates.TemplateResponse(
             request,
             "pages/change_password.html",
-            {
-                "current_user": user,
-                "user": user,
-                "required": required,
-                "error": str(e),
-                "success": None,
-                "page_title": "Change Password",
-            },
+            await WebAuthViewService.change_password_page_context(
+                db, user, required=required, error=str(e)
+            ),
             status_code=status.HTTP_400_BAD_REQUEST,
         )

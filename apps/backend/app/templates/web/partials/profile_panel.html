@@ -89,7 +89,7 @@
                         {{ input(name="confirm_password", type="password", placeholder="••••••••", id="confirm_password", required=true, class="input font-mono") }}
                     </div>
                 </div>
-                <p class="text-xs text-dark-text-muted -mt-2">The password policy an admin sets in Settings applies; a refusal names the rule it misses</p>
+                <p class="text-xs text-dark-text-muted -mt-2">{{ password_requirements | join("; ") }}</p>
 
 
                 <!-- Submit Button -->

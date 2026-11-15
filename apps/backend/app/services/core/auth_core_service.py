@@ -28,6 +28,7 @@ from app.crud.user_crud import UserCRUD
 from app.models.session_model import Session
 from app.models.user_model import User
 from app.schemas.auth_schema import CurrentUserResponse, SessionResponse
+from app.schemas.setting_schema import PASSWORD_SPECIAL_CHARACTERS
 from app.services.core.api_token_core_service import ApiTokenCoreService
 from app.services.core.settings_core_service import SettingsCoreService
 from app.shared.logger import get_logger
@@ -87,17 +88,24 @@ class AuthCoreService:
             >>> if not valid:
             >>>     raise ValueError(error)
         """
+        # Before any rule: bcrypt stops at a NUL (so "Ab1\0Ab1\0Ab1" would be
+        # hashed as "Ab1" and pass every rule below), and UTF-8 cannot encode a
+        # lone surrogate. Every path that sets a password comes through here.
+        if not storable_text(password):
+            return False, "Password contains a character that cannot be stored"
+
+        # Whatever the stored policy allows, a password of whitespace alone is
+        # no password.
+        if not password.strip():
+            return False, "Password cannot be blank or whitespace only"
+
         policy = await SettingsCoreService.get_password_policy(db)
 
         min_length = policy.min_password_length
         if len(password) < min_length:
             return False, f"Password must be at least {min_length} characters long"
 
-        # A password is stored as UTF-8, which cannot encode a lone surrogate.
-        try:
-            password_bytes = password.encode()
-        except UnicodeEncodeError:
-            return False, "Password contains a character that cannot be stored"
+        password_bytes = password.encode()
 
         # bcrypt hashes at most 72 bytes; a longer password is refused rather
         # than cut short (a character outside ASCII takes more than one byte).
@@ -117,13 +125,14 @@ class AuthCoreService:
         if policy.require_number and not any(c.isdigit() for c in password):
             return False, "Password must contain at least one digit"
 
-        if policy.require_special_char:
-            special_chars = "!@#$%^&*()_+-=[]{}|;:,.<>?"
-            if not any(c in special_chars for c in password):
-                return (
-                    False,
-                    f"Password must contain at least one special character ({special_chars})",
-                )
+        if policy.require_special_char and not any(
+            c in PASSWORD_SPECIAL_CHARACTERS for c in password
+        ):
+            return (
+                False,
+                "Password must contain at least one special character "
+                f"({PASSWORD_SPECIAL_CHARACTERS})",
+            )
 
         if policy.check_common_passwords and is_common_password(password):
             return False, "Password is too common. Please choose a stronger password"
@@ -620,6 +629,14 @@ class AuthCoreService:
             ValueError: If the user is gone, the current password is incorrect, or the
                 new password doesn't meet complexity requirements
         """
+        # The new password is held to the policy before the current one is
+        # checked, so a policy refusal is the same answer for a right and a
+        # wrong current password: a stolen session cannot use it to test
+        # guesses without changing anything.
+        valid, error_message = await self.validate_password_complexity(db, new_password)
+        if not valid:
+            raise ValueError(error_message)
+
         # Core takes an id and refetches — the web layer's DTO never enters core, so the
         # row mutated below is always a live, session-attached ORM object.
         # The current password is checked as a sign-in checks a password, under
@@ -693,11 +710,6 @@ class AuthCoreService:
         # The right password resets the count, as a successful sign-in does.
         user.failed_login_attempts = 0
         user.locked_until = None
-
-        # Validate new password complexity
-        valid, error_message = await self.validate_password_complexity(db, new_password)
-        if not valid:
-            raise ValueError(error_message)
 
         # Hash new password
         user.password_hash = await self.hash_password_threaded(new_password)

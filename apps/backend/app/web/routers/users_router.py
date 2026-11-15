@@ -98,12 +98,13 @@ async def users_table_partial(
 async def create_user_form(
     request: Request,
     user: AdminUserWeb,
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> HTMLResponse:
     """
     HTMX partial - returns form for creating a new user.
     """
-    context = WebUsersViewService().build_user_create_form_context(
-        request=request, current_user=user
+    context = await WebUsersViewService.build_user_create_form_context(
+        db, request=request, current_user=user
     )
     return templates.TemplateResponse(
         request,

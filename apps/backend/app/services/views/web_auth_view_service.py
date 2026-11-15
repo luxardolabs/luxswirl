@@ -110,6 +110,28 @@ class WebAuthViewService:
         response.delete_cookie(key=cookie, path=settings.security.session_cookie_path)
         return response
 
+    @staticmethod
+    async def change_password_page_context(
+        db: AsyncSession,
+        user: AuthedUser,
+        *,
+        required: bool,
+        error: str | None = None,
+        success: str | None = None,
+    ) -> dict[str, Any]:
+        """The change-password page's context, with the stored password
+        policy's rules listed as the page's requirements."""
+        policy = await SettingsCoreService.get_password_policy(db)
+        return {
+            "current_user": user,
+            "user": user,
+            "required": required,
+            "error": error,
+            "success": success,
+            "page_title": "Change Password",
+            "password_requirements": policy.requirements,
+        }
+
     async def change_password(
         self,
         db: AsyncSession,

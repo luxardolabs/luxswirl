@@ -196,3 +196,116 @@ async def test_change_password_honours_a_stored_require_uppercase_off(
     assert "Password changed successfully" in resp.text
     await db.refresh(user)
     assert AuthCoreService.verify_password(NO_UPPERCASE, user.password_hash)
+
+
+# bcrypt stops at a NUL, so "Ab1\0Ab1\0Ab1" (11 characters, upper, lower and
+# digit) would be stored as a hash that "Ab1" also matches.
+CYCLED = "Ab1\x00Ab1\x00Ab1"
+CYCLED_PREFIX = "Ab1"
+
+
+async def _signed_in(db: AsyncSession, client: AsyncClient) -> User:
+    user = make_user()
+    db.add(user)
+    await db.flush()
+    _, token = await AuthCoreService().create_session(db, user.id)
+    client.cookies.set(settings.security.session_cookie_name, token)
+    return user
+
+
+async def test_the_policy_refuses_a_password_with_a_nul(db: AsyncSession) -> None:
+    valid, error = await AuthCoreService.validate_password_complexity(db, CYCLED)
+    assert valid is False
+    assert error == "Password contains a character that cannot be stored"
+
+
+async def test_profile_change_password_with_nul_cannot_make_a_3_char_password(
+    db: AsyncSession, client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(settings.security, "auth_enabled", True)
+    user = await _signed_in(db, client)
+    resp = await client.post(
+        "/profile/change-password",
+        data={
+            "current_password": "TestPass123!",
+            "new_password": CYCLED,
+            "confirm_password": CYCLED,
+        },
+    )
+    assert resp.status_code < 500, resp.text[:500]
+    assert "cannot be stored" in resp.text
+    await db.refresh(user)
+    assert not AuthCoreService.verify_password(CYCLED_PREFIX, user.password_hash)
+    assert AuthCoreService.verify_password("TestPass123!", user.password_hash)
+
+
+async def test_admin_reset_with_nul_cannot_set_a_3_char_password(
+    db: AsyncSession,
+) -> None:
+    user = make_user()
+    db.add(user)
+    await db.flush()
+    with pytest.raises(ValidationException, match="cannot be stored"):
+        await AuthCoreService().reset_password(db, user.id, CYCLED)
+    assert AuthCoreService.verify_password("TestPass123!", user.password_hash)
+
+
+async def test_relaxed_policy_still_refuses_a_whitespace_only_password(
+    db: AsyncSession,
+) -> None:
+    await _store(db, "security.min_password_length", 6)
+    for key in ("require_uppercase", "require_lowercase", "require_number"):
+        await _store(db, f"security.{key}", False)
+    assert (await AuthCoreService.validate_password_complexity(db, "qwzxkv"))[0]
+    for blank in ("      ", "\t\n    　 "):
+        valid, _ = await AuthCoreService.validate_password_complexity(db, blank)
+        assert valid is False
+    with pytest.raises(ValidationException):
+        await UserCoreService().create_user(
+            db, UserCreate(username="blank-pw", password="      ")
+        )
+
+
+async def test_the_change_password_page_lists_the_stored_policy(
+    db: AsyncSession, client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(settings.security, "auth_enabled", True)
+    await _store(db, "security.min_password_length", 14)
+    await _store(db, "security.require_uppercase", False)
+    await _store(db, "security.require_special_char", True)
+    await _signed_in(db, client)
+
+    page = (await client.get("/change-password")).text
+
+    assert "At least 14 characters" in page
+    assert "At least one special character" in page
+    assert "uppercase" not in page
+    assert "Minimum 8 characters" not in page
+
+
+async def test_the_user_create_form_lists_the_stored_policy(
+    db: AsyncSession, client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(settings.security, "auth_enabled", True)
+    await _store(db, "security.min_password_length", 10)
+    await _store(db, "security.require_number", False)
+    await _signed_in(db, client)
+
+    panel = (await client.get("/settings/users/create-form")).text
+
+    assert "At least 10 characters" in panel
+    assert "At least one uppercase letter" in panel
+    assert "digit" not in panel
+    assert "Min 8 characters" not in panel
+
+
+async def test_the_profile_panel_lists_the_stored_policy(
+    db: AsyncSession, client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(settings.security, "auth_enabled", True)
+    await _store(db, "security.min_password_length", 11)
+    await _signed_in(db, client)
+
+    panel = (await client.get("/profile")).text
+
+    assert "At least 11 characters" in panel
