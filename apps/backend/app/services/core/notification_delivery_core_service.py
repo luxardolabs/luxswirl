@@ -68,13 +68,14 @@ class NotificationDeliveryCoreService:
         limit: int,
         *,
         provider_share: int | None = None,
-        held: Collection[UUID] = (),
+        idle_limit: int = 0,
+        own_ids: Collection[UUID] = (),
     ) -> ClaimedBatch:
         """Claim up to `limit` due rows (`NotificationLogCRUD.claim_due`),
         taken in turn across providers, with at most `provider_share` (all of
         `limit`, by default) in flight for one provider across every server
-        process, and beyond them the first due row of each provider with
-        nothing in flight; never a row in `held`.
+        process, and beyond them the first due row of up to `idle_limit`
+        providers with nothing in flight; never a row in `own_ids`.
 
         A row whose payload this release cannot read is failed, one that is
         no longer to be sent (`_refusal`) is recorded as suppressed, and one
@@ -87,7 +88,8 @@ class NotificationDeliveryCoreService:
             now,
             limit,
             provider_share=provider_share or max(limit, 1),
-            held=held,
+            idle_limit=idle_limit,
+            own_ids=own_ids,
         )
         deliveries: list[ClaimedDelivery] = []
         ended = 0

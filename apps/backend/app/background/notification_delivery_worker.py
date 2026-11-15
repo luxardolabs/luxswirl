@@ -11,12 +11,13 @@ claimed in turn across providers, the one with the fewest attempts in flight
 first; no provider has more than `PROVIDER_SHARE` in flight, counted across
 every server process (its `sending` rows under a live lease); and a provider
 with nothing in flight anywhere is given its first due row even when every
-slot is held, one attempt past the pool's slots for each such provider. So providers whose every
-attempt waits out its timeout leave the others theirs, however many of them
-there are. Several server processes each run one; SKIP LOCKED keeps them off
-each other's rows. A graceful stop hands back the
-rows of the attempts it cuts off, due again at once; a row whose worker died
-mid-delivery is claimed again once its lease lapses.
+slot is held, one attempt past the pool's slots for each such provider (up
+to `IDLE_PROVIDER_EXTRA` a claim). So providers whose every attempt waits out
+its timeout leave the others theirs. Several server processes each run one;
+SKIP LOCKED keeps them off each other's rows. A graceful stop records every
+attempt that ended and hands back the rows of those it cut off, due again at
+once; a row whose worker died mid-delivery is claimed again once its lease
+lapses.
 """
 
 import asyncio
@@ -46,6 +47,9 @@ DELIVERY_SLOTS = 20
 # The most attempts one provider may have in flight, across every server
 # process.
 PROVIDER_SHARE = 10
+# The most attempts one claim starts past the free slots, one each for
+# providers with nothing in flight.
+IDLE_PROVIDER_EXTRA = 20
 _POLL_IDLE_SECONDS = 1.0
 _POLL_ERROR_BACKOFF_SECONDS = 5.0
 
@@ -90,7 +94,8 @@ class DeliveryPool:
                 provider_share=PROVIDER_SHARE,
                 # Its own attempts, recorded or not: never claimed twice here,
                 # even once a record that kept failing outlasts the lease.
-                held=[claimed.log_id for claimed in self._in_flight.values()],
+                idle_limit=IDLE_PROVIDER_EXTRA,
+                own_ids=[claimed.log_id for claimed in self._in_flight.values()],
             )
         for claimed in batch.deliveries:
             attempt = asyncio.create_task(

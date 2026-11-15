@@ -25,7 +25,7 @@ from app.services.core.notification_delivery_core_service import (
     NotificationDeliveryCoreService,
 )
 from fixtures.factories import make_notification_provider
-from notifications.test_outbox_delivery_rules import _alert_with, _Hooks, _queue
+from fixtures.outbox_hooks import WebhookHooks, alert_with, queue_for
 from sqlalchemy.ext.asyncio import AsyncSession
 
 pytestmark = pytest.mark.integration
@@ -82,12 +82,12 @@ async def _record_fails_then_database_returns(
     """One notification; its attempt is delivered, then its record fails (the
     database unreachable) and keeps failing for `outage`. The worker loop's
     next pass then runs as it does: fill first, then settle."""
-    hook = _Hooks()
+    hook = WebhookHooks()
     hook.install(monkeypatch)
     url = "https://p.test/h"
     provider = make_notification_provider(config={"post_url": url})
-    alert_id = await _alert_with(worker_db, [provider])
-    await _queue(worker_db, alert_id, [provider.id], "down")
+    alert_id = await alert_with(worker_db, [provider])
+    await queue_for(worker_db, alert_id, [provider.id], "down")
     start = datetime_utils.utc_now() + timedelta(seconds=1)
 
     original = NotificationDeliveryCoreService.record

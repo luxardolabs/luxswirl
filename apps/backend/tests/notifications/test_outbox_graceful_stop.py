@@ -16,13 +16,13 @@ from app.services.core.notification_delivery_core_service import (
 )
 from fixtures.factories import make_notification_provider
 from fixtures.outbox import deliver_committed
-from notifications.test_outbox_delivery_rules import _alert_with, _Hooks, _queue
+from fixtures.outbox_hooks import WebhookHooks, alert_with, queue_for
 
 pytestmark = pytest.mark.integration
 
 
 async def _stop_while_recording(
-    worker_db: Any, monkeypatch: pytest.MonkeyPatch, hook: _Hooks
+    worker_db: Any, monkeypatch: pytest.MonkeyPatch, hook: WebhookHooks
 ) -> list[str]:
     """Two providers, one notification each; the running worker is stopped
     while it records the first ended attempt (its database round trip in
@@ -30,8 +30,8 @@ async def _stop_while_recording(
     delivers whatever is due."""
     urls = ["https://one.test/h", "https://two.test/h"]
     providers = [make_notification_provider(config={"post_url": u}) for u in urls]
-    alert_id = await _alert_with(worker_db, providers)
-    await _queue(worker_db, alert_id, [p.id for p in providers], "down")
+    alert_id = await alert_with(worker_db, providers)
+    await queue_for(worker_db, alert_id, [p.id for p in providers], "down")
 
     original = NotificationDeliveryCoreService.record
     recording = asyncio.Event()
@@ -62,7 +62,7 @@ async def test_a_stop_while_recording_sends_nothing_twice(
 ) -> None:
     """Both providers answered before the stop: neither notification may go
     out twice when the worker restarts."""
-    hook = _Hooks()
+    hook = WebhookHooks()
     hook.install(monkeypatch)
     urls = await _stop_while_recording(worker_db, monkeypatch, hook)
     assert [len(hook.to(u)) for u in urls] == [1, 1], hook.sent
@@ -73,16 +73,16 @@ async def test_control_stop_hands_back_an_attempt_cut_off_mid_send(
 ) -> None:
     """Control: an attempt truly cut off by the stop is handed back and sent
     once by the restarted worker."""
-    hanging = _Hooks(slow={"https://slow.test/h"}, delay=3600)
+    hanging = WebhookHooks(slow={"https://slow.test/h"}, delay=3600)
     hanging.install(monkeypatch)
     provider = make_notification_provider(config={"post_url": "https://slow.test/h"})
-    alert_id = await _alert_with(worker_db, [provider])
-    await _queue(worker_db, alert_id, [provider.id], "down")
+    alert_id = await alert_with(worker_db, [provider])
+    await queue_for(worker_db, alert_id, [provider.id], "down")
     worker_module.start_notification_delivery_worker()
     await asyncio.wait_for(hanging.entered.wait(), 10)
     await worker_module.stop_notification_delivery_worker()
 
-    answering = _Hooks()
+    answering = WebhookHooks()
     answering.install(monkeypatch)
     await deliver_committed()
     assert answering.to("https://slow.test/h") == ["down"]

@@ -60,11 +60,12 @@ class NotificationLogCRUD:
         limit: int,
         *,
         provider_share: int,
-        held: Collection[UUID] = (),
+        idle_limit: int,
+        own_ids: Collection[UUID] = (),
     ) -> list[NotificationLog]:
-        """Up to `limit` rows due for delivery, and the first due row of each
-        provider with nothing in flight beyond them, locked FOR UPDATE SKIP
-        LOCKED.
+        """Up to `limit` rows due for delivery, and beyond them the first due
+        row of up to `idle_limit` providers with nothing in flight, locked
+        FOR UPDATE SKIP LOCKED.
 
         Due: pending or retrying with `next_attempt_at` reached, or sending
         with its lease lapsed (its worker stopped). A row is held back while
@@ -80,10 +81,10 @@ class NotificationLogCRUD:
         than `provider_share` in flight in all, so providers whose every
         attempt waits out its timeout never fill the slots between them. A
         provider with nothing in flight is given its first row whether or not
-        a slot is free, so one that comes due while every slot is held, by
-        however many providers that never answer, is never left waiting for
-        one to free. A row in `held` (this process's own attempts, still
-        unrecorded) is never claimed, whatever its lease says.
+        a slot is free, so one that comes due while every slot is held by
+        providers that never answer is not left waiting for one to free. A
+        row in `own_ids` (this process's own attempts, still unrecorded) is
+        never claimed, whatever its lease says.
         """
         earlier = aliased(NotificationLog)
         awaiting = [
@@ -136,7 +137,7 @@ class NotificationLogCRUD:
                 )
                 .label("rank"),
             )
-            .where(due, ~held_back, NotificationLog.id.not_in(list(held)))
+            .where(due, ~held_back, NotificationLog.id.not_in(list(own_ids)))
             .subquery()
         )
         held = func.coalesce(in_flight.c.held, 0)
@@ -159,16 +160,22 @@ class NotificationLogCRUD:
             .where(turn <= provider_share)
             .subquery()
         )
-        eligible = select(placed.c.id).where(
-            or_(
-                placed.c.position <= limit,
-                and_(placed.c.held == 0, placed.c.rank == 1),
-            ),
+        eligible = (
+            select(placed.c.id, placed.c.position)
+            .where(
+                or_(
+                    placed.c.position <= limit,
+                    and_(placed.c.held == 0, placed.c.rank == 1),
+                ),
+            )
+            .subquery()
         )
         result = await db.execute(
             select(NotificationLog)
-            .where(NotificationLog.id.in_(eligible))
-            .order_by(NotificationLog.decision_seq)
+            .join(eligible, eligible.c.id == NotificationLog.id)
+            # The slots' rows first, then idle providers' by their place.
+            .order_by(eligible.c.position)
+            .limit(limit + idle_limit)
             .with_for_update(skip_locked=True, of=NotificationLog)
             # The rows as locked now, over any copy the session holds.
             .execution_options(populate_existing=True)

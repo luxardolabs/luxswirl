@@ -31,107 +31,26 @@ from app.db import worker_session
 from app.models.alert_notification_mapping_model import AlertNotificationMapping
 from app.models.check_model import Check
 from app.models.notification_log_model import NotificationLog
-from app.notifications.providers.base import NotificationContext
-from app.notifications.providers.webhook import WebhookNotificationProvider
-from app.services.core.notification_core_service import NotificationCoreService
 from app.services.core.notification_delivery_core_service import (
     CLAIM_LEASE,
     NotificationDeliveryCoreService,
 )
 from fixtures.factories import (
     make_agent,
-    make_alert,
     make_alert_check_mapping,
     make_alert_notification_mapping,
     make_check,
     make_notification_provider,
 )
 from fixtures.outbox import deliver_committed
+from fixtures.outbox_hooks import (
+    WebhookHooks,
+    alert_with,
+    queue_for,
+)
 from sqlalchemy import delete, select, update
 
 pytestmark = pytest.mark.integration
-
-
-def _context(name: str) -> NotificationContext:
-    return NotificationContext(
-        check_name=name,
-        check_type="ping",
-        target="192.0.2.1",
-        agent_id=None,
-        agent_name="a",
-        status="error",
-        success=False,
-        latency_ms=1.0,
-        timestamp=utc_now().isoformat(),
-        alert_name="al",
-    )
-
-
-class _Hooks:
-    """Records each send per provider url, with when it was made; a url in
-    `slow` waits `delay` seconds and then fails, as a blackholed endpoint
-    does."""
-
-    def __init__(self, slow: set[str] | None = None, delay: float = 0.0) -> None:
-        self.slow = slow or set()
-        self.delay = delay
-        self.sent: list[tuple[str, str, float]] = []
-        self.entered = asyncio.Event()
-
-    def install(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        hook = self
-
-        async def send(self: Any, context: NotificationContext) -> bool:
-            url = self.config["post_url"]
-            hook.entered.set()
-            if url in hook.slow:
-                await asyncio.sleep(hook.delay)
-                raise TimeoutError("endpoint did not answer")
-            hook.sent.append((url, context.check_name, time.monotonic()))
-            return True
-
-        monkeypatch.setattr(WebhookNotificationProvider, "send", send)
-
-    def to(self, url: str) -> list[str]:
-        return [name for sent_to, name, _ in self.sent if sent_to == url]
-
-
-async def _alert_with(worker_db: Any, providers: list[Any]) -> UUID:
-    async with worker_db() as s:
-        made = make_alert()
-        s.add_all([*providers, made])
-        await s.flush()
-        s.add_all(
-            make_alert_notification_mapping(
-                alert_id=made.id, notification_provider_id=p.id
-            )
-            for p in providers
-        )
-        await s.commit()
-    alert_id: UUID = made.id
-    return alert_id
-
-
-async def _queue(
-    worker_db: Any,
-    alert_id: UUID,
-    provider_ids: list[UUID],
-    name: str,
-    check_id: UUID | None = None,
-) -> list[UUID]:
-    async with worker_db() as s:
-        rows = await NotificationCoreService.queue_notifications(
-            s,
-            provider_ids,
-            _context(name),
-            alert_id=alert_id,
-            check_result_id=None,
-            check_result_timestamp=None,
-            check_id=check_id,
-        )
-        ids = [row.id for row in rows]
-        await s.commit()
-    return ids
 
 
 async def _rows(worker_db: Any, ids: list[UUID]) -> list[tuple[str, str | None]]:
@@ -153,15 +72,15 @@ async def test_rate_limit_holds_for_a_backlog_decided_before_the_window(
     """A provider limited to one notification per 10 minutes, five waiting
     since they were decided 20 minutes ago (the worker was down): delivered
     now, one goes out and the rest are rate limited."""
-    hook = _Hooks()
+    hook = WebhookHooks()
     hook.install(monkeypatch)
     provider = make_notification_provider(
         rate_limit_count=1, rate_limit_window_minutes=10
     )
-    alert_id = await _alert_with(worker_db, [provider])
+    alert_id = await alert_with(worker_db, [provider])
     ids: list[UUID] = []
     for n in range(5):
-        ids += await _queue(worker_db, alert_id, [provider.id], f"c{n}")
+        ids += await queue_for(worker_db, alert_id, [provider.id], f"c{n}")
     decided = utc_now() - timedelta(minutes=20)
     async with worker_db() as s:
         await s.execute(
@@ -203,14 +122,14 @@ async def _healthy_beside_dead(
     provider's 30 were sent, and how long the last took."""
     good_url = "https://good.example.test/hook"
     dead_urls = [f"https://dead{n}.example.test/hook" for n in range(dead_count)]
-    hook = _Hooks(slow=set(dead_urls), delay=2.0)
+    hook = WebhookHooks(slow=set(dead_urls), delay=2.0)
     hook.install(monkeypatch)
     dead = [make_notification_provider(config={"post_url": u}) for u in dead_urls]
     good = make_notification_provider(config={"post_url": good_url})
-    alert_id = await _alert_with(worker_db, [*dead, good])
+    alert_id = await alert_with(worker_db, [*dead, good])
     providers = [*(p.id for p in dead), good.id]
     for n, check_id in enumerate(await _checks_on(worker_db, alert_id, 30)):
-        await _queue(worker_db, alert_id, providers, f"c{n}", check_id)
+        await queue_for(worker_db, alert_id, providers, f"c{n}", check_id)
 
     started = time.monotonic()
     await deliver_committed()
@@ -247,11 +166,11 @@ async def test_one_unreadable_payload_does_not_stop_every_other_delivery(
     another release, a field missing) fails on its own; every other row is
     still delivered."""
     url = "https://other.example.test/hook"
-    hook = _Hooks()
+    hook = WebhookHooks()
     hook.install(monkeypatch)
     provider = make_notification_provider(config={"post_url": url})
-    alert_id = await _alert_with(worker_db, [provider])
-    unreadable = await _queue(worker_db, alert_id, [provider.id], "old")
+    alert_id = await alert_with(worker_db, [provider])
+    unreadable = await queue_for(worker_db, alert_id, [provider.id], "old")
     async with worker_db() as s:
         row = await s.get(NotificationLog, unreadable[0])
         assert row is not None and row.payload is not None
@@ -260,9 +179,9 @@ async def test_one_unreadable_payload_does_not_stop_every_other_delivery(
         row.payload = legacy
         await s.commit()
     other = make_notification_provider(config={"post_url": url})
-    other_alert = await _alert_with(worker_db, [other])
+    other_alert = await alert_with(worker_db, [other])
     for n in range(3):
-        await _queue(worker_db, other_alert, [other.id], f"unrelated{n}")
+        await queue_for(worker_db, other_alert, [other.id], f"unrelated{n}")
 
     await deliver_committed()
 
@@ -275,10 +194,10 @@ async def _edited_before_delivery(
 ) -> tuple[list[str], list[tuple[str, str | None]]]:
     """Queue one notification about a mapped check, apply `edit`, deliver."""
     url = "https://team.example.test/hook"
-    hook = _Hooks()
+    hook = WebhookHooks()
     hook.install(monkeypatch)
     provider = make_notification_provider(config={"post_url": url})
-    alert_id = await _alert_with(worker_db, [provider])
+    alert_id = await alert_with(worker_db, [provider])
     async with worker_db() as s:
         agent = make_agent()
         s.add(agent)
@@ -288,7 +207,7 @@ async def _edited_before_delivery(
         await s.flush()
         s.add(make_alert_check_mapping(alert_id=alert_id, check_id=check.id))
         await s.commit()
-    ids = await _queue(worker_db, alert_id, [provider.id], "svc", check.id)
+    ids = await queue_for(worker_db, alert_id, [provider.id], "svc", check.id)
     async with worker_db() as s:
         if edit == "unmap_provider":
             await AlertCRUD.replace_provider_mappings(s, alert_id, [])
@@ -375,13 +294,13 @@ async def test_cut_off_delivery_is_not_rate_limited_by_itself(
     which hands the row back; claimed again at once, the row is not counted
     against its own limit, and it is sent."""
     url = "https://team.example.test/hook"
-    hanging = _Hooks(slow={url}, delay=3600)
+    hanging = WebhookHooks(slow={url}, delay=3600)
     hanging.install(monkeypatch)
     provider = make_notification_provider(
         config={"post_url": url}, rate_limit_count=1, rate_limit_window_minutes=10
     )
-    alert_id = await _alert_with(worker_db, [provider])
-    ids = await _queue(worker_db, alert_id, [provider.id], "svc")
+    alert_id = await alert_with(worker_db, [provider])
+    ids = await queue_for(worker_db, alert_id, [provider.id], "svc")
     worker = asyncio.create_task(deliver_due_notifications())
     await asyncio.wait_for(hanging.entered.wait(), 10)
     worker.cancel()
@@ -389,7 +308,7 @@ async def test_cut_off_delivery_is_not_rate_limited_by_itself(
         await worker
     assert [status for status, _ in await _rows(worker_db, ids)] == ["retrying"]
 
-    answering = _Hooks()
+    answering = WebhookHooks()
     answering.install(monkeypatch)
     await deliver_due_notifications()
 
@@ -403,7 +322,7 @@ async def test_a_row_the_stop_could_not_hand_back_is_claimed_once_its_lease_laps
     """A worker that dies mid-attempt hands nothing back: its row stays
     `sending` until the lease lapses, then is claimed again and sent."""
     url = "https://team.example.test/hook"
-    hanging = _Hooks(slow={url}, delay=3600)
+    hanging = WebhookHooks(slow={url}, delay=3600)
     hanging.install(monkeypatch)
 
     async def unreachable(*_: object) -> int:
@@ -411,8 +330,8 @@ async def test_a_row_the_stop_could_not_hand_back_is_claimed_once_its_lease_laps
 
     monkeypatch.setattr(NotificationDeliveryCoreService, "release", unreachable)
     provider = make_notification_provider(config={"post_url": url})
-    alert_id = await _alert_with(worker_db, [provider])
-    ids = await _queue(worker_db, alert_id, [provider.id], "svc")
+    alert_id = await alert_with(worker_db, [provider])
+    ids = await queue_for(worker_db, alert_id, [provider.id], "svc")
     worker = asyncio.create_task(deliver_due_notifications())
     await asyncio.wait_for(hanging.entered.wait(), 10)
     worker.cancel()
@@ -420,7 +339,7 @@ async def test_a_row_the_stop_could_not_hand_back_is_claimed_once_its_lease_laps
         await worker
     assert [status for status, _ in await _rows(worker_db, ids)] == ["sending"]
 
-    answering = _Hooks()
+    answering = WebhookHooks()
     answering.install(monkeypatch)
     assert await deliver_due_notifications() == 0
     await deliver_due_notifications(now=utc_now() + CLAIM_LEASE + timedelta(seconds=1))
@@ -435,9 +354,9 @@ async def _dead_backlog(worker_db: Any, dead_count: int) -> UUID:
         make_notification_provider(config={"post_url": f"https://dead{n}.test/h"})
         for n in range(dead_count)
     ]
-    alert_id = await _alert_with(worker_db, dead)
+    alert_id = await alert_with(worker_db, dead)
     for n, check_id in enumerate(await _checks_on(worker_db, alert_id, 30)):
-        await _queue(worker_db, alert_id, [p.id for p in dead], f"c{n}", check_id)
+        await queue_for(worker_db, alert_id, [p.id for p in dead], f"c{n}", check_id)
     return alert_id
 
 
@@ -447,7 +366,9 @@ async def test_a_provider_with_nothing_in_flight_has_a_slot_dead_ones_cannot_tak
     """Two blackholes take every slot while nothing else is due. A
     notification for a third provider then comes due: the pool claims it at
     once, one attempt past its slots, not after a dead attempt times out."""
-    hook = _Hooks(slow={"https://dead0.test/h", "https://dead1.test/h"}, delay=3600)
+    hook = WebhookHooks(
+        slow={"https://dead0.test/h", "https://dead1.test/h"}, delay=3600
+    )
     hook.install(monkeypatch)
     alert_id = await _dead_backlog(worker_db, 2)
     pool = DeliveryPool(worker_session)
@@ -465,7 +386,7 @@ async def test_a_provider_with_nothing_in_flight_has_a_slot_dead_ones_cannot_tak
             )
             await s.commit()
         [check_id] = await _checks_on(worker_db, alert_id, 1)
-        await _queue(worker_db, alert_id, [good.id], "late", check_id)
+        await queue_for(worker_db, alert_id, [good.id], "late", check_id)
 
         good_taken = await pool.fill()
         await pool.settle(timeout=5)
@@ -483,7 +404,7 @@ async def test_a_providers_share_holds_across_server_processes(
     """Two server processes (two pools) and one blackhole with a backlog:
     the provider's share counts what every process has in flight, so the
     second process claims none of it."""
-    hook = _Hooks(slow={"https://dead0.test/h"}, delay=3600)
+    hook = WebhookHooks(slow={"https://dead0.test/h"}, delay=3600)
     hook.install(monkeypatch)
     await _dead_backlog(worker_db, 1)
     first = DeliveryPool(worker_session)
@@ -510,7 +431,7 @@ async def _late(worker_db: Any, alert_id: UUID, url: str, name: str) -> None:
         )
         await s.commit()
     [check_id] = await _checks_on(worker_db, alert_id, 1)
-    await _queue(worker_db, alert_id, [provider.id], name, check_id)
+    await queue_for(worker_db, alert_id, [provider.id], name, check_id)
 
 
 async def test_no_number_of_dead_providers_holds_a_healthy_one_behind_them(
@@ -520,7 +441,7 @@ async def test_no_number_of_dead_providers_holds_a_healthy_one_behind_them(
     with nothing in flight and each starts its first attempt; a healthy
     provider coming due after them is still claimed at once."""
     dead = [f"https://dead{n}.test/h" for n in range(4)]
-    hook = _Hooks(slow=set(dead), delay=3600)
+    hook = WebhookHooks(slow=set(dead), delay=3600)
     hook.install(monkeypatch)
     alert_id = await _dead_backlog(worker_db, 2)
     pool = DeliveryPool(worker_session)
@@ -545,14 +466,14 @@ async def test_a_graceful_stop_leaves_nothing_counted_in_flight(
     """A provider's share is in flight when the worker stops: the stop hands
     the rows back, so the restarted process claims the provider's rows at
     once, not after the lease lapses."""
-    hanging = _Hooks(slow={"https://dead0.test/h"}, delay=3600)
+    hanging = WebhookHooks(slow={"https://dead0.test/h"}, delay=3600)
     hanging.install(monkeypatch)
     await _dead_backlog(worker_db, 1)
     before = DeliveryPool(worker_session)
     assert await before.fill() == PROVIDER_SHARE
     await before.cancel()
 
-    answering = _Hooks()
+    answering = WebhookHooks()
     answering.install(monkeypatch)
     restarted = DeliveryPool(worker_session)
     try:
@@ -562,3 +483,25 @@ async def test_a_graceful_stop_leaves_nothing_counted_in_flight(
         await restarted.cancel()
 
     assert taken == PROVIDER_SHARE
+
+
+async def test_a_claim_takes_no_more_idle_providers_than_its_bound(
+    worker_db: Any,
+) -> None:
+    """Three providers with nothing in flight, one row due each, and no free
+    slot: a claim bound to two idle providers takes two, the third waits."""
+    providers = [
+        make_notification_provider(config={"post_url": f"https://idle{n}.test/h"})
+        for n in range(3)
+    ]
+    alert_id = await alert_with(worker_db, providers)
+    for n, check_id in enumerate(await _checks_on(worker_db, alert_id, 3)):
+        await queue_for(worker_db, alert_id, [providers[n].id], f"c{n}", check_id)
+
+    async with worker_db() as s:
+        bounded = await NotificationDeliveryCoreService.claim_due(
+            s, utc_now(), 0, idle_limit=2
+        )
+        await s.rollback()
+
+    assert len(bounded.deliveries) == 2
