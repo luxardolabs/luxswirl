@@ -1,0 +1,75 @@
+# The whole-platform adversarial audit's record (/adversarial-audit, luxarch adversarial-audit-skill).
+# [profile] is the owner's statement of what an attacker wants here; [slices.*] records what was attacked.
+
+[profile]
+written = "2026-11-14"
+commit = "154f58e3"
+crown_jewels = [
+  "code execution on an agent host: authoring, changing, moving or enabling a synthetic check (Python run by exec()) without being an admin, or getting past the script's AST validation",
+  "credentials held at rest: check targets and configs (database connection strings, HTTP auth headers, DNS and API secrets), notification provider configs (webhook URLs, SMTP and Home Assistant secrets), and the field-encryption key that protects them",
+  "agent identity: agent keys, recovery secrets and registration keys, which let a party register, impersonate or recover an agent and read every check config it is sent",
+  "accounts: user passwords and sessions, lsw_ API tokens and their scopes, the metrics bearer token, and the admin role itself (first-run setup, user management, role changes)",
+  "monitoring integrity: forged, suppressed or misattributed check results, heartbeats or job results that hide an outage, silence an alert, or raise false ones",
+  "the server's network position: any path that makes the server or an agent connect where the operator did not allow (SSRF via checks, notification providers, bulk preview, artifacts)",
+]
+actors = [
+  "anonymous visitors: /login, the first-run setup wizard, public status pages (/status/{slug}), /health, /api, /static, /metrics when no token is set",
+  "signed-in viewers, editors and admins of the web UI (one organisation; roles, not tenants)",
+  "admin API callers holding an lsw_ token whose scopes narrow its user's role",
+  "MCP clients holding an lsw_ token (/mcp, 23 tools)",
+  "agents: approved agents with their key, pending agents with their recovery secret, and anyone holding a registration key",
+  "the targets the agents check, whose responses (bodies, headers, DNS records, query rows, screenshots, traces) flow back as results and artifacts shown in the UI",
+  "a peer on the server's network that can reach it directly or forge X-Forwarded-For / Host",
+]
+boundaries = [
+  "check results, heartbeats and job results posted by agents: response_data, metrics, errors and scan hosts rendered to every signed-in user",
+  "artifact uploads from agents (screenshots, Playwright traces) and their download and trace viewer",
+  "synthetic check scripts (exec() on the agent, validated by AST)",
+  "outbound fetches: check targets, webhook and Home Assistant providers, SMTP, the bulk preview probe",
+  "check import (JSON file), bulk create and network-scan-to-checks (maintenance jobs that hold secrets in encrypted params)",
+  "request metadata used for trust: X-Forwarded-For (rate-limit keys, audit addresses), Host, Origin (same-origin guard)",
+  "MCP request bodies and tool arguments, and the audit rows written from them",
+  "log lines and audit rows, which must carry no credential (log_redaction.scrub, credential_mask)",
+]
+hot_spots = [
+  { path = "apps/backend/app/mcp/server.py", why = "the sweep cannot read MCPAuthMiddleware, so every MCP tool's auth is unknown; four MCP breaks are already open (LUXSWIRL-544..547)" },
+  { path = "apps/backend/app/core/synthetic_security.py", why = "the only control between a synthetic script and code execution on the agent host" },
+  { path = "apps/backend/app/api/v1/routers/agent_router.py", why = "registration, key recovery and heartbeat: every agent credential is issued or proved here, and pending agents reach it with a recovery secret" },
+  { path = "apps/backend/app/services/core/agent_core_service.py", why = "agent approval, revoke, regenerate and synthetic placement rules (who may move a synthetic check onto an agent)" },
+  { path = "apps/backend/app/services/core/auth_core_service.py", why = "sign-in, lockout and password change; two race fixes in the last week (LUXSWIRL-446, LUXSWIRL-541)" },
+  { path = "apps/backend/app/web/routers/admin_bootstrap_router.py", why = "anonymous first-run setup creates the first admin" },
+  { path = "apps/backend/app/web/routers/status_pages_router.py", why = "the only anonymous pages that render monitoring data" },
+  { path = "apps/backend/app/core/credential_mask.py", why = "what a viewer, /metrics and the logs see of every credential; missed 16 forms before (LUXSWIRL-481)" },
+  { path = "apps/backend/app/core/target_origin.py", why = "a viewer's view of a target, and the Prometheus target label" },
+  { path = "apps/shared/ssrf.py", why = "every outbound address judgment for checks, providers and the preview" },
+  { path = "apps/backend/app/notifications/providers/_vetted_http.py", why = "webhook and Home Assistant posting, with DNS pinning" },
+  { path = "apps/backend/app/api/v1/routers/artifact_router.py", why = "binary uploads from agents, later served to editors" },
+  { path = "apps/backend/app/core/request_helpers.py", why = "the client address behind every rate limit and audit row (X-Forwarded-For trust)" },
+]
+out_of_scope = [
+  { path = "apps/agent/app/checks/synthetic.py", why = "an admin running code on an agent is the feature (SECURITY.md); only a non-admin reaching it, or a script getting past the AST validation, is in scope" },
+  { path = "apps/backend/app/web/routers/settings_router.py#logo-demo", why = "a static design page with no data" },
+  { path = "tenancy", why = "single organisation by design (SECURITY.md: not multi-tenant); role boundaries between viewer, editor and admin are in scope, cross-tenant is not" },
+]
+history = [
+  "OWASP API Top 10 pre-publish audit, 13 findings (LUXSWIRL-190)",
+  "mask_credentials missed 16 credential forms, read by viewers and unauthenticated /metrics (LUXSWIRL-481)",
+  "a MySQL credential exposed in a tracked checks cache; rotated and history rewritten (LUXSWIRL-532)",
+  "X-Forwarded-For forgeable from any private peer, a fresh rate-limit bucket per request (LUXSWIRL-431)",
+  "SSRF: webhook re-resolution, IPv6-mapped IPv4, unix sockets, cloud metadata ranges (LUXSWIRL-504, 505, 510)",
+  "viewers downloading raw traces and screenshots (LUXSWIRL-484); job errors and results unmasked to viewers (LUXSWIRL-485)",
+  "sign-in and password change racing a reset or unlock (LUXSWIRL-446, LUXSWIRL-541)",
+  "MCP: unbounded queued calls and lost audit rows (LUXSWIRL-502); open: wrong-token burst past the limit, body read before the in-flight check, IPv6 not folded to /64, unbounded audit row (LUXSWIRL-544..547)",
+  "agent-protocol adversarial pass, 8 breaks fixed (LUXSWIRL-294)",
+]
+
+[profile.surface]   # copied verbatim from the sweep's `surface:` line (backend target; the agent target is all zero)
+routes = 248
+anon = 1
+money = 0
+credential = 25
+upload = 11
+webhook = 0
+mounts = 1
+jobs = 37
+tools = 23

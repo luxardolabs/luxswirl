@@ -152,3 +152,6 @@ Makefile.local
 # Claude Code hook session state (luxarch --emit hooks)
 .claude/.luxpm-path-searches.json
 .claude/.luxpm-hold-notices.json
+
+# Local reproductions from /adversarial-audit runs (the issues carry the proof)
+/.adversarial-audit/
