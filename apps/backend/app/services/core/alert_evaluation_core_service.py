@@ -101,6 +101,9 @@ class AlertEvaluationCoreService:
                         await AlertEvaluationCoreService._fire_alert(
                             db, alert, check, check_result
                         )
+                    await AlertEvaluationCoreService._note_cleared(
+                        db, alert, check, check_result
+                    )
             except Exception:
                 logger.exception(
                     "Alert evaluation failed",
@@ -422,23 +425,26 @@ class AlertEvaluationCoreService:
         config: dict[str, Any],
     ) -> bool:
         """Evaluate threshold trigger: fires while the latency meets the
-        comparison, and once on the safe side again (a recovery) when the
-        alert's last word for the check was that breach and it notifies on
-        recovery."""
+        comparison, and on the first result back on the safe side (a
+        recovery) when it notifies on recovery."""
         if AlertEvaluationCoreService._threshold_breached(alert, check_result):
             return True
         if not alert.notify_on_recovery or check_result.latency_ms is None:
             return False
+        # A recovery tells of the end of a breach: the result before this one
+        # breached, and the alert notified the check (as for status_change).
+        recent = await AlertCRUD.get_recent_results_for_check(
+            db, check.id, 2, at_or_before=check_result.timestamp
+        )
+        # post-db-filter: the read is LIMIT 2; this asks for the one before
+        if len(recent) < 2 or not AlertEvaluationCoreService._threshold_breached(
+            alert, recent[1]
+        ):
+            return False
         last_notification = await AlertCRUD.get_last_notification_for_dedup(
             db, alert.id, check.id
         )
-        return (
-            last_notification is not None
-            and last_notification.notification_hash
-            == AlertEvaluationCoreService._fit_state_key(
-                AlertEvaluationCoreService._threshold_key(alert, breached=True)
-            )
-        )
+        return last_notification is not None
 
     @staticmethod
     async def _evaluate_repeated_failure(
@@ -717,6 +723,85 @@ class AlertEvaluationCoreService:
         return len(rows)
 
     @staticmethod
+    def _is_clear(alert: Alert, check_result: CheckResult) -> bool:
+        """Whether the result is on the clear side of a breach alert: a success
+        for a failure alert, a latency on the safe side for a threshold one (a
+        result with no latency, a timeout, is neither)."""
+        if alert.trigger_type == AlertTriggerType.THRESHOLD:
+            return (
+                check_result.latency_ms is not None
+                and AlertEvaluationCoreService._threshold_value(alert) is not None
+                and not AlertEvaluationCoreService._threshold_breached(
+                    alert, check_result
+                )
+            )
+        if alert.trigger_type in (
+            AlertTriggerType.STATUS_CHANGE,
+            AlertTriggerType.REPEATED_FAILURE,
+        ):
+            return bool(check_result.success)
+        return False
+
+    @staticmethod
+    def _breach_key(alert: Alert) -> str | None:
+        """The state key of the alert's breach, as the log column holds it."""
+        if alert.trigger_type == AlertTriggerType.STATUS_CHANGE:
+            return "status:down"
+        if alert.trigger_type == AlertTriggerType.REPEATED_FAILURE:
+            return "repeated_failure:down"
+        if alert.trigger_type == AlertTriggerType.THRESHOLD:
+            return AlertEvaluationCoreService._fit_state_key(
+                AlertEvaluationCoreService._threshold_key(alert, breached=True)
+            )
+        return None
+
+    @staticmethod
+    async def _note_cleared(
+        db: AsyncSession,
+        alert: Alert,
+        check: Check,
+        check_result: CheckResult,
+    ) -> None:
+        """Record that the check left the breach the alert last notified, when
+        no recovery said so (the alert does not notify on recovery, or the
+        recovery was snoozed): one `suppressed` row per provider, its state key
+        the clear state's. De-duplication reads the alert's last row, so the
+        next breach is then a new state and is announced, not a repeat of the
+        first."""
+        if not AlertEvaluationCoreService._is_clear(alert, check_result):
+            return
+        last = await AlertCRUD.get_last_notification_for_dedup(db, alert.id, check.id)
+        if last is None or last.notification_hash is None:
+            return
+        if last.notification_hash != AlertEvaluationCoreService._breach_key(alert):
+            return
+        state_key = AlertEvaluationCoreService._compute_alert_state_key(
+            alert, check_result
+        )
+        mappings = await AlertCRUD.list_active_notif_mappings_for_alert(db, alert.id)
+        now = utc_now()
+        await AlertCRUD.add_notification_logs(
+            db,
+            [
+                NotificationLog(
+                    alert_id=alert.id,
+                    notification_provider_id=mapping.notification_provider.id,
+                    check_result_id=check_result.id,
+                    check_result_timestamp=check_result.timestamp,
+                    check_id=check.id,
+                    check_success=check_result.success,
+                    check_latency_ms=check_result.latency_ms,
+                    status=NotificationStatus.SUPPRESSED.value,
+                    error_message="Recovered; recovery not announced",
+                    notification_hash=state_key,
+                    sent_at=now,
+                )
+                for mapping in mappings
+                if mapping.notification_provider.deleted_at is None
+            ],
+        )
+
+    @staticmethod
     async def _handle_parent_suppression(
         db: AsyncSession,
         alert: Alert,
@@ -892,45 +977,6 @@ class AlertEvaluationCoreService:
         return False
 
     @staticmethod
-    async def _left_breach_since(
-        db: AsyncSession,
-        alert: Alert,
-        check_result: CheckResult,
-        last_notification: NotificationLog,
-    ) -> bool:
-        """Whether, since the result `last_notification` was about, the check
-        had a result that did not breach this alert: a success for a failure
-        alert whose last word was the outage, a latency on the safe side for a
-        threshold alert. Such a result ended that breach, so this one starts
-        another, whether or not its end was announced."""
-        after = last_notification.check_result_timestamp
-        if after is None or after >= check_result.timestamp:
-            return False
-        key = last_notification.notification_hash or ""
-        if key in ("status:down", "repeated_failure:down"):
-            return await AlertCRUD.has_success_between(
-                db, check_result.check_id, after, check_result.timestamp
-            )
-        threshold = AlertEvaluationCoreService._threshold_value(alert)
-        if (
-            alert.trigger_type == AlertTriggerType.THRESHOLD
-            and threshold is not None
-            and key
-            == AlertEvaluationCoreService._fit_state_key(
-                AlertEvaluationCoreService._threshold_key(alert, breached=True)
-            )
-        ):
-            return await AlertCRUD.has_latency_within_between(
-                db,
-                check_result.check_id,
-                after,
-                check_result.timestamp,
-                operator=(alert.trigger_config or {}).get("operator", ">"),
-                value=threshold,
-            )
-        return False
-
-    @staticmethod
     async def _state_changed_since(
         db: AsyncSession,
         alert: Alert,
@@ -947,11 +993,7 @@ class AlertEvaluationCoreService:
                 alert, check_result
             )
             if last_notification.notification_hash == current_state_key:
-                # The same state, unless the alert left it since and is back:
-                # a second outage after a recovery nobody was told of.
-                return await AlertEvaluationCoreService._left_breach_since(
-                    db, alert, check_result, last_notification
-                )
+                return False
             logger.debug(
                 "Alert state changed - sending notification",
                 extra={

@@ -198,7 +198,7 @@ Every check result the server stores is evaluated against all applicable alerts:
 **Rules:**
 
 1. **Always send on a status change** (down → up or up → down).
-1. **A new outage is a change too:** once the check has recovered (a success; for a latency threshold, a latency back on the safe side), the next outage or breach is announced, whether or not its recovery was (`notify_on_recovery` off).
+1. **A new outage is a change too:** once the check has recovered (a success; for a latency threshold, a latency back on the safe side), the next outage or breach is announced, whether or not its recovery was. A recovery that is not announced (`notify_on_recovery` off, or the pair snoozed) is logged as **Suppressed** with *Recovered; recovery not announced*. A result with no latency (a timeout) neither ends a latency breach nor starts one.
 1. **For the same status:** never resend if `resend_interval_minutes` is blank; otherwise resend after the interval elapses. `max_resends` caps the resends.
 
 ```
@@ -217,7 +217,7 @@ Scenario 4 — resend = 15m, max_resends = 3
   10:00 #1   10:15 #2   10:30 #3   10:45 #4 (max)   11:00 none   11:30 recover → recovery
 
 Scenario 5 — notify_on_recovery off
-  10:00 fail → notification   10:10 recover → none   10:30 fail → notification
+  10:00 fail → notification   10:10 recover → none (logged as Suppressed)   10:30 fail → notification
 ```
 
 ### Snooze

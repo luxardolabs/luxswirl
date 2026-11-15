@@ -6,19 +6,7 @@ from collections.abc import Collection, Sequence
 from datetime import datetime, timedelta
 from uuid import UUID
 
-from sqlalchemy import (
-    ColumnElement,
-    and_,
-    case,
-    delete,
-    exists,
-    func,
-    literal,
-    not_,
-    or_,
-    select,
-    update,
-)
+from sqlalchemy import and_, case, delete, func, literal, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -271,68 +259,6 @@ class AlertCRUD:
             query.order_by(CheckResult.timestamp.desc()).limit(limit)
         )
         return result.scalars().all()
-
-    @staticmethod
-    async def _any_result_between(
-        db: AsyncSession,
-        check_id: UUID,
-        after: datetime,
-        before: datetime,
-        condition: ColumnElement[bool],
-    ) -> bool:
-        """Whether a result of the check timestamped after `after` and before
-        `before` meets `condition`."""
-        found = await db.execute(
-            select(
-                exists().where(
-                    CheckResult.check_id == check_id,
-                    CheckResult.timestamp > after,
-                    CheckResult.timestamp < before,
-                    condition,
-                )
-            )
-        )
-        return bool(found.scalar())
-
-    @staticmethod
-    async def has_success_between(
-        db: AsyncSession, check_id: UUID, after: datetime, before: datetime
-    ) -> bool:
-        """Whether the check succeeded at least once after `after` and before
-        `before`."""
-        return await AlertCRUD._any_result_between(
-            db, check_id, after, before, CheckResult.success.is_(True)
-        )
-
-    @staticmethod
-    async def has_latency_within_between(
-        db: AsyncSession,
-        check_id: UUID,
-        after: datetime,
-        before: datetime,
-        *,
-        operator: str,
-        value: float,
-    ) -> bool:
-        """Whether a result after `after` and before `before` did not meet
-        `latency_ms <operator> value`: no latency, or one on the other side, as
-        a threshold alert judges it."""
-        breach = {
-            ">": CheckResult.latency_ms > value,
-            ">=": CheckResult.latency_ms >= value,
-            "<": CheckResult.latency_ms < value,
-            "<=": CheckResult.latency_ms <= value,
-            "==": CheckResult.latency_ms == value,
-        }.get(operator)
-        if breach is None:
-            return False
-        return await AlertCRUD._any_result_between(
-            db,
-            check_id,
-            after,
-            before,
-            or_(CheckResult.latency_ms.is_(None), not_(breach)),
-        )
 
     @staticmethod
     async def checks_with_result_alerts(
