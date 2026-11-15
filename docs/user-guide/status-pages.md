@@ -54,18 +54,20 @@ ______________________________________________________________________
 
 At `/status/{slug}` the page shows an **overall status hero**, then ungrouped checks and groups in your saved order, refreshing every 20 seconds via HTMX (no full reload).
 
-**Overall status** is computed from current results:
+**Overall status** is computed from each check's current result. A check with no current result (none yet, disabled, or gone silent) is unknown: it is left out of the verdict and the percentage, since nothing says it is failing.
 
-| Indicator                      | Condition                 |
-| ------------------------------ | ------------------------- |
-| 🟢 **All Systems Operational** | All checks passing        |
-| 🟡 **Degraded Performance**    | Some failing, but ≥50% up |
-| 🔴 **Service Outage**          | \<50% up                  |
-| ⚪ **Status Unknown**          | No recent results         |
+| Indicator                         | Condition                                    |
+| --------------------------------- | -------------------------------------------- |
+| 🟢 **All Systems Operational**    | No check with a current result is failing    |
+| 🟡 **Partial Service Disruption** | Some checks failing, at least one passing    |
+| 🔴 **Service Outage**             | Every check with a current result is failing |
+| ⚪ **Status Unknown**             | No check on the page has a current result    |
 
-It also shows overall 24-hour uptime. **Each check** displays its name, target, current status (Up/Down/Unknown), most-recent latency (color-coded: green \<100ms, yellow 100–500ms, red >500ms), and 24h uptime % (green ≥99%, yellow 95–99%, red \<95%; "No data" when the check has no results in the last 24 hours). **Groups** show a header with check count and a collapse/expand toggle; collapsed groups show only the group's overall status.
+An outage is called only when nothing on the page is serving: while any check passes, the page reports a partial disruption and how many services are affected, whatever their share. The percentage beside it is the share of checks with a current result that are passing. Each group's header follows the same rule (All Operational, N Issues, All Down, No Data). **Each check** displays its name, target, current status (Up/Down/Unknown), most-recent latency (color-coded: green \<100ms, yellow 100–500ms, red >500ms), and 24h uptime % (green ≥99%, yellow 95–99%, red \<95%; "No data" when the check has no results in the last 24 hours). **Groups** show a header with check count and a collapse/expand toggle; collapsed groups show only the group's overall status.
 
 **Public vs private:** a public page (`is_public=true`) is viewable at `/status/{slug}` with no auth; a private page redirects to login. Slugs aren't secret tokens — for sensitive internal pages, either use an unguessable slug or keep the page private.
+
+**Rate limit:** each client address may load `/status/{slug}` and its refresh 120 times a minute each (`SECURITY__STATUS_PAGE_RATE_LIMIT`), then gets `429` until the minute is out. An open page refreshes three times a minute, so about forty viewers can share one address. The nginx example (`nginx/conf.d/luxswirl.conf.example`) limits `/status/` per address as well.
 
 ______________________________________________________________________
 

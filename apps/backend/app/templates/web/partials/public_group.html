@@ -8,23 +8,25 @@
         </h2>
 
         <!-- Group Status Summary -->
-        {%- set group_total, group_up, group_down = item.total, item.up, item.down -%}
-
         <div class="flex items-center gap-3">
-            {% if group_down == 0 %}
+            {% if item.status == 'operational' %}
             <span class="px-3 py-1 bg-green-900/30 text-green-400 text-xs font-semibold rounded-full border border-green-600/30">
                 All Operational
             </span>
-            {% elif group_up > 0 %}
+            {% elif item.status == 'degraded' %}
             <span class="px-3 py-1 bg-yellow-900/30 text-yellow-400 text-xs font-semibold rounded-full border border-yellow-600/30">
-                {{ group_down }} Issue{{ 's' if group_down != 1 else '' }}
+                {{ item.down }} Issue{{ 's' if item.down != 1 else '' }}
             </span>
-            {% else %}
+            {% elif item.status == 'outage' %}
             <span class="px-3 py-1 bg-red-900/30 text-red-400 text-xs font-semibold rounded-full border border-red-600/30">
                 All Down
             </span>
+            {% else %}
+            <span class="px-3 py-1 bg-slate-800/30 text-slate-300 text-xs font-semibold rounded-full border border-slate-600/30">
+                No Data
+            </span>
             {% endif %}
-            <span class="text-sm text-dark-text-muted">{{ group_total }} service{{ 's' if group_total != 1 else '' }}</span>
+            <span class="text-sm text-dark-text-muted">{{ item.total }} service{{ 's' if item.total != 1 else '' }}</span>
         </div>
     </div>
 
@@ -35,6 +37,8 @@
         <div class="status-card animate-fade-in w-64 flex-shrink-0 rounded-lg border transition-all duration-300 p-3 group
             {% if check.latest_success %}
                 bg-gradient-to-br from-dark-bg-secondary to-green-950/20 border-green-600/30 hover:border-green-500/60 hover:shadow-lg hover:shadow-green-500/20 hover:scale-110 hover:z-50
+            {% elif check.latest_success is none %}
+                bg-gradient-to-br from-dark-bg-secondary to-slate-900/20 border-slate-600/30 hover:border-slate-500/60 hover:shadow-lg hover:scale-110 hover:z-50
             {% else %}
                 bg-gradient-to-br from-dark-bg-secondary to-red-950/20 border-red-600/30 hover:border-red-500/60 hover:shadow-lg hover:shadow-red-500/20 hover:scale-110 hover:z-50
             {% endif %}
@@ -88,6 +92,8 @@
                         {% if check.latest_success %}
                         <div class="w-2 h-2 bg-green-500 rounded-full"></div>
                         <div class="absolute inset-0 w-2 h-2 bg-green-500 rounded-full animate-ping opacity-75"></div>
+                        {% elif check.latest_success is none %}
+                        <div class="w-2 h-2 bg-slate-500 rounded-full"></div>
                         {% else %}
                         <div class="w-2 h-2 bg-red-500 rounded-full"></div>
                         <div class="absolute inset-0 w-2 h-2 bg-red-500 rounded-full animate-ping opacity-75"></div>
@@ -130,6 +136,9 @@
                             {% if check.latest_success %}
                             <stop offset="0%" stop-color="rgb(134,239,172)" stop-opacity="0.6" />
                             <stop offset="100%" stop-color="rgb(34,197,94)" stop-opacity="1" />
+                            {% elif check.latest_success is none %}
+                            <stop offset="0%" stop-color="rgb(203,213,225)" stop-opacity="0.6" />
+                            <stop offset="100%" stop-color="rgb(100,116,139)" stop-opacity="1" />
                             {% else %}
                             <stop offset="0%" stop-color="rgb(252,165,165)" stop-opacity="0.6" />
                             <stop offset="100%" stop-color="rgb(239,68,68)" stop-opacity="1" />

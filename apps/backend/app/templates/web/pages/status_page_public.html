@@ -16,7 +16,7 @@
 </div>
 
 <!-- Overall Status Hero -->
-<div class="card p-6 mb-8 {% if overall_status == 'operational' %}bg-gradient-to-br from-green-900/20 to-emerald-900/10 border-green-600/30{% elif overall_status == 'degraded' %}bg-gradient-to-br from-yellow-900/20 to-amber-900/10 border-yellow-600/30{% else %}bg-gradient-to-br from-red-900/20 to-rose-900/10 border-red-600/30{% endif %}">
+<div class="card p-6 mb-8 {% if overall_status == 'operational' %}bg-gradient-to-br from-green-900/20 to-emerald-900/10 border-green-600/30{% elif overall_status == 'degraded' %}bg-gradient-to-br from-yellow-900/20 to-amber-900/10 border-yellow-600/30{% elif overall_status == 'unknown' %}bg-gradient-to-br from-slate-800/30 to-slate-900/10 border-slate-600/30{% else %}bg-gradient-to-br from-red-900/20 to-rose-900/10 border-red-600/30{% endif %}">
     <div class="flex items-center justify-between">
         <div class="flex items-center gap-4">
             <!-- Status Indicator -->
@@ -28,7 +28,7 @@
                 </div>
                 <div>
                     <div class="text-2xl font-bold text-green-400">All Systems Operational</div>
-                    <div class="text-sm text-dark-text-muted">{{ checks_up }} of {{ total_checks }} services running smoothly</div>
+                    <div class="text-sm text-dark-text-muted">{{ checks_up }} of {{ total_checks }} services running smoothly{% if checks_unknown %}, {{ checks_unknown }} with no recent results{% endif %}</div>
                 </div>
                 {% elif overall_status == 'degraded' %}
                 <div class="relative">
@@ -38,6 +38,14 @@
                 <div>
                     <div class="text-2xl font-bold text-yellow-400">Partial Service Disruption</div>
                     <div class="text-sm text-dark-text-muted">{{ checks_down }} of {{ total_checks }} services experiencing issues</div>
+                </div>
+                {% elif overall_status == 'unknown' %}
+                <div class="relative">
+                    <div class="w-4 h-4 bg-slate-500 rounded-full"></div>
+                </div>
+                <div>
+                    <div class="text-2xl font-bold text-slate-300">Status Unknown</div>
+                    <div class="text-sm text-dark-text-muted">No recent results for {{ total_checks }} service{{ 's' if total_checks != 1 else '' }}</div>
                 </div>
                 {% else %}
                 <div class="relative">
@@ -70,7 +78,7 @@
                 {% endfor %}
             </div>
             <div class="text-right">
-                <div class="text-3xl font-bold text-dark-text-primary">{{ overall_uptime }}%</div>
+                <div class="text-3xl font-bold text-dark-text-primary">{% if overall_uptime is none %}No data{% else %}{{ overall_uptime }}%{% endif %}</div>
                 <div class="text-xs text-dark-text-muted uppercase tracking-wide">Overall Uptime</div>
             </div>
         </div>
