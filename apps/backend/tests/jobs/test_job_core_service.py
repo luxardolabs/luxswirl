@@ -169,7 +169,7 @@ class TestJobLifecycle:
         # the PAYLOAD is actually persisted, not just the status flipped
         assert out.result is not None
         assert out.result.get("discovered_hosts") == [
-            {"ip": "10.0.0.7", "open_ports": []}
+            {"ip": "10.0.0.7", "hostname": None, "open_ports": []}
         ]
 
     async def test_submit_failed_result(self, db: AsyncSession):

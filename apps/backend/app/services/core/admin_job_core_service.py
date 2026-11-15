@@ -149,7 +149,9 @@ class AdminJobCoreService:
 
         Raises:
             JobNotFoundException: If there is no such job
-            ValidationException: If the job has no scan result to create from
+            ValidationException: If the job is not a completed network scan
+                with a result, or the request would make more than BULK_MAX
+                checks (none is made)
         """
         await AdminJobCoreService._get_job(db, job_id)
         defaults = await SettingsCoreService.get_check_defaults(db)

@@ -66,9 +66,10 @@ TOOLS: list[Tool] = [
     Tool(
         name="create_checks_from_job",
         description=(
-            "Make one kind of check (ping, web, ssh, database) from a finished scan's "
-            "hosts, on an agent: `checks` is the same body as POST "
-            "/api/v1/admin/jobs/{id}/checks. A host whose check exists is skipped."
+            "Make one kind of check (ping, web, ssh, database) from a completed "
+            "network_scan's hosts, on an agent: `checks` is the same body as POST "
+            "/api/v1/admin/jobs/{id}/checks. A host whose check exists is skipped; "
+            "a request that would make more than 10,000 checks makes none."
         ),
         inputSchema={
             "type": "object",

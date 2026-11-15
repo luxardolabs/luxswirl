@@ -8,12 +8,40 @@ Handles server-side business logic for network_scan jobs:
 - Creating follow-up recommendations
 """
 
+import ipaddress
+import re
 from typing import Any
 
 from app.core.scan_check_names import PORT_CATEGORIES
 from app.shared.logger import get_logger
 
 logger = get_logger("luxswirl.services.jobs.network_scan")
+
+
+# One DNS label: letters, digits, hyphens and (as reverse DNS on Windows
+# networks returns them) underscores, 1-63 long, never starting or ending with
+# a hyphen. Nothing a URL reads as userinfo, port, path or query can pass.
+_LABEL = re.compile(r"[A-Za-z0-9_](?:[A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?")
+_MAX_HOSTNAME = 253
+
+
+def _ip(value: object) -> str | None:
+    """`value` if it is an IP address, as Python writes it; nothing otherwise."""
+    if not isinstance(value, str):
+        return None
+    try:
+        return str(ipaddress.ip_address(value))
+    except ValueError:
+        return None
+
+
+def _hostname(value: object) -> str | None:
+    """`value` if it is a DNS hostname; nothing otherwise."""
+    if not isinstance(value, str) or not 0 < len(value) <= _MAX_HOSTNAME:
+        return None
+    if all(_LABEL.fullmatch(label) for label in value.split(".")):
+        return value
+    return None
 
 
 def _port_numbers(value: object) -> list[int]:
@@ -28,16 +56,25 @@ class NetworkScanCoreService:
 
     @staticmethod
     def scan_hosts(result: dict[str, Any]) -> list[dict[str, Any]]:
-        """The scan's hosts, each a mapping whose `open_ports` are port numbers.
+        """The scan's hosts, each a mapping whose `ip` is an IP address or
+        None, `hostname` a DNS hostname or None, and `open_ports` port numbers.
 
-        The agent writes the result, so an entry that is not a mapping is
-        dropped, and a port that is not a number is left out.
+        The agent writes the result, and a check made from a host connects to
+        its hostname, else its ip: an entry that is not a mapping is dropped,
+        an `ip` or `hostname` that is not one is None (a hostname such as
+        "10.1.2.3@10.9.9.9" would make a URL that connects to another host),
+        and a port that is not a number is left out.
         """
         hosts = result.get("discovered_hosts")
         if not isinstance(hosts, list):
             return []
         return [
-            {**host, "open_ports": _port_numbers(host.get("open_ports"))}
+            {
+                **host,
+                "ip": _ip(host.get("ip")),
+                "hostname": _hostname(host.get("hostname")),
+                "open_ports": _port_numbers(host.get("open_ports")),
+            }
             for host in hosts
             if isinstance(host, dict)
         ]

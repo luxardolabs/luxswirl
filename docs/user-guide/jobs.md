@@ -125,7 +125,7 @@ Click any row to open it. The panel shows:
 - **Metadata:** full Job ID, type, agent, priority, created-at, and created-by.
 - **Timing:** assigned-at, started-at, completed-at, duration, and expires-at.
 - **Parameters** and **Results**, as formatted JSON. Running jobs show a spinner; failed jobs show the error.
-- **Actions:** Cancel, Delete, Copy Results, and — for a completed `network_scan` — **Create Checks from Results**, which opens the bulk check form pre-filled with the discovered hosts so you can pick which to monitor.
+- **Actions:** Cancel, Delete, Copy Results, and — for a completed `network_scan` — **Create Checks from Results**, which opens the bulk check form pre-filled with the discovered hosts so you can pick which to monitor. Checks are made only from a completed `network_scan`, at most 10,000 per request (a larger request makes none), and a check whose name the agent already has is skipped, even when two requests run at once. A host's reported hostname is used only if it is a valid DNS name, and its IP only if it is an IP address; a check targets the hostname, else the IP.
 
 ______________________________________________________________________
 

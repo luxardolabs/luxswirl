@@ -47,6 +47,23 @@ SCAN_RESULT: dict[str, Any] = {
         },
     ],
     "scan_params": {"timeout": 10, "ports": [443], "max_concurrent": 100},
+    # The detail panel drops a hostname that is not a DNS name, so the secret
+    # reaches it through a chunk's subnet, which a scan of more than one chunk
+    # shows as written.
+    "chunk_metrics": [
+        {
+            "subnet": "192.168.7.0/25",
+            "duration_seconds": 1.0,
+            "hosts_scanned": 127,
+            "hosts_found": 1,
+        },
+        {
+            "subnet": f"token={SECRET}",
+            "duration_seconds": 1.0,
+            "hosts_scanned": 127,
+            "hosts_found": 0,
+        },
+    ],
 }
 ERROR = f"connect to postgresql://monitor:{SECRET}@db.internal/app failed"
 PARAMS = {

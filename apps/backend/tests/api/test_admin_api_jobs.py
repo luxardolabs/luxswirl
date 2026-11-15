@@ -430,6 +430,31 @@ async def test_a_job_with_no_scan_result_creates_nothing(
     assert await _checks(db, target) == []
 
 
+@pytest.mark.parametrize(
+    ("job_type", "status"),
+    [
+        (JobType.NETWORK_DISCOVER, JobStatus.COMPLETED),
+        (JobType.NETWORK_SCAN, JobStatus.FAILED),
+        (JobType.NETWORK_SCAN, JobStatus.PENDING),
+    ],
+)
+async def test_checks_come_only_from_a_completed_scan(
+    db: AsyncSession, client: AsyncClient, job_type: JobType, status: JobStatus
+) -> None:
+    editor = await _as(db, "editor")
+    job_id = await _job(db, job_type=job_type, status=status, result=SCAN_RESULT)
+    target = await _agent(db)
+
+    resp = await client.post(
+        f"{JOBS}/{job_id}/checks",
+        json={"kind": "ping", "agent_id": str(target)},
+        headers=editor,
+    )
+
+    assert resp.status_code == 422, resp.text
+    assert await _checks(db, target) == []
+
+
 async def test_checks_go_only_to_an_admitted_agent(
     db: AsyncSession, client: AsyncClient
 ) -> None:
