@@ -13,6 +13,7 @@ the notification log (`notification_logs`), a notification to send as a
 
 import fnmatch
 import hashlib
+from collections.abc import Sequence
 from datetime import datetime
 from typing import Any
 from uuid import UUID
@@ -35,6 +36,10 @@ from app.shared.logger import get_logger
 
 # notification_logs.notification_hash is String(64).
 STATE_KEY_LENGTH = 64
+
+# The newest results a recovery or a clear state is judged by: enough to reach
+# past a run of timeouts, and each agent of a check several agents run.
+RECENT_RESULTS = 50
 
 logger = get_logger("luxswirl.services.alert")
 
@@ -431,20 +436,28 @@ class AlertEvaluationCoreService:
             return True
         if not alert.notify_on_recovery or check_result.latency_ms is None:
             return False
-        # A recovery tells of the end of a breach: the result before this one
-        # breached, and the alert notified the check (as for status_change).
-        recent = await AlertCRUD.get_recent_results_for_check(
-            db, check.id, 2, at_or_before=check_result.timestamp
-        )
-        # post-db-filter: the read is LIMIT 2; this asks for the one before
-        if len(recent) < 2 or not AlertEvaluationCoreService._threshold_breached(
-            alert, recent[1]
-        ):
-            return False
+        # A recovery tells of the end of the breach the alert last recorded:
+        # its last row is that breach (or a parent's outage over it), and the
+        # newest earlier result with a latency (a timeout has none) breached,
+        # so a breach long over, whose end nobody recorded, gets none.
         last_notification = await AlertCRUD.get_last_notification_for_dedup(
             db, alert.id, check.id
         )
-        return last_notification is not None
+        if last_notification is None or last_notification.notification_hash not in (
+            AlertEvaluationCoreService._breach_key(alert),
+            "parent_down",
+        ):
+            return False
+        recent = await AlertEvaluationCoreService._recent_results(
+            db, check, check_result
+        )
+        earlier = next(
+            (r for r in recent[1:] if r.latency_ms is not None),
+            None,
+        )
+        return earlier is not None and AlertEvaluationCoreService._threshold_breached(
+            alert, earlier
+        )
 
     @staticmethod
     async def _evaluate_repeated_failure(
@@ -723,6 +736,16 @@ class AlertEvaluationCoreService:
         return len(rows)
 
     @staticmethod
+    async def _recent_results(
+        db: AsyncSession, check: Check, check_result: CheckResult
+    ) -> Sequence[CheckResult]:
+        """The check's newest results up to `check_result`, newest first, at
+        most `RECENT_RESULTS`: what a recovery and a clear state are judged by."""
+        return await AlertCRUD.get_recent_results_for_check(
+            db, check.id, RECENT_RESULTS, at_or_before=check_result.timestamp
+        )
+
+    @staticmethod
     def _is_clear(alert: Alert, check_result: CheckResult) -> bool:
         """Whether the result is on the clear side of a breach alert: a success
         for a failure alert, a latency on the safe side for a threshold one (a
@@ -774,6 +797,18 @@ class AlertEvaluationCoreService:
         if last is None or last.notification_hash is None:
             return
         if last.notification_hash != AlertEvaluationCoreService._breach_key(alert):
+            return
+        # A check several agents run is clear only when each agent's latest
+        # result is: one agent recovering while another still fails ends nothing.
+        latest: dict[object, CheckResult] = {}
+        for result in await AlertEvaluationCoreService._recent_results(
+            db, check, check_result
+        ):
+            latest.setdefault(result.agent_id, result)
+        if not all(
+            AlertEvaluationCoreService._is_clear(alert, result)
+            for result in latest.values()
+        ):
             return
         state_key = AlertEvaluationCoreService._compute_alert_state_key(
             alert, check_result
