@@ -44,7 +44,7 @@ Call `whoami` first: it names the token's user, role and scopes, and the tools i
 
 A tool that changes something takes the same body as its admin-API route, and is held to the same rules: a viewer reads a check's target, connection string and nameserver as their scheme, host and port alone, and free text with its credentials masked ([Admin API](admin-api.md#checks)); a synthetic check is an admin's, and the token must grant `checks:admin` too (a **Read and write** token does not); an unknown id is an error. Deletes, users, settings, API and registration keys, import and the scheduler are not served over MCP; they stay in the web UI and the admin API.
 
-A refused call comes back as a tool error whose text starts `FORBIDDEN:` and names the role or scope it needs; a bad argument comes back as an error naming what is valid.
+A refused call comes back as a tool error whose text starts `FORBIDDEN:` and names the role or scope it needs; a bad argument, a target the SSRF protection refuses or a synthetic script the security validation refuses comes back as an error naming what is wrong or valid.
 
 ## Limits
 

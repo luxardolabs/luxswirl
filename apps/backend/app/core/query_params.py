@@ -21,7 +21,7 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import Query
-from pydantic import BeforeValidator
+from pydantic import AfterValidator, BeforeValidator
 
 from app.models.enum_model import (
     AuditOutcome,
@@ -35,11 +35,21 @@ from app.models.enum_model import (
     SettingCategory,
     UserRole,
 )
+from app.schemas.base_schema import MAX_TAG_LENGTH, refuse_control_chars
 
 
 def empty_to_none(v: object) -> object:
     """Normalize the dropdown's "All" option ('') to None before enum validation."""
     return None if isinstance(v, str) and v.strip() == "" else v
+
+
+def one_line_or_none(v: str | None) -> str | None:
+    """A text filter as given, refused (422) when it holds a control character.
+
+    A filter is matched against one-line text (names, tags), so no control
+    character can match, and a NUL is a character PostgreSQL refuses outright.
+    """
+    return None if v is None else refuse_control_chars(v)
 
 
 def split_csv(value: str | None) -> list[str] | None:
@@ -173,4 +183,19 @@ UntilFilter = Annotated[
     datetime | None,
     BeforeValidator(empty_to_none),
     Query(description="Up to this time (ISO 8601; no zone is UTC)"),
+]
+
+# ── Text filters: one line of free text, bounded as the values they match ──
+# An empty one is no filter, as the form's blank field means.
+SearchFilter = Annotated[
+    str | None,
+    BeforeValidator(empty_to_none),
+    AfterValidator(one_line_or_none),
+    Query(max_length=255, description="Search text"),
+]
+TagFilter = Annotated[
+    str | None,
+    BeforeValidator(empty_to_none),
+    AfterValidator(one_line_or_none),
+    Query(max_length=MAX_TAG_LENGTH, description="Filter by tag"),
 ]

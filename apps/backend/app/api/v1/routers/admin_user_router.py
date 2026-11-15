@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import ApiAdmin, require_scope
 from app.core.config import settings
 from app.core.openapi_operations import HandlerNamedRoute
-from app.core.query_params import ActiveFilter, UserRoleFilter
+from app.core.query_params import ActiveFilter, SearchFilter, UserRoleFilter
 from app.core.rate_limit import api_token_rate_limit_key, limiter
 from app.db import get_db
 from app.schemas.admin_page_schema import MAX_PAGE
@@ -46,7 +46,7 @@ async def admin_list_users(
     per_page: Annotated[int, Query(ge=1, le=200)] = 50,
     role: UserRoleFilter = None,
     is_active: ActiveFilter = None,
-    search: Annotated[str | None, Query(max_length=255)] = None,
+    search: SearchFilter = None,
 ) -> UserPage:
     """One page of users; by `role`, `is_active`, or `search` over names."""
     return await AdminUserCoreService.list_users(

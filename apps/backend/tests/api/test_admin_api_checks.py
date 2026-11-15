@@ -353,3 +353,42 @@ async def test_an_editor_clones_a_check_that_has_a_global_alert(
         db, UUID(clone.json()["id"])
     )
     assert sorted(alert_ids) == sorted([global_alert.id, own_alert.id])
+
+
+# ── A list filter no stored value can hold ───────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    ("path", "param"),
+    [
+        (CHECKS, "tag"),
+        (CHECKS, "search"),
+        ("/api/v1/admin/agents", "search"),
+        ("/api/v1/admin/users", "search"),
+        ("/api/v1/admin/notification-logs", "search"),
+    ],
+)
+@pytest.mark.parametrize("value", ["a\x00b", "a\x1bb", "a‮b"])
+async def test_a_control_character_in_a_list_filter_is_refused(
+    db: AsyncSession, client: AsyncClient, path: str, param: str, value: str
+) -> None:
+    admin = await _as(db, "admin")
+
+    resp = await client.get(path, params={param: value}, headers=admin)
+
+    assert resp.status_code == 422, resp.text
+
+
+async def test_a_plain_tag_filter_still_lists(
+    db: AsyncSession, client: AsyncClient
+) -> None:
+    viewer = await _as(db, "viewer")
+    agent = await _agent(db)
+    await _check(db, agent, display_name="tagged", tags=["edge-01"])
+
+    resp = await client.get(
+        CHECKS, params={"agent_id": str(agent.id), "tag": "edge-01"}, headers=viewer
+    )
+
+    assert resp.status_code == 200, resp.text
+    assert [c["display_name"] for c in resp.json()["items"]] == ["tagged"]

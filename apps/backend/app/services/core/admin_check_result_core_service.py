@@ -8,7 +8,8 @@ response body can hold anything the monitored service sent. Of `metrics`, a
 viewer reads only the sections the web UI's detail panel shows, every string
 in them masked: an HTTP check's metrics also carry every response header the
 monitored service sent (a session cookie among them), and a synthetic check's
-carry the raw errors its `error` is made from.
+carry the raw errors its `error` is made from. A DNS check's nameserver is
+cut to its origin (`masked_metrics`), as the check's own is.
 """
 
 import json
@@ -18,9 +19,10 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.credential_mask import mask_credentials, mask_mapping
+from app.core.credential_mask import mask_credentials
 from app.core.datetime_utils import utc_now
 from app.core.exceptions import NotFoundException, ValidationException
+from app.core.target_origin import masked_metrics
 from app.models.check_result_model import CheckResult
 from app.models.enum_model import UserRole
 from app.schemas.admin_check_result_schema import (
@@ -66,12 +68,28 @@ def _viewer_metrics(metrics: dict[str, Any] | None) -> dict[str, Any] | None:
     response = metrics.get("response")
     if isinstance(response, dict) and "ssl_certificate" in response:
         shown["response"] = {"ssl_certificate": response["ssl_certificate"]}
-    return mask_mapping(shown)
+    return masked_metrics(shown)
 
 
-def _utc(moment: datetime) -> datetime:
-    """`moment` as an aware UTC time; a naive one is taken to be UTC."""
-    return moment.replace(tzinfo=UTC) if moment.tzinfo is None else moment
+# The earliest moment a window may name: no result predates it, and a window's
+# arithmetic near year 1 (24 hours before it, a zone's offset) leaves the calendar.
+EARLIEST = datetime(1970, 1, 1, tzinfo=UTC)
+
+
+def _utc(moment: datetime, name: str) -> datetime:
+    """`moment` (`since` or `until`) as an aware UTC time, a naive one taken to be
+    UTC; refused when it lies before 1970 or its zone moves it off the calendar."""
+    try:
+        aware = (
+            moment.replace(tzinfo=UTC)
+            if moment.tzinfo is None
+            else moment.astimezone(UTC)
+        )
+    except OverflowError:
+        raise ValidationException(f"`{name}` is out of range") from None
+    if aware < EARLIEST:
+        raise ValidationException(f"`{name}` must be in 1970 or later")
+    return aware
 
 
 class AdminCheckResultCoreService:
@@ -112,11 +130,11 @@ class AdminCheckResultCoreService:
         """One page of the check's results in [since, until], newest first.
 
         `until` defaults to now and `since` to 24 hours before it; the window
-        must run forward and span at most 31 days.
+        must run forward, span at most 31 days and start in 1970 or later.
         """
         await CheckCoreService.get_check_by_id(db, check_id)
-        end = _utc(until) if until is not None else utc_now()
-        start = _utc(since) if since is not None else end - DEFAULT_WINDOW
+        end = _utc(until, "until") if until is not None else utc_now()
+        start = _utc(since, "since") if since is not None else end - DEFAULT_WINDOW
         if start >= end:
             raise ValidationException("`since` must be before `until`")
         if end - start > MAX_WINDOW:

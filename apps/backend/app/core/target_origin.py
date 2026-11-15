@@ -28,7 +28,7 @@ import ipaddress
 import re
 from typing import overload
 
-from app.core.credential_mask import mask_credentials
+from app.core.credential_mask import mask_credentials, mask_mapping
 from app.models.enum_model import UserRole
 
 _HIDDEN = "***"
@@ -342,3 +342,19 @@ def shown_target(value: str | None, role: UserRole | None) -> str | None:
     if role in _HOLDERS:
         return mask_credentials(value)
     return target_origin(value)
+
+
+def masked_metrics(metrics: dict[str, object]) -> dict[str, object]:
+    """A check result's metrics as a reader who does not hold the check's credentials
+    reads them: every string masked (`mask_mapping`), and the DNS section's
+    `nameserver` cut to its origin, as the check's own is. The agent copies the
+    check's nameserver there, and a DNS-over-HTTPS one is a URL whose path can be
+    the resolver account's token, which no credential pattern names."""
+    masked = mask_mapping(metrics)
+    dns = metrics.get("dns")
+    shown = masked.get("dns")
+    if isinstance(dns, dict) and isinstance(shown, dict):
+        nameserver = dns.get("nameserver")
+        if isinstance(nameserver, str):
+            shown["nameserver"] = target_origin(nameserver)
+    return masked

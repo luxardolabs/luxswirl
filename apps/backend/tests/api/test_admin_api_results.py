@@ -432,3 +432,56 @@ async def test_a_page_past_any_result_set_is_refused_not_a_server_error(
     )
 
     assert resp.status_code == 422, resp.text
+
+
+# ── A DNS-over-HTTPS nameserver and the calendar's edges ─────────────────────
+
+DOH_TOKEN = "f00dfacecafe1234"
+DOH = f"https://doh.example.net/{DOH_TOKEN}"
+
+
+async def test_a_viewer_reads_a_doh_nameserver_cut_to_its_origin(
+    db: AsyncSession, client: AsyncClient
+) -> None:
+    viewer = await _as(db, "viewer")
+    editor = await _as(db, "editor")
+    check = await _check(db)
+    metrics = {"dns": {"nameserver": DOH, "port": 443, "records": ["192.0.2.1"]}}
+    result = await _result(db, check, 5, metrics=json.dumps(metrics))
+
+    page = await client.get(f"{CHECKS}/{check.id}/results", headers=viewer)
+    one = await client.get(f"{CHECKS}/{check.id}/results/{result.id}", headers=viewer)
+    summary = await client.get(f"{CHECKS}/{check.id}/summary", headers=viewer)
+    full = await client.get(f"{CHECKS}/{check.id}/results", headers=editor)
+
+    for resp in (page, one, summary):
+        assert DOH_TOKEN not in resp.text
+    assert page.json()["items"][0]["metrics"]["dns"] == {
+        "nameserver": "https://doh.example.net",
+        "port": 443,
+        "records": ["192.0.2.1"],
+    }
+    assert full.json()["items"][0]["metrics"]["dns"]["nameserver"] == DOH
+
+
+@pytest.mark.parametrize(
+    ("name", "moment"),
+    [
+        ("until", "0001-01-01T00:00:00"),
+        ("until", "0001-01-01T00:30:00+01:00"),
+        ("until", "9999-12-31T23:59:59-01:00"),
+        ("since", "0001-01-01T00:00:00"),
+        ("since", "1969-12-31T23:00:00Z"),
+    ],
+)
+async def test_a_moment_outside_the_results_calendar_is_refused(
+    db: AsyncSession, client: AsyncClient, name: str, moment: str
+) -> None:
+    viewer = await _as(db, "viewer")
+    check = await _check(db)
+
+    resp = await client.get(
+        f"{CHECKS}/{check.id}/results", params={name: moment}, headers=viewer
+    )
+
+    assert resp.status_code == 422, resp.text

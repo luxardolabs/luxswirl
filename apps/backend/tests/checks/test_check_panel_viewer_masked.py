@@ -91,6 +91,37 @@ async def test_a_viewer_reads_the_panel_masked(
     assert SECRET not in panel
 
 
+DOH_TOKEN = "f00dfacecafe1234"
+DOH_METRICS = json.dumps(
+    {
+        "dns": {
+            "nameserver": f"https://doh.example.net/{DOH_TOKEN}",
+            "port": 443,
+            "record_type": "A",
+            "record_count": 1,
+            "records": ["192.0.2.1"],
+            "ttl": 300,
+            "authoritative": False,
+            "recursion_available": True,
+            "recursion_desired": True,
+            "truncated": False,
+            "canonical_name": "example.com.",
+        }
+    }
+)
+
+
+async def test_a_viewer_reads_a_doh_nameserver_as_its_origin(
+    client: AsyncClient, db: AsyncSession
+) -> None:
+    viewer = await _panel(client, db, "dns", "viewer", DOH_METRICS)
+    editor = await _panel(client, db, "dns", "editor", DOH_METRICS)
+
+    assert DOH_TOKEN not in viewer
+    assert "https://doh.example.net:443" in viewer
+    assert DOH_TOKEN in editor
+
+
 async def test_an_editor_reads_the_error_as_it_was_reported(
     client: AsyncClient, db: AsyncSession
 ) -> None:

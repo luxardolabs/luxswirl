@@ -12,7 +12,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import ApiUser, require_scope
 from app.core.config import settings
 from app.core.openapi_operations import HandlerNamedRoute
-from app.core.query_params import AlertIdFilter, NotifStatusFilter, ProviderIdFilter
+from app.core.query_params import (
+    AlertIdFilter,
+    NotifStatusFilter,
+    ProviderIdFilter,
+    SearchFilter,
+)
 from app.core.rate_limit import api_token_rate_limit_key, limiter
 from app.db import get_db
 from app.schemas.admin_notification_schema import NotificationLogPage
@@ -44,7 +49,7 @@ async def admin_list_notification_logs(
     status: NotifStatusFilter = None,
     alert_id: AlertIdFilter = None,
     notification_provider_id: ProviderIdFilter = None,
-    search: Annotated[str | None, Query(max_length=255)] = None,
+    search: SearchFilter = None,
 ) -> NotificationLogPage:
     """One page of notification attempts, newest first, filtered by `status`,
     `alert_id`, `notification_provider_id` or a `search` of alert, provider and check names."""

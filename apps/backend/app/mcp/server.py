@@ -43,11 +43,15 @@ from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 from mcp.types import CallToolResult, TextContent, Tool
 from starlette.requests import Request
 from starlette.responses import JSONResponse
+from starlette.status import WS_1008_POLICY_VIOLATION
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
+from starlette.websockets import WebSocketClose
 
 from app.core import rate_limit
+from app.core.check_target_validator import CheckTargetBlockedError
 from app.core.exceptions import LuxSwirlException
 from app.core.request_helpers import client_ip_from_request
+from app.core.synthetic_security import SyntheticSecurityError
 from app.db import worker_session
 from app.mcp.authorization import AuthorizationError, authorize_tool_call, may_call
 from app.mcp.authorization.registry import is_meta_tool
@@ -186,6 +190,11 @@ async def _run(handler: ToolHandler, arguments: dict[str, Any]) -> list[TextCont
     except LuxSwirlException as exc:
         # The core's own refusals (not found, invalid, not allowed): written for users.
         raise _ToolFailed(f"Error: {exc.message}", exc.message) from exc
+    except (CheckTargetBlockedError, SyntheticSecurityError) as exc:
+        # A target the SSRF protection refuses, a script the AST validation refuses:
+        # each names what it refused and why (never the URL's credentials), as the
+        # admin API's error handlers answer them.
+        raise _ToolFailed(f"Error: {exc}", str(exc)) from exc
 
 
 async def _audit(
@@ -293,7 +302,12 @@ class MCPAuthMiddleware:
         self.app = app
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] not in ("http", "websocket"):
+        if scope["type"] == "websocket":
+            # The transport speaks HTTP only, and a Request is built of an http
+            # scope alone: a websocket handshake is closed as a policy refusal.
+            await WebSocketClose(code=WS_1008_POLICY_VIOLATION)(scope, receive, send)
+            return
+        if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
 

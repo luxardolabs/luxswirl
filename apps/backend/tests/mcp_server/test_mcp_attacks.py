@@ -23,7 +23,7 @@ from app.models.check_model import Check
 from app.models.mcp_tool_call_model import MCPToolCall
 from app.schemas.api_token_schema import ApiTokenCreate
 from app.services.core.api_token_core_service import ApiTokenCoreService
-from fixtures.factories import make_agent, make_check, make_user
+from fixtures.factories import make_agent, make_check, make_check_result, make_user
 from httpx import ASGITransport
 from mcp.server.fastmcp.server import StreamableHTTPASGIApp
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
@@ -372,6 +372,230 @@ async def test_list_checks_search_is_bounded_like_the_route(db: AsyncSession) ->
     assert _result(response)["isError"] is True, (
         "a 100k-char search the admin route refuses (max 255) was run"
     )
+
+
+# ── 8. A refusal the admin API names is named over MCP too ───────────────────
+
+_INTERNAL = "the tool failed; the server log has the details"
+_SCRIPT = (
+    "async def run_check(page):\n"
+    "    await page.goto('https://a.example')\n"
+    "    return {'status': 'success', 'steps': ['Loaded page']}\n"
+)
+
+
+async def _tool(token: str, tool: str, arguments: dict[str, Any]) -> dict[str, Any]:
+    async with wire_client() as client:
+        response = await client.post(
+            "/mcp/", headers=_headers(token), json=_call(tool, arguments)
+        )
+    return _result(response)
+
+
+async def _bare_agent(db: AsyncSession) -> UUID:
+    agent = make_agent()
+    db.add(agent)
+    await db.flush()
+    return agent.id
+
+
+async def test_an_ssrf_refused_target_is_named_not_internal(db: AsyncSession) -> None:
+    token = await _token(db, "editor", ["*"])
+    agent_id = await _bare_agent(db)
+    body = {
+        "agent_id": str(agent_id),
+        "display_name": "meta",
+        "check_type": "http",
+        "target": "http://169.254.169.254/latest/meta-data/",
+    }
+    seed = await _seed_check(db)
+
+    results = [
+        await _tool(token, "create_check", body),
+        await _tool(
+            token,
+            "update_check",
+            {"check_id": str(seed.id), "changes": {"target": body["target"]}},
+        ),
+        await _tool(
+            token,
+            "clone_check",
+            {"check_id": str(seed.id), "changes": {"target": body["target"]}},
+        ),
+    ]
+
+    for result in results:
+        text = result["content"][0]["text"]
+        assert result["isError"] is True, text
+        assert _INTERNAL not in text, text
+        assert text.startswith("Error: ") and "blocked" in text.lower(), text
+
+
+async def test_a_refused_synthetic_script_is_named_not_internal(
+    db: AsyncSession,
+) -> None:
+    token = await _token(db, "admin", ["*"])
+    agent_id = await _bare_agent(db)
+
+    result = await _tool(
+        token,
+        "create_check",
+        {
+            "agent_id": str(agent_id),
+            "display_name": "browser-flow",
+            "check_type": "synthetic",
+            "target": "https://a.example",
+            "script_code": "import os\nos.system('id')",
+        },
+    )
+
+    text = result["content"][0]["text"]
+    assert result["isError"] is True, text
+    assert _INTERNAL not in text, text
+    assert text.startswith("Error: ") and "os" in text, text
+
+
+async def test_control_an_allowed_synthetic_script_is_made(db: AsyncSession) -> None:
+    token = await _token(db, "admin", ["*"])
+    agent_id = await _bare_agent(db)
+
+    result = await _tool(
+        token,
+        "create_check",
+        {
+            "agent_id": str(agent_id),
+            "display_name": "browser-flow",
+            "check_type": "synthetic",
+            "target": "https://a.example",
+            "script_code": _SCRIPT,
+        },
+    )
+
+    assert result["isError"] is False, result
+
+
+# ── 9. Argument edges answer a named error, never the internal one ───────────
+
+
+@pytest.mark.parametrize(
+    ("tool", "arguments"),
+    [
+        ("list_checks", {"tag": "a\x00b"}),
+        ("list_checks", {"search": "a\x00b"}),
+        ("list_checks", {"tag": "a\x1bb"}),
+        ("list_agents", {"search": "a\x00b"}),
+    ],
+)
+async def test_a_control_character_in_a_list_filter_is_named(
+    db: AsyncSession, tool: str, arguments: dict[str, Any]
+) -> None:
+    token = await _token(db, "viewer", ["*:read"])
+
+    result = await _tool(token, tool, arguments)
+
+    text = result["content"][0]["text"]
+    assert result["isError"] is True, text
+    assert _INTERNAL not in text, text
+
+
+async def test_control_a_plain_tag_lists(db: AsyncSession) -> None:
+    token = await _token(db, "viewer", ["*:read"])
+
+    result = await _tool(token, "list_checks", {"tag": "edge-01"})
+
+    assert result["isError"] is False, result
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        {"until": "0001-01-01T00:00:00"},
+        {"since": "0001-01-01T00:00:00", "until": "0001-01-02T00:00:00"},
+    ],
+)
+async def test_results_near_the_first_year_are_a_named_error(
+    db: AsyncSession, arguments: dict[str, Any]
+) -> None:
+    token = await _token(db, "viewer", ["*:read"])
+    check = await _seed_check(db)
+
+    result = await _tool(
+        token, "get_check_results", {"check_id": str(check.id), **arguments}
+    )
+
+    text = result["content"][0]["text"]
+    assert result["isError"] is True, text
+    assert _INTERNAL not in text, text
+
+
+# ── 10. A viewer reads a DNS-over-HTTPS nameserver as its origin ─────────────
+
+_DOH_TOKEN = "f00dfacecafe1234"
+_DOH = f"https://doh.example.net/{_DOH_TOKEN}"
+
+
+@pytest.mark.parametrize("tool", ["get_check_results", "get_check_summary"])
+async def test_a_viewer_reads_no_doh_token_in_results(
+    db: AsyncSession, tool: str
+) -> None:
+    token = await _token(db, "viewer", ["*:read"])
+    agent_id = await _bare_agent(db)
+    check = make_check(
+        agent_id=agent_id,
+        check_type="dns",
+        target="example.com",
+        check_config={"nameserver": _DOH, "record_type": "A"},
+    )
+    db.add(check)
+    await db.flush()
+    db.add(
+        make_check_result(
+            check_id=check.id,
+            agent_id=agent_id,
+            metrics=json.dumps({"dns": {"nameserver": _DOH, "port": 443}}),
+        )
+    )
+    await db.flush()
+
+    result = await _tool(token, tool, {"check_id": str(check.id)})
+
+    text = result["content"][0]["text"]
+    assert result["isError"] is False, text
+    assert _DOH_TOKEN not in text
+    assert "https://doh.example.net" in text
+
+
+# ── 11. A websocket handshake is closed, not crashed on ──────────────────────
+
+
+async def test_a_websocket_handshake_is_closed_cleanly() -> None:
+    async def never(scope: Scope, receive: Receive, send: Send) -> None:
+        raise AssertionError("a websocket scope reached the transport")
+
+    middleware = MCPAuthMiddleware(never)
+    sent: list[dict[str, Any]] = []
+    scope = {
+        "type": "websocket",
+        "asgi": {"version": "3.0"},
+        "path": "/mcp/",
+        "raw_path": b"/mcp/",
+        "query_string": b"",
+        "headers": [(b"host", b"testserver")],
+        "scheme": "ws",
+        "server": ("testserver", 80),
+        "client": ("10.0.0.9", 5555),
+        "subprotocols": [],
+    }
+
+    async def receive() -> dict[str, Any]:
+        return {"type": "websocket.connect"}
+
+    async def send(message: dict[str, Any]) -> None:
+        sent.append(message)
+
+    await middleware(scope, receive, send)
+
+    assert sent == [{"type": "websocket.close", "code": 1008, "reason": ""}]
 
 
 # keep UUID import used

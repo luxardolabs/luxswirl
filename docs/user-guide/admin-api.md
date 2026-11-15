@@ -97,7 +97,7 @@ A check is addressed by its own id. Reads take any token; writes take an editor'
 | `POST`   | `/api/v1/admin/checks/{id}/enable`  | editor | Enable it                                                                          |
 | `POST`   | `/api/v1/admin/checks/{id}/disable` | editor | Disable it                                                                         |
 
-The list takes `page` (from 1) and `per_page` (1-200, default 50), and filters `agent_id`, `check_type`, `tag`, `search` (name, or the target as the token is shown it: an editor's with its credentials masked, a viewer's by its scheme, host and port), `enabled_only` and `status` (`up`, `down` or `unknown`).
+The list takes `page` (from 1) and `per_page` (1-200, default 50), and filters `agent_id`, `check_type`, `tag`, `search` (name, or the target as the token is shown it: an editor's with its credentials masked, a viewer's by its scheme, host and port), `enabled_only` and `status` (`up`, `down` or `unknown`). A `tag` or `search` holding a control character (a NUL, an escape, a line break) is a `422` here and on every admin list's `search`.
 
 Every check the API returns carries its health, as the status dashboard shows it:
 
@@ -183,9 +183,9 @@ Any token reads them.
 | `GET`  | `/api/v1/admin/checks/{id}/history`          | `points`: the results over the last `hours` (default 24), in time buckets, at most 500              |
 | `GET`  | `/api/v1/admin/checks/{id}/summary`          | `total`, `successful`, `uptime_percent` and latency over the last `hours`, and the `latest` result  |
 
-The results page reads the last 24 hours unless `since` and `until` (ISO 8601; a time with no zone is UTC) say otherwise. The window must run forward and span at most 31 days (`422`). It takes `page` and `per_page` (1-200, default 50). `hours` runs from 1 to 720. A result is read through its own check: one of another check is a `404`.
+The results page reads the last 24 hours unless `since` and `until` (ISO 8601; a time with no zone is UTC) say otherwise. The window must run forward, span at most 31 days and start in 1970 or later (`422`). It takes `page` and `per_page` (1-200, default 50). `hours` runs from 1 to 720. A result is read through its own check: one of another check is a `404`.
 
-Each result carries `success`, `latency_ms`, `error`, `error_type`, `http_status_code`, `http_response_time_ms` and the check type's own `metrics` (DNS records, row counts, response headers, ...). A viewer's token reads every `error` with its credentials masked, as above, and no `response_data`. Of `metrics` it reads only what the check detail panel shows (the `dns`, `mysql`, `postgres` and `synthetic` sections and `response.ssl_certificate`), every text in them masked the same way: an HTTP check's response headers, cookies among them, are an editor's to read.
+Each result carries `success`, `latency_ms`, `error`, `error_type`, `http_status_code`, `http_response_time_ms` and the check type's own `metrics` (DNS records, row counts, response headers, ...). A viewer's token reads every `error` with its credentials masked, as above, and no `response_data`. Of `metrics` it reads only what the check detail panel shows (the `dns`, `mysql`, `postgres` and `synthetic` sections and `response.ssl_certificate`), every text in them masked the same way, and the DNS section's `nameserver` read as its scheme, host and port, as the check's own is: an HTTP check's response headers, cookies among them, are an editor's to read.
 
 ## Agents
 

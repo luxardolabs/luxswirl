@@ -12,10 +12,11 @@ from uuid import UUID
 from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.credential_mask import mask_credentials, mask_mapping
+from app.core.credential_mask import mask_credentials
 from app.core.datetime_utils import utc_now
 from app.core.ssl_expiry import ssl_expiry_fields
 from app.core.synthetic_timings import build_synthetic_view
+from app.core.target_origin import masked_metrics
 from app.models.enum_model import UserRole
 from app.schemas.check_result_schema import RecentCheckResult
 from app.services.core.check_dependency_core_service import (
@@ -204,7 +205,7 @@ class CheckDetailViewService:
         for result in history_models:
             metrics = result.get_metrics()  # SSL cert already computed by the server
             if masked:
-                metrics = mask_mapping(metrics)
+                metrics = masked_metrics(metrics)
             history_item: dict[str, Any] = {
                 "timestamp": result.timestamp.isoformat(),  # ISO string for JSON serialization
                 "success": result.success,

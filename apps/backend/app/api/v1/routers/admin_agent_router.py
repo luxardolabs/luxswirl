@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import ApiEditor, ApiUser, require_scope, require_scopes
 from app.core.config import settings
 from app.core.openapi_operations import HandlerNamedRoute
+from app.core.query_params import SearchFilter
 from app.core.rate_limit import api_token_rate_limit_key, limiter
 from app.db import get_db
 from app.schemas.admin_agent_schema import (
@@ -46,7 +47,7 @@ async def admin_list_agents(
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     page: Annotated[int, Query(ge=1, le=MAX_PAGE)] = 1,
     per_page: Annotated[int, Query(ge=1, le=200)] = 50,
-    search: Annotated[str | None, Query(max_length=255)] = None,
+    search: SearchFilter = None,
     archived: bool = False,
     exclude_pending: bool = False,
 ) -> AgentPage:
