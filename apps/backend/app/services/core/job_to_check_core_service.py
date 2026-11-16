@@ -21,7 +21,6 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.scan_check_names import PORT_CATEGORIES
-from app.crud.check_crud import CheckCRUD
 from app.models.enum_model import CheckType, JobStatus, JobType
 from app.schemas.admin_check_schema import BULK_MAX
 from app.schemas.check_schema import BulkCheckCreateSummary, CheckCreate
@@ -155,12 +154,12 @@ class JobToCheckCoreService:
     ) -> tuple[BulkCheckCreateSummary | None, str | None]:
         """Create each candidate whose name the agent has no check of yet.
 
-        The agent's check names are held (`CheckCRUD.hold_names`) before they
-        are read, to the transaction's end, so a second request for the same
+        The agent's check names are held (`CheckCoreService.hold_check_names`)
+        before they are read, to the transaction's end, so a second request for the same
         agent waits for this one's checks and then skips them. A request that
         would make more than BULK_MAX checks is refused before any is made.
         """
-        await CheckCRUD.hold_names(db, params.agent_id)
+        await CheckCoreService.hold_check_names(db, params.agent_id)
         existing = await CheckCoreService.list_checks_for_agent(db, params.agent_id)
         taken = {check.display_name for check in existing}
 
@@ -181,8 +180,10 @@ class JobToCheckCoreService:
 
         for name, target in planned:
             await CheckCoreService.create_check(
-                db, params.agent_id, build(name, target)
+                db, params.agent_id, build(name, target), skip_config_update=True
             )
+        if planned:
+            await CheckCoreService.mark_checks_changed(db, params.agent_id)
 
         logger.info(
             "Bulk created checks from job",
@@ -309,7 +310,7 @@ class JobToCheckCoreService:
         The agent's check names are held before they are read, as in the
         bulk creators, so two clicks at once make the check once.
         """
-        await CheckCRUD.hold_names(db, params.agent_id)
+        await CheckCoreService.hold_check_names(db, params.agent_id)
         existing_checks = await CheckCoreService.list_checks_for_agent(
             db, params.agent_id
         )

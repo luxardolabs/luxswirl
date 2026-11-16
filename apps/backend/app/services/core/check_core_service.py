@@ -26,6 +26,7 @@ from app.core.synthetic_guard import (
     require_admin_actor,
     validate_script,
 )
+from app.crud.agent_crud import AgentCRUD
 from app.crud.check_crud import CheckCRUD
 from app.models.agent_model import Agent
 from app.models.check_model import Check
@@ -78,6 +79,40 @@ class CheckCoreService:
                 f"Agent {agent.agent_name} is {agent.approval_status}: it takes no checks"
             )
         return agent
+
+    @staticmethod
+    async def hold_check_names(db: AsyncSession, agent_id: UUID) -> None:
+        """Hold the agent's check names to the transaction's end, and judge
+        that it still takes checks: what every writer that reads an agent's
+        names to choose new ones takes first.
+
+        A second such writer for the agent waits for this transaction, then
+        reads the names it made. The agent's row is read FOR KEY SHARE, so an
+        archive, reject or delete in flight is waited for and then seen, and
+        one started later waits for this transaction; the agent's own reports
+        go on meanwhile.
+
+        Raises:
+            AgentNotFoundException: no such agent.
+            ValidationException: it is awaiting approval, refused or archived.
+        """
+        await CheckCRUD.hold_names(db, agent_id)
+        admission = await AgentCRUD.key_share_admission(db, agent_id)
+        if admission is None:
+            raise AgentNotFoundException(str(agent_id))
+        status, _key_hash = admission
+        if status in UNADMITTED_AGENT_STATUSES:
+            raise ValidationException(f"The agent is {status}: it takes no checks")
+
+    @staticmethod
+    async def mark_checks_changed(db: AsyncSession, agent_id: UUID) -> None:
+        """Stamp the agent's checks as changed, so it reloads them at its next
+        heartbeat. A writer of many checks stamps once, after the last: the
+        stamp is an update of the agent's row, which its heartbeat waits for
+        until the transaction ends."""
+        agent = await AgentCoreService.get_agent_by_id(db, agent_id)
+        agent.checks_updated_at = utc_now()
+        attributes.flag_modified(agent, "checks_updated_at")
 
     @staticmethod
     async def get_check_by_id(
@@ -436,8 +471,10 @@ class CheckCoreService:
         data: CheckUpdate,
         *,
         actor_is_admin: bool = False,
+        skip_config_update: bool = False,
     ) -> Check:
-        """Update a check."""
+        """Update a check. `skip_config_update` leaves the agent's
+        checks_updated_at to the caller (`mark_checks_changed`)."""
         check = await CheckCoreService.get_check_by_id(
             db, check_id, include_script_code=True
         )
@@ -541,8 +578,9 @@ class CheckCoreService:
         check.updated_at = utc_now()
 
         # Update agent's checks_updated_at timestamp to trigger config reload
-        check.agent.checks_updated_at = utc_now()
-        attributes.flag_modified(check.agent, "checks_updated_at")
+        if not skip_config_update:
+            check.agent.checks_updated_at = utc_now()
+            attributes.flag_modified(check.agent, "checks_updated_at")
 
         check = await CheckCRUD.save_check(db, check)
 
@@ -728,10 +766,9 @@ class CheckCoreService:
         errors: list[dict[str, str]] = []
 
         # A second import or bulk create for the agent waits for this one's
-        # end, then reads the names it made.
-        await CheckCRUD.hold_names(db, agent_id)
-        # An agent that takes no checks keeps the ones it has, too.
-        await CheckCoreService.get_admitted_agent(db, agent_id)
+        # end, then reads the names it made. An agent that takes no checks
+        # keeps the ones it has, too.
+        await CheckCoreService.hold_check_names(db, agent_id)
 
         existing = await CheckCoreService.list_checks_for_agent(db, agent_id)
         existing_map = {c.display_name: c for c in existing}
@@ -786,6 +823,8 @@ class CheckCoreService:
             counts["updated"],
             counts["skipped"],
         )
+        if created or updated:
+            await CheckCoreService.mark_checks_changed(db, agent_id)
         return {
             "created": created,
             "updated": updated,
@@ -817,6 +856,7 @@ class CheckCoreService:
                 existing.id,
                 CheckUpdate.model_validate(check_data.settings()),
                 actor_is_admin=actor_is_admin,
+                skip_config_update=True,
             )
             return "updated"
         existing_map[check_data.name] = await CheckCoreService.create_check(
@@ -825,6 +865,7 @@ class CheckCoreService:
             CheckCreate.model_validate(
                 {"display_name": check_data.name, **check_data.settings()}
             ),
+            skip_config_update=True,
             actor_is_admin=actor_is_admin,
         )
         return "created"
@@ -861,6 +902,7 @@ class CheckCoreService:
                 check.id,
                 CheckUpdate(depends_on_check_id=parent_id),
                 actor_is_admin=actor_is_admin,
+                skip_config_update=True,
             )
 
     @staticmethod
@@ -1194,7 +1236,7 @@ class CheckCoreService:
         failed = 0
         # A second bulk create or import for the agent waits for this one's
         # end, then reads the names it made.
-        await CheckCRUD.hold_names(db, agent_id)
+        await CheckCoreService.hold_check_names(db, agent_id)
         taken = set(await CheckCRUD.display_names_for_agent(db, agent_id))
         numbers: dict[str, int] = {}
 
@@ -1233,7 +1275,7 @@ class CheckCoreService:
                 # Each in its own savepoint: one that fails leaves the rest to commit.
                 async with db.begin_nested():
                     check = await CheckCoreService.create_check(
-                        db, agent_id, check_data
+                        db, agent_id, check_data, skip_config_update=True
                     )
                 taken.add(display_name)
 
@@ -1266,6 +1308,8 @@ class CheckCoreService:
                 )
                 failed += 1
 
+        if succeeded:
+            await CheckCoreService.mark_checks_changed(db, agent_id)
         logger.info(
             "Bulk create complete",
             extra={

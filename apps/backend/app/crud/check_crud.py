@@ -30,12 +30,12 @@ from app.models.agent_model import Agent
 from app.models.check_model import Check
 from app.models.enum_model import AssignmentMode, CheckHealthStatus
 
-
 # The first key of the two-key advisory lock that keeps the writers choosing
 # an agent's check names to one transaction at a time (the second is the agent
 # id's hashtext). Any constant works: the two-key space does not overlap the
 # one-key space other advisory locks use.
 _CHECK_NAMES_LOCK_CLASS = 1_826_301_559
+
 
 class CheckCRUD:
     """Database queries for checks."""

@@ -18,7 +18,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.background.maintenance_handlers._bulk_outcome import finish
 from app.background.maintenance_handlers._job_owner import require_owner_may_edit
-from app.core.exceptions import NotFoundException
+from app.core.exceptions import (
+    AgentNotFoundException,
+    NotFoundException,
+    ValidationException,
+)
 from app.models.enum_model import BulkCheckOutcome
 from app.models.maintenance_job_model import MaintenanceJob
 from app.schemas.check_schema import BulkCheckCreateRequest, BulkCheckCreateResponse
@@ -54,11 +58,31 @@ async def handle(db: AsyncSession, job: MaintenanceJob) -> None:
         },
     )
 
-    result = (
-        await CheckCoreService.bulk_create_checks(db, agent_id, requests)
-        if requests
-        else BulkCheckCreateResponse(total=0, succeeded=0, failed=0, results=[])
-    )
+    try:
+        result = (
+            await CheckCoreService.bulk_create_checks(db, agent_id, requests)
+            if requests
+            else BulkCheckCreateResponse(total=0, succeeded=0, failed=0, results=[])
+        )
+    except (AgentNotFoundException, ValidationException) as e:
+        # The agent is gone or takes no checks: every entry failed.
+        reason = (
+            "The agent no longer exists"
+            if isinstance(e, AgentNotFoundException)
+            else e.message
+        )
+        await finish(
+            db,
+            job,
+            "Created",
+            {
+                "success_count": 0,
+                "failure_count": len(requests) + len(refused),
+                "errors": [f"{reason}; nothing was created", *refused],
+            },
+            fail_when_nothing_done=True,
+        )
+        return
 
     # An alert deleted since the job was queued is reported, not assigned.
     alert_errors: list[str] = []
