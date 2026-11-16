@@ -30,10 +30,8 @@ from app.models.enum_model import AlertTriggerType, NotificationStatus
 from app.models.notification_log_model import NotificationLog
 from app.notifications.providers.base import NotificationContext
 from app.schemas.alert_schema import SendDecision
-from app.services.core.check_outage_core_service import (
-    CheckOutageCoreService,
-    CheckView,
-)
+from app.schemas.check_outage_schema import CheckView
+from app.services.core.check_outage_core_service import CheckOutageCoreService
 from app.services.core.notification_core_service import NotificationCoreService
 from app.shared.logger import get_logger
 
