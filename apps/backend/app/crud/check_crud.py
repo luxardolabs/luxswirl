@@ -31,6 +31,12 @@ from app.models.check_model import Check
 from app.models.enum_model import AssignmentMode, CheckHealthStatus
 
 
+# The first key of the two-key advisory lock that keeps the writers choosing
+# an agent's check names to one transaction at a time (the second is the agent
+# id's hashtext). Any constant works: the two-key space does not overlap the
+# one-key space other advisory locks use.
+_CHECK_NAMES_LOCK_CLASS = 1_826_301_559
+
 class CheckCRUD:
     """Database queries for checks."""
 
@@ -299,6 +305,20 @@ class CheckCRUD:
             .order_by(Check.display_name)
         )
         return result.scalars().all()
+
+    @staticmethod
+    async def hold_names(db: AsyncSession, agent_id: UUID) -> None:
+        """Take the transaction's advisory lock on the names of `agent_id`'s
+        checks: a second writer that reads them to choose new names waits for
+        this transaction's end and then reads what it made. The lock excludes
+        those writers alone; the agent's row stays free for its own requests."""
+        await db.execute(
+            select(
+                func.pg_advisory_xact_lock(
+                    _CHECK_NAMES_LOCK_CLASS, func.hashtext(str(agent_id))
+                )
+            )
+        )
 
     @staticmethod
     async def display_names_for_agent(

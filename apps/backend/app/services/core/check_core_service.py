@@ -727,6 +727,9 @@ class CheckCoreService:
         counts = {"created": 0, "updated": 0, "skipped": 0}
         errors: list[dict[str, str]] = []
 
+        # A second import or bulk create for the agent waits for this one's
+        # end, then reads the names it made.
+        await CheckCRUD.hold_names(db, agent_id)
         # An agent that takes no checks keeps the ones it has, too.
         await CheckCoreService.get_admitted_agent(db, agent_id)
 
@@ -1189,6 +1192,9 @@ class CheckCoreService:
         results: list[BulkCheckResult] = []
         succeeded = 0
         failed = 0
+        # A second bulk create or import for the agent waits for this one's
+        # end, then reads the names it made.
+        await CheckCRUD.hold_names(db, agent_id)
         taken = set(await CheckCRUD.display_names_for_agent(db, agent_id))
         numbers: dict[str, int] = {}
 
