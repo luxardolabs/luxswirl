@@ -39,7 +39,6 @@ from app.models.enum_model import (
     CheckType,
 )
 from app.schemas.check_schema import (
-    DEFAULT_RETRY_INTERVAL_SECONDS,
     AgentCheckCounts,
     BulkCheckCreateRequest,
     BulkCheckCreateResponse,
@@ -51,6 +50,7 @@ from app.schemas.check_schema import (
 )
 from app.schemas.import_export_schema import CheckExport
 from app.services.core._check_bulk_names import bulk_display_name, unused_name
+from app.services.core._check_bulk_request import bulk_check_create
 from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.alert_core_service import AlertCoreService
 from app.services.core.check_dependency_core_service import (
@@ -1214,24 +1214,11 @@ class CheckCoreService:
         agent_id: UUID,
         requests: list[BulkCheckCreateRequest],
     ) -> BulkCheckCreateResponse:
+        """Create a check on the agent for each URL in `requests`, each in its
+        own savepoint, named so no two of the agent's checks share a name.
+
+        Returns: the counts, and each URL's outcome (its check, or its error).
         """
-        Bulk create checks from a list of URLs.
-
-        Args:
-            db: Database session
-            agent_id: Agent UUID or ID
-            requests: List of BulkCheckCreateRequest objects
-
-        Returns:
-            Bulk creation results:
-            {
-                "total": int,
-                "succeeded": int,
-                "failed": int,
-                "results": [BulkCheckResult, ...]
-            }
-        """
-
         results: list[BulkCheckResult] = []
         succeeded = 0
         failed = 0
@@ -1251,27 +1238,7 @@ class CheckCoreService:
                     req.display_name or bulk_display_name(parsed), taken, numbers
                 )
 
-                # Build CheckCreate object
-                check_data = CheckCreate(
-                    display_name=display_name,
-                    check_type=CheckType(check_type),
-                    target=url,
-                    interval_seconds=req.interval_seconds,
-                    timeout_seconds=req.timeout_seconds or 10,
-                    enabled=req.enabled,
-                    tags=req.tags,
-                    expected_status=req.expected_status,
-                    http_method=req.http_method,
-                    verify_ssl=req.verify_ssl,
-                    resend_notification_after=req.resend_notification_after,
-                    retry_attempts=req.retry_attempts,
-                    # Unset takes CheckCreate's own default, as the single form does.
-                    retry_interval_seconds=(
-                        DEFAULT_RETRY_INTERVAL_SECONDS
-                        if req.retry_interval_seconds is None
-                        else req.retry_interval_seconds
-                    ),
-                )
+                check_data = bulk_check_create(req, check_type, url, display_name)
 
                 # Each in its own savepoint: one that fails leaves the rest to commit.
                 async with db.begin_nested():
