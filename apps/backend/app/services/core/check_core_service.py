@@ -89,8 +89,9 @@ class CheckCoreService:
         A second such writer for the agent waits for this transaction, then
         reads the names it made. The agent's row is read FOR KEY SHARE, so an
         archive, reject or delete in flight is waited for and then seen, and
-        one started later waits for this transaction; the agent's own reports
-        go on meanwhile.
+        one started later waits for this transaction (an agent delete takes
+        the same hold, then judges the checks this one made); the agent's own
+        reports and heartbeats go on meanwhile.
 
         Raises:
             AgentNotFoundException: no such agent.

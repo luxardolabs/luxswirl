@@ -140,6 +140,21 @@ class AgentCRUD:
         )
 
     @staticmethod
+    async def lock_without_key(db: AsyncSession, agent_id: UUID) -> None:
+        """Hold `agent_id`'s row FOR NO KEY UPDATE until the transaction ends,
+        and reload it as stored now: a `lock` (an approval, a revoke, a status
+        change) and another such hold wait for each other, while a FOR KEY
+        SHARE reader (a report's admission, a write of the agent's checks)
+        neither waits for it nor holds it up."""
+        await db.execute(
+            select(Agent)
+            .where(Agent.id == agent_id)
+            # key_share on a write lock is PostgreSQL's FOR NO KEY UPDATE.
+            .with_for_update(key_share=True)
+            .execution_options(populate_existing=True)
+        )
+
+    @staticmethod
     async def key_share_admission(
         db: AsyncSession, agent_id: UUID
     ) -> tuple[AgentApprovalStatus, str | None] | None:

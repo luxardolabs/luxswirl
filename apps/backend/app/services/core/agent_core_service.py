@@ -812,8 +812,9 @@ class AgentCoreService:
         """
         # Locked, so the pending check below and an approval of the same agent
         # never interleave: the tags a pending agent suggests land either before
-        # approval judges them, or not at all.
-        await AgentCRUD.lock(db, agent_id)
+        # approval judges them, or not at all. FOR NO KEY UPDATE, so a write of
+        # the agent's checks (FOR KEY SHARE on this row) never holds it up.
+        await AgentCRUD.lock_without_key(db, agent_id)
         agent = await AgentCoreService.get_agent_by_id(db, agent_id)
         if (
             settings.security.auth_enabled
@@ -938,6 +939,9 @@ class AgentCoreService:
             AgentNotFoundException: If agent not found
             AuthorizationException: See `require_may_delete`
         """
+        # A writer of the agent's checks in flight (an import, a bulk create)
+        # is waited for first, so the synthetic checks it makes are judged.
+        await CheckCRUD.hold_names(db, agent_id)
         agent = await AgentCoreService.get_agent_by_id(db, agent_id)
         await AgentCoreService.require_may_delete(
             db, agent_id, actor_is_admin=actor_is_admin

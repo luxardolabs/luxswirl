@@ -17,11 +17,13 @@ from typing import Any
 from uuid import UUID, uuid4
 
 import pytest
-from app.core.exceptions import ValidationException
+from app.core.datetime_utils import utc_now
+from app.core.exceptions import AuthorizationException, ValidationException
 from app.crud.agent_crud import AgentCRUD
 from app.crud.check_crud import CheckCRUD
 from app.models.agent_model import Agent
 from app.models.check_model import Check
+from app.schemas.agent_schema import AgentHeartbeat
 from app.schemas.check_schema import BulkCheckCreateRequest
 from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.check_core_service import CheckCoreService
@@ -31,7 +33,8 @@ from app.services.core.job_to_check_core_service import (
     QuickCheckParams,
 )
 from fixtures.factories import make_agent
-from sqlalchemy import select, update
+from sqlalchemy import select, text, update
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 pytestmark = pytest.mark.integration
@@ -77,6 +80,39 @@ async def _names(worker_db, agent_id: UUID) -> list[str]:
                 )
             ).all()
         )
+
+
+async def _answered(s: AsyncSession, request: Awaitable[None]) -> str:
+    """ "answered" when `request` gets every lock it needs within
+    HOLD_SECONDS, else what refused it."""
+    await s.execute(text(f"SET LOCAL lock_timeout = '{HOLD_SECONDS * 1000}ms'"))
+    try:
+        await request
+    except DBAPIError as e:
+        await s.rollback()
+        return f"blocked: {str(e.orig).splitlines()[0]}"
+    await s.commit()
+    return "answered"
+
+
+async def _report_admission(s: AsyncSession, agent_id: UUID) -> None:
+    """What a report's admission takes: the agent's row FOR KEY SHARE."""
+    assert await AgentCRUD.key_share_admission(s, agent_id) is not None
+
+
+async def _heartbeat(s: AsyncSession, agent_id: UUID) -> None:
+    """The agent's own heartbeat, sent with its key."""
+    key_hash = (
+        await s.execute(select(Agent.api_key_hash).where(Agent.id == agent_id))
+    ).scalar_one()
+    await AgentCoreService.process_heartbeat(
+        s,
+        agent_id,
+        AgentHeartbeat(agent_id=agent_id, timestamp=utc_now(), status="online"),
+        using_agent_key=True,
+        verified_key_hash=key_hash,
+        verified_secret_hash=None,
+    )
 
 
 def _bulk_requests() -> list[BulkCheckCreateRequest]:
@@ -244,21 +280,11 @@ async def test_the_agents_requests_go_on_during_a_write(worker_db, monkeypatch, 
         made += 1
         if made == COUNT // 2:
             async with worker_db() as other:
-                admission = await asyncio.wait_for(
-                    AgentCRUD.key_share_admission(other, agent_id), HOLD_SECONDS
+                answered.append(
+                    await _answered(other, _report_admission(other, agent_id))
                 )
-                assert admission is not None
-                answered.append("report")
-                await asyncio.wait_for(
-                    other.execute(
-                        update(Agent)
-                        .where(Agent.id == agent_id)
-                        .values(hostname="heartbeat")
-                    ),
-                    HOLD_SECONDS,
-                )
-                await other.commit()
-                answered.append("heartbeat")
+            async with worker_db() as other:
+                answered.append(await _answered(other, _heartbeat(other, agent_id)))
         return check
 
     monkeypatch.setattr(
@@ -269,7 +295,7 @@ async def test_the_agents_requests_go_on_during_a_write(worker_db, monkeypatch, 
         await WRITERS[writer](s, agent_id)
         await s.commit()
 
-    assert answered == ["report", "heartbeat"]
+    assert answered == ["answered", "answered"]
     async with worker_db() as s:
         stamped = (
             await s.execute(select(Agent.checks_updated_at).where(Agent.id == agent_id))
@@ -305,3 +331,83 @@ async def test_the_names_hold_waits_for_another_writer_alone(worker_db):
                 )
             await writer.rollback()
         await holder.rollback()
+
+
+SCRIPT = (
+    "async def run_check(page):\n"
+    "    await page.goto('https://127.0.0.1/')\n"
+    "    return {'status': 'success', 'steps': ['x']}\n"
+)
+
+
+async def test_an_editors_agent_delete_waits_for_an_import_and_judges_its_checks(
+    worker_db,
+):
+    """An admin's import has made a synthetic check, uncommitted. An editor's
+    delete of the agent waits for the import, then sees that check and is
+    refused, as it is once the check is committed."""
+    agent_id = await _agent(worker_db)
+    async with worker_db() as importer:
+        result = await CheckCoreService.bulk_import_checks(
+            importer,
+            agent_id,
+            [
+                {
+                    "name": "browse",
+                    "check_type": "synthetic",
+                    "target": "https://127.0.0.1/",
+                    "script_code": SCRIPT,
+                }
+            ],
+            overwrite=False,
+            actor_is_admin=True,
+        )
+        assert result["created"] == 1, result
+        await importer.flush()
+
+        async def delete() -> str:
+            async with worker_db() as d:
+                try:
+                    await AgentCoreService.delete_agent(
+                        d, agent_id, actor_is_admin=False
+                    )
+                except AuthorizationException:
+                    await d.rollback()
+                    return "refused"
+                await d.commit()
+                return "deleted"
+
+        task = asyncio.create_task(delete())
+        await asyncio.sleep(1)
+        await importer.commit()
+    assert await asyncio.wait_for(task, 10) == "refused"
+    assert await _names(worker_db, agent_id) == ["browse"]
+
+
+async def test_a_heartbeat_queued_behind_a_write_and_its_stamp_both_finish(
+    worker_db,
+):
+    """The write's stamp updates the agent's row after a heartbeat may have
+    locked it: the stamp waits for the heartbeat, and both commit."""
+    agent_id = await _agent(worker_db)
+    async with worker_db() as writer:
+        result = await CheckCoreService.bulk_create_checks(
+            writer, agent_id, _bulk_requests()
+        )
+        assert result.succeeded == COUNT
+
+        async def heartbeat() -> str:
+            async with worker_db() as hb:
+                await _heartbeat(hb, agent_id)
+                await hb.commit()
+                return "done"
+
+        task = asyncio.create_task(heartbeat())
+        await asyncio.sleep(1)
+        await writer.commit()
+    assert await asyncio.wait_for(task, 10) == "done"
+    async with worker_db() as s:
+        stamped = (
+            await s.execute(select(Agent.checks_updated_at).where(Agent.id == agent_id))
+        ).scalar_one()
+    assert stamped is not None
