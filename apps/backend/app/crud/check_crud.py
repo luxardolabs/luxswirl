@@ -2,8 +2,9 @@
 Check CRUD - database queries for check operations.
 """
 
-from collections.abc import Collection, Sequence
+from collections.abc import Awaitable, Callable, Collection, Sequence
 from datetime import datetime
+from typing import TypeVar
 from uuid import UUID
 
 from sqlalchemy import (
@@ -32,6 +33,8 @@ from app.models.agent_model import Agent
 from app.models.check_model import Check
 from app.models.enum_model import AssignmentMode, CheckHealthStatus, CheckType
 
+_T = TypeVar("_T")
+
 # The first key of the two-key advisory lock that keeps the writers choosing
 # an agent's check names to one transaction at a time (the second is the agent
 # id's hashtext). Any constant works: the two-key space does not overlap the
@@ -39,9 +42,10 @@ from app.models.enum_model import AssignmentMode, CheckHealthStatus, CheckType
 _CHECK_NAMES_LOCK_CLASS = 1_826_301_559
 # The first key of the synthetic guard (`hold_synthetic_guard`), likewise.
 _SYNTHETIC_GUARD_LOCK_CLASS = 1_826_301_560
-# The share of a transaction's statement timeout it waits for synthetic guards
-# (the web pool's 5 s gives 3 s), so a refusal comes before the timeout's 500.
-_GUARD_WAIT_SHARE = 0.6
+# The share of a transaction's statement timeout it waits for the locks a
+# judged write takes (the web pool's 5 s gives 3 s), so a refusal comes before
+# the timeout's 500.
+_REQUEST_WAIT_SHARE = 0.6
 # The transaction's statement timeout in milliseconds, 0 for none.
 _STATEMENT_TIMEOUT_MS = select(
     func.extract("epoch", cast(func.current_setting("statement_timeout"), INTERVAL))
@@ -161,6 +165,62 @@ class CheckCRUD:
         )
 
     @staticmethod
+    async def _within_request_wait(
+        db: AsyncSession, take: Callable[[], Awaitable[_T]]
+    ) -> _T | None:
+        """Run `take` (statements that wait for locks) waiting at most
+        `_REQUEST_WAIT_SHARE` of the transaction's statement timeout, in a
+        savepoint on the connection (so nothing pending is flushed ahead of
+        it). A transaction under a statement timeout (a request) is refused
+        before the timeout cuts it off; one with none (a maintenance job) waits.
+        None when the wait ran out: what `take` locked is released, and the
+        transaction is usable."""
+        timeout_ms = int(await db.scalar(_STATEMENT_TIMEOUT_MS) or 0)
+        connection = await db.connection()
+        try:
+            async with connection.begin_nested():
+                if timeout_ms:
+                    wait_ms = int(timeout_ms * _REQUEST_WAIT_SHARE)
+                    await db.execute(
+                        select(func.set_config("lock_timeout", f"{wait_ms}ms", True))
+                    )
+                taken = await take()
+                if timeout_ms:
+                    await db.execute(text("SET LOCAL lock_timeout = DEFAULT"))
+        except DBAPIError as exc:
+            if _LOCK_NOT_AVAILABLE not in (
+                getattr(exc.orig, "sqlstate", None),
+                getattr(exc.orig, "pgcode", None),
+            ):
+                raise
+            return None
+        return taken
+
+    @staticmethod
+    async def _advisory_locks(
+        db: AsyncSession, lock_class: int, agent_ids: Collection[UUID]
+    ) -> bool:
+        """Take `lock_class`'s transaction advisory lock on each of `agent_ids`
+        in id order, waiting as `_within_request_wait` does; False when the
+        wait ran out (none is then held)."""
+        agents = sorted(set(agent_ids))
+        if not agents:
+            return True
+
+        async def take() -> bool:
+            for agent_id in agents:
+                await db.execute(
+                    select(
+                        func.pg_advisory_xact_lock(
+                            lock_class, func.hashtext(str(agent_id))
+                        )
+                    )
+                )
+            return True
+
+        return await CheckCRUD._within_request_wait(db, take) is not None
+
+    @staticmethod
     async def hold_synthetic_guard(
         db: AsyncSession, agent_ids: Collection[UUID]
     ) -> bool:
@@ -170,44 +230,51 @@ class CheckCRUD:
         one is, holds to its transaction's end. A judgement made under it reads
         the agent's checks as committed with no such write in flight. Reports
         and other row writers take no advisory lock and are never held by it.
+        A request waits for it at most part of its statement timeout (a long
+        job holding it, such as an import with a synthetic entry, refuses the
+        request); False when that wait ran out."""
+        return await CheckCRUD._advisory_locks(
+            db, _SYNTHETIC_GUARD_LOCK_CLASS, agent_ids
+        )
 
-        A transaction under a statement timeout (a request) waits for the
-        guards at most `_GUARD_WAIT_SHARE` of it, so a long job holding one
-        (an import with a synthetic entry) refuses the request instead of the
-        timeout cutting it off; one with none (a maintenance job) waits for
-        them. False when the wait ran out: no guard is then held, and the
-        transaction is usable."""
-        agents = sorted(set(agent_ids))
-        if not agents:
-            return True
-        timeout_ms = int(await db.scalar(_STATEMENT_TIMEOUT_MS) or 0)
-        connection = await db.connection()
-        try:
-            async with connection.begin_nested():
-                if timeout_ms:
-                    wait_ms = int(timeout_ms * _GUARD_WAIT_SHARE)
-                    await db.execute(
-                        select(func.set_config("lock_timeout", f"{wait_ms}ms", True))
-                    )
-                for agent_id in agents:
-                    await db.execute(
-                        select(
-                            func.pg_advisory_xact_lock(
-                                _SYNTHETIC_GUARD_LOCK_CLASS,
-                                func.hashtext(str(agent_id)),
-                            )
-                        )
-                    )
-                if timeout_ms:
-                    await db.execute(text("SET LOCAL lock_timeout = DEFAULT"))
-        except DBAPIError as exc:
-            if _LOCK_NOT_AVAILABLE not in (
-                getattr(exc.orig, "sqlstate", None),
-                getattr(exc.orig, "pgcode", None),
-            ):
-                raise
-            return False
-        return True
+    @staticmethod
+    async def hold_rows(
+        db: AsyncSession,
+        check_ids: Collection[UUID],
+        *,
+        for_delete: bool = False,
+        key_share_ids: Collection[UUID] = (),
+    ) -> dict[UUID, Check] | None:
+        """The checks as stored now, with agent loaded, each row held to the
+        transaction's end in id order with the lock its write needs: FOR UPDATE
+        for a delete, else FOR NO KEY UPDATE; `key_share_ids` (a parent a write
+        points a check at) FOR KEY SHARE, what that foreign key reads, so a
+        write of the parent never holds it up while a delete of it does. A
+        request waits for them at most part of its statement timeout; None when
+        that wait ran out. The session's pending changes are flushed first."""
+        await db.flush()
+        written = set(check_ids)
+        shared = set(key_share_ids) - written
+
+        async def take() -> dict[UUID, Check]:
+            held: dict[UUID, Check] = {}
+            for check_id in sorted(written | shared):
+                query = (
+                    select(Check)
+                    .where(Check.id == check_id)
+                    .options(selectinload(Check.agent))
+                    .execution_options(populate_existing=True)
+                )
+                if check_id in shared:
+                    query = query.with_for_update(read=True, key_share=True)
+                else:
+                    query = query.with_for_update(key_share=not for_delete)
+                check = (await db.execute(query)).scalar_one_or_none()
+                if check is not None:
+                    held[check_id] = check
+            return held
+
+        return await CheckCRUD._within_request_wait(db, take)
 
     @staticmethod
     async def agent_ids_of(db: AsyncSession, check_ids: Collection[UUID]) -> set[UUID]:
@@ -448,18 +515,14 @@ class CheckCRUD:
         return result.scalars().all()
 
     @staticmethod
-    async def hold_names(db: AsyncSession, agent_id: UUID) -> None:
+    async def hold_names(db: AsyncSession, agent_id: UUID) -> bool:
         """Take the transaction's advisory lock on the names of `agent_id`'s
         checks: a second writer that reads them to choose new names waits for
         this transaction's end and then reads what it made. The lock excludes
-        those writers alone; the agent's row stays free for its own requests."""
-        await db.execute(
-            select(
-                func.pg_advisory_xact_lock(
-                    _CHECK_NAMES_LOCK_CLASS, func.hashtext(str(agent_id))
-                )
-            )
-        )
+        those writers alone; the agent's row stays free for its own requests.
+        A request waits for it at most part of its statement timeout (an
+        import holds it for its run); False when that wait ran out."""
+        return await CheckCRUD._advisory_locks(db, _CHECK_NAMES_LOCK_CLASS, {agent_id})
 
     @staticmethod
     async def display_names_for_agent(

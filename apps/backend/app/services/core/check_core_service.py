@@ -99,8 +99,11 @@ class CheckCoreService:
         Raises:
             AgentNotFoundException: no such agent.
             ValidationException: it is awaiting approval, refused or archived.
+            CheckBusyException: a request's wait for the names ran out (an
+                import holds them for its run).
         """
-        await CheckCRUD.hold_names(db, agent_id)
+        if not await CheckCRUD.hold_names(db, agent_id):
+            raise CheckBusyException()
         admission = await AgentCRUD.key_share_admission(db, agent_id)
         if admission is None:
             raise AgentNotFoundException(str(agent_id))
@@ -170,25 +173,25 @@ class CheckCoreService:
         check is an admin's): a write making it synthetic in flight is waited
         for, none starts before this transaction ends, and the check cannot
         move to another agent between this judgement and the write. `with_ids`
-        (a parent the write points the check at) are held in the same id-ordered
-        pass, as every writer of many checks holds them.
+        (a parent the write points the check at) are held FOR KEY SHARE, what
+        the write's foreign key reads, in the same id-ordered pass.
 
         Raises:
             CheckNotFoundException: No such check.
             CheckBusyException: It moved to another agent while the guard was
-                taken; nothing was changed.
+                taken, or a request's wait for the guard or the rows ran out;
+                nothing was changed.
         """
         # The agent id as a value: the reload below refreshes the session's one
         # copy of the check in place, so its attribute would read the new agent.
         guarded_agent = (await CheckCoreService.get_check_by_id(db, check_id)).agent_id
         if not await CheckCRUD.hold_synthetic_guard(db, {guarded_agent}):
             raise CheckBusyException()
-        locked = {
-            c.id: c
-            for c in await CheckCRUD.get_locked_by_ids(
-                db, {check_id, *with_ids}, for_delete=for_delete
-            )
-        }
+        locked = await CheckCRUD.hold_rows(
+            db, [check_id], for_delete=for_delete, key_share_ids=with_ids
+        )
+        if locked is None:
+            raise CheckBusyException()
         if check_id not in locked:
             raise CheckNotFoundException("unknown", str(check_id))
         if locked[check_id].agent_id != guarded_agent:
@@ -528,8 +531,9 @@ class CheckCoreService:
         await vet_changed_endpoints(db, check, update_data)
         vetted = endpoint_state(check)
         # A parent the write newly points the check at is held with it, in id
-        # order: the write's foreign key reads it. One it already points at is
-        # not read, so it is not held (a delete of it then waits for nothing).
+        # order, FOR KEY SHARE: the write's foreign key reads it. One it already
+        # points at is not read, so it is not held (a delete of it then waits
+        # for nothing).
         new_parent = update_data.get("depends_on_check_id")
         parent_ids = (
             [new_parent]
@@ -546,11 +550,8 @@ class CheckCoreService:
         elif on_agent is not None:
             # A check another write moved off the caller's agent meanwhile is
             # no longer under what the caller holds.
-            held = {
-                c.id: c
-                for c in await CheckCRUD.get_locked_by_ids(db, {check_id, *parent_ids})
-            }
-            if check_id not in held or held[check_id].agent_id != on_agent:
+            held = await CheckCRUD.hold_rows(db, [check_id], key_share_ids=parent_ids)
+            if not held or check_id not in held or held[check_id].agent_id != on_agent:
                 raise CheckBusyException()
             check = held[check_id]
             CheckCoreService._require_admin_for_synthetic(

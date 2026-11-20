@@ -70,12 +70,12 @@ class CheckDependencyCoreService:
         guarded = await CheckCRUD.agent_ids_of(db, written)
         if not await CheckCRUD.hold_synthetic_guard(db, guarded):
             raise CheckBusyException()
-        held = {
-            c.id: c
-            for c in await CheckCRUD.get_locked_by_ids(
-                db, written | ({parent_check_id} if attaching else set())
-            )
-        }
+        rows = await CheckCRUD.hold_rows(
+            db, written, key_share_ids={parent_check_id} if attaching else ()
+        )
+        if rows is None:
+            raise CheckBusyException()
+        held = dict(rows)
         parent = held.pop(parent_check_id, None)
         if parent is None and not attaching:
             parent = await CheckCRUD.get_as_stored(db, parent_check_id)

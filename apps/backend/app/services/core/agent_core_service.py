@@ -943,7 +943,8 @@ class AgentCoreService:
         # create) is waited for first, so the checks it makes are judged; and
         # under the agent's synthetic guard, no check is being made synthetic
         # on it while the delete judges what its cascade removes.
-        await CheckCRUD.hold_names(db, agent_id)
+        if not await CheckCRUD.hold_names(db, agent_id):
+            raise CheckBusyException()
         if not await CheckCRUD.hold_synthetic_guard(db, {agent_id}):
             raise CheckBusyException()
         agent = await AgentCoreService.get_agent_by_id(db, agent_id)
