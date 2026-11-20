@@ -64,8 +64,13 @@ class CheckDependencyCoreService:
         if parent_check_id in desired:
             raise ValidationException("A check cannot depend on itself")
 
-        children = await CheckCRUD.get_checks_by_ids(db, list(desired))
-        by_id = {c.id: c for c in children}
+        # Every child this may attach or detach, held in id order until the
+        # transaction ends and judged as stored: a retype to synthetic in
+        # flight is waited for.
+        listed = {c.id for c in await CheckCRUD.list_dependents(db, parent_check_id)}
+        by_id = {
+            c.id: c for c in await CheckCRUD.get_locked_by_ids(db, desired | listed)
+        }
         missing = desired - by_id.keys()
         if missing:
             raise ValidationException(f"Check {next(iter(missing))} not found")
@@ -76,9 +81,9 @@ class CheckDependencyCoreService:
                 f"Check '{name}' is itself a parent — single-level only"
             )
 
-        current_children = await CheckCRUD.list_dependents(db, parent_check_id)
-        by_id.update({c.id: c for c in current_children})
-        current = {c.id for c in current_children}
+        current = {
+            cid for cid, c in by_id.items() if c.depends_on_check_id == parent_check_id
+        }
         to_add = desired - current
         to_remove = current - desired
 

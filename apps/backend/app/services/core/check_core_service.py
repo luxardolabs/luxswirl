@@ -2,7 +2,6 @@
 Check service - business logic for check operations.
 """
 
-import asyncio
 from collections.abc import Mapping, Sequence
 from typing import Any
 from urllib.parse import ParseResult, urlparse
@@ -13,7 +12,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import attributes
 
 from app.core.check_config import keep_type_fields, pack_config, take_config_updates
-from app.core.check_target_validator import validate_check_target
 from app.core.datetime_utils import utc_now
 from app.core.error_summary import error_summary
 from app.core.exceptions import (
@@ -31,7 +29,6 @@ from app.crud.check_crud import CheckCRUD
 from app.models.agent_model import Agent
 from app.models.check_model import Check
 from app.models.enum_model import (
-    DATABASE_CHECK_TYPES,
     UNADMITTED_AGENT_STATUSES,
     AssignmentMode,
     BulkCheckOutcome,
@@ -51,6 +48,10 @@ from app.schemas.check_schema import (
 from app.schemas.import_export_schema import CheckExport
 from app.services.core._check_bulk_names import bulk_display_name, unused_name
 from app.services.core._check_bulk_request import bulk_check_create
+from app.services.core._check_endpoints import (
+    vet_changed_endpoints,
+    vet_check_endpoints,
+)
 from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.alert_core_service import AlertCoreService
 from app.services.core.check_dependency_core_service import (
@@ -137,6 +138,31 @@ class CheckCoreService:
         return check
 
     @staticmethod
+    async def _get_check_to_change(
+        db: AsyncSession,
+        check_id: UUID,
+        *,
+        include_script_code: bool = False,
+        for_delete: bool = False,
+    ) -> Check:
+        """The check as stored now, held until the transaction ends, for a write
+        that first judges it (a synthetic check is an admin's): a change in
+        flight, such as a retype, is waited for and judged as committed.
+
+        Raises:
+            CheckNotFoundException: No such check.
+        """
+        check = await CheckCRUD.get_locked(
+            db,
+            check_id,
+            include_script_code=include_script_code,
+            for_delete=for_delete,
+        )
+        if not check:
+            raise CheckNotFoundException("unknown", str(check_id))
+        return check
+
+    @staticmethod
     async def get_nameserver(db: AsyncSession, check_id: UUID) -> str | None:
         """The check's DNS nameserver, or None (no such check, or none set).
 
@@ -166,7 +192,7 @@ class CheckCoreService:
         agent = await CheckCoreService.get_admitted_agent(db, agent_id)
 
         # SSRF protection: every address the check connects to
-        await CheckCoreService._validate_endpoints_ssrf(
+        await vet_check_endpoints(
             db, data.check_type, data.target, data.nameserver, data.connection_string
         )
 
@@ -231,49 +257,6 @@ class CheckCoreService:
             extra={"check_name": check.fully_qualified_name, "check_id": str(check.id)},
         )
         return check
-
-    @staticmethod
-    async def _validate_endpoints_ssrf(
-        db: AsyncSession,
-        check_type: str,
-        target: str | None,
-        nameserver: str | None,
-        connection_string: str | None,
-        *,
-        kept_connection_string: str | None = None,
-    ) -> None:
-        """Validate every address a check connects to against the SSRF settings.
-
-        A check reaches its target, and a DNS check also its nameserver and a
-        database check its connection string; each is validated. An empty one
-        is skipped. A database check's driver reads its connection string, or
-        its target when it has none. An update judging only the target names the
-        connection string the check keeps in `kept_connection_string`. The
-        lookups run in a thread, and an address naming more than
-        `shared.ssrf.MAX_TARGET_HOSTS` hosts is refused before any.
-
-        Raises:
-            CheckTargetBlockedError: If any of them is blocked by SSRF protection
-        """
-        protection = await SettingsCoreService.get_network_protection(db)
-        driver_check = check_type in DATABASE_CHECK_TYPES
-        for endpoint, driver_reads in (
-            (
-                target,
-                driver_check and not (connection_string or kept_connection_string),
-            ),
-            (nameserver, False),
-            (connection_string, driver_check),
-        ):
-            if endpoint:
-                # Its lookups block, one host after another: off the event loop.
-                await asyncio.to_thread(
-                    validate_check_target,
-                    endpoint,
-                    block_cloud_metadata=protection.block_cloud_metadata,
-                    block_private_networks=protection.block_private_networks,
-                    database=driver_reads,
-                )
 
     @staticmethod
     async def clone_check(
@@ -476,39 +459,12 @@ class CheckCoreService:
     ) -> Check:
         """Update a check. `skip_config_update` leaves the agent's
         checks_updated_at to the caller (`mark_checks_changed`)."""
-        check = await CheckCoreService.get_check_by_id(
+        check = await CheckCoreService._get_check_to_change(
             db, check_id, include_script_code=True
         )
 
         update_data = data.model_dump(exclude_unset=True)
-
-        # SSRF protection: every address being changed, and any whose reading a change
-        # of type or a connection string coming or going decides. One left as it is
-        # stays out of it, so a stored address is no reason to refuse another edit.
-        check_type = update_data.get("check_type", check.check_type)
-        target = update_data.get("target", check.target)
-        connection_string = update_data.get(
-            "connection_string", check.connection_string
-        )
-        type_changes = check_type != check.check_type
-        await CheckCoreService._validate_endpoints_ssrf(
-            db,
-            check_type,
-            (
-                target
-                if type_changes
-                or target != check.target
-                or bool(connection_string) != bool(check.connection_string)
-                else None
-            ),
-            update_data.get("nameserver"),
-            (
-                connection_string
-                if type_changes or connection_string != check.connection_string
-                else None
-            ),
-            kept_connection_string=connection_string,
-        )
+        await vet_changed_endpoints(db, check, update_data)
 
         if "depends_on_check_id" in update_data:
             await CheckDependencyCoreService.validate_dependency(
@@ -911,7 +867,9 @@ class CheckCoreService:
         db: AsyncSession, check_id: UUID, *, actor_is_admin: bool = False
     ) -> None:
         """Delete a check; a synthetic one only for an admin."""
-        check = await CheckCoreService.get_check_by_id(db, check_id)
+        check = await CheckCoreService._get_check_to_change(
+            db, check_id, for_delete=True
+        )
         if check.check_type == SYNTHETIC:
             require_admin_actor(actor_is_admin=actor_is_admin)
 
@@ -943,16 +901,22 @@ class CheckCoreService:
 
     @staticmethod
     async def _bulk_permitted(
-        db: AsyncSession, check_ids: list[UUID], *, actor_is_admin: bool
+        db: AsyncSession,
+        check_ids: list[UUID],
+        *,
+        actor_is_admin: bool,
+        for_delete: bool = False,
     ) -> tuple[list[UUID], list[str]]:
         """The ids an actor may change in bulk, and one error per id refused.
 
         A synthetic check is an admin's to change in any way (`update_check`),
-        so a non-admin's bulk action leaves each one alone and reports it.
+        so a non-admin's bulk action leaves each one alone and reports it. The
+        checks are judged as stored, held until the transaction ends, so a
+        retype in flight is waited for.
         """
         if actor_is_admin or not check_ids:
             return check_ids, []
-        checks = await CheckCRUD.get_with_agent_by_ids(db, check_ids)
+        checks = await CheckCRUD.get_locked_by_ids(db, check_ids, for_delete=for_delete)
         synthetic = {check.id for check in checks if check.check_type == SYNTHETIC}
         return (
             [check_id for check_id in check_ids if check_id not in synthetic],
@@ -1027,7 +991,7 @@ class CheckCoreService:
             {"success_count", "failure_count", "errors"}
         """
         check_ids, refused = await CheckCoreService._bulk_permitted(
-            db, check_ids, actor_is_admin=actor_is_admin
+            db, check_ids, actor_is_admin=actor_is_admin, for_delete=True
         )
         if not check_ids:
             return CheckCoreService._with_refused(
@@ -1098,13 +1062,13 @@ class CheckCoreService:
         changed: list[UUID] = []
         affected_agents = set()  # Track agents that need config_version update
 
-        # One query for the whole selection, and one for the target agent —
-        # both were being re-issued per check, and the agent is the same every
-        # time round the loop. A check id that no longer resolves still fails
-        # on its own below, exactly as the per-check read did.
+        # One query for the whole selection, held in id order until the
+        # transaction ends, so each check is judged as stored (a retype in
+        # flight is waited for); one for the target agent. A check id that
+        # resolves to nothing fails on its own below.
         checks_by_id = {
             check.id: check
-            for check in await CheckCRUD.get_checks_by_ids(db, check_ids)
+            for check in await CheckCRUD.get_locked_by_ids(db, check_ids)
         }
         # get_admitted_agent RAISES when the agent is gone or takes no checks
         # (pending, rejected, archived), so resolve it here and keep the refusal

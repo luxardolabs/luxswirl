@@ -2,7 +2,7 @@
 Check CRUD - database queries for check operations.
 """
 
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from datetime import datetime
 from uuid import UUID
 
@@ -28,7 +28,7 @@ from app.crud._check_health import current_result, health_condition
 from app.crud._check_search import ids_matching_search
 from app.models.agent_model import Agent
 from app.models.check_model import Check
-from app.models.enum_model import AssignmentMode, CheckHealthStatus
+from app.models.enum_model import AssignmentMode, CheckHealthStatus, CheckType
 
 # The first key of the two-key advisory lock that keeps the writers choosing
 # an agent's check names to one transaction at a time (the second is the agent
@@ -176,6 +176,59 @@ class CheckCRUD:
             query = query.options(undefer(Check.script_code))
         result = await db.execute(query)
         return result.scalar_one_or_none()
+
+    @staticmethod
+    async def get_locked(
+        db: AsyncSession,
+        check_id: UUID,
+        *,
+        include_script_code: bool = False,
+        for_delete: bool = False,
+    ) -> Check | None:
+        """The check as stored now, its row held to the transaction's end: FOR
+        UPDATE for a delete, else FOR NO KEY UPDATE, which a report's KEY SHARE
+        lock does not wait for. A write in flight on the row is waited for, so
+        what the caller judges is what it then changes."""
+        query = (
+            select(Check)
+            .where(Check.id == check_id)
+            .options(selectinload(Check.agent))
+            .with_for_update(key_share=not for_delete)
+            .execution_options(populate_existing=True)
+        )
+        if include_script_code:
+            query = query.options(undefer(Check.script_code))
+        result = await db.execute(query)
+        return result.scalar_one_or_none()
+
+    @staticmethod
+    async def get_locked_by_ids(
+        db: AsyncSession, check_ids: Collection[UUID], *, for_delete: bool = False
+    ) -> Sequence[Check]:
+        """`check_ids` as stored now, with agent loaded, their rows held in id
+        order (as every writer of many checks locks them) to the transaction's
+        end: FOR UPDATE for a delete, else FOR NO KEY UPDATE."""
+        if not check_ids:
+            return []
+        result = await db.execute(
+            select(Check)
+            .where(Check.id.in_(set(check_ids)))
+            .order_by(Check.id)
+            .options(selectinload(Check.agent))
+            .with_for_update(key_share=not for_delete)
+            .execution_options(populate_existing=True)
+        )
+        return result.scalars().all()
+
+    @staticmethod
+    async def agent_has_synthetic(db: AsyncSession, agent_id: UUID) -> bool:
+        """Whether `agent_id` owns a synthetic check, as committed now."""
+        found = await db.execute(
+            select(Check.id)
+            .where(Check.agent_id == agent_id, Check.check_type == CheckType.SYNTHETIC)
+            .limit(1)
+        )
+        return found.first() is not None
 
     @staticmethod
     async def list_paginated(

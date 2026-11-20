@@ -24,7 +24,7 @@ from app.core.exceptions import (
 )
 from app.core.rate_limit import CredentialAttempt
 from app.core.recovery_secret import recovery_secret_digest, recovery_secret_matches
-from app.core.synthetic_guard import SYNTHETIC, require_admin_actor
+from app.core.synthetic_guard import require_admin_actor
 from app.crud.agent_crud import AgentCRUD
 from app.crud.check_crud import CheckCRUD
 from app.models.agent_metric_model import AgentMetric
@@ -918,8 +918,7 @@ class AgentCoreService:
         """
         if actor_is_admin:
             return
-        owned = await CheckCRUD.list_for_agent(db, agent_id)
-        if any(check.check_type == SYNTHETIC for check in owned):
+        if await CheckCRUD.agent_has_synthetic(db, agent_id):
             require_admin_actor(actor_is_admin=actor_is_admin)
 
     @staticmethod
@@ -939,17 +938,21 @@ class AgentCoreService:
             AgentNotFoundException: If agent not found
             AuthorizationException: See `require_may_delete`
         """
-        # A writer of the agent's checks in flight (an import, a bulk create)
-        # is waited for first, so the synthetic checks it makes are judged.
+        # The agent is judged on what the cascade will remove, with nothing left
+        # in flight: a writer of its checks that holds their names (an import, a
+        # bulk create) is waited for; its checks are locked in id order, as a
+        # report locks them (a retype in flight is waited for); then its row,
+        # which waits for a check being inserted or moved onto it and keeps any
+        # more from arriving. A check committed between the two locks is locked
+        # by the second pass, so every check is judged as stored.
         await CheckCRUD.hold_names(db, agent_id)
+        await CheckCRUD.lock_for_delete(db, agent_id=agent_id)
+        await AgentCRUD.lock(db, agent_id)
+        await CheckCRUD.lock_for_delete(db, agent_id=agent_id)
         agent = await AgentCoreService.get_agent_by_id(db, agent_id)
         await AgentCoreService.require_may_delete(
             db, agent_id, actor_is_admin=actor_is_admin
         )
-
-        # Its checks locked in id order first, as a report locks them: the cascade
-        # below removes them in the ORM's dependency order.
-        await CheckCRUD.lock_for_delete(db, agent_id=agent_id)
         await AgentCRUD.delete_agent(db, agent)
 
         logger.info(

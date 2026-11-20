@@ -63,13 +63,13 @@ Synthetic checks execute arbitrary Python code. Administrators can run any code 
 
 **Mitigations**:
 
-- Admin role required — enforced in the core service (`CheckCoreService.create_check`/`update_check`/`clone_check`), not only in the web layer.
+- Admin role required — enforced in the core services (`CheckCoreService`, `CheckDependencyCoreService`, `AlertCoreService`, `AgentCoreService`), not only in the web layer, for every change that reaches a synthetic check: create, edit, clone, move, enable or disable, delete (one, in bulk, or with its agent), its dependency, and the alerts on it. Each is judged on the checks it writes with their rows locked, so a check being made synthetic at that moment is waited for and judged as synthetic (an alert change is refused as busy instead).
 - AST validation (blocks obvious attacks) — hardening, **not** the access control.
 - Audit logging
 - UI warning banner
 - Containment on the agent host: the shipped `compose.yml` runs the agent with no Linux capabilities, a read-only root filesystem and memory and process limits, and gives it none of the server's secrets. See [Recommended deployment hardening](#recommended-deployment-hardening).
 
-**Authorization model**: Synthetic checks are created and edited only through the web UI, which enforces the user's RBAC role (`viewer`/`editor`/`admin`). The JSON API's agent protocol (`/api/v1/agent`) offers no route that creates or edits checks.
+**Authorization model**: Synthetic checks are created and changed through the web UI, the admin API (`/api/v1/admin`) and the MCP server (`/mcp`), each acting as a user with their RBAC role (`viewer`/`editor`/`admin`). Over the admin API and MCP, the admin's token must also grant `checks:admin`; an admin's "Read and write" token is refused as an editor is. The agent protocol (`/api/v1/agent`) offers no route that creates or changes checks.
 
 **Recommendations**:
 
