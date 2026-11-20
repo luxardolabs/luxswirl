@@ -2,7 +2,7 @@
 Check service - business logic for check operations.
 """
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from typing import Any
 from urllib.parse import ParseResult, urlparse
 from uuid import UUID
@@ -158,12 +158,20 @@ class CheckCoreService:
 
     @staticmethod
     async def _get_check_to_change(
-        db: AsyncSession, check_id: UUID, *, include_script_code: bool = False
+        db: AsyncSession,
+        check_id: UUID,
+        *,
+        include_script_code: bool = False,
+        for_delete: bool = False,
+        with_ids: Collection[UUID] = (),
     ) -> Check:
-        """The check as committed, under its agent's synthetic guard, for a write
-        that judges it (a synthetic check is an admin's): a write making it
-        synthetic in flight is waited for, and none starts before this
-        transaction ends.
+        """The check as committed, under its agent's synthetic guard and its row
+        held to the transaction's end, for a write that judges it (a synthetic
+        check is an admin's): a write making it synthetic in flight is waited
+        for, none starts before this transaction ends, and the check cannot
+        move to another agent between this judgement and the write. `with_ids`
+        (a parent the write points the check at) are held in the same id-ordered
+        pass, as every writer of many checks holds them.
 
         Raises:
             CheckNotFoundException: No such check.
@@ -174,13 +182,22 @@ class CheckCoreService:
         # copy of the check in place, so its attribute would read the new agent.
         guarded_agent = (await CheckCoreService.get_check_by_id(db, check_id)).agent_id
         await CheckCRUD.hold_synthetic_guard(db, {guarded_agent})
-        held = await CheckCRUD.get_as_stored(
-            db, check_id, include_script_code=include_script_code
-        )
+        locked = {
+            c.id: c
+            for c in await CheckCRUD.get_locked_by_ids(
+                db, {check_id, *with_ids}, for_delete=for_delete
+            )
+        }
+        if check_id not in locked:
+            raise CheckNotFoundException("unknown", str(check_id))
+        if locked[check_id].agent_id != guarded_agent:
+            raise CheckBusyException()
+        if not include_script_code:
+            return locked[check_id]
+        # The row is held, so this reload reads the same version, script included.
+        held = await CheckCRUD.get_as_stored(db, check_id, include_script_code=True)
         if not held:
             raise CheckNotFoundException("unknown", str(check_id))
-        if held.agent_id != guarded_agent:
-            raise CheckBusyException()
         return held
 
     @staticmethod
@@ -508,9 +525,13 @@ class CheckCoreService:
         )
         await vet_changed_endpoints(db, check, update_data)
         vetted = endpoint_state(check)
+        # A new parent is held with the check: the write's foreign key reads it.
+        parent_ids = [
+            pid for pid in [update_data.get("depends_on_check_id")] if pid is not None
+        ]
         if guarded:
             check = await CheckCoreService._get_check_to_change(
-                db, check_id, include_script_code=True
+                db, check_id, include_script_code=True, with_ids=parent_ids
             )
             CheckCoreService._require_admin_for_synthetic(
                 check, update_data, actor_is_admin=actor_is_admin
@@ -518,10 +539,13 @@ class CheckCoreService:
         elif on_agent is not None:
             # A check another write moved off the caller's agent meanwhile is
             # no longer under what the caller holds.
-            locked = await CheckCRUD.get_locked_by_ids(db, [check_id])
-            if not locked or locked[0].agent_id != on_agent:
+            held = {
+                c.id: c
+                for c in await CheckCRUD.get_locked_by_ids(db, {check_id, *parent_ids})
+            }
+            if check_id not in held or held[check_id].agent_id != on_agent:
                 raise CheckBusyException()
-            check = locked[0]
+            check = held[check_id]
             CheckCoreService._require_admin_for_synthetic(
                 check, update_data, actor_is_admin=actor_is_admin
             )
@@ -757,7 +781,9 @@ class CheckCoreService:
     ) -> None:
         """Delete a check; a synthetic one only for an admin, judged under its
         agent's synthetic guard."""
-        check = await CheckCoreService._get_check_to_change(db, check_id)
+        check = await CheckCoreService._get_check_to_change(
+            db, check_id, for_delete=True
+        )
         if check.check_type == SYNTHETIC:
             require_admin_actor(actor_is_admin=actor_is_admin)
 

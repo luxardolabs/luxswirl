@@ -63,16 +63,22 @@ class CheckDependencyCoreService:
         listed = {c.id for c in await CheckCRUD.list_dependents(db, parent_check_id)}
         guarded = await CheckCRUD.agent_ids_of(db, desired | listed)
         await CheckCRUD.hold_synthetic_guard(db, guarded)
-        parent = await CheckCRUD.get_as_stored(db, parent_check_id)
+        # The children and the parent (which their foreign keys read) held in id
+        # order to the transaction's end, so none moves to another agent
+        # between this judgement and the write.
+        by_id = {
+            c.id: c
+            for c in await CheckCRUD.get_locked_by_ids(
+                db, desired | listed | {parent_check_id}
+            )
+        }
+        parent = by_id.pop(parent_check_id, None)
         if parent is None:
             raise ValidationException(f"Parent check {parent_check_id} not found")
         if parent.depends_on_check_id is not None:
             raise ValidationException(
                 "Selected parent already has its own parent (single-level only)"
             )
-        by_id = {
-            c.id: c for c in await CheckCRUD.get_as_stored_by_ids(db, desired | listed)
-        }
         if any(c.agent_id not in guarded for c in by_id.values()):
             # A child moved to another agent while the guards were taken.
             raise CheckBusyException()

@@ -228,24 +228,6 @@ class CheckCRUD:
         return result.scalar_one_or_none()
 
     @staticmethod
-    async def get_as_stored_by_ids(
-        db: AsyncSession, check_ids: Collection[UUID]
-    ) -> Sequence[Check]:
-        """`check_ids` as committed now (the session's copies reloaded), with
-        agent loaded, read without a lock. The session's pending changes are
-        flushed first, so reloading the rows keeps them."""
-        if not check_ids:
-            return []
-        await db.flush()
-        result = await db.execute(
-            select(Check)
-            .where(Check.id.in_(set(check_ids)))
-            .options(selectinload(Check.agent))
-            .execution_options(populate_existing=True)
-        )
-        return result.scalars().all()
-
-    @staticmethod
     async def get_locked_by_ids(
         db: AsyncSession, check_ids: Collection[UUID], *, for_delete: bool = False
     ) -> Sequence[Check]:
