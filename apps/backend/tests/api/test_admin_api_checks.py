@@ -379,6 +379,27 @@ async def test_a_control_character_in_a_list_filter_is_refused(
     assert resp.status_code == 422, resp.text
 
 
+@pytest.mark.parametrize(
+    ("path", "param"),
+    [
+        (CHECKS, "tag"),
+        (CHECKS, "search"),
+        ("/api/v1/admin/agents", "search"),
+        ("/api/v1/admin/users", "search"),
+        ("/api/v1/admin/notification-logs", "search"),
+    ],
+)
+async def test_a_blank_list_filter_is_no_filter(
+    db: AsyncSession, client: AsyncClient, path: str, param: str
+) -> None:
+    """A form's blank field (`?search=`) is no filter, not a length check on None."""
+    admin = await _as(db, "admin")
+
+    resp = await client.get(path, params={param: ""}, headers=admin)
+
+    assert resp.status_code == 200, resp.text
+
+
 # Names a check stores and people write: a ZWJ emoji sequence, a ZWNJ in
 # Persian, a soft hyphen. Each holds a format (Cf) character.
 STORED_NAMES = {

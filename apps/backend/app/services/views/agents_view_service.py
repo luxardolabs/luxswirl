@@ -509,7 +509,7 @@ class AgentsViewService:
         request: Request,
         current_user: AuthedUser,
         active_only: bool,
-        search: str,
+        search: str | None,
         hours: int,
         page: int,
         per_page: int | None,

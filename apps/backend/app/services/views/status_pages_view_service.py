@@ -284,8 +284,8 @@ class StatusPagesViewService:
         agent_id: UUID | None,
         check_type: CheckType | None,
         status: CheckHealthStatus | None,
-        tags: str,
-        search: str,
+        tags: str | None,
+        search: str | None,
     ) -> dict[str, Any]:
         """Available-checks filter partial."""
         filtered_checks = await DashboardRender.get_filtered_checks_with_status(

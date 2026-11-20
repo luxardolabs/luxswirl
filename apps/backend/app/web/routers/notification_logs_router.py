@@ -15,6 +15,7 @@ from app.core.query_params import (
     NotifStatusFilter,
     PerPageFilter,
     ProviderIdFilter,
+    SearchFilter,
 )
 from app.db import get_db
 from app.services.views.notification_logs_view_service import (
@@ -43,7 +44,7 @@ async def notification_logs_page(
     status: NotifStatusFilter = None,
     alert_id: AlertIdFilter = None,
     notification_provider_id: ProviderIdFilter = None,
-    search: Annotated[str | None, Query(description="Search logs")] = None,
+    search: SearchFilter = None,
     page: Annotated[int, Query(ge=1, description="Page number")] = 1,
     per_page: PerPageFilter = None,
 ) -> HTMLResponse:

@@ -180,19 +180,19 @@ class ChecksViewService:
         current_user: AuthedUser,
         parent_check_id: UUID,
         check_type: CheckType | None = None,
-        agent_name: str = "",
-        tags: str = "",
-        search: str = "",
+        agent_name: str | None = None,
+        tags: str | None = None,
+        search: str | None = None,
     ) -> dict[str, Any]:
         parent = await CheckApiCoreService.get_check_view(db, parent_check_id)
         candidates = await CheckApiCoreService.list_potential_dependent_views(
             db, parent_check_id
         )
 
-        search_lc = search.lower().strip()
+        search_lc = (search or "").lower().strip()
         type_lc = check_type.lower().strip() if check_type else ""
-        agent_lc = agent_name.lower().strip()
-        tag_lc = tags.lower().strip()
+        agent_lc = (agent_name or "").lower().strip()
+        tag_lc = (tags or "").lower().strip()
 
         filtered = []
         for c in candidates:
@@ -236,9 +236,9 @@ class ChecksViewService:
             "candidates": filtered,
             "current_dependent_ids": current_ids,
             "check_type": check_type,
-            "agent_name": agent_name,
-            "tags": tags,
-            "search": search,
+            "agent_name": agent_name or "",
+            "tags": tags or "",
+            "search": search or "",
             "all_types": all_types,
             "all_agents": all_agents,
         }

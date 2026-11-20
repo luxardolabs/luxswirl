@@ -16,6 +16,8 @@ from app.core.query_params import (
     CheckTypeFilter,
     HealthStatusFilter,
     PerPageFilter,
+    SearchFilter,
+    TagsFilter,
 )
 from app.core.safe_redirect import safe_redirect_target
 from app.db import get_db
@@ -75,8 +77,8 @@ async def status_page(
     agent_id: AgentIdFilter = None,
     check_type: CheckTypeFilter = None,
     status: HealthStatusFilter = None,
-    tags: Annotated[str | None, Query(description="Filter by tags")] = None,
-    search: Annotated[str | None, Query(description="Search checks")] = None,
+    tags: TagsFilter = None,
+    search: SearchFilter = None,
     page: Annotated[int, Query(ge=1, description="Page number")] = 1,
     per_page: PerPageFilter = None,
 ) -> HTMLResponse:

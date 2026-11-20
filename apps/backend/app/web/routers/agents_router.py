@@ -17,7 +17,7 @@ from app.core.exceptions import (
     ValidationException,
     value_error_message,
 )
-from app.core.query_params import PerPageFilter
+from app.core.query_params import PerPageFilter, SearchFilter
 from app.db import get_db
 from app.services.views.agents_view_service import AgentsViewService
 from app.services.views.maintenance_job_view_service import MaintenanceJobViewService
@@ -46,9 +46,7 @@ async def agents_list_page(
     current_user: CurrentUserWeb,
     active_only: Annotated[bool, Query(description="Show only active agents")] = False,
     archived: Annotated[bool, Query(description="Show only archived agents")] = False,
-    search: Annotated[
-        str, Query(description="Search agents by name, hostname, or IP")
-    ] = "",
+    search: SearchFilter = None,
     hours: Annotated[
         int, Query(ge=1, le=24, description="Hours of metrics history")
     ] = 4,

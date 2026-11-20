@@ -12,7 +12,12 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.core.query_params import ActiveFilter, PerPageFilter
+from app.core.query_params import (
+    ActiveFilter,
+    PerPageFilter,
+    SearchFilter,
+    UserRoleFilter,
+)
 from app.core.rate_limit import limiter
 from app.db import get_db
 from app.services.views.web_users_view_service import WebUsersViewService
@@ -37,9 +42,9 @@ async def users_page(
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     page: Annotated[int, Query(ge=1)] = 1,
     per_page: PerPageFilter = None,
-    role: Annotated[str | None, Query()] = None,
+    role: UserRoleFilter = None,
     is_active: ActiveFilter = None,
-    search: Annotated[str | None, Query()] = None,
+    search: SearchFilter = None,
 ) -> HTMLResponse:
     """User management page (admin only)."""
     context = await WebUsersViewService().build_users_page_context(
@@ -68,9 +73,9 @@ async def users_table_partial(
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     page: Annotated[int, Query(ge=1)] = 1,
     per_page: PerPageFilter = None,
-    role: Annotated[str | None, Query()] = None,
+    role: UserRoleFilter = None,
     is_active: ActiveFilter = None,
-    search: Annotated[str | None, Query()] = None,
+    search: SearchFilter = None,
 ) -> HTMLResponse:
     """HTMX partial: users table with filtering and pagination."""
     context = await WebUsersViewService().build_users_table_partial_context(

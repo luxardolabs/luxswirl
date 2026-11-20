@@ -21,7 +21,7 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import Query
-from pydantic import AfterValidator, BeforeValidator
+from pydantic import AfterValidator, BeforeValidator, StringConstraints
 
 from app.models.enum_model import (
     AuditOutcome,
@@ -35,7 +35,7 @@ from app.models.enum_model import (
     SettingCategory,
     UserRole,
 )
-from app.schemas.base_schema import MAX_TAG_LENGTH, refuse_search_controls
+from app.schemas.base_schema import MAX_TAG_LENGTH, MAX_TAGS, refuse_search_controls
 
 
 def empty_to_none(v: object) -> object:
@@ -189,16 +189,25 @@ UntilFilter = Annotated[
 ]
 
 # ── Text filters: one line of free text, bounded as the values they match ──
-# An empty one is no filter, as the form's blank field means.
+# An empty one is no filter, as the form's blank field means. The bound sits on the
+# text itself, not on the optional value: a blank field is None by then, and a
+# length constraint on None is a TypeError (500), not a 422.
 SearchFilter = Annotated[
-    str | None,
+    Annotated[str, StringConstraints(max_length=255)] | None,
     BeforeValidator(empty_to_none),
     AfterValidator(one_line_or_none),
-    Query(max_length=255, description="Search text"),
+    Query(description="Search text"),
 ]
 TagFilter = Annotated[
-    str | None,
+    Annotated[str, StringConstraints(max_length=MAX_TAG_LENGTH)] | None,
     BeforeValidator(empty_to_none),
     AfterValidator(one_line_or_none),
-    Query(max_length=MAX_TAG_LENGTH, description="Filter by tag"),
+    Query(description="Filter by tag"),
+]
+TagsFilter = Annotated[
+    Annotated[str, StringConstraints(max_length=MAX_TAGS * (MAX_TAG_LENGTH + 1))]
+    | None,
+    BeforeValidator(empty_to_none),
+    AfterValidator(one_line_or_none),
+    Query(description="Filter by tags, comma-separated"),
 ]

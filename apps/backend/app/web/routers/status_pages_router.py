@@ -16,6 +16,8 @@ from app.core.query_params import (
     CheckTypeFilter,
     HealthStatusFilter,
     PerPageFilter,
+    SearchFilter,
+    TagsFilter,
     TimeRangeFilter,
 )
 from app.core.rate_limit import limiter
@@ -233,8 +235,8 @@ async def get_available_checks(
     agent_id: AgentIdFilter = None,
     check_type: CheckTypeFilter = None,
     status: HealthStatusFilter = None,
-    tags: Annotated[str, Query(description="Comma-separated tags")] = "",
-    search: Annotated[str, Query(description="Search query")] = "",
+    tags: TagsFilter = None,
+    search: SearchFilter = None,
 ) -> HTMLResponse:
     """Get filtered list of available checks for adding to dashboard."""
     context = await StatusPagesViewService.build_available_checks_context(

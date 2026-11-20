@@ -10,7 +10,7 @@ from fastapi.responses import HTMLResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import CheckNotFoundException
-from app.core.query_params import CheckTypeFilter
+from app.core.query_params import CheckTypeFilter, SearchFilter, TagFilter
 from app.core.rate_limit import (
     BULK_PREVIEW_RATE_LIMIT,
     limiter,
@@ -251,9 +251,9 @@ async def dependents_panel(
     current_user: EditorUserWeb,
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     check_type: CheckTypeFilter = None,
-    agent_name: Annotated[str, Query()] = "",
-    tags: Annotated[str, Query()] = "",
-    search: Annotated[str, Query()] = "",
+    agent_name: SearchFilter = None,
+    tags: TagFilter = None,
+    search: SearchFilter = None,
 ) -> Response:
     """Side-panel: manage which checks depend on this one."""
     try:
