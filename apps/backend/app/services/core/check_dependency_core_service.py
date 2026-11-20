@@ -63,16 +63,20 @@ class CheckDependencyCoreService:
         listed = {c.id for c in await CheckCRUD.list_dependents(db, parent_check_id)}
         guarded = await CheckCRUD.agent_ids_of(db, desired | listed)
         await CheckCRUD.hold_synthetic_guard(db, guarded)
-        # The children and the parent (which their foreign keys read) held in id
-        # order to the transaction's end, so none moves to another agent
-        # between this judgement and the write.
+        # The children held in id order to the transaction's end, so none moves
+        # to another agent between this judgement and the write; the parent with
+        # them when a child is attached (its foreign key reads the parent), and
+        # not for a detach, which reads nothing of it.
+        attaching = bool(desired - listed)
         by_id = {
             c.id: c
             for c in await CheckCRUD.get_locked_by_ids(
-                db, desired | listed | {parent_check_id}
+                db, desired | listed | ({parent_check_id} if attaching else set())
             )
         }
         parent = by_id.pop(parent_check_id, None)
+        if parent is None and not attaching:
+            parent = await CheckCRUD.get_as_stored(db, parent_check_id)
         if parent is None:
             raise ValidationException(f"Parent check {parent_check_id} not found")
         if parent.depends_on_check_id is not None:
@@ -97,6 +101,10 @@ class CheckDependencyCoreService:
         }
         to_add = desired - current
         to_remove = current - desired
+        if to_add and not attaching:
+            # A child was detached from this parent meanwhile: attaching it
+            # reads the parent, which is not held.
+            raise CheckBusyException()
 
         # Attaching or detaching a synthetic check writes its dependency, a
         # change to a synthetic check, which is an admin's alone.

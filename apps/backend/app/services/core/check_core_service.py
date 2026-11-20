@@ -525,10 +525,15 @@ class CheckCoreService:
         )
         await vet_changed_endpoints(db, check, update_data)
         vetted = endpoint_state(check)
-        # A new parent is held with the check: the write's foreign key reads it.
-        parent_ids = [
-            pid for pid in [update_data.get("depends_on_check_id")] if pid is not None
-        ]
+        # A parent the write newly points the check at is held with it, in id
+        # order: the write's foreign key reads it. One it already points at is
+        # not read, so it is not held (a delete of it then waits for nothing).
+        new_parent = update_data.get("depends_on_check_id")
+        parent_ids = (
+            [new_parent]
+            if new_parent is not None and new_parent != check.depends_on_check_id
+            else []
+        )
         if guarded:
             check = await CheckCoreService._get_check_to_change(
                 db, check_id, include_script_code=True, with_ids=parent_ids
@@ -549,7 +554,12 @@ class CheckCoreService:
             CheckCoreService._require_admin_for_synthetic(
                 check, update_data, actor_is_admin=actor_is_admin
             )
-        if endpoint_state(check) != vetted:
+        if endpoint_state(check) != vetted or (
+            new_parent is not None
+            and new_parent != check.depends_on_check_id
+            and new_parent not in parent_ids
+        ):
+            # Its endpoints, or the parent it points at, changed meanwhile.
             raise CheckBusyException()
 
         if "depends_on_check_id" in update_data:
