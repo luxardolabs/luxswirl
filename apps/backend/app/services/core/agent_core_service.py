@@ -18,6 +18,7 @@ from app.core.exceptions import (
     AgentNotFoundException,
     AuthenticationException,
     AuthorizationException,
+    CheckBusyException,
     DuplicateResourceException,
     RecoverySecretRefusedException,
     ValidationException,
@@ -943,7 +944,8 @@ class AgentCoreService:
         # under the agent's synthetic guard, no check is being made synthetic
         # on it while the delete judges what its cascade removes.
         await CheckCRUD.hold_names(db, agent_id)
-        await CheckCRUD.hold_synthetic_guard(db, {agent_id})
+        if not await CheckCRUD.hold_synthetic_guard(db, {agent_id}):
+            raise CheckBusyException()
         agent = await AgentCoreService.get_agent_by_id(db, agent_id)
         await AgentCoreService.require_may_delete(
             db, agent_id, actor_is_admin=actor_is_admin

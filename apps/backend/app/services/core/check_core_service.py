@@ -181,7 +181,8 @@ class CheckCoreService:
         # The agent id as a value: the reload below refreshes the session's one
         # copy of the check in place, so its attribute would read the new agent.
         guarded_agent = (await CheckCoreService.get_check_by_id(db, check_id)).agent_id
-        await CheckCRUD.hold_synthetic_guard(db, {guarded_agent})
+        if not await CheckCRUD.hold_synthetic_guard(db, {guarded_agent}):
+            raise CheckBusyException()
         locked = {
             c.id: c
             for c in await CheckCRUD.get_locked_by_ids(
@@ -236,7 +237,8 @@ class CheckCoreService:
             require_admin_actor(actor_is_admin=actor_is_admin)
             # Made under the agent's synthetic guard, before any row is held:
             # a delete of the agent judging its checks waits for it.
-            await CheckCRUD.hold_synthetic_guard(db, {agent_id})
+            if not await CheckCRUD.hold_synthetic_guard(db, {agent_id}):
+                raise CheckBusyException()
         agent = await CheckCoreService.get_admitted_agent(db, agent_id)
 
         await CheckDependencyCoreService.validate_dependency(
@@ -982,7 +984,8 @@ class CheckCoreService:
             and any(check.check_type == SYNTHETIC for check in checks_by_id.values())
         ):
             guarded = {new_agent_id}
-        await CheckCRUD.hold_synthetic_guard(db, guarded)
+        if not await CheckCRUD.hold_synthetic_guard(db, guarded):
+            raise CheckBusyException()
         await CheckCRUD.get_locked_by_ids(
             db,
             [

@@ -15,10 +15,12 @@ from sqlalchemy import (
     inspect,
     or_,
     select,
+    text,
     true,
     update,
 )
-from sqlalchemy.dialects.postgresql import ARRAY
+from sqlalchemy.dialects.postgresql import ARRAY, INTERVAL
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload, undefer
 from sqlalchemy.sql import ColumnElement
@@ -37,6 +39,16 @@ from app.models.enum_model import AssignmentMode, CheckHealthStatus, CheckType
 _CHECK_NAMES_LOCK_CLASS = 1_826_301_559
 # The first key of the synthetic guard (`hold_synthetic_guard`), likewise.
 _SYNTHETIC_GUARD_LOCK_CLASS = 1_826_301_560
+# The share of a transaction's statement timeout it waits for synthetic guards
+# (the web pool's 5 s gives 3 s), so a refusal comes before the timeout's 500.
+_GUARD_WAIT_SHARE = 0.6
+# The transaction's statement timeout in milliseconds, 0 for none.
+_STATEMENT_TIMEOUT_MS = select(
+    func.extract("epoch", cast(func.current_setting("statement_timeout"), INTERVAL))
+    * 1000
+)
+# PostgreSQL lock_not_available: a lock not granted within lock_timeout.
+_LOCK_NOT_AVAILABLE = "55P03"
 
 
 class CheckCRUD:
@@ -151,21 +163,51 @@ class CheckCRUD:
     @staticmethod
     async def hold_synthetic_guard(
         db: AsyncSession, agent_ids: Collection[UUID]
-    ) -> None:
+    ) -> bool:
         """Take the transaction's synthetic guard on each of `agent_ids`, in id
         order: an advisory lock per agent that every write making one of the
         agent's checks synthetic, and every non-admin write judged on whether
         one is, holds to its transaction's end. A judgement made under it reads
         the agent's checks as committed with no such write in flight. Reports
-        and other row writers take no advisory lock and are never held by it."""
-        for agent_id in sorted(set(agent_ids)):
-            await db.execute(
-                select(
-                    func.pg_advisory_xact_lock(
-                        _SYNTHETIC_GUARD_LOCK_CLASS, func.hashtext(str(agent_id))
+        and other row writers take no advisory lock and are never held by it.
+
+        A transaction under a statement timeout (a request) waits for the
+        guards at most `_GUARD_WAIT_SHARE` of it, so a long job holding one
+        (an import with a synthetic entry) refuses the request instead of the
+        timeout cutting it off; one with none (a maintenance job) waits for
+        them. False when the wait ran out: no guard is then held, and the
+        transaction is usable."""
+        agents = sorted(set(agent_ids))
+        if not agents:
+            return True
+        timeout_ms = int(await db.scalar(_STATEMENT_TIMEOUT_MS) or 0)
+        connection = await db.connection()
+        try:
+            async with connection.begin_nested():
+                if timeout_ms:
+                    wait_ms = int(timeout_ms * _GUARD_WAIT_SHARE)
+                    await db.execute(
+                        select(func.set_config("lock_timeout", f"{wait_ms}ms", True))
                     )
-                )
-            )
+                for agent_id in agents:
+                    await db.execute(
+                        select(
+                            func.pg_advisory_xact_lock(
+                                _SYNTHETIC_GUARD_LOCK_CLASS,
+                                func.hashtext(str(agent_id)),
+                            )
+                        )
+                    )
+                if timeout_ms:
+                    await db.execute(text("SET LOCAL lock_timeout = DEFAULT"))
+        except DBAPIError as exc:
+            if _LOCK_NOT_AVAILABLE not in (
+                getattr(exc.orig, "sqlstate", None),
+                getattr(exc.orig, "pgcode", None),
+            ):
+                raise
+            return False
+        return True
 
     @staticmethod
     async def agent_ids_of(db: AsyncSession, check_ids: Collection[UUID]) -> set[UUID]:

@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.error_summary import error_summary
 from app.core.exceptions import (
     AgentNotFoundException,
+    CheckBusyException,
     NotFoundException,
     ValidationException,
 )
@@ -277,8 +278,10 @@ class CheckTransferCoreService:
         await CheckCoreService.hold_check_names(db, agent_id)
         # An import that makes a synthetic check holds the agent's synthetic
         # guard from its start, before any entry's row is written.
-        if any(raw.get("check_type") == SYNTHETIC for raw in checks):
-            await CheckCRUD.hold_synthetic_guard(db, {agent_id})
+        if any(
+            raw.get("check_type") == SYNTHETIC for raw in checks
+        ) and not await CheckCRUD.hold_synthetic_guard(db, {agent_id}):
+            raise CheckBusyException()
 
         existing = await CheckCoreService.list_checks_for_agent(db, agent_id)
         existing_map = {c.display_name: c for c in existing}

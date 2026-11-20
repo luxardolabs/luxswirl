@@ -68,7 +68,8 @@ class CheckDependencyCoreService:
         written = desired ^ listed
         attaching = bool(desired - listed)
         guarded = await CheckCRUD.agent_ids_of(db, written)
-        await CheckCRUD.hold_synthetic_guard(db, guarded)
+        if not await CheckCRUD.hold_synthetic_guard(db, guarded):
+            raise CheckBusyException()
         held = {
             c.id: c
             for c in await CheckCRUD.get_locked_by_ids(
