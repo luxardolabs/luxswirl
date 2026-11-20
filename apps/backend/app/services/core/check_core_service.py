@@ -167,6 +167,7 @@ class CheckCoreService:
         include_script_code: bool = False,
         for_delete: bool = False,
         with_ids: Collection[UUID] = (),
+        dependency_ids: Collection[UUID] = (),
     ) -> Check:
         """The check as committed, under its agent's synthetic guard and its row
         held to the transaction's end, for a write that judges it (a synthetic
@@ -174,7 +175,9 @@ class CheckCoreService:
         for, none starts before this transaction ends, and the check cannot
         move to another agent between this judgement and the write. `with_ids`
         (a parent the write points the check at) are held FOR KEY SHARE, what
-        the write's foreign key reads, in the same id-ordered pass.
+        the write's foreign key reads, in the same id-ordered pass;
+        `dependency_ids` (the check and that parent) take the dependency lock
+        between the guard and the rows.
 
         Raises:
             CheckNotFoundException: No such check.
@@ -186,6 +189,8 @@ class CheckCoreService:
         # copy of the check in place, so its attribute would read the new agent.
         guarded_agent = (await CheckCoreService.get_check_by_id(db, check_id)).agent_id
         if not await CheckCRUD.hold_synthetic_guard(db, {guarded_agent}):
+            raise CheckBusyException()
+        if not await CheckCRUD.hold_dependency(db, dependency_ids):
             raise CheckBusyException()
         locked = await CheckCRUD.hold_rows(
             db, [check_id], for_delete=for_delete, key_share_ids=with_ids
@@ -244,8 +249,15 @@ class CheckCoreService:
                 raise CheckBusyException()
         agent = await CheckCoreService.get_admitted_agent(db, agent_id)
 
+        parent_id = getattr(data, "depends_on_check_id", None)
+        # Judged under the parent's dependency lock, so a write making the
+        # parent a child meanwhile is waited for and then seen.
+        if parent_id is not None and not await CheckCRUD.hold_dependency(
+            db, {parent_id}
+        ):
+            raise CheckBusyException()
         await CheckDependencyCoreService.validate_dependency(
-            db, getattr(data, "depends_on_check_id", None), own_check_id=None
+            db, parent_id, own_check_id=None
         )
 
         check_config = pack_config(data, data.check_type)
@@ -542,7 +554,11 @@ class CheckCoreService:
         )
         if guarded:
             check = await CheckCoreService._get_check_to_change(
-                db, check_id, include_script_code=True, with_ids=parent_ids
+                db,
+                check_id,
+                include_script_code=True,
+                with_ids=parent_ids,
+                dependency_ids=[check_id, *parent_ids] if parent_ids else (),
             )
             CheckCoreService._require_admin_for_synthetic(
                 check, update_data, actor_is_admin=actor_is_admin
@@ -550,6 +566,10 @@ class CheckCoreService:
         elif on_agent is not None:
             # A check another write moved off the caller's agent meanwhile is
             # no longer under what the caller holds.
+            if parent_ids and not await CheckCRUD.hold_dependency(
+                db, [check_id, *parent_ids]
+            ):
+                raise CheckBusyException()
             held = await CheckCRUD.hold_rows(db, [check_id], key_share_ids=parent_ids)
             if not held or check_id not in held or held[check_id].agent_id != on_agent:
                 raise CheckBusyException()
@@ -1041,15 +1061,17 @@ class CheckCoreService:
                     affected_agents.add(new_agent)
                     CheckCoreService._move_check_to_agent(check, new_agent, update_data)
                 else:
-                    # Just update in place (update_check handles checks_updated_at)
+                    # Updated in place; its agent is stamped once, after the
+                    # last check, so the agent's row is not held for the run.
                     await CheckCoreService.update_check(
                         db,
                         check.id,
                         update_data,
                         actor_is_admin=actor_is_admin,
                         guarded=False,
+                        skip_config_update=True,
                     )
-                    # No need to track agent here as update_check already handles it
+                    affected_agents.add(check.agent)
 
                 success_count += 1
                 changed.append(check_id)

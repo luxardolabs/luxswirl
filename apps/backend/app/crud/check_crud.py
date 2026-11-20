@@ -42,6 +42,8 @@ _T = TypeVar("_T")
 _CHECK_NAMES_LOCK_CLASS = 1_826_301_559
 # The first key of the synthetic guard (`hold_synthetic_guard`), likewise.
 _SYNTHETIC_GUARD_LOCK_CLASS = 1_826_301_560
+# The first key of the dependency lock (`hold_dependency`), likewise.
+_CHECK_DEPENDENCY_LOCK_CLASS = 1_826_301_561
 # The share of a transaction's statement timeout it waits for the locks a
 # judged write takes (the web pool's 5 s gives 3 s), so a refusal comes before
 # the timeout's 500.
@@ -198,22 +200,20 @@ class CheckCRUD:
 
     @staticmethod
     async def _advisory_locks(
-        db: AsyncSession, lock_class: int, agent_ids: Collection[UUID]
+        db: AsyncSession, lock_class: int, keys: Collection[UUID]
     ) -> bool:
-        """Take `lock_class`'s transaction advisory lock on each of `agent_ids`
+        """Take `lock_class`'s transaction advisory lock on each of `keys`
         in id order, waiting as `_within_request_wait` does; False when the
         wait ran out (none is then held)."""
-        agents = sorted(set(agent_ids))
-        if not agents:
+        ordered = sorted(set(keys))
+        if not ordered:
             return True
 
         async def take() -> bool:
-            for agent_id in agents:
+            for key in ordered:
                 await db.execute(
                     select(
-                        func.pg_advisory_xact_lock(
-                            lock_class, func.hashtext(str(agent_id))
-                        )
+                        func.pg_advisory_xact_lock(lock_class, func.hashtext(str(key)))
                     )
                 )
             return True
@@ -235,6 +235,18 @@ class CheckCRUD:
         request); False when that wait ran out."""
         return await CheckCRUD._advisory_locks(
             db, _SYNTHETIC_GUARD_LOCK_CLASS, agent_ids
+        )
+
+    @staticmethod
+    async def hold_dependency(db: AsyncSession, check_ids: Collection[UUID]) -> bool:
+        """Take the transaction's dependency lock on each of `check_ids`, in id
+        order: every write that makes a check depend on a parent holds it on
+        both, so two writes that would chain three checks (one making the
+        parent a child, the other making the child a parent) are judged one at
+        a time on the committed links. A request waits for it at most part of
+        its statement timeout; False when that wait ran out."""
+        return await CheckCRUD._advisory_locks(
+            db, _CHECK_DEPENDENCY_LOCK_CLASS, check_ids
         )
 
     @staticmethod

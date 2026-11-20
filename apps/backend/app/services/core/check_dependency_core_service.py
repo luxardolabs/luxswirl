@@ -70,6 +70,13 @@ class CheckDependencyCoreService:
         guarded = await CheckCRUD.agent_ids_of(db, written)
         if not await CheckCRUD.hold_synthetic_guard(db, guarded):
             raise CheckBusyException()
+        # An attach is judged under the dependency lock of the parent and the
+        # children it may attach, so a write making the parent a child, or one
+        # of them a parent, meanwhile is waited for and then seen.
+        if attaching and not await CheckCRUD.hold_dependency(
+            db, {parent_check_id} | (desired - listed)
+        ):
+            raise CheckBusyException()
         rows = await CheckCRUD.hold_rows(
             db, written, key_share_ids={parent_check_id} if attaching else ()
         )
@@ -203,7 +210,9 @@ class CheckDependencyCoreService:
         if own_check_id is not None and depends_on_check_id == own_check_id:
             raise ValidationException("A check cannot depend on itself")
 
-        parent = await CheckCRUD.get_by_id(db, depends_on_check_id)
+        # As committed now: a link committed while this write waited for its
+        # dependency lock is seen.
+        parent = await CheckCRUD.get_as_stored(db, depends_on_check_id)
         if parent is None:
             raise ValidationException(f"Parent check {depends_on_check_id} not found")
 
