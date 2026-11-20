@@ -7,6 +7,8 @@ from uuid import UUID
 
 from sqlalchemy.exc import SQLAlchemyError
 
+from app.services.core.maintenance_job_core_service import MaintenanceJobCoreService
+
 
 def with_refused(outcome: dict[str, Any], refused: list[str]) -> dict[str, Any]:
     """`outcome` with the checks refused before it ran counted as failures."""
@@ -18,11 +20,12 @@ def with_refused(outcome: dict[str, Any], refused: list[str]) -> dict[str, Any]:
 
 
 def bulk_failed(check_ids: list[UUID], error: SQLAlchemyError) -> dict[str, Any]:
-    """A bulk result whose statement failed: every check asked for unchanged."""
+    """A bulk result whose statement failed: every check asked for unchanged,
+    its error as anyone who reads the result may read it (no SQL)."""
     return {
         "success_count": 0,
         "failure_count": len(check_ids),
-        "errors": [str(error)],
+        "errors": [MaintenanceJobCoreService.readable_error(str(error))],
     }
 
 
