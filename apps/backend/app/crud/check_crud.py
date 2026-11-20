@@ -116,15 +116,18 @@ class CheckCRUD:
         check_ids: Sequence[UUID] | None = None,
         agent_id: UUID | None = None,
     ) -> set[UUID]:
-        """Lock every check a delete writes FOR UPDATE, in id order, before it
-        removes any; the ids locked. That is the checks it removes (`check_ids`,
-        or every check of `agent_id`) and each check depending on one of them,
-        whose parent the delete clears.
+        """Lock every check a delete writes, in id order, before it removes any;
+        the ids locked. That is the checks it removes (`check_ids`, or every
+        check of `agent_id`) and each check depending on one of them, whose
+        parent the delete clears.
 
-        A report, and every other writer of many checks, locks in the same
-        order, so none waits on another in a cycle, whatever order the delete
-        then writes the rows in (the ORM removes a dependent check before its
-        parent).
+        All of them are held FOR NO KEY UPDATE in one pass, as the clearing of a
+        parent takes them: a report's FOR KEY SHARE on a dependent (another
+        agent's included) is not held up by the delete. Then the removed ones
+        alone are held FOR UPDATE. A report, and every other writer of many
+        checks, locks in the same order, so none waits on another in a cycle,
+        whatever order the delete then writes the rows in (the ORM removes a
+        dependent check before its parent).
         """
         removed = (
             Check.agent_id == agent_id
@@ -137,7 +140,9 @@ class CheckCRUD:
                 select(Check.id).where(removed).correlate(None)
             ),
         )
-        return await CheckCRUD._lock_in_id_order(db, written, key_share=False)
+        held = await CheckCRUD._lock_in_id_order(db, written, key_share=True)
+        await CheckCRUD._lock_in_id_order(db, removed, key_share=False)
+        return held
 
     @staticmethod
     async def flush_pending(db: AsyncSession) -> None:
