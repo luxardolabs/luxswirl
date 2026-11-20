@@ -668,8 +668,8 @@ async def test_a_replacement_and_a_bulk_modify_of_its_checks_never_deadlock(
     original = CheckCoreService.update_check
     state: dict[str, asyncio.Task[None]] = {}
 
-    async def update_then_replace(db, check_id, data, *, actor_is_admin=False):
-        check = await original(db, check_id, data, actor_is_admin=actor_is_admin)
+    async def update_then_replace(db, check_id, data, **kwargs):
+        check = await original(db, check_id, data, **kwargs)
         if "replace" not in state:
             state["replace"] = asyncio.create_task(
                 _replace(worker_db, alert_id, [low, high])

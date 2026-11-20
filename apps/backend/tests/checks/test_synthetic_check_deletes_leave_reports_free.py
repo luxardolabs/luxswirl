@@ -1,6 +1,6 @@
-"""A delete holds the checks depending on those it removes (on any agent)
-only as clearing their parent does, FOR NO KEY UPDATE: another agent's report
-on such a check, which takes it FOR KEY SHARE, is stored while the delete runs.
+"""A delete leaves the checks depending on those it removes (on any agent)
+to the clearing of their parent, FOR NO KEY UPDATE: another agent's report on
+such a check, which takes it FOR KEY SHARE, is stored while the delete runs.
 Two agent deletes whose checks depend on each other's, and an edit naming a
 parent on an agent being deleted, finish without a deadlock.
 """

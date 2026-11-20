@@ -18,7 +18,6 @@ from app.core.exceptions import (
     AgentNotFoundException,
     AuthenticationException,
     AuthorizationException,
-    CheckBusyException,
     DuplicateResourceException,
     RecoverySecretRefusedException,
     ValidationException,
@@ -53,10 +52,6 @@ logger = get_logger("luxswirl.services.agent")
 
 # The statuses each operator action moves an agent from. Restore is the only
 # way out of archived, so no other action takes an archived agent.
-# How many times an agent delete locks the agent's checks and then its row
-# before a check that keeps arriving refuses it as busy.
-AGENT_DELETE_LOCK_ATTEMPTS = 5
-
 _APPROVABLE = (AgentApprovalStatus.PENDING, AgentApprovalStatus.REJECTED)
 _DISABLEABLE = (AgentApprovalStatus.ACTIVE, AgentApprovalStatus.PAUSED)
 _ARCHIVABLE = (
@@ -927,31 +922,6 @@ class AgentCoreService:
             require_admin_actor(actor_is_admin=actor_is_admin)
 
     @staticmethod
-    async def _lock_agent_and_its_checks(db: AsyncSession, agent_id: UUID) -> None:
-        """Hold every check of `agent_id`, then its row, so the delete is judged
-        on what its cascade removes, with nothing in flight.
-
-        The checks are locked in id order, as a report locks them (a retype in
-        flight is waited for); then the row, which waits for a check being
-        inserted or moved onto the agent and keeps any more from arriving. The
-        agent's row is never held while waiting on a check (a report holding the
-        check waits for the row): a check that arrived between the two locks
-        sends the attempt back, its locks released, and it starts again.
-
-        Raises:
-            CheckBusyException: checks kept arriving for every attempt.
-        """
-        for _ in range(AGENT_DELETE_LOCK_ATTEMPTS):
-            attempt = await db.begin_nested()
-            held = await CheckCRUD.lock_for_delete(db, agent_id=agent_id)
-            await AgentCRUD.lock(db, agent_id)
-            if await CheckCRUD.ids_for_agent(db, agent_id) <= held:
-                await attempt.commit()
-                return
-            await attempt.rollback()
-        raise CheckBusyException()
-
-    @staticmethod
     async def delete_agent(
         db: AsyncSession, agent_id: UUID, *, actor_is_admin: bool
     ) -> None:
@@ -969,13 +939,19 @@ class AgentCoreService:
             AuthorizationException: See `require_may_delete`
         """
         # A writer of its checks that holds their names (an import, a bulk
-        # create) is waited for first, so the checks it makes are judged.
+        # create) is waited for first, so the checks it makes are judged; and
+        # under the agent's synthetic guard, no check is being made synthetic
+        # on it while the delete judges what its cascade removes.
         await CheckCRUD.hold_names(db, agent_id)
-        await AgentCoreService._lock_agent_and_its_checks(db, agent_id)
+        await CheckCRUD.hold_synthetic_guard(db, {agent_id})
         agent = await AgentCoreService.get_agent_by_id(db, agent_id)
         await AgentCoreService.require_may_delete(
             db, agent_id, actor_is_admin=actor_is_admin
         )
+
+        # Its checks locked in id order first, as a report locks them: the cascade
+        # below removes them in the ORM's dependency order.
+        await CheckCRUD.lock_for_delete(db, agent_id=agent_id)
         await AgentCRUD.delete_agent(db, agent)
 
         logger.info(

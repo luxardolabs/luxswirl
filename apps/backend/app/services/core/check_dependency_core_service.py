@@ -12,6 +12,7 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import (
+    CheckBusyException,
     ValidationException,
 )
 from app.core.synthetic_guard import (
@@ -56,13 +57,13 @@ class CheckDependencyCoreService:
         if parent_check_id in desired:
             raise ValidationException("A check cannot depend on itself")
 
-        # The parent and every child this may attach or detach, held in one
-        # id-ordered pass (as a delete of the parent holds it and the children
-        # it clears) until the transaction ends, and judged as stored: a
-        # retype to synthetic in flight is waited for.
+        # Every child this may attach or detach judged as committed under its
+        # agent's synthetic guard: a retype to synthetic in flight is waited
+        # for, and none starts before this transaction ends.
         listed = {c.id for c in await CheckCRUD.list_dependents(db, parent_check_id)}
-        await CheckCRUD.lock_for_change(db, {parent_check_id} | desired | listed)
-        parent = await CheckCRUD.get_locked(db, parent_check_id)
+        guarded = await CheckCRUD.agent_ids_of(db, desired | listed)
+        await CheckCRUD.hold_synthetic_guard(db, guarded)
+        parent = await CheckCRUD.get_as_stored(db, parent_check_id)
         if parent is None:
             raise ValidationException(f"Parent check {parent_check_id} not found")
         if parent.depends_on_check_id is not None:
@@ -70,8 +71,11 @@ class CheckDependencyCoreService:
                 "Selected parent already has its own parent (single-level only)"
             )
         by_id = {
-            c.id: c for c in await CheckCRUD.get_locked_by_ids(db, desired | listed)
+            c.id: c for c in await CheckCRUD.get_as_stored_by_ids(db, desired | listed)
         }
+        if any(c.agent_id not in guarded for c in by_id.values()):
+            # A child moved to another agent while the guards were taken.
+            raise CheckBusyException()
         missing = desired - by_id.keys()
         if missing:
             raise ValidationException(f"Check {next(iter(missing))} not found")

@@ -35,6 +35,8 @@ from app.models.enum_model import AssignmentMode, CheckHealthStatus, CheckType
 # id's hashtext). Any constant works: the two-key space does not overlap the
 # one-key space other advisory locks use.
 _CHECK_NAMES_LOCK_CLASS = 1_826_301_559
+# The first key of the synthetic guard (`hold_synthetic_guard`), likewise.
+_SYNTHETIC_GUARD_LOCK_CLASS = 1_826_301_560
 
 
 class CheckCRUD:
@@ -115,72 +117,65 @@ class CheckCRUD:
         *,
         check_ids: Sequence[UUID] | None = None,
         agent_id: UUID | None = None,
-    ) -> set[UUID]:
-        """Lock every check a delete writes, in id order, before it removes any;
-        the ids locked. That is the checks it removes (`check_ids`, or every
-        check of `agent_id`) and each check depending on one of them, whose
-        parent the delete clears.
+    ) -> None:
+        """Lock the checks a delete is about to remove (`check_ids`, or every check
+        of `agent_id`) FOR UPDATE, in id order, before it removes any.
 
-        All of them are held FOR NO KEY UPDATE in one pass, as the clearing of a
-        parent takes them: a report's FOR KEY SHARE on a dependent (another
-        agent's included) is not held up by the delete. Then the removed ones
-        alone are held FOR UPDATE. A report, and every other writer of many
-        checks, locks in the same order, so none waits on another in a cycle,
-        whatever order the delete then writes the rows in (the ORM removes a
-        dependent check before its parent).
+        A report locks the checks its results reference in the same order, so
+        the two never wait on each other in a cycle, whatever order the delete
+        then removes the rows in (the ORM removes a dependent check before its
+        parent).
         """
-        removed = (
+        condition = (
             Check.agent_id == agent_id
             if agent_id is not None
             else Check.id.in_(set(check_ids or ()))
         )
-        written = or_(
-            removed,
-            Check.depends_on_check_id.in_(
-                select(Check.id).where(removed).correlate(None)
-            ),
-        )
-        held = await CheckCRUD._lock_in_id_order(db, written, key_share=True)
-        await CheckCRUD._lock_in_id_order(db, removed, key_share=False)
-        return held
-
-    @staticmethod
-    async def flush_pending(db: AsyncSession) -> None:
-        """Write the session's pending changes, so a savepoint opened next and
-        rolled back cannot take them with it."""
-        await db.flush()
-
-    @staticmethod
-    async def lock_for_change(db: AsyncSession, check_ids: Collection[UUID]) -> None:
-        """Lock `check_ids` FOR NO KEY UPDATE in id order, in one pass, as every
-        writer of many checks locks them: a write that touches several checks
-        (a check and the parent it now references, a parent and its children)
-        holds none while it waits for another."""
-        await CheckCRUD._lock_in_id_order(
-            db, Check.id.in_(set(check_ids)), key_share=True
-        )
+        await CheckCRUD._lock_in_id_order(db, condition, key_share=False)
 
     @staticmethod
     async def _lock_in_id_order(
         db: AsyncSession, condition: ColumnElement[bool], *, key_share: bool
-    ) -> set[UUID]:
+    ) -> None:
         """Lock the checks `condition` selects in id order: FOR UPDATE, or FOR NO
         KEY UPDATE with `key_share` (a write that changes no key, which a report's
-        KEY SHARE lock does not wait for); the ids locked. Every writer of many
-        checks locks them this way first, so no two wait on each other in a
-        cycle."""
-        rows = await db.scalars(
+        KEY SHARE lock does not wait for). Every writer of many checks locks them
+        this way first, so no two wait on each other in a cycle."""
+        await db.execute(
             select(Check.id)
             .where(condition)
             .order_by(Check.id)
             .with_for_update(key_share=key_share)
         )
-        return set(rows)
 
     @staticmethod
-    async def ids_for_agent(db: AsyncSession, agent_id: UUID) -> set[UUID]:
-        """The ids of `agent_id`'s checks as committed now, read without a lock."""
-        return set(await db.scalars(select(Check.id).where(Check.agent_id == agent_id)))
+    async def hold_synthetic_guard(
+        db: AsyncSession, agent_ids: Collection[UUID]
+    ) -> None:
+        """Take the transaction's synthetic guard on each of `agent_ids`, in id
+        order: an advisory lock per agent that every write making one of the
+        agent's checks synthetic, and every non-admin write judged on whether
+        one is, holds to its transaction's end. A judgement made under it reads
+        the agent's checks as committed with no such write in flight. Reports
+        and other row writers take no advisory lock and are never held by it."""
+        for agent_id in sorted(set(agent_ids)):
+            await db.execute(
+                select(
+                    func.pg_advisory_xact_lock(
+                        _SYNTHETIC_GUARD_LOCK_CLASS, func.hashtext(str(agent_id))
+                    )
+                )
+            )
+
+    @staticmethod
+    async def agent_ids_of(db: AsyncSession, check_ids: Collection[UUID]) -> set[UUID]:
+        """The agents owning `check_ids`, as committed now, read without a lock."""
+        if not check_ids:
+            return set()
+        rows = await db.scalars(
+            select(Check.agent_id).where(Check.id.in_(set(check_ids))).distinct()
+        )
+        return set(rows)
 
     @staticmethod
     async def delete_check(db: AsyncSession, check: Check) -> None:
@@ -214,30 +209,41 @@ class CheckCRUD:
         return result.scalar_one_or_none()
 
     @staticmethod
-    async def get_locked(
-        db: AsyncSession,
-        check_id: UUID,
-        *,
-        include_script_code: bool = False,
-        for_delete: bool = False,
+    async def get_as_stored(
+        db: AsyncSession, check_id: UUID, *, include_script_code: bool = False
     ) -> Check | None:
-        """The check as stored now, its row held to the transaction's end: FOR
-        UPDATE for a delete, else FOR NO KEY UPDATE, which a report's KEY SHARE
-        lock does not wait for. A write in flight on the row is waited for, so
-        what the caller judges is what it then changes. The session's pending
-        changes are flushed first, so reading the row as stored keeps them."""
+        """The check as committed now (the session's copy reloaded), with agent
+        loaded, read without a lock. The session's pending changes are flushed
+        first, so reloading the row keeps them."""
         await db.flush()
         query = (
             select(Check)
             .where(Check.id == check_id)
             .options(selectinload(Check.agent))
-            .with_for_update(key_share=not for_delete)
             .execution_options(populate_existing=True)
         )
         if include_script_code:
             query = query.options(undefer(Check.script_code))
         result = await db.execute(query)
         return result.scalar_one_or_none()
+
+    @staticmethod
+    async def get_as_stored_by_ids(
+        db: AsyncSession, check_ids: Collection[UUID]
+    ) -> Sequence[Check]:
+        """`check_ids` as committed now (the session's copies reloaded), with
+        agent loaded, read without a lock. The session's pending changes are
+        flushed first, so reloading the rows keeps them."""
+        if not check_ids:
+            return []
+        await db.flush()
+        result = await db.execute(
+            select(Check)
+            .where(Check.id.in_(set(check_ids)))
+            .options(selectinload(Check.agent))
+            .execution_options(populate_existing=True)
+        )
+        return result.scalars().all()
 
     @staticmethod
     async def get_locked_by_ids(

@@ -1,8 +1,7 @@
-"""Every writer of checks that a synthetic judgement guards locks the rows it
-writes in one id-ordered pass (a check with the parent it now references; a
-parent with the children it attaches, detaches or, deleted, clears), as an
-agent delete and a bulk delete lock theirs, so none deadlocks with another;
-and locking checks leaves their agent's row free for its reports and
+"""The writers a synthetic judgement guards (an edit naming a parent, a
+dependents change, a delete of a parent) finish beside an agent delete or a
+bulk delete of the same checks, whichever check's id sorts first, without a
+deadlock; and holding checks leaves their agent's row free for its reports and
 heartbeats."""
 
 from __future__ import annotations
@@ -66,7 +65,7 @@ async def test_locking_a_check_leaves_its_agent_free(worker_db, for_delete):
     agent_id = await _agent(worker_db)
     check_id = await _check(worker_db, agent_id)
     async with worker_db() as s:
-        await CheckCRUD.get_locked(s, check_id, for_delete=for_delete)
+        await CheckCRUD.get_locked_by_ids(s, [check_id], for_delete=for_delete)
         report = await _agent_lockable(worker_db, agent_id, key_share=True)
         heartbeat = await _agent_lockable(worker_db, agent_id, key_share=False)
         await s.rollback()

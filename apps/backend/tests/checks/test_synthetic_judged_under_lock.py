@@ -1,7 +1,8 @@
 """An editor's change to a check, or to an agent's checks, is judged on the
-rows it is about to write, locked: a check an admin is making synthetic at that
-moment (created, retyped, not yet committed) is waited for and judged as
-synthetic, so the editor is refused as for a committed one.
+checks as committed with no write making one synthetic in flight: a check an
+admin is making synthetic at that moment (created, retyped, not yet committed)
+is waited for and judged as synthetic, so the editor is refused as for a
+committed one.
 
 Each race holds the admin's write open (flushed, not committed) while the
 editor's change starts, then commits it.

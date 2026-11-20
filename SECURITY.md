@@ -63,7 +63,7 @@ Synthetic checks execute arbitrary Python code. Administrators can run any code 
 
 **Mitigations**:
 
-- Admin role required — enforced in the core services (`CheckCoreService`, `CheckDependencyCoreService`, `AlertCoreService`, `AgentCoreService`), not only in the web layer, for every change that reaches a synthetic check: create, edit, clone, move, enable or disable, delete (one, in bulk, or with its agent), its dependency, and the alerts on it. Each is judged on the checks it writes with their rows locked, so a check being made synthetic at that moment is waited for and judged as synthetic (an alert change is refused as busy instead).
+- Admin role required — enforced in the core services (`CheckCoreService`, `CheckDependencyCoreService`, `AlertCoreService`, `AgentCoreService`), not only in the web layer, for every change that reaches a synthetic check: create, edit, clone, move, enable or disable, delete (one, in bulk, or with its agent), its dependency, and the alerts on it. Each is judged on the checks as committed while no write can be making one of them synthetic: every write that creates, moves or retypes checks on an agent, and every judged write of single checks, holds that agent's lock to its end (a bulk job instead holds the rows it may change and judges them again), so a check being made synthetic at that moment is waited for and judged as synthetic (an alert change is refused as busy instead).
 - AST validation (blocks obvious attacks) — hardening, **not** the access control.
 - Audit logging
 - UI warning banner

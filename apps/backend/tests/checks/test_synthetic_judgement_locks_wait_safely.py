@@ -1,12 +1,12 @@
-"""The locks a synthetic check's writers judge under neither deadlock with the
-writers that share the rows nor hold them through slow work.
+"""The synthetic judgement's guard neither deadlocks with the writers that
+share its rows nor holds them through slow work.
 
-An agent delete never waits on a check while it holds the agent's row (a
-report holding that check waits for the row); a dependents change and a
-delete of its parent lock the parent and its children in one id-ordered pass,
-so neither holds one while it waits for another; an edit runs its endpoint
-lookups, and refuses an editor, before it holds the row; and a check listed
-twice in a bulk move is moved once and stays moved.
+A check created for an agent being deleted waits for the delete and is
+refused; an edit by an admin of a check that arrives finishes beside the
+agent's delete; a dependents change and a delete of its parent do not
+deadlock; an edit looks up its endpoints, and refuses an editor, before it
+takes the guard; and a check listed twice in a bulk move is moved once and
+stays moved.
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ from app.core.exceptions import AuthorizationException, CheckBusyException
 from app.crud.agent_crud import AgentCRUD
 from app.crud.check_crud import CheckCRUD
 from app.models.check_model import Check
-from app.schemas.check_schema import CheckUpdate
+from app.schemas.check_schema import CheckCreate, CheckUpdate
 from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.alert_core_service import AlertCoreService
 from app.services.core.check_core_service import CheckCoreService
@@ -86,42 +86,46 @@ async def _delete_agent(worker_db, agent_id: UUID) -> str:
             return _failure(e)
 
 
-async def test_an_agent_delete_and_a_report_on_a_check_that_just_arrived_both_finish(
+async def test_a_check_created_during_its_agents_delete_waits_and_the_delete_finishes(
     worker_db,
 ):
-    """A heartbeat holds the agent while its delete starts; a check lands on
-    the agent; a report reads it as a report does (the check FOR KEY SHARE,
-    then the agent)."""
+    """A heartbeat holds the agent while its delete starts; a check is created
+    for the agent meanwhile. The create waits for the delete (no check lands
+    on an agent being deleted, where its removal would wait on the reports
+    that read it) and is then refused; the delete finishes."""
     agent_id = await _agent(worker_db)
     await _check(worker_db, agent_id, display_name="old")
+
+    async def create() -> str:
+        async with worker_db() as s:
+            try:
+                await CheckCoreService.create_check(
+                    s,
+                    agent_id,
+                    CheckCreate(display_name="new", check_type="http", target=TARGET),
+                    actor_is_admin=True,
+                )
+                await s.commit()
+                return "created"
+            except Exception as e:  # the outcome is what is asserted
+                await s.rollback()
+                return _failure(e)
 
     async with worker_db() as heartbeat:
         await AgentCRUD.lock_without_key(heartbeat, agent_id)
         delete = asyncio.create_task(_delete_agent(worker_db, agent_id))
-        await asyncio.sleep(0.7)  # the delete has locked "old" and waits for the agent
-        new_id = await asyncio.wait_for(
-            _check(worker_db, agent_id, display_name="new"), 5
-        )
-        report_session = worker_db()
-        report = await report_session.__aenter__()
-        await CheckCRUD.key_share_existing(report, [new_id])
+        await asyncio.sleep(0.7)  # the delete holds the agent's guard
+        creating = asyncio.create_task(create())
+        await asyncio.sleep(0.5)
         await heartbeat.commit()
-    await asyncio.sleep(0.5)
-    try:
-        await asyncio.wait_for(AgentCRUD.key_share_admission(report, agent_id), 10)
-        await report.commit()
-        reported = "ok"
-    except Exception as e:  # the outcome is what is asserted
-        await report.rollback()
-        reported = _failure(e)
-    finally:
-        await report_session.__aexit__(None, None, None)
 
     outcome = {
-        "report": reported,
         "delete": await asyncio.wait_for(delete, FINISH_SECONDS),
+        "create": await asyncio.wait_for(creating, FINISH_SECONDS),
     }
-    assert outcome == {"report": "ok", "delete": "deleted"}, outcome
+    assert outcome["delete"] == "deleted", outcome
+    assert outcome["create"] != "created", outcome
+    assert "deadlock" not in str(outcome).lower(), outcome
 
 
 async def test_an_agent_delete_and_an_edit_of_a_check_that_just_arrived_do_not_deadlock(
@@ -292,8 +296,9 @@ async def test_a_parent_delete_during_a_dependents_change_does_not_deadlock(work
                 return _failure(e)
 
     async with worker_db() as deleter:
-        # What delete_check takes first: the parent and its children FOR
-        # UPDATE, in id order.
+        # What delete_check takes first: the agent's synthetic guard, then the
+        # parent's row FOR UPDATE.
+        await CheckCRUD.hold_synthetic_guard(deleter, {agent_id})
         await CheckCRUD.lock_for_delete(deleter, check_ids=[parent])
         task = asyncio.create_task(set_children())
         await asyncio.sleep(1.5)

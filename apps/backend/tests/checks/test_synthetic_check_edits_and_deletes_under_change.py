@@ -159,9 +159,11 @@ async def _stored(worker_db, check_id: UUID) -> tuple[Any, ...]:
         return tuple(row)
 
 
-async def test_an_edit_whose_target_moves_meanwhile_is_saved_on_the_new_row(
+async def test_an_edit_whose_target_moves_meanwhile_is_refused_as_busy(
     worker_db, monkeypatch
 ):
+    """The endpoints it vetted are no longer the check's: nothing is changed,
+    and the caller sends it again."""
     agent = await _agent(worker_db)
     check_id = await _check(
         worker_db, agent, check_type="http", target="https://127.0.0.1/a"
@@ -177,8 +179,8 @@ async def test_an_edit_whose_target_moves_meanwhile_is_saved_on_the_new_row(
         except Exception as e:  # the outcome is what is asserted
             await s.rollback()
             outcome = f"error:{type(e).__name__}:{e}"[:300]
-    assert outcome == "edited", outcome
-    assert await _stored(worker_db, check_id) == ("http", "https://127.0.0.1/b", 600)
+    assert outcome.startswith("error:CheckBusyException"), outcome
+    assert await _stored(worker_db, check_id) == ("http", "https://127.0.0.1/b", 60)
 
 
 async def test_an_editors_edit_of_a_check_retyped_synthetic_meanwhile_is_refused(

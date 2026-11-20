@@ -16,6 +16,7 @@ from app.core.datetime_utils import utc_now
 from app.core.error_summary import error_summary
 from app.core.exceptions import (
     AgentNotFoundException,
+    CheckBusyException,
     CheckNotFoundException,
     ValidationException,
 )
@@ -48,7 +49,12 @@ from app.schemas.check_schema import (
 from app.schemas.import_export_schema import CheckExport
 from app.services.core._check_bulk_names import bulk_display_name, unused_name
 from app.services.core._check_bulk_request import bulk_check_create
-from app.services.core._check_endpoints import hold_vetted, vet_check_endpoints
+from app.services.core._check_bulk_result import bulk_failed, bulk_outcome, with_refused
+from app.services.core._check_endpoints import (
+    endpoint_state,
+    vet_changed_endpoints,
+    vet_check_endpoints,
+)
 from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.alert_core_service import AlertCoreService
 from app.services.core.check_dependency_core_service import (
@@ -153,28 +159,28 @@ class CheckCoreService:
 
     @staticmethod
     async def _get_check_to_change(
-        db: AsyncSession,
-        check_id: UUID,
-        *,
-        include_script_code: bool = False,
-        for_delete: bool = False,
+        db: AsyncSession, check_id: UUID, *, include_script_code: bool = False
     ) -> Check:
-        """The check as stored now, held until the transaction ends, for a write
-        that first judges it (a synthetic check is an admin's): a change in
-        flight, such as a retype, is waited for and judged as committed.
+        """The check as committed, under its agent's synthetic guard, for a write
+        that judges it (a synthetic check is an admin's): a write making it
+        synthetic in flight is waited for, and none starts before this
+        transaction ends.
 
         Raises:
             CheckNotFoundException: No such check.
+            CheckBusyException: It moved to another agent while the guard was
+                taken; nothing was changed.
         """
-        check = await CheckCRUD.get_locked(
-            db,
-            check_id,
-            include_script_code=include_script_code,
-            for_delete=for_delete,
+        check = await CheckCoreService.get_check_by_id(db, check_id)
+        await CheckCRUD.hold_synthetic_guard(db, {check.agent_id})
+        held = await CheckCRUD.get_as_stored(
+            db, check_id, include_script_code=include_script_code
         )
-        if not check:
+        if not held:
             raise CheckNotFoundException("unknown", str(check_id))
-        return check
+        if held.agent_id != check.agent_id:
+            raise CheckBusyException()
+        return held
 
     @staticmethod
     async def get_nameserver(db: AsyncSession, check_id: UUID) -> str | None:
@@ -203,6 +209,11 @@ class CheckCoreService:
             data: Check creation data
             skip_config_update: If True, don't update agent.checks_updated_at (for internal/system checks)
         """
+        if data.check_type == SYNTHETIC:
+            require_admin_actor(actor_is_admin=actor_is_admin)
+        # Made under the agent's synthetic guard, before any row is held: a
+        # delete of the agent waits for it and none lands while one runs.
+        await CheckCRUD.hold_synthetic_guard(db, {agent_id})
         agent = await CheckCoreService.get_admitted_agent(db, agent_id)
 
         # SSRF protection: every address the check connects to
@@ -470,22 +481,37 @@ class CheckCoreService:
         *,
         actor_is_admin: bool = False,
         skip_config_update: bool = False,
+        guarded: bool = True,
     ) -> Check:
         """Update a check. `skip_config_update` leaves the agent's
-        checks_updated_at to the caller (`mark_checks_changed`)."""
+        checks_updated_at to the caller (`mark_checks_changed`); `guarded=False`
+        leaves the synthetic guard to a caller that judged the check on its
+        row, locked, or holds the guard already (bulk modify, an import).
+
+        Raises:
+            CheckBusyException: The check moved to another agent, or its
+                endpoints changed, while its lookups ran; nothing was changed.
+        """
         update_data = data.model_dump(exclude_unset=True)
-        # Refused before anything is looked up or held, then held with its
-        # endpoints vetted (and the parent it now references, in id order),
-        # and judged again on the row as held.
+        # Refused, and its endpoints looked up (slow), before the guard is
+        # taken; then judged again on the check as committed under it.
         check = await CheckCoreService.get_check_by_id(
             db, check_id, include_script_code=True
         )
         CheckCoreService._require_admin_for_synthetic(
             check, update_data, actor_is_admin=actor_is_admin
         )
-        check = await hold_vetted(
-            db, check, update_data, also_hold=update_data.get("depends_on_check_id")
-        )
+        await vet_changed_endpoints(db, check, update_data)
+        vetted = endpoint_state(check)
+        if guarded:
+            check = await CheckCoreService._get_check_to_change(
+                db, check_id, include_script_code=True
+            )
+            CheckCoreService._require_admin_for_synthetic(
+                check, update_data, actor_is_admin=actor_is_admin
+            )
+        if endpoint_state(check) != vetted:
+            raise CheckBusyException()
 
         if "depends_on_check_id" in update_data:
             await CheckDependencyCoreService.validate_dependency(
@@ -744,6 +770,10 @@ class CheckCoreService:
         # end, then reads the names it made. An agent that takes no checks
         # keeps the ones it has, too.
         await CheckCoreService.hold_check_names(db, agent_id)
+        # An import that makes a synthetic check holds the agent's synthetic
+        # guard from its start, before any entry's row is written.
+        if any(raw.get("check_type") == SYNTHETIC for raw in checks):
+            await CheckCRUD.hold_synthetic_guard(db, {agent_id})
 
         existing = await CheckCoreService.list_checks_for_agent(db, agent_id)
         existing_map = {c.display_name: c for c in existing}
@@ -832,6 +862,7 @@ class CheckCoreService:
                 CheckUpdate.model_validate(check_data.settings()),
                 actor_is_admin=actor_is_admin,
                 skip_config_update=True,
+                guarded=False,
             )
             return "updated"
         existing_map[check_data.name] = await CheckCoreService.create_check(
@@ -878,19 +909,16 @@ class CheckCoreService:
                 CheckUpdate(depends_on_check_id=parent_id),
                 actor_is_admin=actor_is_admin,
                 skip_config_update=True,
+                guarded=False,
             )
 
     @staticmethod
     async def delete_check(
         db: AsyncSession, check_id: UUID, *, actor_is_admin: bool = False
     ) -> None:
-        """Delete a check; a synthetic one only for an admin. It is held with
-        every check depending on it (whose parent the delete clears) in one
-        id-ordered pass, then judged."""
-        await CheckCRUD.lock_for_delete(db, check_ids=[check_id])
-        check = await CheckCoreService._get_check_to_change(
-            db, check_id, for_delete=True
-        )
+        """Delete a check; a synthetic one only for an admin, judged under its
+        agent's synthetic guard."""
+        check = await CheckCoreService._get_check_to_change(db, check_id)
         if check.check_type == SYNTHETIC:
             require_admin_actor(actor_is_admin=actor_is_admin)
 
@@ -931,17 +959,28 @@ class CheckCoreService:
         """The ids an actor may change in bulk, and one error per id refused.
 
         A synthetic check is an admin's to change in any way (`update_check`),
-        so a non-admin's bulk action leaves each one alone and reports it. The
-        checks are judged as stored, held until the transaction ends, so a
-        retype in flight is waited for; a delete holds, in the same pass,
-        every check depending on one of them, whose parent it clears.
+        so a non-admin's bulk action leaves each one alone and reports it. A
+        bulk job runs long, so it holds no synthetic guard: the checks it may
+        change are held in id order (FOR UPDATE for a delete, else FOR NO KEY
+        UPDATE) and judged again as stored, so one made synthetic in flight is
+        refused too, and a check refused at first is never held.
         """
         if actor_is_admin or not check_ids:
             return check_ids, []
-        if for_delete:
-            await CheckCRUD.lock_for_delete(db, check_ids=check_ids)
-        checks = await CheckCRUD.get_locked_by_ids(db, check_ids, for_delete=for_delete)
-        synthetic = {check.id for check in checks if check.check_type == SYNTHETIC}
+        synthetic = {
+            check.id
+            for check in await CheckCRUD.get_with_agent_by_ids(db, check_ids)
+            if check.check_type == SYNTHETIC
+        }
+        synthetic |= {
+            check.id
+            for check in await CheckCRUD.get_locked_by_ids(
+                db,
+                [check_id for check_id in check_ids if check_id not in synthetic],
+                for_delete=for_delete,
+            )
+            if check.check_type == SYNTHETIC
+        }
         return (
             [check_id for check_id in check_ids if check_id not in synthetic],
             [
@@ -950,15 +989,6 @@ class CheckCoreService:
                 if check_id in synthetic
             ],
         )
-
-    @staticmethod
-    def _with_refused(outcome: dict[str, Any], refused: list[str]) -> dict[str, Any]:
-        """`outcome` with the checks refused before it ran counted as failures."""
-        return {
-            "success_count": outcome["success_count"],
-            "failure_count": outcome["failure_count"] + len(refused),
-            "errors": [*refused, *outcome["errors"]],
-        }
 
     @staticmethod
     async def bulk_set_enabled(
@@ -982,14 +1012,12 @@ class CheckCoreService:
                 await CheckCoreService._touch_agents_of(db, check_ids)
         except SQLAlchemyError as e:
             logger.exception("Failed to bulk-toggle checks", extra={"enabled": enabled})
-            return CheckCoreService._bulk_failed(asked, e)
+            return bulk_failed(asked, e)
         logger.info(
             "Bulk toggle complete",
             extra={"enabled": enabled, "success_count": success_count},
         )
-        return CheckCoreService._with_refused(
-            CheckCoreService._bulk_outcome(check_ids, success_count), refused
-        )
+        return with_refused(bulk_outcome(check_ids, success_count), refused)
 
     @staticmethod
     async def bulk_delete(
@@ -1011,41 +1039,19 @@ class CheckCoreService:
                 check_ids, refused = await CheckCoreService._bulk_permitted(
                     db, check_ids, actor_is_admin=actor_is_admin, for_delete=True
                 )
-                # Every check the delete writes locked in id order first, as a
-                # report locks them: the delete below writes in scan order.
+                # Locked in id order first, as a report locks them: the delete
+                # below takes its row locks in scan order.
                 await CheckCRUD.lock_for_delete(db, check_ids=check_ids)
                 affected = await CheckCoreService._touch_agents_of(db, check_ids)
                 success_count = await CheckCRUD.bulk_delete_by_ids(db, check_ids)
         except SQLAlchemyError as e:
             logger.exception("Failed to bulk-delete checks")
-            return CheckCoreService._bulk_failed(asked, e)
+            return bulk_failed(asked, e)
         logger.info(
             "Bulk deleted checks",
             extra={"success_count": success_count, "affected_agent_count": affected},
         )
-        return CheckCoreService._with_refused(
-            CheckCoreService._bulk_outcome(check_ids, success_count), refused
-        )
-
-    @staticmethod
-    def _bulk_failed(check_ids: list[UUID], error: SQLAlchemyError) -> dict[str, Any]:
-        """A bulk result whose statement failed: every check asked for unchanged."""
-        return {
-            "success_count": 0,
-            "failure_count": len(check_ids),
-            "errors": [str(error)],
-        }
-
-    @staticmethod
-    def _bulk_outcome(check_ids: list[UUID], success_count: int) -> dict[str, Any]:
-        """A bulk result whose counts add up to the checks asked for: an id the
-        statement did not touch (no such check) is a failure, not a silence."""
-        missing = len(set(check_ids)) - success_count
-        return {
-            "success_count": success_count,
-            "failure_count": missing,
-            "errors": [f"{missing} check(s) not found"] if missing else [],
-        }
+        return with_refused(bulk_outcome(check_ids, success_count), refused)
 
     @staticmethod
     async def bulk_modify(
@@ -1077,14 +1083,30 @@ class CheckCoreService:
         changed: list[UUID] = []
         affected_agents = set()  # Track agents that need config_version update
 
-        # One query for the whole selection, held in id order until the
-        # transaction ends, so each check is judged as stored (a retype in
-        # flight is waited for); one for the target agent. A check id that
-        # resolves to nothing fails on its own below.
+        # A move lands checks on an agent, and an admin's retype to synthetic
+        # makes some: each holds the agents' synthetic guards first.
+        if new_agent_id:
+            await CheckCRUD.hold_synthetic_guard(db, {new_agent_id})
+        elif actor_is_admin and update_data.check_type == SYNTHETIC:
+            await CheckCRUD.hold_synthetic_guard(
+                db, await CheckCRUD.agent_ids_of(db, check_ids)
+            )
+        # The selection read once; the checks it may change then held in id
+        # order and judged again as stored, so one made synthetic in flight is
+        # refused (a non-admin's synthetic checks are refused unheld). A check
+        # id that resolves to nothing fails on its own below.
         checks_by_id = {
             check.id: check
-            for check in await CheckCRUD.get_locked_by_ids(db, check_ids)
+            for check in await CheckCRUD.get_checks_by_ids(db, check_ids)
         }
+        await CheckCRUD.get_locked_by_ids(
+            db,
+            [
+                check.id
+                for check in checks_by_id.values()
+                if actor_is_admin or check.check_type != SYNTHETIC
+            ],
+        )
         # get_admitted_agent RAISES when the agent is gone or takes no checks
         # (pending, rejected, archived), so resolve it here and keep the refusal
         # as a per-check failure — the loop records one failure per check for a
@@ -1120,7 +1142,11 @@ class CheckCoreService:
                 else:
                     # Just update in place (update_check handles checks_updated_at)
                     await CheckCoreService.update_check(
-                        db, check.id, update_data, actor_is_admin=actor_is_admin
+                        db,
+                        check.id,
+                        update_data,
+                        actor_is_admin=actor_is_admin,
+                        guarded=False,
                     )
                     # No need to track agent here as update_check already handles it
 
