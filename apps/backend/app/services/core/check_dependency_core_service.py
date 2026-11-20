@@ -58,23 +58,24 @@ class CheckDependencyCoreService:
             raise ValidationException("A check cannot depend on itself")
 
         # Every child this may attach or detach judged as committed under its
-        # agent's synthetic guard: a retype to synthetic in flight is waited
-        # for, and none starts before this transaction ends.
+        # agent's synthetic guard, its row held in id order to the
+        # transaction's end, so a retype to synthetic in flight is waited for
+        # and the child cannot move to another agent before the write; the
+        # parent held with them when a child is attached (its foreign key reads
+        # the parent). A child kept as it is is written nothing and read as
+        # stored, unheld, so a delete of the parent never waits on this.
         listed = {c.id for c in await CheckCRUD.list_dependents(db, parent_check_id)}
-        guarded = await CheckCRUD.agent_ids_of(db, desired | listed)
-        await CheckCRUD.hold_synthetic_guard(db, guarded)
-        # The children held in id order to the transaction's end, so none moves
-        # to another agent between this judgement and the write; the parent with
-        # them when a child is attached (its foreign key reads the parent), and
-        # not for a detach, which reads nothing of it.
+        written = desired ^ listed
         attaching = bool(desired - listed)
-        by_id = {
+        guarded = await CheckCRUD.agent_ids_of(db, written)
+        await CheckCRUD.hold_synthetic_guard(db, guarded)
+        held = {
             c.id: c
             for c in await CheckCRUD.get_locked_by_ids(
-                db, desired | listed | ({parent_check_id} if attaching else set())
+                db, written | ({parent_check_id} if attaching else set())
             )
         }
-        parent = by_id.pop(parent_check_id, None)
+        parent = held.pop(parent_check_id, None)
         if parent is None and not attaching:
             parent = await CheckCRUD.get_as_stored(db, parent_check_id)
         if parent is None:
@@ -83,9 +84,16 @@ class CheckDependencyCoreService:
             raise ValidationException(
                 "Selected parent already has its own parent (single-level only)"
             )
-        if any(c.agent_id not in guarded for c in by_id.values()):
+        if any(c.agent_id not in guarded for c in held.values()):
             # A child moved to another agent while the guards were taken.
             raise CheckBusyException()
+        by_id = {
+            **{
+                c.id: c
+                for c in await CheckCRUD.get_as_stored_by_ids(db, desired & listed)
+            },
+            **held,
+        }
         missing = desired - by_id.keys()
         if missing:
             raise ValidationException(f"Check {next(iter(missing))} not found")
@@ -101,9 +109,9 @@ class CheckDependencyCoreService:
         }
         to_add = desired - current
         to_remove = current - desired
-        if to_add and not attaching:
-            # A child was detached from this parent meanwhile: attaching it
-            # reads the parent, which is not held.
+        if (to_add | to_remove) - held.keys():
+            # A child read as kept was detached or re-pointed meanwhile:
+            # writing it would need the row (and the parent) this did not hold.
             raise CheckBusyException()
 
         # Attaching or detaching a synthetic check writes its dependency, a

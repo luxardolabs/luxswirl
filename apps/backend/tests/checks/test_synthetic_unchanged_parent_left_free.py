@@ -4,7 +4,8 @@ parent, so a delete of the parent beside it finishes.
 A child on agent C depends on a parent on agent A. An editor's write that
 names the parent the child already has (the web edit form resubmits it; a
 dependents PUT replaces the whole set, current children included) or detaches
-the child reads nothing of the parent. A delete of the parent (single, bulk or
+the child reads nothing of the parent; a PUT that also attaches another child
+holds the parent and that child, not the child it keeps. A delete of the parent (single, bulk or
 its agent's) holds the parent FOR UPDATE and then needs the child's row for
 the foreign key's ON DELETE SET NULL; the two take different synthetic guards,
 so the writer holding the parent too would deadlock with it whichever id sorts
@@ -158,6 +159,23 @@ def _edit_other_field(parent_id, child_id) -> Change:
     return run
 
 
+def _dependents_keep_and_attach(parent_id, child_id) -> Change:
+    """PUT dependents: its current child kept and a new one attached."""
+
+    async def run(s: AsyncSession) -> None:
+        agent = make_agent()
+        s.add(agent)
+        await s.flush()
+        new_child = make_check(agent_id=agent.id, display_name="new child")
+        s.add(new_child)
+        await s.flush()
+        await CheckDependencyCoreService.set_dependents(
+            s, parent_id, [child_id, new_child.id], actor_is_admin=False
+        )
+
+    return run
+
+
 def _dependents_clear(parent_id, child_id) -> Change:
     """PUT dependents: an empty set, its current child detached."""
 
@@ -198,7 +216,13 @@ async def _race(worker_db, monkeypatch, deleter_of, writer_of, *, child_first: b
 DELETERS = [_single_delete, _bulk_delete, _agent_delete]
 
 
-WRITERS = [_edit_naming_parent, _dependents_put, _dependents_clear, _edit_other_field]
+WRITERS = [
+    _edit_naming_parent,
+    _dependents_put,
+    _dependents_keep_and_attach,
+    _dependents_clear,
+    _edit_other_field,
+]
 
 
 @pytest.mark.parametrize("child_first", [True, False])
