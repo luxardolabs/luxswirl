@@ -17,7 +17,7 @@ from app.background.maintenance_worker import JobFailed
 from app.core.exceptions import AgentNotFoundException, ValidationException
 from app.models.enum_model import ImportMode
 from app.models.maintenance_job_model import MaintenanceJob
-from app.services.core.check_core_service import CheckCoreService
+from app.services.core.check_transfer_core_service import CheckTransferCoreService
 from app.services.core.maintenance_job_core_service import MaintenanceJobCoreService
 from app.shared.logger import get_logger
 
@@ -65,7 +65,7 @@ async def handle(db: AsyncSession, job: MaintenanceJob) -> None:
     # validates each entry, and one that is not a check is an error, not an abort.
     checks = [raw if isinstance(raw, dict) else {"name": None} for raw in checks_data]
     try:
-        result = await CheckCoreService.bulk_import_checks(
+        result = await CheckTransferCoreService.bulk_import_checks(
             db,
             agent_id,
             checks,

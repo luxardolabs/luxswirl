@@ -19,7 +19,7 @@ from app.core.config import settings
 from app.core.rate_limit import limiter
 from app.main import app
 from app.services.core.agent_core_service import AgentCoreService
-from app.services.core.check_core_service import CheckCoreService
+from app.services.core.check_transfer_core_service import CheckTransferCoreService
 from app.services.views.import_export_view_service import ImportExportViewService
 from fixtures.factories import make_agent, make_check
 from httpx import ASGITransport, AsyncClient
@@ -105,7 +105,7 @@ async def test_an_import_refuses_only_the_entries_that_are_not_checks(
             "target": f"https://{name}.test",
         } | fields
 
-    result = await CheckCoreService.bulk_import_checks(
+    result = await CheckTransferCoreService.bulk_import_checks(
         db,
         agent.id,
         [

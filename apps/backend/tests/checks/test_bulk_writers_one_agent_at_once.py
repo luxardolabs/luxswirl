@@ -27,6 +27,7 @@ from app.schemas.agent_schema import AgentHeartbeat
 from app.schemas.check_schema import BulkCheckCreateRequest
 from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.check_core_service import CheckCoreService
+from app.services.core.check_transfer_core_service import CheckTransferCoreService
 from app.services.core.job_to_check_core_service import (
     BulkCheckParams,
     JobToCheckCoreService,
@@ -144,7 +145,7 @@ async def _bulk_create(s: AsyncSession, agent_id: UUID) -> None:
 
 
 async def _import(s: AsyncSession, agent_id: UUID) -> None:
-    await CheckCoreService.bulk_import_checks(
+    await CheckTransferCoreService.bulk_import_checks(
         s, agent_id, _import_entries(), overwrite=False, actor_is_admin=True
     )
 
@@ -223,7 +224,7 @@ async def test_two_imports_at_once_make_each_check_once(worker_db, monkeypatch):
 
     async def import_() -> tuple[int, int]:
         async with worker_db() as s:
-            result = await CheckCoreService.bulk_import_checks(
+            result = await CheckTransferCoreService.bulk_import_checks(
                 s, agent_id, _import_entries(), overwrite=False, actor_is_admin=True
             )
             await s.commit()
@@ -348,7 +349,7 @@ async def test_an_editors_agent_delete_waits_for_an_import_and_judges_its_checks
     refused, as it is once the check is committed."""
     agent_id = await _agent(worker_db)
     async with worker_db() as importer:
-        result = await CheckCoreService.bulk_import_checks(
+        result = await CheckTransferCoreService.bulk_import_checks(
             importer,
             agent_id,
             [

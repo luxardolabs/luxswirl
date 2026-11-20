@@ -46,7 +46,6 @@ from app.schemas.check_schema import (
     CheckUpdate,
     CheckView,
 )
-from app.schemas.import_export_schema import CheckExport
 from app.services.core._check_bulk_names import bulk_display_name, unused_name
 from app.services.core._check_bulk_request import bulk_check_create
 from app.services.core._check_bulk_result import bulk_failed, bulk_outcome, with_refused
@@ -171,14 +170,16 @@ class CheckCoreService:
             CheckBusyException: It moved to another agent while the guard was
                 taken; nothing was changed.
         """
-        check = await CheckCoreService.get_check_by_id(db, check_id)
-        await CheckCRUD.hold_synthetic_guard(db, {check.agent_id})
+        # The agent id as a value: the reload below refreshes the session's one
+        # copy of the check in place, so its attribute would read the new agent.
+        guarded_agent = (await CheckCoreService.get_check_by_id(db, check_id)).agent_id
+        await CheckCRUD.hold_synthetic_guard(db, {guarded_agent})
         held = await CheckCRUD.get_as_stored(
             db, check_id, include_script_code=include_script_code
         )
         if not held:
             raise CheckNotFoundException("unknown", str(check_id))
-        if held.agent_id != check.agent_id:
+        if held.agent_id != guarded_agent:
             raise CheckBusyException()
         return held
 
@@ -482,11 +483,15 @@ class CheckCoreService:
         actor_is_admin: bool = False,
         skip_config_update: bool = False,
         guarded: bool = True,
+        on_agent: UUID | None = None,
     ) -> Check:
         """Update a check. `skip_config_update` leaves the agent's
         checks_updated_at to the caller (`mark_checks_changed`); `guarded=False`
         leaves the synthetic guard to a caller that judged the check on its
         row, locked, or holds the guard already (bulk modify, an import).
+        `on_agent` (with `guarded=False`) is the agent whose guard or names the
+        caller holds: the check's row is locked and judged as stored, and the
+        check must still be that agent's.
 
         Raises:
             CheckBusyException: The check moved to another agent, or its
@@ -507,6 +512,16 @@ class CheckCoreService:
             check = await CheckCoreService._get_check_to_change(
                 db, check_id, include_script_code=True
             )
+            CheckCoreService._require_admin_for_synthetic(
+                check, update_data, actor_is_admin=actor_is_admin
+            )
+        elif on_agent is not None:
+            # A check another write moved off the caller's agent meanwhile is
+            # no longer under what the caller holds.
+            locked = await CheckCRUD.get_locked_by_ids(db, [check_id])
+            if not locked or locked[0].agent_id != on_agent:
+                raise CheckBusyException()
+            check = locked[0]
             CheckCoreService._require_admin_for_synthetic(
                 check, update_data, actor_is_admin=actor_is_admin
             )
@@ -735,182 +750,6 @@ class CheckCoreService:
         if not agent:
             raise AgentNotFoundException(str(agent_id))
         return await CheckCRUD.list_for_agent(db, agent.id)
-
-    @staticmethod
-    async def bulk_import_checks(
-        db: AsyncSession,
-        agent_id: UUID,
-        checks: Sequence[Mapping[str, Any]],
-        overwrite: bool,
-        *,
-        actor_is_admin: bool,
-    ) -> dict[str, Any]:
-        """Import checks for an agent: the ONE import, run by the web upload's
-        worker job.
-
-        Each entry is validated on its own: one that is not a valid check (an
-        unknown type or method from an older export) is an error for that check,
-        never a refusal of the whole import. `overwrite` replaces an existing
-        check of the same name, changing only the optional settings the entry
-        names; otherwise it is skipped. `actor_is_admin` is the caller's
-        authority, as for a single create: a synthetic check is refused unless
-        it is True.
-
-        Each entry runs in its own savepoint, so one that fails (even in the
-        database) leaves the rest to commit. A parent an entry names is linked
-        after every entry is made, in a savepoint of its own: one that cannot be
-        is that entry's error, and its check stays. Builds the CheckCreate /
-        CheckUpdate DTOs here, so routers don't marshal schemas. The agent must
-        take checks. Returns {created, updated, skipped, errors}.
-        """
-        counts = {"created": 0, "updated": 0, "skipped": 0}
-        errors: list[dict[str, str]] = []
-
-        # A second import or bulk create for the agent waits for this one's
-        # end, then reads the names it made. An agent that takes no checks
-        # keeps the ones it has, too.
-        await CheckCoreService.hold_check_names(db, agent_id)
-        # An import that makes a synthetic check holds the agent's synthetic
-        # guard from its start, before any entry's row is written.
-        if any(raw.get("check_type") == SYNTHETIC for raw in checks):
-            await CheckCRUD.hold_synthetic_guard(db, {agent_id})
-
-        existing = await CheckCoreService.list_checks_for_agent(db, agent_id)
-        existing_map = {c.display_name: c for c in existing}
-        # Entries that name a parent, linked once every entry is made.
-        to_link: list[CheckExport] = []
-
-        for raw in checks:
-            name = str(raw.get("name") or "unknown")
-            # swallowed-exceptions: one entry's failure is that entry's error, kept for the caller; its savepoint keeps the rest of the import committable
-            try:
-                check_data = CheckExport.model_validate(raw)
-                async with db.begin_nested():
-                    outcome = await CheckCoreService._import_one(
-                        db,
-                        agent_id,
-                        check_data,
-                        existing_map,
-                        overwrite=overwrite,
-                        actor_is_admin=actor_is_admin,
-                    )
-            except Exception as e:
-                errors.append({"check": name, "error": error_summary(e)})
-                logger.exception("Error importing check", extra={"check_name": name})
-                continue
-            counts[outcome] += 1
-            if outcome != "skipped" and check_data.names_parent():
-                to_link.append(check_data)
-
-        # Unlinks first: a check the file frees of its parent may be another
-        # entry's parent, whatever their order in the file.
-        to_link.sort(
-            key=lambda entry: (
-                entry.depends_on is not None or entry.depends_on_check_id is not None
-            )
-        )
-        for check_data in to_link:
-            # swallowed-exceptions: a parent that cannot be linked is that entry's error, kept for the caller; the check itself is made, and its savepoint keeps the rest committable
-            try:
-                async with db.begin_nested():
-                    await CheckCoreService._link_parent(
-                        db, check_data, existing_map, actor_is_admin=actor_is_admin
-                    )
-            except Exception as e:
-                errors.append({"check": check_data.name, "error": error_summary(e)})
-                logger.exception(
-                    "Error linking an imported check to its parent",
-                    extra={"check_name": check_data.name},
-                )
-
-        created, updated, skipped = (
-            counts["created"],
-            counts["updated"],
-            counts["skipped"],
-        )
-        if created or updated:
-            await CheckCoreService.mark_checks_changed(db, agent_id)
-        return {
-            "created": created,
-            "updated": updated,
-            "skipped": skipped,
-            "errors": errors,
-        }
-
-    @staticmethod
-    async def _import_one(
-        db: AsyncSession,
-        agent_id: UUID,
-        check_data: CheckExport,
-        existing_map: dict[str, Check],
-        *,
-        overwrite: bool,
-        actor_is_admin: bool,
-    ) -> str:
-        """Import one entry; "created", "updated" or "skipped".
-
-        A check the import creates joins `existing_map`, so a name met again
-        in the same import is skipped or overwritten, never made twice.
-        """
-        existing = existing_map.get(check_data.name)
-        if existing is not None:
-            if not overwrite:
-                return "skipped"
-            await CheckCoreService.update_check(
-                db,
-                existing.id,
-                CheckUpdate.model_validate(check_data.settings()),
-                actor_is_admin=actor_is_admin,
-                skip_config_update=True,
-                guarded=False,
-            )
-            return "updated"
-        existing_map[check_data.name] = await CheckCoreService.create_check(
-            db,
-            agent_id,
-            CheckCreate.model_validate(
-                {"display_name": check_data.name, **check_data.settings()}
-            ),
-            skip_config_update=True,
-            actor_is_admin=actor_is_admin,
-        )
-        return "created"
-
-    @staticmethod
-    async def _link_parent(
-        db: AsyncSession,
-        check_data: CheckExport,
-        existing_map: dict[str, Check],
-        *,
-        actor_is_admin: bool,
-    ) -> None:
-        """Point an imported check at the parent its entry names, or at none.
-
-        `depends_on` is a check of the agent imported onto, by name; it runs
-        after every entry is made, so a parent later in the file is found.
-
-        Raises:
-            ValidationException: The agent has no check of that name
-        """
-        parent_id = check_data.depends_on_check_id
-        if check_data.depends_on is not None:
-            parent = existing_map.get(check_data.depends_on)
-            if parent is None:
-                raise ValidationException(
-                    f"It depends on {check_data.depends_on!r}, which this agent "
-                    "does not have"
-                )
-            parent_id = parent.id
-        check = existing_map[check_data.name]
-        if check.depends_on_check_id != parent_id:
-            await CheckCoreService.update_check(
-                db,
-                check.id,
-                CheckUpdate(depends_on_check_id=parent_id),
-                actor_is_admin=actor_is_admin,
-                skip_config_update=True,
-                guarded=False,
-            )
 
     @staticmethod
     async def delete_check(

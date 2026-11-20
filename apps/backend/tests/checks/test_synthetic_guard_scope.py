@@ -19,6 +19,7 @@ from app.core.exceptions import AuthorizationException
 from app.models.check_model import Check
 from app.schemas.check_schema import CheckUpdate
 from app.services.core.check_core_service import CheckCoreService
+from app.services.core.check_transfer_core_service import CheckTransferCoreService
 from fixtures.factories import make_agent, make_check
 from sqlalchemy import select, text
 
@@ -76,7 +77,7 @@ async def _import(worker_db, agent_id: UUID, entries: list[dict[str, Any]]) -> s
             # As the maintenance worker runs it.
             await s.execute(text("SET LOCAL statement_timeout = 0"))
             await s.execute(text("SET LOCAL idle_in_transaction_session_timeout = 0"))
-            out = await CheckCoreService.bulk_import_checks(
+            out = await CheckTransferCoreService.bulk_import_checks(
                 s, agent_id, entries, overwrite=True, actor_is_admin=True
             )
             await s.commit()

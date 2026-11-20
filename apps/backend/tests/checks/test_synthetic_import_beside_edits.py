@@ -13,6 +13,7 @@ import pytest
 from app.crud.check_crud import CheckCRUD
 from app.schemas.check_schema import CheckUpdate
 from app.services.core.check_core_service import CheckCoreService
+from app.services.core.check_transfer_core_service import CheckTransferCoreService
 from fixtures.factories import make_agent, make_check
 
 pytestmark = pytest.mark.integration
@@ -77,7 +78,7 @@ async def _editor_edit(worker_db, check_id: UUID) -> str:
 async def _import(worker_db, agent_id: UUID, entries: list[dict[str, Any]]) -> Any:
     async with worker_db() as s:
         try:
-            result = await CheckCoreService.bulk_import_checks(
+            result = await CheckTransferCoreService.bulk_import_checks(
                 s, agent_id, entries, overwrite=True, actor_is_admin=True
             )
             await s.commit()
