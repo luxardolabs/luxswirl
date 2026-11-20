@@ -162,7 +162,7 @@ async def _stored(worker_db, check_id: UUID) -> tuple[Any, ...]:
 async def test_an_edit_whose_target_moves_meanwhile_is_refused_as_busy(
     worker_db, monkeypatch
 ):
-    """The endpoints it vetted are no longer the check's: nothing is changed,
+    """The check's endpoints differ from the ones it vetted: nothing is changed,
     and the caller sends it again."""
     agent = await _agent(worker_db)
     check_id = await _check(
