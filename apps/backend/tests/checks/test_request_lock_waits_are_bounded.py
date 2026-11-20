@@ -255,8 +255,8 @@ async def test_edit_during_synthetic_import_is_busy_in_time(worker_db, monkeypat
 
 async def test_quick_create_during_import_is_busy_not_a_timeout(worker_db, monkeypatch):
     """A request's quick-create from a scan host waits on the agent's names
-    hold, which an import holds for its whole run: the request is cut off by
-    the 5 s statement timeout (a 500) instead of being answered busy."""
+    hold, which an import holds for its whole run, at most part of its 5 s
+    statement timeout, and is answered busy (409)."""
     _slow_lookups(monkeypatch, 2.5)
     agent = await _agent(worker_db)
     importing = asyncio.create_task(_job_import(worker_db, agent, synthetic=False))

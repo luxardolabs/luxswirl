@@ -4,8 +4,8 @@ so it does not hold the agent's row for its run.
 An editor's bulk modify job (no statement timeout) changes five checks of an
 agent in place, each target resolving slowly. An edit of another check on that
 agent, made while the job runs, writes its own stamp of the agent's row and
-lands, instead of waiting on the job's row lock until its statement timeout
-cuts it off (a 500).
+lands while the job runs: the job holds the agent's row only from its one
+stamp, after its last check, to its commit.
 """
 
 from __future__ import annotations
