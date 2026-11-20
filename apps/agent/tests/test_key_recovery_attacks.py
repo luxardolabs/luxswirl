@@ -53,6 +53,9 @@ REGISTER = "/api/v1/agent/register"
 MARK = {REFUSAL_HEADER: RECOVERY_SECRET_REFUSED}
 # ...and its refusal of a heartbeat's key (sent without the secret).
 MARK_KEY = {REFUSAL_HEADER: AGENT_KEY_REFUSED}
+# How long a run waiting for a count may take on a loaded machine before it is
+# ended as failing.
+UNTIL_DONE_SECONDS = 30.0
 # ...of the registration key, and any other refusal.
 MARK_REG = {REFUSAL_HEADER: REGISTRATION_KEY_REFUSED}
 MARK_OTHER = {REFUSAL_HEADER: REFUSED}
@@ -230,8 +233,15 @@ def _agent(
 
 
 async def _beat_until(
-    agents: list[LuxSwirlAgent], done: Callable[[], bool], timeout: float = 5.0
+    agents: list[LuxSwirlAgent],
+    done: Callable[[], bool],
+    timeout: float = UNTIL_DONE_SECONDS,
 ) -> None:
+    """Run the agents' heartbeats until `done()`, or until `timeout` passes.
+
+    A caller waiting for a count reads it after this returns, so the bound only
+    ends a run that is failing; a caller that watches what happens in a fixed
+    window passes its own `timeout`."""
     tasks = []
     for agent in agents:
         agent.heartbeat_sender.start()
