@@ -1,8 +1,8 @@
 """The synthetic judgement's guard neither deadlocks with the writers that
 share its rows nor holds them through slow work.
 
-A check created for an agent being deleted waits for the delete and is
-refused; an edit by an admin of a check that arrives finishes beside the
+A check created for an agent being deleted does not deadlock with the
+delete; an edit by an admin of a check that arrives finishes beside the
 agent's delete; a dependents change and a delete of its parent do not
 deadlock; an edit looks up its endpoints, and refuses an editor, before it
 takes the guard; and a check listed twice in a bulk move is moved once and
@@ -86,13 +86,12 @@ async def _delete_agent(worker_db, agent_id: UUID) -> str:
             return _failure(e)
 
 
-async def test_a_check_created_during_its_agents_delete_waits_and_the_delete_finishes(
+async def test_a_check_created_during_its_agents_delete_does_not_deadlock(
     worker_db,
 ):
-    """A heartbeat holds the agent while its delete starts; a check is created
-    for the agent meanwhile. The create waits for the delete (no check lands
-    on an agent being deleted, where its removal would wait on the reports
-    that read it) and is then refused; the delete finishes."""
+    """A heartbeat holds the agent while its delete starts; a plain check is
+    created for the agent meanwhile. The delete finishes, and the create
+    either lands (and goes with the agent) or is refused; neither deadlocks."""
     agent_id = await _agent(worker_db)
     await _check(worker_db, agent_id, display_name="old")
 
@@ -124,7 +123,6 @@ async def test_a_check_created_during_its_agents_delete_waits_and_the_delete_fin
         "create": await asyncio.wait_for(creating, FINISH_SECONDS),
     }
     assert outcome["delete"] == "deleted", outcome
-    assert outcome["create"] != "created", outcome
     assert "deadlock" not in str(outcome).lower(), outcome
 
 

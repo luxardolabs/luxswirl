@@ -209,17 +209,17 @@ class CheckCoreService:
             data: Check creation data
             skip_config_update: If True, don't update agent.checks_updated_at (for internal/system checks)
         """
-        if data.check_type == SYNTHETIC:
-            require_admin_actor(actor_is_admin=actor_is_admin)
-        # Made under the agent's synthetic guard, before any row is held: a
-        # delete of the agent waits for it and none lands while one runs.
-        await CheckCRUD.hold_synthetic_guard(db, {agent_id})
-        agent = await CheckCoreService.get_admitted_agent(db, agent_id)
-
-        # SSRF protection: every address the check connects to
+        # SSRF protection: every address the check connects to, looked up
+        # before anything is held.
         await vet_check_endpoints(
             db, data.check_type, data.target, data.nameserver, data.connection_string
         )
+        if data.check_type == SYNTHETIC:
+            require_admin_actor(actor_is_admin=actor_is_admin)
+            # Made under the agent's synthetic guard, before any row is held:
+            # a delete of the agent judging its checks waits for it.
+            await CheckCRUD.hold_synthetic_guard(db, {agent_id})
+        agent = await CheckCoreService.get_admitted_agent(db, agent_id)
 
         await CheckDependencyCoreService.validate_dependency(
             db, getattr(data, "depends_on_check_id", None), own_check_id=None
@@ -1083,22 +1083,31 @@ class CheckCoreService:
         changed: list[UUID] = []
         affected_agents = set()  # Track agents that need config_version update
 
-        # A move lands checks on an agent, and an admin's retype to synthetic
-        # makes some: each holds the agents' synthetic guards first.
-        if new_agent_id:
-            await CheckCRUD.hold_synthetic_guard(db, {new_agent_id})
-        elif actor_is_admin and update_data.check_type == SYNTHETIC:
-            await CheckCRUD.hold_synthetic_guard(
-                db, await CheckCRUD.agent_ids_of(db, check_ids)
-            )
-        # The selection read once; the checks it may change then held in id
-        # order and judged again as stored, so one made synthetic in flight is
-        # refused (a non-admin's synthetic checks are refused unheld). A check
-        # id that resolves to nothing fails on its own below.
+        # The selection read once, unheld. An admin's change that leaves checks
+        # synthetic on an agent (a move of synthetic checks, a retype to
+        # synthetic) then holds those agents' synthetic guards; the checks it
+        # may change are held in id order and judged again as stored, so one
+        # made synthetic, or moved, in flight is refused below (a non-admin's
+        # synthetic checks are refused unheld). A check id that resolves to
+        # nothing fails on its own below.
         checks_by_id = {
             check.id: check
             for check in await CheckCRUD.get_checks_by_ids(db, check_ids)
         }
+        guarded: set[UUID] = set()
+        if actor_is_admin and update_data.check_type == SYNTHETIC:
+            guarded = (
+                {new_agent_id}
+                if new_agent_id
+                else {check.agent_id for check in checks_by_id.values()}
+            )
+        elif (
+            actor_is_admin
+            and new_agent_id
+            and any(check.check_type == SYNTHETIC for check in checks_by_id.values())
+        ):
+            guarded = {new_agent_id}
+        await CheckCRUD.hold_synthetic_guard(db, guarded)
         await CheckCRUD.get_locked_by_ids(
             db,
             [
@@ -1127,8 +1136,21 @@ class CheckCoreService:
                 if not check:
                     raise CheckNotFoundException("unknown", str(check_id))
 
+                moving = bool(new_agent_id) and new_agent_id != check.agent_id
+                lands_on = new_agent_id if moving else check.agent_id
+                makes_synthetic = (
+                    update_data.check_type == SYNTHETIC
+                    and check.check_type != SYNTHETIC
+                ) or (
+                    moving and SYNTHETIC in (check.check_type, update_data.check_type)
+                )
+                if actor_is_admin and makes_synthetic and lands_on not in guarded:
+                    # It would become synthetic on an agent whose guard this
+                    # does not hold (it was retyped or moved meanwhile).
+                    raise CheckBusyException()
+
                 # If changing agent, update the agent_id to preserve historical data
-                if new_agent_id and new_agent_id != check.agent_id:
+                if moving:
                     if not new_agent:
                         raise ValueError(new_agent_error or "Target agent not found")
 
