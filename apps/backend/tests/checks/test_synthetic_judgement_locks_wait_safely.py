@@ -2,8 +2,9 @@
 writers that share the rows nor hold them through slow work.
 
 An agent delete never waits on a check while it holds the agent's row (a
-report holding that check waits for the row); a dependents change waits for a
-delete of its parent before it holds any child; an edit runs its endpoint
+report holding that check waits for the row); a dependents change and a
+delete of its parent lock the parent and its children in one id-ordered pass,
+so neither holds one while it waits for another; an edit runs its endpoint
 lookups, and refuses an editor, before it holds the row; and a check listed
 twice in a bulk move is moved once and stays moved.
 """
@@ -291,8 +292,9 @@ async def test_a_parent_delete_during_a_dependents_change_does_not_deadlock(work
                 return _failure(e)
 
     async with worker_db() as deleter:
-        # What delete_check takes first: the parent's row FOR UPDATE.
-        await CheckCRUD.get_locked(deleter, parent, for_delete=True)
+        # What delete_check takes first: the parent and its children FOR
+        # UPDATE, in id order.
+        await CheckCRUD.lock_for_delete(deleter, check_ids=[parent])
         task = asyncio.create_task(set_children())
         await asyncio.sleep(1.5)
         try:

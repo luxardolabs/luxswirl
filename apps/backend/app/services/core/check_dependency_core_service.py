@@ -52,26 +52,23 @@ class CheckDependencyCoreService:
         are reparented to this one. Children that are themselves parents are
         rejected to preserve the single-level rule.
         """
-        # The parent's row first, as the children's reference to it takes it:
-        # a delete of the parent in flight (which then clears its children) is
-        # waited for before any child is held.
-        await CheckCRUD.key_share_existing(db, [parent_check_id])
-        parent = await CheckCRUD.get_by_id(db, parent_check_id)
+        desired = set(child_check_ids)
+        if parent_check_id in desired:
+            raise ValidationException("A check cannot depend on itself")
+
+        # The parent and every child this may attach or detach, held in one
+        # id-ordered pass (as a delete of the parent holds it and the children
+        # it clears) until the transaction ends, and judged as stored: a
+        # retype to synthetic in flight is waited for.
+        listed = {c.id for c in await CheckCRUD.list_dependents(db, parent_check_id)}
+        await CheckCRUD.lock_for_change(db, {parent_check_id} | desired | listed)
+        parent = await CheckCRUD.get_locked(db, parent_check_id)
         if parent is None:
             raise ValidationException(f"Parent check {parent_check_id} not found")
         if parent.depends_on_check_id is not None:
             raise ValidationException(
                 "Selected parent already has its own parent (single-level only)"
             )
-
-        desired = set(child_check_ids)
-        if parent_check_id in desired:
-            raise ValidationException("A check cannot depend on itself")
-
-        # Every child this may attach or detach, held in id order until the
-        # transaction ends and judged as stored: a retype to synthetic in
-        # flight is waited for.
-        listed = {c.id for c in await CheckCRUD.list_dependents(db, parent_check_id)}
         by_id = {
             c.id: c for c in await CheckCRUD.get_locked_by_ids(db, desired | listed)
         }

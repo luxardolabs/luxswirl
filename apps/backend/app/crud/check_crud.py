@@ -116,21 +116,44 @@ class CheckCRUD:
         check_ids: Sequence[UUID] | None = None,
         agent_id: UUID | None = None,
     ) -> set[UUID]:
-        """Lock the checks a delete is about to remove (`check_ids`, or every check
-        of `agent_id`) FOR UPDATE, in id order, before it removes any; the ids
-        locked.
+        """Lock every check a delete writes FOR UPDATE, in id order, before it
+        removes any; the ids locked. That is the checks it removes (`check_ids`,
+        or every check of `agent_id`) and each check depending on one of them,
+        whose parent the delete clears.
 
-        A report locks the checks its results reference in the same order, so
-        the two never wait on each other in a cycle, whatever order the delete
-        then removes the rows in (the ORM removes a dependent check before its
+        A report, and every other writer of many checks, locks in the same
+        order, so none waits on another in a cycle, whatever order the delete
+        then writes the rows in (the ORM removes a dependent check before its
         parent).
         """
-        condition = (
+        removed = (
             Check.agent_id == agent_id
             if agent_id is not None
             else Check.id.in_(set(check_ids or ()))
         )
-        return await CheckCRUD._lock_in_id_order(db, condition, key_share=False)
+        written = or_(
+            removed,
+            Check.depends_on_check_id.in_(
+                select(Check.id).where(removed).correlate(None)
+            ),
+        )
+        return await CheckCRUD._lock_in_id_order(db, written, key_share=False)
+
+    @staticmethod
+    async def flush_pending(db: AsyncSession) -> None:
+        """Write the session's pending changes, so a savepoint opened next and
+        rolled back cannot take them with it."""
+        await db.flush()
+
+    @staticmethod
+    async def lock_for_change(db: AsyncSession, check_ids: Collection[UUID]) -> None:
+        """Lock `check_ids` FOR NO KEY UPDATE in id order, in one pass, as every
+        writer of many checks locks them: a write that touches several checks
+        (a check and the parent it now references, a parent and its children)
+        holds none while it waits for another."""
+        await CheckCRUD._lock_in_id_order(
+            db, Check.id.in_(set(check_ids)), key_share=True
+        )
 
     @staticmethod
     async def _lock_in_id_order(

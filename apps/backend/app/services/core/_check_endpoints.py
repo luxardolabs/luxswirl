@@ -1,16 +1,24 @@
 """A check's endpoints vetted against the network protection settings before a
-create or an update writes them (SSRF)."""
+create or an update writes them (SSRF), and an update's check held with its
+endpoints vetted, never while they are looked up."""
 
 import asyncio
 from collections.abc import Mapping
 from typing import Any
+from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.check_target_validator import validate_check_target
+from app.core.exceptions import CheckBusyException, CheckNotFoundException
+from app.crud.check_crud import CheckCRUD
 from app.models.check_model import Check
 from app.models.enum_model import DATABASE_CHECK_TYPES
 from app.services.core.settings_core_service import SettingsCoreService
+
+# How many times an update holds its check before endpoints that keep changing
+# under it refuse it as busy.
+HOLD_ATTEMPTS = 5
 
 
 async def vet_check_endpoints(
@@ -54,6 +62,46 @@ async def vet_check_endpoints(
                 block_private_networks=protection.block_private_networks,
                 database=driver_reads,
             )
+
+
+async def hold_vetted(
+    db: AsyncSession,
+    check: Check,
+    update_data: Mapping[str, Any],
+    *,
+    also_hold: UUID | None = None,
+) -> Check:
+    """`check` held for the update as stored now, with every address the update
+    reads vetted, and never held while one is looked up.
+
+    It is vetted as read, then held (with `also_hold`, the parent the update
+    now references, in one id-ordered pass). When the held row's endpoints
+    differ from the vetted ones, the hold is released (a savepoint, opened
+    after the session's pending changes are flushed, rolled back) and the
+    new ones are vetted before holding again.
+
+    Raises:
+        CheckNotFoundException: The check is gone.
+        CheckBusyException: Its endpoints kept changing for every attempt.
+        CheckTargetBlockedError: An address is blocked by SSRF protection.
+    """
+    check_id = check.id
+    await CheckCRUD.flush_pending(db)
+    for _ in range(HOLD_ATTEMPTS):
+        await vet_changed_endpoints(db, check, update_data)
+        vetted = endpoint_state(check)
+        attempt = await db.begin_nested()
+        await CheckCRUD.lock_for_change(db, {check_id} | ({also_hold} - {None}))
+        held = await CheckCRUD.get_locked(db, check_id, include_script_code=True)
+        if held is None:
+            await attempt.rollback()
+            raise CheckNotFoundException("unknown", str(check_id))
+        if endpoint_state(held) == vetted:
+            await attempt.commit()
+            return held
+        await attempt.rollback()
+        check = held
+    raise CheckBusyException()
 
 
 def endpoint_state(check: Check) -> tuple[str, str, str | None]:

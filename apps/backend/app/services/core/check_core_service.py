@@ -48,11 +48,7 @@ from app.schemas.check_schema import (
 from app.schemas.import_export_schema import CheckExport
 from app.services.core._check_bulk_names import bulk_display_name, unused_name
 from app.services.core._check_bulk_request import bulk_check_create
-from app.services.core._check_endpoints import (
-    endpoint_state,
-    vet_changed_endpoints,
-    vet_check_endpoints,
-)
+from app.services.core._check_endpoints import hold_vetted, vet_check_endpoints
 from app.services.core.agent_core_service import AgentCoreService
 from app.services.core.alert_core_service import AlertCoreService
 from app.services.core.check_dependency_core_service import (
@@ -478,22 +474,18 @@ class CheckCoreService:
         """Update a check. `skip_config_update` leaves the agent's
         checks_updated_at to the caller (`mark_checks_changed`)."""
         update_data = data.model_dump(exclude_unset=True)
-        # Judged and vetted (its lookups can be slow) before the row is held,
-        # then judged again on the row as held; vetted again only when the row
-        # changed the endpoints meanwhile.
+        # Refused before anything is looked up or held, then held with its
+        # endpoints vetted (and the parent it now references, in id order),
+        # and judged again on the row as held.
         check = await CheckCoreService.get_check_by_id(
             db, check_id, include_script_code=True
         )
         CheckCoreService._require_admin_for_synthetic(
             check, update_data, actor_is_admin=actor_is_admin
         )
-        await vet_changed_endpoints(db, check, update_data)
-        vetted = endpoint_state(check)
-        check = await CheckCoreService._get_check_to_change(
-            db, check_id, include_script_code=True
+        check = await hold_vetted(
+            db, check, update_data, also_hold=update_data.get("depends_on_check_id")
         )
-        if endpoint_state(check) != vetted:
-            await vet_changed_endpoints(db, check, update_data)
 
         if "depends_on_check_id" in update_data:
             await CheckDependencyCoreService.validate_dependency(
@@ -892,7 +884,10 @@ class CheckCoreService:
     async def delete_check(
         db: AsyncSession, check_id: UUID, *, actor_is_admin: bool = False
     ) -> None:
-        """Delete a check; a synthetic one only for an admin."""
+        """Delete a check; a synthetic one only for an admin. It is held with
+        every check depending on it (whose parent the delete clears) in one
+        id-ordered pass, then judged."""
+        await CheckCRUD.lock_for_delete(db, check_ids=[check_id])
         check = await CheckCoreService._get_check_to_change(
             db, check_id, for_delete=True
         )
@@ -938,10 +933,13 @@ class CheckCoreService:
         A synthetic check is an admin's to change in any way (`update_check`),
         so a non-admin's bulk action leaves each one alone and reports it. The
         checks are judged as stored, held until the transaction ends, so a
-        retype in flight is waited for.
+        retype in flight is waited for; a delete holds, in the same pass,
+        every check depending on one of them, whose parent it clears.
         """
         if actor_is_admin or not check_ids:
             return check_ids, []
+        if for_delete:
+            await CheckCRUD.lock_for_delete(db, check_ids=check_ids)
         checks = await CheckCRUD.get_locked_by_ids(db, check_ids, for_delete=for_delete)
         synthetic = {check.id for check in checks if check.check_type == SYNTHETIC}
         return (
@@ -973,28 +971,18 @@ class CheckCoreService:
         Returns:
             {"success_count", "failure_count", "errors"}
         """
-        check_ids, refused = await CheckCoreService._bulk_permitted(
-            db, check_ids, actor_is_admin=actor_is_admin
-        )
-        if not check_ids:
-            return CheckCoreService._with_refused(
-                {"success_count": 0, "failure_count": 0, "errors": []}, refused
-            )
-        # swallowed-exceptions: a DB failure is reported as failures; the savepoint keeps the caller's session committable, which is what delivers that report
+        asked = check_ids
+        # swallowed-exceptions: a DB failure (a lock waited on past the timeout included) is reported as failures; the savepoint keeps the caller's session committable, which is what delivers that report
         try:
             async with db.begin_nested():
+                check_ids, refused = await CheckCoreService._bulk_permitted(
+                    db, check_ids, actor_is_admin=actor_is_admin
+                )
                 success_count = await CheckCRUD.bulk_set_enabled(db, check_ids, enabled)
                 await CheckCoreService._touch_agents_of(db, check_ids)
         except SQLAlchemyError as e:
             logger.exception("Failed to bulk-toggle checks", extra={"enabled": enabled})
-            return CheckCoreService._with_refused(
-                {
-                    "success_count": 0,
-                    "failure_count": len(check_ids),
-                    "errors": [str(e)],
-                },
-                refused,
-            )
+            return CheckCoreService._bulk_failed(asked, e)
         logger.info(
             "Bulk toggle complete",
             extra={"enabled": enabled, "success_count": success_count},
@@ -1016,31 +1004,21 @@ class CheckCoreService:
         Returns:
             {"success_count", "failure_count", "errors"}
         """
-        check_ids, refused = await CheckCoreService._bulk_permitted(
-            db, check_ids, actor_is_admin=actor_is_admin, for_delete=True
-        )
-        if not check_ids:
-            return CheckCoreService._with_refused(
-                {"success_count": 0, "failure_count": 0, "errors": []}, refused
-            )
-        # swallowed-exceptions: a DB failure is reported as failures; the savepoint keeps the worker's session committable, which is what delivers that report
+        asked = check_ids
+        # swallowed-exceptions: a DB failure (a lock waited on past the timeout included) is reported as failures; the savepoint keeps the worker's session committable, which is what delivers that report
         try:
             async with db.begin_nested():
-                # Locked in id order first, as a report locks them: the delete
-                # below takes its row locks in scan order.
+                check_ids, refused = await CheckCoreService._bulk_permitted(
+                    db, check_ids, actor_is_admin=actor_is_admin, for_delete=True
+                )
+                # Every check the delete writes locked in id order first, as a
+                # report locks them: the delete below writes in scan order.
                 await CheckCRUD.lock_for_delete(db, check_ids=check_ids)
                 affected = await CheckCoreService._touch_agents_of(db, check_ids)
                 success_count = await CheckCRUD.bulk_delete_by_ids(db, check_ids)
         except SQLAlchemyError as e:
             logger.exception("Failed to bulk-delete checks")
-            return CheckCoreService._with_refused(
-                {
-                    "success_count": 0,
-                    "failure_count": len(check_ids),
-                    "errors": [str(e)],
-                },
-                refused,
-            )
+            return CheckCoreService._bulk_failed(asked, e)
         logger.info(
             "Bulk deleted checks",
             extra={"success_count": success_count, "affected_agent_count": affected},
@@ -1048,6 +1026,15 @@ class CheckCoreService:
         return CheckCoreService._with_refused(
             CheckCoreService._bulk_outcome(check_ids, success_count), refused
         )
+
+    @staticmethod
+    def _bulk_failed(check_ids: list[UUID], error: SQLAlchemyError) -> dict[str, Any]:
+        """A bulk result whose statement failed: every check asked for unchanged."""
+        return {
+            "success_count": 0,
+            "failure_count": len(check_ids),
+            "errors": [str(error)],
+        }
 
     @staticmethod
     def _bulk_outcome(check_ids: list[UUID], success_count: int) -> dict[str, Any]:
