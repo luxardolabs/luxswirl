@@ -56,6 +56,12 @@ async def vet_check_endpoints(
             )
 
 
+def endpoint_state(check: Check) -> tuple[str, str, str | None]:
+    """What `vet_changed_endpoints` reads of the stored check: two reads that
+    agree on it vet the same way."""
+    return (check.check_type, check.target, check.connection_string)
+
+
 async def vet_changed_endpoints(
     db: AsyncSession, check: Check, update_data: Mapping[str, Any]
 ) -> None:

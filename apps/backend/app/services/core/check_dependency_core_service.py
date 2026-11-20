@@ -52,6 +52,10 @@ class CheckDependencyCoreService:
         are reparented to this one. Children that are themselves parents are
         rejected to preserve the single-level rule.
         """
+        # The parent's row first, as the children's reference to it takes it:
+        # a delete of the parent in flight (which then clears its children) is
+        # waited for before any child is held.
+        await CheckCRUD.key_share_existing(db, [parent_check_id])
         parent = await CheckCRUD.get_by_id(db, parent_check_id)
         if parent is None:
             raise ValidationException(f"Parent check {parent_check_id} not found")

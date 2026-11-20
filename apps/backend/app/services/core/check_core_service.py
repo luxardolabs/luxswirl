@@ -49,6 +49,7 @@ from app.schemas.import_export_schema import CheckExport
 from app.services.core._check_bulk_names import bulk_display_name, unused_name
 from app.services.core._check_bulk_request import bulk_check_create
 from app.services.core._check_endpoints import (
+    endpoint_state,
     vet_changed_endpoints,
     vet_check_endpoints,
 )
@@ -136,6 +137,23 @@ class CheckCoreService:
         if not check:
             raise CheckNotFoundException("unknown", str(check_id))
         return check
+
+    @staticmethod
+    def _require_admin_for_synthetic(
+        check: Check, update_data: Mapping[str, Any], *, actor_is_admin: bool
+    ) -> None:
+        """Authz (OWASP API5): a synthetic check runs arbitrary code on an agent
+        host, so turning a check into one, or changing one in any way (its
+        script, its target, which agents run it, whether it runs), is an
+        admin's alone.
+
+        Raises:
+            AuthorizationException: The check is or becomes synthetic and the
+                actor is not an admin.
+        """
+        check_type = update_data.get("check_type", check.check_type)
+        if SYNTHETIC in (check.check_type, check_type):
+            require_admin_actor(actor_is_admin=actor_is_admin)
 
     @staticmethod
     async def _get_check_to_change(
@@ -459,12 +477,23 @@ class CheckCoreService:
     ) -> Check:
         """Update a check. `skip_config_update` leaves the agent's
         checks_updated_at to the caller (`mark_checks_changed`)."""
+        update_data = data.model_dump(exclude_unset=True)
+        # Judged and vetted (its lookups can be slow) before the row is held,
+        # then judged again on the row as held; vetted again only when the row
+        # changed the endpoints meanwhile.
+        check = await CheckCoreService.get_check_by_id(
+            db, check_id, include_script_code=True
+        )
+        CheckCoreService._require_admin_for_synthetic(
+            check, update_data, actor_is_admin=actor_is_admin
+        )
+        await vet_changed_endpoints(db, check, update_data)
+        vetted = endpoint_state(check)
         check = await CheckCoreService._get_check_to_change(
             db, check_id, include_script_code=True
         )
-
-        update_data = data.model_dump(exclude_unset=True)
-        await vet_changed_endpoints(db, check, update_data)
+        if endpoint_state(check) != vetted:
+            await vet_changed_endpoints(db, check, update_data)
 
         if "depends_on_check_id" in update_data:
             await CheckDependencyCoreService.validate_dependency(
@@ -474,12 +503,9 @@ class CheckCoreService:
         # The check type after this update, which decides which config fields apply.
         check_type = update_data.get("check_type", check.check_type)
 
-        # Authz (OWASP API5): a synthetic check runs arbitrary code on an agent
-        # host, so turning a check into one, or changing one in any way (its
-        # script, its target, which agents run it, whether it runs), is an
-        # admin's alone.
-        if SYNTHETIC in (check.check_type, check_type):
-            require_admin_actor(actor_is_admin=actor_is_admin)
+        CheckCoreService._require_admin_for_synthetic(
+            check, update_data, actor_is_admin=actor_is_admin
+        )
         if check_type != SYNTHETIC:
             # Only a synthetic check keeps a script.
             update_data["script_code"] = None
@@ -1056,6 +1082,8 @@ class CheckCoreService:
             Dict with success/failure counts
         """
 
+        # A check listed twice is one check, changed once.
+        check_ids = list(dict.fromkeys(check_ids))
         success_count = 0
         failure_count = 0
         errors = []
