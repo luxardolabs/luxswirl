@@ -166,14 +166,14 @@ class CheckCoreService:
         *,
         include_script_code: bool = False,
         for_delete: bool = False,
-        with_ids: Collection[UUID] = (),
+        key_share_ids: Collection[UUID] = (),
         dependency_ids: Collection[UUID] = (),
     ) -> Check:
         """The check as committed, under its agent's synthetic guard and its row
         held to the transaction's end, for a write that judges it (a synthetic
         check is an admin's): a write making it synthetic in flight is waited
         for, none starts before this transaction ends, and the check cannot
-        move to another agent between this judgement and the write. `with_ids`
+        move to another agent between this judgement and the write. `key_share_ids`
         (a parent the write points the check at) are held FOR KEY SHARE, what
         the write's foreign key reads, in the same id-ordered pass;
         `dependency_ids` (the check and that parent) take the dependency lock
@@ -193,7 +193,7 @@ class CheckCoreService:
         if not await CheckCRUD.hold_dependency(db, dependency_ids):
             raise CheckBusyException()
         locked = await CheckCRUD.hold_rows(
-            db, [check_id], for_delete=for_delete, key_share_ids=with_ids
+            db, [check_id], for_delete=for_delete, key_share_ids=key_share_ids
         )
         if locked is None:
             raise CheckBusyException()
@@ -517,13 +517,13 @@ class CheckCoreService:
         actor_is_admin: bool = False,
         skip_config_update: bool = False,
         guarded: bool = True,
-        on_agent: UUID | None = None,
+        agent_id: UUID | None = None,
     ) -> Check:
         """Update a check. `skip_config_update` leaves the agent's
         checks_updated_at to the caller (`mark_checks_changed`); `guarded=False`
         leaves the synthetic guard to a caller that judged the check on its
         row, locked, or holds the guard already (bulk modify, an import).
-        `on_agent` (with `guarded=False`) is the agent whose guard or names the
+        `agent_id` (with `guarded=False`) is the agent whose guard or names the
         caller holds: the check's row is locked and judged as stored, and the
         check must still be that agent's.
 
@@ -557,13 +557,13 @@ class CheckCoreService:
                 db,
                 check_id,
                 include_script_code=True,
-                with_ids=parent_ids,
+                key_share_ids=parent_ids,
                 dependency_ids=[check_id, *parent_ids] if parent_ids else (),
             )
             CheckCoreService._require_admin_for_synthetic(
                 check, update_data, actor_is_admin=actor_is_admin
             )
-        elif on_agent is not None:
+        elif agent_id is not None:
             # A check another write moved off the caller's agent meanwhile is
             # no longer under what the caller holds.
             if parent_ids and not await CheckCRUD.hold_dependency(
@@ -571,7 +571,7 @@ class CheckCoreService:
             ):
                 raise CheckBusyException()
             held = await CheckCRUD.hold_rows(db, [check_id], key_share_ids=parent_ids)
-            if not held or check_id not in held or held[check_id].agent_id != on_agent:
+            if not held or check_id not in held or held[check_id].agent_id != agent_id:
                 raise CheckBusyException()
             check = held[check_id]
             CheckCoreService._require_admin_for_synthetic(

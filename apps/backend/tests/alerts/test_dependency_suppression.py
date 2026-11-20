@@ -236,7 +236,7 @@ async def test_validate_dependency_rejects_missing_parent():
     db = AsyncMock()
     with (
         patch(
-            "app.services.core.check_core_service.CheckCRUD.get_by_id",
+            "app.services.core.check_core_service.CheckCRUD.get_as_stored",
             AsyncMock(return_value=None),
         ),
         pytest.raises(ValidationException, match="not found"),
@@ -252,7 +252,7 @@ async def test_validate_dependency_rejects_two_level_chain():
     parent = SimpleNamespace(id=uuid4(), depends_on_check_id=uuid4())
     with (
         patch(
-            "app.services.core.check_core_service.CheckCRUD.get_by_id",
+            "app.services.core.check_core_service.CheckCRUD.get_as_stored",
             AsyncMock(return_value=parent),
         ),
         pytest.raises(ValidationException, match="Single-level"),
@@ -268,7 +268,7 @@ async def test_validate_dependency_accepts_valid_parent():
     parent = SimpleNamespace(id=uuid4(), depends_on_check_id=None)
     with (
         patch(
-            "app.services.core.check_core_service.CheckCRUD.get_by_id",
+            "app.services.core.check_core_service.CheckCRUD.get_as_stored",
             AsyncMock(return_value=parent),
         ),
         patch(
@@ -288,7 +288,7 @@ async def test_validate_dependency_refuses_a_check_that_is_a_parent():
     parent = SimpleNamespace(id=uuid4(), depends_on_check_id=None)
     with (
         patch(
-            "app.services.core.check_core_service.CheckCRUD.get_by_id",
+            "app.services.core.check_core_service.CheckCRUD.get_as_stored",
             AsyncMock(return_value=parent),
         ),
         patch(

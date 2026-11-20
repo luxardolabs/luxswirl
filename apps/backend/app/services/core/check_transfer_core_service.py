@@ -375,7 +375,7 @@ class CheckTransferCoreService:
                 actor_is_admin=actor_is_admin,
                 skip_config_update=True,
                 guarded=False,
-                on_agent=agent_id,
+                agent_id=agent_id,
             )
             return "updated"
         existing_map[check_data.name] = await CheckCoreService.create_check(
@@ -424,5 +424,5 @@ class CheckTransferCoreService:
                 actor_is_admin=actor_is_admin,
                 skip_config_update=True,
                 guarded=False,
-                on_agent=agent_id,
+                agent_id=agent_id,
             )
