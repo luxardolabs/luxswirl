@@ -97,7 +97,7 @@ A check is addressed by its own id. Reads take any token; writes take an editor'
 | `POST`   | `/api/v1/admin/checks/{id}/enable`  | editor | Enable it                                                                          |
 | `POST`   | `/api/v1/admin/checks/{id}/disable` | editor | Disable it                                                                         |
 
-The list takes `page` (from 1) and `per_page` (1-200, default 50), and filters `agent_id`, `check_type`, `tag`, `search` (name, or the target as the token is shown it: an editor's with its credentials masked, a viewer's by its scheme, host and port), `enabled_only` and `status` (`up`, `down` or `unknown`). A `tag` or `search` holding a control character (a NUL, an escape, a line break, a bidi override) is a `422` here and on every admin list's `search`; a zero-width joiner, a ZWNJ or a soft hyphen, which a stored name can hold, is searched for as written.
+The list takes `page` (from 1) and `per_page` (1-200, default 50), and filters `agent_id`, `check_type`, `tag`, `search` (name, or the target as the token is shown it: an editor's with its credentials masked, a viewer's by its scheme, host and port), `enabled_only` and `status` (`up`, `down` or `unknown`). A `tag` or `search` holding a control character (a NUL, an escape, a line break, a bidi override) is a `422` here and on every admin list's `search`; a zero-width joiner, a ZWNJ or a soft hyphen, which a stored name can hold, is searched for as written. An empty `tag` or `search` is no filter, as a form's blank field means.
 
 Every check the API returns carries its health, as the status dashboard shows it:
 
